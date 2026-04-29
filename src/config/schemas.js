@@ -745,12 +745,14 @@ export const schemas = {
       { key: "email",       label: "Email",      type: "text",   required: true },
       { key: "password",    label: "Password",   type: "text" },
       { key: "role",        label: "Role",       type: "select", options: ["SUPER_ADMIN", "COMPANY_ADMIN", "BRANCH_MANAGER", "HR_MANAGER", "HR_OFFICER", "FINANCE_MANAGER", "ACCOUNTANT", "INVENTORY_MANAGER", "INVENTORY_OFFICER", "VIEWER"], required: true },
+      { key: "department",   label: "Department", type: "select", options: ["HR", "INVENTORY", "FINANCE"], required: true },
+      { key: "designation",   label: "Designation", type: "text" },
       { key: "branch_id",   label: "Branch",     type: "text" },
       { key: "employee_id", label: "Employee",   type: "text" },
       { key: "is_superadmin",label: "Superadmin",type: "select", options: ["false", "true"] },
       { key: "status",      label: "Status",     type: "select", options: ["Active", "Inactive"] },
     ],
-    columns: ["username", "full_name", "email", "role", "status"],
+    columns: ["username", "full_name", "email", "role", "department", "status"],
   },
 
   departments: {

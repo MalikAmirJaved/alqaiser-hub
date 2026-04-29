@@ -20,6 +20,7 @@ export default function CrudPage({
   columns,
   idPrefix = "row",
   statusField,
+  hideAddbtn = false
 }) {
   const [rows, setRows] = useState([]);
   const [query, setQuery] = useState("");
@@ -143,9 +144,11 @@ export default function CrudPage({
             <button onClick={exportCsv} className="inline-flex items-center gap-2 px-3 h-9 rounded-md border border-border text-sm hover:bg-muted">
               <Download className="w-4 h-4" /> Export
             </button>
+            {!hideAddbtn && (
             <button onClick={openAdd} className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90">
               <Plus className="w-4 h-4" /> Add new
             </button>
+            )}
           </>
         }
       />

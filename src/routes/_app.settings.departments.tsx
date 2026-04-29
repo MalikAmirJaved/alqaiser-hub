@@ -4,5 +4,5 @@ import CrudPage from "../components/CrudPage";
 import { schemas } from "../config/schemas";
 
 export const Route = createFileRoute("/_app/settings/departments")({
-  component: () => <CrudPage {...schemas.departments} />,
+  component: () => <CrudPage {...schemas.departments} hideAddbtn={true} />,
 });
