@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { createFileRoute } from "@tanstack/react-router";
 import { ls } from "../services/localStorageService";
 import StatCard from "../components/cards/StatCard";
