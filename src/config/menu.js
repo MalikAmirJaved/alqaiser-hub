@@ -12,6 +12,25 @@ export const menu = [
 
   {
     type: "group",
+    title: "Human Resources",
+    icon: Users,
+    children: [
+      { title: "Employee Management", to: "/hr/employees", icon: Users },
+      { title: "Payroll", to: "/hr/payroll", icon: Wallet },
+      { title: "Time & Attendance", to: "/hr/attendance", icon: CalendarClock },
+      { title: "Leave Management", to: "/hr/leave", icon: CalendarDays },
+      { title: "Shift Management", to: "/hr/shifts", icon: Clock },
+      { title: "Employee Assets", to: "/hr/assets", icon: Briefcase },
+      { title: "Performance", to: "/hr/performance", icon: TrendingUp },
+      { title: "Recruitment", to: "/hr/recruitment", icon: UserPlus },
+      { title: "Exit Management", to: "/hr/exit", icon: LogOutIcon },
+      { title: "HR Policies", to: "/hr/policies", icon: Shield },
+      { title: "Compensation", to: "/hr/compensation", icon: HandCoins },
+    ],
+  },
+
+  {
+    type: "group",
     title: "Inventory",
     icon: Boxes,
     children: [
@@ -29,25 +48,6 @@ export const menu = [
       { title: "Alerts", to: "/inventory/alerts", icon: Bell },
       { title: "Selling / POS", to: "/inventory/pos", icon: ScanLine },
       { title: "Audit Logs", to: "/inventory/audit", icon: FileText },
-    ],
-  },
-
-  {
-    type: "group",
-    title: "Human Resources",
-    icon: Users,
-    children: [
-      { title: "Employee Management", to: "/hr/employees", icon: Users },
-      { title: "Payroll", to: "/hr/payroll", icon: Wallet },
-      { title: "Time & Attendance", to: "/hr/attendance", icon: CalendarClock },
-      { title: "Leave Management", to: "/hr/leave", icon: CalendarDays },
-      { title: "Shift Management", to: "/hr/shifts", icon: Clock },
-      { title: "Employee Assets", to: "/hr/assets", icon: Briefcase },
-      { title: "Performance", to: "/hr/performance", icon: TrendingUp },
-      { title: "Recruitment", to: "/hr/recruitment", icon: UserPlus },
-      { title: "Exit Management", to: "/hr/exit", icon: LogOutIcon },
-      { title: "HR Policies", to: "/hr/policies", icon: Shield },
-      { title: "Compensation", to: "/hr/compensation", icon: HandCoins },
     ],
   },
 

@@ -247,7 +247,7 @@ export default function CrudPage({
       </div>
 
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4" onClick={() => setModalOpen(false)}>
+        <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4" >
           <form
             onClick={(e) => e.stopPropagation()}
             onSubmit={handleSubmit}
