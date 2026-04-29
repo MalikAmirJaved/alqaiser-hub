@@ -10,9 +10,6 @@ You are building **Al Qaiser Business Operating System (BOS)** strictly accordin
 Primary architecture document:
 `/BOS_Blueprint/BOS_Complete_Blueprint.docx`
 
-Secondary fast-reference:
-`/BOS_Blueprint/BOS_Complete_Blueprint.md`
-
 If conflicts occur:
 DOCX = Final Authority
 MD = Working Reference
