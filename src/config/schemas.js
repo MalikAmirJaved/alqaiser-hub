@@ -294,8 +294,8 @@ export const schemas = {
     fields: [
       { key: "employee_id",              label: "Employee Id",          type: "text",   required: true },
       { key: "first_name",                 label: "First Name",             type: "text",   required: true },
-      { key: "last_name",                  label: "Last Name",              type: "text",   required: true },
-      { key: "father_name",                label: "Father Name",            type: "text" },
+      { key: "last_name",                  label: "Last Name",              type: "text", },
+      { key: "father_name",                label: "Father Name",            type: "text", required: true },
       { key: "cnic",                       label: "CNIC",                   type: "text",   required: true },
       { key: "date_of_birth",              label: "Date of Birth",          type: "date",   required: true },
       { key: "gender",                     label: "Gender",                 type: "select", options: ["MALE", "FEMALE", "OTHER"], required: true },
