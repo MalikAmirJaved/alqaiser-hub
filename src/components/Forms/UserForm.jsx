@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from "react";
 import { X, ChevronDown, ChevronRight, Shield } from "lucide-react";
-import { ls, uid } from "../services/localStorageService";
+import { ls, uid } from "../../services/localStorageService";
 
 // Module to feature mapping
 const MODULE_FEATURES = {

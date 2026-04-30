@@ -8,7 +8,7 @@ import { useState, useEffect } from "react";
 import { ls, uid } from "@/services/localStorageService";
 import PageHeader from "@/components/PageHeader";
 import { Plus, Pencil, Trash2, Search, Download } from "lucide-react";
-import UserFormWithPermissions from "@/components/UserFormWithPermissions";
+import UserFormWithPermissions from "@/components/Forms/UserForm";
 
 export const Route = createFileRoute("/_app/settings/users")({
   component: UsersPage,
