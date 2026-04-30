@@ -1,18 +1,148 @@
-import { useState } from "react";
+// ============================================
+// FILE: src/components/sidebar/Sidebar.jsx (UPDATED)
+// ============================================
+
+import { useState, useEffect } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { menu } from "../../config/menu";
 import { motion, AnimatePresence } from "framer-motion";
+import { permissionService } from "../../services/permissionService";
 
 export default function Sidebar({ open, onClose }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
-  const [openGroups, setOpenGroups] = useState(() => {
-    const initial = {};
-    menu.forEach((m, i) => {
-      if (m.type === "group" && m.children?.some((c) => path.startsWith(c.to))) initial[i] = true;
+  const [filteredMenu, setFilteredMenu] = useState([]);
+  const [openGroups, setOpenGroups] = useState({});
+
+  // Map menu titles to module names and features
+  const getModuleAndFeature = (title, parentTitle) => {
+    const moduleMapping = {
+      "Human Resources": { module: "HR", feature: null },
+      "Inventory": { module: "INVENTORY", feature: null },
+      "Finance": { module: "FINANCE", feature: null },
+      "Settings": { module: "SETTINGS", feature: null },
+    };
+
+    const featureMapping = {
+      // HR Features
+      "Employee Management": { module: "HR", feature: "Employee Management" },
+      "Payroll": { module: "HR", feature: "Payroll" },
+      "Time & Attendance": { module: "HR", feature: "Time & Attendance" },
+      "Leave Management": { module: "HR", feature: "Leave Management" },
+      "Shift Management": { module: "HR", feature: "Shift Management" },
+      "Employee Assets": { module: "HR", feature: "Employee Assets" },
+      "Performance": { module: "HR", feature: "Performance" },
+      "Recruitment": { module: "HR", feature: "Recruitment" },
+      "Exit Management": { module: "HR", feature: "Exit Management" },
+      "HR Policies": { module: "HR", feature: "HR Policies" },
+      "Compensation": { module: "HR", feature: "Compensation" },
+      // Inventory Features
+      "Inventory Dashboard": { module: "INVENTORY", feature: null },
+      "Product Management": { module: "INVENTORY", feature: "Products" },
+      "Stock Management": { module: "INVENTORY", feature: "Stock Management" },
+      "Warehouse Management": { module: "INVENTORY", feature: "Warehouses" },
+      "Purchase Management": { module: "INVENTORY", feature: "Purchase Orders" },
+      "Suppliers & Vendors": { module: "INVENTORY", feature: "Suppliers" },
+      "Sales Integration": { module: "INVENTORY", feature: "Sales Orders" },
+      "Assets Inventory": { module: "INVENTORY", feature: "Assets Inventory" },
+      "Inventory Transfers": { module: "INVENTORY", feature: "Inventory Transfers" },
+      "Barcode & QR": { module: "INVENTORY", feature: "Barcode & QR" },
+      "Reports": { module: "INVENTORY", feature: "Reports" },
+      "Alerts": { module: "INVENTORY", feature: "Alerts" },
+      "Selling / POS": { module: "INVENTORY", feature: "POS" },
+      "Audit Logs": { module: "INVENTORY", feature: "Audit Logs" },
+      // Finance Features
+      "Finance Dashboard": { module: "FINANCE", feature: null },
+      "Accounts": { module: "FINANCE", feature: "Chart of Accounts" },
+      "Invoices": { module: "FINANCE", feature: "Invoices" },
+      "Expenses": { module: "FINANCE", feature: "Expenses" },
+      "Payables": { module: "FINANCE", feature: "Payables" },
+      "Receivables": { module: "FINANCE", feature: "Receivables" },
+      "Budgets": { module: "FINANCE", feature: "Budgets" },
+      "Bank & Cash": { module: "FINANCE", feature: "Bank & Cash" },
+      "Payroll Finance": { module: "FINANCE", feature: "Payroll" },
+      "Assets": { module: "FINANCE", feature: "Fixed Assets" },
+      "Taxes": { module: "FINANCE", feature: "Taxes" },
+      "Forecasting": { module: "FINANCE", feature: "Forecasting" },
+      "Finance Settings": { module: "FINANCE", feature: "Settings" },
+      // Settings Features
+      "Company Profile": { module: "SETTINGS", feature: "Company Profile" },
+      "Users & Roles": { module: "SETTINGS", feature: "Users & Roles" },
+      "Departments": { module: "SETTINGS", feature: "Departments" },
+      "Designations": { module: "SETTINGS", feature: "Designations" },
+      "Preferences": { module: "SETTINGS", feature: "Preferences" },
+    };
+
+    if (parentTitle && moduleMapping[parentTitle]) {
+      return { module: moduleMapping[parentTitle].module, feature: null };
+    }
+    
+    return featureMapping[title] || { module: null, feature: null };
+  };
+
+  // Filter menu based on user permissions
+  useEffect(() => {
+    permissionService.init();
+    const user = permissionService.getCurrentUser();
+    
+    if (user?.role === "COMPANY_ADMIN") {
+      setFilteredMenu(menu);
+      return;
+    }
+
+    const accessibleModules = permissionService.getAccessibleModules();
+    const accessibleFeatures = new Set();
+    
+    // Get all accessible features
+    accessibleModules.forEach(module => {
+      const features = permissionService.getAccessibleFeatures(module, "view");
+      features.forEach(f => accessibleFeatures.add(f));
     });
-    return initial;
-  });
+
+    // Filter menu items
+    const filtered = menu
+      .map(item => {
+        if (item.type === "link") {
+          const { module, feature } = getModuleAndFeature(item.title);
+          if (module && accessibleModules.includes(module)) {
+            if (!feature || accessibleFeatures.has(feature)) {
+              return item;
+            }
+          }
+          return null;
+        } else if (item.type === "group") {
+          const { module } = getModuleAndFeature(item.title);
+          if (module && !accessibleModules.includes(module)) {
+            return null;
+          }
+          
+          const filteredChildren = item.children.filter(child => {
+            const { feature } = getModuleAndFeature(child.title);
+            return !feature || accessibleFeatures.has(feature);
+          });
+          
+          if (filteredChildren.length === 0) return null;
+          
+          return {
+            ...item,
+            children: filteredChildren,
+          };
+        }
+        return item;
+      })
+      .filter(Boolean);
+
+    setFilteredMenu(filtered);
+    
+    // Initialize open groups based on current path
+    const initial = {};
+    filtered.forEach((m, i) => {
+      if (m.type === "group" && m.children?.some((c) => path.startsWith(c.to))) {
+        initial[i] = true;
+      }
+    });
+    setOpenGroups(initial);
+  }, [path]);
 
   const toggle = (i) => setOpenGroups((s) => ({ ...s, [i]: !s[i] }));
   const isActive = (to) => path === to || (to !== "/dashboard" && path.startsWith(to + "/")) || path === to;
@@ -43,7 +173,7 @@ export default function Sidebar({ open, onClose }) {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-1">
-          {menu.map((item, i) =>
+          {filteredMenu.map((item, i) =>
             item.type === "link" ? (
               <Link
                 key={item.title}

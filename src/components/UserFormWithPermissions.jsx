@@ -1,10 +1,10 @@
 // ============================================
-// FILE: src/components/UserFormWithPermissions.jsx (NEW FILE)
+// FILE: src/components/UserFormWithPermissions.jsx (FIXED imports)
 // ============================================
 
 import { useEffect, useState } from "react";
 import { X, ChevronDown, ChevronRight, Shield } from "lucide-react";
-import { ls } from "../services/localStorageService";
+import { ls, uid } from "../services/localStorageService";
 
 // Module to feature mapping
 const MODULE_FEATURES = {
@@ -31,7 +31,7 @@ export default function UserFormWithPermissions({
   initialData = null,
   onSubmit,
   onCancel,
-  departments = ["HR", "INVENTORY", "FINANCE"],
+  departments = ["HR", "INVENTORY", "FINANCE", "SETTINGS"],
 }) {
   const [userData, setUserData] = useState({
     username: "",
