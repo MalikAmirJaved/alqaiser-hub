@@ -174,7 +174,7 @@ function EmployeesPage() {
     <div>
       <PageHeader
         title="Employee Management"
-        subtitle="Manage employee records,个人信息, employment details"
+        subtitle="Manage employee records, employment details"
         actions={
           <>
             <button

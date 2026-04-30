@@ -44,7 +44,9 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
   const [designations, setDesignations] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
-
+const filteredDesignations = designations.filter(
+  (d) => d.department === formData.department
+);
   // Load designations and employees
   useEffect(() => {
     loadDesignations();
@@ -92,9 +94,13 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
     });
   };
 
-  const handleChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
+const handleChange = (field, value) => {
+  setFormData(prev => ({
+    ...prev,
+    [field]: value,
+    ...(field === "department" && { designation: "" }) // reset designation
+  }));
+};
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -319,18 +325,26 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
               </div>
 
               <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground text-xs">Designation</span>
-                <select
-                  value={formData.designation}
-                  onChange={(e) => handleChange("designation", e.target.value)}
-                  className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">Select Designation</option>
-                  {designations.map(d => (
-                    <option key={d.id} value={d.title}>{d.title} ({d.level || "N/A"})</option>
-                  ))}
-                </select>
-              </label>
+  <span className="text-muted-foreground text-xs">Designation</span>
+  <select
+    value={formData.designation}
+    disabled={!formData.department}
+    onChange={(e) => handleChange("designation", e.target.value)}
+    className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
+  >
+    <option value="">Select Designation</option>
+
+    {filteredDesignations.length === 0 ? (
+      <option disabled>No designations for this department</option>
+    ) : (
+      filteredDesignations.map(d => (
+        <option key={d.id} value={d.title}>
+          {d.title} ({d.level || "N/A"})
+        </option>
+      ))
+    )}
+  </select>
+</label>
 
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-sm flex flex-col gap-1">

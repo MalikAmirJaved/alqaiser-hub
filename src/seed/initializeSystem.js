@@ -99,10 +99,10 @@ export function initializeSystem() {
 
   // ─── DESIGNATIONS ─────────────────────────────────────────────────────────
   ls.set("designations", [
-    { id: uid("dsg"), title: "Software Engineer", department: null, level: "Mid", pay_grade: "G2", is_active: "true",...complusory },
-    { id: uid("dsg"), title: "Senior Engineer", department: null, level: "Senior", pay_grade: "G4", is_active: "true",...complusory },
-    { id: uid("dsg"), title: "Sales Executive", department: null, level: "Mid", pay_grade: "G3", is_active: "true",...complusory },
-    { id: uid("dsg"), title: "Accountant", department: null, level: "Mid", pay_grade: "G3", is_active: "true",...complusory },
+    { id: uid("dsg"), title: "Software Engineer", department: "HR", level: "Mid", pay_grade: "G2", is_active: "true",...complusory },
+    { id: uid("dsg"), title: "Senior Engineer", department: "INVENTORY", level: "Senior", pay_grade: "G4", is_active: "true",...complusory },
+    { id: uid("dsg"), title: "Sales Executive", department: "FINANCE", level: "Mid", pay_grade: "G3", is_active: "true",...complusory },
+    { id: uid("dsg"), title: "Accountant", department: "INVENTORY", level: "Mid", pay_grade: "G3", is_active: "true",...complusory },
   ]);
 
   // ─── INVENTORY ────────────────────────────────────────────────────────────
