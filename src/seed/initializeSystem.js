@@ -29,10 +29,9 @@ export function initializeSystem() {
       full_name: "System Admin",
       email: "admin@alqaiserit.local",
       password: "admin123",
-      role: "SUPER_ADMIN",
+      role: "COMPANY_ADMIN",
       branch_id: null,
       employee_id: null,
-      is_superadmin: "true",
       status: "Active",
     },
     {
@@ -41,10 +40,10 @@ export function initializeSystem() {
       full_name: "HR Manager",
       email: "hr@alqaiserit.local",
       password: "hr12345",
-      role: "HR_MANAGER",
+      role: "STAFF",
+      department: "HR",
       branch_id: null,
       employee_id: null,
-      is_superadmin: "false",
       status: "Active",
     },
     {
@@ -53,28 +52,20 @@ export function initializeSystem() {
       full_name: "Finance Lead",
       email: "finance@alqaiserit.local",
       password: "fin12345",
-      role: "FINANCE_MANAGER",
+      role: "STAFF",
+      department: "FINANCE",
       branch_id: null,
       employee_id: null,
-      is_superadmin: "false",
       status: "Active",
     },
   ]);
 
-  // ─── DEPARTMENTS ──────────────────────────────────────────────────────────
-  ls.set("departments", [
-    { id: uid("dep"), name: "Engineering", code: "ENG", head: "Ahmed Raza", parent_id: null, employees: 12, is_active: "true" },
-    { id: uid("dep"), name: "Sales", code: "SAL", head: "Sara Khan", parent_id: null, employees: 8, is_active: "true" },
-    { id: uid("dep"), name: "Support", code: "SUP", head: "Bilal Ahmed", parent_id: null, employees: 6, is_active: "true" },
-    { id: uid("dep"), name: "Finance", code: "FIN", head: "Nadia Ali", parent_id: null, employees: 4, is_active: "true" },
-  ]);
-
   // ─── DESIGNATIONS ─────────────────────────────────────────────────────────
   ls.set("designations", [
-    { id: uid("dsg"), title: "Software Engineer", department_id: null, level: "Mid", pay_grade: "G2", is_active: "true" },
-    { id: uid("dsg"), title: "Senior Engineer", department_id: null, level: "Senior", pay_grade: "G4", is_active: "true" },
-    { id: uid("dsg"), title: "Sales Executive", department_id: null, level: "Mid", pay_grade: "G3", is_active: "true" },
-    { id: uid("dsg"), title: "Accountant", department_id: null, level: "Mid", pay_grade: "G3", is_active: "true" },
+    { id: uid("dsg"), title: "Software Engineer", department: null, level: "Mid", pay_grade: "G2", is_active: "true" },
+    { id: uid("dsg"), title: "Senior Engineer", department: null, level: "Senior", pay_grade: "G4", is_active: "true" },
+    { id: uid("dsg"), title: "Sales Executive", department: null, level: "Mid", pay_grade: "G3", is_active: "true" },
+    { id: uid("dsg"), title: "Accountant", department: null, level: "Mid", pay_grade: "G3", is_active: "true" },
   ]);
 
   // ─── EMPLOYEES ────────────────────────────────────────────────────────────
@@ -97,8 +88,9 @@ export function initializeSystem() {
       emergency_contact_name: "Fatima Raza",
       emergency_contact_phone: "+92-301-5555555",
       emergency_contact_relation: "Wife",
-      department_id: "Engineering",
-      designation_id: "Senior Engineer",
+      department: "FINANCE",
+      designation: "Senior Engineer",
+      role: "STAFF",
       employment_type: "FULL_TIME",
       employment_status: "ACTIVE",
       joining_date: "2022-03-01",
@@ -129,8 +121,9 @@ export function initializeSystem() {
       emergency_contact_name: "Imran Khan",
       emergency_contact_phone: "+92-301-6666666",
       emergency_contact_relation: "Father",
-      department_id: "Sales",
-      designation_id: "Sales Executive",
+      department: "INVENTORY",
+      designation: "Sales Executive",
+      role: "STAFF",
       employment_type: "FULL_TIME",
       employment_status: "ACTIVE",
       joining_date: "2023-01-15",
@@ -161,8 +154,9 @@ export function initializeSystem() {
       emergency_contact_name: "Naseer Ahmed",
       emergency_contact_phone: "+92-301-7777777",
       emergency_contact_relation: "Father",
-      department_id: "Support",
-      designation_id: "Software Engineer",
+      department: "HR",
+      designation: "Software Engineer",
+      role: "STAFF",
       employment_type: "FULL_TIME",
       employment_status: "ACTIVE",
       joining_date: "2023-08-10",
@@ -174,39 +168,7 @@ export function initializeSystem() {
       bank_account_number: "0123456790",
       bank_iban: "PK36MEZN0000123456790",
       salary: 95000,
-    },
-    {
-      id: uid("emp"),
-      employee_id: "EMP-004",
-      first_name: "Nadia",
-      last_name: "Ali",
-      father_name: "Ali Hassan",
-      cnic: "42101-4567890-4",
-      date_of_birth: "1988-07-25",
-      gender: "FEMALE",
-      marital_status: "MARRIED",
-      phone: "+92-301-4444444",
-      email: "nadia@alqaiserit.local",
-      personal_email: "nadia.ali@gmail.com",
-      address: "Clifton, Karachi",
-      city: "Karachi",
-      emergency_contact_name: "Ali Hassan",
-      emergency_contact_phone: "+92-301-8888888",
-      emergency_contact_relation: "Husband",
-      department_id: "Finance",
-      designation_id: "Accountant",
-      employment_type: "FULL_TIME",
-      employment_status: "ACTIVE",
-      joining_date: "2021-11-20",
-      confirmation_date: "2022-05-20",
-      probation_days: 180,
-      work_location: "OFFICE",
-      reporting_manager_id: null,
-      bank_name: "HBL",
-      bank_account_number: "9876543211",
-      bank_iban: "PK36HBL00009876543211",
-      salary: 110000,
-    },
+    }
   ]);
 
   // ─── INVENTORY ────────────────────────────────────────────────────────────
@@ -490,7 +452,7 @@ export function initializeSystem() {
   ]);
 
   ls.set("recruitment", [
-    { id: uid("rc"), name: "Hamza Iqbal", position: "Backend Engineer", department_id: "Engineering", apply_date: today(), interview_date: "2026-05-10", stage: "Interview", status: "Active", notes: "Strong Python background" },
+    { id: uid("rc"), name: "Hamza Iqbal", position: "Backend Engineer", department: "Engineering", apply_date: today(), interview_date: "2026-05-10", stage: "Interview", status: "Active", notes: "Strong Python background" },
   ]);
 
   ls.set("exits", [
@@ -666,3 +628,100 @@ export function initializeSystem() {
 
   ls.set(SEED_FLAG, true);
 }
+
+
+// Pre-define features per module for UI reference
+  const moduleFeatures = {
+    HR: [
+      "Employee Management", "Payroll", "Time & Attendance", "Leave Management",
+      "Shift Management", "Employee Assets", "Performance", "Recruitment",
+      "Exit Management", "HR Policies", "Compensation"
+    ],
+    INVENTORY: [
+      "Products", "Stock Management", "Warehouses", "Purchase Orders",
+      "Suppliers", "Sales Orders", "Assets Inventory", "Inventory Transfers",
+      "Barcode & QR", "Reports", "Alerts", "POS"
+    ],
+    FINANCE: [
+      "Chart of Accounts", "Invoices", "Expenses", "Payables", "Receivables",
+      "Budgets", "Bank & Cash", "Fixed Assets", "Taxes", "Reports", "Forecasting"
+    ],
+    SETTINGS: [
+      "Company Profile", "Users & Roles", "Departments", "Designations", "Preferences"
+    ]
+  };
+
+  // Get all users to assign permissions
+  const users = ls.get("users", []);
+  const permissions = [];
+
+  // Helper to create permission entry
+  const createPermission = (userId, moduleName, featureName, canCreate, canUpdate, canDelete, canView) => ({
+    id: uid("perm"),
+    user_id: userId,
+    module_name: moduleName,
+    feature_name: featureName,
+    is_create_access: canCreate ? "true" : "false",
+    is_update_access: canUpdate ? "true" : "false",
+    is_delete_access: canDelete ? "true" : "false",
+    is_view_access: canView ? "true" : "false",
+  });
+
+  // Assign permissions per user
+  users.forEach((user) => {
+    if (user.role === "COMPANY_ADMIN") {
+      // Company Admin gets FULL ACCESS to everything
+      Object.entries(moduleFeatures).forEach(([module, features]) => {
+        features.forEach((feature) => {
+          permissions.push(createPermission(user.id, module, feature, true, true, true, true));
+        });
+      });
+    } else if (user.role === "BRANCH_ADMIN") {
+      // Branch Admin gets FULL ACCESS but only to their assigned module
+      const userModule = user.department || "INVENTORY";
+      if (moduleFeatures[userModule]) {
+        moduleFeatures[userModule].forEach((feature) => {
+          permissions.push(createPermission(user.id, userModule, feature, true, true, true, true));
+        });
+      }
+    } else if (user.role === "STAFF") {
+      // Staff gets VIEW and limited CREATE/UPDATE based on department
+      const userModule = user.department || "INVENTORY";
+      if (moduleFeatures[userModule]) {
+        moduleFeatures[userModule].forEach((feature) => {
+          // Staff can view everything, create/update limited to their area
+          const canCreate = feature === "Expenses" || feature === "Leave Management" || feature === "Attendance";
+          const canUpdate = feature === "Expenses" || feature === "Leave Management" || feature === "Time & Attendance";
+          permissions.push(createPermission(user.id, userModule, feature, canCreate, canUpdate, false, true));
+        });
+      }
+    }
+  });
+
+  // Add some specific overrides for demo
+  const adminUser = users.find(u => u.email === "admin@alqaiserit.local");
+  const hrUser = users.find(u => u.email === "hr@alqaiserit.local");
+  const financeUser = users.find(u => u.email === "finance@alqaiserit.local");
+
+  if (adminUser) {
+    // Admin already has full access from above
+  }
+
+  if (hrUser) {
+    // HR gets additional permissions for HR module
+    moduleFeatures.HR.forEach((feature) => {
+      permissions.push(createPermission(hrUser.id, "HR", feature, true, true, true, true));
+    });
+  }
+
+  if (financeUser) {
+    // Finance gets additional permissions
+    moduleFeatures.FINANCE.forEach((feature) => {
+      permissions.push(createPermission(financeUser.id, "FINANCE", feature, true, true, true, true));
+    });
+  }
+
+  ls.set("permissions", permissions);
+
+  // Also store feature list for dropdowns
+  ls.set("moduleFeatures", moduleFeatures);

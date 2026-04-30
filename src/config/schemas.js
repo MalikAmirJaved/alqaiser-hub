@@ -308,8 +308,9 @@ export const schemas = {
       { key: "emergency_contact_name",     label: "Emergency Contact",      type: "text" },
       { key: "emergency_contact_phone",    label: "Emergency Phone",        type: "text" },
       { key: "emergency_contact_relation", label: "Emergency Relation",     type: "text" },
-      { key: "department_id",              label: "Department",             type: "text",   required: true },
-      { key: "designation_id",             label: "Designation",            type: "text",   required: true },
+      { key: "role",        label: "Role",       type: "select", options: ["COMPANY_ADMIN", "BRANCH_ADMIN", "STAFF"], required: true },
+      { key: "department",   label: "Department", type: "select", options: ["HR", "INVENTORY", "FINANCE"], required: true },
+      { key: "designation",   label: "Designation", type: "text" },
       { key: "employment_type",            label: "Employment Type",        type: "select", options: ["FULL_TIME", "PART_TIME", "CONTRACT", "INTERN"], required: true },
       { key: "employment_status",          label: "Status",                 type: "select", options: ["ACTIVE", "ON_LEAVE", "SUSPENDED", "TERMINATED", "RESIGNED"] },
       { key: "joining_date",               label: "Joining Date",           type: "date",   required: true },
@@ -322,7 +323,7 @@ export const schemas = {
       { key: "bank_iban",                  label: "Bank IBAN",              type: "text" },
       { key: "salary",                     label: "Basic Salary",           type: "number" },
     ],
-    columns: ["employee_id", "first_name", "last_name", "department_id", "designation_id", "employment_type", "employment_status"],
+    columns: ["employee_id", "first_name", "last_name", "department", "designation", "employment_type", "employment_status"],
   },
 
   payroll: {
@@ -475,14 +476,14 @@ export const schemas = {
     fields: [
       { key: "name",        label: "Applicant Name",  type: "text",   required: true },
       { key: "position",    label: "Position",        type: "text",   required: true },
-      { key: "department_id",label: "Department",     type: "text" },
+      { key: "department",label: "Department",     type: "text" },
       { key: "apply_date",  label: "Apply Date",      type: "date" },
       { key: "interview_date",label: "Interview Date",type: "date" },
       { key: "stage",       label: "Stage",           type: "select", options: ["Applied", "Screening", "Interview", "Offer", "Hired", "Rejected"] },
       { key: "status",      label: "Status",          type: "select", options: ["Active", "Closed"] },
       { key: "notes",       label: "Notes",           type: "textarea" },
     ],
-    columns: ["name", "position", "department_id", "apply_date", "stage", "status"],
+    columns: ["name", "position", "department", "apply_date", "stage", "status"],
   },
 
   exits: {
@@ -744,30 +745,16 @@ export const schemas = {
       { key: "full_name",   label: "Full Name",  type: "text",   required: true },
       { key: "email",       label: "Email",      type: "text",   required: true },
       { key: "password",    label: "Password",   type: "text" },
-      { key: "role",        label: "Role",       type: "select", options: ["SUPER_ADMIN", "COMPANY_ADMIN", "BRANCH_MANAGER", "HR_MANAGER", "HR_OFFICER", "FINANCE_MANAGER", "ACCOUNTANT", "INVENTORY_MANAGER", "INVENTORY_OFFICER", "VIEWER"], required: true },
+      { key: "role",        label: "Role",       type: "select", options: ["COMPANY_ADMIN", "BRANCH_ADMIN", "STAFF"], required: true },
       { key: "department",   label: "Department", type: "select", options: ["HR", "INVENTORY", "FINANCE"], required: true },
       { key: "designation",   label: "Designation", type: "text" },
       { key: "branch_id",   label: "Branch",     type: "text" },
       { key: "employee_id", label: "Employee",   type: "text" },
-      { key: "is_superadmin",label: "Superadmin",type: "select", options: ["false", "true"] },
       { key: "status",      label: "Status",     type: "select", options: ["Active", "Inactive"] },
     ],
     columns: ["username", "full_name", "email", "role", "department", "status"],
   },
 
-  departments: {
-    title: "Departments",
-    storeKey: "departments",
-    idPrefix: "dep",
-    fields: [
-      { key: "name",       label: "Name",             type: "text", required: true },
-      { key: "code",       label: "Code",             type: "text" },
-      { key: "head",       label: "Department Head",  type: "text" },
-      { key: "parent_id",  label: "Parent Dept.",     type: "text" },
-      { key: "employees",  label: "Employees",        type: "number" },
-      { key: "is_active",  label: "Status",           type: "select", options: ["true", "false"] },
-    ],
-  },
 
   designations: {
     title: "Designations",
@@ -775,10 +762,27 @@ export const schemas = {
     idPrefix: "dsg",
     fields: [
       { key: "title",        label: "Title",        type: "text",   required: true },
-      { key: "department_id",label: "Department",   type: "text" },
+      { key: "department",label: "Department",   type: "select", options: ["HR", "INVENTORY", "FINANCE"], required: true },
       { key: "level",        label: "Level",        type: "select", options: ["Junior", "Mid", "Senior", "Lead", "Manager", "Director"] },
       { key: "pay_grade",    label: "Pay Grade",    type: "text" },
       { key: "is_active",    label: "Status",       type: "select", options: ["true", "false"] },
     ],
+  },
+  // ─── PERMISSIONS ──────────────────────────────────────────────────────────
+  permissions: {
+    title: "User Permissions",
+    subtitle: "Manage access controls per user and module",
+    storeKey: "permissions",
+    idPrefix: "perm",
+    fields: [
+      { key: "user_id",           label: "User",              type: "select", required: true },
+      { key: "module_name",       label: "Module",            type: "select", options: ["HR", "INVENTORY", "FINANCE", "SETTINGS"], required: true },
+      { key: "feature_name",      label: "Feature/Page",      type: "text", required: true },
+      { key: "is_create_access",  label: "Create Access",     type: "select", options: ["true", "false"] },
+      { key: "is_update_access",  label: "Update Access",     type: "select", options: ["true", "false"] },
+      { key: "is_delete_access",  label: "Delete Access",     type: "select", options: ["true", "false"] },
+      { key: "is_view_access",    label: "View Access",       type: "select", options: ["true", "false"] },
+    ],
+    columns: ["user_id", "module_name", "feature_name", "is_create_access", "is_update_access", "is_delete_access", "is_view_access"],
   },
 };

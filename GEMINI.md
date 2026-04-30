@@ -259,7 +259,6 @@ Every module/submodule should support:
 # AUTH MODE (FRONTEND ONLY)
 For now:
 Use localStorage seeded auth:
-- SUPER_ADMIN
 - COMPANY_ADMIN
 - BRANCH_MANAGER
 - VIEWER
