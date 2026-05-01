@@ -1,5 +1,5 @@
 // ============================================
-// FILE: src/components/CrudPage.jsx (UPDATED - with permission checks)
+// FILE: src/components/CrudPage.jsx (UPDATED - with location selectors)
 // ============================================
 
 import { useEffect, useMemo, useState } from "react";
@@ -7,6 +7,7 @@ import { ls, uid } from "../services/localStorageService";
 import { Plus, Pencil, Trash2, Search, Download, X, ChevronLeft, ChevronRight, Shield } from "lucide-react";
 import PageHeader from "./PageHeader";
 import { permissionService } from "../services/permissionService";
+import { CountrySelect, StateSelect, CitySelect } from "./LocationSelectors";
 
 // Map storeKey to module and feature
 const getModuleAndFeature = (storeKey) => {
@@ -60,6 +61,7 @@ const getModuleAndFeature = (storeKey) => {
 
 /**
  * Generic CRUD page with permission-based action buttons
+ * Supports location fields: type "country", "state", "city"
  */
 export default function CrudPage({
   storeKey,
@@ -81,6 +83,10 @@ export default function CrudPage({
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({});
+  
+  // State for dependent location fields (used when country/state changes)
+  const [dependentCountry, setDependentCountry] = useState("");
+  const [dependentState, setDependentState] = useState("");
   
   // Permission states
   const [permissions, setPermissions] = useState({
@@ -110,9 +116,8 @@ export default function CrudPage({
       loading: false,
     });
     
-    // If user doesn't have view permission, they shouldn't see this page at all
+    // If user doesn't have view permission, redirect
     if (!canView) {
-      // The guard component will handle redirect
       window.location.hash = "/dashboard";
     }
   }, [storeKey, module, feature]);
@@ -134,8 +139,22 @@ export default function CrudPage({
       return;
     }
     const blank = {};
-    fields.forEach((f) => (blank[f.key] = f.type === "number" ? 0 : ""));
+    fields.forEach((f) => {
+      if (f.type === "number") {
+        blank[f.key] = 0;
+      } else if (f.type === "country") {
+        blank[f.key] = "";
+      } else if (f.type === "state") {
+        blank[f.key] = "";
+      } else if (f.type === "city") {
+        blank[f.key] = "";
+      } else {
+        blank[f.key] = "";
+      }
+    });
     setForm(blank);
+    setDependentCountry("");
+    setDependentState("");
     setEditing(null);
     setModalOpen(true);
   };
@@ -146,6 +165,9 @@ export default function CrudPage({
       return;
     }
     setForm({ ...row });
+    // Set dependent state for location fields if present
+    if (row.country) setDependentCountry(row.country);
+    if (row.state) setDependentState(row.state);
     setEditing(row.id);
     setModalOpen(true);
   };
@@ -181,6 +203,37 @@ export default function CrudPage({
       persist([{ id: uid(idPrefix), ...form }, ...rows]);
     }
     setModalOpen(false);
+  };
+
+  /**
+   * Updates form value and handles dependent location field synchronization
+   */
+  const updateFormValue = (key, value) => {
+    setForm(prev => ({ ...prev, [key]: value }));
+    
+    // Reset dependent fields when country changes
+    if (key === "country") {
+      setDependentCountry(value);
+      // Reset state and city if they exist in the form
+      const hasStateField = fields.some(f => f.key === "state");
+      const hasCityField = fields.some(f => f.key === "city");
+      if (hasStateField) {
+        setForm(prev => ({ ...prev, state: "" }));
+      }
+      if (hasCityField) {
+        setForm(prev => ({ ...prev, city: "" }));
+      }
+      setDependentState("");
+    }
+    
+    // Reset city when state changes
+    if (key === "state") {
+      setDependentState(value);
+      const hasCityField = fields.some(f => f.key === "city");
+      if (hasCityField) {
+        setForm(prev => ({ ...prev, city: "" }));
+      }
+    }
   };
 
   const filtered = useMemo(() => {
@@ -239,6 +292,90 @@ export default function CrudPage({
     if (["absent", "rejected", "cancelled", "high", "overdue", "resigned"].some((x) => v.includes(x)))
       return "bg-destructive/15 text-destructive border-destructive/30";
     return "bg-muted text-muted-foreground border-border";
+  };
+
+  /**
+   * Render form field based on type
+   * Supports: text, number, date, textarea, select, country, state, city
+   */
+  const renderFormField = (field) => {
+    const value = form[field.key] ?? "";
+    const commonClassName = "bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring";
+    const textareaClassName = "bg-muted/40 border border-border rounded-md p-2 outline-none focus:ring-2 focus:ring-ring";
+
+    switch (field.type) {
+      case "select":
+        return (
+          <select
+            value={value}
+            onChange={(e) => updateFormValue(field.key, e.target.value)}
+            className={commonClassName}
+          >
+            <option value="">— Select —</option>
+            {field.options.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        );
+      
+      case "textarea":
+        return (
+          <textarea
+            value={value}
+            onChange={(e) => updateFormValue(field.key, e.target.value)}
+            rows={3}
+            className={textareaClassName}
+          />
+        );
+      
+      case "country":
+        return (
+          <CountrySelect
+            value={value}
+            onChange={(val) => updateFormValue(field.key, val)}
+            required={field.required}
+            className={commonClassName}
+          />
+        );
+      
+      case "state":
+        // Need to find the country field to know which country's states to show
+        const countryField = fields.find(f => f.key === "country");
+        const countryValue = countryField ? form[countryField.key] : dependentCountry;
+        return (
+          <StateSelect
+            countryCode={countryValue}
+            value={value}
+            onChange={(val) => updateFormValue(field.key, val)}
+            required={field.required}
+            className={commonClassName}
+          />
+        );
+      
+      case "city":
+        const countryFieldForCity = fields.find(f => f.key === "country");
+        const stateFieldForCity = fields.find(f => f.key === "state");
+        const countryVal = countryFieldForCity ? form[countryFieldForCity.key] : dependentCountry;
+        const stateVal = stateFieldForCity ? form[stateFieldForCity.key] : dependentState;
+        return (
+          <CitySelect
+            countryCode={countryVal}
+            stateCode={stateVal}
+            value={value}
+            onChange={(val) => updateFormValue(field.key, val)}
+            required={field.required}
+            className={commonClassName}
+          />
+        );
+      
+      default:
+        return (
+          <input
+            type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
+            value={value}
+            onChange={(e) => updateFormValue(field.key, field.type === "number" ? Number(e.target.value) : e.target.value)}
+            className={commonClassName}
+          />
+        );
+    }
   };
 
   if (permissions.loading) {
@@ -410,30 +547,7 @@ export default function CrudPage({
                   <span className="text-muted-foreground">
                     {f.label} {f.required && <span className="text-destructive">*</span>}
                   </span>
-                  {f.type === "select" ? (
-                    <select
-                      value={form[f.key] ?? ""}
-                      onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
-                      className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="">— Select —</option>
-                      {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  ) : f.type === "textarea" ? (
-                    <textarea
-                      value={form[f.key] ?? ""}
-                      onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
-                      rows={3}
-                      className="bg-muted/40 border border-border rounded-md p-2 outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  ) : (
-                    <input
-                      type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
-                      value={form[f.key] ?? ""}
-                      onChange={(e) => setForm({ ...form, [f.key]: f.type === "number" ? Number(e.target.value) : e.target.value })}
-                      className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  )}
+                  {renderFormField(f)}
                 </label>
               ))}
             </div>
