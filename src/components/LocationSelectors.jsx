@@ -8,6 +8,7 @@ import {
   State, 
   City 
 } from "country-state-city";
+import SearchableSelect from "./SearchableSelect";
 
 /**
  * Country Selector Component
@@ -18,25 +19,21 @@ export function CountrySelect({ value, onChange, required = false, className = "
 
   useEffect(() => {
     const allCountries = Country.getAllCountries();
-    setCountries(allCountries);
+    setCountries(allCountries.map(c => ({ value: c.isoCode, label: `${c.flag} ${c.name}` })));
   }, []);
 
   return (
-    <select
-      value={value || ""}
-      onChange={(e) => onChange(e.target.value)}
+    <SearchableSelect
+      value={value}
+      onChange={onChange}
+      options={countries}
       required={required}
-      className={className || "bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"}
-    >
-      <option value="">— {placeholder} —</option>
-      {countries.map((country) => (
-        <option key={country.isoCode} value={country.isoCode}>
-          {country.flag} {country.name}
-        </option>
-      ))}
-    </select>
+      className={className}
+      placeholder={placeholder}
+    />
   );
 }
+
 
 /**
  * State/Region Selector Component (depends on selected country)
@@ -48,29 +45,25 @@ export function StateSelect({ countryCode, value, onChange, required = false, cl
   useEffect(() => {
     if (countryCode) {
       const statesOfCountry = State.getStatesOfCountry(countryCode);
-      setStates(statesOfCountry);
+      setStates(statesOfCountry.map(s => ({ value: s.isoCode || s.name, label: s.name })));
     } else {
       setStates([]);
     }
   }, [countryCode]);
 
   return (
-    <select
-      value={value || ""}
-      onChange={(e) => onChange(e.target.value)}
+    <SearchableSelect
+      value={value}
+      onChange={onChange}
+      options={states}
       required={required}
       disabled={!countryCode}
-      className={className || "bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"}
-    >
-      <option value="">— {placeholder} —</option>
-      {states.map((state) => (
-        <option key={state.isoCode || state.name} value={state.isoCode || state.name}>
-          {state.name}
-        </option>
-      ))}
-    </select>
+      className={className}
+      placeholder={placeholder}
+    />
   );
 }
+
 
 /**
  * City Selector Component (depends on selected country and state)
@@ -82,27 +75,22 @@ export function CitySelect({ countryCode, stateCode, value, onChange, required =
   useEffect(() => {
     if (countryCode && stateCode) {
       const citiesOfState = City.getCitiesOfState(countryCode, stateCode);
-      setCities(citiesOfState);
+      setCities(citiesOfState.map(c => ({ value: c.name, label: c.name })));
     } else {
       setCities([]);
     }
   }, [countryCode, stateCode]);
 
   return (
-    <select
-      value={value || ""}
-      onChange={(e) => onChange(e.target.value)}
+    <SearchableSelect
+      value={value}
+      onChange={onChange}
+      options={cities}
       required={required}
       disabled={!countryCode || !stateCode}
-      className={className || "bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"}
-    >
-      <option value="">— {placeholder} —</option>
-      {cities.map((city) => (
-        <option key={city.name} value={city.name}>
-          {city.name}
-        </option>
-      ))}
-    </select>
+      className={className}
+      placeholder={placeholder}
+    />
   );
 }
 
@@ -123,24 +111,22 @@ export function LocationGroup({
   cityLabel = "City",
   className = "",
 }) {
-  // Reset state when country changes
   const handleCountryChange = (newCountry) => {
     setCountry(newCountry);
-    setState(""); // Reset state
-    setCity(""); // Reset city
+    setState("");
+    setCity("");
   };
 
-  // Reset city when state changes
   const handleStateChange = (newState) => {
     setState(newState);
-    setCity(""); // Reset city
+    setCity("");
   };
 
   const inputClassName = className || "bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring";
 
   return (
     <div className="space-y-3">
-      <label className="text-sm flex flex-col gap-1">
+      <div>
         <span className="text-muted-foreground text-xs">{countryLabel} {required && <span className="text-destructive">*</span>}</span>
         <CountrySelect 
           value={country} 
@@ -148,9 +134,9 @@ export function LocationGroup({
           required={required}
           className={inputClassName}
         />
-      </label>
+      </div>
 
-      <label className="text-sm flex flex-col gap-1">
+      <div>
         <span className="text-muted-foreground text-xs">{stateLabel}</span>
         <StateSelect 
           countryCode={country} 
@@ -158,9 +144,9 @@ export function LocationGroup({
           onChange={handleStateChange}
           className={inputClassName}
         />
-      </label>
+      </div>
 
-      <label className="text-sm flex flex-col gap-1">
+      <div>
         <span className="text-muted-foreground text-xs">{cityLabel}</span>
         <CitySelect 
           countryCode={country} 
@@ -169,10 +155,11 @@ export function LocationGroup({
           onChange={setCity}
           className={inputClassName}
         />
-      </label>
+      </div>
     </div>
   );
 }
+
 
 /**
  * Simple Address Form with Location Selectors

@@ -8,6 +8,7 @@ import { Plus, Pencil, Trash2, Search, Download, X, ChevronLeft, ChevronRight, S
 import PageHeader from "./PageHeader";
 import { permissionService } from "../services/permissionService";
 import { CountrySelect, StateSelect, CitySelect } from "./LocationSelectors";
+import SearchableSelect from "./SearchableSelect";
 
 // Map storeKey to module and feature
 const getModuleAndFeature = (storeKey) => {
@@ -305,17 +306,18 @@ export default function CrudPage({
 
     switch (field.type) {
       case "select":
-        return (
-          <select
-            value={value}
-            onChange={(e) => updateFormValue(field.key, e.target.value)}
-            className={commonClassName}
-          >
-            <option value="">— Select —</option>
-            {field.options.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        );
-      
+  const selectOptions = field.options.map(opt => ({ value: opt, label: opt }));
+  return (
+    <SearchableSelect
+      value={value}
+      onChange={(val) => updateFormValue(field.key, val)}
+      options={selectOptions}
+      required={field.required}
+      className={commonClassName}
+      placeholder={`Select ${field.label}`}
+    />
+  );
+
       case "textarea":
         return (
           <textarea

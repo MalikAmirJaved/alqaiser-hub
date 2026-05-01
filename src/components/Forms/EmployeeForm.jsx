@@ -7,6 +7,8 @@ import { X, Users, Building2, Briefcase, UserCog } from "lucide-react";
 import { ls, uid } from "@/services/localStorageService";
 import { companyContext } from "@/services/companyContextService";
 import { LocationGroup } from "../LocationSelectors"; // Import the location component
+import SearchableSelect from "../SearchableSelect";
+
 
 export default function EmployeeForm({ initialData = null, onSubmit, onCancel }) {
   const [formData, setFormData] = useState({
@@ -215,28 +217,32 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Gender *</span>
-                  <select
-                    value={formData.gender}
-                    onChange={(e) => handleChange("gender", e.target.value)}
-                    className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="MALE">Male</option>
-                    <option value="FEMALE">Female</option>
-                    <option value="OTHER">Other</option>
-                  </select>
+                  <SearchableSelect
+  value={formData.gender}
+  onChange={(val) => handleChange("gender", val)}
+  options={[
+    { value: "MALE", label: "Male" },
+    { value: "FEMALE", label: "Female" },
+    { value: "OTHER", label: "Other" }
+  ]}
+  required={true}
+  placeholder="Select Gender"
+/>
                 </label>
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Marital Status</span>
-                  <select
-                    value={formData.marital_status}
-                    onChange={(e) => handleChange("marital_status", e.target.value)}
-                    className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="SINGLE">Single</option>
-                    <option value="MARRIED">Married</option>
-                    <option value="DIVORCED">Divorced</option>
-                    <option value="WIDOWED">Widowed</option>
-                  </select>
+                  <SearchableSelect
+  value={formData.marital_status}
+  onChange={(val) => handleChange("marital_status", val)}
+  options={[
+    { value: "SINGLE", label: "Single" },
+    { value: "MARRIED", label: "Married" },
+    { value: "DIVORCED", label: "Divorced" },
+    { value: "WIDOWED", label: "Widowed" }
+  ]}
+  placeholder="Select Marital Status"
+/>
+
                 </label>
               </div>
 
@@ -318,81 +324,74 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Role</span>
-                  <select
-                    value={formData.role}
-                    onChange={(e) => handleChange("role", e.target.value)}
-                    className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="STAFF">Staff</option>
-                    <option value="BRANCH_ADMIN">Branch Admin</option>
-                    <option value="COMPANY_ADMIN">Company Admin</option>
-                  </select>
+                  <SearchableSelect
+  value={formData.role}
+  onChange={(val) => handleChange("role", val)}
+  options={[
+    { value: "STAFF", label: "Staff" },
+    { value: "BRANCH_ADMIN", label: "Branch Admin" },
+    { value: "COMPANY_ADMIN", label: "Company Admin" }
+  ]}
+  placeholder="Select Role"
+/>
                 </label>
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Department *</span>
-                  <select
-                    value={formData.department}
-                    onChange={(e) => handleChange("department", e.target.value)}
-                    required
-                    className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="">Select Department</option>
-                    <option value="HR">HR</option>
-                    <option value="INVENTORY">Inventory</option>
-                    <option value="FINANCE">Finance</option>
-                  </select>
+                  <SearchableSelect
+  value={formData.department}
+  onChange={(val) => handleChange("department", val)}
+  options={[
+    { value: "HR", label: "HR" },
+    { value: "INVENTORY", label: "Inventory" },
+    { value: "FINANCE", label: "Finance" }
+  ]}
+  required={true}
+  placeholder="Select Department"
+/>
                 </label>
               </div>
 
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs">Designation</span>
-                <select
-                  value={formData.designation}
-                  disabled={!formData.department}
-                  onChange={(e) => handleChange("designation", e.target.value)}
-                  className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">Select Designation</option>
-                  {filteredDesignations.length === 0 ? (
-                    <option disabled>No designations for this department</option>
-                  ) : (
-                    filteredDesignations.map(d => (
-                      <option key={d.id} value={d.title}>
-                        {d.title} ({d.level || "N/A"})
-                      </option>
-                    ))
-                  )}
-                </select>
+                <SearchableSelect
+  value={formData.designation}
+  onChange={(val) => handleChange("designation", val)}
+  options={filteredDesignations.map(d => ({ value: d.title, label: `${d.title} (${d.level || "N/A"})` }))}
+  disabled={!formData.department}
+  placeholder="Select Designation"
+/>
               </label>
 
               {/* Continue with rest of employment fields... */}
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Employment Type</span>
-                  <select
-                    value={formData.employment_type}
-                    onChange={(e) => handleChange("employment_type", e.target.value)}
-                    className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="FULL_TIME">Full Time</option>
-                    <option value="PART_TIME">Part Time</option>
-                    <option value="CONTRACT">Contract</option>
-                    <option value="INTERN">Intern</option>
-                  </select>
+                  <SearchableSelect
+  value={formData.employment_type}
+  onChange={(val) => handleChange("employment_type", val)}
+  options={[
+    { value: "FULL_TIME", label: "Full Time" },
+    { value: "PART_TIME", label: "Part Time" },
+    { value: "CONTRACT", label: "Contract" },
+    { value: "INTERN", label: "Intern" }
+  ]}
+  placeholder="Select Employment Type"
+/>
                 </label>
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Status</span>
-                  <select
-                    value={formData.employment_status}
-                    onChange={(e) => handleChange("employment_status", e.target.value)}
-                    className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="ACTIVE">Active</option>
-                    <option value="ON_LEAVE">On Leave</option>
-                    <option value="SUSPENDED">Suspended</option>
-                    <option value="TERMINATED">Terminated</option>
-                    <option value="RESIGNED">Resigned</option>
-                  </select>
+                  <SearchableSelect
+  value={formData.employment_status}
+  onChange={(val) => handleChange("employment_status", val)}
+  options={[
+    { value: "ACTIVE", label: "Active" },
+    { value: "ON_LEAVE", label: "On Leave" },
+    { value: "SUSPENDED", label: "Suspended" },
+    { value: "TERMINATED", label: "Terminated" },
+    { value: "RESIGNED", label: "Resigned" }
+  ]}
+  placeholder="Select Status"
+/>
                 </label>
               </div>
 
@@ -430,37 +429,31 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 </label>
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Work Location</span>
-                  <select
-                    value={formData.work_location}
-                    onChange={(e) => handleChange("work_location", e.target.value)}
-                    className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="OFFICE">Office</option>
-                    <option value="REMOTE">Remote</option>
-                    <option value="HYBRID">Hybrid</option>
-                  </select>
+                  <SearchableSelect
+  value={formData.work_location}
+  onChange={(val) => handleChange("work_location", val)}
+  options={[
+    { value: "OFFICE", label: "Office" },
+    { value: "REMOTE", label: "Remote" },
+    { value: "HYBRID", label: "Hybrid" }
+  ]}
+  placeholder="Select Work Location"
+/>
+
                 </label>
               </div>
 
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs">Reporting Manager</span>
-                <select
-                  value={formData.reporting_manager_id}
-                  onChange={(e) => handleChange("reporting_manager_id", e.target.value)}
-                  className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">Select Manager</option>
-                  {getManagerEmployees().map(emp => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.first_name} {emp.last_name} - {emp.designation || "Manager"}
-                    </option>
-                  ))}
-                  {employees.filter(e => !getManagerEmployees().find(m => m.id === e.id)).map(emp => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.first_name} {emp.last_name} ({emp.designation || "Staff"})
-                    </option>
-                  ))}
-                </select>
+                <SearchableSelect
+  value={formData.reporting_manager_id}
+  onChange={(val) => handleChange("reporting_manager_id", val)}
+  options={getManagerEmployees().map(emp => ({ 
+    value: emp.id, 
+    label: `${emp.first_name} ${emp.last_name} - ${emp.designation || "Manager"}` 
+  }))}
+  placeholder="Select Manager"
+/>
               </label>
             </div>
           </div>

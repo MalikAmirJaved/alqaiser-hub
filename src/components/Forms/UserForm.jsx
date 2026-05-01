@@ -4,7 +4,8 @@
 
 import { useEffect, useState } from "react";
 import { X, ChevronDown, ChevronRight, Shield } from "lucide-react";
-import { ls, uid } from "../../services/localStorageService";
+import { ls, uid } from "@/services/localStorageService";
+import SearchableSelect from "../SearchableSelect";
 
 // Module to feature mapping
 const MODULE_FEATURES = {
@@ -312,29 +313,28 @@ export default function UserFormWithPermissions({
             <div className="grid sm:grid-cols-2 gap-3">
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs">Role *</span>
-                <select
-                  value={userData.role}
-                  onChange={(e) => handleRoleChange(e.target.value)}
-                  className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="COMPANY_ADMIN">Company Admin</option>
-                  <option value="BRANCH_ADMIN">Branch Admin</option>
-                  <option value="STAFF">Staff</option>
-                </select>
+                <SearchableSelect
+  value={userData.role}
+  onChange={(val) => handleRoleChange(val)}
+  options={[
+    { value: "COMPANY_ADMIN", label: "Company Admin" },
+    { value: "BRANCH_ADMIN", label: "Branch Admin" },
+    { value: "STAFF", label: "Staff" }
+  ]}
+  required={true}
+  placeholder="Select Role"
+/>
               </label>
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs">Department *</span>
-                <select
-                  value={userData.department}
-                  onChange={(e) => handleDepartmentChange(e.target.value)}
-                  required
-                  className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">Select Department</option>
-                  {departments.map(dept => (
-                    <option key={dept} value={dept}>{dept}</option>
-                  ))}
-                </select>
+                <SearchableSelect
+  value={userData.department}
+  onChange={(val) => handleDepartmentChange(val)}
+  options={departments.map(d => ({ value: d, label: d }))}
+  required={true}
+  placeholder="Select Department"
+/>
+
               </label>
             </div>
 
@@ -350,14 +350,15 @@ export default function UserFormWithPermissions({
 
             <label className="text-sm flex flex-col gap-1">
               <span className="text-muted-foreground text-xs">Status</span>
-              <select
-                value={userData.status}
-                onChange={(e) => setUserData({ ...userData, status: e.target.value })}
-                className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
+              <SearchableSelect
+  value={userData.status}
+  onChange={(val) => setUserData({ ...userData, status: val })}
+  options={[
+    { value: "Active", label: "Active" },
+    { value: "Inactive", label: "Inactive" }
+  ]}
+  placeholder="Select Status"
+/>
             </label>
           </div>
 
