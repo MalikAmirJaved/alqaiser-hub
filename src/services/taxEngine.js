@@ -1,5 +1,5 @@
 // ============================================
-// FILE: src/services/taxEngine.js (NEW)
+// FILE: src/services/taxEngine.js (UPDATED)
 // Production-ready Tax Engine with multi-country support
 // ============================================
 
@@ -8,7 +8,8 @@ import { companyContext } from "./companyContextService";
 
 /**
  * Central Tax Engine - Handles all tax calculations across modules
- * Supports multi-country, multi-currency, and various tax types
+ * Supports multi-country, multi-currency, and tax types (VAT, Sales Tax)
+ * NOTE: Tax is NOT deducted from employee salaries - only business transactions
  */
 export class TaxEngine {
   constructor() {
@@ -25,10 +26,10 @@ export class TaxEngine {
   }
 
   /**
-   * Calculate tax for a transaction
+   * Calculate tax for a transaction (BUSINESS TRANSACTIONS ONLY)
    * @param {Object} params - Calculation parameters
-   * @param {string} params.module - 'hr', 'inventory', 'finance'
-   * @param {string} params.transactionType - 'invoice', 'salary', 'expense', 'purchase'
+   * @param {string} params.module - 'hr', 'inventory', 'finance' (NOT for salary tax)
+   * @param {string} params.transactionType - 'invoice', 'expense', 'purchase', 'sale' (NOT 'salary')
    * @param {number} params.amount - Base amount
    * @param {string} params.country - Country code (e.g., 'PK', 'US', 'GB')
    * @param {string} params.currency - Currency code
@@ -38,6 +39,19 @@ export class TaxEngine {
   calculateTax({ module, transactionType, amount, country, currency = "PKR", context = {} }) {
     this.init();
     
+    // Skip tax calculation for salary/employee payroll transactions
+    if (transactionType === "salary" || module === "hr" && transactionType === "payroll") {
+      return {
+        subtotal: amount,
+        totalTax: 0,
+        total: amount,
+        currency,
+        taxBreakdown: [],
+        taxTransaction: null,
+        note: "Salary transactions are tax-exempt - no tax applied",
+      };
+    }
+    
     const applicableTaxes = this.getApplicableTaxes(module, transactionType, country, context);
     
     let subtotal = amount;
@@ -45,15 +59,15 @@ export class TaxEngine {
     const taxBreakdown = [];
 
     for (const tax of applicableTaxes) {
-      const taxAmount = this.calculateTaxAmount(subtotal, tax.rate, tax.is_inclusive);
+      // Tax is always exclusive (added on top, not included in price)
+      const taxAmount = this.calculateTaxAmount(subtotal, tax.rate);
       
       taxBreakdown.push({
         tax_id: tax.id,
         tax_name: tax.name,
-        tax_type: tax.type,
+        tax_type: tax.type,  // VAT or Sales Tax only
         rate: tax.rate,
         amount: taxAmount,
-        is_inclusive: tax.is_inclusive,
         country: tax.country,
       });
       
@@ -62,7 +76,7 @@ export class TaxEngine {
 
     const total = subtotal + totalTax;
 
-    // Create tax transaction record
+    // Create tax transaction record for audit trail
     const taxTransaction = this.createTaxTransaction({
       module,
       transactionType,
@@ -87,12 +101,17 @@ export class TaxEngine {
 
   /**
    * Get applicable taxes based on rules
+   * Only returns VAT and Sales Tax types
    */
   getApplicableTaxes(module, transactionType, country, context = {}) {
     const taxes = this.taxesCache || [];
     const taxRules = this.taxRulesCache || [];
     
-    // Filter taxes by module and transaction type
+    // Filter by valid tax types only (VAT, Sales Tax)
+    const validTaxTypes = ["VAT", "Sales Tax"];
+    const validTaxes = taxes.filter(tax => validTaxTypes.includes(tax.type) && tax.is_active === "true");
+    
+    // Filter rules by module and transaction type
     const applicableRules = taxRules.filter(rule => 
       rule.module === module && 
       rule.transaction_type === transactionType &&
@@ -101,9 +120,8 @@ export class TaxEngine {
     
     const taxIds = new Set(applicableRules.map(rule => rule.tax_id));
     
-    return taxes.filter(tax => 
+    return validTaxes.filter(tax => 
       taxIds.has(tax.id) && 
-      tax.is_active === "true" &&
       (tax.country === country || tax.country === "GLOBAL")
     );
   }
@@ -127,18 +145,11 @@ export class TaxEngine {
   }
 
   /**
-   * Calculate tax amount (handles inclusive/exclusive)
+   * Calculate tax amount (ALWAYS EXCLUSIVE - added on top of price)
    */
-  calculateTaxAmount(amount, rate, isInclusive) {
+  calculateTaxAmount(amount, rate) {
     const rateDecimal = rate / 100;
-    
-    if (isInclusive === "true") {
-      // Tax is included in the price
-      return amount - (amount / (1 + rateDecimal));
-    } else {
-      // Tax is added on top
-      return amount * rateDecimal;
-    }
+    return amount * rateDecimal;
   }
 
   /**
@@ -209,7 +220,7 @@ export class TaxEngine {
   }
 
   /**
-   * Get input tax (tax paid on purchases)
+   * Get input tax (tax paid on purchases) - BUSINESS ONLY
    */
   getInputTax({ startDate, endDate }) {
     const transactions = ls.get("tax_transactions", []);
@@ -221,7 +232,7 @@ export class TaxEngine {
   }
 
   /**
-   * Get output tax (tax collected on sales)
+   * Get output tax (tax collected on sales) - BUSINESS ONLY
    */
   getOutputTax({ startDate, endDate }) {
     const transactions = ls.get("tax_transactions", []);
@@ -233,7 +244,7 @@ export class TaxEngine {
   }
 
   /**
-   * Calculate net tax payable (Output - Input)
+   * Calculate net tax payable (Output - Input) - BUSINESS ONLY
    */
   getNetTaxPayable({ startDate, endDate }) {
     const inputTax = this.getInputTax({ startDate, endDate });

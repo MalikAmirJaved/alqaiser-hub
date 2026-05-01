@@ -910,17 +910,16 @@ suppliers: {
     idPrefix: "tax",
     fields: [
       { key: "name", label: "Tax Name", type: "text", required: true },
-      { key: "type", label: "Tax Type", type: "select", options: ["GST", "VAT", "Sales Tax", "Income Tax", "Withholding Tax", "Social Security", "Professional Tax", "EOBI", "PESSI"], required: true },
+      { key: "type", label: "Tax Type", type: "select", options: ["VAT", "Sales Tax"], required: true },
       { key: "rate", label: "Rate (%)", type: "number", required: true },
       { key: "country", label: "Country", type: "country", required: true },
-      { key: "is_inclusive", label: "Tax Inclusive", type: "select", options: ["true", "false"] },
       { key: "tax_code", label: "Tax Code", type: "text" },
       { key: "effective_from", label: "Effective From", type: "date" },
       { key: "effective_to", label: "Effective To", type: "date" },
       { key: "is_active", label: "Status", type: "select", options: ["true", "false"] },
       { key: "description", label: "Description", type: "textarea" },
     ],
-    columns: ["name", "type", "rate", "country", "is_inclusive", "is_active"],
+    columns: ["name", "type", "rate", "country", "tax_code", "is_active"],
   },
   
   taxRules: {
@@ -996,22 +995,23 @@ suppliers: {
     columns: ["employee_name", "month", "year", "gross_salary", "total_deductions", "net_salary", "status"],
   },
   
-  taxTransactions: {
-    title: "Tax Transactions",
-    subtitle: "Audit trail of all tax calculations",
-    storeKey: "tax_transactions",
-    idPrefix: "txn",
-    fields: [
-      { key: "module", label: "Module", type: "text" },
-      { key: "transaction_type", label: "Transaction Type", type: "text" },
-      { key: "subtotal", label: "Subtotal", type: "number" },
-      { key: "total_tax", label: "Total Tax", type: "number" },
-      { key: "total", label: "Total", type: "number" },
-      { key: "currency", label: "Currency", type: "text" },
-      { key: "country", label: "Country", type: "text" },
-    ],
-    columns: ["module", "transaction_type", "subtotal", "total_tax", "total", "currency"],
-  },
+// taxTransactions schema remains the same (no is_inclusive field was there)
+taxTransactions: {
+  title: "Tax Transactions",
+  subtitle: "Audit trail of all tax calculations",
+  storeKey: "tax_transactions",
+  idPrefix: "txn",
+  fields: [
+    { key: "module", label: "Module", type: "text" },
+    { key: "transaction_type", label: "Transaction Type", type: "text" },
+    { key: "subtotal", label: "Subtotal", type: "number" },
+    { key: "total_tax", label: "Total Tax", type: "number" },
+    { key: "total", label: "Total", type: "number" },
+    { key: "currency", label: "Currency", type: "text" },
+    { key: "country", label: "Country", type: "text" },
+  ],
+  columns: ["module", "transaction_type", "subtotal", "total_tax", "total", "currency"],
+},
   
   payrollBatches: {
     title: "Payroll Batches",

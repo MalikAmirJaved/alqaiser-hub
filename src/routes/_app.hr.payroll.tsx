@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
 import { Button } from "../components/ui/button";
 import { Download, Play, FileText, Users } from "lucide-react";
 
-export const Route = createFileRoute("/_app/hr/payroll")({
+export const Route = createFileRoute("/_app/hr/payroll")({  
   component: PayrollPage,
 });
 

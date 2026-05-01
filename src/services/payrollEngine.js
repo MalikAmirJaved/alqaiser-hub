@@ -1,22 +1,23 @@
 // ============================================
-// FILE: src/services/payrollEngine.js (NEW)
-// Advanced Payroll Processing System
+// FILE: src/services/payrollEngine.js (UPDATED)
+// Advanced Payroll Processing System - NO TAX DEDUCTION
 // ============================================
 
 /**
- * Payroll Engine - Handles employee salary processing, tax calculations, and disbursement
-*/
+ * Payroll Engine - Handles employee salary processing
+ * NOTE: Tax is NOT deducted from salaries - handled separately by business entities
+ */
 import { ls } from "./localStorageService";
 import { companyContext } from "./companyContextService";
 import { TaxEngine } from "./taxEngine";
 
 export class PayrollEngine {
   get taxEngine() {
-  if (!this._taxEngine) {
-    this._taxEngine = new TaxEngine();
+    if (!this._taxEngine) {
+      this._taxEngine = new TaxEngine();
+    }
+    return this._taxEngine;
   }
-  return this._taxEngine;
-}
 
   /**
    * Calculate payroll for a single employee
@@ -41,19 +42,12 @@ export class PayrollEngine {
     const attendanceAdjustment = this.calculateAttendanceAdjustment(employee.id, attendance, grossSalary);
     grossSalary += attendanceAdjustment;
     
-    // Calculate taxes (Income Tax, Social Security, etc.)
-    const taxCalculation = this.calculateEmployeeTaxes(employee, grossSalary);
-    
-    // Calculate other deductions
+    // ONLY calculate loan and benefit deductions - NO TAX DEDUCTION
     const loanDeductions = this.calculateLoanDeductions(employee.id);
     const benefitDeductions = this.calculateBenefitDeductions(employee.id);
     const customDeductionsTotal = customDeductions.reduce((sum, d) => sum + d.amount, 0);
     
-    const totalDeductions = 
-      taxCalculation.total_tax + 
-      loanDeductions + 
-      benefitDeductions + 
-      customDeductionsTotal;
+    const totalDeductions = loanDeductions + benefitDeductions + customDeductionsTotal;
     
     const netSalary = grossSalary - totalDeductions;
     
@@ -68,13 +62,12 @@ export class PayrollEngine {
       net_salary: netSalary,
       bonuses: bonuses,
       deductions: {
-        taxes: taxCalculation.tax_breakdown,
+        taxes: 0, // ZERO TAX on salaries
         loans: loanDeductions,
         benefits: benefitDeductions,
         custom: customDeductions,
       },
       attendance_adjustment: attendanceAdjustment,
-      tax_calculation: taxCalculation,
       status: "CALCULATED",
     });
     
@@ -84,10 +77,10 @@ export class PayrollEngine {
       gross_salary: grossSalary,
       total_deductions: totalDeductions,
       net_salary: netSalary,
-      tax_breakdown: taxCalculation.tax_breakdown,
+      taxes: 0, // ZERO TAX on salaries
       bonuses: bonuses,
       deductions_summary: {
-        tax: taxCalculation.total_tax,
+        tax: 0, // ZERO TAX on salaries
         loan: loanDeductions,
         benefit: benefitDeductions,
         custom: customDeductionsTotal,
@@ -97,131 +90,49 @@ export class PayrollEngine {
   }
 
   /**
-   * Calculate employee taxes (Income Tax, Social Security, etc.)
+   * Calculate employee taxes - DISABLED (no tax deduction from salary)
+   * Kept for reference but returns zero
    */
   calculateEmployeeTaxes(employee, grossSalary) {
-    const country = employee.country || "PK";
-    const taxBrackets = this.getTaxBrackets(country);
-    const socialSecurityRate = this.getSocialSecurityRate(country);
-    
-    let incomeTax = 0;
-    let remainingSalary = grossSalary;
-    
-    // Calculate progressive income tax
-    for (const bracket of taxBrackets) {
-      if (remainingSalary <= 0) break;
-      
-      const taxableInBracket = Math.min(remainingSalary, bracket.max - bracket.min);
-      incomeTax += taxableInBracket * (bracket.rate / 100);
-      remainingSalary -= taxableInBracket;
-    }
-    
-    // Calculate social security
-    const socialSecurity = grossSalary * (socialSecurityRate / 100);
-    
-    // Calculate professional tax (if applicable)
-    const professionalTax = this.calculateProfessionalTax(grossSalary, country);
-    
-    // Calculate withholding tax
-    const withholdingTax = this.calculateWithholdingTax(employee, grossSalary);
-    
-    const taxBreakdown = [
-      { name: "Income Tax", rate: "progressive", amount: incomeTax },
-      { name: "Social Security", rate: socialSecurityRate, amount: socialSecurity },
-      { name: "Professional Tax", rate: null, amount: professionalTax },
-      { name: "Withholding Tax", rate: null, amount: withholdingTax },
-    ].filter(t => t.amount > 0);
-    
-    const totalTax = taxBreakdown.reduce((sum, t) => sum + t.amount, 0);
-    
-    // Create tax transaction for payroll
-    this.taxEngine.calculateTax({
-      module: "hr",
-      transactionType: "salary",
-      amount: grossSalary,
-      country: country,
-      context: {
-        employee_id: employee.id,
-        tax_type: "payroll",
-      },
-    });
-    
+    // Tax is NOT deducted from employee salaries
+    // This method returns zero to ensure no tax is calculated
     return {
-      total_tax: totalTax,
-      tax_breakdown: taxBreakdown,
-      income_tax: incomeTax,
-      social_security: socialSecurity,
-      professional_tax: professionalTax,
-      withholding_tax: withholdingTax,
+      total_tax: 0,
+      tax_breakdown: [],
+      income_tax: 0,
+      social_security: 0,
+      professional_tax: 0,
+      withholding_tax: 0,
+      note: "No tax deduction from salary - tax applied to business transactions only",
     };
   }
 
   /**
-   * Get tax brackets for a country
+   * Get tax brackets for a country - NOT USED (no salary tax)
    */
   getTaxBrackets(country) {
-    const brackets = {
-      PK: [
-        { min: 0, max: 600000, rate: 0 },
-        { min: 600000, max: 1200000, rate: 5 },
-        { min: 1200000, max: 2400000, rate: 10 },
-        { min: 2400000, max: 3600000, rate: 15 },
-        { min: 3600000, max: 6000000, rate: 20 },
-        { min: 6000000, max: Infinity, rate: 25 },
-      ],
-      US: [
-        { min: 0, max: 11000, rate: 10 },
-        { min: 11000, max: 44725, rate: 12 },
-        { min: 44725, max: 95375, rate: 22 },
-        { min: 95375, max: 182100, rate: 24 },
-        { min: 182100, max: 231250, rate: 32 },
-        { min: 231250, max: 578125, rate: 35 },
-        { min: 578125, max: Infinity, rate: 37 },
-      ],
-      GB: [
-        { min: 0, max: 12570, rate: 0 },
-        { min: 12570, max: 50270, rate: 20 },
-        { min: 50270, max: 125140, rate: 40 },
-        { min: 125140, max: Infinity, rate: 45 },
-      ],
-    };
-    
-    return brackets[country] || brackets.PK;
+    return []; // No tax brackets for salary
   }
 
   /**
-   * Get social security rate for a country
+   * Get social security rate - DISABLED
    */
   getSocialSecurityRate(country) {
-    const rates = {
-      PK: 12, // 12% for EOBI + PESSI
-      US: 7.65, // FICA (Social Security + Medicare)
-      GB: 13.8, // National Insurance
-    };
-    return rates[country] || 12;
+    return 0; // No social security deduction from salary
   }
 
   /**
-   * Calculate professional tax
+   * Calculate professional tax - DISABLED
    */
   calculateProfessionalTax(grossSalary, country) {
-    if (country !== "PK") return 0;
-    
-    // Professional tax slabs for Pakistan (monthly)
-    if (grossSalary <= 25000) return 0;
-    if (grossSalary <= 35000) return 100;
-    if (grossSalary <= 50000) return 200;
-    if (grossSalary <= 75000) return 350;
-    return 500;
+    return 0; // No professional tax deduction
   }
 
   /**
-   * Calculate withholding tax
+   * Calculate withholding tax - DISABLED
    */
   calculateWithholdingTax(employee, grossSalary) {
-    // Implement based on country-specific withholding rules
-    // For now, return 0 as it's usually calculated at payment time
-    return 0;
+    return 0; // No withholding tax
   }
 
   /**
@@ -286,7 +197,7 @@ export class PayrollEngine {
   }
 
   /**
-   * Process payroll for multiple employees
+   * Process payroll for multiple employees (salary only, no tax)
    */
   processPayroll({ month, year, employeeIds = null, options = {} }) {
     const employees = ls.get("employees", []);
@@ -315,6 +226,7 @@ export class PayrollEngine {
       total_gross: totalGross,
       total_deductions: totalDeductions,
       total_net: totalNet,
+      tax_amount: 0, // ZERO TAX on salaries
       payroll_records: results,
       status: "PROCESSED",
     });
@@ -327,6 +239,7 @@ export class PayrollEngine {
       total_gross: totalGross,
       total_deductions: totalDeductions,
       total_net: totalNet,
+      tax_amount: 0,
       payroll_records: results,
       batch_record: batchRecord,
     };
@@ -367,7 +280,7 @@ export class PayrollEngine {
   }
 
   /**
-   * Generate payslip for employee
+   * Generate payslip for employee (NO TAX DEDUCTION)
    */
   generatePayslip(employeeId, month, year) {
     const payrollRecords = ls.get("payroll", []);
@@ -386,6 +299,7 @@ export class PayrollEngine {
       payroll: record,
       generated_at: new Date().toISOString(),
       company: ls.get("company", {}),
+      note: "No tax deduction applied to salary - tax only on business transactions",
     };
   }
 }
