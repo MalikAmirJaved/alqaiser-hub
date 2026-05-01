@@ -55,11 +55,11 @@ export default function TaxReport() {
     URL.revokeObjectURL(url);
   };
 
-  const downloadFBRReport = () => {
-    // Format for FBR (Federal Board of Revenue) Pakistan
+  const downloadTAXReport = () => {
+    // Format for TAX (Federal Board of Revenue) Pakistan
     if (!summary) return;
     
-    const fbrFormat = {
+    const taxFormat = {
       report_type: "SALES_TAX_WORKSHEET",
       period: period,
       output_tax: netPayable?.output_tax || 0,
@@ -69,11 +69,11 @@ export default function TaxReport() {
       filer_status: "FILER",
     };
     
-    const blob = new Blob([JSON.stringify(fbrFormat, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(taxFormat, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `fbr_sales_tax_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `tax_sales_tax_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -170,7 +170,7 @@ export default function TaxReport() {
             PKR {(netPayable?.net_payable || 0).toLocaleString()}
           </div>
           <div className="text-[10px] text-muted-foreground">
-            Due to FBR
+            Due to TAX
           </div>
         </div>
       </div>
@@ -215,11 +215,11 @@ export default function TaxReport() {
           Export Report
         </button>
         <button
-          onClick={downloadFBRReport}
+          onClick={downloadTAXReport}
           className="inline-flex items-center gap-2 px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90"
         >
           <Download className="w-4 h-4" />
-          Download FBR Report
+          Download TAX Report
         </button>
       </div>
     </div>
