@@ -1,11 +1,12 @@
 // ============================================
-// FILE: src/components/EmployeeForm.jsx (NEW - enhanced employee form)
+// FILE: src/components/Forms/EmployeeForm.jsx (UPDATED with location selectors)
 // ============================================
 
 import { useEffect, useState } from "react";
 import { X, Users, Building2, Briefcase, UserCog } from "lucide-react";
-import { ls, uid } from "../../services/localStorageService";
-import { companyContext } from "../../services/companyContextService";
+import { ls, uid } from "@/services/localStorageService";
+import { companyContext } from "@/services/companyContextService";
+import { LocationGroup } from "../LocationSelectors"; // Import the location component
 
 export default function EmployeeForm({ initialData = null, onSubmit, onCancel }) {
   const [formData, setFormData] = useState({
@@ -21,7 +22,11 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
     email: "",
     personal_email: "",
     address: "",
+    // Location fields (moved from separate fields)
+    country: "PK", // Default to Pakistan
+    state: "",
     city: "",
+    postal_code: "",
     emergency_contact_name: "",
     emergency_contact_phone: "",
     emergency_contact_relation: "",
@@ -44,9 +49,11 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
   const [designations, setDesignations] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
-const filteredDesignations = designations.filter(
-  (d) => d.department === formData.department
-);
+  
+  const filteredDesignations = designations.filter(
+    (d) => d.department === formData.department
+  );
+
   // Load designations and employees
   useEffect(() => {
     loadDesignations();
@@ -63,14 +70,12 @@ const filteredDesignations = designations.filter(
 
   const loadDesignations = () => {
     const allDesignations = ls.get("designations", []);
-    // Filter active designations
     const activeDesignations = allDesignations.filter(d => d.is_active === "true");
     setDesignations(activeDesignations);
   };
 
   const loadEmployees = () => {
     const allEmployees = ls.get("employees", []);
-    // Filter by company context
     const filtered = companyContext.filterByContext(allEmployees);
     setEmployees(filtered);
   };
@@ -86,7 +91,6 @@ const filteredDesignations = designations.filter(
     }));
   };
 
-  // Get employees with manager-level designations for reporting manager dropdown
   const getManagerEmployees = () => {
     return employees.filter(emp => {
       const designation = designations.find(d => d.title === emp.designation);
@@ -94,18 +98,17 @@ const filteredDesignations = designations.filter(
     });
   };
 
-const handleChange = (field, value) => {
-  setFormData(prev => ({
-    ...prev,
-    [field]: value,
-    ...(field === "department" && { designation: "" }) // reset designation
-  }));
-};
+  const handleChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value,
+      ...(field === "department" && { designation: "" })
+    }));
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    // Validation
     const requiredFields = ["first_name", "father_name", "cnic", "date_of_birth", "phone", "department", "joining_date"];
     for (const field of requiredFields) {
       if (!formData[field]) {
@@ -114,8 +117,12 @@ const handleChange = (field, value) => {
       }
     }
 
-    // Add company context and submit
+    // For display, combine address fields if needed
     const finalData = { ...formData };
+    if (formData.address_line) {
+      finalData.address = `${formData.address_line}, ${formData.city || ""}, ${formData.state || ""}, ${formData.country || ""}`;
+    }
+    
     onSubmit(finalData);
   };
 
@@ -137,10 +144,8 @@ const handleChange = (field, value) => {
         </div>
 
         <div className="p-5">
-          {/* Employee ID - Hidden field, auto-generated */}
           <input type="hidden" value={formData.employee_id} />
 
-          {/* Two Column Layout */}
           <div className="grid md:grid-cols-2 gap-4">
             
             {/* Personal Information Section */}
@@ -267,28 +272,43 @@ const handleChange = (field, value) => {
                 </label>
               </div>
 
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground text-xs">Address</span>
-                <textarea
-                  value={formData.address}
-                  onChange={(e) => handleChange("address", e.target.value)}
-                  rows={2}
-                  className="bg-muted/40 border border-border rounded-md p-2 outline-none focus:ring-2 focus:ring-ring"
+              {/*  address/city fields with LocationGroup */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold text-primary/80">Address Information</h4>
+                <label className="text-sm flex flex-col gap-1">
+                  <span className="text-muted-foreground text-xs">Street Address</span>
+                  <textarea
+                    value={formData.address_line || ""}
+                    onChange={(e) => handleChange("address_line", e.target.value)}
+                    rows={2}
+                    className="bg-muted/40 border border-border rounded-md p-2 outline-none focus:ring-2 focus:ring-ring"
+                    placeholder="House #, Street, Area"
+                  />
+                </label>
+                
+                {/* LocationGroup Component - Centralized country/state/city dropdowns */}
+                <LocationGroup
+                  country={formData.country}
+                  setCountry={(val) => handleChange("country", val)}
+                  state={formData.state}
+                  setState={(val) => handleChange("state", val)}
+                  city={formData.city}
+                  setCity={(val) => handleChange("city", val)}
                 />
-              </label>
 
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground text-xs">City</span>
-                <input
-                  type="text"
-                  value={formData.city}
-                  onChange={(e) => handleChange("city", e.target.value)}
-                  className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
-                />
-              </label>
+                <label className="text-sm flex flex-col gap-1">
+                  <span className="text-muted-foreground text-xs">Postal/ZIP Code</span>
+                  <input
+                    type="text"
+                    value={formData.postal_code || ""}
+                    onChange={(e) => handleChange("postal_code", e.target.value)}
+                    className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </label>
+              </div>
             </div>
 
-            {/* Employment Information Section */}
+            {/* Employment Information Section - unchanged */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
                 <Briefcase className="w-4 h-4" />
@@ -325,27 +345,27 @@ const handleChange = (field, value) => {
               </div>
 
               <label className="text-sm flex flex-col gap-1">
-  <span className="text-muted-foreground text-xs">Designation</span>
-  <select
-    value={formData.designation}
-    disabled={!formData.department}
-    onChange={(e) => handleChange("designation", e.target.value)}
-    className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
-  >
-    <option value="">Select Designation</option>
+                <span className="text-muted-foreground text-xs">Designation</span>
+                <select
+                  value={formData.designation}
+                  disabled={!formData.department}
+                  onChange={(e) => handleChange("designation", e.target.value)}
+                  className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">Select Designation</option>
+                  {filteredDesignations.length === 0 ? (
+                    <option disabled>No designations for this department</option>
+                  ) : (
+                    filteredDesignations.map(d => (
+                      <option key={d.id} value={d.title}>
+                        {d.title} ({d.level || "N/A"})
+                      </option>
+                    ))
+                  )}
+                </select>
+              </label>
 
-    {filteredDesignations.length === 0 ? (
-      <option disabled>No designations for this department</option>
-    ) : (
-      filteredDesignations.map(d => (
-        <option key={d.id} value={d.title}>
-          {d.title} ({d.level || "N/A"})
-        </option>
-      ))
-    )}
-  </select>
-</label>
-
+              {/* Continue with rest of employment fields... */}
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Employment Type</span>
@@ -361,7 +381,7 @@ const handleChange = (field, value) => {
                   </select>
                 </label>
                 <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground text-xs">Status (Default: Active)</span>
+                  <span className="text-muted-foreground text-xs">Status</span>
                   <select
                     value={formData.employment_status}
                     onChange={(e) => handleChange("employment_status", e.target.value)}
@@ -435,7 +455,6 @@ const handleChange = (field, value) => {
                       {emp.first_name} {emp.last_name} - {emp.designation || "Manager"}
                     </option>
                   ))}
-                  {/* Also show all employees as fallback */}
                   {employees.filter(e => !getManagerEmployees().find(m => m.id === e.id)).map(emp => (
                     <option key={emp.id} value={emp.id}>
                       {emp.first_name} {emp.last_name} ({emp.designation || "Staff"})
