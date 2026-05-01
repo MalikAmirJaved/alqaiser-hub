@@ -122,7 +122,7 @@ export function LocationGroup({
     setCity("");
   };
 
-  const inputClassName = className || "bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring";
+  const inputClassName = className || " ";
 
   return (
     <div className="space-y-3">

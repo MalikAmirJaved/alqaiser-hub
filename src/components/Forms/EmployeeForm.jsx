@@ -51,7 +51,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
   const [designations, setDesignations] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
-  
+
   const filteredDesignations = designations.filter(
     (d) => d.department === formData.department
   );
@@ -60,7 +60,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
   useEffect(() => {
     loadDesignations();
     loadEmployees();
-    
+
     // If editing, populate form
     if (initialData) {
       setFormData(initialData);
@@ -110,7 +110,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
     const requiredFields = ["first_name", "father_name", "cnic", "date_of_birth", "phone", "department", "joining_date"];
     for (const field of requiredFields) {
       if (!formData[field]) {
@@ -124,7 +124,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
     if (formData.address_line) {
       finalData.address = `${formData.address_line}, ${formData.city || ""}, ${formData.state || ""}, ${formData.country || ""}`;
     }
-    
+
     onSubmit(finalData);
   };
 
@@ -149,14 +149,14 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
           <input type="hidden" value={formData.employee_id} />
 
           <div className="grid md:grid-cols-2 gap-4">
-            
+
             {/* Personal Information Section */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
                 <Users className="w-4 h-4" />
                 Personal Information
               </h3>
-              
+
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">First Name *</span>
@@ -218,30 +218,30 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Gender *</span>
                   <SearchableSelect
-  value={formData.gender}
-  onChange={(val) => handleChange("gender", val)}
-  options={[
-    { value: "MALE", label: "Male" },
-    { value: "FEMALE", label: "Female" },
-    { value: "OTHER", label: "Other" }
-  ]}
-  required={true}
-  placeholder="Select Gender"
-/>
+                    value={formData.gender}
+                    onChange={(val) => handleChange("gender", val)}
+                    options={[
+                      { value: "MALE", label: "Male" },
+                      { value: "FEMALE", label: "Female" },
+                      { value: "OTHER", label: "Other" }
+                    ]}
+                    required={true}
+                    placeholder="Select Gender"
+                  />
                 </label>
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Marital Status</span>
                   <SearchableSelect
-  value={formData.marital_status}
-  onChange={(val) => handleChange("marital_status", val)}
-  options={[
-    { value: "SINGLE", label: "Single" },
-    { value: "MARRIED", label: "Married" },
-    { value: "DIVORCED", label: "Divorced" },
-    { value: "WIDOWED", label: "Widowed" }
-  ]}
-  placeholder="Select Marital Status"
-/>
+                    value={formData.marital_status}
+                    onChange={(val) => handleChange("marital_status", val)}
+                    options={[
+                      { value: "SINGLE", label: "Single" },
+                      { value: "MARRIED", label: "Married" },
+                      { value: "DIVORCED", label: "Divorced" },
+                      { value: "WIDOWED", label: "Widowed" }
+                    ]}
+                    placeholder="Select Marital Status"
+                  />
 
                 </label>
               </div>
@@ -291,7 +291,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                     placeholder="House #, Street, Area"
                   />
                 </label>
-                
+
                 {/* LocationGroup Component - Centralized country/state/city dropdowns */}
                 <LocationGroup
                   country={formData.country}
@@ -325,41 +325,41 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Role</span>
                   <SearchableSelect
-  value={formData.role}
-  onChange={(val) => handleChange("role", val)}
-  options={[
-    { value: "STAFF", label: "Staff" },
-    { value: "BRANCH_ADMIN", label: "Branch Admin" },
-    { value: "COMPANY_ADMIN", label: "Company Admin" }
-  ]}
-  placeholder="Select Role"
-/>
+                    value={formData.role}
+                    onChange={(val) => handleChange("role", val)}
+                    options={[
+                      { value: "STAFF", label: "Staff" },
+                      { value: "BRANCH_ADMIN", label: "Branch Admin" },
+                      { value: "COMPANY_ADMIN", label: "Company Admin" }
+                    ]}
+                    placeholder="Select Role"
+                  />
                 </label>
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Department *</span>
                   <SearchableSelect
-  value={formData.department}
-  onChange={(val) => handleChange("department", val)}
-  options={[
-    { value: "HR", label: "HR" },
-    { value: "INVENTORY", label: "Inventory" },
-    { value: "FINANCE", label: "Finance" }
-  ]}
-  required={true}
-  placeholder="Select Department"
-/>
+                    value={formData.department}
+                    onChange={(val) => handleChange("department", val)}
+                    options={[
+                      { value: "HR", label: "HR" },
+                      { value: "INVENTORY", label: "Inventory" },
+                      { value: "FINANCE", label: "Finance" }
+                    ]}
+                    required={true}
+                    placeholder="Select Department"
+                  />
                 </label>
               </div>
 
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs">Designation</span>
                 <SearchableSelect
-  value={formData.designation}
-  onChange={(val) => handleChange("designation", val)}
-  options={filteredDesignations.map(d => ({ value: d.title, label: `${d.title} (${d.level || "N/A"})` }))}
-  disabled={!formData.department}
-  placeholder="Select Designation"
-/>
+                  value={formData.designation}
+                  onChange={(val) => handleChange("designation", val)}
+                  options={filteredDesignations.map(d => ({ value: d.title, label: `${d.title} (${d.level || "N/A"})` }))}
+                  disabled={!formData.department}
+                  placeholder="Select Designation"
+                />
               </label>
 
               {/* Continue with rest of employment fields... */}
@@ -367,31 +367,31 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Employment Type</span>
                   <SearchableSelect
-  value={formData.employment_type}
-  onChange={(val) => handleChange("employment_type", val)}
-  options={[
-    { value: "FULL_TIME", label: "Full Time" },
-    { value: "PART_TIME", label: "Part Time" },
-    { value: "CONTRACT", label: "Contract" },
-    { value: "INTERN", label: "Intern" }
-  ]}
-  placeholder="Select Employment Type"
-/>
+                    value={formData.employment_type}
+                    onChange={(val) => handleChange("employment_type", val)}
+                    options={[
+                      { value: "FULL_TIME", label: "Full Time" },
+                      { value: "PART_TIME", label: "Part Time" },
+                      { value: "CONTRACT", label: "Contract" },
+                      { value: "INTERN", label: "Intern" }
+                    ]}
+                    placeholder="Select Employment Type"
+                  />
                 </label>
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Status</span>
                   <SearchableSelect
-  value={formData.employment_status}
-  onChange={(val) => handleChange("employment_status", val)}
-  options={[
-    { value: "ACTIVE", label: "Active" },
-    { value: "ON_LEAVE", label: "On Leave" },
-    { value: "SUSPENDED", label: "Suspended" },
-    { value: "TERMINATED", label: "Terminated" },
-    { value: "RESIGNED", label: "Resigned" }
-  ]}
-  placeholder="Select Status"
-/>
+                    value={formData.employment_status}
+                    onChange={(val) => handleChange("employment_status", val)}
+                    options={[
+                      { value: "ACTIVE", label: "Active" },
+                      { value: "ON_LEAVE", label: "On Leave" },
+                      { value: "SUSPENDED", label: "Suspended" },
+                      { value: "TERMINATED", label: "Terminated" },
+                      { value: "RESIGNED", label: "Resigned" }
+                    ]}
+                    placeholder="Select Status"
+                  />
                 </label>
               </div>
 
@@ -430,15 +430,15 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Work Location</span>
                   <SearchableSelect
-  value={formData.work_location}
-  onChange={(val) => handleChange("work_location", val)}
-  options={[
-    { value: "OFFICE", label: "Office" },
-    { value: "REMOTE", label: "Remote" },
-    { value: "HYBRID", label: "Hybrid" }
-  ]}
-  placeholder="Select Work Location"
-/>
+                    value={formData.work_location}
+                    onChange={(val) => handleChange("work_location", val)}
+                    options={[
+                      { value: "OFFICE", label: "Office" },
+                      { value: "REMOTE", label: "Remote" },
+                      { value: "HYBRID", label: "Hybrid" }
+                    ]}
+                    placeholder="Select Work Location"
+                  />
 
                 </label>
               </div>
@@ -446,14 +446,14 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs">Reporting Manager</span>
                 <SearchableSelect
-  value={formData.reporting_manager_id}
-  onChange={(val) => handleChange("reporting_manager_id", val)}
-  options={getManagerEmployees().map(emp => ({ 
-    value: emp.id, 
-    label: `${emp.first_name} ${emp.last_name} - ${emp.designation || "Manager"}` 
-  }))}
-  placeholder="Select Manager"
-/>
+                  value={formData.reporting_manager_id}
+                  onChange={(val) => handleChange("reporting_manager_id", val)}
+                  options={getManagerEmployees().map(emp => ({
+                    value: emp.id,
+                    label: `${emp.first_name} ${emp.last_name} - ${emp.designation || "Manager"}`
+                  }))}
+                  placeholder="Select Manager"
+                />
               </label>
             </div>
           </div>

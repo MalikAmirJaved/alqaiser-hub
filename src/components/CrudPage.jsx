@@ -313,7 +313,6 @@ export default function CrudPage({
       onChange={(val) => updateFormValue(field.key, val)}
       options={selectOptions}
       required={field.required}
-      className={commonClassName}
       placeholder={`Select ${field.label}`}
     />
   );

@@ -3,7 +3,7 @@
 // ============================================
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { ChevronDown, ChevronUp, X, Search } from "lucide-react";
+import { ChevronDown, ChevronUp, Search } from "lucide-react";
 
 /**
  * SearchableSelect Component
@@ -98,16 +98,7 @@ export default function SearchableSelect({
           {displayValue}
         </span>
         <div className="flex items-center gap-1 ml-2">
-          {value && (
-            <button
-              type="button"
-              onClick={handleClear}
-              className="p-0.5 hover:bg-muted rounded"
-              aria-label="Clear selection"
-            >
-              <X className="w-3.5 h-3.5 text-muted-foreground" />
-            </button>
-          )}
+          
           <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`} />
         </div>
       </div>
