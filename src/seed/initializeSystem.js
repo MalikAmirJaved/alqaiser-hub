@@ -406,66 +406,6 @@ export function initializeSystem() {
     { id: uid("cp"), employee_id: "Ahmed Raza", grade: "G4", basic: 150000, house_rent_allowance: 15000, medical_allowance: 5000, transport_allowance: 10000, allowances: 30000, total: 180000, effective_date: "2024-01-01", ...complusory },
   ]);
 
-  ls.set("payroll", [
-    { id: uid("pr"), run_code: "PR-2026-04", period_month: 4, period_year: 2026, run_type: "MONTHLY", total_gross: 300000, total_deductions: 7000, total_net: 293000, total_employer_contributions: 15000, approved_by_id: null, paid_at: "2026-04-30", status: "PAID", notes: "April 2026 payroll", ...complusory },
-  ]);
-
-  ls.set("payrollSlips", [
-    {
-      id: uid("psl"),
-      payroll_run_id: "PR-2026-04",
-      employee_id: "Ahmed Raza",
-      basic_salary: 150000,
-      house_rent_allowance: 15000,
-      medical_allowance: 5000,
-      transport_allowance: 10000,
-      overtime_hours: 5,
-      overtime_amount: 5000,
-      bonus: 10000,
-      gross_salary: 185000,
-      income_tax: 3000,
-      eobi_employee: 500,
-      eobi_employer: 2500,
-      pessi_employee: 300,
-      loan_deduction: 0,
-      advance_deduction: 0,
-      late_deduction: 0,
-      absent_deduction: 0,
-      total_deductions: 3800,
-      net_salary: 181200,
-      payment_method: "BANK",
-      payment_status: "PAID",
-      paid_at: "2026-04-30",
-      ...complusory
-    },
-    {
-      id: uid("psl"),
-      payroll_run_id: "PR-2026-04",
-      employee_id: "Sara Khan",
-      basic_salary: 100000,
-      house_rent_allowance: 10000,
-      medical_allowance: 4000,
-      transport_allowance: 6000,
-      overtime_hours: 0,
-      overtime_amount: 0,
-      bonus: 5000,
-      gross_salary: 120000,
-      income_tax: 1500,
-      eobi_employee: 400,
-      eobi_employer: 2000,
-      pessi_employee: 250,
-      loan_deduction: 0,
-      advance_deduction: 0,
-      late_deduction: 200,
-      absent_deduction: 0,
-      total_deductions: 2350,
-      net_salary: 117650,
-      payment_method: "BANK",
-      payment_status: "PAID",
-      paid_at: "2026-04-30",...complusory
-    },
-  ]);
-
   // ─── FINANCE ──────────────────────────────────────────────────────────────
 
   ls.set("accounts", [
@@ -547,9 +487,202 @@ export function initializeSystem() {
     { id: uid("fa"), name: "Office Vehicle", category: "Vehicle", purchase_date: "2024-01-15", cost_value: 3500000, depreciation_method: "Straight-Line", depreciation: 350000, accumulated_dep: 700000, net_book_value: 2800000, disposal_date: null, status: "Active" ,...complusory},
   ]);
 
-  ls.set("taxes", [
-    { id: uid("tx"), name: "Sales Tax", tax_type: "Sales Tax", rate: 17, period: "2026", amount: 1500000, account_id: null, is_active: "true",...complusory },
-  ]);
+  // ─── TAXES ──────────────────────────────────────────────────────────────
+ls.set("taxes", [
+  { 
+    id: uid("tax"), 
+    name: "GST Standard", 
+    type: "GST", 
+    rate: 18, 
+    country: "PK", 
+    is_inclusive: "false", 
+    tax_code: "GST-001",
+    effective_from: "2024-01-01",
+    effective_to: null,
+    is_active: "true",
+    description: "Standard GST for most goods and services",
+    ...complusory 
+  },
+  { 
+    id: uid("tax"), 
+    name: "GST Reduced", 
+    type: "GST", 
+    rate: 5, 
+    country: "PK", 
+    is_inclusive: "false", 
+    tax_code: "GST-002",
+    effective_from: "2024-01-01",
+    effective_to: null,
+    is_active: "true",
+    description: "Reduced GST for essential items",
+    ...complusory 
+  },
+  { 
+    id: uid("tax"), 
+    name: "Sales Tax IT", 
+    type: "Sales Tax", 
+    rate: 15, 
+    country: "PK", 
+    is_inclusive: "false", 
+    tax_code: "ST-IT-001",
+    effective_from: "2024-01-01",
+    effective_to: null,
+    is_active: "true",
+    description: "Sales tax on IT services",
+    ...complusory 
+  },
+  { 
+    id: uid("tax"), 
+    name: "Withholding Tax", 
+    type: "Withholding Tax", 
+    rate: 10, 
+    country: "PK", 
+    is_inclusive: "false", 
+    tax_code: "WHT-001",
+    effective_from: "2024-01-01",
+    effective_to: null,
+    is_active: "true",
+    description: "Withholding tax on vendor payments",
+    ...complusory 
+  },
+  { 
+    id: uid("tax"), 
+    name: "Income Tax", 
+    type: "Income Tax", 
+    rate: 20, 
+    country: "PK", 
+    is_inclusive: "false", 
+    tax_code: "IT-001",
+    effective_from: "2024-01-01",
+    effective_to: null,
+    is_active: "true",
+    description: "Income tax on employee salaries",
+    ...complusory 
+  },
+  { 
+    id: uid("tax"), 
+    name: "EOBI Contribution", 
+    type: "EOBI", 
+    rate: 5, 
+    country: "PK", 
+    is_inclusive: "false", 
+    tax_code: "EOBI-001",
+    effective_from: "2024-01-01",
+    effective_to: null,
+    is_active: "true",
+    description: "Employees Old-Age Benefits Institution",
+    ...complusory 
+  },
+  { 
+    id: uid("tax"), 
+    name: "PESSI", 
+    type: "PESSI", 
+    rate: 6, 
+    country: "PK", 
+    is_inclusive: "false", 
+    tax_code: "PESSI-001",
+    effective_from: "2024-01-01",
+    effective_to: null,
+    is_active: "true",
+    description: "Social security contributions",
+    ...complusory 
+  },
+]);
+
+// ─── TAX RULES ──────────────────────────────────────────────────────────────
+ls.set("taxRules", [
+  { 
+    id: uid("rule"), 
+    module: "inventory", 
+    transaction_type: "invoice", 
+    tax_id: "GST Standard (tax_id)", 
+    conditions: "{\"product_type\": \"PRODUCT\"}", 
+    priority: 1, 
+    is_active: "true",
+    ...complusory 
+  },
+  { 
+    id: uid("rule"), 
+    module: "inventory", 
+    transaction_type: "purchase", 
+    tax_id: "GST Standard (tax_id)", 
+    conditions: "{\"purchase_type\": \"goods\"}", 
+    priority: 1, 
+    is_active: "true",
+    ...complusory 
+  },
+  { 
+    id: uid("rule"), 
+    module: "hr", 
+    transaction_type: "salary", 
+    tax_id: "Income Tax (tax_id)", 
+    conditions: null, 
+    priority: 1, 
+    is_active: "true",
+    ...complusory 
+  },
+  { 
+    id: uid("rule"), 
+    module: "finance", 
+    transaction_type: "expense", 
+    tax_id: "Withholding Tax (tax_id)", 
+    conditions: "{\"vendor_type\": \"service\"}", 
+    priority: 1, 
+    is_active: "true",
+    ...complusory 
+  },
+]);
+
+// ─── EMPLOYEE LOANS ─────────────────────────────────────────────────────────
+ls.set("employeeLoans", [
+  {
+    id: uid("loan"),
+    employee_id: "Ahmed Raza (employee_id)",
+    loan_type: "Salary Advance",
+    principal_amount: 50000,
+    monthly_deduction: 5000,
+    total_months: 10,
+    paid_months: 2,
+    remaining_amount: 40000,
+    start_date: today(),
+    end_date: null,
+    interest_rate: 0,
+    status: "ACTIVE",
+    approved_by: "System Admin",
+    ...complusory
+  },
+]);
+
+// ─── EMPLOYEE BENEFITS ──────────────────────────────────────────────────────
+ls.set("employeeBenefits", [
+  {
+    id: uid("benefit"),
+    employee_id: "Ahmed Raza (employee_id)",
+    benefit_type: "Health Insurance",
+    employer_contribution: 15000,
+    employee_contribution: 5000,
+    monthly_amount: 20000,
+    effective_date: today(),
+    status: "ACTIVE",
+    ...complusory
+  },
+  {
+    id: uid("benefit"),
+    employee_id: "Sara Khan (employee_id)",
+    benefit_type: "Health Insurance",
+    employer_contribution: 15000,
+    employee_contribution: 5000,
+    monthly_amount: 20000,
+    effective_date: today(),
+    status: "ACTIVE",
+    ...complusory
+  },
+]);
+
+// ─── PAYROLL RECORDS ────────────────────────────────────────────────────────
+ls.set("payroll", []);
+ls.set("payrollBatches", []);
+ls.set("tax_transactions", []);
 
   ls.set("forecasts", [
     { id: uid("fc"), period: "Q1-2026", type: "REVENUE", revenue: 8900000, expense: 4200000, profit: 4700000, actual: 8900000, variance: 0, notes: "Q1 actuals" ,...complusory},
