@@ -3,7 +3,7 @@
 // ============================================
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { ChevronDown, ChevronUp, Search } from "lucide-react";
+import { ChevronDown, ChevronUp, Search, X, Check } from "lucide-react";
 
 /**
  * SearchableSelect Component
@@ -18,196 +18,151 @@ import { ChevronDown, ChevronUp, Search } from "lucide-react";
  * @param {boolean} disabled - Disabled state
  * @param {string} label - Optional label for the field
  */
-export default function SearchableSelect({ 
-  value = "", 
-  onChange, 
-  options = [], 
-  placeholder = "Select...", 
-  required = false, 
-  className = "", 
-  disabled = false 
+export default function SearchableSelect({
+  value,
+  onChange,
+  options = [],
+  required = false,
+  placeholder = "Select...",
+  disabled = false,
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const wrapperRef = useRef(null);
+  const [query, setQuery] = useState("");
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const inputRef = useRef(null);
+  const containerRef = useRef(null);
 
-  const selectedOption = options.find((opt) => opt.value === value);
-  const displayValue = selectedOption ? selectedOption.label : (value || placeholder);
+  // Sync input text when value changes or dropdown opens
+  useEffect(() => {
+    const selectedOption = options.find((opt) => opt.value === value);
+    setQuery(selectedOption ? selectedOption.label : "");
+  }, [value, options, isOpen]);
 
-  const filteredOptions = useMemo(() => {
-    if (!search) return options;
-    return options.filter((opt) =>
-      opt.label?.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [options, search]);
+  const filteredOptions = options.filter((opt) =>
+    opt.label.toLowerCase().includes(query.toLowerCase())
+  );
 
-  // Close dropdown when clicking outside
+  const handleSelect = (option) => {
+    onChange(option.value);
+    setQuery(option.label);
+    setIsOpen(false);
+    setHighlightedIndex(-1);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!isOpen) setIsOpen(true);
+      if (filteredOptions.length === 0) return;
+
+      setHighlightedIndex((prev) => {
+        if (e.key === "ArrowDown") return prev < filteredOptions.length - 1 ? prev + 1 : 0;
+        return prev > 0 ? prev - 1 : filteredOptions.length - 1;
+      });
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (!isOpen) {
+        setIsOpen(true);
+        setHighlightedIndex(0);
+      } else if (highlightedIndex >= 0 && highlightedIndex < filteredOptions.length) {
+        handleSelect(filteredOptions[highlightedIndex]);
+      }
+    } else if (e.key === "Escape") {
+      setIsOpen(false);
+    }
+  };
+
+  // Close dropdown on outside click & restore query if closed without selecting
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
         setIsOpen(false);
-        setSearch("");
+        const selectedOption = options.find((opt) => opt.value === value);
+        setQuery(selectedOption ? selectedOption.label : "");
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [options, value]);
 
-  // Explicit toggle handler that prevents event interference
-  const handleToggle = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!disabled) {
-      setIsOpen(prev => !prev);
+  // Scroll highlighted item into view automatically
+  useEffect(() => {
+    if (isOpen && highlightedIndex >= 0) {
+      const activeOption = containerRef.current?.querySelector(`[data-index="${highlightedIndex}"]`);
+      activeOption?.scrollIntoView({ block: "nearest" });
     }
-  }, [disabled]);
-
-  const handleSelect = useCallback((val, label) => {
-    onChange(val);
-    setSearch("");
-    setIsOpen(false); // Closes dropdown after selection
-  }, [onChange]);
-
-  const handleClear = useCallback((e) => {
-    e.stopPropagation(); // Prevents dropdown toggle when clicking X
-    setSearch("");
-    setIsOpen(false);
-  }, []);
+  }, [highlightedIndex, isOpen]);
 
   return (
-    <div ref={wrapperRef} className={`relative w-full ${className}`}>
-      {/* Trigger Area */}
-      <div
-        onClick={handleToggle}
-        className={`
-          w-full h-9 px-3 flex items-center justify-between rounded-md border border-border bg-muted/40 text-sm outline-none
-          focus-within:ring-2 focus-within:ring-ring cursor-pointer select-none transition-colors
-          ${disabled ? "opacity-50 pointer-events-none cursor-not-allowed" : "hover:bg-muted/60"}
-        `}
-        role="combobox"
-        aria-expanded={isOpen}
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            setIsOpen(prev => !prev);
-          }
-        }}
-      >
-        <span className={`truncate ${value ? "text-foreground" : "text-muted-foreground"}`}>
-          {displayValue}
-        </span>
-        <div className="flex items-center gap-1 ml-2">
-          
-          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`} />
+    <div ref={containerRef} className="relative w-full">
+      <div className="relative flex items-center">
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            if (!isOpen) setIsOpen(true);
+            setHighlightedIndex(-1);
+          }}
+          onClick={() => setIsOpen(true)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          disabled={disabled}
+          required={required}
+          className="w-full bg-muted/40 border border-border rounded-md h-9 px-3 pr-8 outline-none focus:ring-2 focus:ring-ring text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+        />
+        <div className="absolute right-2 flex items-center pointer-events-none">
+          {query ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setQuery("");
+                onChange("");
+                setIsOpen(true);
+                inputRef.current?.focus();
+              }}
+              className="p-0.5 rounded hover:bg-muted/60 text-muted-foreground pointer-events-auto"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          ) : (
+            <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`} />
+          )}
         </div>
       </div>
 
-      {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-md shadow-lg z-50 overflow-hidden animate-in fade-in-0 zoom-in-95 duration-100">
-          <div className="p-2 border-b border-border">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                autoFocus
-                placeholder="Search..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full h-7 pl-7 pr-2 text-xs rounded border border-border bg-muted/20 outline-none focus:ring-1 focus:ring-ring"
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
-          </div>
-
-          <div className="max-h-60 overflow-y-auto p-1">
-            {filteredOptions.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-muted-foreground text-center">No results found</div>
-            ) : (
-              filteredOptions.map((opt) => (
-                <div
-                  key={opt.value}
-                  onClick={() => handleSelect(opt.value, opt.label)}
+        <ul
+          className="absolute z-50 mt-1 w-full bg-card border border-border rounded-md shadow-lg max-h-60 overflow-auto py-1"
+        >
+          {filteredOptions.length === 0 ? (
+            <li className="px-3 py-2 text-sm text-muted-foreground">No results found.</li>
+          ) : (
+            filteredOptions.map((option, index) => {
+              const isSelected = value === option.value;
+              const isHighlighted = highlightedIndex === index;
+              return (
+                <li
+                  key={option.value}
+                  data-index={index}
+                  onClick={() => handleSelect(option)}
+                  onMouseEnter={() => setHighlightedIndex(index)}
                   className={`
-                    px-3 py-2 text-sm rounded cursor-pointer select-none flex items-center justify-between
-                    ${opt.value === value ? "bg-primary/15 text-primary font-medium" : "hover:bg-muted/50"}
+                    px-3 py-2 text-sm cursor-pointer flex items-center justify-between transition-colors
+                    ${isHighlighted ? "bg-muted/60 text-foreground" : "text-foreground"}
+                    ${isSelected ? "font-semibold text-primary" : ""}
                   `}
                 >
-                  {opt.label}
-                  {opt.value === value && <span className="text-xs text-primary">✓</span>}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+                  {option.label}
+                  {isSelected && <Check className="w-4 h-4 text-primary" />}
+                </li>
+              );
+            })
+          )}
+        </ul>
       )}
-      
-      {/* Hidden input for form validation */}
-      {required && <input type="hidden" value={value} required />}
-    </div>
-  );
-}
-
-/**
- * SearchableSelectGroup - Combines multiple searchable selects for country/state/city
- */
-export function LocationSearchableGroup({
-  country,
-  setCountry,
-  state,
-  setState,
-  city,
-  setCity,
-  countries = [],
-  states = [],
-  cities = [],
-  required = false,
-}) {
-  const handleCountryChange = (newCountry) => {
-    setCountry(newCountry);
-    setState("");
-    setCity("");
-  };
-
-  const handleStateChange = (newState) => {
-    setState(newState);
-    setCity("");
-  };
-
-  return (
-    <div className="space-y-3">
-      <div>
-        <label className="text-muted-foreground text-xs block mb-1">
-          Country {required && <span className="text-destructive">*</span>}
-        </label>
-        <SearchableSelect
-          value={country}
-          onChange={handleCountryChange}
-          options={countries}
-          placeholder="Select Country"
-        />
-      </div>
-      <div>
-        <label className="text-muted-foreground text-xs block mb-1">State/Region</label>
-        <SearchableSelect
-          value={state}
-          onChange={handleStateChange}
-          options={states}
-          placeholder="Select State"
-          disabled={!country}
-        />
-      </div>
-      <div>
-        <label className="text-muted-foreground text-xs block mb-1">City</label>
-        <SearchableSelect
-          value={city}
-          onChange={setCity}
-          options={cities}
-          placeholder="Select City"
-          disabled={!country || !state}
-        />
-      </div>
     </div>
   );
 }
