@@ -93,7 +93,7 @@ export function DatePicker({ value, onChange, placeholder = "Pick a date", class
         <Button
           variant="outline"
           className={cn(
-            "w-full justify-start text-left font-normal transition-all duration-200",
+            "w-full justify-start text-left font-normal transition-all duration-200 cursor-pointer",
             "hover:bg-accent hover:text-accent-foreground",
             !date && "text-muted-foreground",
             open && "ring-2 ring-ring ring-offset-2",

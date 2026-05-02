@@ -111,7 +111,7 @@ export default function SearchableSelect({
 
   return (
     <div ref={containerRef} className="relative w-full">
-      <div className="relative flex items-center">
+      <div className="relative flex items-center ">
         <input
           ref={inputRef}
           type="text"
@@ -126,7 +126,7 @@ export default function SearchableSelect({
           placeholder={placeholder}
           disabled={disabled}
           required={required}
-          className="w-full bg-muted/40 border border-border rounded-md h-9 px-3 pr-8 outline-none focus:ring-2 focus:ring-ring text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          className={`w-full bg-muted/40 border border-border ${!isOpen && "cursor-pointer"}  rounded-md h-9 px-3 pr-8 outline-none focus:ring-2 focus:ring-ring text-sm disabled:opacity-50 disabled:cursor-not-allowed`}
         />
         <div className="absolute right-2 flex items-center pointer-events-none">
           {query ? (
