@@ -607,31 +607,6 @@ ls.set("employeeLoans", [
   },
 ]);
 
-// ─── EMPLOYEE BENEFITS ──────────────────────────────────────────────────────
-ls.set("employeeBenefits", [
-  {
-    id: uid("benefit"),
-    employee_id: "Ahmed Raza (employee_id)",
-    benefit_type: "Health Insurance",
-    employer_contribution: 15000,
-    employee_contribution: 5000,
-    monthly_amount: 20000,
-    effective_date: today(),
-    status: "ACTIVE",
-    ...complusory
-  },
-  {
-    id: uid("benefit"),
-    employee_id: "Sara Khan (employee_id)",
-    benefit_type: "Health Insurance",
-    employer_contribution: 15000,
-    employee_contribution: 5000,
-    monthly_amount: 20000,
-    effective_date: today(),
-    status: "ACTIVE",
-    ...complusory
-  },
-]);
 
 // ─── PAYROLL RECORDS ────────────────────────────────────────────────────────
 ls.set("payroll", []);

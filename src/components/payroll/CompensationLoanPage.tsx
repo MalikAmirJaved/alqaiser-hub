@@ -38,23 +38,6 @@ type Loan = {
   notes?: string;
 };
 
-type Benefit = {
-  id: string;
-  employee_id: string;
-  employee_name?: string;
-  benefit_type: string;
-  provider?: string;
-  policy_number?: string;
-  employer_contribution: number;
-  employee_contribution: number;
-  monthly_amount: number;
-  coverage_amount?: number;
-  effective_date: string;
-  expiry_date?: string;
-  status: string;
-  notes?: string;
-};
-
 type Compensation = {
   id: string;
   employee_id: string;
@@ -81,12 +64,11 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
   const [employees, setEmployees] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
-  const [modalType, setModalType] = useState<"compensation" | "loan" | "benefit">("compensation");
+  const [modalType, setModalType] = useState<"compensation" | "loan">("compensation");
   
   // Data states
   const [compensations, setCompensations] = useState<Compensation[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
-  const [benefits, setBenefits] = useState<Benefit[]>([]);
   
   // Form states
   const [formData, setFormData] = useState<any>({});
@@ -99,7 +81,6 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
     loadEmployees();
     loadCompensations();
     loadLoans();
-    loadBenefits();
   }, []);
 
   const loadEmployees = () => {
@@ -136,15 +117,6 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
     setLoans(enriched);
   };
 
-  const loadBenefits = () => {
-    const allBenefits = (ls.get("employeeBenefits") || []);
-    const filtered = companyContext.filterByContext(allBenefits);
-    const enriched = filtered.map((b: any) => {
-      const emp = employees.find(e => e.id === b.employee_id);
-      return { ...b, employee_name: emp ? `${emp.first_name} ${emp.last_name || ""}` : "Unknown" };
-    });
-    setBenefits(enriched);
-  };
 
   const handleSave = () => {
     let updated: any[] = [];
@@ -169,16 +141,6 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
         ls.set("employeeLoans", updated);
       }
       setLoans(updated);
-    } else if (modalType === "benefit") {
-      if (editingItem) {
-        updated = benefits.map(b => b.id === editingItem.id ? { ...formData, id: b.id } : b);
-        ls.set("employeeBenefits", updated);
-      } else {
-        const newItem = { ...formData, id: `benefit_${Date.now()}` };
-        updated = [newItem, ...benefits];
-        ls.set("employeeBenefits", updated);
-      }
-      setBenefits(updated);
     }
     
     setShowModal(false);
@@ -198,23 +160,18 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
       const updated = loans.filter(l => l.id !== id);
       ls.set("employeeLoans", updated);
       setLoans(updated);
-    } else if (type === "benefit") {
-      const updated = benefits.filter(b => b.id !== id);
-      ls.set("employeeBenefits", updated);
-      setBenefits(updated);
-    }
-    
+    } 
     if (onRefresh) onRefresh();
   };
 
-  const openAddModal = (type: "compensation" | "loan" | "benefit") => {
+  const openAddModal = (type: "compensation" | "loan") => {
     setModalType(type);
     setEditingItem(null);
     setFormData({});
     setShowModal(true);
   };
 
-  const openEditModal = (type: "compensation" | "loan" | "benefit", item: any) => {
+  const openEditModal = (type: "compensation" | "loan", item: any) => {
     setModalType(type);
     setEditingItem(item);
     setFormData(item);
@@ -356,77 +313,6 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
         </div>
       );
     }
-    
-    // Benefit form
-    return (
-      <div className="grid grid-cols-2 gap-3">
-        <label className="text-sm flex flex-col gap-1">
-          <span className="text-muted-foreground text-xs">Employee *</span>
-          <SearchableSelect
-            value={formData.employee_id || ""}
-            onChange={(val) => setFormData({ ...formData, employee_id: val })}
-            options={employeeOptions}
-            placeholder="Select Employee"
-            required
-          />
-        </label>
-        <label className="text-sm flex flex-col gap-1">
-          <span className="text-muted-foreground text-xs">Benefit Type *</span>
-          <SearchableSelect
-            value={formData.benefit_type || ""}
-            onChange={(val) => setFormData({ ...formData, benefit_type: val })}
-            options={[
-              { value: "Health Insurance", label: "Health Insurance" },
-              { value: "Life Insurance", label: "Life Insurance" },
-              { value: "Retirement Fund", label: "Retirement Fund" },
-              { value: "Children Education", label: "Children Education" },
-              { value: "Transport", label: "Transport" },
-              { value: "Meal Vouchers", label: "Meal Vouchers" },
-              { value: "Gym Membership", label: "Gym Membership" },
-              { value: "Other", label: "Other" }
-            ]}
-            placeholder="Select Type"
-            required
-          />
-        </label>
-        <label className="text-sm flex flex-col gap-1">
-          <span className="text-muted-foreground text-xs">Employer Contribution *</span>
-          <input type="number" value={formData.employer_contribution || ""} onChange={(e) => setFormData({ ...formData, employer_contribution: Number(e.target.value) })} required className="bg-muted/40 border border-border rounded-md h-9 px-2" />
-        </label>
-        <label className="text-sm flex flex-col gap-1">
-          <span className="text-muted-foreground text-xs">Employee Contribution *</span>
-          <input type="number" value={formData.employee_contribution || ""} onChange={(e) => setFormData({ ...formData, employee_contribution: Number(e.target.value) })} required className="bg-muted/40 border border-border rounded-md h-9 px-2" />
-        </label>
-        <label className="text-sm flex flex-col gap-1">
-          <span className="text-muted-foreground text-xs">Provider</span>
-          <input type="text" value={formData.provider || ""} onChange={(e) => setFormData({ ...formData, provider: e.target.value })} className="bg-muted/40 border border-border rounded-md h-9 px-2" />
-        </label>
-        <label className="text-sm flex flex-col gap-1">
-          <span className="text-muted-foreground text-xs">Effective Date *</span>
-          <DatePicker
-            date={formData.effective_date ? new Date(formData.effective_date) : undefined}
-            setDate={(date) => setFormData({ ...formData, effective_date: date ? date.toISOString().slice(0, 10) : "" })}
-          />
-        </label>
-        <label className="text-sm flex flex-col gap-1">
-          <span className="text-muted-foreground text-xs">Status</span>
-          <select
-            value={formData.status || "ACTIVE"}
-            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-            className="bg-muted/40 border border-border rounded-md h-9 px-2"
-          >
-            <option value="PENDING">Pending</option>
-            <option value="ACTIVE">Active</option>
-            <option value="CANCELLED">Cancelled</option>
-            <option value="EXPIRED">Expired</option>
-          </select>
-        </label>
-        <label className="text-sm flex flex-col gap-1 sm:col-span-2">
-          <span className="text-muted-foreground text-xs">Notes</span>
-          <textarea rows={2} value={formData.notes || ""} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} className="bg-muted/40 border border-border rounded-md p-2" />
-        </label>
-      </div>
-    );
   };
 
   // Filter functions
@@ -440,11 +326,6 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
     l.loan_type?.toLowerCase().includes(searchQuery.toLowerCase())
   ).filter(l => statusFilter === "all" || l.status === statusFilter);
   
-  const filteredBenefits = benefits.filter(b => 
-    b.employee_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    b.benefit_type?.toLowerCase().includes(searchQuery.toLowerCase())
-  ).filter(b => statusFilter === "all" || b.status === statusFilter);
-
   return (
     <div className="mt-5">
       {/* Tabs Menu for Salary vs Compensation/Loan */}
@@ -459,18 +340,14 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
               <HandCoins className="w-4 h-4" />
               Loans & Advances
             </TabsTrigger>
-            <TabsTrigger value="benefits" className="flex items-center gap-2">
-              <Shield className="w-4 h-4" />
-              Benefits
-            </TabsTrigger>
           </TabsList>
           
           <button
-            onClick={() => openAddModal(activeTab === "compensation" ? "compensation" : activeTab === "loans" ? "loan" : "benefit")}
+            onClick={() => openAddModal(activeTab === "compensation" ? "compensation" : "loan")}
             className="inline-flex items-center gap-2 px-3 h-8 rounded-md bg-primary text-primary-foreground text-sm"
           >
             <Plus className="w-4 h-4" />
-            Add {activeTab === "compensation" ? "Compensation" : activeTab === "loans" ? "Loan" : "Benefit"}
+            Add {activeTab === "compensation" ? "Compensation" : "Loan" }
           </button>
         </div>
 
@@ -603,68 +480,6 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
               </table>
             </div>
           </TabsContent>
-
-          {/* Benefits Tab */}
-          <TabsContent value="benefits" className="m-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
-                  <tr>
-                    <th className="text-left px-4 py-3">Employee</th>
-                    <th className="text-left px-4 py-3">Benefit Type</th>
-                    <th className="text-left px-4 py-3">Employer</th>
-                    <th className="text-left px-4 py-3">Employee</th>
-                    <th className="text-left px-4 py-3">Monthly</th>
-                    <th className="text-left px-4 py-3">Status</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredBenefits.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="text-center py-10 text-muted-foreground">
-                        No benefit records found.
-                      </td>
-                    </tr>
-                  )}
-                  {filteredBenefits.map((item) => (
-                    <tr key={item.id} className="border-t border-border hover:bg-muted/30">
-                      <td className="px-4 py-3 font-medium">{item.employee_name}</td>
-                      <td className="px-4 py-3">{item.benefit_type}</td>
-                      <td className="px-4 py-3">{formatCurrency(item.employer_contribution)}</td>
-                      <td className="px-4 py-3">{formatCurrency(item.employee_contribution)}</td>
-                      <td className="px-4 py-3">{formatCurrency(item.monthly_amount)}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
-                          item.status === "ACTIVE" ? "bg-success/15 text-success border-success/30" :
-                          item.status === "PENDING" ? "bg-warning/15 text-warning border-warning/30" :
-                          "bg-destructive/15 text-destructive border-destructive/30"
-                        }`}>
-                          {item.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <button onClick={() => openEditModal("benefit", item)} className="p-1.5 rounded-md hover:bg-muted">
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => handleDelete("benefit", item.id)} className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </TabsContent>
-
-          <div className="p-3 border-t border-border flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">
-              {activeTab === "compensation" && `${filteredCompensations.length} compensation records`}
-              {activeTab === "loans" && `${filteredLoans.length} loan records`}
-              {activeTab === "benefits" && `${filteredBenefits.length} benefit records`}
-            </div>
-          </div>
         </div>
       </Tabs>
 
@@ -674,7 +489,7 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
           <div className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-card">
               <h2 className="font-semibold">
-                {editingItem ? "Edit" : "Add"} {modalType === "compensation" ? "Compensation" : modalType === "loan" ? "Loan" : "Benefit"}
+                {editingItem ? "Edit" : "Add"} {modalType === "compensation" ? "Compensation" : "Loan" }
               </h2>
               <button onClick={() => setShowModal(false)} className="p-1.5 rounded-md hover:bg-muted">
                 ✕

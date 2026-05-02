@@ -11,7 +11,7 @@ export default function CompensationLoanModule() {
     <div>
       <PageHeader 
         title="Compensation & Loan" 
-        subtitle="Manage salary structures, employee loans, and benefits" 
+        subtitle="Manage salary structures, employee loans" 
       />
       <CompensationLoanPage formatCurrency={formatCurrency} />
     </div>

@@ -43,12 +43,11 @@ export class PayrollEngine {
     const attendanceAdjustment = this.calculateAttendanceAdjustment(employee.id, attendance, grossSalary);
     grossSalary += attendanceAdjustment;
     
-    // ONLY calculate loan and benefit deductions - NO TAX DEDUCTION
+    // ONLY calculate loan deductions - NO TAX DEDUCTION
     const loanDeductions = this.calculateLoanDeductions(employee.id);
-    const benefitDeductions = this.calculateBenefitDeductions(employee.id);
     const customDeductionsTotal = customDeductions.reduce((sum, d) => sum + d.amount, 0);
     
-    const totalDeductions = loanDeductions + benefitDeductions + customDeductionsTotal;
+    const totalDeductions = loanDeductions + customDeductionsTotal;
     
     const netSalary = grossSalary - totalDeductions;
     
@@ -65,7 +64,6 @@ export class PayrollEngine {
       deductions: {
         taxes: 0, // ZERO TAX on salaries
         loans: loanDeductions,
-        benefits: benefitDeductions,
         custom: customDeductions,
       },
       attendance_adjustment: attendanceAdjustment,
@@ -83,7 +81,6 @@ export class PayrollEngine {
       deductions_summary: {
         tax: 0, // ZERO TAX on salaries
         loan: loanDeductions,
-        benefit: benefitDeductions,
         custom: customDeductionsTotal,
       },
       payroll_record: payrollRecord,
@@ -181,20 +178,6 @@ export class PayrollEngine {
     );
     
     return activeLoans.reduce((sum, loan) => sum + (loan.monthly_deduction || 0), 0);
-  }
-
-  /**
-   * Calculate benefit deductions
-   */
-  calculateBenefitDeductions(employeeId) {
-    const benefits = ls.get("employeeBenefits", []);
-    const activeBenefits = benefits.filter(b => 
-      b.employee_id === employeeId && 
-      b.status === "ACTIVE" &&
-      b.employee_contribution > 0
-    );
-    
-    return activeBenefits.reduce((sum, benefit) => sum + benefit.employee_contribution, 0);
   }
 
   /**
