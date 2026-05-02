@@ -1,3 +1,5 @@
+"use client";
+
 // ============================================
 // FILE: src/components/CrudPage.jsx (UPDATED - with location selectors)
 // ============================================

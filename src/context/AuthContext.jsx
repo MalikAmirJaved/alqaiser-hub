@@ -1,3 +1,5 @@
+"use client";
+
 import { createContext, useContext, useEffect, useState } from "react";
 import { ls } from "../services/localStorageService";
 import { initializeSystem } from "../seed/initializeSystem";

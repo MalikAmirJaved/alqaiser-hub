@@ -1,3 +1,5 @@
+"use client";
+
 // ============================================
 // FILE: src/components/Forms/EmployeeForm.jsx (UPDATED with location selectors)
 // ============================================

@@ -1,16 +1,18 @@
+"use client";
+
 import { Bell, Menu, Moon, Search, Sun, LogOut } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
-import { useNavigate } from "@tanstack/react-router";
+import { useRouter } from "next/navigation";
 
 export default function Topbar({ onToggleSidebar }) {
   const { theme, toggle } = useTheme();
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
 
   const handleLogout = () => {
     logout();
-    navigate({ to: "/login" });
+    router.push("/login");
   };
 
   return (

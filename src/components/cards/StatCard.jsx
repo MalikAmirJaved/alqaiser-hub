@@ -1,3 +1,5 @@
+"use client";
+
 export default function StatCard({ label, value, hint, icon: Icon, accent = "primary" }) {
   const tones = {
     primary: "bg-primary/15 text-primary",

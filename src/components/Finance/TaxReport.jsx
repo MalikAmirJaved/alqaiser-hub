@@ -1,3 +1,5 @@
+"use client";
+
 // ============================================
 // FILE: src/components/Finance/TaxReport.jsx (NEW)
 // Tax Reporting Component

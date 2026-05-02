@@ -1,16 +1,18 @@
+"use client";
 // ============================================
 // FILE: src/components/sidebar/Sidebar.jsx (UPDATED)
 // ============================================
 
 import { useState, useEffect } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { usePathname } from "next/navigation";
+import Link from "next/link";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { menu } from "../../config/menu";
 import { motion, AnimatePresence } from "framer-motion";
 import { permissionService } from "../../services/permissionService";
 
 export default function Sidebar({ open, onClose }) {
-  const path = useRouterState({ select: (s) => s.location.pathname });
+  const path = usePathname() || "";
   const [filteredMenu, setFilteredMenu] = useState([]);
   const [openGroups, setOpenGroups] = useState({});
 
@@ -177,7 +179,7 @@ export default function Sidebar({ open, onClose }) {
             item.type === "link" ? (
               <Link
                 key={item.title}
-                to={item.to}
+                href={item.to}
                 onClick={onClose}
                 className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition ${
                   isActive(item.to)
@@ -216,7 +218,7 @@ export default function Sidebar({ open, onClose }) {
                       {item.children.map((c) => (
                         <Link
                           key={c.to}
-                          to={c.to}
+                          href={c.to}
                           onClick={onClose}
                           className={`flex items-center gap-2 px-3 py-2 my-0.5 rounded-md text-[13px] transition ${
                             isActive(c.to)

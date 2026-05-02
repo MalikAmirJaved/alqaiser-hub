@@ -1,3 +1,5 @@
+"use client";
+
 // ============================================
 // FILE: src/components/UserFormWithPermissions.jsx (FIXED imports)
 // ============================================

@@ -1,3 +1,5 @@
+"use client";
+
 export default function PageHeader({ title, subtitle, actions }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
