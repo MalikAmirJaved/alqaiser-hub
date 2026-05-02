@@ -1,5 +1,9 @@
-"use client";
+import { redirect } from "next/navigation";
 
-// @ts-nocheck
-
-export default () => <Navigate to="/dashboard" />;
+/**
+ * Root app route: redirect to /dashboard.
+ * Using next/navigation redirect (server-side, zero JS sent to client).
+ */
+export default function AppRootPage() {
+  redirect("/dashboard");
+}

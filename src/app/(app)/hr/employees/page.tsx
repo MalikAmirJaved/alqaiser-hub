@@ -1,10 +1,10 @@
+// @ts-nocheck
 "use client";
 
 // ============================================
 // FILE: src/routes/_app.hr.employees.jsx (UPDATED - with enhanced form and company context)
 // ============================================
 
-// @ts-nocheck
 import { useState, useEffect } from "react";
 import { ls, uid } from "@/services/localStorageService";
 import { companyContext } from "@/services/companyContextService";

@@ -1,9 +1,9 @@
+// @ts-nocheck
 "use client";
 
 // ============================================
 // FILE: src/routes/_app.finance.taxes.jsx (UPDATED - with Tax Report)
 // ============================================
-// @ts-nocheck
 import { useState } from "react";
 import CrudPage from "@/components/CrudPage";
 import { schemas } from "@/config/schemas";

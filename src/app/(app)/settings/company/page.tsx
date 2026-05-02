@@ -1,6 +1,6 @@
+// @ts-nocheck
 "use client";
 
-// @ts-nocheck
 import { ls } from "@/services/localStorageService";
 import StatCard from "@/components/cards/StatCard";
 import PageHeader from "@/components/PageHeader";

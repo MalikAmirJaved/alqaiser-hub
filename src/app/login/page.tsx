@@ -1,6 +1,6 @@
+// @ts-nocheck
 "use client";
 
-// @ts-nocheck
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Lock, Mail, ShieldCheck } from "lucide-react";

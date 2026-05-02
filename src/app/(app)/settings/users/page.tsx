@@ -1,10 +1,10 @@
+// @ts-nocheck
 "use client";
 
 // ============================================
 // FILE: src/routes/_app.settings.users.jsx (UPDATED)
 // ============================================
 
-// @ts-nocheck
 import { useState, useEffect } from "react";
 import { ls, uid } from "@/services/localStorageService";
 import PageHeader from "@/components/PageHeader";

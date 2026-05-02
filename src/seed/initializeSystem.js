@@ -652,101 +652,85 @@ ls.set("tax_transactions", []);
   });
 
   ls.set(SEED_FLAG, true);
-}
 
+  // ─── PERMISSIONS ──────────────────────────────────────────────────────────
+  // NOTE: Permissions are seeded here (inside initializeSystem) so they only
+  // run once, guarded by SEED_FLAG, and never at module-import time.
+  const moduleFeatures = {
+    HR: [
+      "Employee Management", "Payroll", "Time & Attendance", "Leave Management",
+      "Shift Management", "Employee Assets", "Performance", "Recruitment",
+      "Exit Management", "HR Policies", "Compensation",
+    ],
+    INVENTORY: [
+      "Products", "Stock Management", "Warehouses", "Purchase Orders",
+      "Suppliers", "Sales Orders", "Assets Inventory", "Inventory Transfers",
+      "Barcode & QR", "Reports", "Alerts", "POS",
+    ],
+    FINANCE: [
+      "Chart of Accounts", "Invoices", "Expenses", "Payables", "Receivables",
+      "Budgets", "Bank & Cash", "Fixed Assets", "Taxes", "Reports", "Forecasting",
+    ],
+    SETTINGS: [
+      "Company Profile", "Users & Roles", "Departments", "Designations", "Preferences",
+    ],
+  };
 
-// Pre-define features per module for UI reference
-const moduleFeatures = {
-  HR: [
-    "Employee Management", "Payroll", "Time & Attendance", "Leave Management",
-    "Shift Management", "Employee Assets", "Performance", "Recruitment",
-    "Exit Management", "HR Policies", "Compensation"
-  ],
-  INVENTORY: [
-    "Products", "Stock Management", "Warehouses", "Purchase Orders",
-    "Suppliers", "Sales Orders", "Assets Inventory", "Inventory Transfers",
-    "Barcode & QR", "Reports", "Alerts", "POS"
-  ],
-  FINANCE: [
-    "Chart of Accounts", "Invoices", "Expenses", "Payables", "Receivables",
-    "Budgets", "Bank & Cash", "Fixed Assets", "Taxes", "Reports", "Forecasting"
-  ],
-  SETTINGS: [
-    "Company Profile", "Users & Roles", "Departments", "Designations", "Preferences"
-  ]
-};
+  const createPermission = (userId, moduleName, featureName, canCreate, canUpdate, canDelete, canView) => ({
+    id: uid("perm"),
+    user_id: userId,
+    module_name: moduleName,
+    feature_name: featureName,
+    is_create_access: canCreate ? "true" : "false",
+    is_update_access: canUpdate ? "true" : "false",
+    is_delete_access: canDelete ? "true" : "false",
+    is_view_access: canView ? "true" : "false",
+  });
 
-// Get all users to assign permissions
-const users = ls.get("users", []);
-const permissions = [];
+  const seedUsers = ls.get("users", []);
+  const permissions = [];
 
-// Helper to create permission entry
-const createPermission = (userId, moduleName, featureName, canCreate, canUpdate, canDelete, canView) => ({
-  id: uid("perm"),
-  user_id: userId,
-  module_name: moduleName,
-  feature_name: featureName,
-  is_create_access: canCreate ? "true" : "false",
-  is_update_access: canUpdate ? "true" : "false",
-  is_delete_access: canDelete ? "true" : "false",
-  is_view_access: canView ? "true" : "false",
-});
-
-// Assign permissions per user
-users.forEach((user) => {
-  if (user.role === "COMPANY_ADMIN") {
-    // Company Admin gets FULL ACCESS to everything
-    Object.entries(moduleFeatures).forEach(([module, features]) => {
-      features.forEach((feature) => {
-        permissions.push(createPermission(user.id, module, feature, true, true, true, true));
+  seedUsers.forEach((user) => {
+    if (user.role === "COMPANY_ADMIN") {
+      Object.entries(moduleFeatures).forEach(([module, features]) => {
+        features.forEach((feature) => {
+          permissions.push(createPermission(user.id, module, feature, true, true, true, true));
+        });
       });
+    } else if (user.role === "BRANCH_ADMIN") {
+      const userModule = user.department || "INVENTORY";
+      if (moduleFeatures[userModule]) {
+        moduleFeatures[userModule].forEach((feature) => {
+          permissions.push(createPermission(user.id, userModule, feature, true, true, true, true));
+        });
+      }
+    } else if (user.role === "STAFF") {
+      const userModule = user.department || "INVENTORY";
+      if (moduleFeatures[userModule]) {
+        moduleFeatures[userModule].forEach((feature) => {
+          const canCreate = feature === "Expenses" || feature === "Leave Management" || feature === "Attendance";
+          const canUpdate = feature === "Expenses" || feature === "Leave Management" || feature === "Time & Attendance";
+          permissions.push(createPermission(user.id, userModule, feature, canCreate, canUpdate, false, true));
+        });
+      }
+    }
+  });
+
+  const hrUser = seedUsers.find((u) => u.email === "hr@alqaiserit.local");
+  const financeUser = seedUsers.find((u) => u.email === "finance@alqaiserit.local");
+
+  if (hrUser) {
+    moduleFeatures.HR.forEach((feature) => {
+      permissions.push(createPermission(hrUser.id, "HR", feature, true, true, true, true));
     });
-  } else if (user.role === "BRANCH_ADMIN") {
-    // Branch Admin gets FULL ACCESS but only to their assigned module
-    const userModule = user.department || "INVENTORY";
-    if (moduleFeatures[userModule]) {
-      moduleFeatures[userModule].forEach((feature) => {
-        permissions.push(createPermission(user.id, userModule, feature, true, true, true, true));
-      });
-    }
-  } else if (user.role === "STAFF") {
-    // Staff gets VIEW and limited CREATE/UPDATE based on department
-    const userModule = user.department || "INVENTORY";
-    if (moduleFeatures[userModule]) {
-      moduleFeatures[userModule].forEach((feature) => {
-        // Staff can view everything, create/update limited to their area
-        const canCreate = feature === "Expenses" || feature === "Leave Management" || feature === "Attendance";
-        const canUpdate = feature === "Expenses" || feature === "Leave Management" || feature === "Time & Attendance";
-        permissions.push(createPermission(user.id, userModule, feature, canCreate, canUpdate, false, true));
-      });
-    }
   }
-});
 
-// Add some specific overrides for demo
-const adminUser = users.find(u => u.email === "admin@alqaiserit.local");
-const hrUser = users.find(u => u.email === "hr@alqaiserit.local");
-const financeUser = users.find(u => u.email === "finance@alqaiserit.local");
+  if (financeUser) {
+    moduleFeatures.FINANCE.forEach((feature) => {
+      permissions.push(createPermission(financeUser.id, "FINANCE", feature, true, true, true, true));
+    });
+  }
 
-if (adminUser) {
-  // Admin already has full access from above
+  ls.set("permissions", permissions);
+  ls.set("moduleFeatures", moduleFeatures);
 }
-
-if (hrUser) {
-  // HR gets additional permissions for HR module
-  moduleFeatures.HR.forEach((feature) => {
-    permissions.push(createPermission(hrUser.id, "HR", feature, true, true, true, true));
-  });
-}
-
-if (financeUser) {
-  // Finance gets additional permissions
-  moduleFeatures.FINANCE.forEach((feature) => {
-    permissions.push(createPermission(financeUser.id, "FINANCE", feature, true, true, true, true));
-  });
-}
-
-ls.set("permissions", permissions);
-
-// Also store feature list for dropdowns
-ls.set("moduleFeatures", moduleFeatures);

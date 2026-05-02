@@ -1,6 +1,6 @@
+// @ts-nocheck
 "use client";
 
-// @ts-nocheck
 import { ls } from "@/services/localStorageService";
 import { useTheme } from "@/context/ThemeContext";
 import PageHeader from "@/components/PageHeader";

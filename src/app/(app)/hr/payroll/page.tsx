@@ -1,9 +1,9 @@
+// @ts-nocheck
 "use client";
 
 // ============================================
 // FILE: src/routes/_app.hr.payroll.jsx (UPDATED - with Advanced Payroll)
 // ============================================
-// @ts-nocheck
 import { useState, useEffect } from "react";
 import CrudPage from "@/components/CrudPage";
 import { schemas } from "@/config/schemas";
