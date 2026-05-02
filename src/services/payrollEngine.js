@@ -20,72 +20,71 @@ export class PayrollEngine {
     return this._taxEngine;
   }
 
-  /**
-   * Calculate payroll for a single employee
-   * @param {Object} employee - Employee object
-   * @param {Object} options - Payroll options (month, year, bonuses, deductions)
-   * @returns {Object} Payroll calculation result
-   */
-  calculateEmployeePayroll(employee, options = {}) {
-    const { month, year, bonuses = [], customDeductions = [], attendance = {} } = options;
-    
-    // Get compensation structure
-    const compensation = this.getEmployeeCompensation(employee.id);
-    
-    // Calculate gross salary
-    let grossSalary = compensation?.total || employee.salary || 0;
-    
-    // Add bonuses
-    const totalBonus = bonuses.reduce((sum, b) => sum + b.amount, 0);
-    grossSalary += totalBonus;
-    
-    // Calculate attendance-based adjustments
-    const attendanceAdjustment = this.calculateAttendanceAdjustment(employee.id, attendance, grossSalary);
-    grossSalary += attendanceAdjustment;
-    
-    // ONLY calculate loan deductions - NO TAX DEDUCTION
-    const loanDeductions = this.calculateLoanDeductions(employee.id);
-    const customDeductionsTotal = customDeductions.reduce((sum, d) => sum + d.amount, 0);
-    
-    const totalDeductions = loanDeductions + customDeductionsTotal;
-    
-    const netSalary = grossSalary - totalDeductions;
-    
-    // Create payroll record
-    const payrollRecord = this.createPayrollRecord({
-      employee_id: employee.id,
-      employee_name: `${employee.first_name} ${employee.last_name || ""}`,
-      month,
-      year,
-      gross_salary: grossSalary,
-      total_deductions: totalDeductions,
-      net_salary: netSalary,
-      bonuses: bonuses,
-      deductions: {
-        taxes: 0, // ZERO TAX on salaries
-        loans: loanDeductions,
-        custom: customDeductions,
-      },
-      attendance_adjustment: attendanceAdjustment,
-      status: "CALCULATED",
-    });
-    
-    return {
-      employee_id: employee.id,
-      employee_name: `${employee.first_name} ${employee.last_name || ""}`,
-      gross_salary: grossSalary,
-      total_deductions: totalDeductions,
-      net_salary: netSalary,
+/**
+ * Calculate payroll for a single employee
+ * @param {Object} employee - Employee object
+ * @param {Object} options - Payroll options (month, year, bonuses, deductions)
+ * @returns {Object} Payroll calculation result
+ */
+calculateEmployeePayroll(employee, options = {}) {
+  const { month, year, bonuses = [], customDeductions = [], attendance = {} } = options;
+  
+  // Get compensation structure
+  const compensation = this.getEmployeeCompensation(employee.id);
+  
+  // Calculate gross salary
+  let grossSalary = compensation?.total || employee.salary || 0;
+  
+  // Add bonuses
+  const totalBonus = bonuses.reduce((sum, b) => sum + b.amount, 0);
+  grossSalary += totalBonus;
+  
+  // Calculate attendance-based adjustments
+  const attendanceAdjustment = this.calculateAttendanceAdjustment(employee.id, attendance, grossSalary);
+  grossSalary += attendanceAdjustment;
+  
+  // ONLY calculate loan deductions - NO TAX DEDUCTION
+  const loanDeductions = this.calculateLoanDeductions(employee.id);
+  const customDeductionsTotal = customDeductions.reduce((sum, d) => sum + d.amount, 0);
+  const totalDeductions = loanDeductions + customDeductionsTotal;
+  
+  const netSalary = grossSalary - totalDeductions;
+  
+  // Create payroll record
+  const payrollRecord = this.createPayrollRecord({
+    employee_id: employee.id,
+    employee_name: `${employee.first_name} ${employee.last_name || ""}`,
+    month,
+    year,
+    gross_salary: grossSalary,
+    total_deductions: totalDeductions,
+    net_salary: netSalary,
+    bonuses: bonuses,
+    deductions: {
       taxes: 0, // ZERO TAX on salaries
-      bonuses: bonuses,
-      deductions_summary: {
-        tax: 0, // ZERO TAX on salaries
-        loan: loanDeductions,
-        custom: customDeductionsTotal,
-      },
-      payroll_record: payrollRecord,
-    };
-  }
+      loans: loanDeductions,
+      custom: customDeductions,
+    },
+    attendance_adjustment: attendanceAdjustment,
+    status: "CALCULATED",
+  });
+  
+  return {
+    employee_id: employee.id,
+    employee_name: `${employee.first_name} ${employee.last_name || ""}`,
+    gross_salary: grossSalary,
+    total_deductions: totalDeductions,
+    net_salary: netSalary,
+    taxes: 0, // ZERO TAX on salaries
+    bonuses: bonuses,
+    deductions_summary: {
+      tax: 0, // ZERO TAX on salaries
+      loan: loanDeductions,
+      custom: customDeductionsTotal,
+    },
+    payroll_record: payrollRecord,
+  };
+}
 
   /**
    * Calculate employee taxes - DISABLED (no tax deduction from salary)

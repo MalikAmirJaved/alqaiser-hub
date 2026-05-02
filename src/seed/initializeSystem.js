@@ -27,6 +27,15 @@ export function initializeSystem() {
     phone: "+92-300-0000000",
     email: "info@alqaiserit.local",
     currency_code: "PKR",
+    taxRate: 18,
+  workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+  weekends: ["Sunday"],
+  leaveYearType: "CALENDAR", // or FISCAL
+  publicHolidays: [
+    { date: "2026-03-14", name: "Holi" },
+    { date: "2026-05-01", name: "Labour Day" },
+    { date: "2026-08-14", name: "Independence Day" }
+  ],
     tax_id: "AQT-9087-IT",
     branch_id: "u_moldv7e5_i7n69",
     created_at: new Date().toISOString(),
@@ -97,6 +106,79 @@ export function initializeSystem() {
       ...complusory
     },
   ]);
+
+  ls.set("leaveTypes", [
+  {
+    id: uid("lt"),
+    name: "Annual Leave",
+    code: "AL",
+    max_days_per_year: 20,
+    is_paid: "true",
+    requires_document: "false",
+    carry_forward_allowed: "true",
+    max_carry_forward_days: 10,
+    min_advance_notice_days: 3,
+    applicable_to: "ALL",
+    status: "ACTIVE",
+    ...complusory
+  },
+  {
+    id: uid("lt"),
+    name: "Sick Leave",
+    code: "SL",
+    max_days_per_year: 12,
+    is_paid: "true",
+    requires_document: "true",
+    carry_forward_allowed: "false",
+    max_carry_forward_days: 0,
+    min_advance_notice_days: 0,
+    applicable_to: "ALL",
+    status: "ACTIVE",
+    ...complusory
+  },
+  {
+    id: uid("lt"),
+    name: "Casual Leave",
+    code: "CL",
+    max_days_per_year: 10,
+    is_paid: "true",
+    requires_document: "false",
+    carry_forward_allowed: "false",
+    max_carry_forward_days: 0,
+    min_advance_notice_days: 2,
+    applicable_to: "ALL",
+    status: "ACTIVE",
+    ...complusory
+  },
+  {
+    id: uid("lt"),
+    name: "Maternity Leave",
+    code: "ML",
+    max_days_per_year: 90,
+    is_paid: "true",
+    requires_document: "true",
+    carry_forward_allowed: "false",
+    max_carry_forward_days: 0,
+    min_advance_notice_days: 15,
+    applicable_to: "FULL_TIME",
+    status: "ACTIVE",
+    ...complusory
+  },
+  {
+    id: uid("lt"),
+    name: "Paternity Leave",
+    code: "PL",
+    max_days_per_year: 7,
+    is_paid: "true",
+    requires_document: "true",
+    carry_forward_allowed: "false",
+    max_carry_forward_days: 0,
+    min_advance_notice_days: 7,
+    applicable_to: "FULL_TIME",
+    status: "ACTIVE",
+    ...complusory
+  },
+]);
 
   // ─── DESIGNATIONS ─────────────────────────────────────────────────────────
   ls.set("designations", [
