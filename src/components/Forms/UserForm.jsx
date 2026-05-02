@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import { X, ChevronDown, ChevronRight, Shield } from "lucide-react";
 import { ls, uid } from "@/services/localStorageService";
-import SearchableSelect from "../SearchableSelect";
+import SearchableSelect from "../reuseable/SearchableSelect";
 
 // Module to feature mapping
 const MODULE_FEATURES = {

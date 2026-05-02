@@ -10,8 +10,8 @@ import { Plus, Pencil, Trash2, Search, Download, X, ChevronLeft, ChevronRight, S
 import PageHeader from "./PageHeader";
 import { permissionService } from "../services/permissionService";
 import { CountrySelect, StateSelect, CitySelect } from "./LocationSelectors";
-import SearchableSelect from "./SearchableSelect";
-import { DatePicker } from "@/components/DatePicker"; // Import the DatePicker component
+import SearchableSelect from "./reuseable/SearchableSelect";
+import { DatePicker } from "@/components/reuseable/DatePicker"; // Import the DatePicker component
 
 // Map storeKey to module and feature
 const getModuleAndFeature = (storeKey) => {

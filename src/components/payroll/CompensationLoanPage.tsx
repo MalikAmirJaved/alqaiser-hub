@@ -6,8 +6,8 @@ import { ls } from "@/services/localStorageService";
 import { companyContext } from "@/services/companyContextService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HandCoins, Receipt, FileText, TrendingUp, Shield, Plus, Pencil, Trash2, Search, Download } from "lucide-react";
-import SearchableSelect from "@/components/SearchableSelect";
-import { DatePicker } from "@/components/DatePicker";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import { DatePicker } from "@/components/reuseable/DatePicker";
 
 interface CompensationLoanPageProps {
   onRefresh?: () => void;

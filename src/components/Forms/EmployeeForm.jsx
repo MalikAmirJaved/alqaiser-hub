@@ -9,8 +9,8 @@ import { X, Users, Building2, Briefcase, UserCog } from "lucide-react";
 import { ls, uid } from "@/services/localStorageService";
 import { companyContext } from "@/services/companyContextService";
 import { LocationGroup } from "../LocationSelectors"; // Import the location component
-import SearchableSelect from "../SearchableSelect";
-import { DatePicker } from "@/components/DatePicker";
+import SearchableSelect from "../reuseable/SearchableSelect";
+import { DatePicker } from "@/components/reuseable/DatePicker";
 
 
 export default function EmployeeForm({ initialData = null, onSubmit, onCancel }) {

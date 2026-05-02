@@ -3,7 +3,7 @@ import { useState } from "react";
 import { ls, uid } from "@/services/localStorageService";
 import { permissionService } from "@/services/permissionService";
 import {  X,  CheckCircle,  Wallet } from "lucide-react";
-import { DatePicker } from "../DatePicker";
+import { DatePicker } from "../reuseable/DatePicker";
 
 // ============================================
 // COMPENSATION MODAL

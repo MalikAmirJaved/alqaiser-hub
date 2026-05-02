@@ -11,11 +11,9 @@ import PaymentModal from "@/components/payroll/PaymentModal";
 import PayslipModal from "@/components/payroll/PayslipModal";
 import MonthSelectorModal from "@/components/payroll/MonthSelectorModal";
 import CompensationLoanPage from "@/components/payroll/CompensationLoanPage";
+import { useCompanySettings } from "@/context/CompanySettingsContext";
 
-// Helper function to format currency
-const formatCurrency = (amount: number) => {
-  return `PKR ${(amount || 0).toLocaleString()}`;
-};
+
 // ============================================
 // MAIN PAYROLL PAGE
 // ============================================
@@ -36,6 +34,7 @@ export default function PayrollPage() {
     canView: true,
     loading: true,
   });
+const { formatCurrency, isReady } = useCompanySettings();
 
   // Load data on mount
   useEffect(() => {
