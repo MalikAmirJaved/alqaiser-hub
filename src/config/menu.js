@@ -26,7 +26,7 @@ export const menu = [
       { title: "Recruitment", to: "/hr/recruitment", icon: UserPlus },
       { title: "Exit Management", to: "/hr/exit", icon: LogOutIcon },
       { title: "HR Policies", to: "/hr/policies", icon: Shield },
-      { title: "Compensation", to: "/hr/compensation", icon: HandCoins },
+      { title: "Compensation & Loan", to: "/hr/compensation", icon: HandCoins },
     ],
   },
 
