@@ -1,4 +1,4 @@
-// src/components/reuseable/DatePicker.tsx
+// src/components/reuseable/DateRangePickerRac.tsx
 "use client";
 
 import * as React from "react";
@@ -6,67 +6,109 @@ import { format, parseISO, setMonth, setYear } from "date-fns";
 import { CalendarIcon, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
+import { RangeCalendar } from "@/components/ui/calendar-rac";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CalendarDate, DateRange as AriaDateRange } from "@internationalized/date";
 
-interface DatePickerProps {
-  value?: string; // Expects "YYYY-MM-DD"
-  onChange?: (val: string | undefined) => void;
+interface DateRangePickerRacProps {
+  startDate?: string;
+  endDate?: string;
+  onChange?: (start: string | undefined, end: string | undefined) => void;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  required?: boolean;
   minDate?: string;
   maxDate?: string;
 }
 
 type ViewMode = "date" | "month" | "year";
 
-export function DatePicker({
-  value,
+const parseDate = (val?: string): CalendarDate | undefined => {
+  if (!val) return undefined;
+  const [y, m, d] = val.split("-").map(Number);
+  return new CalendarDate(y, m, d);
+};
+
+const formatDate = (date?: CalendarDate): string | undefined => {
+  if (!date) return undefined;
+  return `${date.year}-${String(date.month).padStart(2, "0")}-${String(date.day).padStart(2, "0")}`;
+};
+
+export function DateRangePickerRac({
+  startDate,
+  endDate,
   onChange,
-  placeholder = "Pick a date",
+  placeholder = "Select date range",
   className,
   disabled,
+  required,
   minDate,
   maxDate,
-}: DatePickerProps) {
-  const [date, setDate] = React.useState<Date | undefined>(
-    value ? parseISO(`${value}T00:00:00`) : undefined
-  );
+}: DateRangePickerRacProps) {
   const [view, setView] = React.useState<ViewMode>("date");
-  const [tempDate, setTempDate] = React.useState<Date | undefined>(date);
+  
+  // 🔑 KEY FIX: Use CalendarDate for placeholder sync with RangeCalendar
+  const [calendarPlaceholder, setCalendarPlaceholder] = React.useState<CalendarDate | undefined>(
+    startDate ? parseDate(startDate) : undefined
+  );
+  
+  // tempDate for header navigation (JS Date for setMonth/setYear)
+  const [tempDate, setTempDate] = React.useState<Date | undefined>(
+    startDate ? parseISO(`${startDate}T00:00:00`) : undefined
+  );
+  
   const [open, setOpen] = React.useState(false);
 
-  // Sync internal state when external value changes
-  React.useEffect(() => {
-    if (value) {
-      const parsed = parseISO(`${value}T00:00:00`);
-      setDate(parsed);
-      setTempDate(parsed);
-    }
-  }, [value]);
+  const rangeValue = React.useMemo((): AriaDateRange | null => {
+    const start = parseDate(startDate);
+    const end = parseDate(endDate);
+    if (!start) return null;
+    return { start, end: end || start };
+  }, [startDate, endDate]);
 
-  // Reset view when popover opens
+  // 🔑 KEY FIX: Sync calendarPlaceholder when tempDate changes (month/year nav)
   React.useEffect(() => {
-    if (open) {
-      setView("date");
-      setTempDate(date);
+    if (tempDate) {
+      setCalendarPlaceholder(new CalendarDate(tempDate.getFullYear(), tempDate.getMonth() + 1, 1));
     }
-  }, [open, date]);
+  }, [tempDate]);
 
-  const handleSelect = (selected: Date | undefined) => {
-    setDate(selected);
-    if (onChange) {
-      onChange(selected ? format(selected, "yyyy-MM-dd") : undefined);
+  // Sync when external dates change
+  React.useEffect(() => {
+    if (startDate) {
+      const parsed = parseDate(startDate);
+      setCalendarPlaceholder(parsed);
+      setTempDate(parsed ? new Date(parsed.year, parsed.month - 1, 1) : undefined);
     }
+  }, [startDate]);
+
+  const handleSelect = (range: AriaDateRange | null) => {
+    if (!range) {
+      onChange?.(undefined, undefined);
+      return;
+    }
+    onChange?.(
+      formatDate(range.start),
+      range.end ? formatDate(range.end) : undefined,
+    );
     setOpen(false);
   };
 
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setDate(undefined);
-    if (onChange) onChange(undefined);
+    onChange?.(undefined, undefined);
   };
+
+  // Reset view when popover opens
+  React.useEffect(() => {
+    if (open) {
+      setView("date");
+      const initDate = startDate ? parseISO(`${startDate}T00:00:00`) : new Date();
+      setTempDate(initDate);
+      setCalendarPlaceholder(parseDate(startDate) ?? new CalendarDate(initDate.getFullYear(), initDate.getMonth() + 1, 1));
+    }
+  }, [open, startDate]);
 
   // Month selection
   const handleMonthSelect = (monthIndex: number) => {
@@ -96,7 +138,6 @@ export function DatePicker({
     setTempDate(newDate);
   };
 
-  // Generate year range for year picker (100 years before to 10 after current)
   const getYears = () => {
     const currentYear = new Date().getFullYear();
     const years: number[] = [];
@@ -123,6 +164,21 @@ export function DatePicker({
     return false;
   };
 
+  const displayValue = React.useMemo(() => {
+    if (!startDate) return placeholder;
+    const start = parseDate(startDate);
+    const end = parseDate(endDate);
+    if (!start) return placeholder;
+    
+    const formatDisplay = (d: CalendarDate) => 
+      `${d.month}/${d.day}/${d.year}`;
+    
+    if (end) {
+      return `${formatDisplay(start)} - ${formatDisplay(end)}`;
+    }
+    return formatDisplay(start);
+  }, [startDate, endDate, placeholder]);
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -131,18 +187,16 @@ export function DatePicker({
           className={cn(
             "w-full justify-start text-left font-normal transition-all duration-200 cursor-pointer",
             "hover:bg-accent hover:text-accent-foreground",
-            !date && "text-muted-foreground",
+            !startDate && "text-muted-foreground",
             open && "ring-2 ring-ring ring-offset-2",
             disabled && "opacity-50 cursor-not-allowed",
-            className
+            className,
           )}
           disabled={disabled}
         >
           <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-          <span className="flex-1 truncate">
-            {date ? format(date, "PPP") : <span>{placeholder}</span>}
-          </span>
-          {date && (
+          <span className="flex-1 truncate">{displayValue}</span>
+          {(startDate || endDate) && (
             <X
               className="h-4 w-4 shrink-0 opacity-50 hover:opacity-100 transition-opacity"
               onClick={handleClear}
@@ -156,13 +210,12 @@ export function DatePicker({
         align="start"
         sideOffset={8}
       >
-        <div className="bg-popover rounded-lg overflow-hidden min-w-[280px]">
+        <div className="bg-popover rounded-lg overflow-hidden min-w-[320px]">
           
           {/* ===== HEADER ===== */}
           <div className="p-3 border-b bg-muted/30">
             <div className="flex justify-between items-center gap-2">
               
-              {/* Back button (only in month/year view) */}
               {view !== "date" && (
                 <Button
                   variant="ghost"
@@ -175,9 +228,7 @@ export function DatePicker({
                 </Button>
               )}
               
-              {/* Center: Clickable Month/Year buttons */}
               <div className="flex gap-1 mx-auto">
-                {/* Month button - shows month picker */}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -191,7 +242,6 @@ export function DatePicker({
                   {tempDate ? format(tempDate, "MMMM") : format(new Date(), "MMMM")}
                 </Button>
                 
-                {/* Year button - shows year picker */}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -205,7 +255,6 @@ export function DatePicker({
                 </Button>
               </div>
 
-              {/* Navigation arrows (only in date view) */}
               {view === "date" && (
                 <div className="flex gap-1">
                   <Button
@@ -227,7 +276,6 @@ export function DatePicker({
                 </div>
               )}
 
-              {/* Year navigation (in month/year view) */}
               {view !== "date" && (
                 <div className="flex gap-1">
                   <Button
@@ -254,25 +302,20 @@ export function DatePicker({
           {/* ===== CONTENT ===== */}
           <div className="relative">
             
-            {/* DATE VIEW */}
+            {/* DATE VIEW - RangeCalendar with placeholder prop */}
             {view === "date" && (
               <div className="animate-in slide-in-from-left-5 duration-200">
-                <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={handleSelect}
-                  month={tempDate}
-                  onMonthChange={setTempDate}
-                  disabled={isDateDisabled}
-                  initialFocus
-                  className="rounded-md border-0 p-3"
-                  classNames={{
-                    day: "hover:scale-105 transition-all",
-                    day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
-                    day_today: "bg-accent text-accent-foreground",
-                    day_disabled: "opacity-40 cursor-not-allowed",
-                  }}
-                />
+                <div className="p-2">
+                  <RangeCalendar
+                    value={rangeValue}
+                    onChange={handleSelect}
+                    // 🔑 KEY FIX: Control visible month via placeholder
+                    placeholder={calendarPlaceholder}
+                    minValue={minDate ? parseDate(minDate) : new CalendarDate(1900, 1, 1)}
+                    maxValue={maxDate ? parseDate(maxDate) : new CalendarDate(2100, 12, 31)}
+                    visibleMonths={1}
+                  />
+                </div>
               </div>
             )}
 
@@ -324,7 +367,7 @@ export function DatePicker({
           </div>
 
           {/* ===== FOOTER ===== */}
-          {date && view === "date" && (
+          {(startDate || endDate) && view === "date" && (
             <div className="p-2 border-t bg-muted/30">
               <Button
                 variant="ghost"
@@ -332,7 +375,7 @@ export function DatePicker({
                 className="w-full text-xs transition-all hover:scale-[0.98]"
                 onClick={handleClear}
               >
-                Clear date
+                Clear date range
               </Button>
             </div>
           )}

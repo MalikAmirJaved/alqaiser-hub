@@ -14,6 +14,7 @@ import {
   Plus, CalendarDays, CheckCircle, XCircle, Clock, FileText,
   AlertCircle, Eye, Download, Trash2, Shield, UserCheck
 } from "lucide-react";
+import { DateRangePickerRac } from "@/components/reuseable/DateRangePickerRac";
 
 export default function LeaveManagementPage() {
   const [activeTab, setActiveTab] = useState("my-leaves");
@@ -594,23 +595,19 @@ export default function LeaveManagementPage() {
               </div>
 
               <div className="grid sm:grid-cols-2 gap-4">
-                <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground">Start Date *</span>
-                  <DatePicker
-                    value={formData.start_date}
-                    onChange={(val) => setFormData({ ...formData, start_date: val })}
-                    placeholder="Select start date"
-                  />
-                </label>
-                <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground">End Date</span>
-                  <DatePicker
-                    value={formData.end_date}
-                    onChange={(val) => setFormData({ ...formData, end_date: val })}
-                    placeholder="Select end date (optional)"
-                  />
-                </label>
-              </div>
+  <label className="text-sm flex flex-col gap-1">
+    <span className="text-muted-foreground text-xs">Leave Period *</span>
+    <DateRangePickerRac
+  startDate={formData.start_date}
+  endDate={formData.end_date}
+  onChange={(start, end) => {
+    setFormData({ ...formData, start_date: start, end_date: end });
+  }}
+  placeholder="Select leave period"
+  required
+/>
+  </label>
+</div>
 
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground">Reason *</span>

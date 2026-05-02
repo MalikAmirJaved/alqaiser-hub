@@ -12,7 +12,8 @@ import PageHeader from "./PageHeader";
 import { permissionService } from "../services/permissionService";
 import { CountrySelect, StateSelect, CitySelect } from "./LocationSelectors";
 import SearchableSelect from "./reuseable/SearchableSelect";
-import { DatePicker } from "@/components/reuseable/DatePicker"; // Import the DatePicker component
+import { DatePicker } from "@/components/reuseable/DatePicker";
+import { DateRangePickerRac } from "@/components/reuseable/DateRangePickerRac";
 
 // Map storeKey to module and feature
 const getModuleAndFeature = (storeKey) => {
@@ -67,7 +68,7 @@ const getModuleAndFeature = (storeKey) => {
 /**
  * Generic CRUD page with permission-based action buttons
  * Supports location fields: type "country", "state", "city"
- * Supports date fields: type "date" with DatePicker
+ * Supports date fields: type "date" with DatePickerRac
  */
 export default function CrudPage({
   storeKey,
