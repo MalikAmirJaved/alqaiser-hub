@@ -1,0 +1,1 @@
+1. add the currency on company settingand use gloably
