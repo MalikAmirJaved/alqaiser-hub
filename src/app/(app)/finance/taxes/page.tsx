@@ -5,7 +5,8 @@
 // FILE: src/routes/_app.finance.taxes.jsx (UPDATED - with Tax Report)
 // ============================================
 import { useState } from "react";
-import CrudPage from "@/components/CrudPage";
+import dynamic from "next/dynamic";
+const CrudPage = dynamic(() => import("@/components/CrudPage"), { ssr: false });
 import { schemas } from "@/config/schemas";
 import TaxReport from "@/components/Finance/TaxReport";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";

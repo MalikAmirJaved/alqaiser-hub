@@ -5,21 +5,22 @@
 // FILE: src/routes/_app.hr.payroll.jsx (UPDATED - with Advanced Payroll)
 // ============================================
 import { useState, useEffect } from "react";
-import CrudPage from "@/components/CrudPage";
+import dynamic from "next/dynamic";
 import { schemas } from "@/config/schemas";
-import { PayrollEngine } from "@/services/payrollEngine";
 import { ls } from "@/services/localStorageService";
 import PageHeader from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Download, Play, FileText, Users } from "lucide-react";
 
+// Dynamically import CrudPage to reduce initial JS bundle size and improve LCP
+const CrudPage = dynamic(() => import("@/components/CrudPage"), { ssr: false });
+
 export default PayrollPage;
 
 function PayrollPage() {
   const [activeTab, setActiveTab] = useState("records");
   const [processing, setProcessing] = useState(false);
-  const [payrollEngine] = useState(new PayrollEngine());
   const [employees, setEmployees] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -38,10 +39,14 @@ function PayrollPage() {
     if (!confirm(`Process payroll for ${selectedMonth}/${selectedYear}? This will calculate salaries for all active employees.`)) {
       return;
     }
-    
+
     setProcessing(true);
-    
+
     try {
+      // Dynamically load the engine only when needed
+      const { PayrollEngine } = await import("@/services/payrollEngine");
+      const payrollEngine = new PayrollEngine();
+
       const result = payrollEngine.processPayroll({
         month: selectedMonth,
         year: selectedYear,
@@ -50,7 +55,7 @@ function PayrollPage() {
           includeDeductions: true,
         },
       });
-      
+
       setProcessResult(result);
       alert(`Payroll processed successfully!\nTotal Net Salary: PKR ${result.total_net.toLocaleString()}\nEmployees: ${result.employee_count}`);
     } catch (error) {
@@ -63,7 +68,7 @@ function PayrollPage() {
 
   const exportPayrollReport = () => {
     if (!processResult) return;
-    
+
     const csvRows = [
       ["Employee Name", "Gross Salary", "Tax Deduction", "Loan Deduction", "Benefit Deduction", "Net Salary"],
       ...processResult.payroll_records.map(r => [
@@ -75,7 +80,7 @@ function PayrollPage() {
         r.net_salary,
       ]),
     ];
-    
+
     const csv = csvRows.map(row => row.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -166,19 +171,19 @@ function PayrollPage() {
           <TabsTrigger value="benefits">Benefits</TabsTrigger>
           <TabsTrigger value="batches">Batches</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="records">
           <CrudPage {...schemas.payroll} />
         </TabsContent>
-        
+
         <TabsContent value="loans">
           <CrudPage {...schemas.employeeLoans} />
         </TabsContent>
-        
+
         <TabsContent value="benefits">
           <CrudPage {...schemas.employeeBenefits} />
         </TabsContent>
-        
+
         <TabsContent value="batches">
           <CrudPage {...schemas.payrollBatches} />
         </TabsContent>
