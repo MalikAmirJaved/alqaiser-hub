@@ -1,3 +1,4 @@
+
 // @ts-nocheck
 "use client";
 
@@ -6,3 +7,4 @@ const CrudPage = dynamic(() => import("@/components/CrudPage"), { ssr: false });
 import { schemas } from "@/config/schemas";
 
 export default () => <CrudPage {...schemas.compensation} />;
+

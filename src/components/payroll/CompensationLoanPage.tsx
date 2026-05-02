@@ -1,3 +1,4 @@
+
 // src/components/payroll/CompensationLoanPage.tsx
 "use client";
 

@@ -1,3 +1,4 @@
+
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -144,3 +145,4 @@
   ::-webkit-scrollbar-thumb { background: var(--color-muted); border-radius: 8px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--color-accent); }
 }
+

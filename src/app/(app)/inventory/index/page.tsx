@@ -1,3 +1,4 @@
+
 // @ts-nocheck
 "use client";
 
@@ -60,3 +61,4 @@ function InventoryDashboard() {
     </div>
   );
 }
+

@@ -1,3 +1,4 @@
+
 "use client";
 
 export default function StatCard({ label, value, hint, icon: Icon, accent = "primary" }) {
@@ -23,3 +24,4 @@ export default function StatCard({ label, value, hint, icon: Icon, accent = "pri
     </div>
   );
 }
+

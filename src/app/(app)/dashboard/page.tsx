@@ -1,3 +1,4 @@
+
 // @ts-nocheck
 "use client";
 
@@ -138,3 +139,4 @@ const { formatCurrency, isReady } = useCompanySettings();
     </div>
   );
 }
+

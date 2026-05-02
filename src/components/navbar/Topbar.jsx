@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Bell, Menu, Moon, Search, Sun, LogOut } from "lucide-react";
@@ -69,3 +70,4 @@ export default function Topbar({ onToggleSidebar }) {
     </header>
   );
 }
+

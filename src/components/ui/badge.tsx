@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -32,3 +33,4 @@ function Badge({ className, variant, ...props }: BadgeProps) {
 }
 
 export { Badge, badgeVariants };
+

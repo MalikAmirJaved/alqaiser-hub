@@ -1,3 +1,4 @@
+
 import {
   LayoutDashboard, Boxes, Package, Layers, Warehouse, ShoppingCart, Truck, Repeat,
   QrCode, BarChart3, Bell, ScanLine, FileText, Users, Wallet, CalendarClock,
@@ -87,3 +88,4 @@ export const menu = [
     ],
   },
 ];
+

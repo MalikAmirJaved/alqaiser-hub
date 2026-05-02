@@ -1,3 +1,4 @@
+
 /**
  * Schemas for every CRUD submodule aligned with BOS v1.0 Complete Blueprint.
  * Keys = localStorage keys from seeder.

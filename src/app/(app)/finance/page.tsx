@@ -1,3 +1,4 @@
+
 // @ts-nocheck
 "use client";
 
@@ -46,3 +47,4 @@ function FinanceDashboard() {
     </div>
   );
 }
+

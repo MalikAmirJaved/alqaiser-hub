@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -23,3 +24,4 @@ const Progress = React.forwardRef<
 Progress.displayName = ProgressPrimitive.Root.displayName;
 
 export { Progress };
+
