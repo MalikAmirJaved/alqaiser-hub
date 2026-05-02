@@ -89,22 +89,26 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
     setEmployees(filtered);
   };
 
-  const loadCompensations = () => {
-    const allCompensations = (ls.get("compensation") || []);
-    const filtered = companyContext.filterByContext(allCompensations);
-    // Enrich with employee names
-    const enriched = filtered.map((c: any) => {
-      const emp = employees.find(e => e.id === c.employee_id);
-      return { ...c, employee_name: emp ? `${emp.first_name} ${emp.last_name || ""}` : "Unknown" };
-    });
-    setCompensations(enriched);
-  };
+const loadCompensations = () => {
+  const allCompensations = ls.get("compensation") || [];
+  const allEmployees = ls.get("employees") || [];
+  const filtered = companyContext.filterByContext(allCompensations);
+  
+  const enriched = filtered.map((c: any) => {
+    const emp = allEmployees.find(e => e.id === c.employee_id);
+    return { ...c, employee_name: emp ? `${emp.first_name} ${emp.last_name || ""}` : "Unknown" };
+  });
+  setCompensations(enriched);
+};
 
+// Apply the same change to loadLoans()
   const loadLoans = () => {
     const allLoans = (ls.get("employeeLoans") || []);
     const filtered = companyContext.filterByContext(allLoans);
+      const allEmployees = ls.get("employees") || [];
+
     const enriched = filtered.map((l: any) => {
-      const emp = employees.find(e => e.id === l.employee_id);
+      const emp = allEmployees.find(e => e.id === l.employee_id);
       const remainingAmt = l.principal_amount - (l.monthly_deduction * (l.paid_months || 0));
       const remainingMonths = l.total_months - (l.paid_months || 0);
       return { 
@@ -118,36 +122,47 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
   };
 
 
-  const handleSave = () => {
-    let updated: any[] = [];
-    
-    if (modalType === "compensation") {
-      if (editingItem) {
-        updated = compensations.map(c => c.id === editingItem.id ? { ...formData, id: c.id } : c);
-        ls.set("compensation", updated);
-      } else {
-        const newItem = { ...formData, id: `cp_${Date.now()}` };
-        updated = [newItem, ...compensations];
-        ls.set("compensation", updated);
-      }
-      setCompensations(updated);
-    } else if (modalType === "loan") {
-      if (editingItem) {
-        updated = loans.map(l => l.id === editingItem.id ? { ...formData, id: l.id } : l);
-        ls.set("employeeLoans", updated);
-      } else {
-        const newItem = { ...formData, id: `loan_${Date.now()}`, paid_months: 0, status: "PENDING" };
-        updated = [newItem, ...loans];
-        ls.set("employeeLoans", updated);
-      }
-      setLoans(updated);
+const handleSave = () => {
+  let updated: any[] = [];
+  
+  if (modalType === "compensation") {
+    if (editingItem) {
+      updated = compensations.map(c => c.id === editingItem.id ? { ...formData, id: c.id } : c);
+      ls.set("compensation", updated);
+    } else {
+      // ✅ FIX: Attach multi-tenant context to new compensation
+      const newItem = companyContext.addContextToRecord({
+        ...formData,
+        id: `cp_${Date.now()}`
+      });
+      updated = [newItem, ...compensations];
+      ls.set("compensation", updated);
     }
+    setCompensations(updated);
     
-    setShowModal(false);
-    setEditingItem(null);
-    setFormData({});
-    if (onRefresh) onRefresh();
-  };
+  } else if (modalType === "loan") {
+    if (editingItem) {
+      updated = loans.map(l => l.id === editingItem.id ? { ...formData, id: l.id } : l);
+      ls.set("employeeLoans", updated);
+    } else {
+      // ✅ FIX: Attach multi-tenant context to new loan
+      const newItem = companyContext.addContextToRecord({
+        ...formData,
+        id: `loan_${Date.now()}`,
+        paid_months: 0,
+        status: "PENDING"
+      });
+      updated = [newItem, ...loans];
+      ls.set("employeeLoans", updated);
+    }
+    setLoans(updated);
+  }
+
+  setShowModal(false);
+  setEditingItem(null);
+  setFormData({});
+  if (onRefresh) onRefresh();
+};
 
   const handleDelete = (type: string, id: string) => {
     if (!confirm("Are you sure you want to delete this record?")) return;
