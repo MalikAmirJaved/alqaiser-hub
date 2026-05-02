@@ -6,6 +6,8 @@ import { ls } from "@/services/localStorageService";
 import { companyContext } from "@/services/companyContextService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HandCoins, Receipt, FileText, TrendingUp, Shield, Plus, Pencil, Trash2, Search, Download } from "lucide-react";
+import SearchableSelect from "@/components/SearchableSelect";
+import { DatePicker } from "@/components/DatePicker";
 
 interface CompensationLoanPageProps {
   onRefresh?: () => void;
@@ -100,13 +102,13 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
   }, []);
 
   const loadEmployees = () => {
-    const allEmployees = ls.get("employees", []);
+    const allEmployees = (ls.get("employees") || []);
     const filtered = companyContext.filterByContext(allEmployees);
     setEmployees(filtered);
   };
 
   const loadCompensations = () => {
-    const allCompensations = ls.get("compensation", []);
+    const allCompensations = (ls.get("compensation") || []);
     const filtered = companyContext.filterByContext(allCompensations);
     // Enrich with employee names
     const enriched = filtered.map((c: any) => {
@@ -117,7 +119,7 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
   };
 
   const loadLoans = () => {
-    const allLoans = ls.get("employeeLoans", []);
+    const allLoans = (ls.get("employeeLoans") || []);
     const filtered = companyContext.filterByContext(allLoans);
     const enriched = filtered.map((l: any) => {
       const emp = employees.find(e => e.id === l.employee_id);
@@ -134,7 +136,7 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
   };
 
   const loadBenefits = () => {
-    const allBenefits = ls.get("employeeBenefits", []);
+    const allBenefits = (ls.get("employeeBenefits") || []);
     const filtered = companyContext.filterByContext(allBenefits);
     const enriched = filtered.map((b: any) => {
       const emp = employees.find(e => e.id === b.employee_id);
@@ -144,7 +146,7 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
   };
 
   const handleSave = () => {
-    let updated = [];
+    let updated: any[] = [];
     
     if (modalType === "compensation") {
       if (editingItem) {
@@ -227,17 +229,13 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
         <div className="grid grid-cols-2 gap-3">
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground text-xs">Employee *</span>
-            <select
+            <SearchableSelect
               value={formData.employee_id || ""}
-              onChange={(e) => setFormData({ ...formData, employee_id: e.target.value })}
+              onChange={(val) => setFormData({ ...formData, employee_id: val })}
+              options={employeeOptions}
+              placeholder="Select Employee"
               required
-              className="bg-muted/40 border border-border rounded-md h-9 px-2"
-            >
-              <option value="">Select Employee</option>
-              {employeeOptions.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
+            />
           </label>
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground text-xs">Grade/Band</span>
@@ -269,7 +267,10 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
           </label>
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground text-xs">Effective Date *</span>
-            <input type="date" value={formData.effective_date || ""} onChange={(e) => setFormData({ ...formData, effective_date: e.target.value })} required className="bg-muted/40 border border-border rounded-md h-9 px-2" />
+            <DatePicker
+              date={formData.effective_date ? new Date(formData.effective_date) : undefined}
+              setDate={(date) => setFormData({ ...formData, effective_date: date ? date.toISOString().slice(0, 10) : "" })}
+            />
           </label>
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground text-xs">Notes</span>
@@ -284,35 +285,31 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
         <div className="grid grid-cols-2 gap-3">
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground text-xs">Employee *</span>
-            <select
+            <SearchableSelect
               value={formData.employee_id || ""}
-              onChange={(e) => setFormData({ ...formData, employee_id: e.target.value })}
+              onChange={(val) => setFormData({ ...formData, employee_id: val })}
+              options={employeeOptions}
+              placeholder="Select Employee"
               required
-              className="bg-muted/40 border border-border rounded-md h-9 px-2"
-            >
-              <option value="">Select Employee</option>
-              {employeeOptions.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
+            />
           </label>
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground text-xs">Loan Type *</span>
-            <select
+            <SearchableSelect
               value={formData.loan_type || ""}
-              onChange={(e) => setFormData({ ...formData, loan_type: e.target.value })}
+              onChange={(val) => setFormData({ ...formData, loan_type: val })}
+              options={[
+                { value: "Salary Advance", label: "Salary Advance" },
+                { value: "Personal Loan", label: "Personal Loan" },
+                { value: "Car Loan", label: "Car Loan" },
+                { value: "House Loan", label: "House Loan" },
+                { value: "Education Loan", label: "Education Loan" },
+                { value: "Emergency Loan", label: "Emergency Loan" },
+                { value: "Other", label: "Other" }
+              ]}
+              placeholder="Select Type"
               required
-              className="bg-muted/40 border border-border rounded-md h-9 px-2"
-            >
-              <option value="">Select Type</option>
-              <option value="Salary Advance">Salary Advance</option>
-              <option value="Personal Loan">Personal Loan</option>
-              <option value="Car Loan">Car Loan</option>
-              <option value="House Loan">House Loan</option>
-              <option value="Education Loan">Education Loan</option>
-              <option value="Emergency Loan">Emergency Loan</option>
-              <option value="Other">Other</option>
-            </select>
+            />
           </label>
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground text-xs">Principal Amount *</span>
@@ -328,7 +325,10 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
           </label>
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground text-xs">Start Date *</span>
-            <input type="date" value={formData.start_date || ""} onChange={(e) => setFormData({ ...formData, start_date: e.target.value })} required className="bg-muted/40 border border-border rounded-md h-9 px-2" />
+            <DatePicker
+              date={formData.start_date ? new Date(formData.start_date) : undefined}
+              setDate={(date) => setFormData({ ...formData, start_date: date ? date.toISOString().slice(0, 10) : "" })}
+            />
           </label>
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground text-xs">Interest Rate (%)</span>
@@ -361,36 +361,32 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
       <div className="grid grid-cols-2 gap-3">
         <label className="text-sm flex flex-col gap-1">
           <span className="text-muted-foreground text-xs">Employee *</span>
-          <select
+          <SearchableSelect
             value={formData.employee_id || ""}
-            onChange={(e) => setFormData({ ...formData, employee_id: e.target.value })}
+            onChange={(val) => setFormData({ ...formData, employee_id: val })}
+            options={employeeOptions}
+            placeholder="Select Employee"
             required
-            className="bg-muted/40 border border-border rounded-md h-9 px-2"
-          >
-            <option value="">Select Employee</option>
-            {employeeOptions.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+          />
         </label>
         <label className="text-sm flex flex-col gap-1">
           <span className="text-muted-foreground text-xs">Benefit Type *</span>
-          <select
+          <SearchableSelect
             value={formData.benefit_type || ""}
-            onChange={(e) => setFormData({ ...formData, benefit_type: e.target.value })}
+            onChange={(val) => setFormData({ ...formData, benefit_type: val })}
+            options={[
+              { value: "Health Insurance", label: "Health Insurance" },
+              { value: "Life Insurance", label: "Life Insurance" },
+              { value: "Retirement Fund", label: "Retirement Fund" },
+              { value: "Children Education", label: "Children Education" },
+              { value: "Transport", label: "Transport" },
+              { value: "Meal Vouchers", label: "Meal Vouchers" },
+              { value: "Gym Membership", label: "Gym Membership" },
+              { value: "Other", label: "Other" }
+            ]}
+            placeholder="Select Type"
             required
-            className="bg-muted/40 border border-border rounded-md h-9 px-2"
-          >
-            <option value="">Select Type</option>
-            <option value="Health Insurance">Health Insurance</option>
-            <option value="Life Insurance">Life Insurance</option>
-            <option value="Retirement Fund">Retirement Fund</option>
-            <option value="Children Education">Children Education</option>
-            <option value="Transport">Transport</option>
-            <option value="Meal Vouchers">Meal Vouchers</option>
-            <option value="Gym Membership">Gym Membership</option>
-            <option value="Other">Other</option>
-          </select>
+          />
         </label>
         <label className="text-sm flex flex-col gap-1">
           <span className="text-muted-foreground text-xs">Employer Contribution *</span>
@@ -406,7 +402,10 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
         </label>
         <label className="text-sm flex flex-col gap-1">
           <span className="text-muted-foreground text-xs">Effective Date *</span>
-          <input type="date" value={formData.effective_date || ""} onChange={(e) => setFormData({ ...formData, effective_date: e.target.value })} required className="bg-muted/40 border border-border rounded-md h-9 px-2" />
+          <DatePicker
+            date={formData.effective_date ? new Date(formData.effective_date) : undefined}
+            setDate={(date) => setFormData({ ...formData, effective_date: date ? date.toISOString().slice(0, 10) : "" })}
+          />
         </label>
         <label className="text-sm flex flex-col gap-1">
           <span className="text-muted-foreground text-xs">Status</span>

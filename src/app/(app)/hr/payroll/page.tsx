@@ -52,14 +52,14 @@ export default function PayrollPage() {
   }, [selectedMonth, selectedYear]);
 
   const loadEmployees = () => {
-    const allEmployees = ls.get("employees", []);
+    const allEmployees = (ls.get("employees") || []);
     const filtered = companyContext.filterByContext(allEmployees);
-    const activeEmployees = filtered.filter(e => e.employment_status === "ACTIVE");
+    const activeEmployees = filtered.filter((e: any) => e.employment_status === "ACTIVE");
     setEmployees(activeEmployees);
   };
 
   const loadPaymentStatuses = () => {
-    const statuses = ls.get("paymentStatuses", []);
+    const statuses = (ls.get("paymentStatuses") || []);
     const filteredForMonth = statuses.filter((s: any) => s.month === selectedMonth && s.year === selectedYear);
     setPaymentStatuses(filteredForMonth);
   };
@@ -70,7 +70,7 @@ export default function PayrollPage() {
   };
 
   const getPayrollRecord = (employeeId: string) => {
-    const records = ls.get("payroll", []);
+    const records = (ls.get("payroll") || []);
     return records.find((r: any) =>
       r.employee_id === employeeId && r.month === selectedMonth && r.year === selectedYear
     );

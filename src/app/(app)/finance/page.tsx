@@ -10,10 +10,10 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tool
 export default FinanceDashboard;
 
 function FinanceDashboard() {
-  const invoices = ls.get("invoices", []) || [];
-  const expenses = ls.get("expenses", []) || [];
-  const banks = ls.get("bankAccounts", []) || [];
-  const forecasts = ls.get("forecasts", []) || [];
+  const invoices = (ls.get("invoices") || []) || [];
+  const expenses = (ls.get("expenses") || []) || [];
+  const banks = (ls.get("bankAccounts") || []) || [];
+  const forecasts = (ls.get("forecasts") || []) || [];
   const revenue = invoices.reduce((s, i) => s + (Number(i.amount) || 0), 0);
   const expenseTotal = expenses.reduce((s, i) => s + (Number(i.amount) || 0), 0);
   const cash = banks.reduce((s, i) => s + (Number(i.balance) || 0), 0);

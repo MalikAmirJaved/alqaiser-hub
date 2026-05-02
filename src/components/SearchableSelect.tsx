@@ -20,6 +20,20 @@ import { ChevronDown, ChevronUp, Search, X, Check } from "lucide-react";
  * @param {boolean} disabled - Disabled state
  * @param {string} label - Optional label for the field
  */
+export interface SearchableSelectOption {
+  value: string;
+  label: string;
+}
+
+export interface SearchableSelectProps {
+  value: string;
+  onChange: (value: string) => void;
+  options?: SearchableSelectOption[];
+  required?: boolean;
+  placeholder?: string;
+  disabled?: boolean;
+}
+
 export default function SearchableSelect({
   value,
   onChange,
@@ -27,12 +41,12 @@ export default function SearchableSelect({
   required = false,
   placeholder = "Select...",
   disabled = false,
-}) {
+}: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const inputRef = useRef(null);
-  const containerRef = useRef(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Sync input text when value changes or dropdown opens
   useEffect(() => {
@@ -77,7 +91,7 @@ export default function SearchableSelect({
   // Close dropdown on outside click & restore query if closed without selecting
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
         const selectedOption = options.find((opt) => opt.value === value);
         setQuery(selectedOption ? selectedOption.label : "");

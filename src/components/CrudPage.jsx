@@ -1,7 +1,7 @@
 "use client";
 
 // ============================================
-// FILE: src/components/CrudPage.jsx (UPDATED - with location selectors)
+// FILE: src/components/CrudPage.jsx (UPDATED - with DatePicker integration)
 // ============================================
 
 import { useEffect, useMemo, useState } from "react";
@@ -11,6 +11,7 @@ import PageHeader from "./PageHeader";
 import { permissionService } from "../services/permissionService";
 import { CountrySelect, StateSelect, CitySelect } from "./LocationSelectors";
 import SearchableSelect from "./SearchableSelect";
+import { DatePicker } from "@/components/DatePicker"; // Import the DatePicker component
 
 // Map storeKey to module and feature
 const getModuleAndFeature = (storeKey) => {
@@ -65,6 +66,7 @@ const getModuleAndFeature = (storeKey) => {
 /**
  * Generic CRUD page with permission-based action buttons
  * Supports location fields: type "country", "state", "city"
+ * Supports date fields: type "date" with DatePicker
  */
 export default function CrudPage({
   storeKey,
@@ -145,6 +147,8 @@ export default function CrudPage({
     fields.forEach((f) => {
       if (f.type === "number") {
         blank[f.key] = 0;
+      } else if (f.type === "date") {
+        blank[f.key] = ""; // Will be "YYYY-MM-DD" when selected
       } else if (f.type === "country") {
         blank[f.key] = "";
       } else if (f.type === "state") {
@@ -298,6 +302,15 @@ export default function CrudPage({
   };
 
   /**
+   * Format date for display in table
+   */
+  const formatDateValue = (value) => {
+    if (!value) return "—";
+    // If it's already a formatted date string, return as is
+    return value;
+  };
+
+  /**
    * Render form field based on type
    * Supports: text, number, date, textarea, select, country, state, city
    */
@@ -308,16 +321,16 @@ export default function CrudPage({
 
     switch (field.type) {
       case "select":
-  const selectOptions = field.options.map(opt => ({ value: opt, label: opt }));
-  return (
-    <SearchableSelect
-      value={value}
-      onChange={(val) => updateFormValue(field.key, val)}
-      options={selectOptions}
-      required={field.required}
-      placeholder={`Select ${field.label}`}
-    />
-  );
+        const selectOptions = field.options.map(opt => ({ value: opt, label: opt }));
+        return (
+          <SearchableSelect
+            value={value}
+            onChange={(val) => updateFormValue(field.key, val)}
+            options={selectOptions}
+            required={field.required}
+            placeholder={`Select ${field.label}`}
+          />
+        );
 
       case "textarea":
         return (
@@ -326,6 +339,16 @@ export default function CrudPage({
             onChange={(e) => updateFormValue(field.key, e.target.value)}
             rows={3}
             className={textareaClassName}
+          />
+        );
+      
+      case "date":
+        return (
+          <DatePicker
+            value={value}
+            onChange={(val) => updateFormValue(field.key, val)}
+            placeholder={`Select ${field.label}`}
+            className={commonClassName}
           />
         );
       
@@ -486,17 +509,24 @@ export default function CrudPage({
               )}
               {pageRows.map((r) => (
                 <tr key={r.id} className="border-t border-border hover:bg-muted/30">
-                  {cols.map((c) => (
-                    <td key={c} className="px-4 py-2.5">
-                      {isStatus(c) ? (
-                        <span className={`inline-flex items-center px-2 py-0.5 text-[11px] rounded-full border ${badgeFor(r[c])}`}>
-                          {String(r[c] ?? "—")}
-                        </span>
-                      ) : (
-                        <span>{String(r[c] ?? "—")}</span>
-                      )}
-                    </td>
-                  ))}
+                  {cols.map((c) => {
+                    // Check if this is a date field for better display
+                    const fieldDef = fields.find(f => f.key === c);
+                    const isDateField = fieldDef?.type === "date";
+                    const displayValue = isDateField ? formatDateValue(r[c]) : (r[c] ?? "—");
+                    
+                    return (
+                      <td key={c} className="px-4 py-2.5">
+                        {isStatus(c) ? (
+                          <span className={`inline-flex items-center px-2 py-0.5 text-[11px] rounded-full border ${badgeFor(r[c])}`}>
+                            {String(displayValue)}
+                          </span>
+                        ) : (
+                          <span>{String(displayValue)}</span>
+                        )}
+                      </td>
+                    );
+                  })}
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
                     {permissions.canUpdate && (
                       <button onClick={() => openEdit(r)} className="p-1.5 rounded-md hover:bg-muted" aria-label="Edit">
@@ -532,7 +562,7 @@ export default function CrudPage({
       </div>
 
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4" >
+        <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4">
           <form
             onClick={(e) => e.stopPropagation()}
             onSubmit={handleSubmit}

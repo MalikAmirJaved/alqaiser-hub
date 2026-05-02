@@ -9,16 +9,18 @@ import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar, PieChart, Pie, Cell, Legend,
 } from "recharts";
+import { useCompanySettings } from "@/context/CompanySettingsContext";
 
 export default Dashboard;
 
 function Dashboard() {
-  const products = ls.get("products", []) || [];
-  const employees = ls.get("employees", []) || [];
-  const invoices = ls.get("invoices", []) || [];
-  const expenses = ls.get("expenses", []) || [];
-  const alerts = ls.get("alerts", []) || [];
-  const sales = ls.get("salesOrders", []) || [];
+  const products = (ls.get("products") || []) || [];
+  const employees = (ls.get("employees") || []) || [];
+  const invoices = (ls.get("invoices") || []) || [];
+  const expenses = (ls.get("expenses") || []) || [];
+  const alerts = (ls.get("alerts") || []) || [];
+  const sales = (ls.get("salesOrders") || []) || [];
+const { formatCurrency, isReady } = useCompanySettings();
 
   const revenue = invoices.reduce((s, i) => s + (Number(i.amount) || 0), 0);
   const expenseTotal = expenses.reduce((s, i) => s + (Number(i.amount) || 0), 0);
@@ -37,7 +39,6 @@ function Dashboard() {
   ).map(([name, value]) => ({ name, value }));
   const colors = ["var(--color-chart-1)", "var(--color-chart-2)", "var(--color-chart-3)", "var(--color-chart-4)", "var(--color-chart-5)"];
 
-  const fmt = (n) => "PKR " + Number(n).toLocaleString();
 
   return (
     <div>
@@ -46,20 +47,20 @@ function Dashboard() {
         subtitle="Overview of operations across Inventory, HR & Finance"
       />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label="Revenue" value={fmt(revenue)} hint={`${invoices.length} invoices`} icon={TrendingUp} accent="success" />
-        <StatCard label="Expenses" value={fmt(expenseTotal)} hint={`${expenses.length} entries`} icon={Wallet} accent="warning" />
-        <StatCard label="Stock Value" value={fmt(stockValue)} hint={`${products.length} products`} icon={Boxes} accent="info" />
+        <StatCard label="Revenue" value={formatCurrency(revenue)} hint={`${invoices.length} invoices`} icon={TrendingUp} accent="success" />
+        <StatCard label="Expenses" value={formatCurrency(expenseTotal)} hint={`${expenses.length} entries`} icon={Wallet} accent="warning" />
+        <StatCard label="Stock Value" value={formatCurrency(stockValue)} hint={`${products.length} products`} icon={Boxes} accent="info" />
         <StatCard label="Employees" value={employees.length} hint="Active workforce" icon={Users} accent="primary" />
         <StatCard label="Sales Orders" value={sales.length} icon={ShoppingCart} accent="info" />
         <StatCard label="Alerts" value={alerts.length} hint="Requires attention" icon={AlertTriangle} accent="destructive" />
-        <StatCard label="Profit (est.)" value={fmt(revenue - expenseTotal)} accent="success" icon={TrendingUp} />
-        <StatCard label="Avg Salary" value={fmt(employees.reduce((s, e) => s + Number(e.salary || 0), 0) / Math.max(1, employees.length))} icon={Users} />
+        <StatCard label="Profit (est.)" value={formatCurrency(revenue - expenseTotal)} accent="success" icon={TrendingUp} />
+        <StatCard label="Avg Salary" value={formatCurrency(employees.reduce((s, e) => s + Number(e.salary || 0), 0) / Math.max(1, employees.length))} icon={Users} />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4 mt-5">
         <div className="bg-card border border-border rounded-2xl p-4 lg:col-span-2">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold">Revenue vs Expenses (M PKR)</h3>
+            <h3 className="font-semibold">Revenue vs Expenses</h3>
           </div>
           <div className="h-72">
             <ResponsiveContainer>

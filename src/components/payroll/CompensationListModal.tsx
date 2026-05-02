@@ -8,11 +8,12 @@ import {  X,  Wallet } from "lucide-react";
 // COMPENSATION LIST MODAL
 // ============================================
 export default function CompensationListModal({
-    formatCurrency,
+  formatCurrency,
   employee,
   isOpen,
   onClose
 }: {
+  formatCurrency: (amount: number) => string;
   employee: any;
   isOpen: boolean;
   onClose: () => void;
@@ -21,7 +22,7 @@ export default function CompensationListModal({
 
   useEffect(() => {
     if (isOpen && employee) {
-      const allCompensations = ls.get("compensation", []);
+      const allCompensations = (ls.get("compensation") || []);
       const employeeCompensations = allCompensations.filter((c: any) => c.employee_id === employee.id);
       setCompensations(employeeCompensations);
     }

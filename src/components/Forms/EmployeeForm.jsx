@@ -10,6 +10,7 @@ import { ls, uid } from "@/services/localStorageService";
 import { companyContext } from "@/services/companyContextService";
 import { LocationGroup } from "../LocationSelectors"; // Import the location component
 import SearchableSelect from "../SearchableSelect";
+import { DatePicker } from "@/components/DatePicker";
 
 
 export default function EmployeeForm({ initialData = null, onSubmit, onCancel }) {
@@ -206,10 +207,9 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 </label>
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Date of Birth *</span>
-                  <input
-                    type="date"
+                  <DatePicker
                     value={formData.date_of_birth}
-                    onChange={(e) => handleChange("date_of_birth", e.target.value)}
+                    onChange={(value) => handleChange("date_of_birth", value)}
                     required
                     className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
                   />
@@ -400,20 +400,18 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Joining Date *</span>
-                  <input
-                    type="date"
+                  <DatePicker
                     value={formData.joining_date}
-                    onChange={(e) => handleChange("joining_date", e.target.value)}
+                    onChange={(value) => handleChange("joining_date", value)}
                     required
                     className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
                   />
                 </label>
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Confirmation Date</span>
-                  <input
-                    type="date"
+                  <DatePicker
                     value={formData.confirmation_date}
-                    onChange={(e) => handleChange("confirmation_date", e.target.value)}
+                    onChange={(value) => handleChange("confirmation_date", value)}
                     className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
                   />
                 </label>

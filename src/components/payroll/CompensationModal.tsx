@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ls, uid } from "@/services/localStorageService";
 import { permissionService } from "@/services/permissionService";
 import {  X,  CheckCircle,  Wallet } from "lucide-react";
+import { DatePicker } from "../DatePicker";
 
 // ============================================
 // COMPENSATION MODAL
@@ -14,6 +15,7 @@ export default function CompensationModal({
   onClose,
   onSuccess
 }: {
+  formatCurrency: (amount: number) => string;
   employee: any;
   isOpen: boolean;
   onClose: () => void;
@@ -46,7 +48,7 @@ export default function CompensationModal({
     setLoading(true);
 
     try {
-      const compensations = ls.get("compensation", []);
+      const compensations = (ls.get("compensation") || []);
       const newCompensation = {
         id: uid("comp"),
         employee_id: employee.id,
@@ -72,7 +74,7 @@ export default function CompensationModal({
       ls.set("compensation", [newCompensation, ...updatedCompensations]);
 
       // Update employee's salary
-      const employees = ls.get("employees", []);
+      const employees = (ls.get("employees") || []);
       const updatedEmployees = employees.map((e: any) =>
         e.id === employee.id
           ? { ...e, salary: totalCompensation, compensation_id: newCompensation.id }
@@ -122,10 +124,9 @@ export default function CompensationModal({
             </div>
             <div>
               <div className="text-xs text-muted-foreground">Effective Date</div>
-              <input
-                type="date"
+              <DatePicker
                 value={formData.effective_date}
-                onChange={(e) => setFormData({ ...formData, effective_date: e.target.value })}
+                onChange={(value) => setFormData({ ...formData, effective_date: value })}
                 className="bg-muted/40 border border-border rounded-md h-8 px-2 text-sm"
               />
             </div>

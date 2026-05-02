@@ -26,8 +26,8 @@ function UsersPage() {
   }, []);
 
   const loadData = () => {
-    setUsers(ls.get("users", []));
-    setPermissions(ls.get("permissions", []));
+    setUsers((ls.get("users") || []));
+    setPermissions((ls.get("permissions") || []));
   };
 
   const filteredUsers = users.filter(u =>

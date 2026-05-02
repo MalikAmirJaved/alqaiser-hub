@@ -49,7 +49,7 @@ function EmployeesPage() {
   }, []);
 
   const loadEmployees = () => {
-    const allEmployees = ls.get("employees", []);
+    const allEmployees = (ls.get("employees") || []);
     // Filter by company context (multi-tenant isolation)
     const filtered = companyContext.filterByContext(allEmployees);
     setEmployees(filtered);

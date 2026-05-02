@@ -10,11 +10,11 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGri
 export default InventoryDashboard;
 
 function InventoryDashboard() {
-  const products = ls.get("products", []) || [];
+  const products = (ls.get("products") || []) || [];
   const stockValue = products.reduce((s, p) => s + (Number(p.cost || 0) * Number(p.stock || 0)), 0);
   const lowStock = products.filter((p) => Number(p.stock) <= Number(p.reorder)).length;
-  const purchases = ls.get("purchaseOrders", []) || [];
-  const sales = ls.get("salesOrders", []) || [];
+  const purchases = (ls.get("purchaseOrders") || []) || [];
+  const sales = (ls.get("salesOrders") || []) || [];
 
   return (
     <div>

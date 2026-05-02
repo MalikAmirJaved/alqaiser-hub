@@ -9,7 +9,7 @@ export default Preferences;
 
 function Preferences() {
   const { theme, toggle } = useTheme();
-  const company = ls.get("company", {}) || {};
+  const company = (ls.get("company") || {}) || {};
   const reset = () => {
     if (!confirm("Reset all data to seed defaults?")) return;
     ls.clearAll();

@@ -3,17 +3,19 @@ import { useState } from "react";
 import { ls, uid } from "@/services/localStorageService";
 import { permissionService } from "@/services/permissionService";
 import {  X,  CheckCircle,  HandCoins} from "lucide-react";
+import { DatePicker } from "../DatePicker";
 
 // ============================================
 // LOAN MODAL
 // ============================================
 export default function LoanModal({
-    formatCurrency,
+  formatCurrency,
   employee,
   isOpen,
   onClose,
   onSuccess
 }: {
+  formatCurrency: (amount: number) => string;
   employee: any;
   isOpen: boolean;
   onClose: () => void;
@@ -38,7 +40,7 @@ export default function LoanModal({
     setLoading(true);
 
     try {
-      const loans = ls.get("employeeLoans", []);
+      const loans = (ls.get("employeeLoans") || []);
       const newLoan = {
         id: uid("loan"),
         employee_id: employee.id,
@@ -120,10 +122,9 @@ export default function LoanModal({
 
             <label className="text-sm flex flex-col gap-1">
               <span className="text-muted-foreground">Start Date</span>
-              <input
-                type="date"
+              <DatePicker
                 value={formData.start_date}
-                onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                onChange={(value) => setFormData({ ...formData, start_date: value })}
                 className="bg-muted/40 border border-border rounded-md h-10 px-3 outline-none focus:ring-2 focus:ring-ring"
               />
             </label>

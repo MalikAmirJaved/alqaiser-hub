@@ -7,22 +7,22 @@ import {  X,  Receipt, } from "lucide-react";
 // ============================================
 // PAYSLIP MODAL (Enhanced)
 // ============================================
-export default function PayslipModal({ employee, isOpen,formatCurrency, onClose,  }: { employee: any; isOpen: boolean; onClose: () => void }) {
+export default function PayslipModal({ employee, isOpen, formatCurrency, onClose,  }: { employee: any; isOpen: boolean; formatCurrency: (amount: number) => string; onClose: () => void }) {
   const [payrollRecords, setPayrollRecords] = useState<any[]>([]);
   const [loans, setLoans] = useState<any[]>([]);
   const [compensation, setCompensation] = useState<any>(null);
 
   useEffect(() => {
     if (isOpen && employee) {
-      const records = ls.get("payroll", []);
+      const records = (ls.get("payroll") || []);
       const employeeRecords = records.filter((r: any) => r.employee_id === employee.id);
       setPayrollRecords(employeeRecords);
 
-      const allLoans = ls.get("employeeLoans", []);
+      const allLoans = (ls.get("employeeLoans") || []);
       const employeeLoans = allLoans.filter((l: any) => l.employee_id === employee.id);
       setLoans(employeeLoans);
 
-      const compensations = ls.get("compensation", []);
+      const compensations = (ls.get("compensation") || []);
       const activeComp = compensations.find((c: any) => c.employee_id === employee.id && c.status === "ACTIVE");
       setCompensation(activeComp);
     }

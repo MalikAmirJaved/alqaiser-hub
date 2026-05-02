@@ -9,12 +9,13 @@ import { X,  HandCoins,  Hash } from "lucide-react";
 // LOAN LIST MODAL
 // ============================================
 export default function LoanListModal({
-    formatCurrency,
+  formatCurrency,
   employee,
   isOpen,
   onClose,
   onRefresh
 }: {
+  formatCurrency: (amount: number) => string;
   employee: any;
   isOpen: boolean;
   onClose: () => void;
@@ -24,7 +25,7 @@ export default function LoanListModal({
 
   useEffect(() => {
     if (isOpen && employee) {
-      const allLoans = ls.get("employeeLoans", []);
+      const allLoans = (ls.get("employeeLoans") || []);
       const employeeLoans = allLoans.filter((l: any) => l.employee_id === employee.id);
       setLoans(employeeLoans);
     }
@@ -32,7 +33,7 @@ export default function LoanListModal({
 
   const handleCloseLoan = (loanId: string) => {
     if (confirm("Close this loan? The remaining amount will be written off.")) {
-      const allLoans = ls.get("employeeLoans", []);
+      const allLoans = (ls.get("employeeLoans") || []);
       const updatedLoans = allLoans.map((l: any) =>
         l.id === loanId ? { ...l, status: "CLOSED", closed_at: new Date().toISOString() } : l
       );
