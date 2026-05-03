@@ -714,6 +714,7 @@ export default function ShiftsManagementPage() {
                             : emp.default_shift_id ? "From hire date" : "—"}
                         </td>
                         <td className="px-4 py-3 text-right space-x-2">
+                          {!activeDefault?.effective_from && (
                           <Button 
                             size="sm" 
                             variant="outline" 
@@ -729,6 +730,7 @@ export default function ShiftsManagementPage() {
                           >
                             <Settings className="w-3.5 h-3.5 mr-1.5"/> Set Default
                           </Button>
+                          )}
                           
                           <Button 
                             size="sm" 
