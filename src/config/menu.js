@@ -6,6 +6,8 @@ import {
   HandCoins, BookOpen, Receipt, CreditCard, ArrowDownCircle, ArrowUpCircle, Target,
   Landmark, Coins, Calculator, LineChart, History, Settings, UserCog, Building2,
   Cpu, ClipboardList,
+  Calendar,
+  Sparkles,
 } from "lucide-react";
 
 export const menu = [
@@ -20,7 +22,14 @@ export const menu = [
       { title: "Payroll", to: "/hr/payroll", icon: Wallet },
       { title: "Time & Attendance", to: "/hr/attendance", icon: CalendarClock },
       { title: "Leave Management", to: "/hr/leave", icon: CalendarDays },
-      { title: "Shift Management", to: "/hr/shifts", icon: Clock },
+      {
+        title: "Shift Management",
+        icon: Clock,
+        children: [
+          { title: "Shifts", to: "/hr/shifts/list", icon: Layers },
+          { title: "Shift Templates", to: "/hr/shifts/templates", icon: Layers },
+        ],
+      },
       { title: "Employee Assets", to: "/hr/assets", icon: Briefcase },
       { title: "Performance", to: "/hr/performance", icon: TrendingUp },
       { title: "Recruitment", to: "/hr/recruitment", icon: UserPlus },

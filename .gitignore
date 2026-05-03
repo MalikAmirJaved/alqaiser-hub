@@ -32,3 +32,17 @@ dist-ssr
 *.sln
 *.sw?
 
+.env
+.env.local
+.env.development
+.env.production
+.env*.local
+.tsconfig.tsbuildinfo
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.local
+.dev.vars

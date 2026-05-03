@@ -65,14 +65,14 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [modalType, setModalType] = useState<"compensation" | "loan">("compensation");
-  
+
   // Data states
   const [compensations, setCompensations] = useState<Compensation[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
-  
+
   // Form states
   const [formData, setFormData] = useState<any>({});
-  
+
   // Search states
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -89,30 +89,30 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
     setEmployees(filtered);
   };
 
-const loadCompensations = () => {
-  const allCompensations = ls.get("compensation") || [];
-  const allEmployees = ls.get("employees") || [];
-  const filtered = companyContext.filterByContext(allCompensations);
-  
-  const enriched = filtered.map((c: any) => {
-    const emp = allEmployees.find(e => e.id === c.employee_id);
-    return { ...c, employee_name: emp ? `${emp.first_name} ${emp.last_name || ""}` : "Unknown" };
-  });
-  setCompensations(enriched);
-};
+  const loadCompensations = () => {
+    const allCompensations = ls.get("compensation") || [];
+    const allEmployees = ls.get("employees") || [];
+    const filtered = companyContext.filterByContext(allCompensations);
 
-// Apply the same change to loadLoans()
+    const enriched = filtered.map((c: any) => {
+      const emp = allEmployees.find(e => e.id === c.employee_id);
+      return { ...c, employee_name: emp ? `${emp.first_name} ${emp.last_name || ""}` : "Unknown" };
+    });
+    setCompensations(enriched);
+  };
+
+  // Apply the same change to loadLoans()
   const loadLoans = () => {
     const allLoans = (ls.get("employeeLoans") || []);
     const filtered = companyContext.filterByContext(allLoans);
-      const allEmployees = ls.get("employees") || [];
+    const allEmployees = ls.get("employees") || [];
 
     const enriched = filtered.map((l: any) => {
       const emp = allEmployees.find(e => e.id === l.employee_id);
       const remainingAmt = l.principal_amount - (l.monthly_deduction * (l.paid_months || 0));
       const remainingMonths = l.total_months - (l.paid_months || 0);
-      return { 
-        ...l, 
+      return {
+        ...l,
         employee_name: emp ? `${emp.first_name} ${emp.last_name || ""}` : "Unknown",
         remaining_amount: remainingAmt,
         remaining_months: remainingMonths
@@ -122,51 +122,51 @@ const loadCompensations = () => {
   };
 
 
-const handleSave = () => {
-  let updated: any[] = [];
-  
-  if (modalType === "compensation") {
-    if (editingItem) {
-      updated = compensations.map(c => c.id === editingItem.id ? { ...formData, id: c.id } : c);
-      ls.set("compensation", updated);
-    } else {
-      // ✅ FIX: Attach multi-tenant context to new compensation
-      const newItem = companyContext.addContextToRecord({
-        ...formData,
-        id: `cp_${Date.now()}`
-      });
-      updated = [newItem, ...compensations];
-      ls.set("compensation", updated);
-    }
-    setCompensations(updated);
-    
-  } else if (modalType === "loan") {
-    if (editingItem) {
-      updated = loans.map(l => l.id === editingItem.id ? { ...formData, id: l.id } : l);
-      ls.set("employeeLoans", updated);
-    } else {
-      // ✅ FIX: Attach multi-tenant context to new loan
-      const newItem = companyContext.addContextToRecord({
-        ...formData,
-        id: `loan_${Date.now()}`,
-        paid_months: 0,
-        status: "PENDING"
-      });
-      updated = [newItem, ...loans];
-      ls.set("employeeLoans", updated);
-    }
-    setLoans(updated);
-  }
+  const handleSave = () => {
+    let updated: any[] = [];
 
-  setShowModal(false);
-  setEditingItem(null);
-  setFormData({});
-  if (onRefresh) onRefresh();
-};
+    if (modalType === "compensation") {
+      if (editingItem) {
+        updated = compensations.map(c => c.id === editingItem.id ? { ...formData, id: c.id } : c);
+        ls.set("compensation", updated);
+      } else {
+        // ✅ FIX: Attach multi-tenant context to new compensation
+        const newItem = companyContext.addContextToRecord({
+          ...formData,
+          id: `cp_${Date.now()}`
+        });
+        updated = [newItem, ...compensations];
+        ls.set("compensation", updated);
+      }
+      setCompensations(updated);
+
+    } else if (modalType === "loan") {
+      if (editingItem) {
+        updated = loans.map(l => l.id === editingItem.id ? { ...formData, id: l.id } : l);
+        ls.set("employeeLoans", updated);
+      } else {
+        // ✅ FIX: Attach multi-tenant context to new loan
+        const newItem = companyContext.addContextToRecord({
+          ...formData,
+          id: `loan_${Date.now()}`,
+          paid_months: 0,
+          status: "PENDING"
+        });
+        updated = [newItem, ...loans];
+        ls.set("employeeLoans", updated);
+      }
+      setLoans(updated);
+    }
+
+    setShowModal(false);
+    setEditingItem(null);
+    setFormData({});
+    if (onRefresh) onRefresh();
+  };
 
   const handleDelete = (type: string, id: string) => {
     if (!confirm("Are you sure you want to delete this record?")) return;
-    
+
     if (type === "compensation") {
       const updated = compensations.filter(c => c.id !== id);
       ls.set("compensation", updated);
@@ -175,7 +175,7 @@ const handleSave = () => {
       const updated = loans.filter(l => l.id !== id);
       ls.set("employeeLoans", updated);
       setLoans(updated);
-    } 
+    }
     if (onRefresh) onRefresh();
   };
 
@@ -196,7 +196,7 @@ const handleSave = () => {
   // Form field renderer
   const renderFormFields = () => {
     const employeeOptions = employees.map(e => ({ value: e.id, label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""}` }));
-    
+
     if (modalType === "compensation") {
       return (
         <div className="grid grid-cols-2 gap-3">
@@ -252,7 +252,7 @@ const handleSave = () => {
         </div>
       );
     }
-    
+
     if (modalType === "loan") {
       return (
         <div className="grid grid-cols-2 gap-3">
@@ -299,8 +299,8 @@ const handleSave = () => {
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground text-xs">Start Date *</span>
             <DatePicker
-              date={formData.start_date ? new Date(formData.start_date) : undefined}
-              setDate={(date) => setFormData({ ...formData, start_date: date ? date.toISOString().slice(0, 10) : "" })}
+              value={formData.effective_date}
+              onChange={(value) => setFormData({ ...formData, effective_date: value || "" })}
             />
           </label>
           <label className="text-sm flex flex-col gap-1">
@@ -331,16 +331,16 @@ const handleSave = () => {
   };
 
   // Filter functions
-  const filteredCompensations = compensations.filter(c => 
+  const filteredCompensations = compensations.filter(c =>
     c.employee_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.grade?.toLowerCase().includes(searchQuery.toLowerCase())
   );
-  
-  const filteredLoans = loans.filter(l => 
+
+  const filteredLoans = loans.filter(l =>
     l.employee_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     l.loan_type?.toLowerCase().includes(searchQuery.toLowerCase())
   ).filter(l => statusFilter === "all" || l.status === statusFilter);
-  
+
   return (
     <div className="mt-5">
       {/* Tabs Menu for Salary vs Compensation/Loan */}
@@ -356,13 +356,13 @@ const handleSave = () => {
               Loans & Advances
             </TabsTrigger>
           </TabsList>
-          
+
           <button
             onClick={() => openAddModal(activeTab === "compensation" ? "compensation" : "loan")}
             className="inline-flex items-center gap-2 px-3 h-8 rounded-md bg-primary text-primary-foreground text-sm"
           >
             <Plus className="w-4 h-4" />
-            Add {activeTab === "compensation" ? "Compensation" : "Loan" }
+            Add {activeTab === "compensation" ? "Compensation" : "Loan"}
           </button>
         </div>
 
@@ -472,12 +472,11 @@ const handleSave = () => {
                       <td className="px-4 py-3">{formatCurrency(item.monthly_deduction)}</td>
                       <td className="px-4 py-3">{formatCurrency(item.remaining_amount)}</td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
-                          item.status === "ACTIVE" ? "bg-success/15 text-success border-success/30" :
-                          item.status === "PAID" ? "bg-info/15 text-info border-info/30" :
-                          item.status === "PENDING" ? "bg-warning/15 text-warning border-warning/30" :
-                          "bg-destructive/15 text-destructive border-destructive/30"
-                        }`}>
+                        <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${item.status === "ACTIVE" ? "bg-success/15 text-success border-success/30" :
+                            item.status === "PAID" ? "bg-info/15 text-info border-info/30" :
+                              item.status === "PENDING" ? "bg-warning/15 text-warning border-warning/30" :
+                                "bg-destructive/15 text-destructive border-destructive/30"
+                          }`}>
                           {item.status}
                         </span>
                       </td>
@@ -504,7 +503,7 @@ const handleSave = () => {
           <div className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-card">
               <h2 className="font-semibold">
-                {editingItem ? "Edit" : "Add"} {modalType === "compensation" ? "Compensation" : "Loan" }
+                {editingItem ? "Edit" : "Add"} {modalType === "compensation" ? "Compensation" : "Loan"}
               </h2>
               <button onClick={() => setShowModal(false)} className="p-1.5 rounded-md hover:bg-muted">
                 ✕

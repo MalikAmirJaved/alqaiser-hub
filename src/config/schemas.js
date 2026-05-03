@@ -1067,4 +1067,62 @@ leaveBalances: {
     ],
     columns: ["user_id", "module_name", "feature_name", "is_create_access", "is_update_access", "is_delete_access", "is_view_access"],
   },
+
+  shifts_templates: {
+    title: "Shift Templates",
+    subtitle: "Define standard shift patterns and working hours.",
+    storeKey: "shifts_templates",
+    idPrefix: "shift_tpl",
+    fields: [
+      { key: "name", label: "Template Name", type: "text", required: true },
+      { key: "startTime", label: "Start Time", type: "text", required: true },
+      { key: "endTime", label: "End Time", type: "text", required: true },
+      { key: "breakMinutes", label: "Break (Minutes)", type: "number" },
+      { key: "color", label: "Color Code", type: "text" },
+      { key: "description", label: "Description", type: "textarea" },
+      { key: "is_active", label: "Status", type: "select", options: ["true", "false"] },
+      // Standard context fields
+      { key: "company_id", label: "Company", type: "text", hidden: true },
+      { key: "branch_id", label: "Branch", type: "text", hidden: true },
+    ],
+    columns: ["name", "startTime", "endTime", "breakMinutes", "is_active"],
+  },
+
+  shifts_assignments: {
+    title: "Shift Assignments",
+    subtitle: "Assign employees to specific shifts on the calendar.",
+    storeKey: "shifts_assignments",
+    idPrefix: "shift_asgn",
+    fields: [
+      { key: "templateId", label: "Shift Template", type: "text", required: true }, // Should ideally be a SearchableSelect
+      { key: "employeeIds", label: "Employees", type: "text" }, // Stored as JSON string, not ideal for direct editing
+      { key: "date", label: "Assignment Date", type: "date", required: true },
+      { key: "notes", label: "Notes", type: "textarea" },
+      // Standard context fields
+      { key: "company_id", label: "Company", type: "text", hidden: true },
+      { key: "branch_id", label: "Branch", type: "text", hidden: true },
+    ],
+    columns: ["templateId", "employeeIds", "date", "notes"],
+  },
+
+  // Add this inside the exported schemas object
+employee_default_shifts: {
+  title: "Employee Default Shifts",
+  subtitle: "Manage default shift patterns for employees over time.",
+  storeKey: "employee_default_shifts",
+  idPrefix: "eds",
+  fields: [
+    { key: "employee_id", label: "Employee", type: "text", required: true },
+    { key: "template_id", label: "Shift Template", type: "text", required: true },
+    { key: "effective_from", label: "Effective From", type: "date", required: true },
+    { key: "effective_to", label: "Effective To", type: "date" },
+    // Multi-tenant context fields
+    { key: "company_id", label: "Company", type: "text", required: true, hidden: true },
+    { key: "branch_id", label: "Branch", type: "text", hidden: true },
+    { key: "created_by", label: "Created By", type: "text", hidden: true },
+    { key: "created_at", label: "Created At", type: "text", hidden: true },
+    { key: "updated_at", label: "Updated At", type: "text", hidden: true },
+  ],
+  columns: ["employee_id", "template_id", "effective_from", "effective_to"],
+},
 };

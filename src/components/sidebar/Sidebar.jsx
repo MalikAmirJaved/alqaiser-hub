@@ -1,7 +1,6 @@
-
 "use client";
 // ============================================
-// FILE: src/components/sidebar/Sidebar.jsx (UPDATED)
+// FILE: src/components/sidebar/Sidebar.jsx (UPDATED - Supports Nested Groups)
 // ============================================
 
 import { useState, useEffect } from "react";
@@ -33,12 +32,15 @@ export default function Sidebar({ open, onClose }) {
       "Time & Attendance": { module: "HR", feature: "Time & Attendance" },
       "Leave Management": { module: "HR", feature: "Leave Management" },
       "Shift Management": { module: "HR", feature: "Shift Management" },
+      "Shift Templates": { module: "HR", feature: "Shift Management" },
+      "Shift Assignments": { module: "HR", feature: "Shift Management" },
+      "Auto Scheduler": { module: "HR", feature: "Shift Management" },
       "Employee Assets": { module: "HR", feature: "Employee Assets" },
       "Performance": { module: "HR", feature: "Performance" },
       "Recruitment": { module: "HR", feature: "Recruitment" },
       "Exit Management": { module: "HR", feature: "Exit Management" },
       "HR Policies": { module: "HR", feature: "HR Policies" },
-      "Compensation": { module: "HR", feature: "Compensation" },
+      "Compensation & Loan": { module: "HR", feature: "Compensation" },
       // Inventory Features
       "Inventory Dashboard": { module: "INVENTORY", feature: null },
       "Product Management": { module: "INVENTORY", feature: "Products" },
@@ -73,37 +75,39 @@ export default function Sidebar({ open, onClose }) {
       "Users & Roles": { module: "SETTINGS", feature: "Users & Roles" },
       "Departments": { module: "SETTINGS", feature: "Departments" },
       "Designations": { module: "SETTINGS", feature: "Designations" },
+      "Leave Types": { module: "SETTINGS", feature: "Leave Types" },
       "Preferences": { module: "SETTINGS", feature: "Preferences" },
     };
 
     if (parentTitle && moduleMapping[parentTitle]) {
       return { module: moduleMapping[parentTitle].module, feature: null };
     }
-    
+
     return featureMapping[title] || { module: null, feature: null };
   };
 
-  // Filter menu based on user permissions
-  useEffect(() => {
-    permissionService.init();
+  // Check if a menu item has nested children
+  const hasNestedChildren = (item) => {
+    return item.children && item.children.length > 0 && item.children.some(c => c.children);
+  };
+
+  // Filter menu items based on permissions (recursive)
+  const filterMenuByPermissions = (items) => {
     const user = permissionService.getCurrentUser();
     
     if (user?.role === "COMPANY_ADMIN") {
-      setFilteredMenu(menu);
-      return;
+      return items;
     }
 
     const accessibleModules = permissionService.getAccessibleModules();
     const accessibleFeatures = new Set();
     
-    // Get all accessible features
     accessibleModules.forEach(module => {
       const features = permissionService.getAccessibleFeatures(module, "view");
       features.forEach(f => accessibleFeatures.add(f));
     });
 
-    // Filter menu items
-    const filtered = menu
+    return items
       .map(item => {
         if (item.type === "link") {
           const { module, feature } = getModuleAndFeature(item.title);
@@ -118,11 +122,8 @@ export default function Sidebar({ open, onClose }) {
           if (module && !accessibleModules.includes(module)) {
             return null;
           }
-          
-          const filteredChildren = item.children.filter(child => {
-            const { feature } = getModuleAndFeature(child.title);
-            return !feature || accessibleFeatures.has(feature);
-          });
+
+          const filteredChildren = filterMenuByPermissions(item.children || []);
           
           if (filteredChildren.length === 0) return null;
           
@@ -134,21 +135,111 @@ export default function Sidebar({ open, onClose }) {
         return item;
       })
       .filter(Boolean);
+  };
 
+  // Filter menu based on user permissions
+  useEffect(() => {
+    permissionService.init();
+    const filtered = filterMenuByPermissions(menu);
     setFilteredMenu(filtered);
-    
+
     // Initialize open groups based on current path
     const initial = {};
-    filtered.forEach((m, i) => {
-      if (m.type === "group" && m.children?.some((c) => path.startsWith(c.to))) {
-        initial[i] = true;
-      }
-    });
+    const findAndOpenGroups = (items, parentIndex = null) => {
+      items.forEach((m, i) => {
+        const groupKey = parentIndex !== null ? `${parentIndex}-${i}` : String(i);
+        
+        if (m.type === "group" && m.children) {
+          // Check if any child matches current path
+          const hasActiveChild = m.children.some(c => {
+            if (c.children) {
+              return c.children.some(subC => path.startsWith(subC.to));
+            }
+            return c.to && path.startsWith(c.to);
+          });
+          
+          if (hasActiveChild) {
+            initial[groupKey] = true;
+          }
+          
+          // Recurse into nested children
+          m.children.forEach((child, childIndex) => {
+            if (child.children) {
+              const nestedKey = `${groupKey}-${childIndex}`;
+              if (child.children.some(subC => path.startsWith(subC.to))) {
+                initial[nestedKey] = true;
+                initial[groupKey] = true; // Also open parent
+              }
+            }
+          });
+        }
+      });
+    };
+    
+    findAndOpenGroups(filtered);
     setOpenGroups(initial);
   }, [path]);
 
-  const toggle = (i) => setOpenGroups((s) => ({ ...s, [i]: !s[i] }));
+  const toggle = (key) => setOpenGroups((s) => ({ ...s, [key]: !s[key] }));
   const isActive = (to) => path === to || (to !== "/dashboard" && path.startsWith(to + "/")) || path === to;
+
+  // Render a nested group item (like Shift Management)
+  const renderNestedGroup = (item, groupKey) => {
+    const isOpen = openGroups[groupKey];
+    const hasActiveChild = item.children.some(c => 
+      c.to && (path.startsWith(c.to) || path === c.to)
+    );
+
+    return (
+      <div key={item.title}>
+        <button
+          onClick={() => toggle(groupKey)}
+          className={`w-full flex items-center justify-between gap-3 px-3 py-2 my-0.5 rounded-md text-[13px] transition ${
+            hasActiveChild
+              ? "bg-sidebar-primary/20 text-sidebar-foreground/85"
+              : "hover:bg-sidebar-accent text-sidebar-foreground/85"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <item.icon className="w-3.5 h-3.5" />
+            {item.title}
+          </span>
+          {isOpen ? (
+            <ChevronDown className="w-3.5 h-3.5" />
+          ) : (
+            <ChevronRight className="w-3.5 h-3.5" />
+          )}
+        </button>
+        <AnimatePresence initial={false}>
+          {isOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              className="overflow-hidden ml-3 border-l border-sidebar-border pl-2"
+            >
+              {item.children.map((c) => (
+                <Link
+                  key={c.to}
+                  href={c.to}
+                  onClick={onClose}
+                  className={`flex items-center gap-2 px-3 py-2 my-0.5 rounded-md text-[13px] transition ${
+                    isActive(c.to)
+                      ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                      : "hover:bg-sidebar-accent text-sidebar-foreground/85"
+                  }`}
+                >
+                  <c.icon className="w-3.5 h-3.5" />
+                  {c.title}
+                </Link>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  };
 
   return (
     <>
@@ -194,21 +285,21 @@ export default function Sidebar({ open, onClose }) {
             ) : (
               <div key={item.title}>
                 <button
-                  onClick={() => toggle(i)}
+                  onClick={() => toggle(String(i))}
                   className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-md text-sm hover:bg-sidebar-accent"
                 >
                   <span className="flex items-center gap-3">
                     <item.icon className="w-4 h-4" />
                     {item.title}
                   </span>
-                  {openGroups[i] ? (
+                  {openGroups[String(i)] ? (
                     <ChevronDown className="w-4 h-4" />
                   ) : (
                     <ChevronRight className="w-4 h-4" />
                   )}
                 </button>
                 <AnimatePresence initial={false}>
-                  {openGroups[i] && (
+                  {openGroups[String(i)] && (
                     <motion.div
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: "auto", opacity: 1 }}
@@ -216,21 +307,28 @@ export default function Sidebar({ open, onClose }) {
                       transition={{ duration: 0.18 }}
                       className="overflow-hidden ml-3 border-l border-sidebar-border pl-2"
                     >
-                      {item.children.map((c) => (
-                        <Link
-                          key={c.to}
-                          href={c.to}
-                          onClick={onClose}
-                          className={`flex items-center gap-2 px-3 py-2 my-0.5 rounded-md text-[13px] transition ${
-                            isActive(c.to)
-                              ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                              : "hover:bg-sidebar-accent text-sidebar-foreground/85"
-                          }`}
-                        >
-                          <c.icon className="w-3.5 h-3.5" />
-                          {c.title}
-                        </Link>
-                      ))}
+                      {item.children.map((c, childIndex) => {
+                        // Check if this child has its own children (nested group)
+                        if (c.children) {
+                          return renderNestedGroup(c, `${i}-${childIndex}`);
+                        }
+                        // Regular link
+                        return (
+                          <Link
+                            key={c.to}
+                            href={c.to}
+                            onClick={onClose}
+                            className={`flex items-center gap-2 px-3 py-2 my-0.5 rounded-md text-[13px] transition ${
+                              isActive(c.to)
+                                ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                                : "hover:bg-sidebar-accent text-sidebar-foreground/85"
+                            }`}
+                          >
+                            <c.icon className="w-3.5 h-3.5" />
+                            {c.title}
+                          </Link>
+                        );
+                      })}
                     </motion.div>
                   )}
                 </AnimatePresence>
