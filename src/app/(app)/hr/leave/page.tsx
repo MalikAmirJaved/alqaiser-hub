@@ -78,7 +78,7 @@ export default function LeaveManagementPage() {
   const loadLeaveBalances = (empList, typesList) => {
     const storedBalances = ls.get("leaveBalances", []);
     const filtered = storedBalances.filter(b => b.year === currentYear);
-    
+
     // If no balances exist, create default ones
     if (filtered.length === 0 && typesList.length > 0 && empList.length > 0) {
       const newBalances = [];
@@ -191,7 +191,7 @@ export default function LeaveManagementPage() {
           approval_date: status === "APPROVED" ? new Date().toISOString() : null,
           rejection_reason: status === "REJECTED" ? rejectionReason : null,
         };
-        
+
         // Update leave balances if approved
         if (status === "APPROVED") {
           updateLeaveBalance(l.employee_id, l.leave_type_id, l.total_days);
@@ -200,7 +200,7 @@ export default function LeaveManagementPage() {
       }
       return l;
     });
-    
+
     setLeaves(updated);
     ls.set("leaves", updated);
     loadLeaveBalances(employees, leaveTypes);
@@ -208,10 +208,10 @@ export default function LeaveManagementPage() {
 
   const updateLeaveBalance = (employeeId, leaveTypeId, daysUsed) => {
     const balances = ls.get("leaveBalances", []);
-    const idx = balances.findIndex(b => 
+    const idx = balances.findIndex(b =>
       b.employee_id === employeeId && b.leave_type_id === leaveTypeId && b.year === currentYear
     );
-    
+
     if (idx !== -1) {
       balances[idx].used += daysUsed;
       balances[idx].available = balances[idx].allocated - balances[idx].used + (balances[idx].carry_forward_from || 0);
@@ -594,20 +594,20 @@ export default function LeaveManagementPage() {
                 </label>
               </div>
 
-<div className="grid sm:grid-cols-2 gap-4">
-  <label className="text-sm flex flex-col gap-1">
-    <span className="text-muted-foreground text-xs">Leave Period *</span>
-    <DateRangePickerRac
-      startDate={formData.start_date}
-      endDate={formData.end_date}
-      onChange={(start, end) => {
-        setFormData({ ...formData, start_date: start, end_date: end });
-      }}
-      placeholder="Select leave period"
-      required
-    />
-  </label>
-</div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <label className="text-sm flex flex-col gap-1">
+                  <span className="text-muted-foreground text-xs">Leave Period *</span>
+                  <DateRangePickerRac
+                    startDate={formData.start_date}
+                    endDate={formData.end_date}
+                    onChange={(start, end) => {
+                      setFormData({ ...formData, start_date: start, end_date: end });
+                    }}
+                    placeholder="Select leave period"
+                    required
+                  />
+                </label>
+              </div>
 
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground">Reason *</span>
@@ -682,36 +682,36 @@ export default function LeaveManagementPage() {
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div className="text-muted-foreground">Leave Type:</div>
                 <div className="font-medium">{leaveTypes.find(t => t.id === selectedLeave.leave_type_id)?.name || selectedLeave.leave_type_id}</div>
-                
+
                 <div className="text-muted-foreground">Period:</div>
                 <div>{selectedLeave.start_date} → {selectedLeave.end_date}</div>
-                
+
                 <div className="text-muted-foreground">Total Days:</div>
                 <div>{selectedLeave.total_days}{selectedLeave.is_half_day === "true" && " (Half Day)"}</div>
-                
+
                 <div className="text-muted-foreground">Status:</div>
                 <div><span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${getStatusBadge(selectedLeave.status)}`}>{selectedLeave.status}</span></div>
-                
+
                 <div className="text-muted-foreground">Applied On:</div>
                 <div>{selectedLeave.applied_at ? new Date(selectedLeave.applied_at).toLocaleDateString() : "—"}</div>
-                
+
                 <div className="text-muted-foreground">Reason:</div>
                 <div className="col-span-2">{selectedLeave.reason}</div>
-                
+
                 {selectedLeave.contact_number && (
                   <>
                     <div className="text-muted-foreground">Emergency Contact:</div>
                     <div>{selectedLeave.contact_number}</div>
                   </>
                 )}
-                
+
                 {selectedLeave.rejection_reason && (
                   <>
                     <div className="text-muted-foreground">Rejection Reason:</div>
                     <div className="text-destructive">{selectedLeave.rejection_reason}</div>
                   </>
                 )}
-                
+
                 {selectedLeave.approved_by_id && (
                   <>
                     <div className="text-muted-foreground">Approved By:</div>
