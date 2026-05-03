@@ -1126,4 +1126,30 @@ employee_default_shifts: {
   ],
   columns: ["employee_id", "template_id", "effective_from", "effective_to"],
 },
+
+shift_change_history: {
+  title: "Shift Change History",
+  subtitle: "Track all shift changes for employees (audit trail)",
+  storeKey: "shift_change_history",
+  idPrefix: "sch",
+  fields: [
+    { key: "employee_id", label: "Employee", type: "text", required: true },
+    { key: "employee_name", label: "Employee Name", type: "text" },
+    { key: "change_type", label: "Change Type", type: "select", options: ["DEFAULT_CHANGE", "TEMPORARY_OVERRIDE", "DATE_RANGE_ASSIGNMENT"] },
+    { key: "from_template_id", label: "From Shift", type: "text" },
+    { key: "from_template_name", label: "From Shift Name", type: "text" },
+    { key: "to_template_id", label: "To Shift", type: "text", required: true },
+    { key: "to_template_name", label: "To Shift Name", type: "text" },
+    { key: "effective_from", label: "Effective From", type: "date", required: true },
+    { key: "effective_to", label: "Effective To", type: "date" },
+    { key: "reason", label: "Reason", type: "textarea" },
+    { key: "changed_by", label: "Changed By", type: "text" },
+    { key: "changed_by_name", label: "Changed By Name", type: "text" },
+    { key: "changed_at", label: "Changed At", type: "datetime" },
+    { key: "company_id", label: "Company", type: "text", hidden: true },
+    { key: "branch_id", label: "Branch", type: "text", hidden: true },
+  ],
+  columns: ["employee_name", "change_type", "from_template_name", "to_template_name", "effective_from", "effective_to", "changed_at"],
+},
+
 };
