@@ -1,18 +1,16 @@
-
 "use client";
 
 // ============================================
-// FILE: src/components/Forms/EmployeeForm.jsx (UPDATED with location selectors)
+// FILE: src/components/Forms/EmployeeForm.jsx (UPDATED with default shift)
 // ============================================
 
 import { useEffect, useState } from "react";
-import { X, Users, Building2, Briefcase, UserCog } from "lucide-react";
+import { X, Users, Building2, Briefcase, UserCog, Clock } from "lucide-react";
 import { ls, uid } from "@/services/localStorageService";
 import { companyContext } from "@/services/companyContextService";
-import { LocationGroup } from "../LocationSelectors"; // Import the location component
+import { LocationGroup } from "../LocationSelectors";
 import SearchableSelect from "../reuseable/SearchableSelect";
 import { DatePicker } from "@/components/reuseable/DatePicker";
-
 
 export default function EmployeeForm({ initialData = null, onSubmit, onCancel }) {
   const [formData, setFormData] = useState({
@@ -27,9 +25,8 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
     phone: "",
     email: "",
     personal_email: "",
-    address: "",
-    // Location fields (moved from separate fields)
-    country: "PK", // Default to Pakistan
+    address_line: "",
+    country: "PK",
     state: "",
     city: "",
     postal_code: "",
@@ -50,26 +47,27 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
     bank_account_number: "",
     bank_iban: "",
     salary: 0,
+    default_shift_id: "", // New field
   });
 
   const [designations, setDesignations] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [shiftTemplates, setShiftTemplates] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const filteredDesignations = designations.filter(
     (d) => d.department === formData.department
   );
 
-  // Load designations and employees
+  // Load designations, employees, and shift templates
   useEffect(() => {
     loadDesignations();
     loadEmployees();
+    loadShiftTemplates();
 
-    // If editing, populate form
     if (initialData) {
       setFormData(initialData);
     } else {
-      // Auto-generate employee ID for new employee
       generateEmployeeId();
     }
   }, [initialData]);
@@ -84,6 +82,12 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
     const allEmployees = ls.get("employees", []);
     const filtered = companyContext.filterByContext(allEmployees);
     setEmployees(filtered);
+  };
+
+  const loadShiftTemplates = () => {
+    const templates = ls.get("shifts_templates", []);
+    const activeTemplates = templates.filter(t => t.is_active === true);
+    setShiftTemplates(activeTemplates);
   };
 
   const generateEmployeeId = () => {
@@ -123,7 +127,6 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
       }
     }
 
-    // For display, combine address fields if needed
     const finalData = { ...formData };
     if (formData.address_line) {
       finalData.address = `${formData.address_line}, ${formData.city || ""}, ${formData.state || ""}, ${formData.country || ""}`;
@@ -150,8 +153,6 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
         </div>
 
         <div className="p-5">
-          <input type="hidden" value={formData.employee_id} />
-
           <div className="grid md:grid-cols-2 gap-4">
 
             {/* Personal Information Section */}
@@ -245,7 +246,6 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                     ]}
                     placeholder="Select Marital Status"
                   />
-
                 </label>
               </div>
 
@@ -281,7 +281,6 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 </label>
               </div>
 
-              {/*  address/city fields with LocationGroup */}
               <div className="space-y-2">
                 <h4 className="text-xs font-semibold text-primary/80">Address Information</h4>
                 <label className="text-sm flex flex-col gap-1">
@@ -295,7 +294,6 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                   />
                 </label>
 
-                {/* LocationGroup Component - Centralized country/state/city dropdowns */}
                 <LocationGroup
                   country={formData.country}
                   setCountry={(val) => handleChange("country", val)}
@@ -317,7 +315,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
               </div>
             </div>
 
-            {/* Employment Information Section - unchanged */}
+            {/* Employment Information Section */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
                 <Briefcase className="w-4 h-4" />
@@ -365,7 +363,6 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 />
               </label>
 
-              {/* Continue with rest of employment fields... */}
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Employment Type</span>
@@ -440,7 +437,6 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                     ]}
                     placeholder="Select Work Location"
                   />
-
                 </label>
               </div>
 
@@ -454,6 +450,22 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                     label: `${emp.first_name} ${emp.last_name} - ${emp.designation || "Manager"}`
                   }))}
                   placeholder="Select Manager"
+                />
+              </label>
+
+              {/* NEW: Default Shift Selection */}
+              <label className="text-sm flex flex-col gap-1">
+                <span className="text-muted-foreground text-xs flex items-center gap-1">
+                  <Clock className="w-3 h-3" /> Default Shift
+                </span>
+                <SearchableSelect
+                  value={formData.default_shift_id}
+                  onChange={(val) => handleChange("default_shift_id", val)}
+                  options={shiftTemplates.map(tpl => ({
+                    value: tpl.id,
+                    label: `${tpl.name} (${tpl.startTime} - ${tpl.endTime})`
+                  }))}
+                  placeholder="Select default shift (optional)"
                 />
               </label>
             </div>

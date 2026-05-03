@@ -383,6 +383,7 @@ export const schemas = {
       { key: "bank_account_number",      label: "Bank Account #",       type: "text" },
       { key: "bank_iban",                label: "Bank IBAN",            type: "text" },
       { key: "salary",                   label: "Basic Salary",         type: "number" },
+          { key: "default_shift_id", label: "Default Shift", type: "text" },
       { key: "company_id", label: "Company", type: "text", required: true, hidden: true },
       { key: "branch_id", label: "Branch", type: "text", hidden: true },
       { key: "created_by", label: "Created By", type: "text", hidden: true },
