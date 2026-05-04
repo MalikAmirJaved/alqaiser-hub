@@ -453,7 +453,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 />
               </label>
 
-              {/* NEW: Default Shift Selection */}
+              {/* Default Shift Selection */}
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs flex items-center gap-1">
                   <Clock className="w-3 h-3" /> Default Shift
@@ -468,6 +468,19 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                   placeholder="Select default shift (optional)"
                 />
               </label>
+
+              <label className="text-sm flex flex-col gap-1">
+  <span className="text-muted-foreground text-xs flex items-center gap-1"><Briefcase className="w-3 h-3"/> Default Asset Kit</span>
+  <SearchableSelect
+    value={formData.asset_category_id || ""}
+    onChange={(val) => handleChange("asset_category_id", val)}
+    options={ls.get("hrAssetCategories", []).filter(c => c.is_active !== "false").map(c => ({
+      value: c.id,
+      label: `${c.name} (${JSON.parse(c.asset_ids || '[]').length} items)`
+    }))}
+    placeholder="Select hardware kit to assign on creation"
+  />
+</label>
             </div>
           </div>
 

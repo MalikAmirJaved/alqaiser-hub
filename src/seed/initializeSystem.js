@@ -463,9 +463,6 @@ export function initializeSystem() {
     { id: uid("sh"), name: "Evening", start: "14:00", end: "23:00", employees: 6, is_active: "true" ,...complusory},
   ]);
 
-  ls.set("empAssets", [
-    { id: uid("ea"), employee_id: "Ahmed Raza", asset: "MacBook Pro 14", asset_tag: "AST-001", assigned_date: "2023-01-10", return_date: null, status: "Active", ...complusory},
-  ]);
 
   ls.set("performance", [
     { id: uid("pf"), employee_id: "Ahmed Raza", period: "Q1-2026", review_date: "2026-03-31", reviewer_id: "HR Manager", score: 92, kpi_notes: "Exceeded all KPI targets", rating: "Excellent", improvement_plan: "Continue leadership training", ...complusory },

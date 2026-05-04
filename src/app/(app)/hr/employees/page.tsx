@@ -130,6 +130,34 @@ function EmployeesPage() {
     }
     
     ls.set("employees", updatedEmployees);
+
+    if (employeeData.asset_category_id && !editingEmployee) {
+  const cats = ls.get("hrAssetCategories", []);
+  const cat = cats.find(c => c.id === employeeData.asset_category_id);
+  if (cat) {
+    const assetIds = JSON.parse(cat.asset_ids || "[]");
+    const newAssignments: any[] = assetIds.map(aId => {
+      const asset = ls.get("hrAssets", []).find(a => a.id === aId);
+      return companyContext.addContextToRecord({
+        id: uid("hrt_as"),
+        employee_id: savedEmployee.id,
+        employee_name: `${savedEmployee.first_name} ${savedEmployee.last_name || ""}`,
+        category_id: cat.id,
+        category_name: cat.name,
+        asset_id: aId,
+        asset_name: asset?.name || aId,
+        serial_number: null,
+        assigned_date: new Date().toISOString().split("T")[0],
+        status: "ACTIVE",
+        condition: "NEW",
+        notes: "Assigned via Employee Creation"
+      });
+    });
+    const existingAssignments = ls.get("employeeAssetAssignments", []);
+    ls.set("employeeAssetAssignments", [...newAssignments, ...existingAssignments]);
+  }
+}
+
     setEmployees(updatedEmployees);
     setModalOpen(false);
     setEditingEmployee(null);
