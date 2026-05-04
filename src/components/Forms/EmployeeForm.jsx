@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { X, Users, Building2, Briefcase, UserCog, Clock } from "lucide-react";
 import { ls, uid } from "@/services/localStorageService";
 import { companyContext } from "@/services/companyContextService";
-import { LocationGroup } from "../LocationSelectors";
+import { LocationGroup } from "../reuseable/LocationSelectors";
 import SearchableSelect from "../reuseable/SearchableSelect";
 import { DatePicker } from "@/components/reuseable/DatePicker";
 

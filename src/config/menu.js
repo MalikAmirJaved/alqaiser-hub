@@ -8,6 +8,7 @@ import {
   Cpu, ClipboardList,
   Calendar,
   Sparkles,
+  Tag,
 } from "lucide-react";
 
 export const menu = [
@@ -52,7 +53,9 @@ export const menu = [
     title: "Inventory",
     icon: Boxes,
     children: [
-      { title: "Inventory Dashboard", to: "/inventory", icon: LayoutDashboard },
+      { title: "Inventory Dashboard", to: "/inventory/dashboard", icon: LayoutDashboard },
+      { title: "Categories", to: "/inventory/categories", icon: Layers },
+      { title: "Brands", to: "/inventory/brands", icon: Tag },
       { title: "Product Management", to: "/inventory/products", icon: Package },
       { title: "Stock Management", to: "/inventory/stock", icon: Layers },
       { title: "Warehouse Management", to: "/inventory/warehouses", icon: Warehouse },

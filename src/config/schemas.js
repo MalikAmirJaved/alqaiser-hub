@@ -1243,5 +1243,36 @@ employeeAssetAssignments: {
   ],
   columns: ["employee_name", "category_name", "asset_name", "assigned_date", "condition", "status"],
 },
+categories: {
+    title: "Category Management",
+    subtitle: "Organize products into hierarchical categories",
+    storeKey: "categories",
+    idPrefix: "cat",
+    fields: [
+      { key: "name",        label: "Category Name", type: "text", required: true },
+      { key: "description", label: "Description", type: "textarea" },
+      // Multi-tenant & audit fields (hidden in UI, required for DB)
+      { key: "company_id", label: "Company", type: "text", hidden: true },
+      { key: "branch_id", label: "Branch", type: "text", hidden: true },
+      { key: "created_at", label: "Created At", type: "text", hidden: true },
+      { key: "updated_at", label: "Updated At", type: "text", hidden: true },
+    ],
+    columns: ["name", "description"],
+  },
+  brands: {
+    title: "Brand Management",
+    subtitle: "Manage manufacturers and brand identities",
+    storeKey: "brands",
+    idPrefix: "br",
+    fields: [
+      { key: "name",    label: "Brand Name", type: "text", required: true },
+      { key: "country", label: "Country of Origin", type: "text" },
+      { key: "company_id", label: "Company", type: "text", hidden: true },
+      { key: "branch_id", label: "Branch", type: "text", hidden: true },
+      { key: "created_at", label: "Created At", type: "text", hidden: true },
+      { key: "updated_at", label: "Updated At", type: "text", hidden: true },
+    ],
+    columns: ["name", "country"],
+  },
 
 };

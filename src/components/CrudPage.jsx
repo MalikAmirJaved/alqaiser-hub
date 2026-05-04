@@ -10,7 +10,7 @@ import { ls, uid } from "../services/localStorageService";
 import { Plus, Pencil, Trash2, Search, Download, X, ChevronLeft, ChevronRight, Shield } from "lucide-react";
 import PageHeader from "./PageHeader";
 import { permissionService } from "../services/permissionService";
-import { CountrySelect, StateSelect, CitySelect } from "./LocationSelectors";
+import { CountrySelect, StateSelect, CitySelect } from "./reuseable/LocationSelectors";
 import SearchableSelect from "./reuseable/SearchableSelect";
 import { DatePicker } from "@/components/reuseable/DatePicker";
 
@@ -139,46 +139,50 @@ export default function CrudPage({
     ls.set(storeKey, next);
   };
 
-  const openAdd = () => {
-    if (!permissions.canCreate) {
-      alert("You don't have permission to create new records.");
-      return;
+const openAdd = () => {
+  if (!permissions.canCreate) {
+    alert("You don't have permission to create new records.");
+    return;
+  }
+  const blank = {};
+  fields.filter(f => !f.hidden).forEach((f) => { 
+    if (f.type === "number") {
+      blank[f.key] = 0;
+    } else if (f.type === "date") {
+      blank[f.key] = "";
+    } else if (f.type === "country") {
+      blank[f.key] = "";
+    } else if (f.type === "state") {
+      blank[f.key] = "";
+    } else if (f.type === "city") {
+      blank[f.key] = "";
+    } else {
+      blank[f.key] = "";
     }
-    const blank = {};
-    fields.forEach((f) => {
-      if (f.type === "number") {
-        blank[f.key] = 0;
-      } else if (f.type === "date") {
-        blank[f.key] = ""; // Will be "YYYY-MM-DD" when selected
-      } else if (f.type === "country") {
-        blank[f.key] = "";
-      } else if (f.type === "state") {
-        blank[f.key] = "";
-      } else if (f.type === "city") {
-        blank[f.key] = "";
-      } else {
-        blank[f.key] = "";
-      }
-    });
-    setForm(blank);
-    setDependentCountry("");
-    setDependentState("");
-    setEditing(null);
-    setModalOpen(true);
-  };
+  });
+  setForm(blank);
+  setDependentCountry("");
+  setDependentState("");
+  setEditing(null);
+  setModalOpen(true);
+};
   
-  const openEdit = (row) => {
-    if (!permissions.canUpdate) {
-      alert("You don't have permission to edit records.");
-      return;
-    }
-    setForm({ ...row });
-    // Set dependent state for location fields if present
-    if (row.country) setDependentCountry(row.country);
-    if (row.state) setDependentState(row.state);
-    setEditing(row.id);
-    setModalOpen(true);
-  };
+const openEdit = (row) => {
+  if (!permissions.canUpdate) {
+    alert("You don't have permission to edit records.");
+    return;
+  }
+  // Only include visible fields when editing
+  const visibleFormData = {};
+  fields.filter(f => !f.hidden).forEach(f => {
+    visibleFormData[f.key] = row[f.key] ?? "";
+  });
+  setForm(visibleFormData);
+  if (row.country) setDependentCountry(row.country);
+  if (row.state) setDependentState(row.state);
+  setEditing(row.id);
+  setModalOpen(true);
+};
   
   const handleDelete = (id) => {
     if (!permissions.canDelete) {
@@ -576,15 +580,15 @@ export default function CrudPage({
               </button>
             </div>
             <div className="p-4 grid sm:grid-cols-2 gap-3">
-              {fields.map((f) => (
-                <label key={f.key} className={`text-sm flex flex-col gap-1 ${f.type === "textarea" ? "sm:col-span-2" : ""}`}>
-                  <span className="text-muted-foreground">
-                    {f.label} {f.required && <span className="text-destructive">*</span>}
-                  </span>
-                  {renderFormField(f)}
-                </label>
-              ))}
-            </div>
+  {fields.filter(f => !f.hidden).map((f) => (
+    <label key={f.key} className={`text-sm flex flex-col gap-1 ${f.type === "textarea" ? "sm:col-span-2" : ""}`}>
+      <span className="text-muted-foreground">
+        {f.label} {f.required && <span className="text-destructive">*</span>}
+      </span>
+      {renderFormField(f)}
+    </label>
+  ))}
+</div>
             <div className="p-4 border-t border-border flex justify-end gap-2">
               <button type="button" onClick={() => setModalOpen(false)} className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted">
                 Cancel
