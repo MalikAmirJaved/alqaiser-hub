@@ -2,7 +2,7 @@
 "use client";
 import dynamic from "next/dynamic";
 
-const AssetCategories = dynamic(() => import("@/components/hr/AssetCategories"), { 
+const AssetCategories = dynamic(() => import("@/components/HRAssets/AssetCategories"), { 
   ssr: false,
   loading: () => (
     <div className="flex items-center justify-center min-h-[60vh]">

@@ -2,7 +2,7 @@
 "use client";
 import dynamic from "next/dynamic";
 
-const EmployeeAssets = dynamic(() => import("@/components/hr/EmployeeAssets"), { 
+const EmployeeAssets = dynamic(() => import("@/components/HRAssets/EmployeeAssets"), { 
   ssr: false,
   loading: () => (
     <div className="flex items-center justify-center min-h-[60vh]">
