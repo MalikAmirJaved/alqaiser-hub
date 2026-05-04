@@ -2,7 +2,7 @@
 "use client";
 
 // ============================================
-// FILE: src/components/LocationSelectors.jsx
+// FILE: src/components/reuseable/LocationSelectors.jsx
 // ============================================
 
 import { useEffect, useState } from "react";

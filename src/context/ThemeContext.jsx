@@ -7,10 +7,10 @@ import { ls } from "../services/localStorageService";
 const ThemeContext = createContext(null);
 
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState("dark");
+  const [theme, setTheme] = useState("light");
 
   useEffect(() => {
-    const saved = ls.get("theme") || "dark";
+    const saved = ls.get("theme") || "light";
     setTheme(saved);
   }, []);
 
