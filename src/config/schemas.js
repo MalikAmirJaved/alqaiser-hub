@@ -1178,139 +1178,310 @@ export const schemas = {
     ],
     columns: ["employee_name", "category_name", "asset_name", "assigned_date", "condition", "status"],
   },
-  brands: {
-    title: "Brand Management",
-    subtitle: "Manage product brands, manufacturers, and suppliers",
-    storeKey: "brands",
-    idPrefix: "br",
-    statusField: "status",
-    fields: [
-      // Basic Information
-      { key: "name", label: "Brand Name", type: "text", required: true, placeholder: "e.g., Apple, Samsung, Nike" },
-      { key: "code", label: "Brand Code", type: "text", required: true, placeholder: "e.g., APPL, SAMS, NKE" },
-      { key: "country_of_origin", label: "Country of Origin", type: "country" },
-      { key: "description", label: "Description", type: "textarea", placeholder: "Brand description, history, etc." },
-      { key: "status", label: "Status", type: "select", options: ["active", "inactive", "discontinued"] },
-      { key: "company_id", label: "Company", type: "text", required: true, hidden: true },
-      { key: "branch_id", label: "Branch", type: "text", hidden: true },
-      { key: "created_by", label: "Created By", type: "text", hidden: true },
-      { key: "created_at", label: "Created At", type: "text", hidden: true },
-      { key: "updated_at", label: "Updated At", type: "text", hidden: true },
-    ],
-    columns: ["code", "name", "country_of_origin", "website", "status", "is_featured"],
-    filters: ["status", "is_featured", "country_of_origin"],
-    sortable: ["name", "created_at", "priority"],
-  },
+products: {
+  title: "Product Management",
+  subtitle: "Manage products with separate attributes, inventory, and tags",
+  storeKey: "products",
+  idPrefix: "prod",
+  statusField: "status",
+  
+  fields: [
+    // Core Product Info
+    { key: "sku", label: "SKU", type: "text", required: true, section: "Basic Information" },
+    { key: "barcode", label: "Barcode/EAN", type: "text", section: "Basic Information" },
+    { key: "name", label: "Product Name", type: "text", required: true, section: "Basic Information" },
+    { key: "category_id", label: "Category", type: "searchable_select", required: true, section: "Basic Information" },
+    { key: "brand_id", label: "Brand", type: "searchable_select", section: "Basic Information" },
+    { key: "short_description", label: "Short Description", type: "textarea", rows: 2, section: "Basic Information" },
+    { key: "description", label: "Full Description", type: "textarea", rows: 4, section: "Basic Information" },
+    { key: "product_type", label: "Product Type", type: "select", options: ["simple", "variable", "bundle", "digital", "service"], section: "Basic Information" },
+    { key: "unit_of_measure", label: "Unit of Measure", type: "select", options: ["PCS", "KG", "LTR", "MTR", "BOX", "SET", "PAIR", "DOZEN"], section: "Basic Information" },
+    
+    // Pricing (basic - extended in separate table)
+    { key: "cost_price", label: "Cost Price", type: "number", required: true, section: "Pricing" },
+    { key: "selling_price", label: "Selling Price", type: "number", required: true, section: "Pricing" },
+    { key: "special_price", label: "Special Price", type: "number", section: "Pricing" },
+    { key: "special_price_from", label: "Special Price Start", type: "date", section: "Pricing" },
+    { key: "special_price_to", label: "Special Price End", type: "date", section: "Pricing" },
+    { key: "msrp", label: "MSRP/List Price", type: "number", section: "Pricing" },
+    
+    // Tax
+    { key: "tax_class", label: "Tax Class", type: "select", options: ["standard", "reduced", "zero", "exempt"], section: "Pricing" },
+    { key: "tax_rate", label: "Tax Rate (%)", type: "number", step: 0.01, section: "Pricing" },
+    
+    // Shipping
+    { key: "weight", label: "Weight (kg)", type: "number", step: 0.01, section: "Shipping" },
+    { key: "length", label: "Length (cm)", type: "number", step: 0.01, section: "Shipping" },
+    { key: "width", label: "Width (cm)", type: "number", step: 0.01, section: "Shipping" },
+    { key: "height", label: "Height (cm)", type: "number", step: 0.01, section: "Shipping" },
+    { key: "shipping_class", label: "Shipping Class", type: "select", options: ["standard", "express", "heavy", "fragile"], section: "Shipping" },
+    
+    // Media
+    { key: "main_image", label: "Main Image URL", type: "text", section: "Media" },
+    { key: "gallery_images", label: "Gallery Images", type: "custom_array", section: "Media" },
+    { key: "video_url", label: "Video URL", type: "text", section: "Media" },
+    
+    // Status
+    { key: "status", label: "Status", type: "select", options: ["active", "draft", "archived"], section: "Status" },
+    
+    // Multi-tenant and audit
+    { key: "company_id", required: true, hidden: true },
+    { key: "branch_id", hidden: true },
+    { key: "created_by", hidden: true },
+    { key: "updated_by", hidden: true },
+    { key: "created_at", hidden: true },
+    { key: "updated_at", hidden: true },
+    { key: "deleted_at", hidden: true },
+  ],
+  
+  columns: ["sku", "name", "category_id", "brand_id", "selling_price", "stock_quantity", "status"],
+  sortable: ["name", "sku", "selling_price", "stock_quantity", "created_at"],
+},
 
-  // Enhanced Categories Schema with hierarchical support
-  categories: {
-    title: "Category Management",
-    subtitle: "Organize products with hierarchical categories and attributes",
-    storeKey: "categories",
-    idPrefix: "cat",
-    statusField: "status",
-    fields: [
-      // Basic Information
-      { key: "name", label: "Category Name", type: "text", required: true },
-      { key: "code", label: "Category Code", type: "text", placeholder: "e.g., CAT-001" },
-      { key: "description", label: "Description", type: "textarea" },
-      // Multi-tenant fields
-      { key: "company_id", label: "Company", type: "text", required: true, hidden: true },
-      { key: "branch_id", label: "Branch", type: "text", hidden: true },
-      { key: "created_by", label: "Created By", type: "text", hidden: true },
-      { key: "created_at", label: "Created At", type: "text", hidden: true },
-      { key: "updated_at", label: "Updated At", type: "text", hidden: true },
-    ],
-    columns: ["code", "name", "parent_id", "display_order", "show_in_menu", "status"],
-  },
+// =========================
+// PRODUCT ATTRIBUTES (NORMALIZED)
+// =========================
+productAttributes: {
+  title: "Product Attributes",
+  subtitle: "Manage product specifications and custom attributes",
+  storeKey: "productAttributes",
+  idPrefix: "pa",
+  
+  fields: [
+    { key: "product_id", label: "Product", type: "searchable_select", required: true },
+    { key: "attribute_name", label: "Attribute Name", type: "text", required: true },
+    { key: "attribute_value", label: "Attribute Value", type: "text", required: true },
+    { key: "attribute_group", label: "Attribute Group", type: "select", options: ["Technical", "Physical", "Warranty", "Other"] },
+    { key: "is_filterable", label: "Filterable", type: "select", options: ["false", "true"] },
+    { key: "display_order", label: "Display Order", type: "number" },
+    
+    // Multi-tenant
+    { key: "company_id", required: true, hidden: true },
+    { key: "branch_id", hidden: true },
+    { key: "created_by", hidden: true },
+    { key: "updated_by", hidden: true },
+    { key: "created_at", hidden: true },
+    { key: "updated_at", hidden: true },
+  ],
+  
+  columns: ["product_id", "attribute_name", "attribute_value", "attribute_group", "is_filterable"],
+  sortable: ["attribute_name", "attribute_group", "display_order"],
+},
 
-  products: {
-    title: "Product Management",
-    subtitle: "Manage products, variants, pricing, inventory, and media",
-    storeKey: "products",
-    idPrefix: "p",
-    statusField: "status",
-    fields: [
-      // Basic Information
-      { key: "sku", label: "SKU", type: "text", required: true, placeholder: "Unique product identifier" },
-      { key: "name", label: "Product Name", type: "text", required: true },
-      // Categories & Brand
-      { key: "category_id", label: "Category", type: "select", options: [], required: true },
-      { key: "brand_id", label: "Brand", type: "select", options: [] },
-      // Descriptions
-      { key: "short_description", label: "Short Description", type: "textarea", placeholder: "Brief description (150-200 chars)" },
-      { key: "description", label: "Full Description", type: "textarea", placeholder: "Complete product details" },
+// =========================
+// PRODUCT ATTRIBUTE GROUPS
+// =========================
+attributeGroups: {
+  title: "Attribute Groups",
+  subtitle: "Group product attributes for better organization",
+  storeKey: "attributeGroups",
+  idPrefix: "ag",
+  
+  fields: [
+    { key: "name", label: "Group Name", type: "text", required: true },
+    { key: "code", label: "Group Code", type: "text", required: true },
+    { key: "description", label: "Description", type: "textarea" },
+    { key: "display_order", label: "Display Order", type: "number" },
+    { key: "is_active", label: "Status", type: "select", options: ["true", "false"] },
+    
+    // Multi-tenant
+    { key: "company_id", required: true, hidden: true },
+    { key: "branch_id", hidden: true },
+    { key: "created_by", hidden: true },
+    { key: "updated_by", hidden: true },
+    { key: "created_at", hidden: true },
+    { key: "updated_at", hidden: true },
+  ],
+  
+  columns: ["name", "code", "description", "display_order", "is_active"],
+},
 
-      // Media Gallery
-      { key: "main_image", label: "Main Image URL", type: "text", placeholder: "https://..." },
-      { key: "gallery_images", label: "Gallery Images (JSON)", type: "textarea", placeholder: '["url1.jpg", "url2.jpg"]' },
-      { key: "video_url", label: "Video URL", type: "text", placeholder: "YouTube/Vimeo link" },
+// =========================
+// PRODUCT VARIANTS
+// =========================
+productVariants: {
+  title: "Product Variants",
+  subtitle: "Manage product variations (size, color, etc.)",
+  storeKey: "productVariants",
+  idPrefix: "var",
+  
+  fields: [
+    { key: "product_id", label: "Parent Product", type: "searchable_select", required: true },
+    { key: "sku", label: "SKU", type: "text", required: true },
+    { key: "barcode", label: "Barcode", type: "text" },
+    { key: "attribute_combination", label: "Attribute Combination", type: "json", required: true, description: 'e.g., {"size": "Large", "color": "Red"}' },
+    { key: "cost_price", label: "Cost Price", type: "number", required: true },
+    { key: "selling_price", label: "Selling Price", type: "number", required: true },
+    { key: "special_price", label: "Special Price", type: "number" },
+    { key: "main_image", label: "Variant Image", type: "text" },
+    { key: "status", label: "Status", type: "select", options: ["active", "inactive"] },
+    
+    // Multi-tenant
+    { key: "company_id", required: true, hidden: true },
+    { key: "branch_id", hidden: true },
+    { key: "created_by", hidden: true },
+    { key: "updated_by", hidden: true },
+    { key: "created_at", hidden: true },
+    { key: "updated_at", hidden: true },
+  ],
+  
+  columns: ["sku", "product_id", "attribute_combination", "selling_price", "status"],
+  sortable: ["sku", "selling_price"],
+},
 
-      // Pricing
-      { key: "cost_price", label: "Cost Price", type: "number", required: true, step: "0.01" },
-      { key: "selling_price", label: "Selling Price", type: "number", required: true, step: "0.01" },
-      { key: "min_selling_price", label: "Minimum Selling Price", type: "number", step: "0.01" },
-      { key: "max_selling_price", label: "Maximum Selling Price", type: "number", step: "0.01" },
-      { key: "special_price", label: "Special Price", type: "number", step: "0.01" },
-      { key: "special_price_from", label: "Special Price Start", type: "date" },
-      { key: "special_price_to", label: "Special Price End", type: "date" },
-      { key: "msrp", label: "MSRP (List Price)", type: "number", step: "0.01" },
-      // Tax & Shipping
-      { key: "tax_class_id", label: "Tax Class", type: "select", options: ["standard", "reduced", "zero", "exempt"] },
-      { key: "tax_rate", label: "Tax Rate (%)", type: "number", step: "0.01" },
-      { key: "weight", label: "Weight (kg)", type: "number", step: "0.01" },
-      { key: "length", label: "Length (cm)", type: "number", step: "0.01" },
-      { key: "width", label: "Width (cm)", type: "number", step: "0.01" },
-      { key: "height", label: "Height (cm)", type: "number", step: "0.01" },
-      { key: "shipping_class", label: "Shipping Class", type: "select", options: ["standard", "express", "heavy", "fragile"] },
-      // Inventory Management
-      { key: "unit_of_measure", label: "Unit of Measure", type: "select", options: ["PCS", "KG", "LTR", "MTR", "BOX", "SET", "PAIR", "DOZEN"] },
-      { key: "stock_quantity", label: "Stock Quantity", type: "number", required: true },
-      { key: "reserved_quantity", label: "Reserved Quantity", type: "number", readonly: true },
-      { key: "available_quantity", label: "Available Quantity", type: "number", readonly: true },
-      { key: "reorder_point", label: "Reorder Point", type: "number", placeholder: "Minimum stock before reorder" },
-      { key: "reorder_quantity", label: "Reorder Quantity", type: "number", placeholder: "Quantity to reorder" },
-      { key: "max_stock_level", label: "Maximum Stock Level", type: "number" },
-      { key: "lead_time_days", label: "Lead Time (Days)", type: "number" },
-      // Batch & Serial Tracking
-      { key: "track_by_batch", label: "Track by Batch", type: "select", options: ["true", "false"] },
-      { key: "track_by_serial", label: "Track by Serial", type: "select", options: ["true", "false"] },
-      { key: "expiry_required", label: "Expiry Date Required", type: "select", options: ["true", "false"] },
-      { key: "shelf_life_days", label: "Shelf Life (Days)", type: "number" },
-      // Product Type
-      { key: "product_type", label: "Product Type", type: "select", options: ["simple", "variable", "bundle", "digital", "service"] },
-      { key: "is_active", label: "Active Status", type: "select", options: ["true", "false"] },
+// =========================
+// INVENTORY (NORMALIZED)
+// =========================
+inventory: {
+  title: "Inventory Management",
+  subtitle: "Track stock levels per product, variant, and warehouse",
+  storeKey: "inventory",
+  idPrefix: "inv",
+  
+  fields: [
+    { key: "product_id", label: "Product", type: "searchable_select", required: true },
+    { key: "variant_id", label: "Variant", type: "searchable_select", description: "Leave empty for simple products" },
+    { key: "warehouse_id", label: "Warehouse", type: "searchable_select", required: true },
+    { key: "stock_quantity", label: "Stock Quantity", type: "number", required: true },
+    { key: "reserved_quantity", label: "Reserved Quantity", type: "number", default: 0 },
+    { key: "available_quantity", label: "Available Quantity", type: "number", readonly: true, description: "Auto-calculated: stock - reserved" },
+    { key: "reorder_point", label: "Reorder Point", type: "number" },
+    { key: "reorder_quantity", label: "Reorder Quantity", type: "number" },
+    { key: "max_stock_level", label: "Max Stock Level", type: "number" },
+    { key: "lead_time_days", label: "Lead Time (Days)", type: "number" },
+    { key: "shelf_life_days", label: "Shelf Life (Days)", type: "number" },
+    { key: "location_bin", label: "Bin/Rack Location", type: "text" },
+    { key: "last_counted_at", label: "Last Counted", type: "date" },
+    
+    // Multi-tenant
+    { key: "company_id", required: true, hidden: true },
+    { key: "branch_id", hidden: true },
+    { key: "created_by", hidden: true },
+    { key: "updated_by", hidden: true },
+    { key: "created_at", hidden: true },
+    { key: "updated_at", hidden: true },
+  ],
+  
+  columns: ["product_id", "variant_id", "warehouse_id", "stock_quantity", "available_quantity", "reorder_point"],
+  sortable: ["product_id", "warehouse_id", "stock_quantity"],
+},
 
-      // Multi-tenant fields
-      { key: "company_id", label: "Company", type: "text", required: true, hidden: true },
-      { key: "branch_id", label: "Branch", type: "text", hidden: true },
-      { key: "created_by", label: "Created By", type: "text", hidden: true },
-      { key: "created_at", label: "Created At", type: "text", hidden: true },
-      { key: "updated_at", label: "Updated At", type: "text", hidden: true },
-    ],
-    columns: ["sku", "name", "category_name", "brand_name", "selling_price", "stock_quantity", "status"],
-  },
+// =========================
+// TAGS (NORMALIZED)
+// =========================
+tags: {
+  title: "Tag Management",
+  subtitle: "Manage product tags for categorization and filtering",
+  storeKey: "tags",
+  idPrefix: "tag",
+  
+  fields: [
+    { key: "name", label: "Tag Name", type: "text", required: true },
+    { key: "slug", label: "Slug", type: "text", description: "URL-friendly version" },
+    { key: "description", label: "Description", type: "textarea" },
+    { key: "color", label: "Color Code", type: "text", placeholder: "#HEX or Tailwind class" },
+    { key: "is_active", label: "Status", type: "select", options: ["true", "false"] },
+    
+    // Multi-tenant
+    { key: "company_id", required: true, hidden: true },
+    { key: "branch_id", hidden: true },
+    { key: "created_by", hidden: true },
+    { key: "updated_by", hidden: true },
+    { key: "created_at", hidden: true },
+    { key: "updated_at", hidden: true },
+  ],
+  
+  columns: ["name", "slug", "description", "color", "is_active"],
+  sortable: ["name", "created_at"],
+},
 
-  // Product Variants Schema (for variable products)
-  productVariants: {
-    title: "Product Variants",
-    subtitle: "Manage product variations (size, color, style, etc.)",
-    storeKey: "productVariants",
-    idPrefix: "var",
-    fields: [
-      { key: "product_id", label: "Parent Product", type: "select", required: true },
-      { key: "sku", label: "Variant SKU", type: "text", required: true },
-      { key: "attributes", label: "Attributes", type: "textarea", required: true },
-      { key: "selling_price", label: "Price", type: "number", required: true, step: "0.01" },
-      { key: "cost_price", label: "Cost Price", type: "number", step: "0.01" },
-      { key: "stock_quantity", label: "Stock", type: "number", required: true },
-      { key: "image_url", label: "Variant Image", type: "text" },
-      { key: "weight", label: "Weight (kg)", type: "number", step: "0.01" },
-      { key: "company_id", label: "Company", type: "text", required: true, hidden: true },
-      { key: "branch_id", label: "Branch", type: "text", hidden: true },
-    ],
-    columns: ["sku", "attributes", "selling_price", "stock_quantity"],
-  },
+// =========================
+// PRODUCT TAGS (JUNCTION TABLE)
+// =========================
+productTags: {
+  title: "Product Tags Mapping",
+  subtitle: "Link products to tags",
+  storeKey: "productTags",
+  idPrefix: "pt",
+  
+  fields: [
+    { key: "product_id", label: "Product", type: "searchable_select", required: true },
+    { key: "tag_id", label: "Tag", type: "searchable_select", required: true },
+    
+    // Multi-tenant
+    { key: "company_id", required: true, hidden: true },
+    { key: "branch_id", hidden: true },
+    { key: "created_by", hidden: true },
+    { key: "created_at", hidden: true },
+  ],
+  
+  columns: ["product_id", "tag_id"],
+},
+
+// =========================
+// BRANDS (SIMPLIFIED)
+// =========================
+brands: {
+  title: "Brand Management",
+  subtitle: "Manage product brands, manufacturers, and suppliers",
+  storeKey: "brands",
+  idPrefix: "br",
+  statusField: "status",
+
+  fields: [
+    { key: "name", label: "Brand Name", type: "text", required: true },
+    { key: "code", label: "Brand Code", type: "text", required: true },
+    { key: "country_of_origin", label: "Country", type: "country" },
+    { key: "description", label: "Description", type: "textarea" },
+    { key: "status", label: "Status", type: "select", options: ["active", "inactive", "discontinued"] },
+    
+    // MULTI-TENANT
+    { key: "company_id", type: "text", required: true, hidden: true },
+    { key: "branch_id", type: "text", hidden: true },
+    
+    // AUDIT
+    { key: "created_by", hidden: true },
+    { key: "updated_by", hidden: true },
+    { key: "created_at", hidden: true },
+    { key: "updated_at", hidden: true },
+    { key: "deleted_at", hidden: true },
+  ],
+
+  columns: ["code", "name", "country_of_origin", "description", "status"],
+  sortable: ["name", "created_at"],
+},
+
+// =========================
+// CATEGORIES (SIMPLIFIED)
+// =========================
+categories: {
+  title: "Category Management",
+  subtitle: "Organize products with hierarchical categories",
+  storeKey: "categories",
+  idPrefix: "cat",
+  statusField: "status",
+
+  fields: [
+    { key: "name", label: "Category Name", type: "text", required: true },
+    { key: "code", label: "Category Code", type: "text", required: true },
+    { key: "description", label: "Description", type: "textarea" },
+    { key: "status", type: "select", options: ["active", "inactive"] },
+
+    // MULTI-TENANT
+    { key: "company_id", required: true, hidden: true },
+    { key: "branch_id", hidden: true },
+
+    // AUDIT
+    { key: "created_by", hidden: true },
+    { key: "updated_by", hidden: true },
+    { key: "created_at", hidden: true },
+    { key: "updated_at", hidden: true },
+    { key: "deleted_at", hidden: true },
+  ],
+
+  columns: ["code", "name", "parent_id", "description", "status"],
+  sortable: ["name", "display_order", "created_at"],
+},
 
   
 };
