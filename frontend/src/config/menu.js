@@ -101,12 +101,15 @@ export const menu = [
 
     {
     type: "group",
-    title: "Monitoring",
+    title: "AI Monitoring",
     icon: Eye,
     children: [
-      { title: "Main Entry", to: "/monitoring/main-entry", icon: DoorOpen },
-      { title: "Warehouse", to: "/monitoring/warehouse", icon: Video },
-      { title: "Employees Monitoring", to: "/monitoring/employees", icon: Camera },
+      { title: "Live Dashboard", to: "/monitoring/dashboard", icon: Video },
+      { title: "Activity Tracking", to: "/monitoring/activiy-tracking", icon: DoorOpen },
+      { title: "Inventory Monitoring", to: "/monitoring/inventory-monitoring", icon: Camera },
+      { title: "Workforce Monitoring", to: "/monitoring/workforce-monitoring", icon: Video },
+      { title: "Alerts & Events", to: "/monitoring/alerts-events", icon: DoorOpen },
+      { title: "Reports & Insights", to: "/monitoring/reports-insights", icon: Camera },
     ],
   },
 
