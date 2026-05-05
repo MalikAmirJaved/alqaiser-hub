@@ -34,7 +34,7 @@ export default function PaymentModal({
 
   useEffect(() => {
     if (isOpen && employee) {
-      const loans = (ls.get("employeeLoans") || []);
+      const loans = ls.get<any[]>("employeeLoans", []) || [];
       const active = loans.filter((l: any) => l.employee_id === employee.id && l.status === "ACTIVE");
       setActiveLoans(active);
 
@@ -62,7 +62,7 @@ export default function PaymentModal({
     setProcessing(true);
 
     try {
-      const payrollRecords = (ls.get("payroll") || []);
+      const payrollRecords = ls.get<any[]>("payroll", []) || [];
       const currentMonth = new Date().getMonth() + 1;
       const currentYear = new Date().getFullYear();
 
@@ -118,7 +118,7 @@ export default function PaymentModal({
       ls.set("payroll", [payrollRecord, ...payrollRecords]);
 
       // Update loan remaining amounts
-      const allLoans = (ls.get("employeeLoans") || []);
+      const allLoans = ls.get<any[]>("employeeLoans", []) || [];
       const updatedLoans = allLoans.map((loan: any) => {
         if (selectedLoanDeductions[loan.id] && loan.status === "ACTIVE") {
           const newRemaining = loan.remaining_amount - loan.monthly_deduction;
@@ -136,7 +136,7 @@ export default function PaymentModal({
       ls.set("employeeLoans", updatedLoans);
 
       // Update payment status
-      const paymentStatuses = (ls.get("paymentStatuses") || []);
+      const paymentStatuses = ls.get<any[]>("paymentStatuses", []) || [];
       const paymentRecord = {
         id: uid("pstat"),
         employee_id: employee.id,

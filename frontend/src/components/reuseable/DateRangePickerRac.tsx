@@ -8,7 +8,9 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { RangeCalendar } from "@/components/ui/calendar-rac";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarDate, DateRange as AriaDateRange } from "@internationalized/date";
+import { CalendarDate } from "@internationalized/date";
+import { DateRange as AriaDateRange } from "react-aria-components";
+
 
 interface DateRangePickerRacProps {
   startDate?: string;
@@ -30,7 +32,8 @@ const parseDate = (val?: string): CalendarDate | undefined => {
   return new CalendarDate(y, m, d);
 };
 
-const formatDate = (date?: CalendarDate): string | undefined => {
+const formatDate = (date?: any): string | undefined => {
+
   if (!date) return undefined;
   return `${date.year}-${String(date.month).padStart(2, "0")}-${String(date.day).padStart(2, "0")}`;
 };
@@ -316,7 +319,6 @@ export function DateRangePickerRac({
                     key={`${calendarPlaceholder?.year}-${calendarPlaceholder?.month}`}
                     value={rangeValue}
                     onChange={handleSelect}
-                    placeholder={calendarPlaceholder}
                     focusedValue={calendarPlaceholder}
                     onFocusChange={(focused) => {
                       setCalendarPlaceholder(focused);
@@ -324,7 +326,6 @@ export function DateRangePickerRac({
                     }}
                     minValue={minDate ? parseDate(minDate) : new CalendarDate(1900, 1, 1)}
                     maxValue={maxDate ? parseDate(maxDate) : new CalendarDate(2100, 12, 31)}
-                    visibleMonths={1}
                   />
                 </div>
               </div>

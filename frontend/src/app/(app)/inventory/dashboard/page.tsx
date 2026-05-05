@@ -7,11 +7,12 @@ import { Boxes, Layers, AlertTriangle, ShoppingCart, TrendingUp } from "lucide-r
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 
 export default function InventoryDashboard() {
-  const products = ls.get("products", []) || [];
-  const stockValue = products.reduce((s, p) => s + (Number(p.cost || 0) * Number(p.stock || 0)), 0);
-  const lowStock = products.filter((p) => Number(p.stock) <= Number(p.reorder)).length;
-  const purchases = ls.get("purchaseOrders", []) || [];
-  const sales = ls.get("salesOrders", []) || [];
+  const products = ls.get<any[]>("products", []) || [];
+  const stockValue = products.reduce((s: number, p: any) => s + (Number(p.cost || 0) * Number(p.stock || 0)), 0);
+  const lowStock = products.filter((p: any) => Number(p.stock) <= Number(p.reorder)).length;
+  const purchases = ls.get<any[]>("purchaseOrders", []) || [];
+  const sales = ls.get<any[]>("salesOrders", []) || [];
+
 
   return (
     <div>
@@ -26,7 +27,8 @@ export default function InventoryDashboard() {
         <h3 className="font-semibold mb-3 flex items-center gap-2"><TrendingUp className="w-4 h-4"/> Top Products by Stock</h3>
         <div className="h-72">
           <ResponsiveContainer>
-            <BarChart data={products.map(p => ({ name: p.name, stock: p.stock, value: p.stock * p.cost }))}>
+            <BarChart data={products.map((p: any) => ({ name: p.name, stock: Number(p.stock || 0), value: Number(p.stock || 0) * Number(p.cost || 0) }))}>
+
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
               <XAxis dataKey="name" stroke="var(--color-muted-foreground)" fontSize={11} />
               <YAxis stroke="var(--color-muted-foreground)" fontSize={11} />

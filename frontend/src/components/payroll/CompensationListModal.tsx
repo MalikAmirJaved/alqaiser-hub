@@ -23,7 +23,8 @@ export default function CompensationListModal({
 
   useEffect(() => {
     if (isOpen && employee) {
-      const allCompensations = (ls.get("compensation") || []);
+      const allCompensations = ls.get<any[]>("compensation", []);
+
       const employeeCompensations = allCompensations.filter((c: any) => c.employee_id === employee.id);
       setCompensations(employeeCompensations);
     }

@@ -16,7 +16,7 @@ export default function ShiftTemplatesPage() {
     name: "", startTime: "09:00", endTime: "17:00", breakMinutes: 60, color: "#3b82f6", description: "", is_active: true
   });
 
-  useEffect(() => setTemplates(ls.get("shifts_templates", [])), []);
+  useEffect(() => setTemplates(ls.get<any[]>("shifts_templates", [])), []);
 
   const filtered = templates.filter((t) => t.name.toLowerCase().includes(search.toLowerCase()));
 

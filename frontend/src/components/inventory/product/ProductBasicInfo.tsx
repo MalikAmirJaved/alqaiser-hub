@@ -21,10 +21,10 @@ export default function ProductBasicInfo({ product, onChange, errors = {} }: Pro
   const [brands, setBrands] = useState<{ value: string; label: string }[]>([]);
 
   useEffect(() => {
-    const cats = ls.get("categories", []);
+    const cats = ls.get<any[]>("categories", []) || [];
     setCategories(cats.map((c: any) => ({ value: c.id, label: `${c.name} (${c.code})` })));
     
-    const brs = ls.get("brands", []);
+    const brs = ls.get<any[]>("brands", []) || [];
     setBrands(brs.map((b: any) => ({ value: b.id, label: `${b.name} (${b.code})` })));
   }, []);
 

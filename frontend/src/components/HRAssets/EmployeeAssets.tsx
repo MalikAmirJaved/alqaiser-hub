@@ -125,10 +125,10 @@ export default function EmployeeAssets() {
   }, []);
 
   const loadData = () => {
-    setAssets(companyContext.filterByContext(ls.get("hrAssets", [])));
-    setCategories(companyContext.filterByContext(ls.get("hrAssetCategories", [])));
-    setAssignments(companyContext.filterByContext(ls.get("employeeAssetAssignments", [])));
-    setEmployees(companyContext.filterByContext(ls.get("employees", [])));
+    setAssets(companyContext.filterByContext(ls.get<any[]>("hrAssets", [])));
+    setCategories(companyContext.filterByContext(ls.get<any[]>("hrAssetCategories", [])));
+    setAssignments(companyContext.filterByContext(ls.get<any[]>("employeeAssetAssignments", [])));
+    setEmployees(companyContext.filterByContext(ls.get<any[]>("employees", [])));
     setLoading(false);
   };
 

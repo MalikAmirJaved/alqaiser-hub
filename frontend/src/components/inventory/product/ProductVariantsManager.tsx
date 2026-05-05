@@ -47,7 +47,7 @@ export default function ProductVariantsManager({ product, variants, onChange }: 
 
   // Load attribute groups from settings
   useEffect(() => {
-    const attrGroups = ls.get("attributeGroups", []);
+    const attrGroups = ls.get<any[]>("attributeGroups", []) || [];
     // You could load custom attribute definitions from here
   }, []);
 
@@ -162,7 +162,7 @@ export default function ProductVariantsManager({ product, variants, onChange }: 
             
             <TabsContent value="standard" className="space-y-4 pt-4">
               <div className="space-y-3">
-                {Object.entries(attributeDefinitions).map(([attrName, options]) => (
+                {Object.entries(attributeDefinitions).map(([attrName, options]: [string, any]) => (
                   <div key={attrName}>
                     <Label className="text-sm font-medium mb-2 block">{attrName}</Label>
                     <div className="flex flex-wrap gap-2">
@@ -391,7 +391,7 @@ export default function ProductVariantsManager({ product, variants, onChange }: 
                   <div className="mt-3 pt-3 border-t border-border">
                     <Label className="text-xs mb-2 block">Attribute Combination</Label>
                     <div className="flex flex-wrap gap-2">
-                      {Object.entries(variant.attribute_combination).map(([key, value]) => (
+                      {Object.entries(variant.attribute_combination).map(([key, value]: [string, any]) => (
                         <Badge key={key} variant="secondary" className="gap-1">
                           {key}: {value}
                           <button

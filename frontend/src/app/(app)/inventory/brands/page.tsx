@@ -13,7 +13,7 @@ export default function BrandsPage() {
   const [editing, setEditing] = useState<any>(null);
 
   useEffect(() => load(), []);
-  const load = () => setItems(ls.get("brands", []));
+  const load = () => setItems(ls.get<any[]>("brands", []));
 
   const filtered = useMemo(() => items.filter(i => i.name?.toLowerCase().includes(query.toLowerCase()) || i.code?.toLowerCase().includes(query.toLowerCase())), [items, query]);
 

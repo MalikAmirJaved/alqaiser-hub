@@ -15,11 +15,11 @@ import UserFormWithPermissions from "@/components/Forms/UserForm";
 export default UsersPage;
 
 function UsersPage() {
-  const [users, setUsers] = useState([]);
-  const [permissions, setPermissions] = useState([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [permissions, setPermissions] = useState<any[]>([]);
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
+  const [editingUser, setEditingUser] = useState<any>(null);
   const [departments] = useState(["HR", "INVENTORY", "FINANCE", "SETTINGS"]);
 
   useEffect(() => {
@@ -27,8 +27,8 @@ function UsersPage() {
   }, []);
 
   const loadData = () => {
-    setUsers((ls.get("users") || []));
-    setPermissions((ls.get("permissions") || []));
+    setUsers(ls.get<any[]>("users", []));
+    setPermissions(ls.get<any[]>("permissions", []));
   };
 
   const filteredUsers = users.filter(u =>

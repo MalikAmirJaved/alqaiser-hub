@@ -1,6 +1,14 @@
 
 
-export default function PageHeader({ title, subtitle, actions }) {
+import React from "react";
+
+interface PageHeaderProps {
+  title: string;
+  subtitle?: string;
+  actions?: React.ReactNode;
+}
+
+export default function PageHeader({ title, subtitle, actions }: PageHeaderProps) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
       <div>
@@ -11,4 +19,5 @@ export default function PageHeader({ title, subtitle, actions }) {
     </div>
   );
 }
+
 

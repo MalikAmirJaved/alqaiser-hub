@@ -15,15 +15,15 @@ export default function PayslipModal({ employee, isOpen, formatCurrency, onClose
 
   useEffect(() => {
     if (isOpen && employee) {
-      const records = (ls.get("payroll") || []);
+      const records = ls.get<any[]>("payroll", []) || [];
       const employeeRecords = records.filter((r: any) => r.employee_id === employee.id);
       setPayrollRecords(employeeRecords);
 
-      const allLoans = (ls.get("employeeLoans") || []);
+      const allLoans = ls.get<any[]>("employeeLoans", []) || [];
       const employeeLoans = allLoans.filter((l: any) => l.employee_id === employee.id);
       setLoans(employeeLoans);
 
-      const compensations = (ls.get("compensation") || []);
+      const compensations = ls.get<any[]>("compensation", []) || [];
       const activeComp = compensations.find((c: any) => c.employee_id === employee.id && c.status === "ACTIVE");
       setCompensation(activeComp);
     }

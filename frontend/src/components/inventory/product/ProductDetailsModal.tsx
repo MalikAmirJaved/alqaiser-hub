@@ -12,18 +12,30 @@ export default function ProductDetailsModal({
   inventory, 
   attributes, 
   tags, 
+  warehouses = [],
   onClose, 
   onEdit 
+}: {
+  product: any;
+  variants: any[];
+  inventory: any[];
+  attributes: any[];
+  tags: any[];
+  warehouses?: any[];
+  onClose: () => void;
+  onEdit: () => void;
 }) {
+
   const [activeTab, setActiveTab] = useState("info");
 
   // Group attributes
-  const groupedAttributes = attributes.reduce((acc, attr) => {
+  const groupedAttributes = attributes.reduce((acc: any, attr: any) => {
     const group = attr.attribute_group || "General";
     if (!acc[group]) acc[group] = [];
     acc[group].push(attr);
     return acc;
-  }, {});
+  }, {} as Record<string, any[]>);
+
 
   // Calculate total stock
   const totalStock = inventory.reduce((sum, i) => sum + i.stock_quantity, 0);
@@ -131,11 +143,13 @@ export default function ProductDetailsModal({
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {Object.entries(groupedAttributes).map(([groupName, groupAttrs]) => (
+                  {Object.entries(groupedAttributes).map(([groupName, groupAttrs]: [string, any]) => (
+
                     <div key={groupName}>
                       <h4 className="font-medium text-sm text-muted-foreground mb-3">{groupName}</h4>
                       <div className="grid grid-cols-2 gap-3">
-                        {groupAttrs.map(attr => (
+                        {(groupAttrs as any[]).map((attr: any) => (
+
                           <div key={attr.id} className="flex justify-between py-2 border-b border-border">
                             <span className="text-sm font-medium">{attr.attribute_name}</span>
                             <span className="text-sm text-muted-foreground">{attr.attribute_value}</span>
@@ -161,7 +175,8 @@ export default function ProductDetailsModal({
                         <div className="flex justify-between items-start">
                           <div>
                             <div className="font-medium">
-                              {Object.entries(variant.attribute_combination || {}).map(([k, v]) => `${k}: ${v}`).join(" | ")}
+                              {Object.entries(variant.attribute_combination || {}).map(([k, v]: [string, any]) => `${k}: ${v}`).join(" | ")}
+
                             </div>
                             <div className="text-sm text-muted-foreground mt-1">
                               SKU: {variant.sku}

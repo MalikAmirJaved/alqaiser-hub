@@ -15,12 +15,12 @@ import { useCompanySettings } from "@/context/CompanySettingsContext";
 export default Dashboard;
 
 function Dashboard() {
-  const products = (ls.get("products") || []) || [];
-  const employees = (ls.get("employees") || []) || [];
-  const invoices = (ls.get("invoices") || []) || [];
-  const expenses = (ls.get("expenses") || []) || [];
-  const alerts = (ls.get("alerts") || []) || [];
-  const sales = (ls.get("salesOrders") || []) || [];
+  const products = ls.get<any[]>("products") || [];
+  const employees = ls.get<any[]>("employees") || [];
+  const invoices = ls.get<any[]>("invoices") || [];
+  const expenses = ls.get<any[]>("expenses") || [];
+  const alerts = ls.get<any[]>("alerts") || [];
+  const sales = ls.get<any[]>("salesOrders") || [];
 const { formatCurrency, isReady } = useCompanySettings();
 
   const revenue = invoices.reduce((s, i) => s + (Number(i.amount) || 0), 0);

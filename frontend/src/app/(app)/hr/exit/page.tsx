@@ -67,11 +67,11 @@ export default function ExitManagementPage() {
   }, []);
 
   const loadData = () => {
-    const allRecords = ls.get("exits", []) as ExitRecord[];
+    const allRecords = ls.get<ExitRecord[]>("exits", []) || [];
     const filtered = companyContext.filterByContext(allRecords);
     setRecords(filtered);
 
-    const allEmployees = ls.get("employees", []);
+    const allEmployees = ls.get<any[]>("employees", []) || [];
     const activeEmps = companyContext.filterByContext(allEmployees).filter(
       (e: any) => e.employment_status === "ACTIVE"
     );
@@ -115,10 +115,11 @@ export default function ExitManagementPage() {
       updated = records.map(r => r.id === editingRecord.id ? { ...r, ...data } : r);
     } else {
       const newRecord = companyContext.addContextToRecord({
-        id: uid("ex"),
         ...data,
+        id: uid("ex"),
         created_at: new Date().toISOString(),
       });
+
       updated = [newRecord, ...records];
     }
     ls.set("exits", updated);
@@ -222,10 +223,10 @@ export default function ExitManagementPage() {
                       {r.clearance_status}
                     </span>
                     <div className="flex gap-1 mt-1">
-                      <ShieldCheck className={`w-3 h-3 ${r.clearance_hr ? "text-success" : "text-muted-foreground/40"}`} title="HR" />
-                      <ShieldCheck className={`w-3 h-3 ${r.clearance_it ? "text-success" : "text-muted-foreground/40"}`} title="IT" />
-                      <ShieldCheck className={`w-3 h-3 ${r.clearance_finance ? "text-success" : "text-muted-foreground/40"}`} title="Finance" />
-                      <ShieldCheck className={`w-3 h-3 ${r.clearance_admin ? "text-success" : "text-muted-foreground/40"}`} title="Admin" />
+                      <ShieldCheck className={`w-3 h-3 ${r.clearance_hr ? "text-success" : "text-muted-foreground/40"}`} />
+                      <ShieldCheck className={`w-3 h-3 ${r.clearance_it ? "text-success" : "text-muted-foreground/40"}`} />
+                      <ShieldCheck className={`w-3 h-3 ${r.clearance_finance ? "text-success" : "text-muted-foreground/40"}`} />
+                      <ShieldCheck className={`w-3 h-3 ${r.clearance_admin ? "text-success" : "text-muted-foreground/40"}`} />
                     </div>
                   </td>
                   <td className="px-4 py-2.5 text-xs font-medium">{r.final_settlement ? `${r.final_settlement.toLocaleString()}` : "—"}</td>

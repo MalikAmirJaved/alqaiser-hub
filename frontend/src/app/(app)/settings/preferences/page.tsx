@@ -9,8 +9,10 @@ import PageHeader from "@/components/PageHeader";
 export default Preferences;
 
 function Preferences() {
-  const { theme, toggle } = useTheme();
-  const company = (ls.get("company") || {}) || {};
+  const { theme, toggle } = useTheme() as any;
+
+  const company = ls.get<any>("company", {}) || {};
+
   const reset = () => {
     if (!confirm("Reset all data to seed defaults?")) return;
     ls.clearAll();

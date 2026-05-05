@@ -1,7 +1,22 @@
 
-"use client";
+import React from "react";
+import { LucideIcon } from "lucide-react";
 
-export default function StatCard({ label, value, hint, icon: Icon, accent = "primary" }) {
+interface StatCardProps {
+  label: string;
+  value: string | number;
+  hint?: string;
+  icon?: LucideIcon;
+  accent?: "primary" | "success" | "warning" | "info" | "destructive";
+}
+
+export default function StatCard({ 
+  label, 
+  value, 
+  hint, 
+  icon: Icon, 
+  accent = "primary" 
+}: StatCardProps) {
   const tones = {
     primary: "bg-primary/15 text-primary",
     success: "bg-success/15 text-success",
@@ -24,4 +39,5 @@ export default function StatCard({ label, value, hint, icon: Icon, accent = "pri
     </div>
   );
 }
+
 

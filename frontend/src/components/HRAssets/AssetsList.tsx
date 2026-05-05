@@ -81,7 +81,7 @@ export default function AssetsList() {
   }, []);
 
   const loadData = () => {
-    setAssets(companyContext.filterByContext(ls.get("hrAssets", [])));
+    setAssets(companyContext.filterByContext(ls.get<any[]>("hrAssets", [])));
     setLoading(false);
   };
 
@@ -115,7 +115,7 @@ export default function AssetsList() {
   };
 
   const handleDelete = (id: string) => {
-    const categories = companyContext.filterByContext(ls.get("hrAssetCategories", []));
+    const categories = companyContext.filterByContext(ls.get<any[]>("hrAssetCategories", []));
     const usedInCategories = categories.filter(c => {
       const assetIds = JSON.parse(c.asset_ids || "[]");
       return assetIds.includes(id);
@@ -126,7 +126,7 @@ export default function AssetsList() {
       return;
     }
     
-    const assignments = companyContext.filterByContext(ls.get("employeeAssetAssignments", []));
+    const assignments = companyContext.filterByContext(ls.get<any[]>("employeeAssetAssignments", []));
     const isAssigned = assignments.some(a => a.asset_id === id && a.status === "ACTIVE");
     if (isAssigned) {
       toast.error("Cannot delete: Asset is currently assigned to an employee");

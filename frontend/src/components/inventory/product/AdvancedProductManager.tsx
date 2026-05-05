@@ -18,22 +18,23 @@ import ProductTagsManager from "./ProductTagsManager";
 
 export default function AdvancedProductManager({ productId, onSave, onCancel }) {
   const [activeTab, setActiveTab] = useState("basic");
-  const [product, setProduct] = useState(null);
-  const [variants, setVariants] = useState([]);
-  const [attributes, setAttributes] = useState([]);
-  const [inventoryRecords, setInventoryRecords] = useState([]);
-  const [tags, setTags] = useState([]);
+  const [product, setProduct] = useState<any>(null);
+  const [variants, setVariants] = useState<any[]>([]);
+  const [attributes, setAttributes] = useState<any[]>([]);
+  const [inventoryRecords, setInventoryRecords] = useState<any[]>([]);
+  const [tags, setTags] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
-  const [errors, setErrors] = useState({});
-  const [warehouses, setWarehouses] = useState([]);
+  const [errors, setErrors] = useState<any>({});
+  const [warehouses, setWarehouses] = useState<any[]>([]);
 
   // Load all data
   useEffect(() => {
-    setWarehouses(ls.get("warehouses", []));
+    setWarehouses(ls.get<any[]>("warehouses", []) || []);
     
     if (productId) {
-      const products = ls.get("products", []);
-      const found = products.find(p => p.id === productId);
+      const products = ls.get<any[]>("products", []) || [];
+      const found = products.find((p: any) => p.id === productId);
+
       if (found) {
         setProduct(found);
         loadVariants(productId);
@@ -70,30 +71,35 @@ export default function AdvancedProductManager({ productId, onSave, onCancel }) 
     return `SKU-${timestamp}`;
   };
 
-  const loadVariants = (pid) => {
-    const allVariants = ls.get("productVariants", []);
-    setVariants(allVariants.filter(v => v.product_id === pid));
+  const loadVariants = (pid: string) => {
+    const allVariants = ls.get<any[]>("productVariants", []) || [];
+    setVariants(allVariants.filter((v: any) => v.product_id === pid));
   };
 
-  const loadAttributes = (pid) => {
-    const allAttributes = ls.get("productAttributes", []);
-    setAttributes(allAttributes.filter(a => a.product_id === pid));
+
+  const loadAttributes = (pid: string) => {
+    const allAttributes = ls.get<any[]>("productAttributes", []) || [];
+    setAttributes(allAttributes.filter((a: any) => a.product_id === pid));
   };
 
-  const loadInventory = (pid) => {
-    const allInventory = ls.get("inventory", []);
-    setInventoryRecords(allInventory.filter(i => i.product_id === pid));
+
+  const loadInventory = (pid: string) => {
+    const allInventory = ls.get<any[]>("inventory", []) || [];
+    setInventoryRecords(allInventory.filter((i: any) => i.product_id === pid));
   };
 
-  const loadTags = (pid) => {
-    const allProductTags = ls.get("productTags", []);
-    const tagIds = allProductTags.filter(pt => pt.product_id === pid).map(pt => pt.tag_id);
-    const allTags = ls.get("tags", []);
-    setTags(allTags.filter(t => tagIds.includes(t.id)));
+
+  const loadTags = (pid: string) => {
+    const allProductTags = ls.get<any[]>("productTags", []) || [];
+    const tagIds = allProductTags.filter((pt: any) => pt.product_id === pid).map((pt: any) => pt.tag_id);
+    const allTags = ls.get<any[]>("tags", []) || [];
+    setTags(allTags.filter((t: any) => tagIds.includes(t.id)));
   };
+
 
   const validateProduct = () => {
-    const newErrors = {};
+    const newErrors: any = {};
+
     if (!product.name) newErrors.name = "Product name is required";
     if (!product.sku) newErrors.sku = "SKU is required";
     if (!product.category_id) newErrors.category = "Category is required";
@@ -113,9 +119,9 @@ export default function AdvancedProductManager({ productId, onSave, onCancel }) 
     setSaving(true);
     
     // Save product
-    const products = ls.get("products", []);
+    const products = ls.get<any[]>("products", []) || [];
     if (productId) {
-      const updated = products.map(p => p.id === productId 
+      const updated = products.map((p: any) => p.id === productId 
         ? { ...product, updated_at: new Date().toISOString() } 
         : p
       );
@@ -125,30 +131,31 @@ export default function AdvancedProductManager({ productId, onSave, onCancel }) 
     }
     
     // Save variants
-    const allVariants = ls.get("productVariants", []);
-    const filteredVariants = allVariants.filter(v => v.product_id !== product.id);
+    const allVariants = ls.get<any[]>("productVariants", []) || [];
+    const filteredVariants = allVariants.filter((v: any) => v.product_id !== product.id);
     ls.set("productVariants", [...filteredVariants, ...variants]);
     
     // Save attributes
-    const allAttributes = ls.get("productAttributes", []);
-    const filteredAttributes = allAttributes.filter(a => a.product_id !== product.id);
+    const allAttributes = ls.get<any[]>("productAttributes", []) || [];
+    const filteredAttributes = allAttributes.filter((a: any) => a.product_id !== product.id);
     ls.set("productAttributes", [...filteredAttributes, ...attributes]);
     
     // Save inventory
-    const allInventory = ls.get("inventory", []);
-    const filteredInventory = allInventory.filter(i => i.product_id !== product.id);
+    const allInventory = ls.get<any[]>("inventory", []) || [];
+    const filteredInventory = allInventory.filter((i: any) => i.product_id !== product.id);
     ls.set("inventory", [...filteredInventory, ...inventoryRecords]);
     
     // Save tags
-    const allProductTags = ls.get("productTags", []);
-    const filteredTags = allProductTags.filter(pt => pt.product_id !== product.id);
-    const newTags = tags.map(tag => ({
+    const allProductTags = ls.get<any[]>("productTags", []) || [];
+    const filteredTags = allProductTags.filter((pt: any) => pt.product_id !== product.id);
+    const newTags = tags.map((tag: any) => ({
       id: uid("pt"),
       product_id: product.id,
       tag_id: tag.id,
       created_at: new Date().toISOString(),
-      created_by: ls.get("session")?.id
+      created_by: ls.get<any>("session")?.id
     }));
+
     ls.set("productTags", [...filteredTags, ...newTags]);
     
     setSaving(false);

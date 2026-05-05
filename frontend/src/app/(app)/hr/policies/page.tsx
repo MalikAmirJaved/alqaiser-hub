@@ -71,7 +71,7 @@ export default function HRPolicyPage() {
   }, []);
 
   const loadData = () => {
-    const allPolicies = ls.get("policies", []) as PolicyRecord[];
+    const allPolicies = ls.get<PolicyRecord[]>("policies", []) || [];
     const filtered = companyContext.filterByContext(allPolicies);
     setRecords(filtered);
     setLoading(false);
@@ -111,8 +111,8 @@ export default function HRPolicyPage() {
       updated = records.map(r => r.id === editingRecord.id ? { ...r, ...data, updated_at: new Date().toISOString() } : r);
     } else {
       const newRecord = companyContext.addContextToRecord({
-        id: uid("pol"),
         ...data,
+        id: uid("pol"),
         created_at: new Date().toISOString(),
       });
       updated = [newRecord, ...records];
@@ -249,6 +249,7 @@ export default function HRPolicyPage() {
 // ==========================================
 function PolicyFormModal({ initialData, onSubmit, onClose }: { initialData: PolicyRecord | null, onSubmit: (d: PolicyRecord) => void, onClose: () => void }) {
   const [formData, setFormData] = useState<PolicyRecord>({
+    id: "",
     code: `POL-${String(Math.floor(Math.random() * 900) + 100)}`,
     title: "", category: "", department: "ALL", employee_type: "ALL",
     version: "1.0", status: "DRAFT", effective_date: "", review_date: "", expiry_date: "",
@@ -256,6 +257,7 @@ function PolicyFormModal({ initialData, onSubmit, onClose }: { initialData: Poli
     content: "", approved_by: "", approval_date: "", change_summary: "",
     ...(initialData || {})
   });
+
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

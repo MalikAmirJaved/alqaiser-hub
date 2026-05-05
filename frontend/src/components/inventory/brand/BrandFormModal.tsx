@@ -35,7 +35,7 @@ export default function BrandFormModal({ isOpen, onClose, initialData, onSuccess
     if (!form.name || !form.code) return alert("Name and Code are required");
     setSaving(true);
 
-    const brands = ls.get("brands", []) as Brand[];
+    const brands = ls.get<any[]>("brands", []) as Brand[];
     if (initialData) {
       const updated = brands.map(b => b.id === initialData.id ? { ...b, ...form, updated_at: new Date().toISOString() } : b);
       ls.set("brands", updated);

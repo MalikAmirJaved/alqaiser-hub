@@ -146,8 +146,8 @@ export default function AssetCategories() {
   }, []);
 
   const loadData = () => {
-    setAssets(companyContext.filterByContext(ls.get("hrAssets", [])));
-    setCategories(companyContext.filterByContext(ls.get("hrAssetCategories", [])));
+    setAssets(companyContext.filterByContext(ls.get<any[]>("hrAssets", [])));
+    setCategories(companyContext.filterByContext(ls.get<any[]>("hrAssetCategories", [])));
     setLoading(false);
   };
 
@@ -183,7 +183,7 @@ export default function AssetCategories() {
   };
 
   const handleDelete = (id: string) => {
-    const assignments = companyContext.filterByContext(ls.get("employeeAssetAssignments", []));
+    const assignments = companyContext.filterByContext(ls.get<any[]>("employeeAssetAssignments", []));
     const hasActiveAssignments = assignments.some(a => a.category_id === id && a.status === "ACTIVE");
     if (hasActiveAssignments) {
       toast.error("Cannot delete: Kit has active employee assignments");

@@ -17,7 +17,10 @@ interface Tag {
   color?: string;
   description?: string;
   is_active: string;
+  created_at?: string;
+  created_by?: string;
 }
+
 
 interface ProductTagsManagerProps {
   product: any;
@@ -34,7 +37,7 @@ export default function ProductTagsManager({ product, tags, onChange }: ProductT
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
 
   useEffect(() => {
-    const tagsList = ls.get("tags", []);
+    const tagsList = ls.get<any[]>("tags", []) || [];
     setAllTags(tagsList);
     
     // Generate suggested tags from product name
@@ -66,7 +69,7 @@ export default function ProductTagsManager({ product, tags, onChange }: ProductT
       color: newTagColor,
       is_active: "true",
       created_at: new Date().toISOString(),
-      created_by: ls.get("session")?.id
+      created_by: ls.get<any>("session")?.id
     };
     
     const updatedTags = [...allTags, newTag];
@@ -87,7 +90,8 @@ export default function ProductTagsManager({ product, tags, onChange }: ProductT
       color: "#10b981",
       is_active: "true",
       created_at: new Date().toISOString(),
-      created_by: ls.get("session")?.id
+      created_by: ls.get<any>("session")?.id
+
     };
     
     const updatedTags = [...allTags, newTag];

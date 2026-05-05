@@ -32,6 +32,7 @@ export interface SearchableSelectProps {
   required?: boolean;
   placeholder?: string;
   disabled?: boolean;
+  className?: string;
 }
 
 export default function SearchableSelect({
@@ -41,7 +42,9 @@ export default function SearchableSelect({
   required = false,
   placeholder = "Select...",
   disabled = false,
+  className = "",
 }: SearchableSelectProps) {
+
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -110,7 +113,8 @@ export default function SearchableSelect({
   }, [highlightedIndex, isOpen]);
 
   return (
-    <div ref={containerRef} className="relative w-full">
+    <div ref={containerRef} className={`relative ${className}`}>
+
       <div className="relative flex items-center ">
         <input
           ref={inputRef}
