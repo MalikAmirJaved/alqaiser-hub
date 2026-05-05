@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { ls } from "@/services/localStorageService";
 import PageHeader from "@/components/PageHeader";
 import { Search, Plus, Tag, Trash2, Pencil, Globe } from "lucide-react";
-import BrandFormModal from "@/components/inventory/BrandFormModal";
+import BrandFormModal from "@/components/inventory/brand/BrandFormModal";
 
 export default function BrandsPage() {
   const [items, setItems] = useState<any[]>([]);

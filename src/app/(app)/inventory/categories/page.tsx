@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { ls } from "@/services/localStorageService";
 import PageHeader from "@/components/PageHeader";
 import { Search, Plus, Layers, Trash2, Pencil } from "lucide-react";
-import CategoryFormModal from "@/components/inventory/CategoryFormModal";
+import CategoryFormModal from "@/components/inventory/category/CategoryFormModal";
 
 export default function CategoriesPage() {
   const [items, setItems] = useState<any[]>([]);
