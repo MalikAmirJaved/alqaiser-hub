@@ -12,7 +12,6 @@ env/
 .venv/
 
 # Django
-db.sqlite3
 *.log
 
 # Django migrations cache
