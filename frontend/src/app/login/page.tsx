@@ -10,7 +10,8 @@ import { useRouter } from "next/navigation";
 export default LoginPage;
 
 function LoginPage() {
-  const { login, user, ready } = useAuth();
+  const { login, user, ready } = useAuth() as any;
+
   const navigate = useRouter();
   const [email, setEmail] = useState("admin@alqaiserit.local");
   const [password, setPassword] = useState("admin123");

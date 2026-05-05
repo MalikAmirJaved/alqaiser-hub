@@ -49,7 +49,7 @@ export default function CompensationModal({
     setLoading(true);
 
     try {
-      const compensations = (ls.get("compensation") || []);
+      const compensations = ls.get<any[]>("compensation", []);
       const newCompensation = {
         id: uid("comp"),
         employee_id: employee.id,
@@ -75,7 +75,7 @@ export default function CompensationModal({
       ls.set("compensation", [newCompensation, ...updatedCompensations]);
 
       // Update employee's salary
-      const employees = (ls.get("employees") || []);
+      const employees = ls.get<any[]>("employees", []);
       const updatedEmployees = employees.map((e: any) =>
         e.id === employee.id
           ? { ...e, salary: totalCompensation, compensation_id: newCompensation.id }
@@ -127,7 +127,8 @@ export default function CompensationModal({
               <div className="text-xs text-muted-foreground">Effective Date</div>
               <DatePicker
                 value={formData.effective_date}
-                onChange={(value) => setFormData({ ...formData, effective_date: value })}
+                onChange={(value) => setFormData({ ...formData, effective_date: value || "" })}
+
                 className="bg-muted/40 border border-border rounded-md h-8 px-2 text-sm"
               />
             </div>

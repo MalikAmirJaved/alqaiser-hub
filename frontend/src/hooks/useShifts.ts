@@ -9,12 +9,12 @@ export const useShifts = () => {
 
   // Initialize from LocalStorage
   useEffect(() => {
-    setTemplates(ls.get("shifts_templates", []));
-    setAssignments(ls.get("shifts_assignments", []));
+    setTemplates(ls.get<any[]>("shifts_templates", []) || []);
+    setAssignments(ls.get<any[]>("shifts_assignments", []) || []);
   }, []);
 
   const saveTemplate = (template: ShiftTemplate) => {
-    const existing = ls.get("shifts_templates", []);
+    const existing = ls.get<any[]>("shifts_templates", []) || [];
     const idx = existing.findIndex((t: ShiftTemplate) => t.id === template.id);
     
     let updated: ShiftTemplate[];
@@ -31,7 +31,7 @@ export const useShifts = () => {
   };
 
   const saveAssignment = (assignment: ShiftAssignment) => {
-    const existing = ls.get("shifts_assignments", []);
+    const existing = ls.get<any[]>("shifts_assignments", []) || [];
     const idx = existing.findIndex((a: ShiftAssignment) => a.id === assignment.id);
     
     let updated: ShiftAssignment[];

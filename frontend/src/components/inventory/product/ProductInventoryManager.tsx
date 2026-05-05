@@ -68,7 +68,8 @@ export default function ProductInventoryManager({
       available_quantity: (newInventory.stock_quantity || 0) - (newInventory.reserved_quantity || 0),
       last_counted_at: null,
       created_at: new Date().toISOString(),
-      created_by: ls.get("session")?.id
+      created_by: ls.get<any>("session")?.id
+
     };
     
     onChange([...inventoryRecords, record]);
@@ -111,7 +112,7 @@ export default function ProductInventoryManager({
     const variant = variants.find(v => v.id === variantId);
     if (!variant) return "Unknown Variant";
     return Object.entries(variant.attribute_combination || {})
-      .map(([k, v]) => `${k}: ${v}`)
+      .map(([k, v]: [string, any]) => `${k}: ${v}`)
       .join(", ");
   };
 
@@ -184,7 +185,8 @@ export default function ProductInventoryManager({
                     {variants.map(variant => (
                       <option key={variant.id} value={variant.id}>
                         {Object.entries(variant.attribute_combination || {})
-                          .map(([k, v]) => `${k}:${v}`).join(" ")}
+                          .map(([k, v]: [string, any]) => `${k}:${v}`).join(" ")}
+
                       </option>
                     ))}
                   </select>
@@ -262,7 +264,8 @@ export default function ProductInventoryManager({
         </div>
       ) : (
         <div className="space-y-4">
-          {Object.entries(inventoryByVariant).map(([variantId, records]) => {
+          {Object.entries(inventoryByVariant).map(([variantId, records]: [string, any]) => {
+
             if (records.length === 0) return null;
             const variantName = getVariantName(variantId === "base" ? null : variantId);
             
@@ -350,10 +353,10 @@ export default function ProductInventoryManager({
                           </div>
                           <div className="flex items-center gap-2 mt-6">
                             {isLowStock && !isOutOfStock && (
-                              <AlertTriangle className="w-4 h-4 text-warning" title="Low stock warning" />
+                              <AlertTriangle className="w-4 h-4 text-warning" />
                             )}
                             {isOutOfStock && (
-                              <AlertTriangle className="w-4 h-4 text-destructive" title="Out of stock" />
+                              <AlertTriangle className="w-4 h-4 text-destructive" />
                             )}
                             <button
                               onClick={() => deleteInventory(record.id)}

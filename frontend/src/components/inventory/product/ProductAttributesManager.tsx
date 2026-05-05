@@ -20,7 +20,10 @@ interface ProductAttribute {
   attribute_group: string;
   is_filterable: string;
   display_order: number;
+  created_at?: string;
+  created_by?: string;
 }
+
 
 interface ProductAttributesManagerProps {
   product: any;
@@ -40,7 +43,7 @@ export default function ProductAttributesManager({ product, attributes, onChange
   const [bulkInput, setBulkInput] = useState("");
 
   useEffect(() => {
-    const groups = ls.get("attributeGroups", []);
+    const groups = ls.get<any[]>("attributeGroups", []) || [];
     setAttributeGroups(groups);
   }, []);
 
@@ -53,7 +56,7 @@ export default function ProductAttributesManager({ product, attributes, onChange
       ...newAttribute,
       display_order: attributes.length,
       created_at: new Date().toISOString(),
-      created_by: ls.get("session")?.id
+      created_by: ls.get<any>("session")?.id
     };
     
     onChange([...attributes, attribute]);
@@ -81,7 +84,7 @@ export default function ProductAttributesManager({ product, attributes, onChange
           is_filterable: filterable === "true" ? "true" : "false",
           display_order: attributes.length + newAttributes.length,
           created_at: new Date().toISOString(),
-          created_by: ls.get("session")?.id
+          created_by: ls.get<any>("session")?.id
         });
       }
     });

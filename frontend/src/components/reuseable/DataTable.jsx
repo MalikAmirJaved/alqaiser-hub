@@ -7,13 +7,31 @@
 import { useState, useMemo } from "react";
 import { Search, ChevronLeft, ChevronRight, Download, Filter, X } from "lucide-react";
 
+/**
+ * @param {object} props
+ * @param {any[]} props.data
+ * @param {any[]} props.columns
+ * @param {function} [props.onEdit]
+ * @param {function} [props.onDelete]
+ * @param {function} [props.onView]
+ * @param {function} [props.onExport]
+ * @param {string} [props.title]
+ * @param {string} [props.subtitle]
+ * @param {any} [props.actions]
+ * @param {boolean} [props.searchable]
+ * @param {any[]} [props.searchFields]
+ * @param {number} [props.defaultPageSize]
+ * @param {boolean} [props.showPagination]
+ */
 export default function DataTable({
   data = [],
   columns = [],
-  onEdit,
-  onDelete,
-  onView,
-  onExport,
+  onEdit = null,
+  onDelete = null,
+  onView = null,
+  onExport = null,
+
+
   title = "",
   subtitle = "",
   actions = null,

@@ -97,17 +97,17 @@ export default function ProductStatsCards({ products }: ProductStatsCardsProps) 
     const topBrandId = Object.entries(brandCount).sort((a, b) => b[1] - a[1])[0]?.[0] || "";
     
     // Get category and brand names
-    const categoriesList = ls.get("categories", []);
-    const brandsList = ls.get("brands", []);
+    const categoriesList = ls.get<any[]>("categories", []) || [];
+    const brandsList = ls.get<any[]>("brands", []) || [];
     const topCategory = categoriesList.find((c: any) => c.id === topCategoryId)?.name || "";
     const topBrand = brandsList.find((b: any) => b.id === topBrandId)?.name || "";
     
     // Total variants
-    const variants = ls.get("productVariants", []);
+    const variants = ls.get<any[]>("productVariants", []) || [];
     const totalVariants = variants.filter(v => products.some(p => p.id === v.product_id)).length;
     
     // Total tags (unique tags across all products)
-    const productTags = ls.get("productTags", []);
+    const productTags = ls.get<any[]>("productTags", []) || [];
     const uniqueTagIds = new Set(productTags.map(pt => pt.tag_id));
     const totalTags = uniqueTagIds.size;
     

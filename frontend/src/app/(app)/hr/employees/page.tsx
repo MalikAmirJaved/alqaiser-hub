@@ -16,11 +16,11 @@ import { Plus, Pencil, Trash2, Search, Download, Shield, Clock } from "lucide-re
 export default EmployeesPage;
 
 function EmployeesPage() {
-  const [employees, setEmployees] = useState([]);
-  const [shiftTemplates, setShiftTemplates] = useState([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [shiftTemplates, setShiftTemplates] = useState<any[]>([]);
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState(null);
+  const [editingEmployee, setEditingEmployee] = useState<any>(null);
   const [permissions, setPermissions] = useState({
     canCreate: false,
     canUpdate: false,
@@ -51,14 +51,14 @@ function EmployeesPage() {
   }, []);
 
   const loadEmployees = () => {
-    const allEmployees = (ls.get("employees") || []);
+    const allEmployees = ls.get<any[]>("employees", []) || [];
     // Filter by company context (multi-tenant isolation)
     const filtered = companyContext.filterByContext(allEmployees);
     setEmployees(filtered);
   };
 
   const loadShiftTemplates = () => {
-    const templates = ls.get("shifts_templates", []);
+    const templates = ls.get<any[]>("shifts_templates", []) || [];
     const activeTemplates = templates.filter(t => t.is_active === true);
     setShiftTemplates(activeTemplates);
   };
@@ -66,7 +66,7 @@ function EmployeesPage() {
   // Helper function to get employee's current default shift template name
   const getEmployeeDefaultShiftName = (employeeId, defaultShiftId) => {
     // First check employee_default_shifts table for active default
-    const defaultShifts = ls.get("employee_default_shifts", []);
+    const defaultShifts = ls.get<any[]>("employee_default_shifts", []) || [];
     const today = new Date().toISOString().split("T")[0];
     
     const activeDefault = defaultShifts.find(d => 
@@ -132,12 +132,12 @@ function EmployeesPage() {
     ls.set("employees", updatedEmployees);
 
     if (employeeData.asset_category_id && !editingEmployee) {
-  const cats = ls.get("hrAssetCategories", []);
+  const cats = ls.get<any[]>("hrAssetCategories", []) || [];
   const cat = cats.find(c => c.id === employeeData.asset_category_id);
   if (cat) {
     const assetIds = JSON.parse(cat.asset_ids || "[]");
     const newAssignments: any[] = assetIds.map(aId => {
-      const asset = ls.get("hrAssets", []).find(a => a.id === aId);
+      const asset = ls.get<any[]>("hrAssets", []).find(a => a.id === aId);
       return companyContext.addContextToRecord({
         id: uid("hrt_as"),
         employee_id: savedEmployee.id,
@@ -153,7 +153,7 @@ function EmployeesPage() {
         notes: "Assigned via Employee Creation"
       });
     });
-    const existingAssignments = ls.get("employeeAssetAssignments", []);
+    const existingAssignments = ls.get<any[]>("employeeAssetAssignments", []) || [];
     ls.set("employeeAssetAssignments", [...newAssignments, ...existingAssignments]);
   }
 }
@@ -165,7 +165,7 @@ function EmployeesPage() {
 
   // Create default shift for a new employee
   const createEmployeeDefaultShift = (employeeId, templateId, effectiveFrom) => {
-    const defaultShifts = ls.get("employee_default_shifts", []);
+    const defaultShifts = ls.get<any[]>("employee_default_shifts", []) || [];
     
     // Check if there's already an open-ended default for this employee
     const existingOpenEnded = defaultShifts.find(d => 
@@ -240,11 +240,11 @@ function EmployeesPage() {
     if (!confirm(`Delete employee "${employee.first_name} ${employee.last_name}"? This will also remove their shift assignments.`)) return;
     
     // Also delete employee's default shifts and assignments
-    const defaultShifts = ls.get("employee_default_shifts", []);
+    const defaultShifts = ls.get<any[]>("employee_default_shifts", []) || [];
     const updatedDefaultShifts = defaultShifts.filter(d => d.employee_id !== employee.id);
     ls.set("employee_default_shifts", updatedDefaultShifts);
     
-    const assignments = ls.get("shifts_assignments", []);
+    const assignments = ls.get<any[]>("shifts_assignments", []) || [];
     const updatedAssignments = assignments.filter(a => !a.employeeIds.includes(employee.id));
     ls.set("shifts_assignments", updatedAssignments);
     

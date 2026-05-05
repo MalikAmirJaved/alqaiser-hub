@@ -18,12 +18,13 @@ import { DateRangePickerRac } from "@/components/reuseable/DateRangePickerRac";
 
 export default function LeaveManagementPage() {
   const [activeTab, setActiveTab] = useState("my-leaves");
-  const [leaves, setLeaves] = useState([]);
-  const [leaveTypes, setLeaveTypes] = useState([]);
-  const [employees, setEmployees] = useState([]);
-  const [leaveBalances, setLeaveBalances] = useState([]);
+  const [leaves, setLeaves] = useState<any[]>([]);
+  const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [leaveBalances, setLeaveBalances] = useState<any[]>([]);
   const [isApplyOpen, setIsApplyOpen] = useState(false);
-  const [selectedLeave, setSelectedLeave] = useState(null);
+  const [selectedLeave, setSelectedLeave] = useState<any>(null);
+
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [permissions, setPermissions] = useState({
     canApprove: false,
@@ -60,28 +61,29 @@ export default function LeaveManagementPage() {
   }, []);
 
   const loadData = () => {
-    const allLeaves = ls.get("leaves", []);
+    const allLeaves = ls.get<any[]>("leaves", []) || [];
     const filteredLeaves = companyContext.filterByContext(allLeaves);
     setLeaves(filteredLeaves);
-
-    const allTypes = ls.get("leaveTypes", []);
-    const activeTypes = allTypes.filter(t => t.status === "ACTIVE");
+  
+    const allTypes = ls.get<any[]>("leaveTypes", []) || [];
+    const activeTypes = allTypes.filter((t: any) => t.status === "ACTIVE");
     setLeaveTypes(activeTypes);
-
-    const allEmployees = ls.get("employees", []);
-    const activeEmployees = allEmployees.filter(e => e.employment_status === "ACTIVE");
+  
+    const allEmployees = ls.get<any[]>("employees", []) || [];
+    const activeEmployees = allEmployees.filter((e: any) => e.employment_status === "ACTIVE");
     setEmployees(activeEmployees);
 
     loadLeaveBalances(activeEmployees, activeTypes);
   };
 
-  const loadLeaveBalances = (empList, typesList) => {
-    const storedBalances = ls.get("leaveBalances", []);
+  const loadLeaveBalances = (empList: any[], typesList: any[]) => {
+    const storedBalances = ls.get<any[]>("leaveBalances", []) || [];
     const filtered = storedBalances.filter(b => b.year === currentYear);
 
     // If no balances exist, create default ones
     if (filtered.length === 0 && typesList.length > 0 && empList.length > 0) {
-      const newBalances = [];
+      const newBalances: any[] = [];
+
       empList.forEach(emp => {
         typesList.forEach(type => {
           newBalances.push(companyContext.addContextToRecord({
@@ -206,8 +208,8 @@ export default function LeaveManagementPage() {
     loadLeaveBalances(employees, leaveTypes);
   };
 
-  const updateLeaveBalance = (employeeId, leaveTypeId, daysUsed) => {
-    const balances = ls.get("leaveBalances", []);
+  const updateLeaveBalance = (employeeId: string, leaveTypeId: string, daysUsed: number) => {
+    const balances = ls.get<any[]>("leaveBalances", []) || [];
     const idx = balances.findIndex(b =>
       b.employee_id === employeeId && b.leave_type_id === leaveTypeId && b.year === currentYear
     );
@@ -357,7 +359,7 @@ export default function LeaveManagementPage() {
                 <tbody>
                   {userLeaves.length === 0 && (
                     <tr>
-                      <td colSpan="7" className="text-center py-10 text-muted-foreground">
+                      <td colSpan={7} className="text-center py-10 text-muted-foreground">
                         No leave records found. Click "Apply for Leave" to submit a request.
                       </td>
                     </tr>
@@ -423,7 +425,7 @@ export default function LeaveManagementPage() {
                   <tbody>
                     {pendingApprovals.length === 0 && (
                       <tr>
-                        <td colSpan="7" className="text-center py-10 text-muted-foreground">
+                        <td colSpan={7} className="text-center py-10 text-muted-foreground">
                           No pending leave requests.
                         </td>
                       </tr>
@@ -601,8 +603,9 @@ export default function LeaveManagementPage() {
                     startDate={formData.start_date}
                     endDate={formData.end_date}
                     onChange={(start, end) => {
-                      setFormData({ ...formData, start_date: start, end_date: end });
+                      setFormData({ ...formData, start_date: start || "", end_date: end || "" });
                     }}
+
                     placeholder="Select leave period"
                     required
                   />

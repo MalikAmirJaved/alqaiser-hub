@@ -84,14 +84,14 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
   }, []);
 
   const loadEmployees = () => {
-    const allEmployees = (ls.get("employees") || []);
+    const allEmployees = ls.get<any[]>("employees", []) || [];
     const filtered = companyContext.filterByContext(allEmployees);
     setEmployees(filtered);
   };
 
   const loadCompensations = () => {
-    const allCompensations = ls.get("compensation") || [];
-    const allEmployees = ls.get("employees") || [];
+    const allCompensations = ls.get<any[]>("compensation", []) || [];
+    const allEmployees = ls.get<any[]>("employees", []) || [];
     const filtered = companyContext.filterByContext(allCompensations);
 
     const enriched = filtered.map((c: any) => {
@@ -103,9 +103,9 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
 
   // Apply the same change to loadLoans()
   const loadLoans = () => {
-    const allLoans = (ls.get("employeeLoans") || []);
+    const allLoans = ls.get<any[]>("employeeLoans", []) || [];
     const filtered = companyContext.filterByContext(allLoans);
-    const allEmployees = ls.get("employees") || [];
+    const allEmployees = ls.get<any[]>("employees", []) || [];
 
     const enriched = filtered.map((l: any) => {
       const emp = allEmployees.find(e => e.id === l.employee_id);
@@ -241,9 +241,10 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground text-xs">Effective Date *</span>
             <DatePicker
-              date={formData.effective_date ? new Date(formData.effective_date) : undefined}
-              setDate={(date) => setFormData({ ...formData, effective_date: date ? date.toISOString().slice(0, 10) : "" })}
+              value={formData.effective_date}
+              onChange={(val) => setFormData({ ...formData, effective_date: val || "" })}
             />
+
           </label>
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground text-xs">Notes</span>

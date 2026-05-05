@@ -11,10 +11,10 @@ import { DatePicker } from "@/components/reuseable/DatePicker";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 export default function LeaveTypesPage() {
-  const [leaveTypes, setLeaveTypes] = useState([]);
+  const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingType, setEditingType] = useState(null);
+  const [editingType, setEditingType] = useState<any>(null);
   const [permissions, setPermissions] = useState({
     canCreate: false,
     canUpdate: false,
@@ -49,7 +49,7 @@ export default function LeaveTypesPage() {
   }, []);
 
   const loadLeaveTypes = () => {
-    const allTypes = ls.get("leaveTypes", []);
+    const allTypes = ls.get<any[]>("leaveTypes", []);
     const filtered = companyContext.filterByContext(allTypes);
     setLeaveTypes(filtered);
   };

@@ -15,7 +15,7 @@ import SearchableSelect from "./reuseable/SearchableSelect";
 import { DatePicker } from "@/components/reuseable/DatePicker";
 
 // Map storeKey to module and feature
-const getModuleAndFeature = (storeKey) => {
+const getModuleAndFeature = (storeKey: string) => {
   const mapping = {
     // HR
     employees: { module: "HR", feature: "Employee Management" },
@@ -64,6 +64,26 @@ const getModuleAndFeature = (storeKey) => {
   return mapping[storeKey] || { module: "SETTINGS", feature: "General" };
 };
 
+interface Field {
+  key: string;
+  label: string;
+  type: string;
+  required?: boolean;
+  options?: string[];
+  hidden?: boolean;
+}
+
+interface CrudPageProps {
+  storeKey: string;
+  title: string;
+  subtitle?: string;
+  fields: Field[];
+  columns?: string[];
+  idPrefix?: string;
+  statusField?: string;
+  hideAddbtn?: boolean;
+}
+
 /**
  * Generic CRUD page with permission-based action buttons
  * Supports location fields: type "country", "state", "city"
@@ -78,17 +98,18 @@ export default function CrudPage({
   idPrefix = "row",
   statusField,
   hideAddbtn = false
-}) {
-  const [rows, setRows] = useState([]);
+}: CrudPageProps) {
+
+  const [rows, setRows] = useState<any[]>([]);
   const [query, setQuery] = useState("");
-  const [sortKey, setSortKey] = useState(null);
-  const [sortDir, setSortDir] = useState("asc");
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);
   const pageSize = 8;
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({});
+  const [editing, setEditing] = useState<string | number | null>(null);
+  const [form, setForm] = useState<Record<string, any>>({});
   
   // State for dependent location fields (used when country/state changes)
   const [dependentCountry, setDependentCountry] = useState("");
@@ -130,11 +151,11 @@ export default function CrudPage({
 
   useEffect(() => {
     if (permissions.canView) {
-      setRows(ls.get(storeKey, []) || []);
+      setRows(ls.get<any[]>(storeKey, []) || []);
     }
   }, [storeKey, permissions.canView]);
 
-  const persist = (next) => {
+  const persist = (next: any[]) => {
     setRows(next);
     ls.set(storeKey, next);
   };
@@ -220,7 +241,7 @@ const openEdit = (row) => {
   /**
    * Updates form value and handles dependent location field synchronization
    */
-  const updateFormValue = (key, value) => {
+  const updateFormValue = (key: string, value: any) => {
     setForm(prev => ({ ...prev, [key]: value }));
     
     // Reset dependent fields when country changes
@@ -288,14 +309,14 @@ const openEdit = (row) => {
     URL.revokeObjectURL(url);
   };
 
-  const sortBy = (k) => {
+  const sortBy = (k: string) => {
     if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(k); setSortDir("asc"); }
   };
 
-  const fieldLabel = (k) => fields.find((f) => f.key === k)?.label || k;
-  const isStatus = (k) => statusField && k === statusField;
-  const badgeFor = (val) => {
+  const fieldLabel = (k: string) => fields.find((f) => f.key === k)?.label || k;
+  const isStatus = (k: string) => statusField && k === statusField;
+  const badgeFor = (val: any) => {
     const v = String(val).toLowerCase();
     if (["active", "paid", "approved", "completed", "received", "present", "excellent"].some((x) => v.includes(x)))
       return "bg-success/15 text-success border-success/30";
@@ -351,7 +372,8 @@ const openEdit = (row) => {
         return (
           <DatePicker
             value={value}
-            onChange={(val) => updateFormValue(field.key, val)}
+            onChange={(val) => updateFormValue(field.key, val || "")}
+
             placeholder={`Select ${field.label}`}
             className={commonClassName}
           />

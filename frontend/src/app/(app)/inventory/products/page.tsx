@@ -12,18 +12,21 @@ import ProductStatsCards from "@/components/inventory/product/ProductStatsCards"
 import ProductDetailsModal from "@/components/inventory/product/ProductDetailsModal";
 
 export default function ProductsPage() {
-  const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [brands, setBrands] = useState([]);
-  const [variants, setVariants] = useState([]);
-  const [inventory, setInventory] = useState([]);
-  const [productTags, setProductTags] = useState([]);
-  const [tags, setTags] = useState([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [brands, setBrands] = useState<any[]>([]);
+  const [variants, setVariants] = useState<any[]>([]);
+  const [inventory, setInventory] = useState<any[]>([]);
+  const [productTags, setProductTags] = useState<any[]>([]);
+  const [tags, setTags] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState("table");
   const [showProductModal, setShowProductModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+
   const [filters, setFilters] = useState({
     category: "",
     brand: "",
@@ -31,18 +34,25 @@ export default function ProductsPage() {
     minPrice: "",
     maxPrice: "",
     stockStatus: "",
-    tags: []
+    tags: [] as string[],
+    productType: "",
+    sortBy: "",
+    sortOrder: "asc"
   });
+
+
 
   // Load all related data
   const loadData = useCallback(() => {
-    setProducts(ls.get("products", []));
-    setCategories(ls.get("categories", []));
-    setBrands(ls.get("brands", []));
-    setVariants(ls.get("productVariants", []));
-    setInventory(ls.get("inventory", []));
-    setProductTags(ls.get("productTags", []));
-    setTags(ls.get("tags", []));
+    setProducts(ls.get<any[]>("products", []) || []);
+    setCategories(ls.get<any[]>("categories", []) || []);
+    setBrands(ls.get<any[]>("brands", []) || []);
+    setVariants(ls.get<any[]>("productVariants", []) || []);
+    setInventory(ls.get<any[]>("inventory", []) || []);
+    setProductTags(ls.get<any[]>("productTags", []) || []);
+    setTags(ls.get<any[]>("tags", []) || []);
+    setWarehouses(ls.get<any[]>("warehouses", []) || []);
+
     setLoading(false);
   }, []);
 
@@ -51,13 +61,13 @@ export default function ProductsPage() {
   }, [loadData]);
 
   // Calculate stock for a product (sum across warehouses for simple products)
-  const getProductStock = useCallback((productId, variantId = null) => {
-    const inv = inventory.filter(i => i.product_id === productId);
+  const getProductStock = useCallback((productId: string, variantId: string | null = null) => {
+    const inv = inventory.filter((i: any) => i.product_id === productId);
     if (variantId) {
-      return inv.filter(i => i.variant_id === variantId).reduce((sum, i) => sum + i.stock_quantity, 0);
+      return inv.filter((i: any) => i.variant_id === variantId).reduce((sum, i) => sum + (i.stock_quantity || 0), 0);
     }
     // For simple products (no variants), sum stock across warehouses
-    return inv.filter(i => !i.variant_id).reduce((sum, i) => sum + i.stock_quantity, 0);
+    return inv.filter((i: any) => !i.variant_id).reduce((sum, i) => sum + (i.stock_quantity || 0), 0);
   }, [inventory]);
 
   // Get product variants
@@ -72,7 +82,7 @@ export default function ProductsPage() {
   }, [productTags, tags]);
 
   // Enrich products with computed data
-  const enrichedProducts = useMemo(() => {
+  const enrichedProducts = useMemo<any[]>(() => {
     return products.map(product => ({
       ...product,
       stock_quantity: getProductStock(product.id),
@@ -84,7 +94,7 @@ export default function ProductsPage() {
   }, [products, getProductStock, getProductVariants, getProductTags, categories, brands]);
 
   // Apply filters
-  const filteredProducts = useMemo(() => {
+  const filteredProducts = useMemo<any[]>(() => {
     let filtered = [...enrichedProducts];
     
     if (filters.category) {
@@ -144,7 +154,7 @@ export default function ProductsPage() {
     ls.set("productTags", updatedProductTags);
     
     // Delete product attributes
-    const productAttrs = ls.get("productAttributes", []);
+    const productAttrs = ls.get<any[]>("productAttributes", []) || [];
     const updatedAttrs = productAttrs.filter(pa => pa.product_id !== product.id);
     ls.set("productAttributes", updatedAttrs);
     
@@ -324,8 +334,9 @@ export default function ProductsPage() {
       />
 
       <DataTable
-        data={filteredProducts}
-        columns={columns}
+        data={filteredProducts as any}
+
+        columns={columns as any}
         onView={handleViewDetails}
         onEdit={(product) => {
           setSelectedProduct(product);
@@ -334,7 +345,7 @@ export default function ProductsPage() {
         onDelete={handleDelete}
         title="Products"
         searchable={true}
-        searchFields={["name", "sku"]}
+        searchFields={["name", "sku"] as any}
         defaultPageSize={15}
       />
 
@@ -354,9 +365,12 @@ export default function ProductsPage() {
           product={selectedProduct}
           variants={getProductVariants(selectedProduct.id)}
           inventory={inventory}
-          attributes={ls.get("productAttributes", []).filter(a => a.product_id === selectedProduct.id)}
+          attributes={ls.get<any[]>("productAttributes", []).filter((a: any) => a.product_id === selectedProduct.id)}
           tags={getProductTags(selectedProduct.id)}
+          warehouses={warehouses as any}
+
           onClose={() => setShowDetailsModal(false)}
+
           onEdit={() => {
             setShowDetailsModal(false);
             setShowProductModal(true);

@@ -211,7 +211,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                   <span className="text-muted-foreground text-xs">Date of Birth *</span>
                   <DatePicker
                     value={formData.date_of_birth}
-                    onChange={(value) => handleChange("date_of_birth", value)}
+                    onChange={(value) => handleChange("date_of_birth", value || "")}
                     required
                     className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
                   />
@@ -400,7 +400,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                   <span className="text-muted-foreground text-xs">Joining Date *</span>
                   <DatePicker
                     value={formData.joining_date}
-                    onChange={(value) => handleChange("joining_date", value)}
+                    onChange={(value) => handleChange("joining_date", value || "")}
                     required
                     className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
                   />
@@ -409,7 +409,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                   <span className="text-muted-foreground text-xs">Confirmation Date</span>
                   <DatePicker
                     value={formData.confirmation_date}
-                    onChange={(value) => handleChange("confirmation_date", value)}
+                    onChange={(value) => handleChange("confirmation_date", value || "")}
                     className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
                   />
                 </label>

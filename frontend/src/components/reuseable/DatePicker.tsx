@@ -17,6 +17,7 @@ interface DatePickerProps {
   disabled?: boolean;
   minDate?: string;
   maxDate?: string;
+  required?: boolean;
 }
 
 type ViewMode = "date" | "month" | "year";

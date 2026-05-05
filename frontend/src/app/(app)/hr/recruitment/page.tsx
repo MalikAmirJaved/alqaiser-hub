@@ -71,11 +71,11 @@ export default function RecruitmentPage() {
   }, []);
 
   const loadData = () => {
-    const allRecords = ls.get("recruitment", []) as RecruitmentRecord[];
+    const allRecords = ls.get<RecruitmentRecord[]>("recruitment", []) || [];
     const filtered = companyContext.filterByContext(allRecords);
     setRecords(filtered);
 
-    const allEmployees = ls.get("employees", []);
+    const allEmployees = ls.get<any[]>("employees", []) || [];
     const activeEmps = companyContext.filterByContext(allEmployees).filter(
       (e: any) => e.employment_status === "ACTIVE"
     );
@@ -117,10 +117,11 @@ export default function RecruitmentPage() {
       updated = records.map(r => r.id === editingRecord.id ? { ...r, ...data } : r);
     } else {
       const newRecord = companyContext.addContextToRecord({
-        id: uid("rc"),
         ...data,
+        id: uid("rc"),
         created_at: new Date().toISOString(),
       });
+
       updated = [newRecord, ...records];
     }
     ls.set("recruitment", updated);

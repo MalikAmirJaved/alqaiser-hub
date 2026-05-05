@@ -43,6 +43,8 @@ interface EmployeeDefaultShift {
   template_id: string;
   effective_from: string;
   effective_to: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface ShiftChangeHistory {
@@ -156,11 +158,11 @@ export default function ShiftsManagementPage() {
   }, []);
 
   const loadData = () => {
-    setTemplates(ls.get("shifts_templates", []));
-    setAssignments(ls.get("shifts_assignments", []));
-    setDefaultShifts(ls.get("employee_default_shifts", []));
-    setShiftHistory(ls.get("shift_change_history", []));
-    const allEmployees = ls.get("employees", []);
+    setTemplates(ls.get<ShiftTemplate[]>("shifts_templates", []) || []);
+    setAssignments(ls.get<ShiftAssignment[]>("shifts_assignments", []) || []);
+    setDefaultShifts(ls.get<EmployeeDefaultShift[]>("employee_default_shifts", []) || []);
+    setShiftHistory(ls.get<ShiftChangeHistory[]>("shift_change_history", []) || []);
+    const allEmployees = ls.get<any[]>("employees", []) || [];
     const activeEmployees = allEmployees.filter((e: any) => e.employment_status === "ACTIVE");
     setEmployees(activeEmployees);
     setLoading(false);

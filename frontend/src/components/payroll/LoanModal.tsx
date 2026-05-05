@@ -41,7 +41,7 @@ export default function LoanModal({
     setLoading(true);
 
     try {
-      const loans = (ls.get("employeeLoans") || []);
+      const loans = ls.get<any[]>("employeeLoans", []) || [];
       const newLoan = {
         id: uid("loan"),
         employee_id: employee.id,
@@ -125,7 +125,8 @@ export default function LoanModal({
               <span className="text-muted-foreground">Start Date</span>
               <DatePicker
                 value={formData.start_date}
-                onChange={(value) => setFormData({ ...formData, start_date: value })}
+                onChange={(value) => setFormData({ ...formData, start_date: value || "" })}
+
                 className="bg-muted/40 border border-border rounded-md h-10 px-3 outline-none focus:ring-2 focus:ring-ring"
               />
             </label>

@@ -30,7 +30,7 @@ export function CompanySettingsProvider({ children }: { children: React.ReactNod
 
   const loadSettings = useCallback(() => {
     // Reads from 'company' to match your seeder, but fallbacks safely
-    const raw = ls.get("company") || {};
+    const raw = ls.get<Partial<CompanySettings>>("company") || {};
     const defaults: CompanySettings = {
       companyName: "Al Qaiser IT Company",
       currency: "PKR",
@@ -61,11 +61,27 @@ export function CompanySettingsProvider({ children }: { children: React.ReactNod
   }, [loadSettings]);
 
   const updateSettings = (updates: Partial<CompanySettings>) => {
-    const newSettings = { ...settings, ...updates };
-    ls.set("company", newSettings); // Matches your seeder key
-    setSettings(newSettings);
-    window.dispatchEvent(new Event("settingsUpdated")); // Triggers instant same-tab re-renders
-  };
+  setSettings((prev) => {
+    const base: CompanySettings = {
+      companyName: "Al Qaiser IT Company",
+      currency: "PKR",
+      taxRate: 0,
+      timezone: "UTC",
+      fiscalYearStart: "January",
+      ...(prev || {}),
+    };
+
+    const newSettings: CompanySettings = {
+      ...base,
+      ...updates,
+    };
+
+    ls.set("company", newSettings);
+    window.dispatchEvent(new Event("settingsUpdated"));
+
+    return newSettings;
+  });
+};
 
   const currency = settings?.currency || "PKR";
   

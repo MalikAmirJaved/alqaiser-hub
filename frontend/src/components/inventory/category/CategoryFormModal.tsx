@@ -33,7 +33,7 @@ export default function CategoryFormModal({ isOpen, onClose, initialData, onSucc
     if (!form.name || !form.code) return alert("Name and Code are required");
     setSaving(true);
 
-    const categories = ls.get("categories", []) as Category[];
+    const categories = ls.get<any[]>("categories", []) as Category[];
     if (initialData) {
       const updated = categories.map(c => c.id === initialData.id ? { ...c, ...form, updated_at: new Date().toISOString() } : c);
       ls.set("categories", updated);
