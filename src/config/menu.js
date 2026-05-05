@@ -9,6 +9,10 @@ import {
   Calendar,
   Sparkles,
   Tag,
+  Eye,
+  Camera,
+  DoorOpen,
+  Video,
 } from "lucide-react";
 
 export const menu = [
@@ -92,6 +96,17 @@ export const menu = [
       { title: "Forecasting", to: "/finance/forecasting", icon: LineChart },
       { title: "Audit Logs", to: "/finance/audit", icon: History },
       { title: "Settings", to: "/finance/settings", icon: Settings },
+    ],
+  },
+
+    {
+    type: "group",
+    title: "Monitoring",
+    icon: Eye,
+    children: [
+      { title: "Main Entry", to: "/monitoring/main-entry", icon: DoorOpen },
+      { title: "Warehouse", to: "/monitoring/warehouse", icon: Video },
+      { title: "Employees Monitoring", to: "/monitoring/employees", icon: Camera },
     ],
   },
 
