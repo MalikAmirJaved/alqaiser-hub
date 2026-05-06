@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'apps.common',
     'apps.organization'
 ]
+
 AUTH_USER_MODEL = 'organization.User'
 
 MIDDLEWARE = [
@@ -136,6 +137,10 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
+AUTHENTICATION_BACKENDS = [
+    'apps.common.backends.EmailOrUsernameBackend', 
+    'django.contrib.auth.backends.ModelBackend',  
+]
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
