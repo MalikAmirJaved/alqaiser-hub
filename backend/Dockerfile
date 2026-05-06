@@ -1,4 +1,6 @@
 # Development stage
+# source venv/bin/activate  // to activate python venv
+
 FROM python:3.12-slim AS development
 
 WORKDIR /app
