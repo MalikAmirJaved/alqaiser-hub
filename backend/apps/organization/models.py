@@ -3,8 +3,12 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 
 
+# -----------------------------
+# COMPANY MODEL
+# -----------------------------
 class Company(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id = models.BigAutoField(primary_key=True)
+    _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 
     name = models.CharField(max_length=255)
     short_name = models.CharField(max_length=100, unique=True)
@@ -31,8 +35,18 @@ class Company(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
 
+# -----------------------------
+# BRANCH MODEL
+# -----------------------------
 class Branch(models.Model):
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="branches")
+    id = models.BigAutoField(primary_key=True)
+    _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="branches"
+    )
 
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=50)
@@ -53,13 +67,30 @@ class Branch(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
 
+# -----------------------------
+# USER MODEL
+# -----------------------------
 class User(AbstractUser):
+    id = models.BigAutoField(primary_key=True)
+    _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+
     role = models.CharField(max_length=50, default="staff")
 
     full_name = models.CharField(max_length=255, blank=True, null=True)
 
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, null=True, blank=True)
-    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, null=True, blank=True)
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
+
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
 
     employee_id = models.CharField(max_length=50, blank=True, null=True)
     status = models.CharField(max_length=20, default="active")
