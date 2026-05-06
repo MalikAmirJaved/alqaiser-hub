@@ -54,7 +54,9 @@ INSTALLED_APPS = [
     'apps.monitoring',
     'apps.compsetting',
     'apps.common',
+    'apps.organization'
 ]
+AUTH_USER_MODEL = 'organization.User'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

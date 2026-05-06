@@ -2,14 +2,16 @@ services:
   db:
     image: postgres:15-alpine
     container_name: alqaiser_db_dev
+    ports:
+    - "5433:5432"
     volumes:
       - postgres_data_dev:/var/lib/postgresql/data
     environment:
-      - POSTGRES_DB=Al-Qaiser_Hub
+      - POSTGRES_DB=alqaiser_hub
       - POSTGRES_USER=alqaiser_user
-      - POSTGRES_PASSWORD=12345
+      - POSTGRES_PASSWORD=123456
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U alqaiser_user"]
+      test: ["CMD-SHELL", "pg_isready -U alqaiser_user -d alqaiser_hub"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,14 +32,16 @@ services:
       sh -c "
       python manage.py makemigrations &&
       python manage.py migrate &&
+      python manage.py seed_org &&
       python manage.py runserver 0.0.0.0:8000
       "
     environment:
       - DEBUG=1
       - DB_HOST=db
-      - DB_NAME=Al-Qaiser_Hub
+      - DB_NAME=alqaiser_hub
       - DB_USER=alqaiser_user
-      - DB_PASSWORD=12345
+      - DB_PASSWORD=123456
+      - DB_PORT=5432
     env_file:
       - ./backend/.env
     depends_on:

@@ -55,7 +55,6 @@ export function initializeSystem() {
     email: "info@alqaiserit.local",
     currency_code: "PKR",
     tax_id: "AQT-9087-IT",
-    branch_id: "BRNCH-0001",
     is_hq: 1,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
