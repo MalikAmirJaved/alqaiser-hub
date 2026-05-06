@@ -11,6 +11,7 @@ export default LoginPage;
 
 function LoginPage() {
   const { login, user, ready } = useAuth() as any;
+const [loading, setLoading] = useState(false);
 
   const navigate = useRouter();
   const [email, setEmail] = useState("admin@alqaiserit.local");
@@ -23,13 +24,19 @@ function LoginPage() {
     if (ready && user) navigate.push("/dashboard");
   }, [ready, user, navigate]);
 
-  const submit = (e) => {
-    e.preventDefault();
-    setErr("");
-    const res = login(email, password, remember);
-    if (!res.ok) setErr(res.error);
-    else navigate.push("/dashboard");
-  };
+const submit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setErr("");
+  setLoading(true);
+  const res = await login(email, password, remember);
+  setLoading(false);
+  if (!res.ok) {
+    setErr(res.error || "Login failed");
+  } else {
+    navigate.push("/dashboard");
+  }
+};
+
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-background text-foreground">
@@ -126,7 +133,7 @@ function LoginPage() {
             </div>
           ) : (
             <button type="submit" className="mt-5 w-full h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90">
-              Sign in
+               {loading ? "Signing in..." : "Sign in"}
             </button>
           )}
 

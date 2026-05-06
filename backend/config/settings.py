@@ -32,8 +32,8 @@ SECRET_KEY = env("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env.bool("DEBUG", default=False)
 
-ALLOWED_HOSTS = []
-
+FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
 # Application definition
 
@@ -61,6 +61,7 @@ INSTALLED_APPS = [
 AUTH_USER_MODEL = 'organization.User'
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -141,6 +142,9 @@ AUTHENTICATION_BACKENDS = [
     'apps.common.backends.EmailOrUsernameBackend', 
     'django.contrib.auth.backends.ModelBackend',  
 ]
+CORS_ALLOWED_ORIGINS = [
+    FRONTEND_URL,
+]
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
@@ -151,7 +155,7 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 
 USE_TZ = True
-
+CORS_ALLOW_CREDENTIALS = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
