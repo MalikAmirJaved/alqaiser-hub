@@ -3,9 +3,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Sidebar from "../components/sidebar/Sidebar";
-import Topbar from "../components/navbar/Topbar";
-import { useAuth } from "../context/AuthContext";
+import Sidebar from "@/components/sidebar/Sidebar";
+import Topbar from "@/components/navbar/Topbar";
+import { useAuth } from "@/context/AuthContext";
 
 export default function AppLayout({ children }) {
   const { user, ready } = useAuth();

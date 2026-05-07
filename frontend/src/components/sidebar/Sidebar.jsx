@@ -7,9 +7,9 @@ import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { menu } from "../../config/menu";
+import { menu } from "@/config/menu";
 import { motion, AnimatePresence } from "framer-motion";
-import { permissionService } from "../../services/permissionService";
+import { permissionService } from "@/services/permissionService";
 
 export default function Sidebar({ open, onClose }) {
   const path = usePathname() || "";

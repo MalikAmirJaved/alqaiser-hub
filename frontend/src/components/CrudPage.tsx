@@ -13,6 +13,7 @@ import { permissionService } from "../services/permissionService";
 import { CountrySelect, StateSelect, CitySelect } from "./reuseable/LocationSelectors";
 import SearchableSelect from "./reuseable/SearchableSelect";
 import { DatePicker } from "@/components/reuseable/DatePicker";
+import { useAuth } from "@/context/AuthContext";
 
 // Map storeKey to module and feature
 const getModuleAndFeature = (storeKey: string) => {
@@ -99,7 +100,7 @@ export default function CrudPage({
   statusField,
   hideAddbtn = false
 }: CrudPageProps) {
-
+  const { user, ready } = useAuth();
   const [rows, setRows] = useState<any[]>([]);
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<string | null>(null);
@@ -442,7 +443,7 @@ const openEdit = (row) => {
     );
   }
 
-  if (!permissions.canView) {
+  if (!permissions.canView && !(user?.role === "COMPANY_ADMIN")) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center max-w-md">

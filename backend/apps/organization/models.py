@@ -23,11 +23,15 @@ class Company(models.Model):
     currency_code = models.CharField(max_length=10, default="USD")
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
 
-    working_days = models.CharField(max_length=255, default="Mon-Fri")
-    weekends = models.CharField(max_length=255, default="Sat-Sun")
-    leave_year_type = models.CharField(max_length=50, default="calendar")
-
-    public_holidays = models.JSONField(default=list)
+    # Changed from CharField to JSONField to store arrays
+    working_days = models.JSONField(default=list)      # e.g. ["Monday", "Tuesday", ...]
+    weekends = models.JSONField(default=list)           # e.g. ["Sunday"]
+    leave_year_type = models.CharField(
+        max_length=20,
+        choices=[("CALENDAR", "Calendar"), ("FISCAL", "Fiscal")],
+        default="CALENDAR",
+    )
+    public_holidays = models.JSONField(default=list)    # list of {"date": "...", "name": "..."}
 
     tax_id = models.CharField(max_length=100, blank=True, null=True)
 
@@ -75,25 +79,41 @@ class User(AbstractUser):
     _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 
     role = models.CharField(max_length=50, default="staff")
-
     full_name = models.CharField(max_length=255, blank=True, null=True)
+
+    # New fields from your spec
+    department = models.CharField(max_length=100, blank=True, null=True)
+    designation = models.CharField(max_length=100, blank=True, null=True)
 
     company = models.ForeignKey(
         Company,
         on_delete=models.CASCADE,
         null=True,
-        blank=True
+        blank=True,
+        related_name="users"
     )
-
     branch = models.ForeignKey(
         Branch,
         on_delete=models.CASCADE,
         null=True,
-        blank=True
+        blank=True,
+        related_name="users"
     )
 
     employee_id = models.CharField(max_length=50, blank=True, null=True)
     status = models.CharField(max_length=20, default="active")
 
+    # Who created this user (self-reference)
+    created_by = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_users"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # Django's is_staff, is_superuser, etc. remain from AbstractUser.
+    # They are not shown in your list but are required for auth.

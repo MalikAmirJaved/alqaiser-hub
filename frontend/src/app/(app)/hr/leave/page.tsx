@@ -15,8 +15,10 @@ import {
   AlertCircle, Eye, Download, Trash2, Shield, UserCheck
 } from "lucide-react";
 import { DateRangePickerRac } from "@/components/reuseable/DateRangePickerRac";
+import { useAuth } from "@/context/AuthContext";
 
 export default function LeaveManagementPage() {
+  const { user, ready } = useAuth();
   const [activeTab, setActiveTab] = useState("my-leaves");
   const [leaves, setLeaves] = useState<any[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
@@ -249,7 +251,7 @@ export default function LeaveManagementPage() {
     );
   }
 
-  if (!permissions.canView) {
+  if (!permissions.canView && !(user?.role === "COMPANY_ADMIN")) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center max-w-md">

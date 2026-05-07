@@ -12,10 +12,12 @@ import { permissionService } from "@/services/permissionService";
 import PageHeader from "@/components/PageHeader";
 import EmployeeForm from "@/components/Forms/EmployeeForm";
 import { Plus, Pencil, Trash2, Search, Download, Shield, Clock } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 export default EmployeesPage;
 
 function EmployeesPage() {
+  const { user, ready } = useAuth();
   const [employees, setEmployees] = useState<any[]>([]);
   const [shiftTemplates, setShiftTemplates] = useState<any[]>([]);
   const [query, setQuery] = useState("");
@@ -314,7 +316,7 @@ function EmployeesPage() {
     );
   }
 
-  if (!permissions.canView) {
+  if (!permissions.canView && !(user?.role === "COMPANY_ADMIN")) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center max-w-md">

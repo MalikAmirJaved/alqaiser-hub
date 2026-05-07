@@ -69,7 +69,7 @@ class Command(BaseCommand):
 
             user.is_staff = True
             user.is_superuser = True
-            user.role = 'admin'
+            user.role = 'COMPANY_ADMIN'
             user.company = company
             user.branch = branch
             user.save()
