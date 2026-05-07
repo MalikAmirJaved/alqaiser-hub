@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import { ThemeProvider } from "@/context/ThemeContext";
-import { AuthProvider } from "@/context/AuthContext";
 import { ReactQueryProvider } from "./providers";
+import { ThemeInitializer } from "@/components/ThemeInitializer";
 import "@/styles.css";
 import { Inter } from "next/font/google";
 
@@ -14,15 +13,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body className={inter.variable}>
-        <ThemeProvider>
-          <ReactQueryProvider>
-            <AuthProvider>
-                {children}
-            </AuthProvider>
-          </ReactQueryProvider>
-        </ThemeProvider>
+        <ReactQueryProvider>
+          <ThemeInitializer />
+          {children}
+        </ReactQueryProvider>
       </body>
     </html>
   );

@@ -13,7 +13,7 @@ import { permissionService } from "../services/permissionService";
 import { CountrySelect, StateSelect, CitySelect } from "./reuseable/LocationSelectors";
 import SearchableSelect from "./reuseable/SearchableSelect";
 import { DatePicker } from "@/components/reuseable/DatePicker";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 
 // Map storeKey to module and feature
 const getModuleAndFeature = (storeKey: string) => {

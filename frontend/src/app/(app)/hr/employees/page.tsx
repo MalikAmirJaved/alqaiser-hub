@@ -12,7 +12,7 @@ import { permissionService } from "@/services/permissionService";
 import PageHeader from "@/components/PageHeader";
 import EmployeeForm from "@/components/Forms/EmployeeForm";
 import { Plus, Pencil, Trash2, Search, Download, Shield, Clock } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 
 export default EmployeesPage;
 

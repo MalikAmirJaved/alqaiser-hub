@@ -94,14 +94,14 @@ export default function Sidebar({ open, onClose }) {
   // Filter menu items based on permissions (recursive)
   const filterMenuByPermissions = (items) => {
     const user = permissionService.getCurrentUser();
-    
+
     if (user?.role === "COMPANY_ADMIN") {
       return items;
     }
 
     const accessibleModules = permissionService.getAccessibleModules();
     const accessibleFeatures = new Set();
-    
+
     accessibleModules.forEach(module => {
       const features = permissionService.getAccessibleFeatures(module, "view");
       features.forEach(f => accessibleFeatures.add(f));
@@ -111,11 +111,19 @@ export default function Sidebar({ open, onClose }) {
       .map(item => {
         if (item.type === "link") {
           const { module, feature } = getModuleAndFeature(item.title);
-          if (module && accessibleModules.includes(module)) {
+
+          // Public links (no module mapping)
+          if (!module) {
+            return item;
+          }
+
+          // Module access
+          if (accessibleModules.includes(module)) {
             if (!feature || accessibleFeatures.has(feature)) {
               return item;
             }
           }
+
           return null;
         } else if (item.type === "group") {
           const { module } = getModuleAndFeature(item.title);
@@ -124,9 +132,9 @@ export default function Sidebar({ open, onClose }) {
           }
 
           const filteredChildren = filterMenuByPermissions(item.children || []);
-          
+
           if (filteredChildren.length === 0) return null;
-          
+
           return {
             ...item,
             children: filteredChildren,
@@ -148,7 +156,7 @@ export default function Sidebar({ open, onClose }) {
     const findAndOpenGroups = (items, parentIndex = null) => {
       items.forEach((m, i) => {
         const groupKey = parentIndex !== null ? `${parentIndex}-${i}` : String(i);
-        
+
         if (m.type === "group" && m.children) {
           // Check if any child matches current path
           const hasActiveChild = m.children.some(c => {
@@ -157,11 +165,11 @@ export default function Sidebar({ open, onClose }) {
             }
             return c.to && path.startsWith(c.to);
           });
-          
+
           if (hasActiveChild) {
             initial[groupKey] = true;
           }
-          
+
           // Recurse into nested children
           m.children.forEach((child, childIndex) => {
             if (child.children) {
@@ -175,7 +183,7 @@ export default function Sidebar({ open, onClose }) {
         }
       });
     };
-    
+
     findAndOpenGroups(filtered);
     setOpenGroups(initial);
   }, [path]);
@@ -186,7 +194,7 @@ export default function Sidebar({ open, onClose }) {
   // Render a nested group item (like Shift Management)
   const renderNestedGroup = (item, groupKey) => {
     const isOpen = openGroups[groupKey];
-    const hasActiveChild = item.children.some(c => 
+    const hasActiveChild = item.children.some(c =>
       c.to && (path.startsWith(c.to) || path === c.to)
     );
 
@@ -194,11 +202,10 @@ export default function Sidebar({ open, onClose }) {
       <div key={item.title}>
         <button
           onClick={() => toggle(groupKey)}
-          className={`w-full flex items-center justify-between gap-3 px-3 py-2 my-0.5 rounded-md text-[13px] transition ${
-            hasActiveChild
+          className={`w-full flex items-center justify-between gap-3 px-3 py-2 my-0.5 rounded-md text-[13px] transition ${hasActiveChild
               ? "bg-sidebar-primary/20 text-sidebar-foreground/85"
               : "hover:bg-sidebar-accent text-sidebar-foreground/85"
-          }`}
+            }`}
         >
           <span className="flex items-center gap-2">
             <item.icon className="w-3.5 h-3.5" />
@@ -224,11 +231,10 @@ export default function Sidebar({ open, onClose }) {
                   key={c.to}
                   href={c.to}
                   onClick={onClose}
-                  className={`flex items-center gap-2 px-3 py-2 my-0.5 rounded-md text-[13px] transition ${
-                    isActive(c.to)
+                  className={`flex items-center gap-2 px-3 py-2 my-0.5 rounded-md text-[13px] transition ${isActive(c.to)
                       ? "bg-sidebar-primary text-sidebar-primary-foreground"
                       : "hover:bg-sidebar-accent text-sidebar-foreground/85"
-                  }`}
+                    }`}
                 >
                   <c.icon className="w-3.5 h-3.5" />
                   {c.title}
@@ -250,9 +256,8 @@ export default function Sidebar({ open, onClose }) {
         />
       )}
       <aside
-        className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border z-50 transition-transform duration-200 flex flex-col ${
-          open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        }`}
+        className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border z-50 transition-transform duration-200 flex flex-col ${open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          }`}
       >
         <div className="px-4 py-4 border-b border-sidebar-border">
           <div className="flex items-center gap-2">
@@ -273,11 +278,10 @@ export default function Sidebar({ open, onClose }) {
                 key={item.title}
                 href={item.to}
                 onClick={onClose}
-                className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition ${
-                  isActive(item.to)
+                className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition ${isActive(item.to)
                     ? "bg-sidebar-primary text-sidebar-primary-foreground"
                     : "hover:bg-sidebar-accent"
-                }`}
+                  }`}
               >
                 <item.icon className="w-4 h-4" />
                 <span>{item.title}</span>
@@ -318,11 +322,10 @@ export default function Sidebar({ open, onClose }) {
                             key={c.to}
                             href={c.to}
                             onClick={onClose}
-                            className={`flex items-center gap-2 px-3 py-2 my-0.5 rounded-md text-[13px] transition ${
-                              isActive(c.to)
+                            className={`flex items-center gap-2 px-3 py-2 my-0.5 rounded-md text-[13px] transition ${isActive(c.to)
                                 ? "bg-sidebar-primary text-sidebar-primary-foreground"
                                 : "hover:bg-sidebar-accent text-sidebar-foreground/85"
-                            }`}
+                              }`}
                           >
                             <c.icon className="w-3.5 h-3.5" />
                             {c.title}

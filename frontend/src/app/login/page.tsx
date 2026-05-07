@@ -1,18 +1,13 @@
-
-
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { Lock, Mail, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-export default LoginPage;
-
-function LoginPage() {
-  const { login, user, ready } = useAuth() as any;
-const [loading, setLoading] = useState(false);
-
+export default function LoginPage() {
+  const { login, user, ready } = useAuth();
+  const [loading, setLoading] = useState(false);
   const navigate = useRouter();
   const [email, setEmail] = useState("admin@gmail.com");
   const [password, setPassword] = useState("123456");
@@ -24,18 +19,16 @@ const [loading, setLoading] = useState(false);
     if (ready && user) navigate.push("/dashboard");
   }, [ready, user, navigate]);
 
-const submit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setErr("");
-  setLoading(true);
-  const res = await login(email, password, remember);
-  setLoading(false);
-  if (!res.ok) {
-    setErr(res.error || "Login failed");
-  } else {
-    navigate.push("/dashboard");
-  }
-};
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr("");
+    setLoading(true);
+    const res = await login(email, password);
+    setLoading(false);
+    if (!res.ok) {
+      setErr(res.error || "Login failed");
+    }
+  };
 
 
   return (

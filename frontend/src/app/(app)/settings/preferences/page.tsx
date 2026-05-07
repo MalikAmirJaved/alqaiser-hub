@@ -3,13 +3,13 @@
 "use client";
 
 import { ls } from "@/services/localStorageService";
-import { useTheme } from "@/context/ThemeContext";
+import { useThemeStore } from "@/stores/useThemeStore";
 import PageHeader from "@/components/PageHeader";
 
 export default Preferences;
 
 function Preferences() {
-  const { theme, toggle } = useTheme() as any;
+  const { theme, toggle } = useThemeStore() as any;
 
   const company = ls.get<any>("company", {}) || {};
 

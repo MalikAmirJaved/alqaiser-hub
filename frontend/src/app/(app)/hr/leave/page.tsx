@@ -15,7 +15,7 @@ import {
   AlertCircle, Eye, Download, Trash2, Shield, UserCheck
 } from "lucide-react";
 import { DateRangePickerRac } from "@/components/reuseable/DateRangePickerRac";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function LeaveManagementPage() {
   const { user, ready } = useAuth();

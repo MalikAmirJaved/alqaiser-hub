@@ -1,6 +1,6 @@
 "use client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useApi } from "@/context/AuthContext";
+import { useApi } from "@/hooks/useApi";
 
 export interface CompanySettings {
   companyName: string;

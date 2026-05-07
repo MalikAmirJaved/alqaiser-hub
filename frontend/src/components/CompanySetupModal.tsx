@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";  // adjust to your button
 export default function CompanySetupModal() {
   const { settings, isReady, updateSettings } = useCompanySettings();
   const [form, setForm] = useState<Partial<CompanySettings>>({
-    companyName: "",
     currency: "USD",
     taxRate: 0,
     timezone: "UTC",
@@ -36,18 +35,6 @@ export default function CompanySetupModal() {
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Company Name */}
-          <label className="block">
-            <span className="text-xs text-muted-foreground">Company Name *</span>
-            <input
-              type="text"
-              value={form.companyName}
-              onChange={e => handleChange("companyName", e.target.value)}
-              className="w-full bg-muted/40 border border-border rounded-md h-10 px-3"
-              required
-            />
-          </label>
-
           {/* Currency */}
           <label className="block">
             <span className="text-xs text-muted-foreground">Currency</span>

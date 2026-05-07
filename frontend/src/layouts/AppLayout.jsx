@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/sidebar/Sidebar";
 import Topbar from "@/components/navbar/Topbar";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import CompanySetupModal from "@/components/CompanySetupModal";
 
@@ -20,7 +20,6 @@ export default function AppLayout({ children }) {
   if (!ready) return <div className="min-h-screen grid place-items-center text-muted-foreground">Loading…</div>;
   if (!user) return null;
 
-  // If company admin and setup not completed → show modal
   const showSetupModal =
     user.role === "COMPANY_ADMIN" &&
     settings &&
