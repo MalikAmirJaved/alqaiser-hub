@@ -53,12 +53,12 @@ export default function Topbar({ onToggleSidebar }) {
           </button>
 
           <div className="hidden sm:flex flex-col items-end leading-tight">
-            <span className="text-sm font-medium">{user?.name || "User"}</span>
+            <span className="text-sm font-medium">{user?.username }</span>
             <span className="text-[11px] text-muted-foreground">{user?.role || "—"}</span>
           </div>
 
           <div className="w-9 h-9 rounded-full bg-primary text-primary-foreground grid place-items-center text-sm font-semibold">
-            {(user?.name || "U").charAt(0)}
+            {(user?.username || "U").charAt(0).toUpperCase()}
           </div>
 
           <button onClick={handleLogout} className="p-2 rounded-md hover:bg-muted">

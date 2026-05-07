@@ -10,12 +10,13 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { menu } from "@/config/menu";
 import { motion, AnimatePresence } from "framer-motion";
 import { permissionService } from "@/services/permissionService";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 export default function Sidebar({ open, onClose }) {
   const path = usePathname() || "";
   const [filteredMenu, setFilteredMenu] = useState([]);
   const [openGroups, setOpenGroups] = useState({});
-
+  const {settings} = useCompanySettings();
   // Map menu titles to module names and features
   const getModuleAndFeature = (title, parentTitle) => {
     const moduleMapping = {
@@ -265,8 +266,7 @@ export default function Sidebar({ open, onClose }) {
               C
             </div>
             <div>
-              <div className="font-semibold text-sm leading-tight">Clickmasters BOS</div>
-              <div className="text-[11px] text-muted-foreground">Al Qaiser IT Company</div>
+              <div className="font-semibold text-sm leading-tight">{settings?.companyName}</div>
             </div>
           </div>
         </div>
@@ -341,7 +341,7 @@ export default function Sidebar({ open, onClose }) {
         </nav>
 
         <div className="p-3 border-t border-sidebar-border text-[11px] text-muted-foreground">
-          v1.0 · Internal BOS
+          {/* add version OR somthing */}
         </div>
       </aside>
     </>

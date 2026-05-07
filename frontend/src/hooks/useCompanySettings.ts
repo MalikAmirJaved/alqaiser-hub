@@ -37,7 +37,7 @@ export function useUpdateCompanySettings() {
   });
 }
 
-// ---------- Combined hook for convenience (replaces the old context) ----------
+// ---------- Combined hook for convenience  ----------
 export function useCompanySettings() {
   const { data: settings, isLoading, error } = useCompanySettingsQuery();
   const updateMutation = useUpdateCompanySettings();
