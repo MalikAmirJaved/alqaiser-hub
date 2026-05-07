@@ -24,11 +24,12 @@ def health_check(request):
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('health/', health_check, name='health_check'),  
-    path('api/accounts/', include('apps.accounts.urls')),
 
     path('api/accounts/', include('apps.accounts.urls')),
     path('api/hr/', include('apps.hr.urls')),
     path('api/inventory/', include('apps.inventory.urls')),
     path('api/finance/', include('apps.finance.urls')),
     path('api/organization/', include('apps.organization.urls')),
+    path('api/company/', include('apps.compsetting.urls')),
+
 ]

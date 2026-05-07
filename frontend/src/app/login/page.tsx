@@ -14,8 +14,8 @@ function LoginPage() {
 const [loading, setLoading] = useState(false);
 
   const navigate = useRouter();
-  const [email, setEmail] = useState("admin@alqaiserit.local");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("admin@gmail.com");
+  const [password, setPassword] = useState("123456");
   const [remember, setRemember] = useState(true);
   const [err, setErr] = useState("");
   const [forgot, setForgot] = useState(false);

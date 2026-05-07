@@ -1,7 +1,7 @@
 // src/app/(app)/hr/compensation/page.tsx
 "use client";
 import CompensationLoanPage from "@/components/payroll/CompensationLoanPage";
-import { useCompanySettings } from "@/context/CompanySettingsContext";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 import PageHeader from "@/components/PageHeader";
 
 export default function CompensationLoanModule() {

@@ -20,23 +20,9 @@ class Company(models.Model):
     phone = models.CharField(max_length=30, blank=True, null=True)
     email = models.EmailField(blank=True, null=True)
 
-    currency_code = models.CharField(max_length=10, default="USD")
-    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-
-    # Changed from CharField to JSONField to store arrays
-    working_days = models.JSONField(default=list)      # e.g. ["Monday", "Tuesday", ...]
-    weekends = models.JSONField(default=list)           # e.g. ["Sunday"]
-    leave_year_type = models.CharField(
-        max_length=20,
-        choices=[("CALENDAR", "Calendar"), ("FISCAL", "Fiscal")],
-        default="CALENDAR",
-    )
-    public_holidays = models.JSONField(default=list)    # list of {"date": "...", "name": "..."}
-
-    tax_id = models.CharField(max_length=100, blank=True, null=True)
-
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
 
 
 # -----------------------------

@@ -9,7 +9,7 @@ import { DollarSign, Users, Clock, TrendingUp, Search, Filter, Eye, CreditCard, 
 import PaymentModal from "@/components/payroll/PaymentModal";
 import PayslipModal from "@/components/payroll/PayslipModal";
 import MonthSelectorModal from "@/components/payroll/MonthSelectorModal";
-import { useCompanySettings } from "@/context/CompanySettingsContext";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 // ============================================
 // MAIN PAYROLL PAGE (Salaries & Payslips Only)

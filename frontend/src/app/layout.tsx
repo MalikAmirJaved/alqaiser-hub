@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { AuthProvider } from "@/context/AuthContext";
-import { CompanySettingsProvider } from "@/context/CompanySettingsContext";
 import { ReactQueryProvider } from "./providers";
 import "@/styles.css";
 import { Inter } from "next/font/google";
@@ -20,9 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <ReactQueryProvider>
             <AuthProvider>
-              <CompanySettingsProvider>
                 {children}
-              </CompanySettingsProvider>
             </AuthProvider>
           </ReactQueryProvider>
         </ThemeProvider>

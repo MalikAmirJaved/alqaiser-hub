@@ -10,7 +10,7 @@ import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar, PieChart, Pie, Cell, Legend,
 } from "recharts";
-import { useCompanySettings } from "@/context/CompanySettingsContext";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 export default Dashboard;
 

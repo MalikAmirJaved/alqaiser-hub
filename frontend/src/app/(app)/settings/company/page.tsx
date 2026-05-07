@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { ls } from "@/services/localStorageService";
 import PageHeader from "@/components/PageHeader";
-import { useCompanySettings } from "@/context/CompanySettingsContext";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { Building2, Globe, Receipt, Info, Briefcase, Mail, Phone, MapPin, Building, CheckCircle, CalendarDays } from "lucide-react";
 
 export default function CompanyProfile() {
