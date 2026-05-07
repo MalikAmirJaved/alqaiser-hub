@@ -1,62 +1,52 @@
-
 // ============================================
-// FILE: src/services/permissionService.js (NEW)
+// FILE: src/services/permissionService.js
 // ============================================
 
-import { ls } from "./localStorageService";
+import { apiFetch } from "@/lib/api";
+import { companyContext } from "./companyContextService";
 
 /**
- * Permission Service - Handles all RBAC operations
- * Production-ready permission checking system
+ * Permission Service - Handles all RBAC operations with real backend
  */
 class PermissionService {
   constructor() {
     this.permissionsCache = null;
+    this.modulesCache = null;
     this.currentUser = null;
+    this.initialized = false;
   }
 
   /**
-   * Initialize or refresh permission cache for current user
+   * Initialize or refresh permission cache from backend
    */
-  init() {
-    const session = this.getSession();
-    if (!session) {
-      this.permissionsCache = null;
-      this.currentUser = null;
+  async init(forceRefresh = false) {
+    if (this.initialized && !forceRefresh) return true;
+    
+    try {
+      // Get current user
+      const user = await apiFetch('/api/accounts/me/');
+      this.currentUser = user;
+      
+      // Get user permissions
+      const permissions = await apiFetch('/api/organization/permissions/');
+      this.permissionsCache = permissions;
+      
+      // Get modules (with features)
+      const modules = await apiFetch('/api/organization/modules/');
+      this.modulesCache = modules;
+      
+      this.initialized = true;
+      return true;
+    } catch (error) {
+      console.error('Failed to initialize permissions:', error);
       return false;
     }
-
-    this.currentUser = session;
-    const allPermissions = ls.get("permissions", []);
-    this.permissionsCache = allPermissions.filter(p => p.user_id === session.id);
-    return true;
-  }
-
-  /**
-   * Get current session (works with both localStorage and sessionStorage)
-   */
-  getSession() {
-    if (typeof window === "undefined") return null;
-    
-    const localSession = ls.get("session");
-    if (localSession) return localSession;
-    
-    const sessionStorageData = sessionStorage.getItem("clickmasters_session");
-    if (sessionStorageData) {
-      try {
-        return JSON.parse(sessionStorageData);
-      } catch {
-        return null;
-      }
-    }
-    return null;
   }
 
   /**
    * Get current user
    */
   getCurrentUser() {
-    if (!this.currentUser) this.init();
     return this.currentUser;
   }
 
@@ -64,40 +54,42 @@ class PermissionService {
    * Get all permissions for current user
    */
   getUserPermissions() {
-    if (!this.permissionsCache) this.init();
     return this.permissionsCache || [];
   }
 
   /**
    * Check if user has specific permission for a feature
-   * @param {string} moduleName - Module name (HR, INVENTORY, FINANCE, SETTINGS)
-   * @param {string} featureName - Feature/page name
+   * @param {string} moduleCode - Module code (HR, INVENTORY, FINANCE, SETTINGS)
+   * @param {string} featureCode - Feature code
    * @param {string} action - 'create', 'update', 'delete', 'view'
    * @returns {boolean}
    */
-  hasPermission(moduleName, featureName, action) {
-    const permissions = this.getUserPermissions();
+  hasPermission(moduleCode, featureCode, action) {
+    if (!this.permissionsCache) {
+      console.warn('Permissions not initialized. Call init() first.');
+      return false;
+    }
     
-    // Super admin override: COMPANY_ADMIN has all permissions
-    if (this.currentUser?.role === "COMPANY_ADMIN") {
+    // Super admin override
+    if (this.currentUser?.role === "COMPANY_ADMIN" || this.currentUser?.is_superuser) {
       return true;
     }
 
-    const permission = permissions.find(
-      p => p.module_name === moduleName && p.feature_name === featureName
+    const permission = this.permissionsCache.find(
+      p => p.moduleCode === moduleCode && p.featureCode === featureCode
     );
 
     if (!permission) return false;
 
     switch (action) {
       case "create":
-        return permission.is_create_access === "true";
+        return permission.isCreateAccess === "true";
       case "update":
-        return permission.is_update_access === "true";
+        return permission.isUpdateAccess === "true";
       case "delete":
-        return permission.is_delete_access === "true";
+        return permission.isDeleteAccess === "true";
       case "view":
-        return permission.is_view_access === "true";
+        return permission.isViewAccess === "true";
       default:
         return false;
     }
@@ -106,66 +98,77 @@ class PermissionService {
   /**
    * Check if user can view a specific module
    */
-  canViewModule(moduleName) {
-    // For module-level check, we check if user has view access to ANY feature in the module
-    const permissions = this.getUserPermissions();
-    if (this.currentUser?.role === "COMPANY_ADMIN") return true;
+  canViewModule(moduleCode) {
+    if (this.currentUser?.role === "COMPANY_ADMIN" || this.currentUser?.is_superuser) {
+      return true;
+    }
     
-    return permissions.some(
-      p => p.module_name === moduleName && p.is_view_access === "true"
-    );
+    return this.permissionsCache?.some(
+      p => p.moduleCode === moduleCode && p.isViewAccess === "true"
+    ) || false;
   }
 
   /**
    * Get all modules user has access to
    */
   getAccessibleModules() {
-    const permissions = this.getUserPermissions();
-    if (this.currentUser?.role === "COMPANY_ADMIN") {
-      return ["HR", "INVENTORY", "FINANCE", "SETTINGS"];
+    if (this.currentUser?.role === "COMPANY_ADMIN" || this.currentUser?.is_superuser) {
+      return this.modulesCache || [];
     }
     
-    const modules = new Set();
-    permissions.forEach(p => {
-      if (p.is_view_access === "true") {
-        modules.add(p.module_name);
+    const accessibleModules = [];
+    const modulesWithAccess = new Set();
+    
+    this.permissionsCache?.forEach(p => {
+      if (p.isViewAccess === "true") {
+        modulesWithAccess.add(p.moduleCode);
       }
     });
-    return Array.from(modules);
+    
+    // Filter modules by those with access
+    this.modulesCache?.forEach(module => {
+      if (modulesWithAccess.has(module.code)) {
+        accessibleModules.push(module);
+      }
+    });
+    
+    return accessibleModules;
   }
 
   /**
    * Get accessible features for a specific module
    */
-  getAccessibleFeatures(moduleName, action = "view") {
-    const permissions = this.getUserPermissions();
-    if (this.currentUser?.role === "COMPANY_ADMIN") {
-      // Return all features for this module from moduleFeatures
-      const moduleFeatures = ls.get("moduleFeatures", {});
-      return moduleFeatures[moduleName] || [];
+  getAccessibleFeatures(moduleCode, action = "view") {
+    if (this.currentUser?.role === "COMPANY_ADMIN" || this.currentUser?.is_superuser) {
+      const module = this.modulesCache?.find(m => m.code === moduleCode);
+      return module?.features || [];
     }
     
-    return permissions
-      .filter(p => p.module_name === moduleName && p[`is_${action}_access`] === "true")
-      .map(p => p.feature_name);
+    const actionKey = action === "view" ? "isViewAccess" :
+                      action === "create" ? "isCreateAccess" :
+                      action === "update" ? "isUpdateAccess" : "isDeleteAccess";
+    
+    return this.permissionsCache
+      ?.filter(p => p.moduleCode === moduleCode && p[actionKey] === "true")
+      ?.map(p => ({ code: p.featureCode, name: p.featureName })) || [];
   }
 
   /**
    * Check if user can perform any action on a feature
    */
-  canAccessFeature(moduleName, featureName) {
-    return this.hasPermission(moduleName, featureName, "view");
+  canAccessFeature(moduleCode, featureCode) {
+    return this.hasPermission(moduleCode, featureCode, "view");
   }
 
   /**
    * Get CRUD permissions for a specific feature
    */
-  getFeaturePermissions(moduleName, featureName) {
+  getFeaturePermissions(moduleCode, featureCode) {
     return {
-      canCreate: this.hasPermission(moduleName, featureName, "create"),
-      canUpdate: this.hasPermission(moduleName, featureName, "update"),
-      canDelete: this.hasPermission(moduleName, featureName, "delete"),
-      canView: this.hasPermission(moduleName, featureName, "view"),
+      canCreate: this.hasPermission(moduleCode, featureCode, "create"),
+      canUpdate: this.hasPermission(moduleCode, featureCode, "update"),
+      canDelete: this.hasPermission(moduleCode, featureCode, "delete"),
+      canView: this.hasPermission(moduleCode, featureCode, "view"),
     };
   }
 
@@ -174,31 +177,45 @@ class PermissionService {
    */
   clearCache() {
     this.permissionsCache = null;
+    this.modulesCache = null;
     this.currentUser = null;
+    this.initialized = false;
   }
 }
 
 export const permissionService = new PermissionService();
 
 /**
- * Hook for using permissions in components
+ * React hook for using permissions in components
  */
 export function usePermissions() {
-  const [perms, setPerms] = useState(null);
-  const [user, setUser] = useState(null);
+  const [state, setState] = React.useState({
+    user: null,
+    permissions: null,
+    modules: null,
+    loading: true,
+  });
 
-  useEffect(() => {
-    permissionService.init();
-    setUser(permissionService.getCurrentUser());
-    setPerms(permissionService.getUserPermissions());
+  React.useEffect(() => {
+    const loadPermissions = async () => {
+      await permissionService.init();
+      setState({
+        user: permissionService.getCurrentUser(),
+        permissions: permissionService.getUserPermissions(),
+        modules: permissionService.getAccessibleModules(),
+        loading: false,
+      });
+    };
+    
+    loadPermissions();
   }, []);
 
   return {
-    user,
-    permissions: perms,
-    hasPermission: (module, feature, action) => permissionService.hasPermission(module, feature, action),
-    canViewModule: (module) => permissionService.canViewModule(module),
-    getFeaturePermissions: (module, feature) => permissionService.getFeaturePermissions(module, feature),
-    accessibleModules: permissionService.getAccessibleModules(),
+    ...state,
+    hasPermission: (moduleCode, featureCode, action) => 
+      permissionService.hasPermission(moduleCode, featureCode, action),
+    canViewModule: (moduleCode) => permissionService.canViewModule(moduleCode),
+    getFeaturePermissions: (moduleCode, featureCode) => 
+      permissionService.getFeaturePermissions(moduleCode, featureCode),
   };
 }

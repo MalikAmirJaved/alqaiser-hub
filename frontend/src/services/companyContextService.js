@@ -1,52 +1,48 @@
-
 // ============================================
-// FILE: src/services/companyContextService.js (NEW)
+// FILE: src/services/companyContextService.js
 // ============================================
 
-import { ls } from "./localStorageService";
-import { permissionService } from "./permissionService";
+import { apiFetch } from "@/lib/api";
 
 /**
- * Company Context Service - Handles multi-tenant data isolation
- * Adds company_id and branch_id to all records automatically
+ * Company Context Service - Handles multi-tenant data isolation with real backend
  */
 class CompanyContextService {
   constructor() {
     this.currentCompany = null;
     this.currentBranch = null;
     this.currentUser = null;
+    this.initialized = false;
+    this.pendingContext = null;
   }
 
   /**
-   * Initialize company context for current user
+   * Initialize company context for current user from backend
    */
-  init() {
-    const session = permissionService.getSession();
-    if (!session) {
-      this.currentCompany = null;
-      this.currentBranch = null;
-      this.currentUser = null;
+  async init() {
+    if (this.initialized) return true;
+    
+    try {
+      const context = await apiFetch('/api/organization/context/');
+      this.currentCompany = context.companyId ? { id: context.companyId, name: context.companyName } : null;
+      this.currentBranch = context.branchId ? { id: context.branchId, name: context.branchName } : null;
+      
+      // Get current user from /me endpoint
+      const user = await apiFetch('/api/accounts/me/');
+      this.currentUser = user;
+      
+      this.initialized = true;
+      return true;
+    } catch (error) {
+      console.error('Failed to initialize company context:', error);
       return false;
     }
-
-    this.currentUser = session;
-    this.currentCompany = ls.get("company", null);
-    
-    // Get user's branch from user record
-    const users = ls.get("users", []);
-    const userRecord = users.find(u => u.id === session.id);
-    if (userRecord) {
-      this.currentBranch = userRecord.branch_id || null;
-    }
-    
-    return true;
   }
 
   /**
    * Get current company ID
    */
   getCurrentCompanyId() {
-    if (!this.currentCompany) this.init();
     return this.currentCompany?.id || null;
   }
 
@@ -54,81 +50,110 @@ class CompanyContextService {
    * Get current branch ID
    */
   getCurrentBranchId() {
-    if (!this.currentBranch && this.currentUser) this.init();
-    return this.currentBranch;
+    return this.currentBranch?.id || null;
   }
 
   /**
    * Get current user ID
    */
   getCurrentUserId() {
-    if (!this.currentUser) this.init();
     return this.currentUser?.id || null;
   }
 
   /**
-   * Add company context to a record (for creation)
+   * Get current user role
+   */
+  getCurrentUserRole() {
+    return this.currentUser?.role || null;
+  }
+
+  /**
+   * Switch company context
+   */
+  async switchCompany(companyId) {
+    try {
+      await apiFetch('/api/organization/switch-company/', {
+        method: 'POST',
+        body: JSON.stringify({ companyId })
+      });
+      
+      // Re-initialize context
+      this.initialized = false;
+      await this.init();
+      return true;
+    } catch (error) {
+      console.error('Failed to switch company:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Update branch context
+   */
+  async updateBranch(branchId) {
+    try {
+      await apiFetch('/api/organization/context/', {
+        method: 'PATCH',
+        body: JSON.stringify({ branchId: branchId || null })
+      });
+      
+      this.currentBranch = branchId ? { id: branchId } : null;
+      return true;
+    } catch (error) {
+      console.error('Failed to update branch:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Add company context to a record (for creation - backend handles this)
+   * This is now just for frontend convenience, backend will add actual context
    */
   addContextToRecord(record, options = {}) {
     const companyId = options.companyId || this.getCurrentCompanyId();
     const branchId = options.branchId || this.getCurrentBranchId();
     const userId = options.userId || this.getCurrentUserId();
     
+    // Return record with context metadata for frontend display
+    // Backend will set the actual company_id, branch_id, created_by
     return {
       ...record,
-      company_id: companyId,
-      branch_id: branchId,
-      created_by: userId,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      _companyId: companyId,
+      _branchId: branchId,
+      _createdBy: userId,
     };
-  }
-
-  /**
-   * Add context to multiple records
-   */
-  addContextToRecords(records, options = {}) {
-    return records.map(record => this.addContextToRecord(record, options));
   }
 
   /**
    * Filter records by current company/branch context
    * For SELECT queries - only show data from user's company/branch
+   * Note: Real filtering should be done by backend queries
    */
   filterByContext(records, options = {}) {
     const companyId = options.companyId || this.getCurrentCompanyId();
     const branchId = options.branchId || this.getCurrentBranchId();
-    const userRole = this.currentUser?.role;
+    const userRole = this.getCurrentUserRole();
     
+    // This is a client-side fallback. Real filtering should be done by API.
     // Company Admin can see all records of their company
     if (userRole === "COMPANY_ADMIN") {
-      return records.filter(record => record.company_id === companyId);
+      return records.filter(record => record.company_id === companyId || !record.company_id);
     }
     
     // Branch Admin can see all records of their branch
     if (userRole === "BRANCH_ADMIN") {
       return records.filter(record => 
-        record.company_id === companyId && record.branch_id === branchId
+        (record.company_id === companyId || !record.company_id) && 
+        (record.branch_id === branchId || !record.branch_id)
       );
     }
     
-    // Staff can only see records they created (or branch-specific based on permissions)
+    // Staff can only see records they created or branch records
     const userId = this.getCurrentUserId();
     return records.filter(record => 
-      record.company_id === companyId && 
-      (record.branch_id === branchId || record.created_by === userId)
+      (record.company_id === companyId || !record.company_id) && 
+      ((record.branch_id === branchId || !record.branch_id) || record.created_by === userId)
     );
-  }
-
-  /**
-   * Update record with new timestamps
-   */
-  updateRecordTimestamps(record) {
-    return {
-      ...record,
-      updated_at: new Date().toISOString(),
-      updated_by: this.getCurrentUserId(),
-    };
   }
 
   /**
@@ -138,6 +163,7 @@ class CompanyContextService {
     this.currentCompany = null;
     this.currentBranch = null;
     this.currentUser = null;
+    this.initialized = false;
   }
 }
 
