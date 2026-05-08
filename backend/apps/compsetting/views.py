@@ -11,7 +11,7 @@ from datetime import datetime, time
 
 from apps.compsetting.models import (
     CompanySettings, WorkingDay, PublicHoliday, 
-    LeaveType, CompanySettingHistory
+    LeaveType, CompanySettingHistory, Designation
 )
 from apps.organization.models import Company, Branch
 
@@ -691,3 +691,237 @@ class SettingHistoryView(BaseCompanyView):
             'page': page,
             'pageSize': page_size,
         })
+    
+
+class DesignationView(BaseCompanyView):
+    """CRUD for company designations"""
+
+    def get(self, request):
+        """Get all designations"""
+
+        company, settings = self._get_settings(request.user)
+
+        designations = Designation.objects.filter(
+            settings=settings,
+            is_deleted=False
+        ).order_by('level', 'name')
+
+        return Response([
+            {
+                "id": d.id,
+                "_id": str(d._id),
+                "name": d.name,
+                "department": d.department,
+                "level": d.level,
+                "payGrade": d.pay_grade,
+                "description": d.description,
+                "isActive": d.is_active,
+                "createdAt": d.created_at.isoformat(),
+                "updatedAt": d.updated_at.isoformat(),
+            }
+            for d in designations
+        ])
+
+    @transaction.atomic
+    def post(self, request):
+        """Create designation"""
+
+        company, settings = self._get_settings(request.user)
+
+        required_fields = ['name']
+
+        for field in required_fields:
+            if field not in request.data:
+                return Response(
+                    {'error': f'{field} is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # Prevent duplicate designation names
+        if Designation.objects.filter(
+            company=company,
+            name=request.data['name'],
+            is_deleted=False
+        ).exists():
+            return Response(
+                {'error': 'Designation already exists'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        designation = Designation.objects.create(
+            settings=settings,
+            company=company,
+            branch_id=request.data.get('branchId'),
+
+            name=request.data.get('name'),
+            department=request.data.get('department'),
+            level=request.data.get('level', 1),
+            pay_grade=request.data.get('payGrade'),
+            description=request.data.get('description'),
+
+            is_active=request.data.get('isActive', True),
+
+            created_by=request.user,
+            updated_by=request.user,
+        )
+
+        return Response({
+            "message": "Designation created successfully",
+            "id": designation.id,
+            "name": designation.name,
+        }, status=status.HTTP_201_CREATED)
+
+    @transaction.atomic
+    def patch(self, request):
+        """Update designation"""
+
+        company, settings = self._get_settings(request.user)
+
+        designation_id = request.data.get('id')
+
+        if not designation_id:
+            return Response(
+                {'error': 'id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        designation = get_object_or_404(
+            Designation,
+            id=designation_id,
+            settings=settings,
+            is_deleted=False
+        )
+
+        updatable_fields = {
+            'name': 'name',
+            'department': 'department',
+            'level': 'level',
+            'payGrade': 'pay_grade',
+            'description': 'description',
+            'isActive': 'is_active',
+        }
+
+        for request_field, model_field in updatable_fields.items():
+            if request_field in request.data:
+                setattr(
+                    designation,
+                    model_field,
+                    request.data[request_field]
+                )
+
+        # Update branch if provided
+        if 'branchId' in request.data:
+            designation.branch_id = request.data.get('branchId')
+
+        designation.updated_by = request.user
+        designation.save()
+
+        return Response({
+            "message": "Designation updated successfully",
+            "id": designation.id
+        })
+
+    @transaction.atomic
+    def delete(self, request):
+        """Soft delete designation"""
+
+        _, settings = self._get_settings(request.user)
+
+        designation_id = request.data.get('id')
+
+        if not designation_id:
+            return Response(
+                {'error': 'id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        designation = get_object_or_404(
+            Designation,
+            id=designation_id,
+            settings=settings,
+            is_deleted=False
+        )
+
+        designation.is_deleted = True
+        designation.deleted_at = datetime.now()
+        designation.deleted_by = request.user
+        designation.save()
+
+        return Response({
+            'message': 'Designation deleted successfully'
+        })
+    
+class WelcomeDesignationSetupView(BaseCompanyView):
+    """Dedicated bulk create for initial company setup wizard"""
+    
+    @transaction.atomic
+    def post(self, request):
+        """Bulk create designations during welcome/setup"""
+        company, settings = self._get_settings(request.user)
+        user = request.user
+        
+        designations_data = request.data.get('designations', [])
+        
+        if not designations_data or not isinstance(designations_data, list):
+            return Response(
+                {'error': 'designations list is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if len(designations_data) == 0:
+            return Response(
+                {'error': 'At least one designation is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        created = []
+        errors = []
+
+        for idx, des_data in enumerate(designations_data):
+            try:
+                name = des_data.get('name', '').strip()
+                if not name:
+                    raise ValueError(f"Designation name is required at index {idx}")
+
+                # Prevent duplicates in this batch + existing
+                if Designation.objects.filter(
+                    company=company, 
+                    name__iexact=name, 
+                    is_deleted=False
+                ).exists():
+                    raise ValueError(f"Designation '{name}' already exists")
+
+                designation = Designation.objects.create(
+                    settings=settings,
+                    company=company,
+                    branch_id=des_data.get('branchId'),
+                    name=name,
+                    department=des_data.get('department'),
+                    level=des_data.get('level', 1),
+                    pay_grade=des_data.get('payGrade'),
+                    description=des_data.get('description'),
+                    is_active=des_data.get('isActive', True),
+                    created_by=user,
+                    updated_by=user,
+                )
+                
+                created.append({
+                    "id": designation.id,
+                    "_id": str(designation._id),
+                    "name": designation.name,
+                    "level": designation.level,
+                })
+                
+            except Exception as e:
+                errors.append({
+                    "index": idx,
+                    "data": des_data,
+                    "error": str(e)
+                })
+
+        return Response({
+            'message': f'Successfully created {len(created)} designation(s)',
+            'created': created,
+            'errors': errors if errors else None,
+            'count': len(created)
+        }, status=status.HTTP_201_CREATED if created else status.HTTP_400_BAD_REQUEST)

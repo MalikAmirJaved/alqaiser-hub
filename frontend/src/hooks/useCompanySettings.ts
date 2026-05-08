@@ -53,6 +53,8 @@ export interface CompanySettings {
   phone: string;
   email: string;
   
+  designations: Designation[];
+
   // Financial
   currency: string;
   taxRate: number;
@@ -78,6 +80,19 @@ export interface CompanySettings {
   workingDays: WorkingDay[];
   leaveTypes: LeaveType[];
   publicHolidays: PublicHoliday[];
+}
+
+export interface Designation {
+  id: number;
+  _id?: string;
+  name: string;
+  department?: string;
+  level: number;
+  payGrade?: string;
+  description?: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // ------ Query ------
@@ -215,6 +230,9 @@ export function useCompanySettings() {
     deleteLeaveType: useDeleteLeaveType(),
     addPublicHoliday: useAddPublicHoliday(),
     deletePublicHoliday: useDeletePublicHoliday(),
+    createDesignation: useCreateDesignation(),
+    updateDesignation: useUpdateDesignation(),
+    deleteDesignation: useDeleteDesignation(),
   };
 
   const formatCurrency = (amount: number, decimals = 2) => {
@@ -241,12 +259,83 @@ export function useCompanySettings() {
     deleteLeaveType: mutations.deleteLeaveType.mutate,
     addPublicHoliday: mutations.addPublicHoliday.mutate,
     deletePublicHoliday: mutations.deletePublicHoliday.mutate,
-    
+    createDesignation: mutations.createDesignation.mutate,
+updateDesignation: mutations.updateDesignation.mutate,
+deleteDesignation: mutations.deleteDesignation.mutate,
+
 
     // Loading states
     isUpdating: mutations.updateSettings.isPending,
     isUpdatingWorkingDays: mutations.updateWorkingDays.isPending,
     isCreatingLeaveType: mutations.createLeaveType.isPending,
     isDeletingHoliday: mutations.deletePublicHoliday.isPending,
+    isCreatingDesignation: mutations.createDesignation.isPending,
+isUpdatingDesignation: mutations.updateDesignation.isPending,
+isDeletingDesignation: mutations.deleteDesignation.isPending,
   };
 }
+
+export function useSetupDesignations() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (designations: Omit<Designation, "id">[]) =>
+      api("/api/company/settings/designations/setup/", {
+        method: "POST",
+        body: JSON.stringify({ designations }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["companySettings"] });
+    },
+  });
+}
+
+export function useCreateDesignation() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (designation: Omit<Designation, "id">) =>
+      api("/api/company/settings/designations/", {
+        method: "POST",
+        body: JSON.stringify(designation),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["companySettings"] });
+    },
+  });
+}
+
+export function useUpdateDesignation() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (designation: Partial<Designation> & { id: number }) =>
+      api("/api/company/settings/designations/", {
+        method: "PATCH",
+        body: JSON.stringify(designation),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["companySettings"] });
+    },
+  });
+}
+
+export function useDeleteDesignation() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: number) =>
+      api("/api/company/settings/designations/", {
+        method: "DELETE",
+        body: JSON.stringify({ id }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["companySettings"] });
+    },
+  });
+}
+

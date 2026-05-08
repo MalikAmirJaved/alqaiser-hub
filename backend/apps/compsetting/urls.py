@@ -5,6 +5,8 @@ from .views import (
     LeaveTypesView,
     PublicHolidaysView,
     SettingHistoryView,
+    DesignationView,
+    WelcomeDesignationSetupView,
 )
 
 urlpatterns = [
@@ -22,6 +24,17 @@ urlpatterns = [
     path('settings/public-holidays/<int:holiday_id>/', 
          PublicHolidaysView.as_view(), name='public-holiday-delete'),
     
+    path(
+        'settings/designations/',
+        DesignationView.as_view(),
+        name='designations'
+    ),
+
+    path(
+        'settings/designations/setup/',
+        WelcomeDesignationSetupView.as_view(),
+        name='welcome-designation-setup'
+    ),
     # History/Audit
     path('settings/history/', SettingHistoryView.as_view(), name='settings-history'),
 ]

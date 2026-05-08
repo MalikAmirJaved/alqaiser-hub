@@ -2,17 +2,27 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { useCompanySettings, useSetupDesignations } from "@/hooks/useCompanySettings";
 import { Button } from "@/components/ui/button";
 import { Building2, Globe, CalendarDays, Briefcase, CheckCircle, AlertCircle } from "lucide-react";
 
+
+type DesignationForm = {
+  name: string;
+  level: number;
+  isActive: boolean;
+};
+
+
 export default function CompanySetupModal() {
   const { settings, isReady, updateSettings, updateWorkingDays, isUpdating } = useCompanySettings();
-
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [designations, setDesignations] = useState<DesignationForm[]>([
+    { name: "", level: 1, isActive: true }
+  ]);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
-
+  const setupDesignations = useSetupDesignations();
   const [formData, setFormData] = useState({
     companyName: "",
     address: "",
@@ -65,8 +75,35 @@ export default function CompanySetupModal() {
     );
   };
 
+
+  const addDesignation = () => {
+    setDesignations(prev => [
+      ...prev,
+      { name: "", level: prev.length + 1, isActive: true }
+    ]);
+  };
+
+  const updateDesignation = (index: number, field: string, value: any) => {
+    setDesignations(prev =>
+      prev.map((d, i) =>
+        i === index ? { ...d, [field]: value } : d
+      )
+    );
+  };
+
+  const removeDesignation = (index: number) => {
+    setDesignations(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async () => {
     setErrorMsg("");
+
+    // ✅ designation validation
+    if (designations.length < 1 || !designations[0].name.trim()) {
+      setErrorMsg("At least 1 designation is required");
+      return;
+    }
+
     try {
       await updateSettings({
         ...formData,
@@ -75,25 +112,58 @@ export default function CompanySetupModal() {
       });
 
       await updateWorkingDays(workingDays);
-
+      await setupDesignations.mutateAsync(
+        designations.map(d => ({
+          name: d.name,
+          level: d.level,
+          isActive: d.isActive,
+          // department, etc. if needed
+        }))
+      );
       setSuccessMsg("Company setup completed successfully! 🎉");
-      
-      // Auto close after success
+
       setTimeout(() => {
-        window.location.reload(); // Refresh to load full app
+        window.location.reload();
       }, 1500);
+
     } catch (error) {
       setErrorMsg("Failed to save setup. Please try again.");
-      console.error(error);
     }
   };
 
   const handleNext = () => {
-    setStep(prev => {
-      if (prev === 1) return 2;
-      if (prev === 2) return 3;
-      return prev;
-    });
+    setErrorMsg("");
+
+    // STEP 1 validation
+    if (step === 1) {
+      if (!formData.companyName.trim()) {
+        setErrorMsg("Company name is required");
+        return;
+      }
+    }
+
+    // STEP 2 validation (working days)
+    if (step === 2) {
+      const hasWorkingDay = workingDays.some(d => d.isWorking);
+      if (!hasWorkingDay) {
+        setErrorMsg("Select at least 1 working day");
+        return;
+      }
+    }
+
+    // STEP 3 validation (financial)
+    if (step === 3) {
+      if (!formData.currency) {
+        setErrorMsg("Currency is required");
+        return;
+      }
+      if (!formData.taxRate || Number(formData.taxRate) < 0) {
+        setErrorMsg("Valid tax rate is required");
+        return;
+      }
+    }
+
+    setStep(prev => (prev < 4 ? ((prev + 1) as any) : prev));
   };
 
   const handlePrevious = () => {
@@ -124,12 +194,11 @@ export default function CompanySetupModal() {
 
         {/* Progress */}
         <div className="px-8 py-3 bg-muted/50 border-b border-border flex gap-2">
-          {[1, 2, 3].map((s) => (
+          {[1, 2, 3, 4].map((s) => (
             <div
               key={s}
-              className={`h-1.5 flex-1 rounded-full transition-all ${
-                s <= step ? "bg-primary" : "bg-border"
-              }`}
+              className={`h-1.5 flex-1 rounded-full transition-all ${s <= step ? "bg-primary" : "bg-border"
+                }`}
             />
           ))}
         </div>
@@ -210,9 +279,8 @@ export default function CompanySetupModal() {
                       key={day.day}
                       type="button"
                       onClick={() => toggleWorkingDay(day.day)}
-                      className={`px-5 py-2.5 rounded-2xl text-sm font-medium border transition-all ${
-                        day.isWorking ? "bg-primary text-primary-foreground border-primary" : "bg-muted/40 border-border"
-                      }`}
+                      className={`px-5 py-2.5 rounded-2xl text-sm font-medium border transition-all ${day.isWorking ? "bg-primary text-primary-foreground border-primary" : "bg-muted/40 border-border"
+                        }`}
                     >
                       {day.label}
                     </button>
@@ -281,6 +349,54 @@ export default function CompanySetupModal() {
               </div>
             </div>
           )}
+
+          {/* STEP 4: Designations */}
+          {step === 4 && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Briefcase className="w-5 h-5" /> Designations
+              </h3>
+
+              <p className="text-sm text-muted-foreground">
+                Create at least 1 designation to continue
+              </p>
+
+              {designations.map((des, index) => (
+                <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 border rounded-xl">
+                  <input
+                    placeholder="Designation name"
+                    value={des.name}
+                    onChange={(e) => updateDesignation(index, "name", e.target.value)}
+                    className="h-10 px-3 border rounded"
+                  />
+
+                  <input
+                    type="number"
+                    placeholder="Level"
+                    value={des.level}
+                    onChange={(e) => updateDesignation(index, "level", Number(e.target.value))}
+                    className="h-10 px-3 border rounded"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => removeDesignation(index)}
+                    className="text-red-500 text-sm"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={addDesignation}
+                className="px-4 py-2 border rounded-md text-sm"
+              >
+                + Add Designation
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Footer Navigation */}
@@ -293,7 +409,7 @@ export default function CompanySetupModal() {
             Previous
           </Button>
 
-          {step < 3 ? (
+          {step < 4 ? (
             <Button onClick={handleNext}>
               Continue
             </Button>

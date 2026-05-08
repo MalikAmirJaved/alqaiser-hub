@@ -361,3 +361,93 @@ class CompanySettingHistory(TimeStampedModel):
         ]
         verbose_name = "Setting History"
         verbose_name_plural = "Setting Histories"
+
+class Designation(TimeStampedModel):
+    """Employee designations / job titles"""
+
+    id = models.BigAutoField(primary_key=True)
+    _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+
+    # Relations
+    settings = models.ForeignKey(
+        CompanySettings,
+        on_delete=models.CASCADE,
+        related_name='designations'
+    )
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='designations'
+    )
+
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='designations'
+    )
+
+    # Core Fields
+    name = models.CharField(max_length=150)
+
+    department = models.CharField(
+        max_length=150,
+        null=True,
+        blank=True
+    )
+
+    level = models.PositiveSmallIntegerField(
+        default=1,
+        help_text="Hierarchy level of designation"
+    )
+
+    pay_grade = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    description = models.TextField(
+        null=True,
+        blank=True
+    )
+
+    is_active = models.BooleanField(default=True)
+
+    # Audit
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_designations'
+    )
+
+    updated_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_designations'
+    )
+
+    class Meta:
+        verbose_name = "Designation"
+        verbose_name_plural = "Designations"
+
+        ordering = ['level', 'name']
+
+        unique_together = [('company', 'name')]
+
+        indexes = [
+            models.Index(fields=['company', 'is_deleted']),
+            models.Index(fields=['branch']),
+            models.Index(fields=['department']),
+            models.Index(fields=['level']),
+            models.Index(fields=['is_active']),
+        ]
+
+    def __str__(self):
+        return f"{self.name} - {self.department or 'General'}"
