@@ -843,6 +843,7 @@ class DesignationView(BaseCompanyView):
         return Response({
             'message': 'Designation deleted successfully'
         })
+
     
 class WelcomeDesignationSetupView(BaseCompanyView):
     """Dedicated bulk create for initial company setup wizard"""
