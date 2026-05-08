@@ -13,7 +13,7 @@ from apps.compsetting.models import (
     CompanySettings, WorkingDay, PublicHoliday, 
     LeaveType, CompanySettingHistory, Designation
 )
-from apps.organization.models import Company, Branch
+from apps.organization.models import Company
 
 logger = logging.getLogger(__name__)
 
@@ -726,7 +726,6 @@ class DesignationView(BaseCompanyView):
         """Create designation"""
 
         company, settings = self._get_settings(request.user)
-
         required_fields = ['name']
 
         for field in required_fields:
@@ -750,7 +749,7 @@ class DesignationView(BaseCompanyView):
         designation = Designation.objects.create(
             settings=settings,
             company=company,
-            branch_id=request.data.get('branchId'),
+            branch_id=request.user.branch_id,
 
             name=request.data.get('name'),
             department=request.data.get('department'),
@@ -806,10 +805,7 @@ class DesignationView(BaseCompanyView):
                     request.data[request_field]
                 )
 
-        # Update branch if provided
-        if 'branchId' in request.data:
-            designation.branch_id = request.data.get('branchId')
-
+        designation.branch_id = request.user.branch_id
         designation.updated_by = request.user
         designation.save()
 
@@ -891,7 +887,7 @@ class WelcomeDesignationSetupView(BaseCompanyView):
                 designation = Designation.objects.create(
                     settings=settings,
                     company=company,
-                    branch_id=des_data.get('branchId'),
+                    branch_id=request.user.branch_id,
                     name=name,
                     department=des_data.get('department'),
                     pay_grade=des_data.get('payGrade'),
