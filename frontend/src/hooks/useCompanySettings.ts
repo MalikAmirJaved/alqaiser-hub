@@ -12,25 +12,6 @@ export interface WorkingDay {
   isHalfDay: boolean;
 }
 
-export interface LeaveType {
-  id: number;
-  name: string;
-  code: string;
-  description?: string;
-  isPaid: boolean;
-  defaultDaysPerYear: number;
-  maxCarryForwardDays: number;
-  minDaysPerRequest: number;
-  maxDaysPerRequest: number;
-  requiresApproval: boolean;
-  requiresDocument: boolean;
-  isActive: boolean;
-  applicableAfterMonths: number;
-  genderSpecific: 'ALL' | 'MALE' | 'FEMALE';
-  colorCode: string;
-  order: number;
-}
-
 export interface PublicHoliday {
   id: number;
   name: string;
@@ -78,7 +59,6 @@ export interface CompanySettings {
   
   // Relations
   workingDays: WorkingDay[];
-  leaveTypes: LeaveType[];
   publicHolidays: PublicHoliday[];
 }
 
@@ -139,54 +119,6 @@ export function useUpdateWorkingDays() {
   });
 }
 
-export function useCreateLeaveType() {
-  const api = useApi();
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: (leaveType: Omit<LeaveType, 'id'>) =>
-      api("/api/company/settings/leave-types/", {
-        method: "POST",
-        body: JSON.stringify(leaveType),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["companySettings"] });
-    },
-  });
-}
-
-export function useUpdateLeaveType() {
-  const api = useApi();
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: (leaveType: Partial<LeaveType> & { id: number }) =>
-      api("/api/company/settings/leave-types/", {
-        method: "PATCH",
-        body: JSON.stringify(leaveType),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["companySettings"] });
-    },
-  });
-}
-
-export function useDeleteLeaveType() {
-  const api = useApi();
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: (id: number) =>
-      api("/api/company/settings/leave-types/", {
-        method: "DELETE",
-        body: JSON.stringify({ id }),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["companySettings"] });
-    },
-  });
-}
-
 export function useAddPublicHoliday() {
   const api = useApi();
   const queryClient = useQueryClient();
@@ -224,9 +156,6 @@ export function useCompanySettings() {
   const mutations = {
     updateSettings: useUpdateCompanySettings(),
     updateWorkingDays: useUpdateWorkingDays(),
-    createLeaveType: useCreateLeaveType(),
-    updateLeaveType: useUpdateLeaveType(),
-    deleteLeaveType: useDeleteLeaveType(),
     addPublicHoliday: useAddPublicHoliday(),
     deletePublicHoliday: useDeletePublicHoliday(),
   };
@@ -250,9 +179,6 @@ export function useCompanySettings() {
     // Mutations
     updateSettings: mutations.updateSettings.mutate,
     updateWorkingDays: mutations.updateWorkingDays.mutate,
-    createLeaveType: mutations.createLeaveType.mutate,
-    updateLeaveType: mutations.updateLeaveType.mutate,
-    deleteLeaveType: mutations.deleteLeaveType.mutate,
     addPublicHoliday: mutations.addPublicHoliday.mutate,
     deletePublicHoliday: mutations.deletePublicHoliday.mutate,
 
@@ -260,7 +186,6 @@ export function useCompanySettings() {
     // Loading states
     isUpdating: mutations.updateSettings.isPending,
     isUpdatingWorkingDays: mutations.updateWorkingDays.isPending,
-    isCreatingLeaveType: mutations.createLeaveType.isPending,
     isDeletingHoliday: mutations.deletePublicHoliday.isPending,
   };
 }

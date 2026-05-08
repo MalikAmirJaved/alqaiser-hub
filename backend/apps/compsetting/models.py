@@ -253,7 +253,6 @@ class LeaveType(TimeStampedModel):
         null=True,
         blank=True 
     )
-
     branch = models.ForeignKey(
         Branch,
         on_delete=models.SET_NULL,
@@ -262,25 +261,26 @@ class LeaveType(TimeStampedModel):
         related_name='leave_types'
     )
     
+    # Basic Info
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=50)
     description = models.TextField(blank=True, null=True)
     
+    # Leave Configuration
     is_paid = models.BooleanField(default=True)
     default_days_per_year = models.PositiveIntegerField(default=0)
     max_carry_forward_days = models.PositiveIntegerField(default=0)
     min_days_per_request = models.PositiveIntegerField(default=1)
     max_days_per_request = models.PositiveIntegerField(default=30)
     
+    # Settings
     requires_approval = models.BooleanField(default=True)
     requires_document = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
-    
     applicable_after_months = models.PositiveIntegerField(
         default=0,
         help_text="Months after joining when this leave becomes available"
     )
-    
     gender_specific = models.CharField(
         max_length=10,
         choices=[
@@ -291,6 +291,7 @@ class LeaveType(TimeStampedModel):
         default='ALL'
     )
     
+    # Display
     color_code = models.CharField(max_length=7, default="#4A90E2")
     order = models.PositiveSmallIntegerField(default=0)
     
@@ -322,6 +323,7 @@ class LeaveType(TimeStampedModel):
     
     def __str__(self):
         return f"{self.name} ({'Paid' if self.is_paid else 'Unpaid'})"
+
 
 
 class CompanySettingHistory(TimeStampedModel):

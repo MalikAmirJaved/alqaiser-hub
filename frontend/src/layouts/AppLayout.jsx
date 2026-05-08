@@ -48,8 +48,8 @@ export default function AppLayout({ children }) {
 
   const showSetupModal =
     user.role === "COMPANY_ADMIN" &&
-    settings &&
-    !settings.isSetupCompleted;
+    (settings &&
+    !settings.isSetupCompleted);
 
   return (
     <>

@@ -475,6 +475,7 @@ class LeaveTypesView(BaseCompanyView):
             max_days_per_request=request.data.get('maxDaysPerRequest', 30),
             requires_approval=request.data.get('requiresApproval', True),
             requires_document=request.data.get('requiresDocument', False),
+            is_active=request.data.get('isActive', True),
             applicable_after_months=request.data.get('applicableAfterMonths', 0),
             gender_specific=request.data.get('genderSpecific', 'ALL'),
             color_code=request.data.get('colorCode', '#4A90E2'),

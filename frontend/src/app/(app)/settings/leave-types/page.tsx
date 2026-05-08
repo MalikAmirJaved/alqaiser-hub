@@ -1,39 +1,52 @@
-// src/app/(app)/settings/leave-types/page.tsx
+// src/app/(dashboard)/settings/leave-types/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
-import { ls, uid } from "@/services/localStorageService";
-import { companyContext } from "@/services/companyContextService";
-import { permissionService } from "@/services/permissionService";
+import {
+  useLeaveTypes,
+  useCreateLeaveTypeMutation,
+  useUpdateLeaveTypeMutation,
+  useDeleteLeaveTypeMutation,
+} from "@/hooks/useLeaveTypes";
+import DataTable from "@/components/reuseable/DataTable";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Pencil, Trash2, Search, Shield, CheckCircle, XCircle } from "lucide-react";
-import { DatePicker } from "@/components/reuseable/DatePicker";
-import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import FormModal from "@/components/reuseable/FormModal";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Calendar, Shield } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { permissionService } from "@/services/permissionService";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function LeaveTypesPage() {
-  const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
+  const { user } = useAuth();
+  const { data: leaveTypes = [], isLoading, error } = useLeaveTypes();
+  const createLeaveType = useCreateLeaveTypeMutation();
+  const updateLeaveType = useUpdateLeaveTypeMutation();
+  const deleteLeaveType = useDeleteLeaveTypeMutation();
+
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingType, setEditingType] = useState<any>(null);
+  const [editingLeaveType, setEditingLeaveType] = useState<any>(null);
+  const [formData, setFormData] = useState({
+    name: "",
+    code: "",
+    description: "",
+    isPaid: true,
+    defaultDaysPerYear: 20,
+    maxCarryForwardDays: 0,
+    minDaysPerRequest: 1,
+    maxDaysPerRequest: 30,
+    requiresApproval: true,
+    requiresDocument: false,
+    isActive: true,
+    applicableAfterMonths: 0,
+    genderSpecific: "ALL" as const,
+  });
+
   const [permissions, setPermissions] = useState({
     canCreate: false,
     canUpdate: false,
     canDelete: false,
-    canView: true,
     loading: true,
-  });
-
-  const [formData, setFormData] = useState({
-    name: "",
-    code: "",
-    max_days_per_year: "",
-    is_paid: "true",
-    requires_document: "false",
-    carry_forward_allowed: "false",
-    max_carry_forward_days: "",
-    min_advance_notice_days: "",
-    applicable_to: "ALL",
-    status: "ACTIVE",
   });
 
   useEffect(() => {
@@ -42,82 +55,133 @@ export default function LeaveTypesPage() {
       canCreate: permissionService.hasPermission("SETTINGS", "Leave Types", "create"),
       canUpdate: permissionService.hasPermission("SETTINGS", "Leave Types", "update"),
       canDelete: permissionService.hasPermission("SETTINGS", "Leave Types", "delete"),
-      canView: permissionService.hasPermission("SETTINGS", "Leave Types", "view"),
       loading: false,
     });
-    loadLeaveTypes();
   }, []);
 
-  const loadLeaveTypes = () => {
-    const allTypes = ls.get<any[]>("leaveTypes", []);
-    const filtered = companyContext.filterByContext(allTypes);
-    setLeaveTypes(filtered);
-  };
-
-  const handleSave = () => {
-    if (!formData.name || !formData.code || !formData.max_days_per_year) {
-      alert("Please fill all required fields");
-      return;
-    }
-
-    let updatedTypes;
-    if (editingType) {
-      updatedTypes = leaveTypes.map(t =>
-        t.id === editingType.id
-          ? { ...t, ...formData, updated_at: new Date().toISOString() }
-          : t
-      );
-    } else {
-      const newType = companyContext.addContextToRecord({
-        id: uid("lt"),
-        ...formData,
-        max_days_per_year: Number(formData.max_days_per_year),
-        max_carry_forward_days: formData.max_carry_forward_days ? Number(formData.max_carry_forward_days) : null,
-        min_advance_notice_days: formData.min_advance_notice_days ? Number(formData.min_advance_notice_days) : null,
-      });
-      updatedTypes = [newType, ...leaveTypes];
-    }
-
-    ls.set("leaveTypes", updatedTypes);
-    setLeaveTypes(updatedTypes);
-    setModalOpen(false);
-    setEditingType(null);
+  const handleCreate = () => {
     setFormData({
       name: "",
       code: "",
-      max_days_per_year: "",
-      is_paid: "true",
-      requires_document: "false",
-      carry_forward_allowed: "false",
-      max_carry_forward_days: "",
-      min_advance_notice_days: "",
-      applicable_to: "ALL",
-      status: "ACTIVE",
+      description: "",
+      isPaid: true,
+      defaultDaysPerYear: 20,
+      maxCarryForwardDays: 0,
+      minDaysPerRequest: 1,
+      maxDaysPerRequest: 30,
+      requiresApproval: true,
+      requiresDocument: false,
+      isActive: true,
+      applicableAfterMonths: 0,
+      genderSpecific: "ALL",
     });
+    setEditingLeaveType(null);
+    setModalOpen(true);
   };
 
-  const handleDelete = (type) => {
-    if (!confirm(`Delete leave type "${type.name}"? This will affect existing leave records.`)) return;
-    const updated = leaveTypes.filter(t => t.id !== type.id);
-    ls.set("leaveTypes", updated);
-    setLeaveTypes(updated);
+  const handleEdit = (row: any) => {
+    setFormData({
+      name: row.name || "",
+      code: row.code || "",
+      description: row.description || "",
+      isPaid: row.isPaid ?? true,
+      defaultDaysPerYear: row.defaultDaysPerYear || 20,
+      maxCarryForwardDays: row.maxCarryForwardDays || 0,
+      minDaysPerRequest: row.minDaysPerRequest || 1,
+      maxDaysPerRequest: row.maxDaysPerRequest || 30,
+      requiresApproval: row.requiresApproval ?? true,
+      requiresDocument: row.requiresDocument ?? false,
+      isActive: row.isActive ?? true,
+      applicableAfterMonths: row.applicableAfterMonths || 0,
+      genderSpecific: row.genderSpecific || "ALL",
+    });
+    setEditingLeaveType(row);
+    setModalOpen(true);
   };
 
-  const filteredTypes = leaveTypes.filter(t =>
-    t.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.code?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const handleDelete = async (row: any) => {
+    if (!confirm(`Are you sure you want to delete "${row.name}"? This will affect existing leave records.`)) return;
+    try {
+      await deleteLeaveType.mutateAsync(row.id);
+    } catch (error) {
+      console.error("Failed to delete leave type:", error);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!formData.name.trim() || !formData.code.trim()) {
+      alert("Name and Code are required");
+      return;
+    }
+
+    try {
+      if (editingLeaveType) {
+        await updateLeaveType.mutateAsync({
+          id: editingLeaveType.id,
+          ...formData,
+        });
+      } else {
+        await createLeaveType.mutateAsync(formData);
+      }
+      setModalOpen(false);
+    } catch (error) {
+      console.error("Failed to save leave type:", error);
+    }
+  };
+
+  const columns = [
+    {
+      key: "code",
+      label: "Code",
+      sortable: true,
+      render: (value: string) => (
+        <code className="px-2 py-0.5 bg-muted rounded text-xs font-mono">
+          {value}
+        </code>
+      ),
+    },
+    {
+      key: "defaultDaysPerYear",
+      label: "Days/Year",
+      sortable: true,
+      render: (value: number) => (
+        <span className="font-medium">{value} days</span>
+      ),
+    },
+    {
+      key: "isPaid",
+      label: "Type",
+      render: (value: boolean) => (
+        <Badge variant="default" className="bg-green-100 text-green-700">
+          {value ? "Paid" : "Unpaid"}
+        </Badge>
+      ),
+    },
+    {
+      key: "requiresApproval",
+      label: "Approval",
+      render: (value: boolean) => (
+        <Badge variant={value ? "default" : "secondary"} className="text-xs">
+          {value ? "Required" : "Auto"}
+        </Badge>
+      ),
+    },
+  ];
 
   if (permissions.loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground">Loading permissions...</p>
+        </div>
       </div>
     );
   }
 
-  if (!permissions.canView) {
+  if (!permissions.canCreate && !permissions.canUpdate && !permissions.canDelete && user?.role !== "COMPANY_ADMIN") {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center max-w-md">
@@ -126,7 +190,7 @@ export default function LeaveTypesPage() {
           </div>
           <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
           <p className="text-sm text-muted-foreground">
-            You don't have permission to configure leave types.
+            You don't have permission to access leave types configuration.
           </p>
         </div>
       </div>
@@ -136,307 +200,254 @@ export default function LeaveTypesPage() {
   return (
     <div>
       <PageHeader
-        title="Leave Types Configuration"
-        subtitle="Define leave policies that employees can request"
+        title="Leave Types"
+        subtitle="Configure leave policies and types for your organization"
         actions={
-          permissions.canCreate && (
-            <button
-              onClick={() => {
-                setEditingType(null);
-                setFormData({
-                  name: "",
-                  code: "",
-                  max_days_per_year: "",
-                  is_paid: "true",
-                  requires_document: "false",
-                  carry_forward_allowed: "false",
-                  max_carry_forward_days: "",
-                  min_advance_notice_days: "",
-                  applicable_to: "ALL",
-                  status: "ACTIVE",
-                });
-                setModalOpen(true);
-              }}
-              className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm"
-            >
-              <Plus className="w-4 h-4" /> Add Leave Type
-            </button>
+          (permissions.canCreate || user?.role === "COMPANY_ADMIN") && (
+            <Button onClick={handleCreate}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Leave Type
+            </Button>
           )
         }
       />
 
       {/* Stats Cards */}
-      <div className="grid sm:grid-cols-3 gap-3 mb-4">
-        <div className="bg-card border border-border rounded-xl p-3">
-          <div className="text-xs text-muted-foreground">Total Leave Types</div>
-          <div className="text-xl font-semibold">{leaveTypes.length}</div>
+      <div className="grid sm:grid-cols-4 gap-3 mb-6">
+        <div className="bg-card border border-border rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Calendar className="w-4 h-4 text-primary" />
+            <span className="text-xs text-muted-foreground">Total Types</span>
+          </div>
+          <div className="text-2xl font-semibold">{leaveTypes.length}</div>
         </div>
-        <div className="bg-card border border-border rounded-xl p-3">
-          <div className="text-xs text-muted-foreground">Active Types</div>
-          <div className="text-xl font-semibold">{leaveTypes.filter(t => t.status === "ACTIVE").length}</div>
+        <div className="bg-card border border-border rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-3 h-3 rounded-full bg-success" />
+            <span className="text-xs text-muted-foreground">Active</span>
+          </div>
+          <div className="text-2xl font-semibold text-success">
+            {leaveTypes.filter(lt => lt.isActive).length}
+          </div>
         </div>
-        <div className="bg-card border border-border rounded-xl p-3">
-          <div className="text-xs text-muted-foreground">Paid Types</div>
-          <div className="text-xl font-semibold">{leaveTypes.filter(t => t.is_paid === "true").length}</div>
+        <div className="bg-card border border-border rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-3 h-3 rounded-full bg-warning" />
+            <span className="text-xs text-muted-foreground">Paid Types</span>
+          </div>
+          <div className="text-2xl font-semibold">
+            {leaveTypes.filter(lt => lt.isPaid).length}
+          </div>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-3 h-3 rounded-full bg-destructive" />
+            <span className="text-xs text-muted-foreground">Inactive</span>
+          </div>
+          <div className="text-2xl font-semibold text-destructive">
+            {leaveTypes.filter(lt => !lt.isActive).length}
+          </div>
         </div>
       </div>
 
-      {/* Search Bar */}
-      <div className="bg-card border border-border rounded-2xl shadow-sm">
-        <div className="p-3 border-b border-border">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search leave types by name or code..."
-              className="w-full bg-muted/40 pl-9 pr-3 h-9 rounded-md text-sm outline-none focus:ring-2 focus:ring-ring"
-            />
+      <DataTable
+        data={leaveTypes}
+        columns={columns}
+        title="All Leave Types"
+        subtitle={`${leaveTypes.length} leave type${leaveTypes.length !== 1 ? "s" : ""} configured`}
+        searchable
+        searchFields={["name", "code", "description"]}
+        onEdit={(row) => (permissions.canUpdate || user?.role === "COMPANY_ADMIN") && handleEdit(row)}
+        onDelete={(row) => (permissions.canDelete || user?.role === "COMPANY_ADMIN") && handleDelete(row)}
+        defaultPageSize={10}
+      />
+
+      {/* Create/Edit Modal */}
+      <FormModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editingLeaveType ? "Edit Leave Type" : "Create Leave Type"}
+        onSubmit={handleSubmit}
+        loading={createLeaveType.isPending || updateLeaveType.isPending}
+        size="xl"
+      >
+        <div className="space-y-6">
+          {/* Basic Information */}
+          <div>
+            <h3 className="text-sm font-semibold mb-3">Basic Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Leave Name <span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full mt-1 h-10 px-3 rounded-lg border border-border bg-muted/40 focus:border-primary outline-none"
+                  placeholder="e.g., Annual Leave"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Code <span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.code}
+                  onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+                  className="w-full mt-1 h-10 px-3 rounded-lg border border-border bg-muted/40 focus:border-primary outline-none font-mono"
+                  placeholder="e.g., AL"
+                  required
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-sm font-medium text-muted-foreground">
+                  Description
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  rows={2}
+                  className="w-full mt-1 px-3 py-2 rounded-lg border border-border bg-muted/40 focus:border-primary outline-none resize-none"
+                  placeholder="Brief description of this leave type..."
+                />
+              </div>
+            </div>
           </div>
-        </div>
 
-        {/* Leave Types Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="text-left px-4 py-2.5">Name</th>
-                <th className="text-left px-4 py-2.5">Code</th>
-                <th className="text-left px-4 py-2.5">Max Days/Year</th>
-                <th className="text-left px-4 py-2.5">Paid</th>
-                <th className="text-left px-4 py-2.5">Carry Forward</th>
-                <th className="text-left px-4 py-2.5">Status</th>
-                <th className="px-4 py-2.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTypes.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="text-center py-10 text-muted-foreground">
-                    No leave types found. Click "Add Leave Type" to create one.
-                  </td>
-                </tr>
-              )}
-              {filteredTypes.map((type) => (
-                <tr key={type.id} className="border-t border-border hover:bg-muted/30">
-                  <td className="px-4 py-2.5 font-medium">{type.name}</td>
-                  <td className="px-4 py-2.5 font-mono text-xs">{type.code}</td>
-                  <td className="px-4 py-2.5">{type.max_days_per_year} days</td>
-                  <td className="px-4 py-2.5">
-                    {type.is_paid === "true" ? (
-                      <CheckCircle className="w-4 h-4 text-success" />
-                    ) : (
-                      <XCircle className="w-4 h-4 text-muted-foreground" />
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {type.carry_forward_allowed === "true" ? (
-                      <span className="text-xs">{type.max_carry_forward_days || "Unlimited"} days</span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">No</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
-                      type.status === "ACTIVE"
-                        ? "bg-success/15 text-success border-success/30"
-                        : "bg-destructive/15 text-destructive border-destructive/30"
-                    }`}>
-                      {type.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    {permissions.canUpdate && (
-                      <button
-                        onClick={() => {
-                          setEditingType(type);
-                          setFormData({
-                            name: type.name,
-                            code: type.code,
-                            max_days_per_year: type.max_days_per_year,
-                            is_paid: type.is_paid,
-                            requires_document: type.requires_document || "false",
-                            carry_forward_allowed: type.carry_forward_allowed || "false",
-                            max_carry_forward_days: type.max_carry_forward_days || "",
-                            min_advance_notice_days: type.min_advance_notice_days || "",
-                            applicable_to: type.applicable_to || "ALL",
-                            status: type.status,
-                          });
-                          setModalOpen(true);
-                        }}
-                        className="p-1.5 rounded-md hover:bg-muted"
-                        aria-label="Edit"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                    )}
-                    {permissions.canDelete && (
-                      <button
-                        onClick={() => handleDelete(type)}
-                        className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
-                        aria-label="Delete"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+          {/* Leave Configuration */}
+          <div>
+            <h3 className="text-sm font-semibold mb-3">Leave Configuration</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Days Per Year
+                </label>
+                <input
+                  type="number"
+                  value={formData.defaultDaysPerYear}
+                  onChange={(e) => setFormData({ ...formData, defaultDaysPerYear: Number(e.target.value) })}
+                  className="w-full mt-1 h-10 px-3 rounded-lg border border-border bg-muted/40 focus:border-primary outline-none"
+                  min="0"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Min Days Per Request
+                </label>
+                <input
+                  type="number"
+                  value={formData.minDaysPerRequest}
+                  onChange={(e) => setFormData({ ...formData, minDaysPerRequest: Number(e.target.value) })}
+                  className="w-full mt-1 h-10 px-3 rounded-lg border border-border bg-muted/40 focus:border-primary outline-none"
+                  min="1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Max Days Per Request
+                </label>
+                <input
+                  type="number"
+                  value={formData.maxDaysPerRequest}
+                  onChange={(e) => setFormData({ ...formData, maxDaysPerRequest: Number(e.target.value) })}
+                  className="w-full mt-1 h-10 px-3 rounded-lg border border-border bg-muted/40 focus:border-primary outline-none"
+                  min="1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Max Carry Forward Days
+                </label>
+                <input
+                  type="number"
+                  value={formData.maxCarryForwardDays}
+                  onChange={(e) => setFormData({ ...formData, maxCarryForwardDays: Number(e.target.value) })}
+                  className="w-full mt-1 h-10 px-3 rounded-lg border border-border bg-muted/40 focus:border-primary outline-none"
+                  min="0"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Available After (Months)
+                </label>
+                <input
+                  type="number"
+                  value={formData.applicableAfterMonths}
+                  onChange={(e) => setFormData({ ...formData, applicableAfterMonths: Number(e.target.value) })}
+                  className="w-full mt-1 h-10 px-3 rounded-lg border border-border bg-muted/40 focus:border-primary outline-none"
+                  min="0"
+                  placeholder="0 = Immediately"
+                />
+              </div>
 
-      {/* Modal Form */}
-      {modalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4 overflow-y-auto">
-          <div className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-card">
-              <h2 className="font-semibold">
-                {editingType ? "Edit Leave Type" : "Add New Leave Type"}
-              </h2>
-              <button onClick={() => setModalOpen(false)} className="p-1.5 rounded-md hover:bg-muted">
-                ✕
-              </button>
             </div>
+          </div>
 
-            <div className="p-5">
-              <div className="grid sm:grid-cols-2 gap-4">
-                <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground">Leave Type Name *</span>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
-                    placeholder="e.g., Annual Leave"
-                  />
+          {/* Settings */}
+          <div>
+            <h3 className="text-sm font-semibold mb-3">Settings</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Leave Type
                 </label>
-                <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground">Code *</span>
-                  <input
-                    type="text"
-                    value={formData.code}
-                    onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                    className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring font-mono"
-                    placeholder="e.g., AL"
-                  />
-                </label>
+                <select
+                  value={formData.isPaid ? "paid" : "unpaid"}
+                  onChange={(e) => setFormData({ ...formData, isPaid: e.target.value === "paid" })}
+                  className="w-full mt-1 h-10 px-3 rounded-lg border border-border bg-muted/40 focus:border-primary outline-none"
+                >
+                  <option value="paid">Paid Leave</option>
+                  <option value="unpaid">Unpaid Leave</option>
+                </select>
               </div>
-
-              <div className="grid sm:grid-cols-2 gap-4 mt-3">
-                <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground">Max Days Per Year *</span>
-                  <input
-                    type="number"
-                    value={formData.max_days_per_year}
-                    onChange={(e) => setFormData({ ...formData, max_days_per_year: e.target.value })}
-                    className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
-                    placeholder="e.g., 20"
-                  />
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Gender Specific
                 </label>
-                <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground">Min Advance Notice (Days)</span>
-                  <input
-                    type="number"
-                    value={formData.min_advance_notice_days}
-                    onChange={(e) => setFormData({ ...formData, min_advance_notice_days: e.target.value })}
-                    className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
-                    placeholder="e.g., 2"
-                  />
-                </label>
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-4 mt-3">
-                <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground">Paid Leave</span>
-                  <select
-                    value={formData.is_paid}
-                    onChange={(e) => setFormData({ ...formData, is_paid: e.target.value })}
-                    className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="true">Yes (Paid)</option>
-                    <option value="false">No (Unpaid)</option>
-                  </select>
-                </label>
-                <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground">Requires Supporting Document</span>
-                  <select
-                    value={formData.requires_document}
-                    onChange={(e) => setFormData({ ...formData, requires_document: e.target.value })}
-                    className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="false">No</option>
-                    <option value="true">Yes (e.g., Medical Certificate)</option>
-                  </select>
-                </label>
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-4 mt-3">
-                <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground">Carry Forward Allowed</span>
-                  <select
-                    value={formData.carry_forward_allowed}
-                    onChange={(e) => setFormData({ ...formData, carry_forward_allowed: e.target.value })}
-                    className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="false">No</option>
-                    <option value="true">Yes</option>
-                  </select>
-                </label>
-                {formData.carry_forward_allowed === "true" && (
-                  <label className="text-sm flex flex-col gap-1">
-                    <span className="text-muted-foreground">Max Carry Forward Days</span>
-                    <input
-                      type="number"
-                      value={formData.max_carry_forward_days}
-                      onChange={(e) => setFormData({ ...formData, max_carry_forward_days: e.target.value })}
-                      className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
-                      placeholder="Leave empty for unlimited"
-                    />
-                  </label>
-                )}
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-4 mt-3">
-                <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground">Applicable To</span>
-                  <select
-                    value={formData.applicable_to}
-                    onChange={(e) => setFormData({ ...formData, applicable_to: e.target.value })}
-                    className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="ALL">All Employees</option>
-                    <option value="FULL_TIME">Full Time Only</option>
-                    <option value="CONTRACT">Contract Only</option>
-                    <option value="PROBATION">Probation Only</option>
-                  </select>
-                </label>
-                <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground">Status</span>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="ACTIVE">Active</option>
-                    <option value="INACTIVE">Inactive</option>
-                  </select>
-                </label>
+                <select
+                  value={formData.genderSpecific}
+                  onChange={(e) => setFormData({ ...formData, genderSpecific: e.target.value as any })}
+                  className="w-full mt-1 h-10 px-3 rounded-lg border border-border bg-muted/40 focus:border-primary outline-none"
+                >
+                  <option value="ALL">All Employees</option>
+                  <option value="MALE">Male Only</option>
+                  <option value="FEMALE">Female Only</option>
+                </select>
               </div>
             </div>
 
-            <div className="p-4 border-t border-border flex justify-end gap-2">
-              <button onClick={() => setModalOpen(false)} className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted">
-                Cancel
-              </button>
-              <button onClick={handleSave} className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90">
-                {editingType ? "Save Changes" : "Create Leave Type"}
-              </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <label className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={formData.requiresApproval}
+                  onChange={(e) => setFormData({ ...formData, requiresApproval: e.target.checked })}
+                  className="w-4 h-4 rounded accent-primary"
+                />
+                <div>
+                  <div className="text-sm font-medium">Requires Approval</div>
+                  <div className="text-xs text-muted-foreground">Manager must approve leave requests</div>
+                </div>
+              </label>
+              <label className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={formData.requiresDocument}
+                  onChange={(e) => setFormData({ ...formData, requiresDocument: e.target.checked })}
+                  className="w-4 h-4 rounded accent-primary"
+                />
+                <div>
+                  <div className="text-sm font-medium">Requires Document</div>
+                  <div className="text-xs text-muted-foreground">Supporting document must be uploaded</div>
+                </div>
+              </label>
             </div>
           </div>
         </div>
-      )}
+      </FormModal>
     </div>
   );
 }
