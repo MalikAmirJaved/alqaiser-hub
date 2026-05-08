@@ -88,6 +88,22 @@ export default function CompanySetupModal() {
     }
   };
 
+  const handleNext = () => {
+    setStep(prev => {
+      if (prev === 1) return 2;
+      if (prev === 2) return 3;
+      return prev;
+    });
+  };
+
+  const handlePrevious = () => {
+    setStep(prev => {
+      if (prev === 2) return 1;
+      if (prev === 3) return 2;
+      return prev;
+    });
+  };
+
   if (!isReady || (settings && settings.isSetupCompleted)) return null;
 
   return (
@@ -101,7 +117,7 @@ export default function CompanySetupModal() {
             </div>
             <div>
               <h2 className="text-2xl font-semibold">Welcome to Your ERP</h2>
-              <p className="text-muted-foreground">Let’s configure your company to get started</p>
+              <p className="text-muted-foreground">Let's configure your company to get started</p>
             </div>
           </div>
         </div>
@@ -271,14 +287,14 @@ export default function CompanySetupModal() {
         <div className="p-6 border-t border-border flex justify-between items-center bg-muted/30">
           <Button
             variant="outline"
-            onClick={() => setStep(prev => Math.max(1, prev - 1))}
+            onClick={handlePrevious}
             disabled={step === 1}
           >
             Previous
           </Button>
 
           {step < 3 ? (
-            <Button onClick={() => setStep(prev => prev + 1 as 1|2|3)}>
+            <Button onClick={handleNext}>
               Continue
             </Button>
           ) : (

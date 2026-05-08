@@ -55,7 +55,7 @@ export interface CompanySettings {
   
   // Financial
   currency: string;
-  taxRate: string;
+  taxRate: number;
   taxId: string;
   
   // Time
@@ -86,8 +86,8 @@ export function useCompanySettingsQuery() {
   return useQuery<CompanySettings>({
     queryKey: ["companySettings"],
     queryFn: () => api("/api/company/settings/"),
-    staleTime: 30 * 1000, // 30 seconds
-    cacheTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
     retry: 2,
   });
 }
@@ -225,9 +225,9 @@ export function useCompanySettings() {
       minimumFractionDigits: decimals,
     }).format(amount);
   };
-
+  
   return {
-    settings,
+    settings: settings as CompanySettings | undefined,
     isLoading,
     isReady: !isLoading && !error,
     error,
@@ -242,10 +242,11 @@ export function useCompanySettings() {
     addPublicHoliday: mutations.addPublicHoliday.mutate,
     deletePublicHoliday: mutations.deletePublicHoliday.mutate,
     
+
     // Loading states
-    isUpdating: mutations.updateSettings.isLoading,
-    isUpdatingWorkingDays: mutations.updateWorkingDays.isLoading,
-    isCreatingLeaveType: mutations.createLeaveType.isLoading,
-    isDeletingHoliday: mutations.deletePublicHoliday.isLoading,
+    isUpdating: mutations.updateSettings.isPending,
+    isUpdatingWorkingDays: mutations.updateWorkingDays.isPending,
+    isCreatingLeaveType: mutations.createLeaveType.isPending,
+    isDeletingHoliday: mutations.deletePublicHoliday.isPending,
   };
 }
