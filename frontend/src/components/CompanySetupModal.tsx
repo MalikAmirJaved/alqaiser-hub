@@ -5,11 +5,12 @@ import { useState, useEffect } from "react";
 import { useCompanySettings, useSetupDesignations } from "@/hooks/useCompanySettings";
 import { Button } from "@/components/ui/button";
 import { Building2, Globe, CalendarDays, Briefcase, CheckCircle, AlertCircle } from "lucide-react";
+import { DEPARTMENT_CHOICES } from "@/lib/departments";
 
 
 type DesignationForm = {
   name: string;
-  level: number;
+  department: string;
   isActive: boolean;
 };
 
@@ -17,7 +18,7 @@ type DesignationForm = {
 export default function CompanySetupModal() {
   const { settings, isReady, updateSettings, updateWorkingDays, isUpdating } = useCompanySettings();
   const [designations, setDesignations] = useState<DesignationForm[]>([
-    { name: "", level: 1, isActive: true }
+    { name: "", department: "", isActive: true }
   ]);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [successMsg, setSuccessMsg] = useState("");
@@ -79,7 +80,7 @@ export default function CompanySetupModal() {
   const addDesignation = () => {
     setDesignations(prev => [
       ...prev,
-      { name: "", level: prev.length + 1, isActive: true }
+      { name: "", department: "", isActive: true }
     ]);
   };
 
@@ -95,41 +96,44 @@ export default function CompanySetupModal() {
     setDesignations(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = async () => {
-    setErrorMsg("");
+const handleSubmit = async () => {
+  setErrorMsg("");
 
-    // ✅ designation validation
-    if (designations.length < 1 || !designations[0].name.trim()) {
-      setErrorMsg("At least 1 designation is required");
-      return;
-    }
+  // ✅ designation validation
+  const validDesignations = designations.filter(d => d.name.trim());
+  if (validDesignations.length === 0) {
+    setErrorMsg("At least 1 designation with a name is required");
+    return;
+  }
 
-    try {
-      await updateSettings({
-        ...formData,
-        taxRate: parseFloat(formData.taxRate) || 0,
-        isSetupCompleted: true,
-      });
+  try {
+    await updateSettings({
+      ...formData,
+      taxRate: parseFloat(formData.taxRate) || 0,
+      isSetupCompleted: true,
+    });
 
-      await updateWorkingDays(workingDays);
-      await setupDesignations.mutateAsync(
-        designations.map(d => ({
-          name: d.name,
-          level: d.level,
-          isActive: d.isActive,
-          // department, etc. if needed
-        }))
-      );
-      setSuccessMsg("Company setup completed successfully! 🎉");
+    await updateWorkingDays(workingDays);
+    
+    await setupDesignations.mutateAsync(
+      validDesignations.map(d => ({
+        name: d.name.trim(),
+        department: d.department || undefined, // Send undefined if empty
+        isActive: d.isActive,
+      }))
+    );
+    
+    setSuccessMsg("Company setup completed successfully! 🎉");
 
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
+    setTimeout(() => {
+      window.location.reload();
+    }, 1500);
 
-    } catch (error) {
-      setErrorMsg("Failed to save setup. Please try again.");
-    }
-  };
+  } catch (error) {
+    setErrorMsg("Failed to save setup. Please try again.");
+  }
+};
+
 
   const handleNext = () => {
     setErrorMsg("");
@@ -351,52 +355,75 @@ export default function CompanySetupModal() {
           )}
 
           {/* STEP 4: Designations */}
-          {step === 4 && (
-            <div className="space-y-6">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <Briefcase className="w-5 h-5" /> Designations
-              </h3>
+{step === 4 && (
+  <div className="space-y-6">
+    <h3 className="text-lg font-semibold flex items-center gap-2">
+      <Briefcase className="w-5 h-5" /> Designations
+    </h3>
 
-              <p className="text-sm text-muted-foreground">
-                Create at least 1 designation to continue
-              </p>
+    <p className="text-sm text-muted-foreground">
+      Create at least 1 designation to continue
+    </p>
 
-              {designations.map((des, index) => (
-                <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 border rounded-xl">
-                  <input
-                    placeholder="Designation name"
-                    value={des.name}
-                    onChange={(e) => updateDesignation(index, "name", e.target.value)}
-                    className="h-10 px-3 border rounded"
-                  />
+    <div className="space-y-4">
+      {designations.map((des, index) => (
+        <div key={index} className="p-4 border rounded-xl bg-muted/10">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">
+                Designation Name <span className="text-destructive">*</span>
+              </label>
+              <input
+                placeholder="e.g., Software Engineer"
+                value={des.name}
+                onChange={(e) => updateDesignation(index, "name", e.target.value)}
+                className="w-full h-10 px-4 rounded-xl border border-border bg-muted/40 focus:border-primary outline-none"
+              />
+            </div>
 
-                  <input
-                    type="number"
-                    placeholder="Level"
-                    value={des.level}
-                    onChange={(e) => updateDesignation(index, "level", Number(e.target.value))}
-                    className="h-10 px-3 border rounded"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => removeDesignation(index)}
-                    className="text-red-500 text-sm"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">
+                Department
+              </label>
+              <select
+                value={des.department}
+                onChange={(e) => updateDesignation(index, "department", e.target.value)}
+                className="w-full h-10 px-4 rounded-xl border border-border bg-muted/40 focus:border-primary outline-none"
+              >
+                <option value="">Select Department</option>
+                {DEPARTMENT_CHOICES.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="flex items-end">
               <button
                 type="button"
-                onClick={addDesignation}
-                className="px-4 py-2 border rounded-md text-sm"
+                onClick={() => removeDesignation(index)}
+                disabled={designations.length === 1}
+                className="px-4 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                + Add Designation
+                Remove
               </button>
             </div>
-          )}
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <Button
+      type="button"
+      variant="outline"
+      onClick={addDesignation}
+      className="w-full"
+    >
+      + Add Another Designation
+    </Button>
+  </div>
+)}
         </div>
 
         {/* Footer Navigation */}

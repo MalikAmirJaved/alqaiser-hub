@@ -704,7 +704,7 @@ class DesignationView(BaseCompanyView):
         designations = Designation.objects.filter(
             settings=settings,
             is_deleted=False
-        ).order_by('level', 'name')
+        ).order_by('id', 'name')
 
         return Response([
             {
@@ -712,7 +712,6 @@ class DesignationView(BaseCompanyView):
                 "_id": str(d._id),
                 "name": d.name,
                 "department": d.department,
-                "level": d.level,
                 "payGrade": d.pay_grade,
                 "description": d.description,
                 "isActive": d.is_active,
@@ -755,7 +754,6 @@ class DesignationView(BaseCompanyView):
 
             name=request.data.get('name'),
             department=request.data.get('department'),
-            level=request.data.get('level', 1),
             pay_grade=request.data.get('payGrade'),
             description=request.data.get('description'),
 
@@ -795,7 +793,6 @@ class DesignationView(BaseCompanyView):
         updatable_fields = {
             'name': 'name',
             'department': 'department',
-            'level': 'level',
             'payGrade': 'pay_grade',
             'description': 'description',
             'isActive': 'is_active',
@@ -897,7 +894,6 @@ class WelcomeDesignationSetupView(BaseCompanyView):
                     branch_id=des_data.get('branchId'),
                     name=name,
                     department=des_data.get('department'),
-                    level=des_data.get('level', 1),
                     pay_grade=des_data.get('payGrade'),
                     description=des_data.get('description'),
                     is_active=des_data.get('isActive', True),
@@ -909,7 +905,6 @@ class WelcomeDesignationSetupView(BaseCompanyView):
                     "id": designation.id,
                     "_id": str(designation._id),
                     "name": designation.name,
-                    "level": designation.level,
                 })
                 
             except Exception as e:

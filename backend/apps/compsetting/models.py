@@ -398,11 +398,6 @@ class Designation(TimeStampedModel):
         blank=True
     )
 
-    level = models.PositiveSmallIntegerField(
-        default=1,
-        help_text="Hierarchy level of designation"
-    )
-
     pay_grade = models.CharField(
         max_length=50,
         null=True,
@@ -437,7 +432,7 @@ class Designation(TimeStampedModel):
         verbose_name = "Designation"
         verbose_name_plural = "Designations"
 
-        ordering = ['level', 'name']
+        ordering = ['pay_grade', 'name']
 
         unique_together = [('company', 'name')]
 
@@ -445,7 +440,7 @@ class Designation(TimeStampedModel):
             models.Index(fields=['company', 'is_deleted']),
             models.Index(fields=['branch']),
             models.Index(fields=['department']),
-            models.Index(fields=['level']),
+            models.Index(fields=['pay_grade']),
             models.Index(fields=['is_active']),
         ]
 

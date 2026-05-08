@@ -87,7 +87,6 @@ export interface Designation {
   _id?: string;
   name: string;
   department?: string;
-  level: number;
   payGrade?: string;
   description?: string;
   isActive: boolean;
