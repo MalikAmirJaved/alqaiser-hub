@@ -19,9 +19,19 @@ class Company(models.Model):
 
     phone = models.CharField(max_length=30, blank=True, null=True)
     email = models.EmailField(blank=True, null=True)
+    
+    tax_id = models.CharField(max_length=100, blank=True, null=True)
+    is_deleted = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        # Add soft delete manager
+        indexes = [
+            models.Index(fields=['short_name']),
+            models.Index(fields=['is_deleted']),
+        ]
 
 
 

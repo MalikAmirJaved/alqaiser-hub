@@ -127,11 +127,6 @@ export default function CompanyProfile() {
                 ))}
               </div>
             </label>
-            
-            <label className="block text-sm">
-              <span className="text-muted-foreground mb-1.5 block">Default Leave Types (Comma separated)</span>
-              <input type="text" value={formData.leaveTypes} onChange={(e) => setFormData({ ...formData, leaveTypes: e.target.value })} className="w-full h-10 px-3 rounded-md border border-input bg-background" placeholder="e.g., Casual, Sick, Annual" />
-            </label>
 
             <div className="grid sm:grid-cols-2 gap-5">
               <label className="block text-sm">
