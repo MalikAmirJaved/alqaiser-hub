@@ -1,16 +1,44 @@
 import uuid
 from django.db import models
-from apps.organization.models import Company
+from django.conf import settings
+from apps.organization.models import Company, Branch
+from django.conf import settings as django_settings  # Add this at the top of the file
 
 
-class CompanySettings(models.Model):
+class TimeStampedModel(models.Model):
+    """Abstract base model with timestamp fields"""
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='%(class)s_deleted'
+    )
+
+    class Meta:
+        abstract = True
+
+
+class CompanySettings(TimeStampedModel):
     """Core company settings - one per company"""
     id = models.BigAutoField(primary_key=True)
     _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 
+    # Company & Branch relationships
     company = models.OneToOneField(
         Company,
         on_delete=models.CASCADE,
+        related_name='settings'
+    )
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='settings'
     )
 
@@ -21,135 +49,315 @@ class CompanySettings(models.Model):
     
     # Time & Location
     timezone = models.CharField(max_length=50, default="UTC")
-    
-    # Leave Year Configuration
-    leave_year_type = models.CharField(
-        max_length=20,
-        choices=[("CALENDAR", "Calendar"), ("FISCAL", "Fiscal")],
-        default="CALENDAR",
-    )
-    fiscal_year_start = models.PositiveSmallIntegerField(default=1)
-    
+
     # Leave Policies
     leave_during_probation = models.BooleanField(default=False)
     allow_carry_forward = models.BooleanField(default=False)
+    max_carry_forward_days = models.PositiveIntegerField(default=0)
+    
+    # Working Hours
+    default_start_time = models.TimeField(default="09:00")
+    default_end_time = models.TimeField(default="18:00")
+    working_hours_per_day = models.DecimalField(
+        max_digits=4, 
+        decimal_places=2, 
+        default=8.00
+    )
     
     # Status
     is_setup_completed = models.BooleanField(default=False)
-    is_deleted = models.BooleanField(default=False)
     
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    # Audit
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_company_settings'
+    )
+    updated_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_company_settings'
+    )
 
     class Meta:
         verbose_name = "Company Settings"
         verbose_name_plural = "Company Settings"
+        indexes = [
+            models.Index(fields=['company', 'is_deleted']),
+            models.Index(fields=['branch']),
+            models.Index(fields=['is_setup_completed']),
+        ]
 
     def __str__(self):
         return f"Settings for {self.company.name}"
 
 
-class WorkingDay(models.Model):
+class WorkingDay(TimeStampedModel):
     """Individual working days for a company"""
     id = models.BigAutoField(primary_key=True)
+    _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    
     settings = models.ForeignKey(
         CompanySettings,
         on_delete=models.CASCADE,
         related_name='working_days'
     )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='working_days'
+    )
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='working_days'
+    )
     
     DAY_CHOICES = [
-        ("MONDAY", "Monday"),
-        ("TUESDAY", "Tuesday"),
-        ("WEDNESDAY", "Wednesday"),
-        ("THURSDAY", "Thursday"),
-        ("FRIDAY", "Friday"),
-        ("SATURDAY", "Saturday"),
-        ("SUNDAY", "Sunday"),
+        (0, "Monday"),
+        (1, "Tuesday"),
+        (2, "Wednesday"),
+        (3, "Thursday"),
+        (4, "Friday"),
+        (5, "Saturday"),
+        (6, "Sunday"),
     ]
     
-    day = models.CharField(max_length=10, choices=DAY_CHOICES)
+    day = models.PositiveSmallIntegerField(choices=DAY_CHOICES)
     is_working = models.BooleanField(default=True)
-    start_time = models.TimeField(null=True, blank=True)
-    end_time = models.TimeField(null=True, blank=True)
-    order = models.PositiveSmallIntegerField(default=0)
+    start_time = models.TimeField(default="09:00")
+    end_time = models.TimeField(default="18:00")
+    is_half_day = models.BooleanField(default=False)
+    
+    # Audit
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_working_days'
+    )
+    updated_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_working_days'
+    )
     
     class Meta:
         unique_together = [('settings', 'day')]
-        ordering = ['order']
-        verbose_name = "Working Day"
-        verbose_name_plural = "Working Days"
+        ordering = ['day']
         indexes = [
             models.Index(fields=['settings', 'is_working']),
+            models.Index(fields=['company', 'is_deleted']),
         ]
-
+        verbose_name = "Working Day"
+        verbose_name_plural = "Working Days"
     
     def __str__(self):
         return f"{self.get_day_display()} - {'Working' if self.is_working else 'Off'}"
 
 
-class PublicHoliday(models.Model):
+class PublicHoliday(TimeStampedModel):
     """Public holidays for a company"""
     id = models.BigAutoField(primary_key=True)
+    _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    
     settings = models.ForeignKey(
         CompanySettings,
         on_delete=models.CASCADE,
         related_name='public_holidays'
     )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='public_holidays'
+    )
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='public_holidays'
+    )
     
     name = models.CharField(max_length=255)
     date = models.DateField()
+    end_date = models.DateField(null=True, blank=True)
     is_recurring_yearly = models.BooleanField(default=False)
+    is_half_day = models.BooleanField(default=False)
     description = models.TextField(blank=True, null=True)
+    holiday_type = models.CharField(
+        max_length=50,
+        choices=[
+            ('NATIONAL', 'National'),
+            ('RELIGIOUS', 'Religious'),
+            ('COMPANY', 'Company Specific'),
+            ('REGIONAL', 'Regional'),
+        ],
+        default='NATIONAL'
+    )
     
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    # Audit
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_holidays'
+    )
+    updated_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_holidays'
+    )
     
     class Meta:
         unique_together = [('settings', 'date', 'name')]
         ordering = ['date']
-        verbose_name = "Public Holiday"
-        verbose_name_plural = "Public Holidays"
         indexes = [
             models.Index(fields=['settings', 'date']),
+            models.Index(fields=['company', 'date']),
+            models.Index(fields=['is_deleted', 'date']),
         ]
-
+        verbose_name = "Public Holiday"
+        verbose_name_plural = "Public Holidays"
     
     def __str__(self):
         return f"{self.name} - {self.date}"
 
 
-class LeaveType(models.Model):
+class LeaveType(TimeStampedModel):
     """Leave types configuration for a company"""
     id = models.BigAutoField(primary_key=True)
+    _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    
     settings = models.ForeignKey(
         CompanySettings,
         on_delete=models.CASCADE,
+        related_name='leave_types'
+    )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='leave_types',
+        null=True,
+        blank=True 
+    )
+
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='leave_types'
     )
     
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=50)
     description = models.TextField(blank=True, null=True)
+    
     is_paid = models.BooleanField(default=True)
     default_days_per_year = models.PositiveIntegerField(default=0)
     max_carry_forward_days = models.PositiveIntegerField(default=0)
+    min_days_per_request = models.PositiveIntegerField(default=1)
+    max_days_per_request = models.PositiveIntegerField(default=30)
+    
     requires_approval = models.BooleanField(default=True)
+    requires_document = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
+    
+    applicable_after_months = models.PositiveIntegerField(
+        default=0,
+        help_text="Months after joining when this leave becomes available"
+    )
+    
+    gender_specific = models.CharField(
+        max_length=10,
+        choices=[
+            ('ALL', 'All'),
+            ('MALE', 'Male Only'),
+            ('FEMALE', 'Female Only'),
+        ],
+        default='ALL'
+    )
+    
+    color_code = models.CharField(max_length=7, default="#4A90E2")
     order = models.PositiveSmallIntegerField(default=0)
     
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    # Audit
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_leave_types'
+    )
+    updated_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_leave_types'
+    )
     
     class Meta:
         unique_together = [('settings', 'code')]
-        ordering = ['order']
-        verbose_name = "Leave Type"
-        verbose_name_plural = "Leave Types"
+        ordering = ['order', 'name']
         indexes = [
             models.Index(fields=['settings', 'is_active']),
+            models.Index(fields=['company', 'is_deleted']),
         ]
-
+        verbose_name = "Leave Type"
+        verbose_name_plural = "Leave Types"
     
     def __str__(self):
         return f"{self.name} ({'Paid' if self.is_paid else 'Unpaid'})"
+
+
+class CompanySettingHistory(TimeStampedModel):
+    """Track all changes to company settings for audit"""
+    id = models.BigAutoField(primary_key=True)
+    _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    
+    settings = models.ForeignKey(
+        CompanySettings,
+        on_delete=models.CASCADE,
+        related_name='history'
+    )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='settings_history'
+    )
+    
+    field_name = models.CharField(max_length=100)
+    old_value = models.TextField(null=True, blank=True)
+    new_value = models.TextField(null=True, blank=True)
+    changed_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='settings_changes'
+    )
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, null=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['settings', '-created_at']),
+            models.Index(fields=['company', 'field_name']),
+        ]
+        verbose_name = "Setting History"
+        verbose_name_plural = "Setting Histories"

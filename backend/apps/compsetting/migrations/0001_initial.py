@@ -23,8 +23,6 @@ class Migration(migrations.Migration):
                 ('tax_rate', models.DecimalField(decimal_places=2, default=0.0, max_digits=5)),
                 ('tax_id', models.CharField(blank=True, max_length=100, null=True)),
                 ('timezone', models.CharField(default='UTC', max_length=50)),
-                ('leave_year_type', models.CharField(choices=[('CALENDAR', 'Calendar'), ('FISCAL', 'Fiscal')], default='CALENDAR', max_length=20)),
-                ('fiscal_year_start', models.PositiveSmallIntegerField(default=1)),
                 ('public_holidays', models.JSONField(default=list)),
                 ('working_days', models.JSONField(default=list)),
                 ('weekends', models.JSONField(default=list)),

@@ -9,7 +9,6 @@ export default function CompanySetupModal() {
     currency: "USD",
     taxRate: 0,
     timezone: "UTC",
-    fiscalYearStart: "01-01",
   });
 
   // Only show if ready, user is admin (checked after login), and setup not completed
@@ -73,18 +72,6 @@ export default function CompanySetupModal() {
                 <option key={tz} value={tz}>{tz}</option>
               ))}
             </select>
-          </label>
-
-          {/* Fiscal Year Start (MM-DD) */}
-          <label className="block">
-            <span className="text-xs text-muted-foreground">Fiscal Year Start (MM-DD)</span>
-            <input
-              type="text"
-              value={form.fiscalYearStart}
-              onChange={e => handleChange("fiscalYearStart", e.target.value)}
-              placeholder="01-01"
-              className="w-full bg-muted/40 border border-border rounded-md h-10 px-3"
-            />
           </label>
 
           <Button type="submit" className="w-full">

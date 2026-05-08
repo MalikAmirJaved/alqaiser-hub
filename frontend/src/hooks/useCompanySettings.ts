@@ -1,15 +1,15 @@
-// hooks/useCompanySettings.ts
 "use client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
 export interface WorkingDay {
-  day: string;
+  id: number;
+  day: number;
   label: string;
   isWorking: boolean;
   startTime: string | null;
   endTime: string | null;
-  order: number;
+  isHalfDay: boolean;
 }
 
 export interface LeaveType {
@@ -20,8 +20,14 @@ export interface LeaveType {
   isPaid: boolean;
   defaultDaysPerYear: number;
   maxCarryForwardDays: number;
+  minDaysPerRequest: number;
+  maxDaysPerRequest: number;
   requiresApproval: boolean;
+  requiresDocument: boolean;
   isActive: boolean;
+  applicableAfterMonths: number;
+  genderSpecific: 'ALL' | 'MALE' | 'FEMALE';
+  colorCode: string;
   order: number;
 }
 
@@ -29,11 +35,15 @@ export interface PublicHoliday {
   id: number;
   name: string;
   date: string;
+  endDate?: string;
   isRecurringYearly: boolean;
+  isHalfDay: boolean;
   description?: string;
+  holidayType: 'NATIONAL' | 'RELIGIOUS' | 'COMPANY' | 'REGIONAL';
 }
 
 export interface CompanySettings {
+  // Company Details
   companyId: number;
   companyName: string;
   companyShortName: string;
@@ -42,27 +52,43 @@ export interface CompanySettings {
   country: string;
   phone: string;
   email: string;
-  taxId: string;
+  
+  // Financial
   currency: string;
   taxRate: string;
+  taxId: string;
+  
+  // Time
   timezone: string;
-  leaveYearType: string;
-  fiscalYearStart: number;
+  
+  // Working Hours
+  defaultStartTime: string;
+  defaultEndTime: string;
+  workingHoursPerDay: string;
+  
+  // Leave Policies
   leaveDuringProbation: boolean;
   allowCarryForward: boolean;
+  maxCarryForwardDays: number;
+  
+  // Status
   isSetupCompleted: boolean;
+  
+  // Relations
   workingDays: WorkingDay[];
   leaveTypes: LeaveType[];
   publicHolidays: PublicHoliday[];
 }
 
-// ------ Queries ------
+// ------ Query ------
 export function useCompanySettingsQuery() {
   const api = useApi();
-  return useQuery({
+  return useQuery<CompanySettings>({
     queryKey: ["companySettings"],
-    queryFn: () => api<CompanySettings>("/api/company/settings/"),
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    queryFn: () => api("/api/company/settings/"),
+    staleTime: 30 * 1000, // 30 seconds
+    cacheTime: 5 * 60 * 1000, // 5 minutes
+    retry: 2,
   });
 }
 
@@ -88,7 +114,7 @@ export function useUpdateWorkingDays() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (workingDays: WorkingDay[]) =>
+    mutationFn: (workingDays: Partial<WorkingDay>[]) =>
       api("/api/company/settings/working-days/", {
         method: "PATCH",
         body: JSON.stringify({ workingDays }),
@@ -131,15 +157,31 @@ export function useUpdateLeaveType() {
   });
 }
 
+export function useDeleteLeaveType() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (id: number) =>
+      api("/api/company/settings/leave-types/", {
+        method: "DELETE",
+        body: JSON.stringify({ id }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["companySettings"] });
+    },
+  });
+}
+
 export function useAddPublicHoliday() {
   const api = useApi();
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (holiday: Omit<PublicHoliday, 'id'>) =>
+    mutationFn: (holidays: Omit<PublicHoliday, 'id'>[]) =>
       api("/api/company/settings/public-holidays/", {
         method: "POST",
-        body: JSON.stringify(holiday),
+        body: JSON.stringify(holidays),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["companySettings"] });
@@ -165,30 +207,45 @@ export function useDeletePublicHoliday() {
 // ------ Convenience Hook ------
 export function useCompanySettings() {
   const { data: settings, isLoading, error } = useCompanySettingsQuery();
-  const updateSettings = useUpdateCompanySettings();
-  const updateWorkingDays = useUpdateWorkingDays();
-  const createLeaveType = useCreateLeaveType();
-  const updateLeaveType = useUpdateLeaveType();
-  const addPublicHoliday = useAddPublicHoliday();
-  const deletePublicHoliday = useDeletePublicHoliday();
+  const mutations = {
+    updateSettings: useUpdateCompanySettings(),
+    updateWorkingDays: useUpdateWorkingDays(),
+    createLeaveType: useCreateLeaveType(),
+    updateLeaveType: useUpdateLeaveType(),
+    deleteLeaveType: useDeleteLeaveType(),
+    addPublicHoliday: useAddPublicHoliday(),
+    deletePublicHoliday: useDeletePublicHoliday(),
+  };
 
   const formatCurrency = (amount: number, decimals = 2) => {
     const currency = settings?.currency || "USD";
-    return `${currency} ${amount.toLocaleString(undefined, {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency,
       minimumFractionDigits: decimals,
-      maximumFractionDigits: decimals,
-    })}`;
+    }).format(amount);
   };
 
   return {
     settings,
+    isLoading,
     isReady: !isLoading && !error,
-    updateSettings: updateSettings.mutate,
-    updateWorkingDays: updateWorkingDays.mutate,
-    createLeaveType: createLeaveType.mutate,
-    updateLeaveType: updateLeaveType.mutate,
-    addPublicHoliday: addPublicHoliday.mutate,
-    deletePublicHoliday: deletePublicHoliday.mutate,
+    error,
     formatCurrency,
+    
+    // Mutations
+    updateSettings: mutations.updateSettings.mutate,
+    updateWorkingDays: mutations.updateWorkingDays.mutate,
+    createLeaveType: mutations.createLeaveType.mutate,
+    updateLeaveType: mutations.updateLeaveType.mutate,
+    deleteLeaveType: mutations.deleteLeaveType.mutate,
+    addPublicHoliday: mutations.addPublicHoliday.mutate,
+    deletePublicHoliday: mutations.deletePublicHoliday.mutate,
+    
+    // Loading states
+    isUpdating: mutations.updateSettings.isLoading,
+    isUpdatingWorkingDays: mutations.updateWorkingDays.isLoading,
+    isCreatingLeaveType: mutations.createLeaveType.isLoading,
+    isDeletingHoliday: mutations.deletePublicHoliday.isLoading,
   };
 }
