@@ -326,7 +326,7 @@ class WorkingDaysView(BaseCompanyView):
 
         if not working_days_data:
             return Response(
-                {'error': 'workingDays array is required'},
+                {'error': 'workingDays is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
