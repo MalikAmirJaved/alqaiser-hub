@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+from datetime import datetime, time 
 
 from apps.compsetting.models import (
     CompanySettings, WorkingDay, PublicHoliday, 
@@ -323,7 +324,7 @@ class WorkingDaysView(BaseCompanyView):
         company, settings = self._get_settings(request.user)
         user = request.user
         working_days_data = request.data.get('workingDays', [])
-
+                
         if not working_days_data:
             return Response(
                 {'error': 'workingDays is required'},
@@ -331,69 +332,79 @@ class WorkingDaysView(BaseCompanyView):
             )
 
         updated_count = 0
+        created_count = 0
+        
         for day_data in working_days_data:
             try:
-                working_day = WorkingDay.objects.get(
+                # Try to get existing working day, or create if doesn't exist
+                working_day, created = WorkingDay.objects.get_or_create(
                     settings=settings,
                     day=day_data['day'],
-                    is_deleted=False
+                    defaults={
+                        'company': company,
+                        'is_working': day_data.get('isWorking', True),
+                        'start_time': '09:00',
+                        'end_time': '18:00',
+                        'created_by': user,
+                        'updated_by': user,
+                    }
                 )
                 
-                # Track changes
-                changes = {}
-                for field in ['isWorking', 'startTime', 'endTime', 'isHalfDay']:
-                    if field in day_data:
-                        model_field = self._to_snake_case(field)
-                        old_value = getattr(working_day, model_field)
-                        new_value = day_data[field]
-                        
-                        if field in ['startTime', 'endTime']:
-                            if new_value:
-                                hours, minutes = map(int, new_value.split(':'))
-                                new_value = datetime.strptime(
-                                    f"{hours:02d}:{minutes:02d}", "%H:%M"
-                                ).time()
-                        
-                        if str(old_value) != str(new_value):
-                            changes[model_field] = (old_value, new_value)
-                            setattr(working_day, model_field, new_value)
+                if created:
+                    created_count += 1
+                    # Set initial values for newly created record
+                    working_day.is_working = day_data.get('isWorking', True)
+                    working_day.save()
+                    continue
                 
-                if changes:
+                # Update existing record
+                changes_made = False
+                
+                if 'isWorking' in day_data:
+                    if working_day.is_working != day_data['isWorking']:
+                        working_day.is_working = day_data['isWorking']
+                        changes_made = True
+                
+                if 'startTime' in day_data and day_data['startTime']:
+                    try:
+                        hours, minutes = map(int, day_data['startTime'].split(':'))
+                        new_time = time(hours, minutes)
+                        if working_day.start_time != new_time:
+                            working_day.start_time = new_time
+                            changes_made = True
+                    except (ValueError, TypeError) as e:
+                        logger.error(f"Invalid start time format: {day_data['startTime']}")
+                
+                if 'endTime' in day_data and day_data['endTime']:
+                    try:
+                        hours, minutes = map(int, day_data['endTime'].split(':'))
+                        new_time = time(hours, minutes)
+                        if working_day.end_time != new_time:
+                            working_day.end_time = new_time
+                            changes_made = True
+                    except (ValueError, TypeError) as e:
+                        logger.error(f"Invalid end time format: {day_data['endTime']}")
+                
+                if 'isHalfDay' in day_data:
+                    if working_day.is_half_day != day_data['isHalfDay']:
+                        working_day.is_half_day = day_data['isHalfDay']
+                        changes_made = True
+                
+                if changes_made:
                     working_day.updated_by = user
                     working_day.save()
-                    
-                    for field, (old, new) in changes.items():
-                        self._log_change(
-                            settings, company, f"working_day.{working_day.get_day_display()}.{field}",
-                            old, new, user
-                        )
                     updated_count += 1
                     
-            except WorkingDay.DoesNotExist:
-                logger.warning(f"Working day not found: {day_data.get('day')}")
+            except Exception as e:
+                logger.error(f"Error processing working day {day_data.get('day')}: {e}", exc_info=True)
                 continue
 
         return Response({
-            'message': f'{updated_count} working days updated successfully',
-            'updatedCount': updated_count
+            'message': f'{updated_count} working days updated, {created_count} created',
+            'updatedCount': updated_count,
+            'createdCount': created_count
         })
-
-    def _to_snake_case(self, camel_str):
-        """Convert camelCase to snake_case"""
-        return ''.join(['_' + c.lower() if c.isupper() else c for c in camel_str]).lstrip('_')
-
-    def _log_change(self, settings, company, field_name, old_value, new_value, user):
-        """Log working day changes"""
-        CompanySettingHistory.objects.create(
-            settings=settings,
-            company=company,
-            field_name=field_name,
-            old_value=str(old_value),
-            new_value=str(new_value),
-            changed_by=user,
-        )
-
-
+    
 class LeaveTypesView(BaseCompanyView):
     """CRUD for leave types"""
     
