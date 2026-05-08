@@ -451,14 +451,6 @@ export default function CompanyProfile() {
         {/* Actions */}
         <div className="flex items-center justify-end gap-3 pt-4">
           <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="px-4 h-11 border border-border rounded-md hover:bg-muted transition-colors flex items-center gap-2"
-          >
-            <RotateCcw className="w-4 h-4" />
-            Reset
-          </button>
-          <button
             type="submit"
             disabled={loading || isUpdating}
             className="px-6 h-11 bg-primary text-primary-foreground font-medium rounded-md hover:bg-primary/90 flex items-center gap-2 min-w-[140px] justify-center transition-all disabled:opacity-70 shadow-sm"
