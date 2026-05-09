@@ -1,13 +1,15 @@
 "use client";
 
 // ============================================
-// FILE: src/components/Forms/EmployeeForm.jsx (UPDATED with default shift)
+// FILE: src/components/Forms/EmployeeForm.jsx (BACKEND INTEGRATED)
 // ============================================
 
 import { useEffect, useState } from "react";
 import { X, Users, Building2, Briefcase, UserCog, Clock } from "lucide-react";
-import { ls, uid } from "@/services/localStorageService";
-import { companyContext } from "@/services/companyContextService";
+import { useShiftTemplates } from "@/hooks/useShiftTemplates";
+import { useAssetCategories } from "@/hooks/useAssetCategories";
+import { useDesignations } from "@/hooks/useDesignations";
+import { useEmployees } from "@/hooks/useEmployees";
 import { LocationGroup } from "../reuseable/LocationSelectors";
 import SearchableSelect from "../reuseable/SearchableSelect";
 import { DatePicker } from "@/components/reuseable/DatePicker";
@@ -42,58 +44,43 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
     confirmation_date: "",
     probation_days: 180,
     work_location: "OFFICE",
-    reporting_manager_id: "",
+    reporting_manager_id: null,
     bank_name: "",
     bank_account_number: "",
     bank_iban: "",
     salary: 0,
-    default_shift_id: "", // New field
+    default_shift_id: "",
+    asset_category_id: "",
+    old_default_shift_id: "",
   });
 
-  const [designations, setDesignations] = useState([]);
-  const [employees, setEmployees] = useState([]);
-  const [shiftTemplates, setShiftTemplates] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // Fetch data from backend
+  const { data: designations = [] } = useDesignations();
+  const { data: shiftTemplates = [] } = useShiftTemplates();
+  const { data: assetCategories = [] } = useAssetCategories();
+  const { data: employees = [] } = useEmployees();
 
   const filteredDesignations = designations.filter(
     (d) => d.department === formData.department
   );
 
-  // Load designations, employees, and shift templates
+  // Load initial data
   useEffect(() => {
-    loadDesignations();
-    loadEmployees();
-    loadShiftTemplates();
-
     if (initialData) {
-      setFormData(initialData);
+      setFormData({
+        ...initialData,
+        old_default_shift_id: initialData.default_shift_id || "",
+        asset_category_id: initialData.asset_category_id || "",
+      });
     } else {
       generateEmployeeId();
     }
   }, [initialData]);
 
-  const loadDesignations = () => {
-    const allDesignations = ls.get("designations", []);
-    const activeDesignations = allDesignations.filter(d => d.is_active === "true");
-    setDesignations(activeDesignations);
-  };
-
-  const loadEmployees = () => {
-    const allEmployees = ls.get("employees", []);
-    const filtered = companyContext.filterByContext(allEmployees);
-    setEmployees(filtered);
-  };
-
-  const loadShiftTemplates = () => {
-    const templates = ls.get("shifts_templates", []);
-    const activeTemplates = templates.filter(t => t.is_active === true);
-    setShiftTemplates(activeTemplates);
-  };
-
   const generateEmployeeId = () => {
-    const allEmployees = ls.get("employees", []);
-    const filtered = companyContext.filterByContext(allEmployees);
-    const nextNumber = filtered.length + 1;
+    const nextNumber = employees.length + 1;
     const paddedNumber = nextNumber.toString().padStart(3, "0");
     setFormData(prev => ({
       ...prev,
@@ -102,10 +89,11 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
   };
 
   const getManagerEmployees = () => {
-    return employees.filter(emp => {
-      const designation = designations.find(d => d.title === emp.designation);
-      return designation && (designation.level === "Manager" || designation.level === "Lead" || designation.level === "Director");
-    });
+    return employees.filter(emp => 
+      emp.role !== 'STAFF' || emp.designation?.toLowerCase().includes('manager') ||
+      emp.designation?.toLowerCase().includes('lead') ||
+      emp.designation?.toLowerCase().includes('director')
+    );
   };
 
   const handleChange = (field, value) => {
@@ -119,7 +107,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    const requiredFields = ["first_name", "father_name", "cnic", "date_of_birth", "phone", "department", "joining_date"];
+    const requiredFields = ["first_name", "phone", "department", "joining_date"];
     for (const field of requiredFields) {
       if (!formData[field]) {
         alert(`Please fill ${field.replace(/_/g, " ")} field`);
@@ -127,13 +115,14 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
       }
     }
 
-    const finalData = { ...formData };
-    if (formData.address_line) {
-      finalData.address = `${formData.address_line}, ${formData.city || ""}, ${formData.state || ""}, ${formData.country || ""}`;
-    }
-
-    onSubmit(finalData);
+    onSubmit(formData);
   };
+
+  // Get active shift templates
+  const activeShiftTemplates = shiftTemplates.filter(t => t.is_active);
+  
+  // Get active asset categories
+  const activeAssetCategories = assetCategories.filter(c => c.isActive);
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4 overflow-y-auto">
@@ -162,6 +151,17 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 Personal Information
               </h3>
 
+              <label className="text-sm flex flex-col gap-1">
+                <span className="text-muted-foreground text-xs">Employee ID</span>
+                <input
+                  type="text"
+                  value={formData.employee_id}
+                  onChange={(e) => handleChange("employee_id", e.target.value)}
+                  className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring font-mono text-xs"
+                  readOnly={!initialData}
+                />
+              </label>
+
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">First Name *</span>
@@ -185,34 +185,31 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
               </div>
 
               <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground text-xs">Father Name *</span>
+                <span className="text-muted-foreground text-xs">Father Name</span>
                 <input
                   type="text"
                   value={formData.father_name}
                   onChange={(e) => handleChange("father_name", e.target.value)}
-                  required
                   className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
                 />
               </label>
 
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground text-xs">CNIC *</span>
+                  <span className="text-muted-foreground text-xs">CNIC</span>
                   <input
                     type="text"
                     value={formData.cnic}
                     onChange={(e) => handleChange("cnic", e.target.value)}
                     placeholder="42101-1234567-1"
-                    required
                     className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
                   />
                 </label>
                 <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground text-xs">Date of Birth *</span>
+                  <span className="text-muted-foreground text-xs">Date of Birth</span>
                   <DatePicker
                     value={formData.date_of_birth}
                     onChange={(value) => handleChange("date_of_birth", value || "")}
-                    required
                     className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
                   />
                 </label>
@@ -220,7 +217,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
 
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground text-xs">Gender *</span>
+                  <span className="text-muted-foreground text-xs">Gender</span>
                   <SearchableSelect
                     value={formData.gender}
                     onChange={(val) => handleChange("gender", val)}
@@ -229,7 +226,6 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                       { value: "FEMALE", label: "Female" },
                       { value: "OTHER", label: "Other" }
                     ]}
-                    required={true}
                     placeholder="Select Gender"
                   />
                 </label>
@@ -344,7 +340,8 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                     options={[
                       { value: "HR", label: "HR" },
                       { value: "INVENTORY", label: "Inventory" },
-                      { value: "FINANCE", label: "Finance" }
+                      { value: "FINANCE", label: "Finance" },
+                      { value: "MONITORING", label: "Monitoring" }
                     ]}
                     required={true}
                     placeholder="Select Department"
@@ -357,7 +354,10 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 <SearchableSelect
                   value={formData.designation}
                   onChange={(val) => handleChange("designation", val)}
-                  options={filteredDesignations.map(d => ({ value: d.title, label: `${d.title} (${d.level || "N/A"})` }))}
+                  options={filteredDesignations.map(d => ({ 
+                    value: d.name, 
+                    label: `${d.name} (${d.department || "N/A"})` 
+                  }))}
                   disabled={!formData.department}
                   placeholder="Select Designation"
                 />
@@ -443,11 +443,11 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs">Reporting Manager</span>
                 <SearchableSelect
-                  value={formData.reporting_manager_id}
-                  onChange={(val) => handleChange("reporting_manager_id", val)}
+                  value={formData.reporting_manager_id || ""}
+                  onChange={(val) => handleChange("reporting_manager_id", val || null)}
                   options={getManagerEmployees().map(emp => ({
                     value: emp.id,
-                    label: `${emp.first_name} ${emp.last_name} - ${emp.designation || "Manager"}`
+                    label: `${emp.first_name} ${emp.last_name || ""} - ${emp.designation || "Employee"}`
                   }))}
                   placeholder="Select Manager"
                 />
@@ -461,7 +461,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 <SearchableSelect
                   value={formData.default_shift_id}
                   onChange={(val) => handleChange("default_shift_id", val)}
-                  options={shiftTemplates.map(tpl => ({
+                  options={activeShiftTemplates.map(tpl => ({
                     value: tpl.id,
                     label: `${tpl.name} (${tpl.startTime} - ${tpl.endTime})`
                   }))}
@@ -469,18 +469,21 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 />
               </label>
 
+              {/* Asset Kit Selection */}
               <label className="text-sm flex flex-col gap-1">
-  <span className="text-muted-foreground text-xs flex items-center gap-1"><Briefcase className="w-3 h-3"/> Default Asset Kit</span>
-  <SearchableSelect
-    value={formData.asset_category_id || ""}
-    onChange={(val) => handleChange("asset_category_id", val)}
-    options={ls.get("hrAssetCategories", []).filter(c => c.is_active !== "false").map(c => ({
-      value: c.id,
-      label: `${c.name} (${JSON.parse(c.asset_ids || '[]').length} items)`
-    }))}
-    placeholder="Select hardware kit to assign on creation"
-  />
-</label>
+                <span className="text-muted-foreground text-xs flex items-center gap-1">
+                  <Briefcase className="w-3 h-3"/> Default Asset Kit
+                </span>
+                <SearchableSelect
+                  value={formData.asset_category_id}
+                  onChange={(val) => handleChange("asset_category_id", val)}
+                  options={activeAssetCategories.map(c => ({
+                    value: c.id,
+                    label: `${c.name} (${c.assetCount} items)`
+                  }))}
+                  placeholder="Select hardware kit to assign on creation"
+                />
+              </label>
             </div>
           </div>
 
@@ -580,9 +583,10 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
           </button>
           <button
             type="submit"
-            className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90"
+            disabled={loading}
+            className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 disabled:opacity-50"
           >
-            {initialData ? "Save Changes" : "Create Employee"}
+            {loading ? "Saving..." : initialData ? "Save Changes" : "Create Employee"}
           </button>
         </div>
       </form>
