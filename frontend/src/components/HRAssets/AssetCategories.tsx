@@ -1,8 +1,14 @@
 // components/hr/AssetCategories.tsx
 "use client";
-import { useState, useEffect } from "react";
-import { ls, uid } from "@/services/localStorageService";
-import { companyContext } from "@/services/companyContextService";
+import { useState } from "react";
+import { useAssets } from "@/hooks/useAssets";
+import { 
+  useAssetCategories, 
+  useAssetCategoryStats, 
+  useCreateAssetCategory, 
+  useUpdateAssetCategory, 
+  useDeleteAssetCategory 
+} from "@/hooks/useAssetCategories";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,11 +56,11 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 function AssetMultiSelect({ options, selected, onChange, assets }: any) {
-  const toggle = (id: string) => {
-    onChange(selected.includes(id) ? selected.filter((i: string) => i !== id) : [...selected, id]);
+  const toggle = (id: number) => {
+    onChange(selected.includes(id) ? selected.filter((i: number) => i !== id) : [...selected, id]);
   };
 
-  const getAssetDetails = (id: string) => assets.find((a: any) => a.id === id);
+  const getAssetDetails = (id: number) => assets.find((a: any) => a.id === id);
 
   const selectAll = () => onChange(options.map((opt: any) => opt.value));
   const deselectAll = () => onChange([]);
@@ -79,12 +85,12 @@ function AssetMultiSelect({ options, selected, onChange, assets }: any) {
         {selected.length === 0 && (
           <span className="text-xs text-muted-foreground">No assets selected</span>
         )}
-        {selected.map((id: string) => {
+        {selected.map((id: number) => {
           const asset = getAssetDetails(id);
           return (
             <Badge key={id} variant="secondary" className="gap-1 pl-2 pr-1">
               <Package className="w-3 h-3" />
-              <span className="text-xs">{asset?.name || id}</span>
+              <span className="text-xs">{asset?.name || `Asset #${id}`}</span>
               <button onClick={() => toggle(id)} className="ml-1 hover:text-destructive">
                 <X className="w-3 h-3" />
               </button>
@@ -127,86 +133,69 @@ function AssetMultiSelect({ options, selected, onChange, assets }: any) {
 }
 
 export default function AssetCategories() {
-  const [assets, setAssets] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  
+  const { data: assets = [] } = useAssets();
+  const { data: categories = [], isLoading } = useAssetCategories(
+    searchQuery ? { search: searchQuery } : undefined
+  );
+  const { data: stats } = useAssetCategoryStats();
+  const createCategory = useCreateAssetCategory();
+  const updateCategory = useUpdateAssetCategory();
+  const deleteCategory = useDeleteAssetCategory();
+  
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   
   const [form, setForm] = useState({ 
     name: "", 
-    asset_ids: [] as string[], 
+    assetIds: [] as number[], 
     description: "" 
   });
 
-  useEffect(() => {
-    companyContext.init();
-    loadData();
-  }, []);
-
-  const loadData = () => {
-    setAssets(companyContext.filterByContext(ls.get<any[]>("hrAssets", [])));
-    setCategories(companyContext.filterByContext(ls.get<any[]>("hrAssetCategories", [])));
-    setLoading(false);
-  };
-
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim()) {
       toast.error("Kit name is required");
       return;
     }
-    if (form.asset_ids.length === 0) {
+    if (form.assetIds.length === 0) {
       toast.error("Please select at least one asset");
       return;
     }
 
-    const newCategory = companyContext.addContextToRecord({ 
-      id: editing?.id || uid("hrt_c"), 
-      name: form.name,
-      asset_ids: JSON.stringify(form.asset_ids),
-      description: form.description,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    });
-
-    const updated = editing 
-      ? categories.map(c => c.id === editing.id ? newCategory : c) 
-      : [newCategory, ...categories];
-    
-    setCategories(updated);
-    ls.set("hrAssetCategories", updated);
-    setShowModal(false);
-    setEditing(null);
-    setForm({ name: "", asset_ids: [], description: "" });
-    toast.success(editing ? "Kit updated" : "Kit created");
-  };
-
-  const handleDelete = (id: string) => {
-    const assignments = companyContext.filterByContext(ls.get<any[]>("employeeAssetAssignments", []));
-    const hasActiveAssignments = assignments.some(a => a.category_id === id && a.status === "ACTIVE");
-    if (hasActiveAssignments) {
-      toast.error("Cannot delete: Kit has active employee assignments");
-      return;
+    try {
+      if (editing) {
+        await updateCategory.mutateAsync({
+          id: editing.id,
+          name: form.name,
+          description: form.description,
+          assetIds: form.assetIds,
+        });
+      } else {
+        await createCategory.mutateAsync({
+          name: form.name,
+          description: form.description,
+          assetIds: form.assetIds,
+        });
+      }
+      
+      setShowModal(false);
+      setEditing(null);
+      setForm({ name: "", assetIds: [], description: "" });
+    } catch (error: any) {
+      toast.error(error.message || "Failed to save kit");
     }
-    
-    const updated = categories.filter(c => c.id !== id);
-    setCategories(updated);
-    ls.set("hrAssetCategories", updated);
-    toast.success("Kit deleted");
   };
 
-  const getCategoryAssets = (category: any) => {
-    const assetIds = JSON.parse(category.asset_ids || "[]");
-    return assets.filter(a => assetIds.includes(a.id));
+  const handleDelete = async (id: number) => {
+    try {
+      await deleteCategory.mutateAsync(id);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to delete kit");
+    }
   };
 
-  const filteredCategories = categories.filter(c => 
-    c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.description?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
@@ -217,23 +206,19 @@ export default function AssetCategories() {
   return (
     <div className="space-y-6 p-4 md:p-6">
       <PageHeader 
-  title="Equipment Kits" 
-  subtitle="Bundle multiple assets together for easy assignment to employees"
-  actions={
-    <Button onClick={() => { 
-      setEditing(null); 
-      setForm({ 
-        name: "", 
-        asset_ids: [], 
-        description: "" 
-      }); 
-      setShowModal(true); 
-    }}>
-      <Plus className="w-4 h-4 mr-2" />
-      Create Kit
-    </Button>
-  }
-/>
+        title="Equipment Kits" 
+        subtitle="Bundle multiple assets together for easy assignment to employees"
+        actions={
+          <Button onClick={() => { 
+            setEditing(null); 
+            setForm({ name: "", assetIds: [], description: "" }); 
+            setShowModal(true); 
+          }}>
+            <Plus className="w-4 h-4 mr-2" />
+            Create Kit
+          </Button>
+        }
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -242,7 +227,7 @@ export default function AssetCategories() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground">Total Kits</p>
-                <p className="text-2xl font-bold">{categories.length}</p>
+                <p className="text-2xl font-bold">{stats?.totalCategories || categories.length}</p>
               </div>
               <div className="p-2 rounded-lg bg-purple-500/10">
                 <Layers className="w-5 h-5 text-purple-500" />
@@ -256,7 +241,7 @@ export default function AssetCategories() {
               <div>
                 <p className="text-xs text-muted-foreground">Total Assets in Kits</p>
                 <p className="text-2xl font-bold">
-                  {categories.reduce((sum, c) => sum + (JSON.parse(c.asset_ids || "[]").length), 0)}
+                  {stats?.totalAssetsInCategories || categories.reduce((sum, c) => sum + (c.assetCount || 0), 0)}
                 </p>
               </div>
               <div className="p-2 rounded-lg bg-blue-500/10">
@@ -297,7 +282,7 @@ export default function AssetCategories() {
           </div>
         </CardHeader>
         <CardContent>
-          {filteredCategories.length === 0 ? (
+          {categories.length === 0 ? (
             <div className="text-center py-12">
               <Layers className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium">No kits found</h3>
@@ -307,80 +292,79 @@ export default function AssetCategories() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredCategories.map(cat => {
-                const categoryAssets = getCategoryAssets(cat);
-                return (
-                  <Card key={cat.id} className="hover:shadow-md transition-shadow">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <CardTitle className="text-base">{cat.name}</CardTitle>
-                          {cat.description && (
-                            <CardDescription className="mt-1 line-clamp-2">
-                              {cat.description}
-                            </CardDescription>
-                          )}
-                        </div>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreVertical className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => { 
-                              setEditing(cat); 
-                              setForm({ 
-                                name: cat.name, 
-                                asset_ids: JSON.parse(cat.asset_ids || "[]"), 
-                                description: cat.description || "" 
-                              }); 
-                              setShowModal(true); 
-                            }}>
-                              <Edit className="w-4 h-4 mr-2" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => handleDelete(cat.id)} className="text-destructive">
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+              {categories.map(cat => (
+                <Card key={cat.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <CardTitle className="text-base">{cat.name}</CardTitle>
+                        {cat.description && (
+                          <CardDescription className="mt-1 line-clamp-2">
+                            {cat.description}
+                          </CardDescription>
+                        )}
                       </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Assets in kit:</span>
-                          <Badge variant="secondary">{categoryAssets.length}</Badge>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
-                          {categoryAssets.map(asset => (
-                            <Badge key={asset.id} variant="outline" className="text-xs gap-1">
-                              <Package className="w-3 h-3" />
-                              {asset.name}
-                            </Badge>
-                          ))}
-                        </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => { 
+                            setEditing(cat); 
+                            setForm({ 
+                              name: cat.name, 
+                              assetIds: cat.assetIds || [], 
+                              description: cat.description || "" 
+                            }); 
+                            setShowModal(true); 
+                          }}>
+                            <Edit className="w-4 h-4 mr-2" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleDelete(cat.id)} className="text-destructive">
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Assets in kit:</span>
+                        <Badge variant="secondary">{cat.assetCount || cat.assets?.length || 0}</Badge>
                       </div>
-                    </CardContent>
-                    <CardFooter className="pt-0">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="w-full"
-                        onClick={() => {
-                          window.location.href = `/hr/assets/employee-assets?kit=${cat.id}`;
-                        }}
-                      >
-                        <Users className="w-4 h-4 mr-2" />
-                        Assign to Employee
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                );
-              })}
+                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                        {cat.assets?.map(asset => (
+                          <Badge key={asset.id} variant="outline" className="text-xs gap-1">
+                            <Package className="w-3 h-3" />
+                            {asset.name}
+                          </Badge>
+                        )) || (
+                          <span className="text-xs text-muted-foreground">No assets loaded</span>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                  <CardFooter className="pt-0">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full"
+                      onClick={() => {
+                        window.location.href = `/hr/assets/employee-assets?kit=${cat.id}`;
+                      }}
+                    >
+                      <Users className="w-4 h-4 mr-2" />
+                      Assign to Employee
+                    </Button>
+                  </CardFooter>
+                </Card>
+              ))}
             </div>
           )}
         </CardContent>
@@ -408,8 +392,8 @@ export default function AssetCategories() {
               <Label>Select Assets *</Label>
               <AssetMultiSelect
                 options={assets.map(a => ({ value: a.id, label: `${a.name}${a.brand ? ` (${a.brand})` : ''}` }))}
-                selected={form.asset_ids}
-                onChange={(v) => setForm({ ...form, asset_ids: v })}
+                selected={form.assetIds}
+                onChange={(v: number[]) => setForm({ ...form, assetIds: v })}
                 assets={assets}
               />
             </div>
@@ -425,9 +409,12 @@ export default function AssetCategories() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
-            <Button onClick={handleSave}>
+            <Button 
+              onClick={handleSave} 
+              disabled={createCategory.isPending || updateCategory.isPending}
+            >
               <Save className="w-4 h-4 mr-2" />
-              {editing ? "Update" : "Create"} Kit
+              {createCategory.isPending || updateCategory.isPending ? "Saving..." : editing ? "Update" : "Create"} Kit
             </Button>
           </DialogFooter>
         </DialogContent>

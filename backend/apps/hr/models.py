@@ -168,3 +168,70 @@ class Asset(TimeStampedModel):
             return None
         from datetime import date
         return self.warranty_until >= date.today()
+
+
+
+class AssetCategory(TimeStampedModel):
+    """Asset Categories/Kits - bundle multiple assets together"""
+    id = models.BigAutoField(primary_key=True)
+    _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    
+    # Company & Branch
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='asset_categories'
+    )
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='asset_categories'
+    )
+    
+    # Core Fields
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    
+    # Assets in this category
+    assets = models.ManyToManyField(
+        Asset,
+        related_name='categories',
+        blank=True
+    )
+    
+    # Audit
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_asset_categories'
+    )
+    updated_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_asset_categories'
+    )
+    
+    class Meta:
+        verbose_name = "Asset Category"
+        verbose_name_plural = "Asset Categories"
+        ordering = ['name']
+        unique_together = [('company', 'name')]
+        indexes = [
+            models.Index(fields=['company', 'is_deleted']),
+            models.Index(fields=['branch']),
+            models.Index(fields=['is_active']),
+        ]
+    
+    def __str__(self):
+        return f"{self.name} ({self.assets.count()} assets)"
+    
+    def get_asset_ids(self):
+        """Return list of asset IDs in this category"""
+        return list(self.assets.values_list('id', flat=True))
