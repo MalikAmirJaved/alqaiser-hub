@@ -166,7 +166,7 @@ export default function ShiftTemplatesPage() {
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-3">
                 <div
-                  className="w-10 h-10 rounded-xl grid place-items-center text-white font-bold shadow-inner"
+                  className="w-10 h-10 rounded-xl grid place-items-center font-bold shadow-inner"
                 >
                   {t.name.charAt(0)}
                 </div>

@@ -40,7 +40,7 @@ export const menu = [
         icon: Briefcase,
         children: [
           { title: "Assets", to: "/hr/assets/list", icon: Briefcase },
-          { title: "Asset Categories", to: "/hr/assets/categories", icon: Layers },
+          { title: "Asset Kits", to: "/hr/assets/kits", icon: Layers },
           { title: "Employee Assignments", to: "/hr/assets/employee-assets", icon: Users },
         ],
       },
