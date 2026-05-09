@@ -92,3 +92,79 @@ class ShiftTemplate(TimeStampedModel):
         
         total_minutes = (end - start).total_seconds() / 60
         return round((total_minutes - self.break_minutes) / 60, 2)
+    
+
+class Asset(TimeStampedModel):
+    """HR Assets - hardware, equipment, devices"""
+    id = models.BigAutoField(primary_key=True)
+    _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    
+    # Company & Branch
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='hr_assets'
+    )
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='hr_assets'
+    )
+    
+    # Core Fields
+    name = models.CharField(max_length=255)
+    brand = models.CharField(max_length=100, blank=True, null=True)
+    model = models.CharField(max_length=100, blank=True, null=True)
+    serial_number = models.CharField(max_length=100, blank=True, null=True, unique=True)
+    description = models.TextField(blank=True, null=True)
+    
+    # Purchase Information
+    purchase_date = models.DateField(null=True, blank=True)
+    purchase_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    warranty_until = models.DateField(null=True, blank=True)
+    vendor = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Status
+    is_active = models.BooleanField(default=True)
+    is_assigned = models.BooleanField(default=False)
+    
+    # Audit
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_hr_assets'
+    )
+    updated_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_hr_assets'
+    )
+    
+    class Meta:
+        verbose_name = "Asset"
+        verbose_name_plural = "Assets"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['company', 'is_deleted']),
+            models.Index(fields=['branch']),
+            models.Index(fields=['serial_number']),
+            models.Index(fields=['is_assigned']),
+            models.Index(fields=['vendor']),
+        ]
+    
+    def __str__(self):
+        return f"{self.name} ({self.brand or 'No Brand'})"
+    
+    @property
+    def warranty_status(self):
+        """Check if warranty is active"""
+        if not self.warranty_until:
+            return None
+        from datetime import date
+        return self.warranty_until >= date.today()
