@@ -100,7 +100,6 @@ export default function AssetsList() {
           warrantyUntil: form.warrantyUntil || undefined,
           vendor: form.vendor || undefined,
         });
-        toast.success("Asset updated");
       } else {
         await createAsset.mutateAsync({
           name: form.name,
@@ -114,7 +113,6 @@ export default function AssetsList() {
           vendor: form.vendor || undefined,
           isActive: true,
         });
-        toast.success("Asset created");
       }
       
       setShowModal(false);
@@ -132,7 +130,6 @@ export default function AssetsList() {
   const handleDelete = async (id: number) => {
     try {
       await deleteAsset.mutateAsync(id);
-      toast.success("Asset deleted");
     } catch (error: any) {
       toast.error(error.message || "Failed to delete asset");
     }
