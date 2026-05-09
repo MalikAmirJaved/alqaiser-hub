@@ -1,6 +1,11 @@
+# apps/hr/urls.py
 from django.urls import path
-from .views import *
+from apps.hr.views.shift_template_views import ShiftTemplateView
+# ... other imports
 
 urlpatterns = [
-    # example
-]   
+    # Shift Templates
+    path('shift-templates/', ShiftTemplateView.as_view(), name='shift-templates'),
+    
+    # ... other HR URLs
+]
