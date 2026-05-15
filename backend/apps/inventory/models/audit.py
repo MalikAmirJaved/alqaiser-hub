@@ -14,7 +14,7 @@ class AuditLog(BaseModel):
     user_agent = models.TextField(blank=True)
 
     class Meta:
-        db_table = 'audit_logs'
+        db_table = 'inventory_audit_logs'
         indexes = [
             models.Index(fields=['entity_type', 'entity_id']),
             models.Index(fields=['-created_at']),

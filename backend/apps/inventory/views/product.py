@@ -169,7 +169,7 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
             product.category_id = data['category']
         if data.get('brand'):
             product.brand_id = data['brand']
-        product.updated_by = user.id
+        product.updated_by = user
         product.save()
 
         # Handle variants: map received variants by ID
@@ -355,8 +355,8 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                 unit_cost=variant.buying_price,
                 transaction_type=transaction_type,
                 reason_text=reason,
-                created_by=user,
-                updated_by=user,
+                created_by=request.user,
+                updated_by=request.user,
             )
 
         return Response({'status': 'success', 'new_quantity': new_quantity})
