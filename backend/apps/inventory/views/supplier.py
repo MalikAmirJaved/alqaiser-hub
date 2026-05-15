@@ -37,12 +37,13 @@ class BaseSupplierViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         return qs
 
     def create(self, request, *args, **kwargs):
+        user = request.user
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         serializer.save(
-            company_id=request.user.company_id,
-            branch_id=request.user.branch_id,
+            company_id=user.company_id,
+            branch_id=user.branch_id,
             partner_type=self.partner_type,
             created_by=user,
             updated_by=user,

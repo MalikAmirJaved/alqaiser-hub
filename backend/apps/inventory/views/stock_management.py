@@ -17,7 +17,7 @@ from apps.inventory.serializers.stock_management import (
 
 
 class StockManagementViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
-    queryset = StockItem.objects.all()   # ✅ REQUIRED FOR DRF + MIXIN
+    queryset = StockItem.objects.all()  
 
     # -------------------- STOCK ADJUST --------------------
     @action(detail=False, methods=['post'])

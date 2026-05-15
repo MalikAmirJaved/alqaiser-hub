@@ -14,13 +14,13 @@ class BaseModel(models.Model):
         editable=False
     )
 
-    company_id = models.IntegerField(
+    company_id = models.IntegerField( # request.user.company_id
         db_index=True,
         null=True,
         blank=True
     )
 
-    branch_id = models.IntegerField(
+    branch_id = models.IntegerField( # request.user.branch_id
         db_index=True,
         null=True,
         blank=True

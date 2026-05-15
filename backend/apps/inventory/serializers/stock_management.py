@@ -3,13 +3,13 @@ from apps.inventory.models import StockItem, InventoryTransaction, ProductVarian
 
 
 class StockAdjustmentSerializer(serializers.Serializer):
-    """Serializer for stock adjustment request (add/damage)."""
+    """Serializer for stock adjustment request (damage/correction only)."""
     variant_id = serializers.UUIDField()
     warehouse_id = serializers.UUIDField()
-    quantity_change = serializers.IntegerField()  # positive = add, negative = damage
+    quantity_change = serializers.IntegerField()          # positive = add (for correction), negative = damage
     reason = serializers.CharField(max_length=255, required=True)
     transaction_type = serializers.ChoiceField(
-        choices=['ADD_STOCK', 'DAMAGE', 'ADJUSTMENT'],
+        choices=['DAMAGE', 'ADJUSTMENT', 'STOCK_TAKE'],   # no ADD_STOCK
         default='ADJUSTMENT'
     )
 
