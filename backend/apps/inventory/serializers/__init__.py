@@ -13,7 +13,10 @@ from .purchase import (
     PurchaseOrderSerializer, PurchaseOrderLineSerializer,
     GoodsReceiptSerializer, GoodsReceiptLineSerializer
 )
-
+from .sales import (
+    CustomerSerializer, SalesOrderSerializer,
+    SalesShipmentSerializer, SalesReturnSerializer,
+)
 __all__ = [
     "CategorySerializer", "BrandSerializer", "WarehouseSerializer",
     "SupplierSerializer", "ProductVariantSerializer", "ProductSerializer",
@@ -22,4 +25,6 @@ __all__ = [
     "StockItemSerializer", "InventoryTransactionSerializer",
     "PurchaseOrderSerializer", "PurchaseOrderLineSerializer",
     "GoodsReceiptSerializer", "GoodsReceiptLineSerializer",
+    "CustomerSerializer", "SalesOrderSerializer",
+    "SalesShipmentSerializer", "SalesReturnSerializer",
 ]
