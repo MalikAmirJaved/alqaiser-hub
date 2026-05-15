@@ -131,10 +131,10 @@ class StockManagementViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
         ).select_related('variant', 'warehouse')
 
         if filters.get('variant_id'):
-            qs = qs.filter(variant_id=filters['variant_id'])
+            qs = qs.filter(variant___id=filters['variant_id'])
 
         if filters.get('warehouse_id'):
-            qs = qs.filter(warehouse_id=filters['warehouse_id'])
+            qs = qs.filter(warehouse___id=filters['warehouse_id'])
 
         if filters.get('start_date'):
             qs = qs.filter(created_at__date__gte=filters['start_date'])
@@ -173,7 +173,7 @@ class StockManagementViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
         user = request.user
 
         stock_items = StockItem.objects.filter(
-            variant_id=variant_id,
+            variant___id=variant_id,
             company_id=user.company_id
         ).select_related('warehouse')
 

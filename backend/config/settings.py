@@ -135,7 +135,7 @@ REST_FRAMEWORK = {
 
 # ─── JWT ──────────────────────────────────────────────────────────────────────
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=JWT_SECRET_TIME_EXP_MINUTES),
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=JWT_SECRET_TIME_EXP_MINUTES), # minutes
     'REFRESH_TOKEN_LIFETIME': timedelta(days=JWT_REFRESH_TIME_EXP_DAYS),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': False,

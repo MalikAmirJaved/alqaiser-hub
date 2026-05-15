@@ -90,10 +90,10 @@ class InventoryTransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = InventoryTransaction
         fields = [
-            'id', 'transaction_id', 'variant_id', 'variant_sku',
+            '_id', 'id', 'transaction_id', 'variant_id', 'variant_sku',
             'warehouse_id', 'warehouse_name', 'quantity_change',
             'quantity_before', 'quantity_after', 'unit_cost',
             'transaction_type', 'transaction_type_display',
             'reason_text', 'created_by', 'created_at'
         ]
-        read_only_fields = '__all__'
+        read_only_fields = fields
