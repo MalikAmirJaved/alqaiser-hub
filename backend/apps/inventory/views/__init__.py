@@ -4,8 +4,10 @@ from .warehouse import WarehouseViewSet
 from .product import ProductViewSet
 from .supplier import BaseSupplierViewSet, SupplierViewSet, VendorViewSet
 from .stock_management import StockManagementViewSet
+from .transfer import StockTransferViewSet
 
 __all__ = [
     "CategoryViewSet", "BrandViewSet", "WarehouseViewSet",
-    "BaseSupplierViewSet", "SupplierViewSet","VendorViewSet","ProductViewSet","StockManagementViewSet"
+    "BaseSupplierViewSet", "SupplierViewSet","VendorViewSet","ProductViewSet","StockManagementViewSet",
+    "StockTransferViewSet",
 ]

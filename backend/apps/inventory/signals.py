@@ -4,8 +4,7 @@ from django.dispatch import receiver
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from apps.notifications.models import Notification
-from .models import Category, Brand, Warehouse, Supplier
-from .models import Product, ProductVariant, StockItem, InventoryTransaction
+from .models import Category, Brand, Warehouse, Supplier, Product, ProductVariant, StockItem, InventoryTransaction, StockTransfer
 
 # Helper to create notification
 def create_notification(company_id, branch_id, title, message, notif_type='info'):
@@ -255,3 +254,14 @@ def log_transaction_notification(sender, instance, created, **kwargs):
                 f"{instance.get_transaction_type_display()}: {abs(instance.quantity_change)} units of {instance.variant.sku}",
                 "info"
             )
+
+@receiver(post_save, sender=StockTransfer)
+def notify_transfer_change(sender, instance, created, **kwargs):
+    action = 'created' if created else 'updated'
+    create_notification(
+        instance.company_id, instance.branch_id,
+        f"Stock Transfer {action}",
+        f"Transfer {instance.transfer_number} has been {action}. Status: {instance.status}",
+        "info"
+    )
+    broadcast_data_update(instance.company_id, instance.branch_id, 'stock_transfer', action, instance.id)
