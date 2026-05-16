@@ -13,16 +13,16 @@ import { Switch } from "@/components/ui/switch";
 import {
   ArrowLeft, ArrowRight, Check, Package, Layers,
   Plus, Trash2, X, Copy, ChevronDown, ChevronUp,
-  Image as ImageIcon, Tag, DollarSign, BarChart2,
+  Image as ImageIcon,
 } from "lucide-react";
-import type { Product, ProductPayload } from "@/hooks/useProducts";
+import type { Product, ProductPayload, ProductVariantPayload } from "@/hooks/useProducts";
 import { useCategories, Category } from "@/hooks/useCategories";
 import { useBrands, Brand } from "@/hooks/useBrands";
 import AttributeSelector from "./Attributeselector";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 // ──────────────────────────────────────────
-// Zod schema (add status and is_active)
+// Zod schema
 // ──────────────────────────────────────────
 const attributeSchema = z.object({
   key: z.string().min(1, "Key required"),
@@ -30,6 +30,7 @@ const attributeSchema = z.object({
 });
 
 const variantSchema = z.object({
+  id: z.string().optional(),                    // ← ADDED
   sku: z.string().min(1, "SKU required").max(100),
   barcode: z.string().max(100).optional().nullable(),
   qrCode: z.string().max(200).optional().nullable(),
@@ -112,7 +113,7 @@ function Field({ label, required, error, children, hint }: {
 }
 
 // ──────────────────────────────────────────
-// Variant card (unchanged, but stock field is now disabled for editing)
+// Variant card (stock field disabled when editing existing variant)
 // ──────────────────────────────────────────
 function VariantCard({
   index,
@@ -132,6 +133,8 @@ function VariantCard({
   const images: string[] = watch(`variants.${index}.images`) || [];
   const sku: string = watch(`variants.${index}.sku`) || `Variant ${index + 1}`;
   const attrs: { key: string; value: string }[] = watch(`variants.${index}.attributes`) || [];
+  const variantId: string | undefined = watch(`variants.${index}.id`);
+  const isExistingVariant = !!variantId;
 
   const displayName = attrs.length > 0
     ? attrs.map(a => `${a.key}: ${a.value}`).join(" · ")
@@ -225,9 +228,17 @@ function VariantCard({
                   <Input type="number" step="0.01" min="0" {...register(`variants.${index}.sellingPrice`)} placeholder="0.00" className="pl-7" />
                 </div>
               </Field>
-              <Field label={isEditing ? "Current Stock (read‑only)" : "Initial Stock"}>
-                <Input type="number" min="0" {...register(`variants.${index}.stock`)} placeholder="0" disabled={isEditing} />
-                {isEditing && <p className="text-xs text-muted-foreground mt-1">Stock changes require a separate adjustment.</p>}
+              <Field label={isExistingVariant ? "Current Stock (read‑only)" : "Initial Stock"}>
+                <Input
+                  type="number"
+                  min="0"
+                  {...register(`variants.${index}.stock`)}
+                  placeholder="0"
+                  disabled={isExistingVariant}
+                />
+                {isExistingVariant && (
+                  <p className="text-xs text-muted-foreground mt-1">Stock changes require a separate adjustment.</p>
+                )}
               </Field>
               <div className="col-span-1" />
               <Field label="Min Stock">
@@ -333,12 +344,14 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, isLoad
         status: initialData.status as FormData["status"],
         is_active: initialData.is_active,
         variants: initialData.variants.map((v) => ({
+          id: v.id,
           sku: v.sku,
           barcode: v.barcode || "",
           qrCode: v.qr_code || "",
+          stock: v.total_stock || 0,
           buyingPrice: parseFloat(v.buying_price),
           sellingPrice: parseFloat(v.selling_price),
-          stock: 0, // stock is not editable during edit (or we can show current but not send)
+          // Do NOT include stock for existing variants
           minStockLevel: v.min_stock_level,
           maxStockLevel: v.max_stock_level,
           attributes: v.variant_attributes.map((a) => ({ key: a.attribute_key, value: a.attribute_value })),
@@ -391,7 +404,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, isLoad
 
   const duplicateVariant = (i: number) => {
     const vals = watch(`variants.${i}`);
-    append({ ...vals, sku: vals.sku + "-COPY" });
+    append({ ...vals, sku: vals.sku + "-COPY", id: undefined });
   };
 
   const goNext = async () => {
@@ -410,18 +423,25 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, isLoad
       taxRate: data.taxRate,
       status: data.status,
       is_active: data.is_active,
-      variants: data.variants.map((v) => ({
-        sku: v.sku,
-        barcode: v.barcode || "",
-        qrCode: v.qrCode || "",
-        buyingPrice: v.buyingPrice,
-        sellingPrice: v.sellingPrice,
-        stock: v.stock,
-        attributes: v.attributes || [],
-        images: v.images || [],
-        minStockLevel: v.minStockLevel,
-        maxStockLevel: v.maxStockLevel,
-      })),
+      variants: data.variants.map((v) => {
+        const variantPayload: ProductVariantPayload = {
+          id: v.id,
+          sku: v.sku,
+          barcode: v.barcode || "",
+          qrCode: v.qrCode || "",
+          buyingPrice: v.buyingPrice,
+          sellingPrice: v.sellingPrice,
+          minStockLevel: v.minStockLevel,
+          maxStockLevel: v.maxStockLevel,
+          attributes: v.attributes || [],
+          images: v.images || [],
+        };
+        // Only send stock for new variants (id missing)
+        if (!v.id) {
+          variantPayload.stock = v.stock;
+        }
+        return variantPayload;
+      }),
     };
     await onSubmit(payload);
   };

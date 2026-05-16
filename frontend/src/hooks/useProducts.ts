@@ -65,18 +65,19 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-// Payload for create/update – now includes status and is_active
+// Payload for create/update – now includes optional id and correct stock handling
 export interface ProductVariantPayload {
+  id?: string;                      // ← ADDED: required for updates
   sku: string;
   barcode?: string;
   qrCode?: string;
   buyingPrice: number;
   sellingPrice: number;
-  stock?: number;
-  attributes?: Array<{ key: string; value: string }>;
-  images?: string[];
+  stock?: number;                   // only for new variants or absolute change
   minStockLevel?: number;
   maxStockLevel?: number;
+  attributes?: Array<{ key: string; value: string }>;
+  images?: string[];
 }
 
 export interface ProductPayload {
@@ -87,8 +88,8 @@ export interface ProductPayload {
   unit: string;
   storageRequirement: string;
   taxRate: number;
-  status: string;        // added
-  is_active: boolean;    // added
+  status: string;
+  is_active: boolean;
   variants: ProductVariantPayload[];
 }
 
