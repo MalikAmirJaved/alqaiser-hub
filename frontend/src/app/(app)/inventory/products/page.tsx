@@ -284,7 +284,7 @@ export default function ProductsPage() {
       {/* Details Modal */}
       {showDetailsModal && selectedProduct && (
         <ProductDetailsModal
-          product={selectedProduct}
+          productId={selectedProduct.id}   
           onClose={() => setShowDetailsModal(false)}
           onEdit={() => { setShowDetailsModal(false); handleEdit(selectedProduct); }}
         />

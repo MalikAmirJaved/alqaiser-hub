@@ -115,12 +115,23 @@ class ProductSerializer(serializers.ModelSerializer):
     variants = ProductVariantSerializer(many=True, read_only=True)
     category_id = serializers.UUIDField(source='category._id', read_only=True, allow_null=True)
     brand_id    = serializers.UUIDField(source='brand._id',    read_only=True, allow_null=True)
+    
+    # New fields for user info
+    created_by_name = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
         fields = [
             'id', 'product_name', 'description', 'category_id', 'brand_id',
             'unit', 'storage_requirement', 'tax_rate', 'status', 'is_active',
-            'variants', 'created_at', 'updated_at'
+            'variants', 'created_at', 'updated_at',
+            'created_by_name', 'updated_by_name',  # add these
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_created_by_name(self, obj):
+        return obj.created_by.get_full_name() or obj.created_by.email if obj.created_by else None
+
+    def get_updated_by_name(self, obj):
+        return obj.updated_by.get_full_name() or obj.updated_by.email if obj.updated_by else None

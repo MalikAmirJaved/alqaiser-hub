@@ -55,6 +55,8 @@ export interface Product {
   variants: ProductVariant[];
   created_at: string;
   updated_at: string;
+  created_by_name?: string | null; 
+  updated_by_name?: string | null;   
 }
 
 // Paginated response from backend
@@ -137,7 +139,7 @@ export function useProducts(filters?: {
   });
 }
 
-export function useProduct(id: number | null) {
+export function useProduct(id: string | null) {
   const api = useApi();
   return useQuery<Product>({
     queryKey: ["product", id],
