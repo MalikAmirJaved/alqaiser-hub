@@ -14,11 +14,13 @@ import { useCategories } from "@/hooks/useCategories";
 import { useBrands } from "@/hooks/useBrands";
 import { useWarehouses } from "@/hooks/useWarehouses";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
+import ProductForm from "@/components/inventory/product/ProductForm";
+import { Button } from "@/components/ui/button";
 
 export default function ProductsPage() {
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [showProductModal, setShowProductModal] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<Product | undefined>(undefined);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [filters, setFilters] = useState({
     search: "",
@@ -61,7 +63,7 @@ export default function ProductsPage() {
   }, [products, categories, brands]);
 
   const handleCreate = () => {
-    setSelectedProduct(null);
+    setSelectedProduct(undefined);
     setShowProductModal(true);
   };
 
@@ -209,15 +211,24 @@ export default function ProductsPage() {
         <GridView data={enrichedProducts} renderCard={renderCard} loading={isLoading} emptyMessage="No products found" emptyAction={{ label: "Add Product", onClick: handleCreate }} columns={4} />
       )}
 
-      {showProductModal && (
-        <AdvancedProductManager
-          product={selectedProduct}
-          categories={categories}
-          brands={brands}
-          onSave={handleSaveProduct}
-          onCancel={() => setShowProductModal(false)}
-        />
-      )}
+{showProductModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    <div className="w-full max-w-5xl bg-card rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto p-1">
+      <ProductForm
+        initialData={selectedProduct}
+        onSubmit={handleSaveProduct}
+        isLoading={createProduct.isPending || updateProduct.isPending}
+        isEditing={!!selectedProduct}
+      />
+      <div className="flex justify-end p-4 pt-0">
+        <Button variant="outline" onClick={() => setShowProductModal(false)}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  </div>
+)}
+
 
       {showDetailsModal && selectedProduct && (
         <ProductDetailsModal

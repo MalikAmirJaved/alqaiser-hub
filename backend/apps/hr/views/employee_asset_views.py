@@ -3,27 +3,49 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
-from apps.hr.services.assignment_service import AssetAssignmentService
-from apps.hr.models import Asset, AssetCategory, EmployeeAssetAssignment
-from django.db import models
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from datetime import date
 import logging
+
+from apps.common.baseauthentication import CompanyBranchMixin
+from apps.hr.services.assignment_service import AssetAssignmentService
+from apps.hr.models import Asset, AssetCategory, EmployeeAssetAssignment, Employee
 
 logger = logging.getLogger(__name__)
 
 
-class EmployeeAssetAssignmentView(APIView):
-    """Main assignment CRUD endpoint"""
+class EmployeeAssetAssignmentView(CompanyBranchMixin, APIView):
+    """Main assignment CRUD endpoint with UUID support"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
         """Get assignments for an employee"""
-        employee_id = request.query_params.get('employee_id')
-        if not employee_id:
+        employee_uuid = request.query_params.get('employee_id')
+        if not employee_uuid:
             return Response({'error': 'employee_id required'}, status=400)
         
         company_id = request.user.company_id
-        data = AssetAssignmentService.get_employee_assignments(employee_id, company_id)
+        
+        employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
+        
+        data = AssetAssignmentService.get_employee_assignments(employee.id, company_id)
+        
+        # Convert integer IDs to UUIDs in response
+        if 'active_assignments' in data:
+            for assignment in data['active_assignments']:
+                assignment['id'] = str(assignment['id'])
+                if assignment.get('source_kit'):
+                    assignment['source_kit']['id'] = str(assignment['source_kit']['id'])
+        
+        if 'kits' in data:
+            for kit in data['kits']:
+                kit['id'] = str(kit['id'])
+        
+        if 'history' in data:
+            for history in data['history']:
+                history['id'] = str(history['id'])
+        
         return Response(data)
     
     def post(self, request):
@@ -31,22 +53,35 @@ class EmployeeAssetAssignmentView(APIView):
         company_id = request.user.company_id
         branch_id = request.user.branch_id
         
-        employee_id = request.data.get('employee_id')
-        asset_ids = request.data.get('asset_ids', [])
-        kit_ids = request.data.get('kit_ids', [])
+        employee_uuid = request.data.get('employee_id')
+        asset_uuids = request.data.get('asset_ids', [])
+        kit_uuids = request.data.get('kit_ids', [])
         
-        if not employee_id:
+        if not employee_uuid:
             return Response({'error': 'employee_id required'}, status=400)
-        if not asset_ids and not kit_ids:
+        if not asset_uuids and not kit_uuids:
             return Response({'error': 'Must provide asset_ids or kit_ids'}, status=400)
         
         try:
+            # Convert UUIDs to integer IDs for service
+            employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
+            
+            asset_ids = []
+            if asset_uuids:
+                assets = Asset.objects.filter(_id__in=asset_uuids, company_id=company_id, is_deleted=False)
+                asset_ids = list(assets.values_list('id', flat=True))
+            
+            kit_ids = []
+            if kit_uuids:
+                kits = AssetCategory.objects.filter(_id__in=kit_uuids, company_id=company_id, is_deleted=False)
+                kit_ids = list(kits.values_list('id', flat=True))
+            
             result = AssetAssignmentService.assign_assets_to_employee(
-                employee_id=int(employee_id),
+                employee_id=employee.id,
                 company_id=company_id,
                 branch_id=branch_id,
-                asset_ids=[int(a) for a in asset_ids] if asset_ids else None,
-                kit_ids=[int(k) for k in kit_ids] if kit_ids else None,
+                asset_ids=asset_ids if asset_ids else None,
+                kit_ids=kit_ids if kit_ids else None,
                 assigned_date=request.data.get('assigned_date'),
                 condition=request.data.get('condition', 'GOOD'),
                 notes=request.data.get('notes', ''),
@@ -59,17 +94,25 @@ class EmployeeAssetAssignmentView(APIView):
     
     def patch(self, request):
         """Update assignment (return, change condition, etc.)"""
+        company_id = request.user.company_id
         action = request.data.get('action', 'return')
         
         if action == 'return':
-            assignment_ids = request.data.get('assignment_ids', [])
-            if not assignment_ids:
+            assignment_uuids = request.data.get('assignment_ids', [])
+            if not assignment_uuids:
                 return Response({'error': 'assignment_ids required'}, status=400)
             
             try:
+                # Convert UUIDs to integer IDs
+                assignments = EmployeeAssetAssignment.objects.filter(
+                    _id__in=assignment_uuids,
+                    company_id=company_id
+                )
+                assignment_ids = list(assignments.values_list('id', flat=True))
+                
                 result = AssetAssignmentService.return_assets(
                     assignment_ids=assignment_ids,
-                    company_id=request.user.company_id,
+                    company_id=company_id,
                     returned_date=request.data.get('returned_date'),
                     condition_on_return=request.data.get('condition_on_return', 'GOOD'),
                     return_notes=request.data.get('return_notes', ''),
@@ -80,16 +123,16 @@ class EmployeeAssetAssignmentView(APIView):
                 return Response({'error': str(e)}, status=400)
         
         elif action == 'update':
-            assignment_id = request.data.get('assignment_id')
-            if not assignment_id:
+            assignment_uuid = request.data.get('assignment_id')
+            if not assignment_uuid:
                 return Response({'error': 'assignment_id required'}, status=400)
             
-            assignment = EmployeeAssetAssignment.objects.get(
-                id=assignment_id,
-                company_id=request.user.company_id
+            assignment = get_object_or_404(
+                EmployeeAssetAssignment,
+                _id=assignment_uuid,
+                company_id=company_id
             )
             
-            # Update allowed fields
             if 'status' in request.data:
                 assignment.status = request.data['status']
             if 'condition_on_assignment' in request.data:
@@ -107,19 +150,20 @@ class EmployeeAssetAssignmentView(APIView):
         return Response({'error': 'Invalid action'}, status=400)
     
     def delete(self, request):
-        """Remove assignment entirely (admin only)"""
-        assignment_id = request.data.get('id')
-        if not assignment_id:
-            return Response({'error': 'id required'}, status=400)
+        """Remove assignment entirely (admin only) using UUID"""
+        company_id = request.user.company_id
         
-        assignment = EmployeeAssetAssignment.objects.get(
-            id=assignment_id,
-            company_id=request.user.company_id
+        assignment_uuid = request.data.get('id')
+        if not assignment_uuid:
+            return Response({'error': 'id (UUID) required'}, status=400)
+        
+        assignment = get_object_or_404(
+            EmployeeAssetAssignment,
+            _id=assignment_uuid,
+            company_id=company_id
         )
         
-        # Only allow deleting non-active assignments, or admin override
         if assignment.status == 'ACTIVE':
-            # First return the asset
             assignment.status = 'RETURNED'
             assignment.returned_date = date.today()
             assignment.updated_by = request.user
@@ -134,29 +178,30 @@ class EmployeeAssetAssignmentView(APIView):
         return Response({'message': 'Assignment removed'})
 
 
-class AvailableAssetsView(APIView):
-    """Get available assets and kits for assignment"""
+class AvailableAssetsView(CompanyBranchMixin, APIView):
+    """Get available assets and kits for assignment with UUIDs"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
         company_id = request.user.company_id
-        employee_id = request.query_params.get('employee_id')
+        employee_uuid = request.query_params.get('employee_id')
         
-        # Available assets (not assigned to this employee)
-        assigned_to_employee = EmployeeAssetAssignment.objects.filter(
-            employee_id=employee_id,
-            status='ACTIVE'
-        ).values_list('asset_id', flat=True) if employee_id else []
+        assigned_to_employee_ids = []
+        if employee_uuid:
+            employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
+            assigned_to_employee_ids = EmployeeAssetAssignment.objects.filter(
+                employee=employee,
+                status='ACTIVE'
+            ).values_list('asset_id', flat=True)
         
         assets = Asset.objects.filter(
             company_id=company_id,
             is_deleted=False,
             is_active=True
         ).exclude(
-            id__in=assigned_to_employee
+            id__in=assigned_to_employee_ids
         ).order_by('name')
         
-        # Kits with asset details
         kits = AssetCategory.objects.filter(
             company_id=company_id,
             is_deleted=False,
@@ -166,7 +211,7 @@ class AvailableAssetsView(APIView):
         return Response({
             'assets': [
                 {
-                    'id': a.id,
+                    'id': str(a._id),
                     'name': a.name,
                     'brand': a.brand,
                     'model': a.model,
@@ -177,19 +222,19 @@ class AvailableAssetsView(APIView):
             ],
             'kits': [
                 {
-                    'id': k.id,
+                    'id': str(k._id),
                     'name': k.name,
                     'description': k.description,
                     'asset_count': k.assets.filter(is_deleted=False).count(),
                     'assets': [
                         {
-                            'id': asset.id,
+                            'id': str(asset._id),
                             'name': asset.name,
                             'brand': asset.brand,
                             'model': asset.model,
                             'serial_number': asset.serial_number,
                             'is_assigned': asset.is_assigned,
-                            'already_assigned_to_employee': asset.id in assigned_to_employee,
+                            'already_assigned_to_employee': asset.id in assigned_to_employee_ids,
                         }
                         for asset in k.assets.filter(is_deleted=False)
                     ]
@@ -199,19 +244,25 @@ class AvailableAssetsView(APIView):
         })
 
 
-class BulkAssignmentView(APIView):
-    """Bulk operations endpoint"""
+class BulkAssignmentView(CompanyBranchMixin, APIView):
+    """Bulk operations endpoint with UUID support"""
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
         """Bulk return assignments"""
-        assignment_ids = request.data.get('assignment_ids', [])
+        assignment_uuids = request.data.get('assignment_ids', [])
         company_id = request.user.company_id
         
-        if not assignment_ids:
+        if not assignment_uuids:
             return Response({'error': 'assignment_ids required'}, status=400)
         
         try:
+            assignments = EmployeeAssetAssignment.objects.filter(
+                _id__in=assignment_uuids,
+                company_id=company_id
+            )
+            assignment_ids = list(assignments.values_list('id', flat=True))
+            
             result = AssetAssignmentService.return_assets(
                 assignment_ids=assignment_ids,
                 company_id=company_id,

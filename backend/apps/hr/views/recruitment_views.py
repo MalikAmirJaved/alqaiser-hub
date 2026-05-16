@@ -3,15 +3,16 @@
 from django.db import models
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from datetime import datetime, date, timedelta
 import logging
-from django.utils import timezone
-
-from apps.hr.models import RecruitmentCandidate, RecruitmentActivityLog, Employee,InterviewRound
+from django.db import models, transaction
+from apps.common.baseauthentication import CompanyBranchMixin
+from apps.hr.models import RecruitmentCandidate, RecruitmentActivityLog, Employee, InterviewRound
 from apps.hr.serializers.recruitment_serializers import (
     RecruitmentCandidateSerializer,
     RecruitmentActivityLogSerializer,
@@ -20,15 +21,48 @@ from apps.hr.serializers.recruitment_serializers import (
     InterviewRoundUpdateSerializer,
     RoundBulkCreateSerializer,
     RecruitmentCandidateDetailSerializer,
-    RecruitmentCandidateListSerializer
 )
 
 logger = logging.getLogger(__name__)
 
 
-class RecruitmentCandidateView(APIView):
-    """CRUD operations for Recruitment Candidates"""
+class RecruitmentCandidateView(CompanyBranchMixin, APIView):
+    """CRUD operations for Recruitment Candidates with UUID support"""
     permission_classes = [IsAuthenticated]
+    
+    def _serialize_candidate(self, candidate):
+        """Serialize candidate with UUIDs"""
+        return {
+            "id": str(candidate._id),
+            "name": candidate.name,
+            "email": candidate.email,
+            "phone": candidate.phone,
+            "position": candidate.position,
+            "department": candidate.department,
+            "stage": candidate.stage,
+            "status": candidate.status,
+            "apply_date": candidate.apply_date.isoformat() if candidate.apply_date else None,
+            "interview_date": candidate.interview_date.isoformat() if candidate.interview_date else None,
+            "assigned_to_id": str(candidate.assigned_to._id) if candidate.assigned_to else None,
+            "assigned_to_name": candidate.assigned_to.full_name if candidate.assigned_to else None,
+            "assigned_name": candidate.assigned_name,
+            "resume_url": candidate.resume_url,
+            "notes": candidate.notes,
+            "source": candidate.source,
+            "expected_salary": str(candidate.expected_salary) if candidate.expected_salary else None,
+            "current_company": candidate.current_company,
+            "current_position": candidate.current_position,
+            "years_of_experience": float(candidate.years_of_experience) if candidate.years_of_experience else None,
+            "notice_period_days": candidate.notice_period_days,
+            "offer_sent_date": candidate.offer_sent_date.isoformat() if candidate.offer_sent_date else None,
+            "offer_accepted_date": candidate.offer_accepted_date.isoformat() if candidate.offer_accepted_date else None,
+            "offer_amount": str(candidate.offer_amount) if candidate.offer_amount else None,
+            "joining_date": candidate.joining_date.isoformat() if candidate.joining_date else None,
+            "rejection_reason": candidate.rejection_reason,
+            "rejection_date": candidate.rejection_date.isoformat() if candidate.rejection_date else None,
+            "created_at": candidate.created_at.isoformat() if candidate.created_at else None,
+            "updated_at": candidate.updated_at.isoformat() if candidate.updated_at else None,
+        }
     
     def get(self, request):
         """Get all candidates with filtering"""
@@ -45,32 +79,27 @@ class RecruitmentCandidateView(APIView):
             is_deleted=False
         ).select_related('assigned_to', 'created_by', 'updated_by')
         
-        # Filter by department
         department = request.query_params.get('department')
         if department:
             query = query.filter(department=department)
         
-        # Filter by stage
         stage = request.query_params.get('stage')
         if stage:
             query = query.filter(stage=stage)
         
-        # Filter by status
         status_filter = request.query_params.get('status')
         if status_filter:
             query = query.filter(status=status_filter)
         
-        # Filter by source
         source = request.query_params.get('source')
         if source:
             query = query.filter(source=source)
         
-        # Filter by assigned_to
-        assigned_to = request.query_params.get('assigned_to')
-        if assigned_to:
-            query = query.filter(assigned_to_id=assigned_to)
+        assigned_to_uuid = request.query_params.get('assigned_to')
+        if assigned_to_uuid:
+            assigned_to = get_object_or_404(Employee, _id=assigned_to_uuid, company_id=company_id, is_deleted=False)
+            query = query.filter(assigned_to=assigned_to)
         
-        # Date range filters
         date_from = request.query_params.get('date_from')
         date_to = request.query_params.get('date_to')
         if date_from:
@@ -78,7 +107,6 @@ class RecruitmentCandidateView(APIView):
         if date_to:
             query = query.filter(apply_date__lte=date_to)
         
-        # Search
         search = request.query_params.get('search')
         if search:
             query = query.filter(
@@ -89,14 +117,12 @@ class RecruitmentCandidateView(APIView):
                 Q(current_company__icontains=search)
             )
         
-        # Ordering
         ordering = request.query_params.get('ordering', '-apply_date')
         if ordering.lstrip('-') in ['name', 'position', 'department', 'stage', 'apply_date', 'interview_date', 'created_at']:
             query = query.order_by(ordering)
         else:
             query = query.order_by('-apply_date')
         
-        # Pagination
         page = int(request.query_params.get('page', 1))
         page_size = int(request.query_params.get('page_size', 50))
         start = (page - 1) * page_size
@@ -105,10 +131,8 @@ class RecruitmentCandidateView(APIView):
         total = query.count()
         candidates = query[start:end]
         
-        serializer = RecruitmentCandidateSerializer(candidates, many=True)
-        
         return Response({
-            'data': serializer.data,
+            'data': [self._serialize_candidate(c) for c in candidates],
             'pagination': {
                 'page': page,
                 'page_size': page_size,
@@ -117,6 +141,7 @@ class RecruitmentCandidateView(APIView):
             }
         })
     
+    @transaction.atomic
     def post(self, request):
         """Create new candidate"""
         company_id = request.user.company_id
@@ -128,33 +153,53 @@ class RecruitmentCandidateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        serializer = RecruitmentCandidateSerializer(data=request.data)
+        # Convert UUIDs to IDs if provided
+        assigned_to_uuid = request.data.get('assigned_to_id')
+        assigned_to = None
+        if assigned_to_uuid:
+            assigned_to = get_object_or_404(Employee, _id=assigned_to_uuid, company_id=company_id, is_deleted=False)
         
-        if serializer.is_valid():
-            candidate = serializer.save(
-                company_id=company_id,
-                branch_id=branch_id,
-                created_by=request.user,
-                updated_by=request.user
-            )
-            
-            # Log activity
-            self._log_activity(
-                candidate=candidate,
-                action='CREATED',
-                metadata={'ip': request.META.get('REMOTE_ADDR')},
-                performed_by=request.user
-            )
-            
-            return Response(
-                RecruitmentCandidateSerializer(candidate).data,
-                status=status.HTTP_201_CREATED
-            )
+        candidate = RecruitmentCandidate.objects.create(
+            company_id=company_id,
+            branch_id=branch_id,
+            name=request.data.get('name'),
+            email=request.data.get('email'),
+            phone=request.data.get('phone'),
+            position=request.data.get('position'),
+            department=request.data.get('department'),
+            stage=request.data.get('stage', 'Applied'),
+            status=request.data.get('status', 'Active'),
+            apply_date=request.data.get('apply_date', date.today()),
+            interview_date=request.data.get('interview_date'),
+            assigned_to=assigned_to,
+            assigned_name=assigned_to.full_name if assigned_to else request.data.get('assigned_name'),
+            resume_url=request.data.get('resume_url'),
+            notes=request.data.get('notes'),
+            source=request.data.get('source'),
+            expected_salary=request.data.get('expected_salary'),
+            current_company=request.data.get('current_company'),
+            current_position=request.data.get('current_position'),
+            years_of_experience=request.data.get('years_of_experience'),
+            notice_period_days=request.data.get('notice_period_days'),
+            created_by=request.user,
+            updated_by=request.user,
+        )
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        RecruitmentActivityLog.objects.create(
+            company_id=company_id,
+            candidate=candidate,
+            action='CREATED',
+            metadata={'ip': request.META.get('REMOTE_ADDR')},
+            performed_by=request.user,
+            ip_address=request.META.get('REMOTE_ADDR'),
+            user_agent=request.META.get('HTTP_USER_AGENT')
+        )
+        
+        return Response(self._serialize_candidate(candidate), status=status.HTTP_201_CREATED)
     
+    @transaction.atomic
     def patch(self, request):
-        """Update candidate"""
+        """Update candidate using UUID"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -163,82 +208,78 @@ class RecruitmentCandidateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        candidate_id = request.data.get('id')
-        if not candidate_id:
+        candidate_uuid = request.data.get('id')
+        if not candidate_uuid:
             return Response(
-                {'error': 'id is required'},
+                {'error': 'id (UUID) is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         candidate = get_object_or_404(
             RecruitmentCandidate,
-            id=candidate_id,
+            _id=candidate_uuid,
             company_id=company_id,
             is_deleted=False
         )
         
-        # Track changes for activity log
         old_stage = candidate.stage
         old_assigned_to = candidate.assigned_to_id
         
-        serializer = RecruitmentCandidateSerializer(candidate, data=request.data, partial=True)
+        updatable_fields = [
+            'name', 'email', 'phone', 'position', 'department',
+            'stage', 'status', 'apply_date', 'interview_date',
+            'resume_url', 'notes', 'source', 'expected_salary',
+            'current_company', 'current_position', 'years_of_experience',
+            'notice_period_days', 'offer_sent_date', 'offer_accepted_date',
+            'offer_amount', 'joining_date', 'rejection_reason'
+        ]
         
-        if serializer.is_valid():
-            updated_candidate = serializer.save(updated_by=request.user)
-            
-            # Log stage change
-            if old_stage != updated_candidate.stage:
-                self._log_activity(
-                    candidate=updated_candidate,
-                    action='STAGE_CHANGED',
-                    old_value=old_stage,
-                    new_value=updated_candidate.stage,
-                    metadata={'ip': request.META.get('REMOTE_ADDR')},
-                    performed_by=request.user
-                )
-                
-                # Log specific actions based on new stage
-                if updated_candidate.stage == 'Hired':
-                    self._log_activity(
-                        candidate=updated_candidate,
-                        action='HIRED',
-                        metadata={'joining_date': str(updated_candidate.joining_date) if updated_candidate.joining_date else None},
-                        performed_by=request.user
-                    )
-                elif updated_candidate.stage == 'Rejected':
-                    self._log_activity(
-                        candidate=updated_candidate,
-                        action='REJECTED',
-                        old_value=old_stage,
-                        new_value=updated_candidate.rejection_reason,
-                        metadata={'ip': request.META.get('REMOTE_ADDR')},
-                        performed_by=request.user
-                    )
-                elif updated_candidate.stage == 'Offer':
-                    self._log_activity(
-                        candidate=updated_candidate,
-                        action='OFFER_SENT',
-                        metadata={'offer_amount': str(updated_candidate.offer_amount) if updated_candidate.offer_amount else None},
-                        performed_by=request.user
-                    )
-            
-            # Log assignment change
-            if old_assigned_to != updated_candidate.assigned_to_id:
-                self._log_activity(
-                    candidate=updated_candidate,
-                    action='ASSIGNMENT_CHANGED',
-                    old_value=str(old_assigned_to) if old_assigned_to else None,
-                    new_value=str(updated_candidate.assigned_to_id) if updated_candidate.assigned_to_id else None,
-                    metadata={'ip': request.META.get('REMOTE_ADDR')},
-                    performed_by=request.user
-                )
-            
-            return Response(RecruitmentCandidateSerializer(updated_candidate).data)
+        for field in updatable_fields:
+            if field in request.data:
+                setattr(candidate, field, request.data[field])
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        assigned_to_uuid = request.data.get('assigned_to_id')
+        if assigned_to_uuid is not None:
+            if assigned_to_uuid:
+                assigned_to = get_object_or_404(Employee, _id=assigned_to_uuid, company_id=company_id, is_deleted=False)
+                candidate.assigned_to = assigned_to
+                candidate.assigned_name = assigned_to.full_name
+            else:
+                candidate.assigned_to = None
+                candidate.assigned_name = None
+        
+        candidate.updated_by = request.user
+        candidate.save()
+        
+        if old_stage != candidate.stage:
+            RecruitmentActivityLog.objects.create(
+                company_id=company_id,
+                candidate=candidate,
+                action='STAGE_CHANGED',
+                old_value=old_stage,
+                new_value=candidate.stage,
+                performed_by=request.user,
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT')
+            )
+        
+        if old_assigned_to != candidate.assigned_to_id:
+            RecruitmentActivityLog.objects.create(
+                company_id=company_id,
+                candidate=candidate,
+                action='ASSIGNMENT_CHANGED',
+                old_value=str(old_assigned_to) if old_assigned_to else None,
+                new_value=str(candidate.assigned_to_id) if candidate.assigned_to_id else None,
+                performed_by=request.user,
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT')
+            )
+        
+        return Response(self._serialize_candidate(candidate))
     
+    @transaction.atomic
     def delete(self, request):
-        """Soft delete candidate"""
+        """Soft delete candidate using UUID"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -247,50 +288,29 @@ class RecruitmentCandidateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        candidate_id = request.data.get('id')
-        if not candidate_id:
+        candidate_uuid = request.data.get('id')
+        if not candidate_uuid:
             return Response(
-                {'error': 'id is required'},
+                {'error': 'id (UUID) is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         candidate = get_object_or_404(
             RecruitmentCandidate,
-            id=candidate_id,
+            _id=candidate_uuid,
             company_id=company_id,
             is_deleted=False
         )
         
         candidate.is_deleted = True
-        candidate.deleted_at = datetime.now()
+        candidate.deleted_at = timezone.now()
         candidate.deleted_by = request.user
         candidate.save()
         
-        self._log_activity(
-            candidate=candidate,
-            action='CREATED',  # Will add DELETE action
-            metadata={'ip': request.META.get('REMOTE_ADDR')},
-            performed_by=request.user
-        )
-        
         return Response({'message': 'Candidate deleted successfully'})
-    
-    def _log_activity(self, candidate, action, old_value=None, new_value=None, metadata=None, performed_by=None):
-        """Helper method to log activities"""
-        RecruitmentActivityLog.objects.create(
-            company_id=candidate.company_id,
-            candidate=candidate,
-            action=action,
-            old_value=old_value,
-            new_value=new_value,
-            metadata=metadata or {},
-            performed_by=performed_by,
-            ip_address=self.request.META.get('REMOTE_ADDR') if hasattr(self, 'request') else None,
-            user_agent=self.request.META.get('HTTP_USER_AGENT') if hasattr(self, 'request') else None
-        )
 
 
-class RecruitmentStatsView(APIView):
+class RecruitmentStatsView(CompanyBranchMixin, APIView):
     """Get recruitment statistics"""
     permission_classes = [IsAuthenticated]
     
@@ -303,13 +323,11 @@ class RecruitmentStatsView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Base query for active candidates
         query = RecruitmentCandidate.objects.filter(
             company_id=company_id,
             is_deleted=False
         )
         
-        # Filter by date range
         date_from = request.query_params.get('date_from')
         date_to = request.query_params.get('date_to')
         
@@ -318,7 +336,6 @@ class RecruitmentStatsView(APIView):
         if date_to:
             query = query.filter(apply_date__lte=date_to)
         
-        # Calculate stats
         stats = {
             'total_applicants': query.filter(status='Active').count(),
             'screening': query.filter(stage='Screening', status='Active').count(),
@@ -331,7 +348,6 @@ class RecruitmentStatsView(APIView):
             'by_month': []
         }
         
-        # Department breakdown
         dept_stats = query.filter(status='Active').values('department').annotate(
             count=Count('id')
         ).order_by('-count')
@@ -339,7 +355,6 @@ class RecruitmentStatsView(APIView):
         for dept in dept_stats:
             stats['by_department'][dept['department']] = dept['count']
         
-        # Source breakdown
         source_stats = query.filter(status='Active', source__isnull=False).values('source').annotate(
             count=Count('id')
         ).order_by('-count')
@@ -347,7 +362,6 @@ class RecruitmentStatsView(APIView):
         for source in source_stats:
             stats['by_source'][source['source']] = source['count']
         
-        # Monthly breakdown for last 12 months
         today = date.today()
         for i in range(11, -1, -1):
             month_date = today.replace(day=1) - timedelta(days=30 * i)
@@ -368,12 +382,11 @@ class RecruitmentStatsView(APIView):
                 'hired': month_stats.filter(stage='Hired').count()
             })
         
-        serializer = RecruitmentStatsSerializer(stats)
-        return Response(serializer.data)
+        return Response(stats)
 
 
-class RecruitmentActivityLogView(APIView):
-    """Get recruitment activity logs"""
+class RecruitmentActivityLogView(CompanyBranchMixin, APIView):
+    """Get recruitment activity logs with UUID support"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request, candidate_id=None):
@@ -390,14 +403,18 @@ class RecruitmentActivityLogView(APIView):
         ).select_related('candidate', 'performed_by')
         
         if candidate_id:
-            query = query.filter(candidate_id=candidate_id)
+            candidate = get_object_or_404(
+                RecruitmentCandidate,
+                _id=candidate_id,
+                company_id=company_id,
+                is_deleted=False
+            )
+            query = query.filter(candidate=candidate)
         
-        # Filter by action
         action = request.query_params.get('action')
         if action:
             query = query.filter(action=action)
         
-        # Date range filter
         date_from = request.query_params.get('date_from')
         date_to = request.query_params.get('date_to')
         if date_from:
@@ -405,10 +422,8 @@ class RecruitmentActivityLogView(APIView):
         if date_to:
             query = query.filter(created_at__date__lte=date_to)
         
-        # Ordering
         query = query.order_by('-created_at')
         
-        # Pagination
         page = int(request.query_params.get('page', 1))
         page_size = int(request.query_params.get('page_size', 50))
         start = (page - 1) * page_size
@@ -417,10 +432,22 @@ class RecruitmentActivityLogView(APIView):
         total = query.count()
         logs = query[start:end]
         
-        serializer = RecruitmentActivityLogSerializer(logs, many=True)
-        
         return Response({
-            'data': serializer.data,
+            'data': [
+                {
+                    "id": str(l._id),
+                    "candidate_id": str(l.candidate._id) if l.candidate else None,
+                    "candidate_name": l.candidate.name if l.candidate else None,
+                    "action": l.action,
+                    "old_value": l.old_value,
+                    "new_value": l.new_value,
+                    "metadata": l.metadata,
+                    "ip_address": l.ip_address,
+                    "performed_by": l.performed_by.email if l.performed_by else None,
+                    "created_at": l.created_at.isoformat() if l.created_at else None,
+                }
+                for l in logs
+            ],
             'pagination': {
                 'page': page,
                 'page_size': page_size,
@@ -430,14 +457,15 @@ class RecruitmentActivityLogView(APIView):
         })
 
 
-class RecruitmentBulkActionView(APIView):
-    """Bulk actions for recruitment candidates"""
+class RecruitmentBulkActionView(CompanyBranchMixin, APIView):
+    """Bulk actions for recruitment candidates with UUID support"""
     permission_classes = [IsAuthenticated]
     
+    @transaction.atomic
     def post(self, request):
         company_id = request.user.company_id
         action = request.data.get('action')
-        candidate_ids = request.data.get('candidate_ids', [])
+        candidate_uuids = request.data.get('candidate_ids', [])
         
         if not company_id:
             return Response(
@@ -445,23 +473,22 @@ class RecruitmentBulkActionView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        if not action or not candidate_ids:
+        if not action or not candidate_uuids:
             return Response(
                 {'error': 'action and candidate_ids are required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         candidates = RecruitmentCandidate.objects.filter(
-            id__in=candidate_ids,
+            _id__in=candidate_uuids,
             company_id=company_id,
             is_deleted=False
         )
         
         if action == 'delete':
-            # Bulk soft delete
             count = candidates.update(
                 is_deleted=True,
-                deleted_at=datetime.now(),
+                deleted_at=timezone.now(),
                 deleted_by=request.user
             )
             return Response({'message': f'{count} candidates deleted successfully'})
@@ -476,7 +503,6 @@ class RecruitmentBulkActionView(APIView):
             
             count = candidates.update(stage=new_stage, updated_by=request.user)
             
-            # Log activities for each candidate
             for candidate in candidates:
                 RecruitmentActivityLog.objects.create(
                     company_id=company_id,
@@ -491,17 +517,17 @@ class RecruitmentBulkActionView(APIView):
             return Response({'message': f'{count} candidates updated to {new_stage}'})
         
         elif action == 'assign_to':
-            assigned_to_id = request.data.get('assigned_to_id')
-            if not assigned_to_id:
+            assigned_to_uuid = request.data.get('assigned_to_id')
+            if not assigned_to_uuid:
                 return Response(
                     {'error': 'assigned_to_id is required for assign_to action'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            assigned_employee = get_object_or_404(Employee, id=assigned_to_id, company_id=company_id)
+            assigned_employee = get_object_or_404(Employee, _id=assigned_to_uuid, company_id=company_id, is_deleted=False)
             
             count = candidates.update(
-                assigned_to_id=assigned_to_id,
+                assigned_to=assigned_employee,
                 assigned_name=assigned_employee.full_name,
                 updated_by=request.user
             )
@@ -525,8 +551,9 @@ class RecruitmentBulkActionView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-class InterviewRoundView(APIView):
-    """CRUD operations for Interview Rounds"""
+
+class InterviewRoundView(CompanyBranchMixin, APIView):
+    """CRUD operations for Interview Rounds with UUID support"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request, candidate_id):
@@ -541,15 +568,37 @@ class InterviewRoundView(APIView):
         
         candidate = get_object_or_404(
             RecruitmentCandidate,
-            id=candidate_id,
+            _id=candidate_id,
             company_id=company_id,
             is_deleted=False
         )
         
         rounds = candidate.interview_rounds.all().order_by('round_number')
-        serializer = InterviewRoundSerializer(rounds, many=True)
-        return Response(serializer.data)
+        
+        return Response([
+            {
+                "id": str(r._id),
+                "round_number": r.round_number,
+                "round_title": r.round_title,
+                "interview_type": r.interview_type,
+                "interview_type_display": r.get_interview_type_display(),
+                "status": r.status,
+                "status_display": r.get_status_display(),
+                "interview_date": r.interview_date.isoformat() if r.interview_date else None,
+                "interviewer_id": str(r.interviewer._id) if r.interviewer else None,
+                "interviewer_name": r.interviewer_name,
+                "feedback": r.feedback,
+                "rating": r.rating,
+                "notes": r.notes,
+                "meeting_link": r.meeting_link,
+                "duration_minutes": r.duration_minutes,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+            }
+            for r in rounds
+        ])
     
+    @transaction.atomic
     def post(self, request, candidate_id):
         """Create a new interview round"""
         company_id = request.user.company_id
@@ -562,12 +611,11 @@ class InterviewRoundView(APIView):
         
         candidate = get_object_or_404(
             RecruitmentCandidate,
-            id=candidate_id,
+            _id=candidate_id,
             company_id=company_id,
             is_deleted=False
         )
         
-        # Check if round number already exists
         round_number = request.data.get('round_number')
         if InterviewRound.objects.filter(candidate=candidate, round_number=round_number).exists():
             return Response(
@@ -575,31 +623,48 @@ class InterviewRoundView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        serializer = InterviewRoundSerializer(data=request.data)
-        if serializer.is_valid():
-            interview_round = serializer.save(
-                candidate=candidate,
-                interviewer=request.user.employee if hasattr(request.user, 'employee') else None
-            )
-            
-            # Log activity
-            RecruitmentActivityLog.objects.create(
-                company_id=company_id,
-                candidate=candidate,
-                action='INTERVIEW_SCHEDULED',
-                new_value=f"Round {round_number}: {interview_round.round_title}",
-                metadata={'round_number': round_number},
-                performed_by=request.user,
-                ip_address=request.META.get('REMOTE_ADDR'),
-                user_agent=request.META.get('HTTP_USER_AGENT')
-            )
-            
-            return Response(InterviewRoundSerializer(interview_round).data, status=status.HTTP_201_CREATED)
+        interviewer_uuid = request.data.get('interviewer_id')
+        interviewer = None
+        if interviewer_uuid:
+            interviewer = get_object_or_404(Employee, _id=interviewer_uuid, company_id=company_id, is_deleted=False)
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        interview_round = InterviewRound.objects.create(
+            candidate=candidate,
+            round_number=round_number,
+            round_title=request.data.get('round_title'),
+            interview_type=request.data.get('interview_type', 'TECHNICAL'),
+            status=request.data.get('status', 'PENDING'),
+            interview_date=request.data.get('interview_date'),
+            interviewer=interviewer,
+            interviewer_name=interviewer.full_name if interviewer else request.data.get('interviewer_name'),
+            feedback=request.data.get('feedback'),
+            rating=request.data.get('rating'),
+            notes=request.data.get('notes'),
+            meeting_link=request.data.get('meeting_link'),
+            duration_minutes=request.data.get('duration_minutes'),
+        )
+        
+        RecruitmentActivityLog.objects.create(
+            company_id=company_id,
+            candidate=candidate,
+            action='INTERVIEW_SCHEDULED',
+            new_value=f"Round {round_number}: {interview_round.round_title}",
+            metadata={'round_number': round_number},
+            performed_by=request.user,
+            ip_address=request.META.get('REMOTE_ADDR'),
+            user_agent=request.META.get('HTTP_USER_AGENT')
+        )
+        
+        return Response({
+            "id": str(interview_round._id),
+            "round_number": interview_round.round_number,
+            "round_title": interview_round.round_title,
+            "status": interview_round.status,
+        }, status=status.HTTP_201_CREATED)
     
+    @transaction.atomic
     def patch(self, request, candidate_id, round_id):
-        """Update a specific round"""
+        """Update a specific round using UUID"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -608,40 +673,59 @@ class InterviewRoundView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        candidate = get_object_or_404(
+            RecruitmentCandidate,
+            _id=candidate_id,
+            company_id=company_id,
+            is_deleted=False
+        )
+        
         interview_round = get_object_or_404(
             InterviewRound,
-            id=round_id,
-            candidate_id=candidate_id,
-            candidate__company_id=company_id
+            _id=round_id,
+            candidate=candidate
         )
         
         old_status = interview_round.status
         
-        serializer = InterviewRoundUpdateSerializer(interview_round, data=request.data, partial=True)
+        updatable_fields = ['status', 'interview_date', 'feedback', 'rating', 'notes', 'meeting_link', 'duration_minutes']
+        for field in updatable_fields:
+            if field in request.data:
+                setattr(interview_round, field, request.data[field])
         
-        if serializer.is_valid():
-            updated_round = serializer.save()
-            
-            # Log activity
-            if old_status != updated_round.status:
-                RecruitmentActivityLog.objects.create(
-                    company_id=company_id,
-                    candidate=interview_round.candidate,
-                    action='STAGE_CHANGED',
-                    old_value=f"Round {updated_round.round_number}: {old_status}",
-                    new_value=f"Round {updated_round.round_number}: {updated_round.status}",
-                    metadata={'round_number': updated_round.round_number, 'status': updated_round.status},
-                    performed_by=request.user,
-                    ip_address=request.META.get('REMOTE_ADDR'),
-                    user_agent=request.META.get('HTTP_USER_AGENT')
-                )
-            
-            return Response(InterviewRoundSerializer(updated_round).data)
+        interviewer_uuid = request.data.get('interviewer_id')
+        if interviewer_uuid is not None:
+            if interviewer_uuid:
+                interviewer = get_object_or_404(Employee, _id=interviewer_uuid, company_id=company_id, is_deleted=False)
+                interview_round.interviewer = interviewer
+                interview_round.interviewer_name = interviewer.full_name
+            else:
+                interview_round.interviewer = None
+                interview_round.interviewer_name = None
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        interview_round.save()
+        
+        if old_status != interview_round.status:
+            RecruitmentActivityLog.objects.create(
+                company_id=company_id,
+                candidate=candidate,
+                action='STAGE_CHANGED',
+                old_value=f"Round {interview_round.round_number}: {old_status}",
+                new_value=f"Round {interview_round.round_number}: {interview_round.status}",
+                metadata={'round_number': interview_round.round_number, 'status': interview_round.status},
+                performed_by=request.user,
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT')
+            )
+        
+        return Response({
+            "id": str(interview_round._id),
+            "status": interview_round.status,
+        })
     
+    @transaction.atomic
     def delete(self, request, candidate_id, round_id):
-        """Delete a round"""
+        """Delete a round using UUID"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -650,21 +734,28 @@ class InterviewRoundView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        candidate = get_object_or_404(
+            RecruitmentCandidate,
+            _id=candidate_id,
+            company_id=company_id,
+            is_deleted=False
+        )
+        
         interview_round = get_object_or_404(
             InterviewRound,
-            id=round_id,
-            candidate_id=candidate_id,
-            candidate__company_id=company_id
+            _id=round_id,
+            candidate=candidate
         )
         
         interview_round.delete()
         return Response({'message': 'Round deleted successfully'})
 
 
-class RoundBulkCreateView(APIView):
+class RoundBulkCreateView(CompanyBranchMixin, APIView):
     """Bulk create interview rounds for a candidate"""
     permission_classes = [IsAuthenticated]
     
+    @transaction.atomic
     def post(self, request, candidate_id):
         company_id = request.user.company_id
         
@@ -676,15 +767,13 @@ class RoundBulkCreateView(APIView):
         
         candidate = get_object_or_404(
             RecruitmentCandidate,
-            id=candidate_id,
+            _id=candidate_id,
             company_id=company_id,
             is_deleted=False
         )
         
-        # Delete existing rounds
         candidate.interview_rounds.all().delete()
         
-        # Create new rounds
         serializer = RoundBulkCreateSerializer(data=request.data)
         
         if serializer.is_valid():
@@ -692,24 +781,28 @@ class RoundBulkCreateView(APIView):
             created_rounds = []
             
             for round_data in rounds_data:
+                interviewer_uuid = round_data.get('interviewer_id')
+                interviewer = None
+                if interviewer_uuid:
+                    interviewer = get_object_or_404(Employee, _id=interviewer_uuid, company_id=company_id, is_deleted=False)
+                
                 interview_round = InterviewRound.objects.create(
                     candidate=candidate,
                     round_number=round_data['round_number'],
                     round_title=round_data['round_title'],
                     interview_type=round_data.get('interview_type', 'TECHNICAL'),
                     status='PENDING',
-                    interviewer_id=round_data.get('interviewer_id'),
+                    interviewer=interviewer,
+                    interviewer_name=interviewer.full_name if interviewer else None,
                     duration_minutes=round_data.get('duration_minutes'),
                     notes=round_data.get('notes', '')
                 )
                 created_rounds.append(interview_round)
             
-            # Update candidate stage to Interview if not already
             if candidate.stage != 'Interview':
                 candidate.stage = 'Interview'
                 candidate.save()
             
-            # Log activity
             RecruitmentActivityLog.objects.create(
                 company_id=company_id,
                 candidate=candidate,
@@ -723,16 +816,24 @@ class RoundBulkCreateView(APIView):
             
             return Response({
                 'message': f'Successfully created {len(created_rounds)} rounds',
-                'rounds': InterviewRoundSerializer(created_rounds, many=True).data
+                'rounds': [
+                    {
+                        "id": str(r._id),
+                        "round_number": r.round_number,
+                        "round_title": r.round_title,
+                    }
+                    for r in created_rounds
+                ]
             }, status=status.HTTP_201_CREATED)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class RoundStatusBulkUpdateView(APIView):
+class RoundStatusBulkUpdateView(CompanyBranchMixin, APIView):
     """Bulk update round statuses with cascade logic"""
     permission_classes = [IsAuthenticated]
     
+    @transaction.atomic
     def post(self, request, candidate_id):
         company_id = request.user.company_id
         
@@ -744,21 +845,19 @@ class RoundStatusBulkUpdateView(APIView):
         
         candidate = get_object_or_404(
             RecruitmentCandidate,
-            id=candidate_id,
+            _id=candidate_id,
             company_id=company_id,
             is_deleted=False
         )
         
         updates = request.data.get('updates', [])
-        # updates format: [{"round_id": 1, "status": "PASSED", "feedback": "..."}]
-        
         updated_rounds = []
         
         for update in updates:
-            round_id = update.get('round_id')
+            round_uuid = update.get('round_id')
             new_status = update.get('status')
             
-            interview_round = get_object_or_404(InterviewRound, id=round_id, candidate=candidate)
+            interview_round = get_object_or_404(InterviewRound, _id=round_uuid, candidate=candidate)
             old_status = interview_round.status
             
             interview_round.status = new_status
@@ -770,7 +869,6 @@ class RoundStatusBulkUpdateView(APIView):
             
             interview_round.save()
             
-            # Cascade logic: if failed, mark next rounds as failed
             if new_status == 'FAILED' and old_status != 'FAILED':
                 next_rounds = candidate.interview_rounds.filter(
                     round_number__gt=interview_round.round_number,
@@ -780,14 +878,12 @@ class RoundStatusBulkUpdateView(APIView):
                     nr.status = 'FAILED'
                     nr.feedback = f"Auto-rejected due to failure in Round {interview_round.round_number}"
                     nr.save()
-                    updated_rounds.append(nr.id)
+                    updated_rounds.append(str(nr._id))
             
-            updated_rounds.append(round_id)
+            updated_rounds.append(str(round_uuid))
         
-        # Update candidate overall status
         all_rounds = candidate.interview_rounds.all().order_by('round_number')
         
-        # Check if any round failed
         if all_rounds.filter(status='FAILED').exists():
             candidate.stage = 'Rejected'
             candidate.status = 'Closed'
@@ -795,16 +891,13 @@ class RoundStatusBulkUpdateView(APIView):
             if not candidate.rejection_reason:
                 failed_round = all_rounds.filter(status='FAILED').first()
                 candidate.rejection_reason = f"Failed in Round {failed_round.round_number}: {failed_round.round_title}"
-        # Check if all rounds passed
         elif all_rounds.count() > 0 and all_rounds.filter(status='PASSED').count() == all_rounds.count():
             candidate.stage = 'Offer'
-        # Check if any round is pending/scheduled
         elif all_rounds.filter(status__in=['PENDING', 'SCHEDULED']).exists():
             candidate.stage = 'Interview'
         
         candidate.save()
         
-        # Log bulk update
         RecruitmentActivityLog.objects.create(
             company_id=company_id,
             candidate=candidate,
@@ -820,9 +913,10 @@ class RoundStatusBulkUpdateView(APIView):
             'message': f'Successfully updated {len(updates)} rounds',
             'candidate_status': candidate.stage
         })
-    
-class RecruitmentCandidateDetailView(APIView):
-    """Get detailed candidate information with rounds"""
+
+
+class RecruitmentCandidateDetailView(CompanyBranchMixin, APIView):
+    """Get detailed candidate information with rounds using UUID"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request, candidate_id):
@@ -836,10 +930,57 @@ class RecruitmentCandidateDetailView(APIView):
         
         candidate = get_object_or_404(
             RecruitmentCandidate,
-            id=candidate_id,
+            _id=candidate_id,
             company_id=company_id,
             is_deleted=False
         )
         
-        serializer = RecruitmentCandidateDetailSerializer(candidate)
-        return Response(serializer.data)
+        result = {
+            "id": str(candidate._id),
+            "name": candidate.name,
+            "email": candidate.email,
+            "phone": candidate.phone,
+            "position": candidate.position,
+            "department": candidate.department,
+            "stage": candidate.stage,
+            "status": candidate.status,
+            "apply_date": candidate.apply_date.isoformat() if candidate.apply_date else None,
+            "interview_date": candidate.interview_date.isoformat() if candidate.interview_date else None,
+            "assigned_to_id": str(candidate.assigned_to._id) if candidate.assigned_to else None,
+            "assigned_to_name": candidate.assigned_to.full_name if candidate.assigned_to else None,
+            "resume_url": candidate.resume_url,
+            "notes": candidate.notes,
+            "source": candidate.source,
+            "expected_salary": str(candidate.expected_salary) if candidate.expected_salary else None,
+            "current_company": candidate.current_company,
+            "current_position": candidate.current_position,
+            "years_of_experience": float(candidate.years_of_experience) if candidate.years_of_experience else None,
+            "notice_period_days": candidate.notice_period_days,
+            "offer_sent_date": candidate.offer_sent_date.isoformat() if candidate.offer_sent_date else None,
+            "offer_accepted_date": candidate.offer_accepted_date.isoformat() if candidate.offer_accepted_date else None,
+            "offer_amount": str(candidate.offer_amount) if candidate.offer_amount else None,
+            "joining_date": candidate.joining_date.isoformat() if candidate.joining_date else None,
+            "rejection_reason": candidate.rejection_reason,
+            "interview_rounds": [
+                {
+                    "id": str(r._id),
+                    "round_number": r.round_number,
+                    "round_title": r.round_title,
+                    "interview_type": r.interview_type,
+                    "status": r.status,
+                    "interview_date": r.interview_date.isoformat() if r.interview_date else None,
+                    "interviewer_name": r.interviewer_name,
+                    "feedback": r.feedback,
+                    "rating": r.rating,
+                    "notes": r.notes,
+                }
+                for r in candidate.interview_rounds.all().order_by('round_number')
+            ],
+            "current_round": candidate.current_round,
+            "highest_round": candidate.highest_round,
+            "overall_status": candidate.overall_status,
+            "created_at": candidate.created_at.isoformat() if candidate.created_at else None,
+            "updated_at": candidate.updated_at.isoformat() if candidate.updated_at else None,
+        }
+        
+        return Response(result)

@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
 export interface Category {
-  id: number;
+  id: string;
   name: string;
   code: string;
   description: string;

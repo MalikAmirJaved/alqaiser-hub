@@ -4,27 +4,27 @@ import { useApi } from "@/hooks/useApi";
 
 // ---------- Types matching backend ----------
 export interface VariantAttribute {
-  id: number;
+  id: string;
   attribute_key: string;
   attribute_value: string;
 }
 
 export interface VariantImage {
-  id: number;
+  id: string;
   image_url: string;
   sort_order: number;
   is_primary: boolean;
 }
 
 export interface StockByWarehouse {
-  warehouse_id: number;
+  warehouse_id: string;
   warehouse_name: string;
   quantity_on_hand: number;
   quantity_reserved: number;
 }
 
 export interface ProductVariant {
-  id: number;
+  id: string;
   sku: string;
   barcode: string;
   qr_code: string;
@@ -42,11 +42,11 @@ export interface ProductVariant {
 }
 
 export interface Product {
-  id: number;
+  id: string;
   product_name: string;
   description: string;
-  category_id: number | null;
-  brand_id: number | null;
+  category_id: string | null;
+  brand_id: string | null;
   unit: string;
   storage_requirement: string;
   tax_rate: string;
@@ -82,8 +82,8 @@ export interface ProductVariantPayload {
 export interface ProductPayload {
   productName: string;
   description?: string;
-  category?: number | null;
-  brand?: number | null;
+  category?: string | null;
+  brand?: string | null;
   unit: string;
   storageRequirement: string;
   taxRate: number;
@@ -162,7 +162,7 @@ export function useUpdateProduct() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: number } & ProductPayload) =>
+    mutationFn: ({ id, ...data }: { id: string } & ProductPayload) =>
       api<ProductMutationResponse>(`/api/inventory/products/${id}/`, {
         method: "PUT",
         body: JSON.stringify(data),
@@ -178,7 +178,7 @@ export function useDeleteProduct() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: (id: string) =>
       api(`/api/inventory/products/${id}/`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });

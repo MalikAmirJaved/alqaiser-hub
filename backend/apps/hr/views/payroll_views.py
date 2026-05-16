@@ -2,23 +2,49 @@
 from datetime import datetime, date
 from django.db import transaction, models
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from django.db.models import Q
 import logging
+
+from apps.common.baseauthentication import CompanyBranchMixin
 from apps.hr.models import (
-    Employee, PayrollRecord, EmployeeLoan, Compensation,
-    EmployeeAssetAssignment, AssetCategory, Asset
+    Employee, PayrollRecord, EmployeeLoan, Compensation
 )
 
 logger = logging.getLogger(__name__)
 
 
-class PayrollView(APIView):
-    """Payroll management - process and view payroll"""
+class PayrollView(CompanyBranchMixin, APIView):
+    """Payroll management with UUID support"""
     permission_classes = [IsAuthenticated]
+    
+    def _serialize_payroll(self, payroll):
+        return {
+            "id": str(payroll._id),
+            "employee_id": str(payroll.employee._id) if payroll.employee else None,
+            "employee_name": payroll.employee.full_name if payroll.employee else None,
+            "employee_code": payroll.employee.employee_id if payroll.employee else None,
+            "department": payroll.employee.department if payroll.employee else None,
+            "designation": payroll.employee.designation if payroll.employee else None,
+            "month": payroll.month,
+            "year": payroll.year,
+            "base_salary": str(payroll.base_salary),
+            "bonus": str(payroll.bonus),
+            "deductions": str(payroll.deductions),
+            "deduction_breakdown": payroll.deduction_breakdown,
+            "net_salary": str(payroll.net_salary),
+            "transaction_type": payroll.transaction_type,
+            "transaction_number": payroll.transaction_number,
+            "payment_method": payroll.payment_method,
+            "status": payroll.status,
+            "custom_note": payroll.custom_note,
+            "processed_at": payroll.processed_at.isoformat() if payroll.processed_at else None,
+            "created_at": payroll.created_at.isoformat() if payroll.created_at else None,
+        }
     
     def get(self, request):
         """Get payroll records with optional filters"""
@@ -30,10 +56,9 @@ class PayrollView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Filters
         month = request.query_params.get('month')
         year = request.query_params.get('year')
-        employee_id = request.query_params.get('employee_id')
+        employee_uuid = request.query_params.get('employee_id')
         status_filter = request.query_params.get('status')
         search = request.query_params.get('search')
         
@@ -46,8 +71,9 @@ class PayrollView(APIView):
             query = query.filter(month=int(month))
         if year:
             query = query.filter(year=int(year))
-        if employee_id:
-            query = query.filter(employee_id=employee_id)
+        if employee_uuid:
+            employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
+            query = query.filter(employee=employee)
         if status_filter:
             query = query.filter(status=status_filter)
         if search:
@@ -60,35 +86,11 @@ class PayrollView(APIView):
         
         records = query.order_by('-year', '-month', '-created_at')
         
-        return Response([
-            {
-                "id": r.id,
-                "employee_id": r.employee_id,
-                "employee_name": r.employee.full_name,
-                "employee_code": r.employee.employee_id,
-                "department": r.employee.department,
-                "designation": r.employee.designation,
-                "month": r.month,
-                "year": r.year,
-                "base_salary": str(r.base_salary),
-                "bonus": str(r.bonus),
-                "deductions": str(r.deductions),
-                "deduction_breakdown": r.deduction_breakdown,
-                "net_salary": str(r.net_salary),
-                "transaction_type": r.transaction_type,
-                "transaction_number": r.transaction_number,
-                "payment_method": r.payment_method,
-                "status": r.status,
-                "custom_note": r.custom_note,
-                "processed_at": r.processed_at.isoformat() if r.processed_at else None,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
-            }
-            for r in records
-        ])
+        return Response([self._serialize_payroll(r) for r in records])
     
     @transaction.atomic
     def post(self, request):
-        """Process payroll for an employee with compensation and overtime"""
+        """Process payroll for an employee"""
         company_id = request.user.company_id
         branch_id = request.user.branch_id
         
@@ -98,11 +100,11 @@ class PayrollView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        employee_id = request.data.get('employee_id')
+        employee_uuid = request.data.get('employee_id')
         month = request.data.get('month', date.today().month)
         year = request.data.get('year', date.today().year)
         
-        if not employee_id:
+        if not employee_uuid:
             return Response(
                 {'error': 'employee_id is required'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -110,12 +112,11 @@ class PayrollView(APIView):
         
         employee = get_object_or_404(
             Employee,
-            id=employee_id,
+            _id=employee_uuid,
             company_id=company_id,
             is_deleted=False
         )
         
-        # Check if already processed for this month
         if PayrollRecord.objects.filter(
             employee=employee,
             month=month,
@@ -127,22 +128,18 @@ class PayrollView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Get employee base salary from employee table
         base_salary = float(employee.salary)
         
-        # Get active compensation
         compensation = Compensation.objects.filter(
             employee=employee,
             is_active=True,
             is_deleted=False
         ).first()
         
-        # Calculate compensation allowances
         total_compensation = 0
         if compensation:
             total_compensation = float(compensation.total_allowances)
         
-        # Calculate overtime
         overtime_hours = float(request.data.get('overtime_hours', 0))
         overtime_amount = 0
         if compensation and overtime_hours > 0:
@@ -152,7 +149,6 @@ class PayrollView(APIView):
         bonus = float(request.data.get('bonus', 0))
         custom_deductions = float(request.data.get('deductions', 0))
         
-        # Process loan deductions - calculate (monthly_deduction + interest)
         loan_deductions = 0
         deduction_breakdown = {
             'custom_deductions': custom_deductions,
@@ -163,17 +159,16 @@ class PayrollView(APIView):
             'overtime_amount': float(overtime_amount),
         }
         
-        selected_loan_ids = request.data.get('selected_loans', [])
-        if selected_loan_ids:
+        selected_loan_uuids = request.data.get('selected_loans', [])
+        if selected_loan_uuids:
             active_loans = EmployeeLoan.objects.filter(
                 employee=employee,
-                id__in=selected_loan_ids,
+                _id__in=selected_loan_uuids,
                 status='ACTIVE',
                 is_deleted=False
             )
             
             for loan in active_loans:
-                # Calculate monthly deduction with interest
                 monthly_deduction_with_interest = float(loan.monthly_deduction)
                 if float(loan.interest_rate) > 0:
                     interest_amount = (float(loan.remaining_amount) * float(loan.interest_rate) / 100) / loan.remaining_months
@@ -181,14 +176,13 @@ class PayrollView(APIView):
                 
                 loan_deductions += monthly_deduction_with_interest
                 deduction_breakdown['loan_deductions'].append({
-                    'loan_id': loan.id,
+                    'loan_id': str(loan._id),
                     'loan_type': loan.loan_type,
                     'principal_deduction': str(loan.monthly_deduction),
                     'interest_amount': str(monthly_deduction_with_interest - float(loan.monthly_deduction)),
                     'total_deduction': str(monthly_deduction_with_interest)
                 })
                 
-                # Update loan repayment
                 loan.remaining_amount = max(0, float(loan.remaining_amount) - float(loan.monthly_deduction))
                 loan.paid_months += 1
                 if loan.remaining_amount <= 0:
@@ -197,11 +191,8 @@ class PayrollView(APIView):
                 loan.save()
         
         total_deductions = custom_deductions + loan_deductions
-        
-        # Calculate net salary: base salary + total compensation + overtime + bonus - deductions
         net_salary = base_salary + total_compensation + overtime_amount + bonus - total_deductions
         
-        # Generate transaction number
         transaction_number = request.data.get('transaction_number') or \
             f"PAY-{year}{str(month).zfill(2)}-{employee.employee_id}"
         
@@ -221,14 +212,14 @@ class PayrollView(APIView):
             status='PAID',
             custom_note=request.data.get('custom_note'),
             deduction_breakdown=deduction_breakdown,
-            processed_at=datetime.now(),
+            processed_at=timezone.now(),
             created_by=request.user,
             updated_by=request.user,
         )
         
         return Response({
             "message": "Payment processed successfully",
-            "id": payroll.id,
+            "id": str(payroll._id),
             "transaction_number": payroll.transaction_number,
             "base_salary": str(payroll.base_salary),
             "compensation": str(total_compensation),
@@ -238,9 +229,79 @@ class PayrollView(APIView):
             "net_salary": str(payroll.net_salary),
             "status": payroll.status,
         }, status=status.HTTP_201_CREATED)
+    
+    @transaction.atomic
+    def patch(self, request):
+        """Update payroll record using UUID"""
+        company_id = request.user.company_id
+        
+        if not company_id:
+            return Response(
+                {'error': 'User is not associated with any company'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        payroll_uuid = request.data.get('id')
+        if not payroll_uuid:
+            return Response(
+                {'error': 'id (UUID) is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        payroll = get_object_or_404(
+            PayrollRecord,
+            _id=payroll_uuid,
+            company_id=company_id,
+            is_deleted=False
+        )
+        
+        updatable_fields = ['status', 'custom_note', 'transaction_number', 'payment_method']
+        for field in updatable_fields:
+            if field in request.data:
+                setattr(payroll, field, request.data[field])
+        
+        payroll.updated_by = request.user
+        payroll.save()
+        
+        return Response({
+            "message": "Payroll updated successfully",
+            "payroll": self._serialize_payroll(payroll)
+        })
+    
+    @transaction.atomic
+    def delete(self, request):
+        """Soft delete payroll record using UUID"""
+        company_id = request.user.company_id
+        
+        if not company_id:
+            return Response(
+                {'error': 'User is not associated with any company'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        payroll_uuid = request.data.get('id')
+        if not payroll_uuid:
+            return Response(
+                {'error': 'id (UUID) is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        payroll = get_object_or_404(
+            PayrollRecord,
+            _id=payroll_uuid,
+            company_id=company_id,
+            is_deleted=False
+        )
+        
+        payroll.is_deleted = True
+        payroll.deleted_at = timezone.now()
+        payroll.deleted_by = request.user
+        payroll.save()
+        
+        return Response({'message': 'Payroll record deleted successfully'})
 
 
-class PayrollStatsView(APIView):
+class PayrollStatsView(CompanyBranchMixin, APIView):
     """Payroll statistics"""
     permission_classes = [IsAuthenticated]
     
@@ -256,7 +317,6 @@ class PayrollStatsView(APIView):
         month = int(request.query_params.get('month', date.today().month))
         year = int(request.query_params.get('year', date.today().year))
         
-        # Current month payroll
         current_payroll = PayrollRecord.objects.filter(
             company_id=company_id,
             month=month,
@@ -264,10 +324,7 @@ class PayrollStatsView(APIView):
             is_deleted=False
         )
         
-        total_payroll = current_payroll.aggregate(
-            total=models.Sum('net_salary')
-        )['total'] or 0
-        
+        total_payroll = current_payroll.aggregate(total=models.Sum('net_salary'))['total'] or 0
         paid_count = current_payroll.filter(status='PAID').count()
         total_employees = Employee.objects.filter(
             company_id=company_id,
@@ -288,9 +345,37 @@ class PayrollStatsView(APIView):
         })
 
 
-class EmployeeLoanView(APIView):
-    """Employee loans management"""
+class EmployeeLoanView(CompanyBranchMixin, APIView):
+    """Employee loans management with UUID support"""
     permission_classes = [IsAuthenticated]
+    
+    def _serialize_loan(self, loan):
+        return {
+            "id": str(loan._id),
+            "employee_id": str(loan.employee._id) if loan.employee else None,
+            "employee_name": loan.employee.full_name if loan.employee else None,
+            "employee_code": loan.employee.employee_id if loan.employee else None,
+            "department": loan.employee.department if loan.employee else None,
+            "monthly_salary": str(loan.employee.salary) if loan.employee else "0",
+            "loan_type": loan.loan_type,
+            "loan_type_display": loan.get_loan_type_display(),
+            "principal_amount": str(loan.principal_amount),
+            "monthly_deduction": str(loan.monthly_deduction),
+            "remaining_amount": str(loan.remaining_amount),
+            "total_months": loan.total_months,
+            "paid_months": loan.paid_months,
+            "remaining_months": loan.remaining_months,
+            "interest_rate": str(loan.interest_rate),
+            "total_payable": str(loan.total_payable),
+            "start_date": loan.start_date.isoformat() if loan.start_date else None,
+            "end_date": loan.end_date.isoformat() if loan.end_date else None,
+            "status": loan.status,
+            "purpose": loan.purpose,
+            "transaction_number": loan.transaction_number,
+            "approved_at": loan.approved_at.isoformat() if loan.approved_at else None,
+            "notes": loan.notes,
+            "created_at": loan.created_at.isoformat() if loan.created_at else None,
+        }
     
     def get(self, request):
         """Get employee loans"""
@@ -302,7 +387,7 @@ class EmployeeLoanView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        employee_id = request.query_params.get('employee_id')
+        employee_uuid = request.query_params.get('employee_id')
         status_filter = request.query_params.get('status')
         search = request.query_params.get('search')
         
@@ -311,8 +396,9 @@ class EmployeeLoanView(APIView):
             is_deleted=False
         ).select_related('employee')
         
-        if employee_id:
-            query = query.filter(employee_id=employee_id)
+        if employee_uuid:
+            employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
+            query = query.filter(employee=employee)
         if status_filter:
             query = query.filter(status=status_filter)
         if search:
@@ -325,35 +411,7 @@ class EmployeeLoanView(APIView):
         
         loans = query.order_by('-created_at')
         
-        return Response([
-            {
-                "id": l.id,
-                "employee_id": l.employee_id,
-                "employee_name": l.employee.full_name,
-                "employee_code": l.employee.employee_id,
-                "department": l.employee.department,
-                "monthly_salary": str(l.employee.salary),  # Include employee salary
-                "loan_type": l.loan_type,
-                "loan_type_display": l.get_loan_type_display(),
-                "principal_amount": str(l.principal_amount),
-                "monthly_deduction": str(l.monthly_deduction),
-                "remaining_amount": str(l.remaining_amount),
-                "total_months": l.total_months,
-                "paid_months": l.paid_months,
-                "remaining_months": l.remaining_months,
-                "interest_rate": str(l.interest_rate),
-                "total_payable": str(l.total_payable),
-                "start_date": l.start_date.isoformat() if l.start_date else None,
-                "end_date": l.end_date.isoformat() if l.end_date else None,
-                "status": l.status,
-                "purpose": l.purpose,
-                "transaction_number": l.transaction_number,
-                "approved_at": l.approved_at.isoformat() if l.approved_at else None,
-                "notes": l.notes,
-                "created_at": l.created_at.isoformat() if l.created_at else None,
-            }
-            for l in loans
-        ])
+        return Response([self._serialize_loan(l) for l in loans])
     
     @transaction.atomic
     def post(self, request):
@@ -367,8 +425,8 @@ class EmployeeLoanView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        employee_id = request.data.get('employee_id')
-        if not employee_id:
+        employee_uuid = request.data.get('employee_id')
+        if not employee_uuid:
             return Response(
                 {'error': 'employee_id is required'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -376,61 +434,47 @@ class EmployeeLoanView(APIView):
         
         employee = get_object_or_404(
             Employee,
-            id=employee_id,
+            _id=employee_uuid,
             company_id=company_id,
             is_deleted=False
         )
         
-        # Get employee monthly salary
         monthly_salary = float(employee.salary)
-        
-        # Calculate loan details
         principal_amount = float(request.data.get('principal_amount', 0))
         interest_rate = float(request.data.get('interest_rate', 0))
         total_months = int(request.data.get('total_months', 0))
         monthly_deduction = float(request.data.get('monthly_deduction', 0))
         
-        # Validate monthly deduction doesn't exceed monthly salary
         if monthly_deduction > 0 and monthly_deduction > monthly_salary:
             return Response(
                 {'error': f'Monthly deduction ({monthly_deduction}) cannot exceed monthly salary ({monthly_salary})'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Calculate total payable with interest
         if interest_rate > 0:
             total_payable = principal_amount + (principal_amount * interest_rate / 100)
         else:
             total_payable = principal_amount
         
-        # Auto-calculate total_months or monthly_deduction
         if total_months > 0 and monthly_deduction > 0:
-            # Both provided, validate they match
             calculated_total = monthly_deduction * total_months
             if abs(calculated_total - total_payable) > 0.01:
                 return Response(
-                    {'error': f'Monthly deduction ({monthly_deduction}) × Total months ({total_months}) = {calculated_total} does not match total payable ({total_payable})'},
+                    {'error': f'Monthly deduction × Total months does not match total payable'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
         elif total_months > 0 and monthly_deduction == 0:
-            # Auto-calculate monthly deduction
             monthly_deduction = total_payable / total_months
         elif monthly_deduction > 0 and total_months == 0:
-            # Auto-calculate total months
             total_months = int(total_payable / monthly_deduction)
-            if total_payable % monthly_deduction > 0.01:
-                # Handle remainder in last month
-                pass
         else:
             return Response(
                 {'error': 'Please provide either total_months or monthly_deduction'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Generate transaction number
         transaction_number = f"LN-{datetime.now().strftime('%Y%m%d')}-{employee.employee_id}"
         
-        # Always set status as PENDING initially
         loan = EmployeeLoan.objects.create(
             company_id=company_id,
             branch_id=branch_id,
@@ -445,7 +489,7 @@ class EmployeeLoanView(APIView):
             total_payable=total_payable,
             start_date=request.data.get('start_date', date.today()),
             end_date=request.data.get('end_date'),
-            status='PENDING',  # Always start as PENDING
+            status='PENDING',
             purpose=request.data.get('purpose'),
             notes=request.data.get('notes'),
             transaction_number=transaction_number,
@@ -455,19 +499,12 @@ class EmployeeLoanView(APIView):
         
         return Response({
             "message": "Loan created successfully",
-            "id": loan.id,
-            "loan_type": loan.loan_type,
-            "principal_amount": str(loan.principal_amount),
-            "monthly_deduction": str(loan.monthly_deduction),
-            "total_months": loan.total_months,
-            "total_payable": str(loan.total_payable),
-            "status": loan.status,
-            "transaction_number": loan.transaction_number,
+            "loan": self._serialize_loan(loan)
         }, status=status.HTTP_201_CREATED)
     
     @transaction.atomic
     def patch(self, request):
-        """Update loan"""
+        """Update loan using UUID"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -476,32 +513,26 @@ class EmployeeLoanView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        loan_id = request.data.get('id')
-        if not loan_id:
+        loan_uuid = request.data.get('id')
+        if not loan_uuid:
             return Response(
-                {'error': 'id is required'},
+                {'error': 'id (UUID) is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         loan = get_object_or_404(
             EmployeeLoan,
-            id=loan_id,
+            _id=loan_uuid,
             company_id=company_id,
             is_deleted=False
         )
         
-        # Don't allow changing status through this endpoint
-        updatable_fields = [
-            'loan_type', 'principal_amount', 'total_months',
-            'interest_rate', 'start_date', 'end_date',
-            'purpose', 'notes'
-        ]
+        updatable_fields = ['loan_type', 'principal_amount', 'total_months', 'interest_rate', 'start_date', 'end_date', 'purpose', 'notes']
         
         for field in updatable_fields:
             if field in request.data:
                 setattr(loan, field, request.data[field])
         
-        # Recalculate if needed
         if 'principal_amount' in request.data or 'interest_rate' in request.data:
             principal = float(request.data.get('principal_amount', loan.principal_amount))
             interest = float(request.data.get('interest_rate', loan.interest_rate))
@@ -519,14 +550,12 @@ class EmployeeLoanView(APIView):
         
         return Response({
             "message": "Loan updated successfully",
-            "id": loan.id,
-            "monthly_deduction": str(loan.monthly_deduction),
-            "total_payable": str(loan.total_payable),
+            "loan": self._serialize_loan(loan)
         })
     
     @transaction.atomic
     def delete(self, request):
-        """Soft delete loan"""
+        """Soft delete loan using UUID"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -535,16 +564,16 @@ class EmployeeLoanView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        loan_id = request.data.get('id')
-        if not loan_id:
+        loan_uuid = request.data.get('id')
+        if not loan_uuid:
             return Response(
-                {'error': 'id is required'},
+                {'error': 'id (UUID) is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         loan = get_object_or_404(
             EmployeeLoan,
-            id=loan_id,
+            _id=loan_uuid,
             company_id=company_id,
             is_deleted=False
         )
@@ -556,15 +585,15 @@ class EmployeeLoanView(APIView):
             )
         
         loan.is_deleted = True
-        loan.deleted_at = datetime.now()
+        loan.deleted_at = timezone.now()
         loan.deleted_by = request.user
         loan.save()
         
         return Response({'message': 'Loan deleted successfully'})
 
 
-class LoanStatusUpdateView(APIView):
-    """Toggle loan status"""
+class LoanStatusUpdateView(CompanyBranchMixin, APIView):
+    """Toggle loan status with UUID support"""
     permission_classes = [IsAuthenticated]
     
     @transaction.atomic
@@ -577,10 +606,10 @@ class LoanStatusUpdateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        loan_id = request.data.get('id')
+        loan_uuid = request.data.get('id')
         new_status = request.data.get('status')
         
-        if not loan_id or not new_status:
+        if not loan_uuid or not new_status:
             return Response(
                 {'error': 'id and status are required'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -594,7 +623,7 @@ class LoanStatusUpdateView(APIView):
         
         loan = get_object_or_404(
             EmployeeLoan,
-            id=loan_id,
+            _id=loan_uuid,
             company_id=company_id,
             is_deleted=False
         )
@@ -604,7 +633,7 @@ class LoanStatusUpdateView(APIView):
         
         if new_status == 'ACTIVE':
             loan.approved_by = request.user
-            loan.approved_at = datetime.now()
+            loan.approved_at = timezone.now()
         elif new_status == 'CANCELLED':
             loan.remaining_amount = 0
         elif new_status == 'PAID':
@@ -616,14 +645,49 @@ class LoanStatusUpdateView(APIView):
         
         return Response({
             "message": f"Loan status changed from {old_status} to {new_status}",
-            "id": loan.id,
-            "status": loan.status,
+            "loan": {
+                "id": str(loan._id),
+                "status": loan.status,
+            }
         })
 
 
-class CompensationView(APIView):
-    """Employee compensation management"""
+class CompensationView(CompanyBranchMixin, APIView):
+    """Employee compensation management with UUID support"""
     permission_classes = [IsAuthenticated]
+    
+    def _serialize_compensation(self, comp):
+        return {
+            "id": str(comp._id),
+            "employee_id": str(comp.employee._id) if comp.employee else None,
+            "employee_name": comp.employee.full_name if comp.employee else None,
+            "employee_code": comp.employee.employee_id if comp.employee else None,
+            "department": comp.employee.department if comp.employee else None,
+            "designation": comp.employee.designation if comp.employee else None,
+            "basic_salary": str(comp.employee.salary) if comp.employee else "0",
+            "grade": comp.grade,
+            "house_rent_allowance": str(comp.house_rent_allowance),
+            "medical_allowance": str(comp.medical_allowance),
+            "transport_allowance": str(comp.transport_allowance),
+            "fuel_allowance": str(comp.fuel_allowance),
+            "phone_allowance": str(comp.phone_allowance),
+            "utilities_allowance": str(comp.utilities_allowance),
+            "education_allowance": str(comp.education_allowance),
+            "other_allowances": str(comp.other_allowances),
+            "employer_pf": str(comp.employer_pf),
+            "employer_eobi": str(comp.employer_eobi),
+            "overtime_rate": str(comp.overtime_rate),
+            "bonus_percentage": str(comp.bonus_percentage),
+            "total_allowances": str(comp.total_allowances),
+            "total_ctc": str(comp.total_ctc),
+            "total_monthly": str(comp.total_monthly),
+            "is_active": comp.is_active,
+            "status": comp.status,
+            "effective_date": comp.effective_date.isoformat() if comp.effective_date else None,
+            "review_date": comp.review_date.isoformat() if comp.review_date else None,
+            "notes": comp.notes,
+            "created_at": comp.created_at.isoformat() if comp.created_at else None,
+        }
     
     def get(self, request):
         """Get compensations"""
@@ -635,7 +699,7 @@ class CompensationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        employee_id = request.query_params.get('employee_id')
+        employee_uuid = request.query_params.get('employee_id')
         search = request.query_params.get('search')
         status_filter = request.query_params.get('status')
         
@@ -644,8 +708,9 @@ class CompensationView(APIView):
             is_deleted=False
         ).select_related('employee')
         
-        if employee_id:
-            query = query.filter(employee_id=employee_id)
+        if employee_uuid:
+            employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
+            query = query.filter(employee=employee)
         if status_filter:
             query = query.filter(status=status_filter)
         if search:
@@ -657,44 +722,11 @@ class CompensationView(APIView):
         
         compensations = query.order_by('-effective_date')
         
-        return Response([
-            {
-                "id": c.id,
-                "employee_id": c.employee_id,
-                "employee_name": c.employee.full_name,
-                "employee_code": c.employee.employee_id,
-                "department": c.employee.department,
-                "designation": c.employee.designation,
-                "basic_salary": str(c.employee.salary),  # Get from employee table
-                "grade": c.grade,
-                "house_rent_allowance": str(c.house_rent_allowance),
-                "medical_allowance": str(c.medical_allowance),
-                "transport_allowance": str(c.transport_allowance),
-                "fuel_allowance": str(c.fuel_allowance),
-                "phone_allowance": str(c.phone_allowance),
-                "utilities_allowance": str(c.utilities_allowance),
-                "education_allowance": str(c.education_allowance),
-                "other_allowances": str(c.other_allowances),
-                "employer_pf": str(c.employer_pf),
-                "employer_eobi": str(c.employer_eobi),
-                "overtime_rate": str(c.overtime_rate),
-                "bonus_percentage": str(c.bonus_percentage),
-                "total_allowances": str(c.total_allowances),
-                "total_ctc": str(c.total_ctc),
-                "total_monthly": str(c.total_monthly),
-                "is_active": c.is_active,
-                "status": c.status,
-                "effective_date": c.effective_date.isoformat() if c.effective_date else None,
-                "review_date": c.review_date.isoformat() if c.review_date else None,
-                "notes": c.notes,
-                "created_at": c.created_at.isoformat() if c.created_at else None,
-            }
-            for c in compensations
-        ])
+        return Response([self._serialize_compensation(c) for c in compensations])
     
     @transaction.atomic
     def post(self, request):
-        """Create compensation - don't allow duplicate employees"""
+        """Create compensation"""
         company_id = request.user.company_id
         branch_id = request.user.branch_id
         
@@ -704,16 +736,17 @@ class CompensationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        employee_id = request.data.get('employee_id')
-        if not employee_id:
+        employee_uuid = request.data.get('employee_id')
+        if not employee_uuid:
             return Response(
                 {'error': 'employee_id is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Check if employee already has active compensation
+        employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
+        
         existing_compensation = Compensation.objects.filter(
-            employee_id=employee_id,
+            employee=employee,
             is_active=True,
             is_deleted=False
         ).first()
@@ -723,13 +756,6 @@ class CompensationView(APIView):
                 {'error': 'Employee already has an active compensation. Please deactivate it first.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        employee = get_object_or_404(
-            Employee,
-            id=employee_id,
-            company_id=company_id,
-            is_deleted=False
-        )
         
         compensation = Compensation.objects.create(
             company_id=company_id,
@@ -759,14 +785,12 @@ class CompensationView(APIView):
         
         return Response({
             "message": "Compensation created successfully",
-            "id": compensation.id,
-            "total_monthly": str(compensation.total_monthly),
-            "total_ctc": str(compensation.total_ctc),
+            "compensation": self._serialize_compensation(compensation)
         }, status=status.HTTP_201_CREATED)
     
     @transaction.atomic
     def patch(self, request):
-        """Update compensation"""
+        """Update compensation using UUID"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -775,16 +799,16 @@ class CompensationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        compensation_id = request.data.get('id')
-        if not compensation_id:
+        comp_uuid = request.data.get('id')
+        if not comp_uuid:
             return Response(
-                {'error': 'id is required'},
+                {'error': 'id (UUID) is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         compensation = get_object_or_404(
             Compensation,
-            id=compensation_id,
+            _id=comp_uuid,
             company_id=company_id,
             is_deleted=False
         )
@@ -806,13 +830,12 @@ class CompensationView(APIView):
         
         return Response({
             "message": "Compensation updated successfully",
-            "id": compensation.id,
-            "total_monthly": str(compensation.total_monthly),
+            "compensation": self._serialize_compensation(compensation)
         })
     
     @transaction.atomic
     def delete(self, request):
-        """Soft delete compensation"""
+        """Soft delete compensation using UUID"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -821,16 +844,16 @@ class CompensationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        compensation_id = request.data.get('id')
-        if not compensation_id:
+        comp_uuid = request.data.get('id')
+        if not comp_uuid:
             return Response(
-                {'error': 'id is required'},
+                {'error': 'id (UUID) is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         compensation = get_object_or_404(
             Compensation,
-            id=compensation_id,
+            _id=comp_uuid,
             company_id=company_id,
             is_deleted=False
         )
@@ -838,7 +861,7 @@ class CompensationView(APIView):
         compensation.is_deleted = True
         compensation.status = 'INACTIVE'
         compensation.is_active = False
-        compensation.deleted_at = datetime.now()
+        compensation.deleted_at = timezone.now()
         compensation.deleted_by = request.user
         compensation.save()
         

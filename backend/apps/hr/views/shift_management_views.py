@@ -1,16 +1,17 @@
 # apps/hr/views/shift_management_views.py
 from datetime import date, datetime, timedelta
-from typing import List, Dict
 from django.db import transaction
-from django.db.models import Q, Count, F, Prefetch
+from django.db.models import Q, Count, F
 from django.core.cache import cache
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
-from rest_framework.parsers import JSONParser
 import logging
 
+from apps.common.baseauthentication import CompanyBranchMixin
 from apps.hr.models import (
     Employee, ShiftTemplate, ShiftOverride, 
     ShiftDateRangeAssignment, ShiftChangeHistory,
@@ -19,19 +20,18 @@ from apps.hr.models import (
 from apps.hr.serializers.shift_serializers import (
     ShiftOverrideSerializer, ShiftDateRangeSerializer,
     ShiftChangeHistorySerializer, BulkShiftAssignmentSerializer,
-    ResolvedShiftResponseSerializer, EmployeeDefaultShiftSerializer
+    EmployeeDefaultShiftSerializer
 )
 from apps.hr.services.shift_service import ShiftResolutionService
 
 logger = logging.getLogger(__name__)
 
 
-class EmployeeShiftResolveView(APIView):
-    """Resolve shifts for employees on specific dates"""
+class EmployeeShiftResolveView(CompanyBranchMixin, APIView):
+    """Resolve shifts for employees on specific dates with UUID support"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        """Get resolved shifts for employees"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -40,34 +40,30 @@ class EmployeeShiftResolveView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Get query parameters
-        employee_ids = request.query_params.getlist('employee_ids')
+        employee_uuids = request.query_params.getlist('employee_ids')
         date_param = request.query_params.get('date')
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
         
-        # Validate employees belong to company
-        if employee_ids:
+        if employee_uuids:
             employees = Employee.objects.filter(
-                id__in=employee_ids,
+                _id__in=employee_uuids,
                 company_id=company_id,
                 is_deleted=False
             )
-            if employees.count() != len(employee_ids):
+            if employees.count() != len(employee_uuids):
                 return Response(
                     {'error': 'Some employees not found in your company'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             employee_id_list = [e.id for e in employees]
         else:
-            # Get all employees in company
             employees = Employee.objects.filter(
                 company_id=company_id,
                 is_deleted=False
             )
             employee_id_list = list(employees.values_list('id', flat=True))
         
-        # Single date resolution
         if date_param:
             date_obj = datetime.strptime(date_param, '%Y-%m-%d').date()
             results = []
@@ -75,10 +71,10 @@ class EmployeeShiftResolveView(APIView):
             for emp in employees:
                 resolved = ShiftResolutionService.get_resolved_shift(emp.id, date_obj)
                 results.append({
-                    'employee_id': emp.id,
+                    'employee_id': str(emp._id),
                     'employee_name': emp.full_name,
                     'employee_department': emp.department,
-                    'template_id': resolved.get('template_id'),
+                    'template_id': str(resolved.get('template_id')) if resolved.get('template_id') else None,
                     'template_name': resolved.get('template_name'),
                     'start_time': resolved.get('start_time'),
                     'end_time': resolved.get('end_time'),
@@ -89,7 +85,6 @@ class EmployeeShiftResolveView(APIView):
             
             return Response(results)
         
-        # Date range resolution
         if start_date and end_date:
             start = datetime.strptime(start_date, '%Y-%m-%d').date()
             end = datetime.strptime(end_date, '%Y-%m-%d').date()
@@ -104,26 +99,26 @@ class EmployeeShiftResolveView(APIView):
                 employee_id_list, start, end
             )
             
-            # Format response
             formatted_results = {}
             for emp_id, shifts in results.items():
-                employee = next(e for e in employees if e.id == emp_id)
-                formatted_results[emp_id] = {
-                    'employee_name': employee.full_name,
-                    'employee_department': employee.department,
-                    'shifts': {}
-                }
-                for date_str, shift_data in shifts.items():
-                    template = shift_data.get('template')
-                    formatted_results[emp_id]['shifts'][date_str] = {
-                        'template_id': template.id if template else None,
-                        'template_name': template.name if template else None,
-                        'start_time': template.start_time.strftime('%H:%M') if template else None,
-                        'end_time': template.end_time.strftime('%H:%M') if template else None,
-                        'break_minutes': template.break_minutes if template else 0,
-                        'is_override': shift_data.get('is_override', False),
-                        'source_type': shift_data.get('source_type', 'NONE')
+                employee = next((e for e in employees if e.id == emp_id), None)
+                if employee:
+                    formatted_results[str(employee._id)] = {
+                        'employee_name': employee.full_name,
+                        'employee_department': employee.department,
+                        'shifts': {}
                     }
+                    for date_str, shift_data in shifts.items():
+                        template = shift_data.get('template')
+                        formatted_results[str(employee._id)]['shifts'][date_str] = {
+                            'template_id': str(template._id) if template else None,
+                            'template_name': template.name if template else None,
+                            'start_time': template.start_time.strftime('%H:%M') if template else None,
+                            'end_time': template.end_time.strftime('%H:%M') if template else None,
+                            'break_minutes': template.break_minutes if template else 0,
+                            'is_override': shift_data.get('is_override', False),
+                            'source_type': shift_data.get('source_type', 'NONE')
+                        }
             
             return Response(formatted_results)
         
@@ -133,12 +128,11 @@ class EmployeeShiftResolveView(APIView):
         )
 
 
-class ShiftOverrideView(APIView):
-    """CRUD for shift overrides"""
+class ShiftOverrideView(CompanyBranchMixin, APIView):
+    """CRUD for shift overrides with UUID support"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        """Get shift overrides"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -147,7 +141,7 @@ class ShiftOverrideView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        employee_id = request.query_params.get('employee_id')
+        employee_uuid = request.query_params.get('employee_id')
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
         
@@ -155,8 +149,9 @@ class ShiftOverrideView(APIView):
             company_id=company_id
         ).select_related('employee', 'shift_template')
         
-        if employee_id:
-            query = query.filter(employee_id=employee_id)
+        if employee_uuid:
+            employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
+            query = query.filter(employee=employee)
         
         if start_date:
             query = query.filter(date__gte=start_date)
@@ -164,11 +159,24 @@ class ShiftOverrideView(APIView):
         if end_date:
             query = query.filter(date__lte=end_date)
         
-        serializer = ShiftOverrideSerializer(query.order_by('-date'), many=True)
-        return Response(serializer.data)
+        overrides = query.order_by('-date')
+        
+        return Response([
+            {
+                "id": str(o._id),
+                "employee_id": str(o.employee._id),
+                "employee_name": o.employee.full_name,
+                "template_id": str(o.shift_template._id),
+                "template_name": o.shift_template.name,
+                "date": o.date.isoformat(),
+                "reason": o.reason,
+                "notes": o.notes,
+            }
+            for o in overrides
+        ])
     
+    @transaction.atomic
     def post(self, request):
-        """Create shift override"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -177,47 +185,36 @@ class ShiftOverrideView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        employee_id = request.data.get('employee_id')
-        template_id = request.data.get('template_id')
+        employee_uuid = request.data.get('employee_id')
+        template_uuid = request.data.get('template_id')
         date_str = request.data.get('date')
         
-        if not all([employee_id, template_id, date_str]):
+        if not all([employee_uuid, template_uuid, date_str]):
             return Response(
                 {'error': 'employee_id, template_id, and date are required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Verify employee belongs to company
-        try:
-            employee = Employee.objects.get(id=employee_id, company_id=company_id)
-        except Employee.DoesNotExist:
-            return Response(
-                {'error': 'Employee not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        # Verify template exists and belongs to company
-        try:
-            template = ShiftTemplate.objects.get(id=template_id, company_id=company_id)
-        except ShiftTemplate.DoesNotExist:
-            return Response(
-                {'error': 'Shift template not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
+        employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
+        template = get_object_or_404(ShiftTemplate, _id=template_uuid, company_id=company_id, is_deleted=False)
         date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
         
         try:
             override = ShiftResolutionService.create_override(
-                employee_id=employee_id,
-                template_id=template_id,
+                employee_id=employee.id,
+                template_id=template.id,
                 date_obj=date_obj,
                 reason=request.data.get('reason', ''),
                 user=request.user
             )
             
-            serializer = ShiftOverrideSerializer(override)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response({
+                "id": str(override._id),
+                "employee_id": str(override.employee._id),
+                "template_id": str(override.shift_template._id),
+                "date": override.date.isoformat(),
+                "reason": override.reason,
+            }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
             logger.error(f"Error creating override: {str(e)}")
@@ -226,8 +223,8 @@ class ShiftOverrideView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
     
+    @transaction.atomic
     def delete(self, request):
-        """Delete shift override"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -236,17 +233,17 @@ class ShiftOverrideView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        override_id = request.data.get('id')
-        
-        if not override_id:
+        override_uuid = request.data.get('id')
+        if not override_uuid:
             return Response(
-                {'error': 'id is required'},
+                {'error': 'id (UUID) is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         try:
-            override = ShiftOverride.objects.get(
-                id=override_id,
+            override = get_object_or_404(
+                ShiftOverride,
+                _id=override_uuid,
                 employee__company_id=company_id
             )
             
@@ -271,12 +268,11 @@ class ShiftOverrideView(APIView):
             )
 
 
-class ShiftDateRangeView(APIView):
-    """CRUD for date range assignments"""
+class ShiftDateRangeView(CompanyBranchMixin, APIView):
+    """CRUD for date range assignments with UUID support"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        """Get date range assignments"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -285,24 +281,40 @@ class ShiftDateRangeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        employee_id = request.query_params.get('employee_id')
+        employee_uuid = request.query_params.get('employee_id')
         active_only = request.query_params.get('active_only', 'true').lower() == 'true'
         
         query = ShiftDateRangeAssignment.objects.filter(
             company_id=company_id
         ).select_related('employee', 'shift_template')
         
-        if employee_id:
-            query = query.filter(employee_id=employee_id)
+        if employee_uuid:
+            employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
+            query = query.filter(employee=employee)
         
         if active_only:
             query = query.filter(is_active=True, end_date__gte=date.today())
         
-        serializer = ShiftDateRangeSerializer(query.order_by('-start_date'), many=True)
-        return Response(serializer.data)
+        assignments = query.order_by('-start_date')
+        
+        return Response([
+            {
+                "id": str(a._id),
+                "employee_id": str(a.employee._id),
+                "employee_name": a.employee.full_name,
+                "template_id": str(a.shift_template._id),
+                "template_name": a.shift_template.name,
+                "start_date": a.start_date.isoformat(),
+                "end_date": a.end_date.isoformat(),
+                "reason": a.reason,
+                "notes": a.notes,
+                "is_active": a.is_active,
+            }
+            for a in assignments
+        ])
     
+    @transaction.atomic
     def post(self, request):
-        """Create date range assignment"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -311,50 +323,41 @@ class ShiftDateRangeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        employee_id = request.data.get('employee_id')
-        template_id = request.data.get('template_id')
+        employee_uuid = request.data.get('employee_id')
+        template_uuid = request.data.get('template_id')
         start_date_str = request.data.get('start_date')
         end_date_str = request.data.get('end_date')
         
-        if not all([employee_id, template_id, start_date_str]):
+        if not all([employee_uuid, template_uuid, start_date_str]):
             return Response(
                 {'error': 'employee_id, template_id, and start_date are required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Verify employee belongs to company
-        try:
-            employee = Employee.objects.get(id=employee_id, company_id=company_id)
-        except Employee.DoesNotExist:
-            return Response(
-                {'error': 'Employee not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        # Verify template exists
-        try:
-            template = ShiftTemplate.objects.get(id=template_id, company_id=company_id)
-        except ShiftTemplate.DoesNotExist:
-            return Response(
-                {'error': 'Shift template not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
+        employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
+        template = get_object_or_404(ShiftTemplate, _id=template_uuid, company_id=company_id, is_deleted=False)
         start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
         end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else start_date
         
         try:
             assignment = ShiftResolutionService.create_date_range_assignment(
-                employee_id=employee_id,
-                template_id=template_id,
+                employee_id=employee.id,
+                template_id=template.id,
                 start_date=start_date,
                 end_date=end_date,
                 reason=request.data.get('reason', ''),
                 user=request.user
             )
             
-            serializer = ShiftDateRangeSerializer(assignment)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response({
+                "id": str(assignment._id),
+                "employee_id": str(assignment.employee._id),
+                "template_id": str(assignment.shift_template._id),
+                "start_date": assignment.start_date.isoformat(),
+                "end_date": assignment.end_date.isoformat(),
+                "reason": assignment.reason,
+                "is_active": assignment.is_active,
+            }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
             logger.error(f"Error creating date range assignment: {str(e)}")
@@ -363,20 +366,21 @@ class ShiftDateRangeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
     
+    @transaction.atomic
     def patch(self, request):
-        """Update date range assignment"""
         company_id = request.user.company_id
         
-        assignment_id = request.data.get('id')
-        if not assignment_id:
+        assignment_uuid = request.data.get('id')
+        if not assignment_uuid:
             return Response(
-                {'error': 'id is required'},
+                {'error': 'id (UUID) is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         try:
-            assignment = ShiftDateRangeAssignment.objects.get(
-                id=assignment_id,
+            assignment = get_object_or_404(
+                ShiftDateRangeAssignment,
+                _id=assignment_uuid,
                 company_id=company_id
             )
             
@@ -388,8 +392,11 @@ class ShiftDateRangeView(APIView):
             
             assignment.save()
             
-            serializer = ShiftDateRangeSerializer(assignment)
-            return Response(serializer.data)
+            return Response({
+                "id": str(assignment._id),
+                "is_active": assignment.is_active,
+                "reason": assignment.reason,
+            })
             
         except ShiftDateRangeAssignment.DoesNotExist:
             return Response(
@@ -397,20 +404,21 @@ class ShiftDateRangeView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
     
+    @transaction.atomic
     def delete(self, request):
-        """Delete date range assignment"""
         company_id = request.user.company_id
         
-        assignment_id = request.data.get('id')
-        if not assignment_id:
+        assignment_uuid = request.data.get('id')
+        if not assignment_uuid:
             return Response(
-                {'error': 'id is required'},
+                {'error': 'id (UUID) is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         try:
-            assignment = ShiftDateRangeAssignment.objects.get(
-                id=assignment_id,
+            assignment = get_object_or_404(
+                ShiftDateRangeAssignment,
+                _id=assignment_uuid,
                 company_id=company_id
             )
             
@@ -425,8 +433,8 @@ class ShiftDateRangeView(APIView):
             )
 
 
-class BulkShiftAssignmentView(APIView):
-    """Bulk shift assignment for multiple employees"""
+class BulkShiftAssignmentView(CompanyBranchMixin, APIView):
+    """Bulk shift assignment for multiple employees with UUID support"""
     permission_classes = [IsAuthenticated]
     
     @transaction.atomic
@@ -439,54 +447,44 @@ class BulkShiftAssignmentView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        serializer = BulkShiftAssignmentSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        data = serializer.validated_data
-        employee_ids = data['employee_ids']
-        template_id = data['template_id']
-        start_date = data['start_date']
-        end_date = data.get('end_date', start_date)
-        assignment_type = data['assignment_type']
+        data = request.data
+        employee_uuids = data.get('employee_ids', [])
+        template_uuid = data.get('template_id')
+        start_date = datetime.strptime(data.get('start_date'), '%Y-%m-%d').date() if data.get('start_date') else None
+        end_date = datetime.strptime(data.get('end_date'), '%Y-%m-%d').date() if data.get('end_date') else start_date
+        assignment_type = data.get('assignment_type')
         reason = data.get('reason', '')
         
-        # Verify all employees belong to company
+        if not employee_uuids or not template_uuid or not start_date:
+            return Response(
+                {'error': 'employee_ids, template_id, and start_date are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         employees = Employee.objects.filter(
-            id__in=employee_ids,
-            company_id=company_id
+            _id__in=employee_uuids,
+            company_id=company_id,
+            is_deleted=False
         )
         
-        if employees.count() != len(employee_ids):
+        if employees.count() != len(employee_uuids):
             return Response(
                 {'error': 'Some employees not found in your company'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Verify template exists
-        try:
-            template = ShiftTemplate.objects.get(id=template_id, company_id=company_id)
-        except ShiftTemplate.DoesNotExist:
-            return Response(
-                {'error': 'Shift template not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+        template = get_object_or_404(ShiftTemplate, _id=template_uuid, company_id=company_id, is_deleted=False)
         
-        results = {
-            'success': [],
-            'failed': [],
-            'total': len(employee_ids)
-        }
+        results = {'success': [], 'failed': [], 'total': len(employee_uuids)}
         
         for employee in employees:
             try:
                 if assignment_type == 'OVERRIDE':
-                    # Create override for each date in range
                     current_date = start_date
                     while current_date <= end_date:
                         ShiftResolutionService.create_override(
                             employee_id=employee.id,
-                            template_id=template_id,
+                            template_id=template.id,
                             date_obj=current_date,
                             reason=reason,
                             user=request.user
@@ -494,16 +492,16 @@ class BulkShiftAssignmentView(APIView):
                         current_date += timedelta(days=1)
                     
                     results['success'].append({
-                        'employee_id': employee.id,
+                        'employee_id': str(employee._id),
                         'employee_name': employee.full_name,
                         'type': 'override',
                         'dates': f"{start_date} to {end_date}"
                     })
                     
-                else:  # DATE_RANGE
+                else:
                     ShiftResolutionService.create_date_range_assignment(
                         employee_id=employee.id,
-                        template_id=template_id,
+                        template_id=template.id,
                         start_date=start_date,
                         end_date=end_date,
                         reason=reason,
@@ -511,7 +509,7 @@ class BulkShiftAssignmentView(APIView):
                     )
                     
                     results['success'].append({
-                        'employee_id': employee.id,
+                        'employee_id': str(employee._id),
                         'employee_name': employee.full_name,
                         'type': 'date_range',
                         'dates': f"{start_date} to {end_date}"
@@ -520,7 +518,7 @@ class BulkShiftAssignmentView(APIView):
             except Exception as e:
                 logger.error(f"Error assigning shift to employee {employee.id}: {str(e)}")
                 results['failed'].append({
-                    'employee_id': employee.id,
+                    'employee_id': str(employee._id),
                     'employee_name': employee.full_name,
                     'error': str(e)
                 })
@@ -528,8 +526,8 @@ class BulkShiftAssignmentView(APIView):
         return Response(results, status=status.HTTP_200_OK)
 
 
-class ShiftHistoryView(APIView):
-    """Get shift change history"""
+class ShiftHistoryView(CompanyBranchMixin, APIView):
+    """Get shift change history with UUID support"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
@@ -541,7 +539,7 @@ class ShiftHistoryView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        employee_id = request.query_params.get('employee_id')
+        employee_uuid = request.query_params.get('employee_id')
         limit = int(request.query_params.get('limit', 50))
         offset = int(request.query_params.get('offset', 0))
         change_type = request.query_params.get('change_type')
@@ -550,8 +548,9 @@ class ShiftHistoryView(APIView):
         
         query = ShiftChangeHistory.objects.filter(company_id=company_id)
         
-        if employee_id:
-            query = query.filter(employee_id=employee_id)
+        if employee_uuid:
+            employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
+            query = query.filter(employee=employee)
         
         if change_type:
             query = query.filter(change_type=change_type)
@@ -565,10 +564,25 @@ class ShiftHistoryView(APIView):
         total = query.count()
         history = query.order_by('-changed_at')[offset:offset + limit]
         
-        serializer = ShiftChangeHistorySerializer(history, many=True)
-        
         return Response({
-            'data': serializer.data,
+            'data': [
+                {
+                    "id": str(h._id),
+                    "employee_id": str(h.employee._id),
+                    "employee_name": h.employee.full_name,
+                    "change_type": h.change_type,
+                    "from_template_id": str(h.from_template._id) if h.from_template else None,
+                    "from_template_name": h.from_template_name,
+                    "to_template_id": str(h.to_template._id) if h.to_template else None,
+                    "to_template_name": h.to_template_name,
+                    "effective_from": h.effective_from.isoformat(),
+                    "effective_to": h.effective_to.isoformat() if h.effective_to else None,
+                    "reason": h.reason,
+                    "changed_by": h.changed_by.email if h.changed_by else None,
+                    "changed_at": h.changed_at.isoformat(),
+                }
+                for h in history
+            ],
             'pagination': {
                 'total': total,
                 'limit': limit,
@@ -578,8 +592,8 @@ class ShiftHistoryView(APIView):
         })
 
 
-class ShiftStatisticsView(APIView):
-    """Get shift statistics"""
+class ShiftStatisticsView(CompanyBranchMixin, APIView):
+    """Get shift statistics with UUID support"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
@@ -596,7 +610,6 @@ class ShiftStatisticsView(APIView):
         
         employees = Employee.objects.filter(company_id=company_id, is_deleted=False)
         
-        # Get shift distribution for the date
         shift_distribution = {}
         employees_without_shift = 0
         
@@ -605,38 +618,35 @@ class ShiftStatisticsView(APIView):
             template_id = resolved.get('template_id')
             
             if template_id:
-                shift_distribution[template_id] = shift_distribution.get(template_id, 0) + 1
+                template_uuid = str(ShiftTemplate.objects.get(id=template_id)._id) if template_id else None
+                shift_distribution[template_uuid] = shift_distribution.get(template_uuid, 0) + 1
             else:
                 employees_without_shift += 1
         
-        # Get shift template usage statistics
         template_stats = []
         templates = ShiftTemplate.objects.filter(company_id=company_id, is_deleted=False)
         
         for template in templates:
-            # Count active overrides using this template
             overrides_count = ShiftOverride.objects.filter(
-                shift_template_id=template.id,
+                shift_template=template,
                 date__gte=date_obj
             ).count()
             
-            # Count active date range assignments
             date_range_count = ShiftDateRangeAssignment.objects.filter(
-                shift_template_id=template.id,
+                shift_template=template,
                 is_active=True,
                 end_date__gte=date_obj
             ).count()
             
-            # Count employees with this as default
             default_count = EmployeeDefaultShift.objects.filter(
-                template_id=template.id,
+                template=template,
                 effective_from__lte=date_obj
             ).filter(
                 Q(effective_to__isnull=True) | Q(effective_to__gte=date_obj)
             ).count()
             
             template_stats.append({
-                'template_id': template.id,
+                'template_id': str(template._id),
                 'template_name': template.name,
                 'is_active': template.is_active,
                 'overrides_count': overrides_count,
@@ -645,7 +655,6 @@ class ShiftStatisticsView(APIView):
                 'total_usage': overrides_count + date_range_count + default_count
             })
         
-        # Get recent activity
         recent_activity = ShiftChangeHistory.objects.filter(
             company_id=company_id,
             changed_at__date__gte=date_obj - timedelta(days=30)
@@ -666,13 +675,12 @@ class ShiftStatisticsView(APIView):
         })
 
 
-class ShiftScheduleGenerateView(APIView):
-    """Generate and cache shift schedules for performance"""
+class ShiftScheduleGenerateView(CompanyBranchMixin, APIView):
+    """Generate and cache shift schedules for performance with UUID support"""
     permission_classes = [IsAuthenticated]
     
     @transaction.atomic
     def post(self, request):
-        """Pre-compute shift schedules for a date range"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -701,7 +709,6 @@ class ShiftScheduleGenerateView(APIView):
         
         employees = Employee.objects.filter(company_id=company_id, is_deleted=False)
         
-        # Delete existing schedules for this date range
         EmployeeShiftSchedule.objects.filter(
             company_id=company_id,
             date__gte=start,
@@ -710,7 +717,6 @@ class ShiftScheduleGenerateView(APIView):
         
         schedules_created = 0
         
-        # Generate schedules
         for employee in employees:
             current = start
             while current <= end:

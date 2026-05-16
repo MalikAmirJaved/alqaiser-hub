@@ -4,12 +4,14 @@ import logging
 from datetime import datetime, date
 from django.db import transaction, models
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
-from django.db.models import Count, Sum, Avg, Q, Case, When, Value, IntegerField
+from django.db.models import Count, Sum, Avg, Q
 
+from apps.common.baseauthentication import CompanyBranchMixin
 from apps.hr.models import (
     ExitRecord, ExitChecklist, Employee
 )
@@ -17,8 +19,8 @@ from apps.hr.models import (
 logger = logging.getLogger(__name__)
 
 
-class BaseExitView(APIView):
-    """Base class for exit management views"""
+class BaseExitView(CompanyBranchMixin, APIView):
+    """Base class for exit management views with UUID support"""
     permission_classes = [IsAuthenticated]
     
     def _get_company_context(self, request):
@@ -32,11 +34,10 @@ class BaseExitView(APIView):
         return company_id, branch_id
     
     def _serialize_exit_record(self, exit_record):
-        """Serialize exit record with all related data"""
+        """Serialize exit record with UUIDs"""
         return {
-            "id": exit_record.id,
-            "_id": str(exit_record._id),
-            "employee_id": exit_record.employee.employee_id if exit_record.employee else None,
+            "id": str(exit_record._id),
+            "employee_id": str(exit_record.employee._id) if exit_record.employee else None,
             "employee_name": exit_record.employee_name,
             "department": exit_record.department,
             "designation": exit_record.designation,
@@ -56,33 +57,26 @@ class BaseExitView(APIView):
             "notes": exit_record.notes,
             "status": exit_record.get_status_display(),
             "status_value": exit_record.status,
-            "company_id": str(exit_record.company_id) if exit_record.company_id else None,
-            "branch_id": str(exit_record.branch_id) if exit_record.branch_id else None,
             "created_at": exit_record.created_at.isoformat() if exit_record.created_at else None,
             "updated_at": exit_record.updated_at.isoformat() if exit_record.updated_at else None,
         }
 
 
 class ExitRecordView(BaseExitView):
-    """CRUD operations for exit records"""
+    """CRUD operations for exit records with UUID support"""
     
     def get(self, request):
         """Get all exit records with filtering"""
         company_id, branch_id = self._get_company_context(request)
         
-        # Base query
         query = ExitRecord.objects.filter(
             company_id=company_id,
             is_deleted=False
         ).select_related('employee')
         
-        # Branch filter for non-admin users
         if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
-            query = query.filter(
-                Q(branch_id=branch_id) | Q(branch__isnull=True)
-            )
+            query = query.filter(Q(branch_id=branch_id) | Q(branch_id__isnull=True))
         
-        # Search
         search = request.query_params.get('search')
         if search:
             query = query.filter(
@@ -92,7 +86,6 @@ class ExitRecordView(BaseExitView):
                 Q(notes__icontains=search)
             )
         
-        # Filters
         status_filter = request.query_params.get('status')
         clearance_filter = request.query_params.get('clearance_status')
         reason_filter = request.query_params.get('reason')
@@ -113,7 +106,6 @@ class ExitRecordView(BaseExitView):
         if date_to:
             query = query.filter(exit_date__lte=date_to)
         
-        # Ordering
         order_by = request.query_params.get('order_by', '-created_at')
         allowed_order_fields = [
             'created_at', '-created_at', 'exit_date', '-exit_date',
@@ -123,10 +115,9 @@ class ExitRecordView(BaseExitView):
         if order_by in allowed_order_fields:
             query = query.order_by(order_by)
         
-        # Pagination
         page = int(request.query_params.get('page', 1))
         page_size = int(request.query_params.get('page_size', 25))
-        page_size = min(page_size, 100)  # Max 100 per page
+        page_size = min(page_size, 100)
         
         total_count = query.count()
         exit_records = query[(page - 1) * page_size:page * page_size]
@@ -146,7 +137,6 @@ class ExitRecordView(BaseExitView):
         """Create new exit record"""
         company_id, branch_id = self._get_company_context(request)
         
-        # Validate required fields
         required_fields = ['employee_id', 'exit_date', 'reason']
         for field in required_fields:
             if not request.data.get(field):
@@ -155,15 +145,14 @@ class ExitRecordView(BaseExitView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
-        # Get employee
+        employee_uuid = request.data['employee_id']
         employee = get_object_or_404(
             Employee,
-            id=request.data['employee_id'],
+            _id=employee_uuid,
             company_id=company_id,
             is_deleted=False
         )
         
-        # Check if employee already has an active exit record
         existing_exit = ExitRecord.objects.filter(
             employee=employee,
             status='ACTIVE',
@@ -176,13 +165,11 @@ class ExitRecordView(BaseExitView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Parse dates
         exit_date = datetime.strptime(request.data['exit_date'], '%Y-%m-%d').date()
         last_working_day = None
         if request.data.get('last_working_day'):
             last_working_day = datetime.strptime(request.data['last_working_day'], '%Y-%m-%d').date()
         
-        # Create exit record
         exit_record = ExitRecord.objects.create(
             company_id=company_id,
             branch_id=branch_id,
@@ -205,12 +192,10 @@ class ExitRecordView(BaseExitView):
             updated_by=request.user,
         )
         
-        # Update employee status if needed
         if request.data.get('update_employee_status', False):
             employee.employment_status = 'RESIGNED' if exit_record.reason == 'RESIGNATION' else 'TERMINATED'
             employee.save(update_fields=['employment_status'])
         
-        # Create default checklist items
         self._create_default_checklist(exit_record, request.user)
         
         return Response({
@@ -221,25 +206,18 @@ class ExitRecordView(BaseExitView):
     def _create_default_checklist(self, exit_record, user):
         """Create default checklist items for exit record"""
         default_items = [
-            # HR Items
             {"item_type": "HR", "item_name": "Exit Interview", "description": "Conduct exit interview with employee"},
             {"item_type": "HR", "item_name": "Experience Letter", "description": "Prepare experience/relieving letter"},
             {"item_type": "HR", "item_name": "Final Settlement Calculation", "description": "Calculate final dues and settlements"},
             {"item_type": "HR", "item_name": "PF/Gratuity Processing", "description": "Process provident fund or gratuity if applicable"},
-            
-            # IT Items
             {"item_type": "IT", "item_name": "System Access Revocation", "description": "Revoke all system access and credentials"},
             {"item_type": "IT", "item_name": "Email Account", "description": "Backup and deactivate email account"},
             {"item_type": "IT", "item_name": "Software Licenses", "description": "Transfer or revoke software licenses"},
             {"item_type": "IT", "item_name": "Data Backup", "description": "Ensure all work data is backed up"},
-            
-            # Finance Items
             {"item_type": "FINANCE", "item_name": "Pending Expenses", "description": "Clear all pending reimbursements and expenses"},
             {"item_type": "FINANCE", "item_name": "Loan Settlement", "description": "Settle any outstanding loans or advances"},
             {"item_type": "FINANCE", "item_name": "Salary Dues", "description": "Calculate and process pending salary"},
             {"item_type": "FINANCE", "item_name": "Tax Documents", "description": "Prepare tax-related documents"},
-            
-            # Admin Items
             {"item_type": "ADMIN", "item_name": "Asset Return", "description": "Collect all company assets (laptop, phone, ID card, etc.)"},
             {"item_type": "ADMIN", "item_name": "Access Card", "description": "Deactivate office access card"},
             {"item_type": "ADMIN", "item_name": "Parking/Canteen", "description": "Cancel parking and canteen facilities"},
@@ -266,24 +244,23 @@ class ExitRecordView(BaseExitView):
     
     @transaction.atomic
     def patch(self, request):
-        """Update exit record"""
+        """Update exit record using UUID"""
         company_id, _ = self._get_company_context(request)
         
-        exit_record_id = request.data.get('id')
-        if not exit_record_id:
+        exit_uuid = request.data.get('id')
+        if not exit_uuid:
             return Response(
-                {'error': 'id is required'},
+                {'error': 'id (UUID) is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         exit_record = get_object_or_404(
             ExitRecord,
-            id=exit_record_id,
+            _id=exit_uuid,
             company_id=company_id,
             is_deleted=False
         )
         
-        # Updatable fields
         updatable_fields = [
             'exit_date', 'last_working_day', 'reason', 'notice_served',
             'clearance_hr', 'clearance_it', 'clearance_finance', 'clearance_admin',
@@ -299,7 +276,6 @@ class ExitRecordView(BaseExitView):
                 else:
                     setattr(exit_record, field, request.data[field])
         
-        # Update employee status if record is closed
         if request.data.get('status') == 'CLOSED' and exit_record.status == 'CLOSED':
             employee = exit_record.employee
             if employee and employee.employment_status in ['ACTIVE', 'ON_LEAVE']:
@@ -316,25 +292,25 @@ class ExitRecordView(BaseExitView):
     
     @transaction.atomic
     def delete(self, request):
-        """Soft delete exit record"""
+        """Soft delete exit record using UUID"""
         company_id, _ = self._get_company_context(request)
         
-        exit_record_id = request.data.get('id')
-        if not exit_record_id:
+        exit_uuid = request.data.get('id')
+        if not exit_uuid:
             return Response(
-                {'error': 'id is required'},
+                {'error': 'id (UUID) is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         exit_record = get_object_or_404(
             ExitRecord,
-            id=exit_record_id,
+            _id=exit_uuid,
             company_id=company_id,
             is_deleted=False
         )
         
         exit_record.is_deleted = True
-        exit_record.deleted_at = datetime.now()
+        exit_record.deleted_at = timezone.now()
         exit_record.deleted_by = request.user
         exit_record.save()
         
@@ -347,114 +323,75 @@ class ExitStatsView(BaseExitView):
     def get(self, request):
         company_id, branch_id = self._get_company_context(request)
         
-        # Base query
         base_query = ExitRecord.objects.filter(
             company_id=company_id,
             is_deleted=False
         )
         
-        # Branch filter for non-admin
         if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
             base_query = base_query.filter(
-                Q(branch_id=branch_id) | Q(branch__isnull=True)
+                Q(branch_id=branch_id) | Q(branch_id__isnull=True)
             )
         
-        # Year filter
         year = request.query_params.get('year', date.today().year)
         monthly_query = base_query.filter(exit_date__year=year)
         
-        # Basic stats
         stats = {
             "total_exits": base_query.count(),
             "active_exits": base_query.filter(status='ACTIVE').count(),
             "closed_exits": base_query.filter(status='CLOSED').count(),
-            
-            # Clearance stats
             "pending_clearance": base_query.filter(clearance_status='PENDING').count(),
             "in_progress_clearance": base_query.filter(clearance_status='IN_PROGRESS').count(),
             "completed_clearance": base_query.filter(clearance_status='COMPLETED').count(),
-            
-            # Average settlement
-            "avg_settlement": float(base_query.aggregate(
-                Avg('final_settlement')
-            )['final_settlement__avg'] or 0),
-            
-            # Total settlement amount
-            "total_settlement": float(base_query.aggregate(
-                Sum('final_settlement')
-            )['final_settlement__sum'] or 0),
-            
-            # By reason
-            "by_reason": list(
-                base_query.values('reason').annotate(
-                    count=Count('id')
-                ).order_by('-count')
-            ),
-            
-            # By department
-            "by_department": list(
-                base_query.values('department').annotate(
-                    count=Count('id')
-                ).order_by('-count')
-            ),
-            
-            # Monthly trend (current year)
-            "monthly_trend": list(
-                monthly_query.annotate(
-                    month=models.functions.ExtractMonth('exit_date')
-                ).values('month').annotate(
-                    count=Count('id')
-                ).order_by('month')
-            ),
-            
-            # Clearance completion rate
-            "clearance_completion_rate": round(
-                (base_query.filter(clearance_status='COMPLETED').count() / 
-                 base_query.count() * 100) if base_query.count() > 0 else 0,
-                2
-            ),
-            
-            # Notice period compliance
-            "notice_compliance_rate": round(
-                (base_query.filter(notice_served=True).count() / 
-                 base_query.count() * 100) if base_query.count() > 0 else 0,
-                2
-            ),
+            "avg_settlement": float(base_query.aggregate(Avg('final_settlement'))['final_settlement__avg'] or 0),
+            "total_settlement": float(base_query.aggregate(Sum('final_settlement'))['final_settlement__sum'] or 0),
+            "by_reason": list(base_query.values('reason').annotate(count=Count('id')).order_by('-count')),
+            "by_department": list(base_query.values('department').annotate(count=Count('id')).order_by('-count')),
+            "monthly_trend": list(monthly_query.annotate(
+                month=models.functions.ExtractMonth('exit_date')
+            ).values('month').annotate(count=Count('id')).order_by('month')),
+            "clearance_completion_rate": round((base_query.filter(clearance_status='COMPLETED').count() / base_query.count() * 100) if base_query.count() > 0 else 0, 2),
+            "notice_compliance_rate": round((base_query.filter(notice_served=True).count() / base_query.count() * 100) if base_query.count() > 0 else 0, 2),
         }
         
         return Response(stats)
 
 
 class ExitChecklistView(BaseExitView):
-    """Manage exit checklist items"""
+    """Manage exit checklist items with UUID support"""
     
     def get(self, request):
         """Get checklist items for an exit record"""
         company_id, _ = self._get_company_context(request)
-        exit_record_id = request.query_params.get('exit_record_id')
+        exit_uuid = request.query_params.get('exit_record_id')
         
-        if not exit_record_id:
+        if not exit_uuid:
             return Response(
                 {'error': 'exit_record_id is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        exit_record = get_object_or_404(
+            ExitRecord,
+            _id=exit_uuid,
+            company_id=company_id,
+            is_deleted=False
+        )
+        
         checklist_items = ExitChecklist.objects.filter(
-            exit_record_id=exit_record_id,
-            exit_record__company_id=company_id,
+            exit_record=exit_record,
             is_deleted=False
         ).order_by('item_type', 'item_name')
         
         return Response([
             {
-                "id": item.id,
-                "_id": str(item._id),
-                "exit_record_id": item.exit_record_id,
+                "id": str(item._id),
+                "exit_record_id": str(item.exit_record._id),
                 "item_type": item.item_type,
                 "item_name": item.item_name,
                 "description": item.description,
                 "status": item.status,
-                "assigned_to": item.assigned_to_id,
+                "assigned_to": str(item.assigned_to._id) if item.assigned_to else None,
                 "assigned_to_name": item.assigned_to_name,
                 "completed_at": item.completed_at.isoformat() if item.completed_at else None,
                 "notes": item.notes,
@@ -464,52 +401,51 @@ class ExitChecklistView(BaseExitView):
     
     @transaction.atomic
     def patch(self, request):
-        """Update checklist item status"""
+        """Update checklist item status using UUID"""
         company_id, _ = self._get_company_context(request)
         
-        item_id = request.data.get('id')
-        if not item_id:
+        item_uuid = request.data.get('id')
+        if not item_uuid:
             return Response(
-                {'error': 'id is required'},
+                {'error': 'id (UUID) is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         checklist_item = get_object_or_404(
             ExitChecklist,
-            id=item_id,
+            _id=item_uuid,
             exit_record__company_id=company_id,
             is_deleted=False
         )
         
-        # Update fields
         if 'status' in request.data:
             checklist_item.status = request.data['status']
             if request.data['status'] == 'COMPLETED':
-                checklist_item.completed_at = datetime.now()
+                checklist_item.completed_at = timezone.now()
                 checklist_item.completed_by = request.user
         
         if 'notes' in request.data:
             checklist_item.notes = request.data['notes']
         
         if 'assigned_to' in request.data:
-            checklist_item.assigned_to_id = request.data['assigned_to']
-            if request.data['assigned_to']:
-                assigned_employee = Employee.objects.filter(
-                    id=request.data['assigned_to']
-                ).first()
-                if assigned_employee:
-                    checklist_item.assigned_to_name = assigned_employee.full_name
+            assigned_to_uuid = request.data['assigned_to']
+            if assigned_to_uuid:
+                assigned_employee = get_object_or_404(Employee, _id=assigned_to_uuid, company_id=company_id, is_deleted=False)
+                checklist_item.assigned_to = assigned_employee
+                checklist_item.assigned_to_name = assigned_employee.full_name
+            else:
+                checklist_item.assigned_to = None
+                checklist_item.assigned_to_name = None
         
         checklist_item.updated_by = request.user
         checklist_item.save()
         
-        # Update parent exit record clearance status
         exit_record = checklist_item.exit_record
         self._update_exit_clearance_status(exit_record)
         
         return Response({
             "message": "Checklist item updated successfully",
-            "item_id": checklist_item.id,
+            "item_id": str(checklist_item._id),
             "status": checklist_item.status
         })
     
@@ -521,12 +457,9 @@ class ExitChecklistView(BaseExitView):
         )
         
         total_items = checklist_items.count()
-        completed_items = checklist_items.filter(status='COMPLETED').count()
-        
         if total_items == 0:
             return
         
-        # Update individual clearance flags
         for clearance_type in ['HR', 'IT', 'FINANCE', 'ADMIN']:
             type_items = checklist_items.filter(item_type=clearance_type)
             type_completed = type_items.filter(status='COMPLETED').count()
@@ -537,7 +470,7 @@ class ExitChecklistView(BaseExitView):
 
 
 class ExitBulkActionView(BaseExitView):
-    """Bulk actions for exit records"""
+    """Bulk actions for exit records with UUID support"""
     
     @transaction.atomic
     def post(self, request):
@@ -545,16 +478,16 @@ class ExitBulkActionView(BaseExitView):
         company_id, _ = self._get_company_context(request)
         
         action = request.data.get('action')
-        record_ids = request.data.get('ids', [])
+        record_uuids = request.data.get('ids', [])
         
-        if not action or not record_ids:
+        if not action or not record_uuids:
             return Response(
                 {'error': 'action and ids are required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         records = ExitRecord.objects.filter(
-            id__in=record_ids,
+            _id__in=record_uuids,
             company_id=company_id,
             is_deleted=False
         )
@@ -576,7 +509,7 @@ class ExitBulkActionView(BaseExitView):
         elif action == 'DELETE':
             records.update(
                 is_deleted=True,
-                deleted_at=datetime.now(),
+                deleted_at=timezone.now(),
                 deleted_by=request.user
             )
             message = f'Successfully deleted {records.count()} exit records'

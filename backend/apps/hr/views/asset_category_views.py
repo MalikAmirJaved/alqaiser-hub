@@ -2,18 +2,21 @@
 from datetime import datetime
 from django.db import transaction, models
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 import logging
+
+from apps.common.baseauthentication import CompanyBranchMixin
 from apps.hr.models import AssetCategory, Asset
 
 logger = logging.getLogger(__name__)
 
 
-class AssetCategoryView(APIView):
-    """CRUD for Asset Categories/Kits"""
+class AssetCategoryView(CompanyBranchMixin, APIView):
+    """CRUD for Asset Categories/Kits with UUID support"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
@@ -27,19 +30,16 @@ class AssetCategoryView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Build query
         query = AssetCategory.objects.filter(
             company_id=company_id,
             is_deleted=False
         ).prefetch_related('assets')
         
-        # Non-admin users only see their branch categories or global
         if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
             query = query.filter(
-                models.Q(branch_id=branch_id) | models.Q(branch__isnull=True)
+                models.Q(branch_id=branch_id) | models.Q(branch_id__isnull=True)
             )
         
-        # Optional search
         search = request.query_params.get('search')
         if search:
             query = query.filter(
@@ -51,16 +51,15 @@ class AssetCategoryView(APIView):
         
         return Response([
             {
-                "id": c.id,
-                "_id": str(c._id),
+                "id": str(c._id),
                 "name": c.name,
                 "description": c.description,
                 "isActive": c.is_active,
-                "assetIds": c.get_asset_ids(),
-                "assetCount": c.assets.count(),
+                "assetIds": [str(a._id) for a in c.assets.filter(is_deleted=False)],
+                "assetCount": c.assets.filter(is_deleted=False).count(),
                 "assets": [
                     {
-                        "id": a.id,
+                        "id": str(a._id),
                         "name": a.name,
                         "brand": a.brand,
                         "model": a.model,
@@ -86,14 +85,12 @@ class AssetCategoryView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Validate required fields
         if not request.data.get('name'):
             return Response(
                 {'error': 'Category name is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Check for duplicate name
         if AssetCategory.objects.filter(
             company_id=company_id,
             name=request.data['name'],
@@ -114,11 +111,11 @@ class AssetCategoryView(APIView):
             updated_by=request.user,
         )
         
-        # Add assets if provided
-        asset_ids = request.data.get('assetIds', [])
-        if asset_ids:
+        # Add assets if provided (convert UUIDs to IDs)
+        asset_uuids = request.data.get('assetIds', [])
+        if asset_uuids:
             assets = Asset.objects.filter(
-                id__in=asset_ids,
+                _id__in=asset_uuids,
                 company_id=company_id,
                 is_deleted=False
             )
@@ -126,18 +123,17 @@ class AssetCategoryView(APIView):
         
         return Response({
             "message": "Category created successfully",
-            "id": category.id,
-            "_id": str(category._id),
+            "id": str(category._id),
             "name": category.name,
             "description": category.description,
             "isActive": category.is_active,
-            "assetIds": category.get_asset_ids(),
+            "assetIds": [str(a._id) for a in category.assets.all()],
             "assetCount": category.assets.count(),
         }, status=status.HTTP_201_CREATED)
     
     @transaction.atomic
     def patch(self, request):
-        """Update asset category"""
+        """Update asset category using UUID"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -146,21 +142,20 @@ class AssetCategoryView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        category_id = request.data.get('id')
-        if not category_id:
+        category_uuid = request.data.get('id')
+        if not category_uuid:
             return Response(
-                {'error': 'id is required'},
+                {'error': 'id (UUID) is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         category = get_object_or_404(
             AssetCategory,
-            id=category_id,
+            _id=category_uuid,
             company_id=company_id,
             is_deleted=False
         )
         
-        # Update basic fields
         if 'name' in request.data:
             category.name = request.data['name']
         if 'description' in request.data:
@@ -168,12 +163,11 @@ class AssetCategoryView(APIView):
         if 'isActive' in request.data:
             category.is_active = request.data['isActive']
         
-        # Update assets if provided
         if 'assetIds' in request.data:
-            asset_ids = request.data['assetIds']
-            if asset_ids:
+            asset_uuids = request.data['assetIds']
+            if asset_uuids:
                 assets = Asset.objects.filter(
-                    id__in=asset_ids,
+                    _id__in=asset_uuids,
                     company_id=company_id,
                     is_deleted=False
                 )
@@ -186,17 +180,17 @@ class AssetCategoryView(APIView):
         
         return Response({
             "message": "Category updated successfully",
-            "id": category.id,
+            "id": str(category._id),
             "name": category.name,
             "description": category.description,
             "isActive": category.is_active,
-            "assetIds": category.get_asset_ids(),
+            "assetIds": [str(a._id) for a in category.assets.all()],
             "assetCount": category.assets.count(),
         })
     
     @transaction.atomic
     def delete(self, request):
-        """Soft delete asset category"""
+        """Soft delete asset category using UUID"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -205,32 +199,29 @@ class AssetCategoryView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        category_id = request.data.get('id')
-        if not category_id:
+        category_uuid = request.data.get('id')
+        if not category_uuid:
             return Response(
-                {'error': 'id is required'},
+                {'error': 'id (UUID) is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         category = get_object_or_404(
             AssetCategory,
-            id=category_id,
+            _id=category_uuid,
             company_id=company_id,
             is_deleted=False
         )
         
-        # Check if category has active assignments
-        # You may want to add this check when employee assignments are implemented
-        
         category.is_deleted = True
-        category.deleted_at = datetime.now()
+        category.deleted_at = timezone.now()
         category.deleted_by = request.user
         category.save()
         
         return Response({'message': 'Category deleted successfully'})
 
 
-class AssetCategoryStatsView(APIView):
+class AssetCategoryStatsView(CompanyBranchMixin, APIView):
     """Get asset category statistics"""
     permission_classes = [IsAuthenticated]
     
@@ -248,7 +239,7 @@ class AssetCategoryStatsView(APIView):
             is_deleted=False
         )
         
-        total_assets_in_categories = sum(c.assets.count() for c in categories)
+        total_assets_in_categories = sum(c.assets.filter(is_deleted=False).count() for c in categories)
         
         return Response({
             "totalCategories": categories.count(),

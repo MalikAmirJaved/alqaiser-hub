@@ -2,75 +2,25 @@
 from datetime import datetime, date
 from django.db import transaction, models
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 import logging
-from apps.hr.models import Employee, EmployeeDefaultShift, EmployeeAssetAssignment, Asset, AssetCategory, ShiftTemplate
+
+from apps.common.baseauthentication import CompanyBranchMixin
+from apps.hr.models import Employee, EmployeeDefaultShift, EmployeeAssetAssignment, AssetCategory
 
 logger = logging.getLogger(__name__)
 
 
-class EmployeeView(APIView):
-    """CRUD for Employees"""
+class EmployeeView(CompanyBranchMixin, APIView):
+    """CRUD for Employees with UUID support"""
     permission_classes = [IsAuthenticated]
     
-    def get(self, request):
-        """Get all employees for user's company"""
-        company_id = request.user.company_id
-        branch_id = request.user.branch_id
-        
-        if not company_id:
-            return Response(
-                {'error': 'User is not associated with any company'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        query = Employee.objects.filter(
-            company_id=company_id,
-            is_deleted=False
-        ).select_related('default_shift', 'reporting_manager')
-        
-        # Non-admin users only see their branch employees
-        if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
-            query = query.filter(
-                models.Q(branch_id=branch_id) | models.Q(branch__isnull=True)
-            )
-        
-        # Search
-        search = request.query_params.get('search')
-        if search:
-            query = query.filter(
-                models.Q(employee_id__icontains=search) |
-                models.Q(first_name__icontains=search) |
-                models.Q(last_name__icontains=search) |
-                models.Q(department__icontains=search) |
-                models.Q(designation__icontains=search) |
-                models.Q(email__icontains=search)
-            )
-        
-        # Filters
-        department = request.query_params.get('department')
-        status_filter = request.query_params.get('status')
-        employment_type = request.query_params.get('employmentType')
-        
-        if department:
-            query = query.filter(department=department)
-        if status_filter:
-            query = query.filter(employment_status=status_filter)
-        if employment_type:
-            query = query.filter(employment_type=employment_type)
-        
-        employees = query.order_by('first_name', 'last_name')
-        
-        return Response([
-            self._serialize_employee(e) for e in employees
-        ])
-    
     def _serialize_employee(self, employee):
-        """Serialize employee with default shift info"""
-        # Get active default shift
+        """Serialize employee with UUID as id"""
         today = date.today()
         active_default_shift = employee.default_shifts.filter(
             effective_from__lte=today,
@@ -79,16 +29,14 @@ class EmployeeView(APIView):
             models.Q(effective_to__isnull=True) | models.Q(effective_to__gte=today)
         ).select_related('template').first()
         
-        # Safely get reporting manager
-        reporting_manager_name = None
         reporting_manager_id = None
+        reporting_manager_name = None
         if employee.reporting_manager_id and employee.reporting_manager:
-            reporting_manager_id = employee.reporting_manager.id
+            reporting_manager_id = str(employee.reporting_manager._id)
             reporting_manager_name = employee.reporting_manager.full_name
         
         return {
-            "id": employee.id,
-            "_id": str(employee._id),
+            "id": str(employee._id),
             "employee_id": employee.employee_id,
             "first_name": employee.first_name,
             "last_name": employee.last_name,
@@ -119,8 +67,8 @@ class EmployeeView(APIView):
             "work_location": employee.work_location,
             "reporting_manager_id": reporting_manager_id,
             "reporting_manager_name": reporting_manager_name,
-            "default_shift_id": active_default_shift.template_id if active_default_shift else employee.default_shift_id,
-            "default_shift_name": active_default_shift.template.name if active_default_shift and active_default_shift.template else None,
+            "default_shift_id": str(active_default_shift.template._id) if active_default_shift and active_default_shift.template else (str(employee.default_shift._id) if employee.default_shift else None),
+            "default_shift_name": active_default_shift.template.name if active_default_shift and active_default_shift.template else (employee.default_shift.name if employee.default_shift else None),
             "bank_name": employee.bank_name,
             "bank_account_number": employee.bank_account_number,
             "bank_iban": employee.bank_iban,
@@ -128,7 +76,49 @@ class EmployeeView(APIView):
             "createdAt": employee.created_at.isoformat() if employee.created_at else None,
             "updatedAt": employee.updated_at.isoformat() if employee.updated_at else None,
         }
-
+    
+    def get(self, request):
+        """Get all employees for user's company"""
+        company_id = request.user.company_id
+        branch_id = request.user.branch_id
+        
+        if not company_id:
+            return Response(
+                {'error': 'User is not associated with any company'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        query = Employee.objects.filter(company_id=company_id, is_deleted=False).select_related('default_shift', 'reporting_manager')
+        
+        if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
+            query = query.filter(models.Q(branch_id=branch_id) | models.Q(branch_id__isnull=True))
+        
+        search = request.query_params.get('search')
+        if search:
+            query = query.filter(
+                models.Q(employee_id__icontains=search) |
+                models.Q(first_name__icontains=search) |
+                models.Q(last_name__icontains=search) |
+                models.Q(department__icontains=search) |
+                models.Q(designation__icontains=search) |
+                models.Q(email__icontains=search)
+            )
+        
+        department = request.query_params.get('department')
+        status_filter = request.query_params.get('status')
+        employment_type = request.query_params.get('employmentType')
+        
+        if department:
+            query = query.filter(department=department)
+        if status_filter:
+            query = query.filter(employment_status=status_filter)
+        if employment_type:
+            query = query.filter(employment_type=employment_type)
+        
+        employees = query.order_by('first_name', 'last_name')
+        
+        return Response([self._serialize_employee(e) for e in employees])
+    
     @transaction.atomic
     def post(self, request):
         """Create new employee"""
@@ -141,7 +131,6 @@ class EmployeeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Validate required fields
         required_fields = ['first_name', 'phone', 'department', 'joining_date']
         for field in required_fields:
             if not request.data.get(field):
@@ -150,23 +139,18 @@ class EmployeeView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
-        # Generate employee ID if not provided
         employee_id = request.data.get('employee_id')
         if not employee_id:
             count = Employee.objects.filter(company_id=company_id, is_deleted=False).count()
             employee_id = f"EMP-{str(count + 1).zfill(3)}"
         
-        # Check for duplicate employee ID
         if Employee.objects.filter(company_id=company_id, employee_id=employee_id, is_deleted=False).exists():
             return Response(
                 {'error': 'Employee ID already exists'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Parse dates
-        joining_date = request.data.get('joining_date')
-        if joining_date:
-            joining_date = datetime.strptime(joining_date, '%Y-%m-%d').date()
+        joining_date = datetime.strptime(request.data['joining_date'], '%Y-%m-%d').date() if request.data.get('joining_date') else None
         
         date_of_birth = None
         if request.data.get('date_of_birth'):
@@ -176,14 +160,16 @@ class EmployeeView(APIView):
         if request.data.get('confirmation_date'):
             confirmation_date = datetime.strptime(request.data['confirmation_date'], '%Y-%m-%d').date()
         
-        # Handle empty strings for ForeignKey fields
-        reporting_manager_id = request.data.get('reporting_manager_id')
-        if reporting_manager_id == '' or reporting_manager_id is None:
-            reporting_manager_id = None
+        reporting_manager_uuid = request.data.get('reporting_manager_id')
+        reporting_manager = None
+        if reporting_manager_uuid:
+            reporting_manager = get_object_or_404(Employee, _id=reporting_manager_uuid, company_id=company_id, is_deleted=False)
         
-        default_shift_id = request.data.get('default_shift_id')
-        if default_shift_id == '' or default_shift_id is None:
-            default_shift_id = None
+        default_shift_uuid = request.data.get('default_shift_id')
+        from apps.hr.models import ShiftTemplate
+        default_shift = None
+        if default_shift_uuid:
+            default_shift = get_object_or_404(ShiftTemplate, _id=default_shift_uuid, company_id=company_id, is_deleted=False)
         
         employee = Employee.objects.create(
             company_id=company_id,
@@ -216,8 +202,8 @@ class EmployeeView(APIView):
             confirmation_date=confirmation_date,
             probation_days=request.data.get('probation_days', 180),
             work_location=request.data.get('work_location', 'OFFICE'),
-            reporting_manager_id=reporting_manager_id,
-            default_shift_id=default_shift_id,
+            reporting_manager=reporting_manager,
+            default_shift=default_shift,
             bank_name=request.data.get('bank_name'),
             bank_account_number=request.data.get('bank_account_number'),
             bank_iban=request.data.get('bank_iban'),
@@ -226,79 +212,59 @@ class EmployeeView(APIView):
             updated_by=request.user,
         )
         
-        # Create default shift record if provided
-        if default_shift_id and joining_date:
+        if default_shift and joining_date:
             EmployeeDefaultShift.objects.create(
                 company_id=company_id,
                 employee=employee,
-                template_id=default_shift_id,
+                template=default_shift,
                 effective_from=joining_date,
                 created_by=request.user,
                 updated_by=request.user,
             )
         
-        # Assign assets from kit if provided
-        asset_category_id = request.data.get('asset_category_id')
-
-        if asset_category_id and asset_category_id != '':
-            self._assign_assets_from_category(employee, asset_category_id, request.user)
-
+        asset_category_uuid = request.data.get('asset_category_id')
+        if asset_category_uuid:
+            self._assign_assets_from_category(employee, asset_category_uuid, request.user)
+        
         return Response({
             "message": "Employee created successfully",
             "employee": self._serialize_employee(employee),
         }, status=status.HTTP_201_CREATED)
-
-    def _assign_assets_from_category(self, employee, category_id, user):
-        """Assign all assets from a category/kit to an employee"""
+    
+    def _assign_assets_from_category(self, employee, category_uuid, user):
+        """Assign all assets from a category/kit to an employee using UUID"""
         try:
-            category = AssetCategory.objects.get(
-                id=category_id,
-                company_id=employee.company_id,
-                is_deleted=False
-            )
-
-            # Get all assets in the category
-            assets = list(
-                category.assets.filter(
-                    is_deleted=False,
-                    is_active=True
-                )
-            )
-
-
+            category = AssetCategory.objects.get(_id=category_uuid, company_id=employee.company_id, is_deleted=False)
+            assets = list(category.assets.filter(is_deleted=False, is_active=True))
+            
             assignments = []
-
             for asset in assets:
-                assignments.append(
-                    EmployeeAssetAssignment(
-                        company_id=employee.company_id,
-                        branch_id=employee.branch_id,
-                        employee=employee,
-                        asset=asset,
-                        source_type='KIT',
-                        source_kit=category,
-                        assigned_date=date.today(),
-                        status='ACTIVE',
-                        condition_on_assignment='NEW',
-                        notes=f"Assigned via kit: {category.name}",
-                        created_by=user,
-                        updated_by=user,
-                    )
-                )
-
+                assignments.append(EmployeeAssetAssignment(
+                    company_id=employee.company_id,
+                    branch_id=employee.branch_id,
+                    employee=employee,
+                    asset=asset,
+                    source_type='KIT',
+                    source_kit=category,
+                    assigned_date=date.today(),
+                    status='ACTIVE',
+                    condition_on_assignment='NEW',
+                    notes=f"Assigned via kit: {category.name}",
+                    created_by=user,
+                    updated_by=user,
+                ))
+            
             if assignments:
-                # Bulk create all assignments
                 EmployeeAssetAssignment.objects.bulk_create(assignments)
-
+                
         except AssetCategory.DoesNotExist:
-            logger.warning(f"AssetCategory {category_id} not found")
+            logger.warning(f"AssetCategory {category_uuid} not found")
         except Exception as e:
             logger.error(f"Error assigning assets from kit: {str(e)}")
-            raise
-
+    
     @transaction.atomic
     def patch(self, request):
-        """Update employee"""
+        """Update employee using UUID"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -307,21 +273,20 @@ class EmployeeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        employee_id = request.data.get('id')
-        if not employee_id:
+        employee_uuid = request.data.get('id')
+        if not employee_uuid:
             return Response(
-                {'error': 'id is required'},
+                {'error': 'id (UUID) is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         employee = get_object_or_404(
             Employee,
-            id=employee_id,
+            _id=employee_uuid,
             company_id=company_id,
             is_deleted=False
         )
         
-        # Update fields with empty string handling
         updatable_fields = [
             'first_name', 'last_name', 'father_name', 'cnic',
             'gender', 'marital_status', 'phone', 'email', 'personal_email',
@@ -336,16 +301,21 @@ class EmployeeView(APIView):
             if field in request.data:
                 setattr(employee, field, request.data[field])
         
-        # Handle ForeignKey fields with empty string
         if 'reporting_manager_id' in request.data:
             value = request.data['reporting_manager_id']
-            employee.reporting_manager_id = None if value == '' or value is None else value
+            if value:
+                employee.reporting_manager = get_object_or_404(Employee, _id=value, company_id=company_id, is_deleted=False)
+            else:
+                employee.reporting_manager = None
         
         if 'default_shift_id' in request.data:
             value = request.data['default_shift_id']
-            employee.default_shift_id = None if value == '' or value is None else value
+            from apps.hr.models import ShiftTemplate
+            if value:
+                employee.default_shift = get_object_or_404(ShiftTemplate, _id=value, company_id=company_id, is_deleted=False)
+            else:
+                employee.default_shift = None
         
-        # Parse dates
         if 'date_of_birth' in request.data:
             val = request.data['date_of_birth']
             employee.date_of_birth = datetime.strptime(val, '%Y-%m-%d').date() if val else None
@@ -361,35 +331,6 @@ class EmployeeView(APIView):
         employee.updated_by = request.user
         employee.save()
         
-        # Handle default shift change
-        old_default_shift_id = request.data.get('old_default_shift_id')
-        new_default_shift_id = request.data.get('default_shift_id')
-        
-        # Convert empty strings to None for comparison
-        if old_default_shift_id == '':
-            old_default_shift_id = None
-        if new_default_shift_id == '':
-            new_default_shift_id = None
-        
-        if new_default_shift_id is not None and str(new_default_shift_id) != str(old_default_shift_id):
-            # End previous active default shifts
-            today = date.today()
-            EmployeeDefaultShift.objects.filter(
-                employee=employee,
-                effective_to__isnull=True,
-                is_deleted=False
-            ).update(effective_to=today)
-            
-            # Create new default shift
-            EmployeeDefaultShift.objects.create(
-                company_id=company_id,
-                employee=employee,
-                template_id=new_default_shift_id,
-                effective_from=today,
-                created_by=request.user,
-                updated_by=request.user,
-            )
-        
         return Response({
             "message": "Employee updated successfully",
             "employee": self._serialize_employee(employee),
@@ -397,7 +338,7 @@ class EmployeeView(APIView):
     
     @transaction.atomic
     def delete(self, request):
-        """Soft delete employee"""
+        """Soft delete employee using UUID"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -406,21 +347,20 @@ class EmployeeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        employee_id = request.data.get('id')
-        if not employee_id:
+        employee_uuid = request.data.get('id')
+        if not employee_uuid:
             return Response(
-                {'error': 'id is required'},
+                {'error': 'id (UUID) is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         employee = get_object_or_404(
             Employee,
-            id=employee_id,
+            _id=employee_uuid,
             company_id=company_id,
             is_deleted=False
         )
         
-        # Check for active asset assignments
         active_assignments = employee.asset_assignments.filter(status='ACTIVE')
         if active_assignments.exists():
             return Response(
@@ -429,14 +369,14 @@ class EmployeeView(APIView):
             )
         
         employee.is_deleted = True
-        employee.deleted_at = datetime.now()
+        employee.deleted_at = timezone.now()
         employee.deleted_by = request.user
         employee.save()
         
         return Response({'message': 'Employee deleted successfully'})
 
 
-class EmployeeStatsView(APIView):
+class EmployeeStatsView(CompanyBranchMixin, APIView):
     """Get employee statistics"""
     permission_classes = [IsAuthenticated]
     
@@ -449,22 +389,14 @@ class EmployeeStatsView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        employees = Employee.objects.filter(
-            company_id=company_id,
-            is_deleted=False
-        )
+        employees = Employee.objects.filter(company_id=company_id, is_deleted=False)
         
         return Response({
             "totalEmployees": employees.count(),
             "activeEmployees": employees.filter(employment_status='ACTIVE').count(),
             "onLeave": employees.filter(employment_status='ON_LEAVE').count(),
             "departments": employees.values('department').distinct().count(),
-            "withDefaultShift": employees.filter(default_shift__isnull=False).count() + 
-                               EmployeeDefaultShift.objects.filter(
-                                   employee__company_id=company_id,
-                                   effective_to__isnull=True,
-                                   is_deleted=False
-                               ).values('employee').distinct().count(),
+            "withDefaultShift": employees.filter(default_shift__isnull=False).count(),
             "byDepartment": list(employees.values('department').annotate(count=models.Count('id')).order_by('-count')),
             "byStatus": list(employees.values('employment_status').annotate(count=models.Count('id'))),
         })

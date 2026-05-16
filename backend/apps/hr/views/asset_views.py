@@ -2,18 +2,21 @@
 from datetime import datetime, date
 from django.db import transaction, models
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 import logging
+
+from apps.common.baseauthentication import CompanyBranchMixin
 from apps.hr.models import Asset
 
 logger = logging.getLogger(__name__)
 
 
-class AssetView(APIView):
-    """CRUD for HR Assets"""
+class AssetView(CompanyBranchMixin, APIView):
+    """CRUD for HR Assets with UUID support"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
@@ -27,19 +30,13 @@ class AssetView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Build query based on user role
-        query = Asset.objects.filter(
-            company_id=company_id,
-            is_deleted=False
-        )
+        query = Asset.objects.filter(company_id=company_id, is_deleted=False)
         
-        # Non-admin users only see their branch assets or global assets
+        # Non-admin users only see their branch assets
         if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
-            query = query.filter(
-                models.Q(branch_id=branch_id) | models.Q(branch__isnull=True)
-            )
+            query = query.filter(models.Q(branch_id=branch_id) | models.Q(branch_id__isnull=True))
         
-        # Optional filters
+        # Filters
         vendor = request.query_params.get('vendor')
         is_assigned = request.query_params.get('is_assigned')
         search = request.query_params.get('search')
@@ -61,8 +58,7 @@ class AssetView(APIView):
         
         return Response([
             {
-                "id": a.id,
-                "_id": str(a._id),
+                "id": str(a._id),
                 "name": a.name,
                 "brand": a.brand,
                 "model": a.model,
@@ -93,20 +89,15 @@ class AssetView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Validate required fields
         if not request.data.get('name'):
             return Response(
                 {'error': 'Asset name is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Check for duplicate serial number (if provided)
         serial_number = request.data.get('serialNumber')
         if serial_number:
-            if Asset.objects.filter(
-                serial_number=serial_number,
-                is_deleted=False
-            ).exists():
+            if Asset.objects.filter(serial_number=serial_number, is_deleted=False).exists():
                 return Response(
                     {'error': 'Asset with this serial number already exists'},
                     status=status.HTTP_400_BAD_REQUEST
@@ -153,8 +144,7 @@ class AssetView(APIView):
         
         return Response({
             "message": "Asset created successfully",
-            "id": asset.id,
-            "_id": str(asset._id),
+            "id": str(asset._id),
             "name": asset.name,
             "brand": asset.brand,
             "model": asset.model,
@@ -170,7 +160,7 @@ class AssetView(APIView):
     
     @transaction.atomic
     def patch(self, request):
-        """Update asset"""
+        """Update asset using UUID"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -179,16 +169,16 @@ class AssetView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        asset_id = request.data.get('id')
-        if not asset_id:
+        asset_uuid = request.data.get('id')
+        if not asset_uuid:
             return Response(
-                {'error': 'id is required'},
+                {'error': 'id (UUID) is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         asset = get_object_or_404(
             Asset,
-            id=asset_id,
+            _id=asset_uuid,
             company_id=company_id,
             is_deleted=False
         )
@@ -203,11 +193,7 @@ class AssetView(APIView):
         if 'serialNumber' in request.data:
             new_serial = request.data['serialNumber']
             if new_serial and new_serial != asset.serial_number:
-                # Check for duplicate
-                if Asset.objects.filter(
-                    serial_number=new_serial,
-                    is_deleted=False
-                ).exclude(id=asset_id).exists():
+                if Asset.objects.filter(serial_number=new_serial, is_deleted=False).exclude(_id=asset_uuid).exists():
                     return Response(
                         {'error': 'Asset with this serial number already exists'},
                         status=status.HTTP_400_BAD_REQUEST
@@ -253,7 +239,7 @@ class AssetView(APIView):
         
         return Response({
             "message": "Asset updated successfully",
-            "id": asset.id,
+            "id": str(asset._id),
             "name": asset.name,
             "brand": asset.brand,
             "model": asset.model,
@@ -269,7 +255,7 @@ class AssetView(APIView):
     
     @transaction.atomic
     def delete(self, request):
-        """Soft delete asset"""
+        """Soft delete asset using UUID"""
         company_id = request.user.company_id
         
         if not company_id:
@@ -278,21 +264,20 @@ class AssetView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        asset_id = request.data.get('id')
-        if not asset_id:
+        asset_uuid = request.data.get('id')
+        if not asset_uuid:
             return Response(
-                {'error': 'id is required'},
+                {'error': 'id (UUID) is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         asset = get_object_or_404(
             Asset,
-            id=asset_id,
+            _id=asset_uuid,
             company_id=company_id,
             is_deleted=False
         )
         
-        # Check if asset is currently assigned
         if asset.is_assigned:
             return Response(
                 {'error': 'Cannot delete asset that is currently assigned to an employee'},
@@ -300,14 +285,14 @@ class AssetView(APIView):
             )
         
         asset.is_deleted = True
-        asset.deleted_at = datetime.now()
+        asset.deleted_at = timezone.now()
         asset.deleted_by = request.user
         asset.save()
         
         return Response({'message': 'Asset deleted successfully'})
 
 
-class AssetStatsView(APIView):
+class AssetStatsView(CompanyBranchMixin, APIView):
     """Get asset statistics"""
     permission_classes = [IsAuthenticated]
     
@@ -320,14 +305,9 @@ class AssetStatsView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        assets = Asset.objects.filter(
-            company_id=company_id,
-            is_deleted=False
-        )
+        assets = Asset.objects.filter(company_id=company_id, is_deleted=False)
         
-        total_value = assets.aggregate(
-            total=models.Sum('purchase_price')
-        )['total'] or 0
+        total_value = assets.aggregate(total=models.Sum('purchase_price'))['total'] or 0
         
         return Response({
             "totalAssets": assets.count(),
@@ -340,10 +320,6 @@ class AssetStatsView(APIView):
             "uniqueVendors": assets.exclude(
                 models.Q(vendor__isnull=True) | models.Q(vendor='')
             ).values('vendor').distinct().count(),
-            "activeWarranty": sum(
-                1 for a in assets if a.warranty_status is True
-            ),
-            "expiredWarranty": sum(
-                1 for a in assets if a.warranty_status is False
-            ),
+            "activeWarranty": sum(1 for a in assets if a.warranty_status is True),
+            "expiredWarranty": sum(1 for a in assets if a.warranty_status is False),
         })
