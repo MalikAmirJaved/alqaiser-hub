@@ -5,62 +5,48 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash2, Copy, ChevronDown, ChevronUp, X, Package } from "lucide-react";
+import { Plus, Trash2, Copy, ChevronDown, ChevronUp, X, Package, Image as ImageIcon } from "lucide-react";
+import { ProductVariantPayload } from "@/hooks/useProducts";
 
-interface Variant {
-  id?: string;
-  sku: string;
-  barcode?: string;
-  attribute_combination: Record<string, string>;
-  cost_price: number;
-  selling_price: number;
-  special_price?: number | null;
-  main_image?: string;
-  status: string;
+interface Variant extends ProductVariantPayload {
+  id?: string; // temporary frontend ID
 }
 
 interface ProductVariantsManagerProps {
-  product: any;
   variants: Variant[];
   onChange: (variants: Variant[]) => void;
   errors?: Record<string, string>;
+  baseSkuHint?: string;
 }
 
-export default function ProductVariantsManager({ product, variants, onChange, errors = {} }: ProductVariantsManagerProps) {
-  const [attributeDefinitions] = useState<Record<string, string[]>>({
-    Color: ["Red", "Blue", "Green", "Black", "White"],
-    Size: ["XS", "S", "M", "L", "XL"],
-    Material: ["Cotton", "Polyester", "Wool"],
-  });
-  const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string[]>>({});
-  const [generating, setGenerating] = useState(false);
+export default function ProductVariantsManager({ variants, onChange, errors = {}, baseSkuHint = "SKU" }: ProductVariantsManagerProps) {
   const [expandedVariant, setExpandedVariant] = useState<string | null>(null);
+  const [newAttrKey, setNewAttrKey] = useState("");
+  const [newAttrValue, setNewAttrValue] = useState("");
+  const [currentVariantIndex, setCurrentVariantIndex] = useState<number | null>(null);
+  const [newImageUrl, setNewImageUrl] = useState("");
 
-  const generateCombinations = () => {
-    const attributeNames = Object.keys(selectedAttributes);
-    const attributeValues = attributeNames.map(name => selectedAttributes[name]);
-    const combinations = cartesianProduct(attributeNames, attributeValues);
-    setGenerating(true);
-    const newVariants: Variant[] = [];
-    const baseSKU = product.sku;
-    combinations.forEach(combo => {
-      const attributeStr = Object.values(combo).join("-");
-      const variantSKU = `${baseSKU}-${attributeStr}`.toUpperCase();
-      if (!variants.some(v => JSON.stringify(v.attribute_combination) === JSON.stringify(combo))) {
-        newVariants.push({
-          sku: variantSKU,
-          attribute_combination: combo,
-          cost_price: 0,
-          selling_price: 0,
-          status: "active",
-        });
-      }
-    });
-    if (newVariants.length) onChange([...variants, ...newVariants]);
-    setGenerating(false);
+  const addVariant = () => {
+    const newId = `temp_${Date.now()}_${Math.random()}`;
+    onChange([
+      ...variants,
+      {
+        sku: `${baseSkuHint}-VAR${variants.length + 1}`,
+        barcode: "",
+        qrCode: "",
+        buyingPrice: 0,
+        sellingPrice: 0,
+        minStockLevel: 0,
+        maxStockLevel: 0,
+        stock: 0,
+        attributes: [],
+        images: [],
+        id: newId,
+      },
+    ]);
+    setExpandedVariant(newId);
   };
 
   const updateVariant = (index: number, updates: Partial<Variant>) => {
@@ -70,112 +56,215 @@ export default function ProductVariantsManager({ product, variants, onChange, er
   };
 
   const deleteVariant = (index: number) => {
-    if (confirm("Delete this variant?")) onChange(variants.filter((_, i) => i !== index));
+    if (confirm("Delete this variant?")) {
+      const newVariants = variants.filter((_, i) => i !== index);
+      onChange(newVariants);
+      if (expandedVariant === variants[index].id) setExpandedVariant(null);
+    }
   };
 
   const duplicateVariant = (index: number) => {
-    const variant = variants[index];
-    onChange([...variants, { ...variant, sku: `${variant.sku}-COPY` }]);
+    const original = variants[index];
+    const newId = `temp_${Date.now()}_${Math.random()}`;
+    const copy = {
+      ...original,
+      sku: `${original.sku}-COPY`,
+      id: newId,
+      attributes: original.attributes ? [...original.attributes] : [],
+      images: original.images ? [...original.images] : [],
+    };
+    onChange([...variants, copy]);
+    setExpandedVariant(newId);
   };
 
-  const toggleAttributeSelection = (attrName: string, option: string) => {
-    setSelectedAttributes(prev => {
-      const current = prev[attrName] || [];
-      const updated = current.includes(option) ? current.filter(o => o !== option) : [...current, option];
-      if (updated.length === 0) { const { [attrName]: _, ...rest } = prev; return rest; }
-      return { ...prev, [attrName]: updated };
+  const addAttribute = (variantIndex: number) => {
+    if (!newAttrKey.trim() || !newAttrValue.trim()) return;
+    const currentAttrs = variants[variantIndex].attributes || [];
+    updateVariant(variantIndex, {
+      attributes: [...currentAttrs, { key: newAttrKey.trim(), value: newAttrValue.trim() }],
     });
+    setNewAttrKey("");
+    setNewAttrValue("");
+    setCurrentVariantIndex(null);
   };
 
-  const getVariantDisplayName = (variant: Variant) => Object.entries(variant.attribute_combination).map(([k, v]) => `${k}: ${v}`).join(" | ");
+  const removeAttribute = (variantIndex: number, attrIndex: number) => {
+    const attrs = variants[variantIndex].attributes || [];
+    const updated = attrs.filter((_, i) => i !== attrIndex);
+    updateVariant(variantIndex, { attributes: updated });
+  };
+
+  const addImage = (variantIndex: number) => {
+    if (!newImageUrl.trim()) return;
+    const currentImages = variants[variantIndex].images || [];
+    updateVariant(variantIndex, { images: [...currentImages, newImageUrl.trim()] });
+    setNewImageUrl("");
+    setCurrentVariantIndex(null);
+  };
+
+  const removeImage = (variantIndex: number, imgIndex: number) => {
+    const images = variants[variantIndex].images || [];
+    const updated = images.filter((_, i) => i !== imgIndex);
+    updateVariant(variantIndex, { images: updated });
+  };
+
+  const getVariantDisplayName = (variant: Variant) => {
+    if (!variant.attributes || variant.attributes.length === 0) return variant.sku;
+    return variant.attributes.map(a => `${a.key}: ${a.value}`).join(" | ");
+  };
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader><CardTitle className="text-base">Generate Variants from Attributes</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <Tabs defaultValue="standard">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="standard">Standard Attributes</TabsTrigger>
-              <TabsTrigger value="custom">Custom Attributes</TabsTrigger>
-            </TabsList>
-            <TabsContent value="standard" className="space-y-4 pt-4">
-              {Object.entries(attributeDefinitions).map(([attrName, options]) => (
-                <div key={attrName}>
-                  <Label className="text-sm font-medium mb-2 block">{attrName}</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {options.map(opt => (
-                      <Badge key={opt} variant={selectedAttributes[attrName]?.includes(opt) ? "default" : "outline"} className="cursor-pointer" onClick={() => toggleAttributeSelection(attrName, opt)}>
-                        {opt}{selectedAttributes[attrName]?.includes(opt) && <X className="w-3 h-3 ml-1" />}
-                      </Badge>
-                    ))}
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="font-medium">Product Variants</h3>
+          <p className="text-xs text-muted-foreground">{variants.length} variant(s)</p>
+        </div>
+        <Button size="sm" onClick={addVariant}>
+          <Plus className="w-4 h-4 mr-1" /> Add Variant
+        </Button>
+      </div>
+      {errors.variants && <p className="text-xs text-destructive">{errors.variants}</p>}
+
+      {variants.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
+          <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p>No variants yet. Add at least one variant.</p>
+        </div>
+      ) : (
+        variants.map((variant, idx) => (
+          <Card key={variant.id || idx} className="overflow-hidden">
+            <div
+              className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30"
+              onClick={() => setExpandedVariant(expandedVariant === (variant.id || String(idx)) ? null : (variant.id || String(idx)))}
+            >
+              <div className="flex items-center gap-3">
+                {expandedVariant === (variant.id || String(idx)) ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                <div>
+                  <div className="font-medium">{getVariantDisplayName(variant)}</div>
+                  <div className="text-xs font-mono text-muted-foreground">SKU: {variant.sku}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <div className="font-medium text-success">${variant.sellingPrice}</div>
+                  <div className="text-xs text-muted-foreground line-through">${variant.buyingPrice}</div>
+                </div>
+                <div className="flex gap-1">
+                  <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); duplicateVariant(idx); }} className="h-8 w-8">
+                    <Copy className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); deleteVariant(idx); }} className="h-8 w-8 text-destructive">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {expandedVariant === (variant.id || String(idx)) && (
+              <div className="border-t p-4 bg-muted/5 space-y-4">
+                {/* Basic fields */}
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                  <div>
+                    <Label className="text-xs">SKU *</Label>
+                    <Input value={variant.sku} onChange={(e) => updateVariant(idx, { sku: e.target.value.toUpperCase() })} className="mt-1 h-8" />
+                    {errors[`variant_${idx}_sku`] && <p className="text-xs text-destructive">{errors[`variant_${idx}_sku`]}</p>}
+                  </div>
+                  <div>
+                    <Label className="text-xs">Barcode</Label>
+                    <Input value={variant.barcode || ""} onChange={(e) => updateVariant(idx, { barcode: e.target.value })} className="mt-1 h-8" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">QR Code URL</Label>
+                    <Input value={variant.qrCode || ""} onChange={(e) => updateVariant(idx, { qrCode: e.target.value })} className="mt-1 h-8" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Initial Stock</Label>
+                    <Input type="number" value={variant.stock || 0} onChange={(e) => updateVariant(idx, { stock: parseInt(e.target.value) || 0 })} className="mt-1 h-8" />
                   </div>
                 </div>
-              ))}
-            </TabsContent>
-            <TabsContent value="custom" className="pt-4">
-              <p className="text-sm text-muted-foreground">Custom attributes can be added via the settings page.</p>
-            </TabsContent>
-          </Tabs>
-          <Button onClick={generateCombinations} disabled={Object.keys(selectedAttributes).length === 0 || generating} className="w-full">
-            {generating ? "Generating..." : `Generate Variants (${Object.values(selectedAttributes).reduce((a, b) => a * b.length, 1)} combinations)`}
-          </Button>
-        </CardContent>
-      </Card>
 
-      <div className="space-y-3">
-        <div className="flex justify-between items-center">
-          <div><h3 className="font-medium">Product Variants</h3><p className="text-xs text-muted-foreground">{variants.length} variant(s)</p></div>
-          <Button size="sm" variant="outline" onClick={() => onChange([...variants, { sku: `${product.sku}-VAR${variants.length+1}`, attribute_combination: {}, cost_price: 0, selling_price: 0, status: "active" }])}>
-            <Plus className="w-4 h-4 mr-1" /> Add Manual
-          </Button>
-        </div>
-        {errors.variants && <p className="text-xs text-destructive">{errors.variants}</p>}
-        {variants.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg"><Package className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>No variants yet</p></div>
-        ) : (
-          variants.map((variant, idx) => (
-            <Card key={idx} className="overflow-hidden">
-              <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30" onClick={() => setExpandedVariant(expandedVariant === String(idx) ? null : String(idx))}>
-                <div className="flex items-center gap-3">
-                  {expandedVariant === String(idx) ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                  <div><div className="font-medium">{Object.keys(variant.attribute_combination).length ? getVariantDisplayName(variant) : `Variant ${idx+1}`}</div><div className="text-xs font-mono text-muted-foreground">SKU: {variant.sku}</div></div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <Label className="text-xs">Buying Price</Label>
+                    <Input type="number" step="0.01" value={variant.buyingPrice} onChange={(e) => updateVariant(idx, { buyingPrice: parseFloat(e.target.value) || 0 })} className="mt-1 h-8" />
+                    {errors[`variant_${idx}_cost`] && <p className="text-xs text-destructive">{errors[`variant_${idx}_cost`]}</p>}
+                  </div>
+                  <div>
+                    <Label className="text-xs">Selling Price *</Label>
+                    <Input type="number" step="0.01" value={variant.sellingPrice} onChange={(e) => updateVariant(idx, { sellingPrice: parseFloat(e.target.value) || 0 })} className="mt-1 h-8" />
+                    {errors[`variant_${idx}_price`] && <p className="text-xs text-destructive">{errors[`variant_${idx}_price`]}</p>}
+                  </div>
+                  <div>
+                    <Label className="text-xs">Min Stock Level</Label>
+                    <Input type="number" value={variant.minStockLevel || 0} onChange={(e) => updateVariant(idx, { minStockLevel: parseInt(e.target.value) || 0 })} className="mt-1 h-8" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Max Stock Level</Label>
+                    <Input type="number" value={variant.maxStockLevel || 0} onChange={(e) => updateVariant(idx, { maxStockLevel: parseInt(e.target.value) || 0 })} className="mt-1 h-8" />
+                  </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right"><div className="font-medium text-success">${variant.selling_price}</div><div className="text-xs text-muted-foreground line-through">${variant.cost_price}</div></div>
-                  <Badge variant={variant.status === "active" ? "default" : "secondary"}>{variant.status}</Badge>
-                  <div className="flex gap-1">
-                    <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); duplicateVariant(idx); }} className="h-8 w-8"><Copy className="w-3.5 h-3.5" /></Button>
-                    <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); deleteVariant(idx); }} className="h-8 w-8 text-destructive"><Trash2 className="w-3.5 h-3.5" /></Button>
+
+                {/* Attributes section */}
+                <div>
+                  <Label className="text-sm font-medium">Attributes</Label>
+                  <div className="mt-2 space-y-2">
+                    {variant.attributes && variant.attributes.map((attr, aIdx) => (
+                      <div key={aIdx} className="flex items-center gap-2 bg-muted/20 p-2 rounded">
+                        <span className="text-sm font-mono">{attr.key}:</span>
+                        <span className="text-sm">{attr.value}</span>
+                        <button onClick={() => removeAttribute(idx, aIdx)} className="ml-auto text-destructive">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    {currentVariantIndex === idx && (
+                      <div className="flex gap-2 items-center">
+                        <Input placeholder="Key (e.g., Color)" value={newAttrKey} onChange={(e) => setNewAttrKey(e.target.value)} className="h-8 w-32" />
+                        <Input placeholder="Value (e.g., Red)" value={newAttrValue} onChange={(e) => setNewAttrValue(e.target.value)} className="h-8 w-32" />
+                        <Button size="sm" onClick={() => addAttribute(idx)}>Add</Button>
+                        <Button size="sm" variant="ghost" onClick={() => setCurrentVariantIndex(null)}>Cancel</Button>
+                      </div>
+                    )}
+                    {currentVariantIndex !== idx && (
+                      <Button size="sm" variant="outline" onClick={() => setCurrentVariantIndex(idx)}>
+                        <Plus className="w-3 h-3 mr-1" /> Add Attribute
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Images section */}
+                <div>
+                  <Label className="text-sm font-medium">Images</Label>
+                  <div className="mt-2 flex flex-wrap gap-3">
+                    {variant.images && variant.images.map((imgUrl, imgIdx) => (
+                      <div key={imgIdx} className="relative group w-16 h-16 rounded overflow-hidden border border-border">
+                        <img src={imgUrl} alt={`Variant ${idx} image ${imgIdx}`} className="w-full h-full object-cover" />
+                        <button onClick={() => removeImage(idx, imgIdx)} className="absolute top-0 right-0 bg-black/50 p-1 rounded-bl group-hover:opacity-100 opacity-0 transition">
+                          <X className="w-3 h-3 text-white" />
+                        </button>
+                      </div>
+                    ))}
+                    {currentVariantIndex === idx && newImageUrl !== undefined && (
+                      <div className="flex gap-2 items-center">
+                        <Input placeholder="Image URL" value={newImageUrl} onChange={(e) => setNewImageUrl(e.target.value)} className="h-8 w-64" />
+                        <Button size="sm" onClick={() => addImage(idx)}>Add</Button>
+                        <Button size="sm" variant="ghost" onClick={() => setCurrentVariantIndex(null)}>Cancel</Button>
+                      </div>
+                    )}
+                    {currentVariantIndex !== idx && (
+                      <Button size="sm" variant="outline" onClick={() => setCurrentVariantIndex(idx)}>
+                        <ImageIcon className="w-3 h-3 mr-1" /> Add Image
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
-              {expandedVariant === String(idx) && (
-                <div className="border-t p-4 bg-muted/5">
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                    <div><Label className="text-xs">SKU</Label><Input value={variant.sku} onChange={(e) => updateVariant(idx, { sku: e.target.value.toUpperCase() })} className="mt-1 h-8" /></div>
-                    <div><Label className="text-xs">Barcode</Label><Input value={variant.barcode || ""} onChange={(e) => updateVariant(idx, { barcode: e.target.value })} className="mt-1 h-8" /></div>
-                    <div><Label className="text-xs">Cost Price</Label><Input type="number" step="0.01" value={variant.cost_price} onChange={(e) => updateVariant(idx, { cost_price: parseFloat(e.target.value) || 0 })} className="mt-1 h-8" /></div>
-                    <div><Label className="text-xs">Selling Price <span className="text-destructive">*</span></Label><Input type="number" step="0.01" value={variant.selling_price} onChange={(e) => updateVariant(idx, { selling_price: parseFloat(e.target.value) || 0 })} className={`mt-1 h-8 ${errors[`variant_${idx}_price`] ? "border-destructive" : ""}`} /></div>
-                    <div><Label className="text-xs">Status</Label><select value={variant.status} onChange={(e) => updateVariant(idx, { status: e.target.value })} className="w-full mt-1 h-8 rounded-md border border-border bg-background px-2"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
-                  </div>
-                </div>
-              )}
-            </Card>
-          ))
-        )}
-      </div>
+            )}
+          </Card>
+        ))
+      )}
     </div>
   );
-}
-
-function cartesianProduct(attributeNames: string[], attributeValues: string[][]): Record<string, string>[] {
-  if (!attributeNames.length) return [];
-  const result: Record<string, string>[] = [];
-  function generate(current: Record<string, string>, depth: number) {
-    if (depth === attributeNames.length) { result.push({ ...current }); return; }
-    for (const value of attributeValues[depth]) { current[attributeNames[depth]] = value; generate(current, depth + 1); }
-  }
-  generate({}, 0);
-  return result;
 }

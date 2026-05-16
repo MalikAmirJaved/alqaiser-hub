@@ -2,22 +2,19 @@
 "use client";
 
 import { useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Package, Layers, Tag, ImageIcon, ClipboardList } from "lucide-react";
+import { Package, Layers, ImageIcon } from "lucide-react";
 import ProductBasicInfo from "./ProductBasicInfo";
 import ProductVariantsManager from "./ProductVariantsManager";
-import ProductAttributesManager from "./ProductAttributesManager";
-import ProductMediaGallery from "./ProductMediaGallery";
-import ProductTagsManager from "./ProductTagsManager";
+import { Category } from "@/hooks/useCategories";
+import { Brand } from "@/hooks/useBrands";
+import { Product, ProductPayload, ProductVariantPayload } from "@/hooks/useProducts";
 
 interface AdvancedProductManagerProps {
-  product: any;
-  categories: any[];
-  brands: any[];
-  tags: any[];
-  warehouses?: any[]; // kept for future, not used in form
-  onSave: (productData: any) => Promise<void>;
+  product: Product | null;
+  categories: Category[];
+  brands: Brand[];
+  onSave: (productData: ProductPayload) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -25,72 +22,64 @@ export default function AdvancedProductManager({
   product,
   categories,
   brands,
-  tags,
   onSave,
   onCancel,
 }: AdvancedProductManagerProps) {
-  const [activeTab, setActiveTab] = useState("basic");
-  const [formData, setFormData] = useState<any>(() => {
+  const [formData, setFormData] = useState<ProductPayload>(() => {
     if (product) {
-      // Convert existing tags to tag_input format (list of {name, group?})
-      const tagInput = (product.tags || []).map((t: any) => ({
-        name: t.name,
-        group: t.group?.name || undefined,
-      }));
+      // Map existing product to payload format for editing
       return {
-        ...product,
-        tag_input: tagInput,
+        productName: product.product_name,
+        description: product.description,
+        category: product.category_id,
+        brand: product.brand_id,
+        unit: product.unit,
+        storageRequirement: product.storage_requirement,
+        taxRate: parseFloat(product.tax_rate),
+        variants: product.variants.map(v => ({
+          sku: v.sku,
+          barcode: v.barcode || "",
+          qrCode: v.qr_code || "",
+          buyingPrice: parseFloat(v.buying_price),
+          sellingPrice: parseFloat(v.selling_price),
+          minStockLevel: v.min_stock_level,
+          maxStockLevel: v.max_stock_level,
+          attributes: v.variant_attributes.map(attr => ({
+            key: attr.attribute_key,
+            value: attr.attribute_value,
+          })),
+          images: v.variant_images.map(img => img.image_url),
+          // stock field is not used in update; backend handles stock separately
+        })),
       };
     }
     return {
-      sku: generateSKU(),
-      name: "",
-      short_description: "",
+      productName: "",
       description: "",
-      category_id: "",
-      brand_id: "",
-      product_type: "simple",
-      unit_of_measure: "PCS",
-      tax_class: "standard",
-      main_image: "",
-      gallery_images: [],
-      video_url: "",
-      status: "draft",
-      attributes: [],
+      category: null,
+      brand: null,
+      unit: "PIECE",
+      storageRequirement: "AMBIENT",
+      taxRate: 0,
       variants: [],
-      tag_input: [], // array of {name, group?}
     };
   });
 
-  const [errors, setErrors] = useState<any>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
-  function generateSKU() {
-    return `SKU-${Date.now().toString(36).toUpperCase()}`;
-  }
-
-  const validate = () => {
-    const newErrors: any = {};
-    if (!formData.name) newErrors.name = "Product name required";
-    if (!formData.sku) newErrors.sku = "SKU required";
-    if (!formData.category_id) newErrors.category = "Category required";
-    // Validate variants have prices if product_type is variable
-    if (formData.product_type === "variable" && (!formData.variants || formData.variants.length === 0)) {
-      newErrors.variants = "At least one variant required for variable product";
-    }
-    if (formData.product_type === "variable") {
+  const validate = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    if (!formData.productName.trim()) newErrors.productName = "Product name required";
+    if (!formData.category) newErrors.category = "Category required";
+    if (formData.variants.length === 0) {
+      newErrors.variants = "At least one variant required";
+    } else {
       for (let i = 0; i < formData.variants.length; i++) {
         const v = formData.variants[i];
-        if (!v.selling_price || v.selling_price <= 0) {
-          newErrors[`variant_${i}_price`] = `Variant ${i+1} selling price required`;
-        }
-      }
-    } else if (formData.product_type === "simple") {
-      // For simple products, ensure exactly one variant with price
-      if (!formData.variants || formData.variants.length === 0) {
-        newErrors.variants = "Simple product must have one variant with price";
-      } else if (!formData.variants[0].selling_price || formData.variants[0].selling_price <= 0) {
-        newErrors.variants = "Selling price required for the product variant";
+        if (!v.sku) newErrors[`variant_${i}_sku`] = "SKU required";
+        if (v.sellingPrice <= 0) newErrors[`variant_${i}_price`] = "Selling price required";
+        if (v.buyingPrice < 0) newErrors[`variant_${i}_cost`] = "Buying price cannot be negative";
       }
     }
     setErrors(newErrors);
@@ -98,35 +87,18 @@ export default function AdvancedProductManager({
   };
 
   const handleSave = async () => {
-    if (!validate()) {
-      setActiveTab("basic");
-      return;
-    }
+    if (!validate()) return;
     setSaving(true);
     try {
-      // Prepare data for backend
-      const payload = { ...formData };
-      // Remove any id fields from nested objects (backend will recreate)
-      if (payload.variants) {
-        payload.variants = payload.variants.map((v: any) => {
-          const { id, ...rest } = v;
-          return rest;
-        });
-      }
-      if (payload.attributes) {
-        payload.attributes = payload.attributes.map((a: any) => {
-          const { id, ...rest } = a;
-          return rest;
-        });
-      }
-      // tag_input already in correct format
-      await onSave(payload);
+      await onSave(formData);
     } finally {
       setSaving(false);
     }
   };
 
-  const updateFormData = (updates: any) => setFormData({ ...formData, ...updates });
+  const updateFormData = (updates: Partial<ProductPayload>) => {
+    setFormData(prev => ({ ...prev, ...updates }));
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -136,7 +108,6 @@ export default function AdvancedProductManager({
             <h2 className="text-xl font-semibold">
               {product ? "Edit Product" : "Create New Product"}
             </h2>
-            <p className="text-sm text-muted-foreground">SKU: {formData.sku}</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onCancel}>Cancel</Button>
@@ -146,56 +117,21 @@ export default function AdvancedProductManager({
           </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-          <TabsList className="px-6 pt-2 border-b border-border justify-start gap-1 bg-transparent flex-wrap h-auto">
-            <TabsTrigger value="basic"><Package className="w-4 h-4 mr-2" /> Basic Info</TabsTrigger>
-            <TabsTrigger value="variants"><Layers className="w-4 h-4 mr-2" /> Variants</TabsTrigger>
-            <TabsTrigger value="attributes"><ClipboardList className="w-4 h-4 mr-2" /> Attributes</TabsTrigger>
-            <TabsTrigger value="tags"><Tag className="w-4 h-4 mr-2" /> Tags</TabsTrigger>
-            <TabsTrigger value="media"><ImageIcon className="w-4 h-4 mr-2" /> Media</TabsTrigger>
-          </TabsList>
-
-          <div className="flex-1 overflow-y-auto p-6">
-            <TabsContent value="basic">
-              <ProductBasicInfo
-                product={formData}
-                categories={categories}
-                brands={brands}
-                onChange={updateFormData}
-                errors={errors}
-              />
-            </TabsContent>
-            <TabsContent value="variants">
-              <ProductVariantsManager
-                product={formData}
-                variants={formData.variants || []}
-                onChange={(variants) => updateFormData({ variants })}
-                errors={errors}
-              />
-            </TabsContent>
-            <TabsContent value="attributes">
-              <ProductAttributesManager
-                product={formData}
-                attributes={formData.attributes || []}
-                onChange={(attributes) => updateFormData({ attributes })}
-              />
-            </TabsContent>
-            <TabsContent value="tags">
-              <ProductTagsManager
-                product={formData}
-                tagInput={formData.tag_input || []}
-                allTags={tags}
-                onChange={(tagInput) => updateFormData({ tag_input: tagInput })}
-              />
-            </TabsContent>
-            <TabsContent value="media">
-              <ProductMediaGallery
-                product={formData}
-                onChange={updateFormData}
-              />
-            </TabsContent>
-          </div>
-        </Tabs>
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <ProductBasicInfo
+            data={formData}
+            categories={categories}
+            brands={brands}
+            onChange={updateFormData}
+            errors={errors}
+          />
+          <ProductVariantsManager
+            variants={formData.variants}
+            onChange={(variants) => updateFormData({ variants })}
+            errors={errors}
+            baseSkuHint={formData.productName.replace(/\s+/g, "-").toUpperCase()}
+          />
+        </div>
       </div>
     </div>
   );

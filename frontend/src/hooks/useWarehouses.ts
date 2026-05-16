@@ -34,29 +34,61 @@ export interface WarehouseStats {
   overall_occupancy_percentage: number;
 }
 
+interface PaginatedResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
 // Fetch all warehouses
-export function useWarehouses(filters?: { search?: string; is_active?: boolean; country?: string; city?: string }) {
+export function useWarehouses(filters?: {
+  search?: string;
+  is_active?: boolean;
+  country?: string;
+  city?: string;
+}) {
   const api = useApi();
-  
+
   let url = "/api/inventory/warehouses/";
   const params = new URLSearchParams();
-  
-  if (filters?.search) params.append('search', filters.search);
-  if (filters?.is_active !== undefined) params.append('is_active', String(filters.is_active));
-  if (filters?.country) params.append('country', filters.country);
-  if (filters?.city) params.append('city', filters.city);
-  
+
+  if (filters?.search) {
+    params.append("search", filters.search);
+  }
+
+  if (filters?.is_active !== undefined) {
+    params.append("is_active", String(filters.is_active));
+  }
+
+  if (filters?.country) {
+    params.append("country", filters.country);
+  }
+
+  if (filters?.city) {
+    params.append("city", filters.city);
+  }
+
   const queryString = params.toString();
-  if (queryString) url += `?${queryString}`;
-  
-  return useQuery<Warehouse[]>({
+
+  if (queryString) {
+    url += `?${queryString}`;
+  }
+
+  return useQuery<
+    PaginatedResponse<Warehouse>,
+    Error,
+    Warehouse[]
+  >({
     queryKey: ["warehouses", filters],
-    queryFn: () => api(url),
+    queryFn: () => api<PaginatedResponse<Warehouse>>(url),
+    select: (data) => data.results,
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
   });
 }
+
 
 // Fetch single warehouse
 export function useWarehouse(id: number | null) {

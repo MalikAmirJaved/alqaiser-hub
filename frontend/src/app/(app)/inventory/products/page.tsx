@@ -9,14 +9,7 @@ import { TableView, GridView, Column } from "@/components/reuseable/TableGridVie
 import ProductFilters from "@/components/inventory/product/ProductFilters";
 import AdvancedProductManager from "@/components/inventory/product/AdvancedProductManager";
 import ProductDetailsModal from "@/components/inventory/product/ProductDetailsModal";
-import {
-  useProducts,
-  useDeleteProduct,
-  useCreateProduct,
-  useUpdateProduct,
-  Product,
-  useTags,
-} from "@/hooks/useProducts";
+import { useProducts, useDeleteProduct, useCreateProduct, useUpdateProduct, Product, ProductPayload } from "@/hooks/useProducts";
 import { useCategories } from "@/hooks/useCategories";
 import { useBrands } from "@/hooks/useBrands";
 import { useWarehouses } from "@/hooks/useWarehouses";
@@ -28,38 +21,31 @@ export default function ProductsPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [filters, setFilters] = useState({
+    search: "",
     category: "",
     brand: "",
     status: "",
-    productType: "",
-    sortBy: "",
-    sortOrder: "asc",
-    // removed minPrice, maxPrice, stockStatus, tags (tags handled separately)
   });
 
   const { data: products = [], isLoading, refetch } = useProducts(filters);
   const { data: categories = [] } = useCategories();
   const { data: brands = [] } = useBrands();
-  const { data: tags = [] } = useTags();
   const { data: warehouses = [] } = useWarehouses();
   const deleteProduct = useDeleteProduct();
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
   const deleteConfirm = useConfirmationModal();
 
-  // Helper to get display price (lowest variant price or first variant price)
+  // Helper to get display price (lowest variant selling price)
   const getProductPrice = (product: Product): number => {
-    if (!product.variants || product.variants.length === 0) return 0;
-    if (product.product_type === "variable") {
-      const prices = product.variants.map(v => v.selling_price).filter(p => p > 0);
-      return prices.length ? Math.min(...prices) : 0;
-    }
-    return product.variants[0]?.selling_price || 0;
+    if (!product.variants.length) return 0;
+    const prices = product.variants.map(v => parseFloat(v.selling_price));
+    return Math.min(...prices);
   };
 
-  const getProductStock = (product: Product): number => {
-    // Stock will come from future inventory module – return 0 for now
-    return 0;
+  // Total stock across all variants
+  const getTotalStock = (product: Product): number => {
+    return product.variants.reduce((sum, v) => sum + v.total_stock, 0);
   };
 
   const enrichedProducts = useMemo(() => {
@@ -68,7 +54,9 @@ export default function ProductsPage() {
       category_name: categories.find(c => c.id === product.category_id)?.name || "—",
       brand_name: brands.find(b => b.id === product.brand_id)?.name || "—",
       display_price: getProductPrice(product),
-      stock_quantity: getProductStock(product),
+      total_stock: getTotalStock(product),
+      // first primary image from first variant
+      main_image: product.variants[0]?.variant_images.find(img => img.is_primary)?.image_url || product.variants[0]?.variant_images[0]?.image_url || "",
     }));
   }, [products, categories, brands]);
 
@@ -90,44 +78,38 @@ export default function ProductsPage() {
   const handleDelete = async (product: Product) => {
     deleteConfirm.confirm({
       title: "Delete Product",
-      message: `Are you sure you want to delete "${product.name}"? This will also remove all variants and attributes.`,
+      message: `Are you sure you want to delete "${product.product_name}"? This will also remove all variants and stock.`,
       onConfirm: async () => {
-        try {
-          await deleteProduct.mutateAsync(product.id);
-          toast.success(`Product "${product.name}" deleted`);
-          refetch();
-        } catch (error: any) {
-          toast.error(error.message || "Failed to delete product");
-        }
+        await deleteProduct.mutateAsync(product.id);
+        toast.success(`Product "${product.product_name}" deleted`);
+        refetch();
       },
     });
   };
 
-  const handleSaveProduct = async (productData: any) => {
-    try {
-      if (selectedProduct) {
-        await updateProduct.mutateAsync({ id: selectedProduct.id, ...productData });
-        toast.success(`Product "${productData.name}" updated`);
-      } else {
-        await createProduct.mutateAsync(productData);
-        toast.success(`Product "${productData.name}" created`);
-      }
-      setShowProductModal(false);
-      refetch();
-    } catch (error: any) {
-      toast.error(error.message || "Failed to save product");
+  const handleSaveProduct = async (productData: ProductPayload) => {
+    if (selectedProduct) {
+      await updateProduct.mutateAsync({ id: selectedProduct.id, ...productData });
+      toast.success(`Product "${productData.productName}" updated`);
+    } else {
+      await createProduct.mutateAsync(productData);
+      toast.success(`Product "${productData.productName}" created`);
     }
+    setShowProductModal(false);
+    refetch();
   };
 
   const handleExport = () => {
     const exportData = enrichedProducts.map(p => ({
-      SKU: p.sku,
-      Name: p.name,
+      SKU: p.variants[0]?.sku || "",
+      Name: p.product_name,
       Category: p.category_name,
       Brand: p.brand_name,
       Price: p.display_price,
+      Stock: p.total_stock,
       Status: p.status,
     }));
+    if (exportData.length === 0) return;
     const csv = [Object.keys(exportData[0]), ...exportData.map(Object.values)]
       .map(row => row.map(cell => `"${cell}"`).join(","))
       .join("\n");
@@ -141,24 +123,17 @@ export default function ProductsPage() {
   };
 
   const columns: Column<any>[] = [
-    { key: "sku", label: "SKU", sortable: true, render: (val) => <span className="font-mono text-xs">{String(val)}</span> },
-    { key: "name", label: "Product Name", sortable: true },
+    { key: "variants", label: "SKU", render: (val: any) => <span className="font-mono text-xs">{val[0]?.sku || "—"}</span> },
+    { key: "product_name", label: "Product Name", sortable: true },
     { key: "category_name", label: "Category", sortable: true },
     { key: "brand_name", label: "Brand", sortable: true },
-    {
-      key: "display_price",
-      label: "Price",
-      sortable: true,
-      render: (val) => {
-        const price = Number(val || 0);
-        return price > 0 ? `$${price}` : "—";
-      },
-    },
+    { key: "display_price", label: "Price", sortable: true, render: (val) => `$${val}` },
+    { key: "total_stock", label: "Stock", sortable: true },
     {
       key: "status",
       label: "Status",
       sortable: true,
-      render: (val) => (
+      render: (val:any) => (
         <span className={`inline-flex px-2 py-0.5 text-xs rounded-full ${
           val === "active" ? "bg-success/15 text-success" :
           val === "draft" ? "bg-warning/15 text-warning" : "bg-muted/40 text-muted-foreground"
@@ -179,18 +154,19 @@ export default function ProductsPage() {
 
   const renderCard = (product: any) => (
     <div onClick={() => handleViewDetails(product)} className="rounded-xl border border-border bg-card overflow-hidden hover:border-primary/50 transition-all cursor-pointer">
-      {product.main_image && <img src={product.main_image} alt={product.name} className="h-32 w-full object-cover" />}
+      {product.main_image && <img src={product.main_image} alt={product.product_name} className="h-32 w-full object-cover" />}
       <div className="p-4 space-y-2">
         <div className="flex justify-between items-start">
-          <h3 className="font-semibold">{product.name}</h3>
+          <h3 className="font-semibold">{product.product_name}</h3>
           <span className={`text-xs px-2 py-0.5 rounded-full ${
             product.status === "active" ? "bg-success/15 text-success" :
             product.status === "draft" ? "bg-warning/15 text-warning" : "bg-muted/40"
           }`}>{product.status}</span>
         </div>
-        <p className="text-xs text-muted-foreground">{product.sku}</p>
+        <p className="text-xs text-muted-foreground">{product.variants[0]?.sku || "—"}</p>
         <div className="flex justify-between items-center pt-2">
-          <span className="text-lg font-bold text-primary">${product.display_price || "0.00"}</span>
+          <span className="text-lg font-bold text-primary">${product.display_price.toFixed(2)}</span>
+          <span className="text-xs text-muted-foreground">Stock: {product.total_stock}</span>
         </div>
         <div className="flex justify-end gap-2 pt-2 border-t border-border">
           <button onClick={(e) => { e.stopPropagation(); handleEdit(product); }} className="px-3 py-1 text-xs rounded-md border hover:bg-muted">Edit</button>
@@ -204,7 +180,7 @@ export default function ProductsPage() {
     <div className="space-y-5">
       <PageHeader
         title="Product Management"
-        subtitle="Manage products, variants, attributes, and tags"
+        subtitle="Manage products, variants, attributes, and stock"
         actions={
           <div className="flex items-center gap-2">
             <button onClick={() => setViewMode(viewMode === "table" ? "grid" : "table")} className="p-2 rounded-lg border border-border hover:bg-muted">
@@ -225,7 +201,6 @@ export default function ProductsPage() {
         onChange={setFilters}
         categories={categories}
         brands={brands}
-        tags={tags}
       />
 
       {viewMode === "table" ? (
@@ -239,8 +214,6 @@ export default function ProductsPage() {
           product={selectedProduct}
           categories={categories}
           brands={brands}
-          tags={tags}
-          warehouses={warehouses}
           onSave={handleSaveProduct}
           onCancel={() => setShowProductModal(false)}
         />
@@ -249,11 +222,6 @@ export default function ProductsPage() {
       {showDetailsModal && selectedProduct && (
         <ProductDetailsModal
           product={selectedProduct}
-          variants={selectedProduct.variants || []}
-          inventory={[]} // inventory handled separately
-          attributes={selectedProduct.attributes || []}
-          tags={selectedProduct.tags || []}
-          warehouses={warehouses}
           onClose={() => setShowDetailsModal(false)}
           onEdit={() => {
             setShowDetailsModal(false);

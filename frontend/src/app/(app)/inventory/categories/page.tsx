@@ -20,7 +20,7 @@ export default function CategoriesPage() {
   const { data: items = [], isLoading, error } = useCategories(debouncedQuery);
   const deleteCategory = useDeleteCategory();
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (id: number) => {
     if (confirm("Delete this category?")) {
       deleteCategory.mutate(id);
     }

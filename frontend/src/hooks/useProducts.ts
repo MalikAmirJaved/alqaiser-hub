@@ -1,76 +1,135 @@
 // src/hooks/useProducts.ts
-"use client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
-export interface Tag {
-  id: string;
-  name: string;
-  slug?: string;
-  color?: string;
-  group?: { id: string; name: string } | null;
+// ---------- Types matching backend ----------
+export interface VariantAttribute {
+  id: number;
+  attribute_key: string;
+  attribute_value: string;
+}
+
+export interface VariantImage {
+  id: number;
+  image_url: string;
+  sort_order: number;
+  is_primary: boolean;
+}
+
+export interface StockByWarehouse {
+  warehouse_id: number;
+  warehouse_name: string;
+  quantity_on_hand: number;
+  quantity_reserved: number;
 }
 
 export interface ProductVariant {
-  id?: number;
+  id: number;
   sku: string;
-  barcode?: string;
-  attribute_combination: Record<string, string>;
-  cost_price: number;
-  selling_price: number;
-  special_price?: number | null;
-  main_image?: string;
-  status: string;
-}
-
-export interface ProductAttribute {
-  id?: number;
-  attribute_name: string;
-  attribute_value: string;
-  attribute_group?: string;
-  is_filterable: boolean;
-  display_order: number;
+  barcode: string;
+  qr_code: string;
+  buying_price: string;
+  selling_price: string;
+  min_stock_level: number;
+  max_stock_level: number;
+  is_deleted: boolean;
+  variant_attributes: VariantAttribute[];
+  variant_images: VariantImage[];
+  total_stock: number;
+  stock_by_warehouse: StockByWarehouse[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Product {
   id: number;
-  sku: string;
-  barcode: string;
-  name: string;
-  short_description: string;
+  product_name: string;
   description: string;
-  category_id: string;
-  brand_id: string;
-  product_type: string;
-  unit_of_measure: string;
-  tax_class: string;
-  main_image: string;
-  gallery_images: string[];
-  video_url: string;
+  category_id: number | null;
+  brand_id: number | null;
+  unit: string;
+  storage_requirement: string;
+  tax_rate: string;
   status: string;
+  is_active: boolean;
+  variants: ProductVariant[];
   created_at: string;
   updated_at: string;
-  variants: ProductVariant[];
-  attributes: ProductAttribute[];
-  tags: Tag[];
 }
 
-// Remove stats – will be moved to separate module
-export function useProducts(filters?: Record<string, any>) {
-  const api = useApi();
-  let url = "/api/inventory/products/";
-  const params = new URLSearchParams();
-  if (filters) {
-    Object.entries(filters).forEach(([k, v]) => {
-      if (v !== undefined && v !== "") params.append(k, String(v));
-    });
-  }
-  const queryString = params.toString();
-  if (queryString) url += `?${queryString}`;
+// Paginated response from backend
+interface PaginatedResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
 
-  return useQuery<Product[]>({
+// Payload for create/update
+export interface ProductVariantPayload {
+  sku: string;
+  barcode?: string;
+  qrCode?: string;
+  buyingPrice: number;
+  sellingPrice: number;
+  stock?: number;
+  attributes?: Array<{ key: string; value: string }>;
+  images?: string[];
+  minStockLevel?: number;
+  maxStockLevel?: number;
+}
+
+export interface ProductPayload {
+  productName: string;
+  description?: string;
+  category?: number | null;
+  brand?: number | null;
+  unit: string;
+  storageRequirement: string;
+  taxRate: number;
+  variants: ProductVariantPayload[];
+}
+
+export interface ProductMutationResponse {
+  status: string;
+  message: string;
+  data: Product;
+}
+
+// ---------- Hook with pagination handling ----------
+export function useProducts(filters?: {
+  search?: string;
+  category?: string;
+  brand?: string;
+  status?: string;
+}) {
+  const api = useApi();
+
+  let url = "/api/inventory/products/";
+
+  const params = new URLSearchParams();
+
+  if (filters) {
+    if (filters.search) params.append("search", filters.search);
+    if (filters.category) params.append("category", filters.category);
+    if (filters.brand) params.append("brand", filters.brand);
+    if (filters.status) params.append("status", filters.status);
+  }
+
+  const queryString = params.toString();
+
+  if (queryString) {
+    url += `?${queryString}`;
+  }
+
+  return useQuery<
+    PaginatedResponse<Product>,
+    Error,
+    Product[]
+  >({
     queryKey: ["products", filters],
-    queryFn: () => api(url),
+    queryFn: () => api<PaginatedResponse<Product>>(url),
+    select: (data) => data.results,
     staleTime: 30 * 1000,
   });
 }
@@ -79,7 +138,7 @@ export function useProduct(id: number | null) {
   const api = useApi();
   return useQuery<Product>({
     queryKey: ["product", id],
-    queryFn: () => api(`/api/inventory/products/${id}/`),
+    queryFn: () => api<Product>(`/api/inventory/products/${id}/`),
     enabled: !!id,
   });
 }
@@ -88,8 +147,11 @@ export function useCreateProduct() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: any) =>
-      api("/api/inventory/products/", { method: "POST", body: JSON.stringify(data) }),
+    mutationFn: (data: ProductPayload) =>
+      api<ProductMutationResponse>("/api/inventory/products/", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
     },
@@ -100,8 +162,11 @@ export function useUpdateProduct() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: number } & any) =>
-      api(`/api/inventory/products/${id}/`, { method: "PATCH", body: JSON.stringify(data) }),
+    mutationFn: ({ id, ...data }: { id: number } & ProductPayload) =>
+      api<ProductMutationResponse>(`/api/inventory/products/${id}/`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["product", variables.id] });
@@ -113,18 +178,10 @@ export function useDeleteProduct() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => api(`/api/inventory/products/${id}/`, { method: "DELETE" }),
+    mutationFn: (id: number) =>
+      api(`/api/inventory/products/${id}/`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
     },
-  });
-}
-
-// Tags remain for listing, but product creation/update uses tag_input
-export function useTags() {
-  const api = useApi();
-  return useQuery<Tag[]>({
-    queryKey: ["tags"],
-    queryFn: () => api("/api/inventory/tags/"),
   });
 }

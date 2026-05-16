@@ -426,3 +426,21 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                 created_by=user,
                 updated_by=user,
             )
+
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Soft delete: mark product and all its variants as is_deleted=True.
+        This preserves inventory transactions and other related data.
+        """
+        product = self.get_object()
+        product.is_deleted = True
+        product.save(update_fields=['is_deleted'])
+
+        # Also soft delete all variants (optional but recommended)
+        product.variants.update(is_deleted=True)
+
+        return Response({
+            'status': 'success',
+            'message': f'Product "{product.product_name}" has been deleted (soft delete).'
+        }, status=status.HTTP_200_OK)

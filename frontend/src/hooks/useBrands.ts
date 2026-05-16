@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
 export interface Brand {
-  id: string;
+  id: number;
   name: string;
   code: string;
   description: string;
@@ -13,22 +13,35 @@ export interface Brand {
   updated_at?: string;
 }
 
+interface PaginatedResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
 // Fetch all brands
 export function useBrands(search?: string) {
   const api = useApi();
-  return useQuery<Brand[]>({
+
+  const url = search
+    ? `/api/inventory/brands/?search=${encodeURIComponent(search)}`
+    : "/api/inventory/brands/";
+
+  return useQuery<
+    PaginatedResponse<Brand>,
+    Error,
+    Brand[]
+  >({
     queryKey: ["brands", search],
-    queryFn: () => {
-      const url = search
-        ? `/api/inventory/brands/?search=${encodeURIComponent(search)}`
-        : "/api/inventory/brands/";
-      return api(url);
-    },
+    queryFn: () => api<PaginatedResponse<Brand>>(url),
+    select: (data) => data.results,
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
   });
 }
+
 
 // Create brand
 export function useCreateBrand() {
@@ -70,7 +83,7 @@ export function useDeleteBrand() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) =>
+    mutationFn: (id: number) =>
       api(`/api/inventory/brands/${id}/`, {
         method: "DELETE",
       }),

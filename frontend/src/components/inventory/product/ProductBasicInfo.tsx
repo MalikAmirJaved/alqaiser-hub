@@ -9,113 +9,103 @@ import { AlertCircle } from "lucide-react";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { Category } from "@/hooks/useCategories";
 import { Brand } from "@/hooks/useBrands";
+import { ProductPayload } from "@/hooks/useProducts";
 
 interface ProductBasicInfoProps {
-  product: any;
+  data: ProductPayload;
   categories: Category[];
   brands: Brand[];
-  onChange: (product: any) => void;
+  onChange: (updates: Partial<ProductPayload>) => void;
   errors?: Record<string, string>;
 }
 
-export default function ProductBasicInfo({ product, categories, brands, onChange, errors = {} }: ProductBasicInfoProps) {
-  const categoryOptions = categories.map(c => ({ value: c.id, label: `${c.name} (${c.code})` }));
-  const brandOptions = brands.map(b => ({ value: b.id, label: `${b.name} (${b.code})` }));
+const unitOptions = [
+  { value: "PIECE", label: "Piece" },
+  { value: "KG", label: "Kilogram" },
+  { value: "GRAM", label: "Gram" },
+  { value: "LITER", label: "Liter" },
+  { value: "ML", label: "Milliliter" },
+  { value: "PACK", label: "Pack" },
+  { value: "DOZEN", label: "Dozen" },
+];
 
-  const updateField = (key: string, value: any) => onChange({ ...product, [key]: value });
+const storageOptions = [
+  { value: "AMBIENT", label: "Ambient" },
+  { value: "REFRIGERATED", label: "Refrigerated" },
+  { value: "FROZEN", label: "Frozen" },
+];
+
+export default function ProductBasicInfo({ data, categories, brands, onChange, errors = {} }: ProductBasicInfoProps) {
+  const categoryOptions = categories.map(c => ({ value: String(c.id), label: `${c.name} (${c.code})` }));
+  const brandOptions = brands.map(b => ({ value: String(b.id), label: `${b.name} (${b.code})` }));
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label className="text-sm font-medium">SKU <span className="text-destructive">*</span></Label>
-          <Input value={product.sku || ""} onChange={(e) => updateField("sku", e.target.value.toUpperCase())} className={errors.sku ? "border-destructive" : ""} />
-          {errors.sku && <p className="text-xs text-destructive"><AlertCircle className="w-3 h-3 inline" /> {errors.sku}</p>}
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-sm font-medium">Barcode</Label>
-          <Input value={product.barcode || ""} onChange={(e) => updateField("barcode", e.target.value)} />
-        </div>
+      <div className="space-y-1.5">
+        <Label>Product Name <span className="text-destructive">*</span></Label>
+        <Input
+          value={data.productName}
+          onChange={(e) => onChange({ productName: e.target.value })}
+          className={errors.productName ? "border-destructive" : ""}
+        />
+        {errors.productName && <p className="text-xs text-destructive"><AlertCircle className="w-3 h-3 inline" /> {errors.productName}</p>}
       </div>
 
       <div className="space-y-1.5">
-        <Label className="text-sm font-medium">Product Name <span className="text-destructive">*</span></Label>
-        <Input value={product.name || ""} onChange={(e) => updateField("name", e.target.value)} className={errors.name ? "border-destructive" : ""} />
-        {errors.name && <p className="text-xs text-destructive"><AlertCircle className="w-3 h-3 inline" /> {errors.name}</p>}
+        <Label>Description</Label>
+        <Textarea value={data.description || ""} onChange={(e) => onChange({ description: e.target.value })} rows={3} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <Label className="text-sm font-medium">Category <span className="text-destructive">*</span></Label>
-          <SearchableSelect value={product.category_id || ""} onChange={(val) => updateField("category_id", val)} options={categoryOptions} placeholder="Select category" />
-          {errors.category && <p className="text-xs text-destructive"><AlertCircle className="w-3 h-3 inline" /> {errors.category}</p>}
+          <Label>Category <span className="text-destructive">*</span></Label>
+          <SearchableSelect
+            value={data.category ? String(data.category) : ""}
+            onChange={(val) => onChange({ category: val ? Number(val) : null })}
+            options={categoryOptions}
+            placeholder="Select category"
+          />
+          {errors.category && <p className="text-xs text-destructive">{errors.category}</p>}
         </div>
         <div className="space-y-1.5">
-          <Label className="text-sm font-medium">Brand</Label>
-          <SearchableSelect value={product.brand_id || ""} onChange={(val) => updateField("brand_id", val)} options={brandOptions} placeholder="Select brand" />
+          <Label>Brand</Label>
+          <SearchableSelect
+            value={data.brand ? String(data.brand) : ""}
+            onChange={(val) => onChange({ brand: val ? Number(val) : null })}
+            options={brandOptions}
+            placeholder="Select brand"
+          />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="space-y-1.5">
-          <Label className="text-sm font-medium">Product Type</Label>
-          <Select value={product.product_type || "simple"} onValueChange={(val) => updateField("product_type", val)}>
+          <Label>Unit</Label>
+          <Select value={data.unit} onValueChange={(val) => onChange({ unit: val })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="simple">Simple Product</SelectItem>
-              <SelectItem value="variable">Variable Product</SelectItem>
-              <SelectItem value="bundle">Bundle Product</SelectItem>
-              <SelectItem value="digital">Digital Product</SelectItem>
-              <SelectItem value="service">Service</SelectItem>
+              {unitOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-sm font-medium">Unit of Measure</Label>
-          <Select value={product.unit_of_measure || "PCS"} onValueChange={(val) => updateField("unit_of_measure", val)}>
+          <Label>Storage Requirement</Label>
+          <Select value={data.storageRequirement} onValueChange={(val) => onChange({ storageRequirement: val })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="PCS">Pieces (PCS)</SelectItem><SelectItem value="KG">Kilograms (KG)</SelectItem>
-              <SelectItem value="LTR">Liters (LTR)</SelectItem><SelectItem value="MTR">Meters (MTR)</SelectItem>
-              <SelectItem value="BOX">Box (BOX)</SelectItem><SelectItem value="SET">Set (SET)</SelectItem>
-              <SelectItem value="PAIR">Pair (PAIR)</SelectItem><SelectItem value="DOZEN">Dozen (DOZEN)</SelectItem>
+              {storageOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label className="text-sm font-medium">Short Description</Label>
-        <Textarea value={product.short_description || ""} onChange={(e) => updateField("short_description", e.target.value)} rows={2} />
-        <p className="text-xs text-muted-foreground">{product.short_description?.length || 0}/200 characters</p>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label className="text-sm font-medium">Full Description</Label>
-        <Textarea value={product.description || ""} onChange={(e) => updateField("description", e.target.value)} rows={5} />
-      </div>
-
-      <div className="space-y-1.5">
-        <Label className="text-sm font-medium">Tax Class</Label>
-        <Select value={product.tax_class || "standard"} onValueChange={(val) => updateField("tax_class", val)}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="standard">Standard Rate</SelectItem>
-            <SelectItem value="reduced">Reduced Rate</SelectItem>
-            <SelectItem value="zero">Zero Rate (Tax Exempt)</SelectItem>
-            <SelectItem value="exempt">Exempt (No Tax)</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label className="text-sm font-medium">Status</Label>
-        <Select value={product.status || "draft"} onValueChange={(val) => updateField("status", val)}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="active">Active</SelectItem><SelectItem value="draft">Draft</SelectItem><SelectItem value="archived">Archived</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="space-y-1.5">
+          <Label>Tax Rate (%)</Label>
+          <Input
+            type="number"
+            step="0.01"
+            value={data.taxRate}
+            onChange={(e) => onChange({ taxRate: parseFloat(e.target.value) || 0 })}
+          />
+        </div>
       </div>
     </div>
   );

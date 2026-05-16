@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
 export interface Category {
-  id: string;
+  id: number;
   name: string;
   code: string;
   description: string;
@@ -12,22 +12,35 @@ export interface Category {
   updated_at?: string;
 }
 
+interface PaginatedResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
 // Fetch all categories
 export function useCategories(search?: string) {
   const api = useApi();
-  return useQuery<Category[]>({
+
+  const url = search
+    ? `/api/inventory/categories/?search=${encodeURIComponent(search)}`
+    : "/api/inventory/categories/";
+
+  return useQuery<
+    PaginatedResponse<Category>,
+    Error,
+    Category[]
+  >({
     queryKey: ["categories", search],
-    queryFn: () => {
-      const url = search
-        ? `/api/inventory/categories/?search=${encodeURIComponent(search)}`
-        : "/api/inventory/categories/";
-      return api(url);
-    },
+    queryFn: () => api<PaginatedResponse<Category>>(url),
+    select: (data) => data.results,
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
   });
 }
+
 
 // Create category
 export function useCreateCategory() {
@@ -52,7 +65,7 @@ export function useUpdateCategory() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Omit<Category, "id" | "created_at" | "updated_at">> }) =>
+    mutationFn: ({ id, data }: { id: number; data: Partial<Omit<Category, "id" | "created_at" | "updated_at">> }) =>
       api(`/api/inventory/categories/${id}/`, {
         method: "PUT",
         body: JSON.stringify(data),
@@ -69,7 +82,7 @@ export function useDeleteCategory() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) =>
+    mutationFn: (id: number) =>
       api(`/api/inventory/categories/${id}/`, {
         method: "DELETE",
       }),

@@ -16,8 +16,6 @@ class CompanyBranchMixin:
     branch_filter_enabled = True
 
     def get_queryset(self):
-        logger.info("Mixin executed")
-        logger.info(f"User role: {self.request.user.role}")
 
         user = self.request.user
         qs = super().get_queryset()
@@ -34,7 +32,6 @@ class CompanyBranchMixin:
 
         # 3. Branch isolation (role-based)
         role = getattr(user, "role", None)
-        logger.info(f"Queryset: {qs.query}")
         if self.branch_filter_enabled and role != "COMPANY_ADMIN":
             # ensure branch exists before filtering
             if getattr(user, "branch_id", None):
