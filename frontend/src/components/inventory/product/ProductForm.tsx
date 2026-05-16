@@ -439,7 +439,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, isLoad
       <div className="px-6 py-6">
         {/* ── Step 0: Product Info ── */}
         {step === 0 && (
-          <div className="space-y-6 max-w-2xl">
+          <div className="space-y-6 ">
             <Field label="Product Name" required error={errors.productName?.message}>
               <Input
                 {...register("productName")}
