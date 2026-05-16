@@ -7,7 +7,7 @@ from django.core.paginator import Paginator
 import uuid
 
 from apps.common.baseauthentication import CompanyBranchMixin
-from apps.inventory.models import StockItem, InventoryTransaction
+from apps.inventory.models import StockItem, InventoryTransaction, ProductVariant, Warehouse
 from apps.inventory.serializers.stock_management import (
     StockAdjustmentSerializer,
     StockHistoryFilterSerializer,
@@ -17,7 +17,7 @@ from apps.inventory.serializers.stock_management import (
 
 
 class StockManagementViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
-    queryset = StockItem.objects.all()  
+    queryset = StockItem.objects.all()
 
     # -------------------- STOCK ADJUST --------------------
     @action(detail=False, methods=['post'])
@@ -42,9 +42,7 @@ class StockManagementViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
                 warehouse=warehouse,
                 company_id=user.company_id,
                 branch_id=user.branch_id,
-                defaults={'quantity_on_hand': 0, 'quantity_reserved': 0},
-                created_by=user,
-                updated_by=user,
+                defaults={'quantity_on_hand': 0, 'quantity_reserved': 0}
             )
 
             before = stock_item.quantity_on_hand
@@ -87,14 +85,23 @@ class StockManagementViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
     @action(detail=False, methods=['get'])
     def current_stock(self, request):
         queryset = self.get_queryset()
+        user = request.user
 
-        variant_id = request.query_params.get('variant___id')
-        if variant_id:
-            queryset = queryset.filter(variant_id=variant_id)
+        variant_uuid = request.query_params.get('variant_id')
+        if variant_uuid:
+            try:
+                variant = ProductVariant.objects.get(_id=variant_uuid, company_id=user.company_id)
+                queryset = queryset.filter(variant=variant)
+            except ProductVariant.DoesNotExist:
+                queryset = queryset.none()
 
-        warehouse_id = request.query_params.get('warehouse___id')
-        if warehouse_id:
-            queryset = queryset.filter(warehouse_id=warehouse_id)
+        warehouse_uuid = request.query_params.get('warehouse_id')
+        if warehouse_uuid:
+            try:
+                warehouse = Warehouse.objects.get(_id=warehouse_uuid, company_id=user.company_id)
+                queryset = queryset.filter(warehouse=warehouse)
+            except Warehouse.DoesNotExist:
+                queryset = queryset.none()
 
         low_stock = request.query_params.get('low_stock')
         if low_stock and low_stock.lower() == 'true':
@@ -130,11 +137,21 @@ class StockManagementViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
             company_id=user.company_id
         ).select_related('variant', 'warehouse')
 
-        if filters.get('variant_id'):
-            qs = qs.filter(variant___id=filters['variant_id'])
+        variant_uuid = filters.get('variant_id')
+        if variant_uuid:
+            try:
+                variant = ProductVariant.objects.get(_id=variant_uuid, company_id=user.company_id)
+                qs = qs.filter(variant=variant)
+            except ProductVariant.DoesNotExist:
+                qs = qs.none()
 
-        if filters.get('warehouse_id'):
-            qs = qs.filter(warehouse___id=filters['warehouse_id'])
+        warehouse_uuid = filters.get('warehouse_id')
+        if warehouse_uuid:
+            try:
+                warehouse = Warehouse.objects.get(_id=warehouse_uuid, company_id=user.company_id)
+                qs = qs.filter(warehouse=warehouse)
+            except Warehouse.DoesNotExist:
+                qs = qs.none()
 
         if filters.get('start_date'):
             qs = qs.filter(created_at__date__gte=filters['start_date'])
@@ -165,15 +182,20 @@ class StockManagementViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
     # -------------------- VARIANT SUMMARY --------------------
     @action(detail=False, methods=['get'])
     def variant_summary(self, request):
-        variant_id = request.query_params.get('variant_id')
+        variant_uuid = request.query_params.get('variant_id')
 
-        if not variant_id:
+        if not variant_uuid:
             return Response({'error': 'variant_id required'}, status=400)
 
         user = request.user
 
+        try:
+            variant = ProductVariant.objects.get(_id=variant_uuid, company_id=user.company_id)
+        except ProductVariant.DoesNotExist:
+            return Response({'error': 'Variant not found'}, status=404)
+
         stock_items = StockItem.objects.filter(
-            variant___id=variant_id,
+            variant=variant,
             company_id=user.company_id
         ).select_related('warehouse')
 
@@ -186,7 +208,7 @@ class StockManagementViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
         )['total'] or 0
 
         summary = {
-            'variant_id': variant_id,
+            'variant_id': variant_uuid,
             'total_on_hand': total_on_hand,
             'total_reserved': total_reserved,
             'total_available': 0,
@@ -200,7 +222,7 @@ class StockManagementViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
             total_available += available
 
             summary['warehouses'].append({
-                'warehouse_id': item.warehouse.id,
+                'warehouse_id': str(item.warehouse._id),
                 'warehouse_name': item.warehouse.warehouse_name,
                 'quantity_on_hand': item.quantity_on_hand,
                 'quantity_reserved': item.quantity_reserved,

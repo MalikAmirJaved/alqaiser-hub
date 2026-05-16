@@ -7,8 +7,10 @@ from apps.inventory.serializers import CategorySerializer
 
 
 class CategoryViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
-    queryset = Category.objects.all()   # ADD THIS
+    queryset = Category.objects.all()
     serializer_class = CategorySerializer
+    lookup_field = '_id'
+    lookup_value_regex = '[0-9a-f-]+'
 
     def get_queryset(self):
         qs = super().get_queryset()

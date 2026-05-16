@@ -8,8 +8,10 @@ from apps.inventory.serializers import WarehouseSerializer
 
 
 class WarehouseViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
-    queryset = Warehouse.objects.all()  
+    queryset = Warehouse.objects.all()
     serializer_class = WarehouseSerializer
+    lookup_field = '_id'
+    lookup_value_regex = '[0-9a-f-]+'
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -116,7 +118,7 @@ class WarehouseViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         warehouse = self.get_object()
 
         return Response({
-            'id': warehouse.id,
+            'id': warehouse._id,
             'name': warehouse.warehouse_name,
             'capacity': warehouse.capacity,
             'current_occupancy': warehouse.current_occupancy,

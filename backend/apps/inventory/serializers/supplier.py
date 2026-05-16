@@ -2,6 +2,8 @@ from rest_framework import serializers
 from apps.inventory.models import Supplier
 
 class SupplierSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='_id', read_only=True)
+    
     class Meta:
         model = Supplier
         fields = [

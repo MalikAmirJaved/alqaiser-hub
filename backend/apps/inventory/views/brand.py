@@ -7,8 +7,10 @@ from apps.inventory.serializers import BrandSerializer
 
 
 class BrandViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
-    queryset = Brand.objects.all()   # ADD THIS
+    queryset = Brand.objects.all()
     serializer_class = BrandSerializer
+    lookup_field = '_id'
+    lookup_value_regex = '[0-9a-f-]+'
 
     def get_queryset(self):
         qs = super().get_queryset()

@@ -6,13 +6,15 @@ from django.utils import timezone
 import uuid
 
 from apps.common.baseauthentication import CompanyBranchMixin
-from apps.inventory.models import StockTransfer, StockItem, InventoryTransaction
+from apps.inventory.models import StockTransfer, StockItem, InventoryTransaction, ProductVariant, Warehouse
 from apps.inventory.serializers.transfer import StockTransferSerializer, StockTransferCreateSerializer
 
 
 class StockTransferViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
     queryset = StockTransfer.objects.all()
     serializer_class = StockTransferSerializer
+    lookup_field = '_id'
+    lookup_value_regex = '[0-9a-f-]+'
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -21,18 +23,36 @@ class StockTransferViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        user = self.request.user
+
         status_filter = self.request.query_params.get('status')
         if status_filter:
             qs = qs.filter(status=status_filter)
-        variant_id = self.request.query_params.get('variant_id')
-        if variant_id:
-            qs = qs.filter(variant_id=variant_id)
-        src = self.request.query_params.get('source_warehouse')
-        if src:
-            qs = qs.filter(source_warehouse_id=src)
-        dst = self.request.query_params.get('destination_warehouse')
-        if dst:
-            qs = qs.filter(destination_warehouse_id=dst)
+
+        variant_uuid = self.request.query_params.get('variant_id')
+        if variant_uuid:
+            try:
+                variant = ProductVariant.objects.get(_id=variant_uuid, company_id=user.company_id)
+                qs = qs.filter(variant=variant)
+            except ProductVariant.DoesNotExist:
+                qs = qs.none()
+
+        src_uuid = self.request.query_params.get('source_warehouse')
+        if src_uuid:
+            try:
+                src = Warehouse.objects.get(_id=src_uuid, company_id=user.company_id)
+                qs = qs.filter(source_warehouse=src)
+            except Warehouse.DoesNotExist:
+                qs = qs.none()
+
+        dst_uuid = self.request.query_params.get('destination_warehouse')
+        if dst_uuid:
+            try:
+                dst = Warehouse.objects.get(_id=dst_uuid, company_id=user.company_id)
+                qs = qs.filter(destination_warehouse=dst)
+            except Warehouse.DoesNotExist:
+                qs = qs.none()
+
         return qs.order_by('-created_at')
 
     @transaction.atomic
@@ -42,9 +62,9 @@ class StockTransferViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         data = serializer.validated_data
 
         user = request.user
-        variant = data['variant_id']                 # instance
-        source_wh = data['source_warehouse_id']      # instance
-        dest_wh = data['destination_warehouse_id']   # instance
+        variant = data['variant_id']
+        source_wh = data['source_warehouse_id']
+        dest_wh = data['destination_warehouse_id']
         quantity = data['quantity']
         planned_date = data.get('planned_date')
         notes = data.get('notes', '')
@@ -62,7 +82,7 @@ class StockTransferViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
             notes=notes,
             company_id=user.company_id,
             branch_id=user.branch_id,
-            created_by=user,      # User instance (not id)
+            created_by=user,
             updated_by=user,
         )
 

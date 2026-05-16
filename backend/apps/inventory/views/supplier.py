@@ -7,8 +7,10 @@ from apps.inventory.serializers import SupplierSerializer
 
 
 class BaseSupplierViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
-    queryset = Supplier.objects.all()   # ✅ REQUIRED
+    queryset = Supplier.objects.all()
     serializer_class = SupplierSerializer
+    lookup_field = '_id'
+    lookup_value_regex = '[0-9a-f-]+'
 
     def get_queryset(self):
         qs = super().get_queryset()

@@ -7,17 +7,20 @@ import uuid
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.inventory.models import (
     Product, ProductVariant, StockItem, InventoryTransaction, Warehouse,
-    VariantAttribute, VariantImage
+    VariantAttribute, VariantImage, Category, Brand
 )
 from apps.inventory.serializers import ProductSerializer
 
 
 class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
-    queryset = Product.objects.all() 
+    queryset = Product.objects.all()
     serializer_class = ProductSerializer
+    lookup_field = '_id'
+    lookup_value_regex = '[0-9a-f-]+'
 
     def get_queryset(self):
-        qs = super().get_queryset()  # company/branch filtering from mixin
+        qs = super().get_queryset()
+        user = self.request.user
 
         qs = qs.prefetch_related(
             'variants',
@@ -30,13 +33,21 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         if search:
             qs = qs.filter(product_name__icontains=search)
 
-        category = self.request.query_params.get('category')
-        if category:
-            qs = qs.filter(category_id=category)
+        category_uuid = self.request.query_params.get('category')
+        if category_uuid:
+            try:
+                category = Category.objects.get(_id=category_uuid, company_id=user.company_id)
+                qs = qs.filter(category=category)
+            except Category.DoesNotExist:
+                qs = qs.none()
 
-        brand = self.request.query_params.get('brand')
-        if brand:
-            qs = qs.filter(brand_id=brand)
+        brand_uuid = self.request.query_params.get('brand')
+        if brand_uuid:
+            try:
+                brand = Brand.objects.get(_id=brand_uuid, company_id=user.company_id)
+                qs = qs.filter(brand=brand)
+            except Brand.DoesNotExist:
+                qs = qs.none()
 
         status_filter = self.request.query_params.get('status')
         if status_filter:
@@ -44,11 +55,28 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
 
         return qs
 
-
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         user = request.user
         data = request.data
+
+        # Convert category UUID to instance
+        category_uuid = data.get('category')
+        category = None
+        if category_uuid:
+            try:
+                category = Category.objects.get(_id=category_uuid, company_id=user.company_id)
+            except Category.DoesNotExist:
+                return Response({'error': 'Invalid category UUID'}, status=400)
+
+        # Convert brand UUID to instance
+        brand_uuid = data.get('brand')
+        brand = None
+        if brand_uuid:
+            try:
+                brand = Brand.objects.get(_id=brand_uuid, company_id=user.company_id)
+            except Brand.DoesNotExist:
+                return Response({'error': 'Invalid brand UUID'}, status=400)
 
         # 1. Create Product
         product_data = {
@@ -63,12 +91,10 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
             'branch_id': user.branch_id,
             'created_by': user,
             'updated_by': user,
+            'category': category,
+            'brand': brand,
         }
-        if data.get('category'):
-            product_data['category_id'] = data['category']
-        if data.get('brand'):
-            product_data['brand_id'] = data['brand']
-
+        
         product = Product.objects.create(**product_data)
 
         # 2. Get default warehouse
@@ -113,8 +139,7 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                     sort_order=idx,
                     is_primary=(idx == 0),
                     created_by=user,
-                updated_by=user,
-
+                    updated_by=user,
                 )
 
             # Stock item (default warehouse)
@@ -127,8 +152,7 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                     branch_id=user.branch_id,
                     quantity_on_hand=initial_stock,
                     created_by=user,
-                updated_by=user,
-                    
+                    updated_by=user,
                 )
                 if initial_stock > 0:
                     InventoryTransaction.objects.create(
@@ -142,7 +166,7 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                         unit_cost=var_data.get('buyingPrice', 0),
                         transaction_type='INITIAL',
                         created_by=user,
-                updated_by=user,
+                        updated_by=user,
                     )
 
         serializer = self.get_serializer(product)
@@ -165,16 +189,29 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         product.unit = data.get('unit', product.unit)
         product.storage_requirement = data.get('storageRequirement', product.storage_requirement)
         product.tax_rate = data.get('taxRate', product.tax_rate)
+        
+        # Update category if provided
         if data.get('category'):
-            product.category_id = data['category']
+            try:
+                category = Category.objects.get(_id=data['category'], company_id=user.company_id)
+                product.category = category
+            except Category.DoesNotExist:
+                return Response({'error': 'Invalid category UUID'}, status=400)
+        
+        # Update brand if provided
         if data.get('brand'):
-            product.brand_id = data['brand']
+            try:
+                brand = Brand.objects.get(_id=data['brand'], company_id=user.company_id)
+                product.brand = brand
+            except Brand.DoesNotExist:
+                return Response({'error': 'Invalid brand UUID'}, status=400)
+        
         product.updated_by = user
         product.save()
 
-        # Handle variants: map received variants by ID
-        received_variants = {v.get('id'): v for v in data['variants'] if v.get('id')}
-        existing_variants = {str(v.id): v for v in product.variants.all()}
+        # Handle variants: map received variants by UUID
+        received_variants = {v.get('id'): v for v in data.get('variants', []) if v.get('id')}
+        existing_variants = {str(v._id): v for v in product.variants.all()}
 
         # Soft delete variants not in request
         for vid, variant in existing_variants.items():
@@ -185,7 +222,7 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         default_warehouse = self._get_default_warehouse(user)
 
         # Process each variant from request
-        for var_data in data['variants']:
+        for var_data in data.get('variants', []):
             if var_data.get('id') and var_data['id'] in existing_variants:
                 # Update existing variant
                 variant = existing_variants[var_data['id']]
@@ -210,7 +247,7 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                             attribute_key=attr.get('key', ''),
                             attribute_value=attr.get('value', ''),
                             created_by=user,
-                updated_by=user,
+                            updated_by=user,
                         )
                 # Replace images
                 if 'images' in var_data:
@@ -252,7 +289,7 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                     min_stock_level=var_data.get('minStockLevel', 0),
                     max_stock_level=var_data.get('maxStockLevel', 0),
                     created_by=user,
-                updated_by=user,
+                    updated_by=user,
                 )
 
                 # Attributes
@@ -264,7 +301,7 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                         attribute_key=attr.get('key', ''),
                         attribute_value=attr.get('value', ''),
                         created_by=user,
-                updated_by=user,
+                        updated_by=user,
                     )
 
                 # Images
@@ -277,7 +314,7 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                         sort_order=idx,
                         is_primary=(idx == 0),
                         created_by=user,
-                updated_by=user,
+                        updated_by=user,
                     )
 
                 # Initial stock (if any)
@@ -290,7 +327,7 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                         branch_id=user.branch_id,
                         quantity_on_hand=initial_stock,
                         created_by=user,
-                updated_by=user,
+                        updated_by=user,
                     )
                     if initial_stock > 0:
                         InventoryTransaction.objects.create(
@@ -304,7 +341,7 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                             unit_cost=var_data.get('buyingPrice', 0),
                             transaction_type='INITIAL',
                             created_by=user,
-                updated_by=user,
+                            updated_by=user,
                         )
 
         serializer = self.get_serializer(product)
@@ -316,23 +353,23 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def adjust_stock(self, request, pk=None):
-        """Adjust stock of a specific variant in a specific warehouse."""
         product = self.get_object()
-        variant_id = request.data.get('variant_id')
-        warehouse_id = request.data.get('warehouse_id')
+        variant_uuid = request.data.get('variant_id')
+        warehouse_uuid = request.data.get('warehouse_id')
         quantity_change = int(request.data.get('quantity_change', 0))
         reason = request.data.get('reason', '')
         transaction_type = request.data.get('transaction_type', 'ADJUSTMENT')
 
         try:
-            variant = product.variants.get(id=variant_id)
+            variant = product.variants.get(_id=variant_uuid)
+            warehouse = Warehouse.objects.get(_id=warehouse_uuid, company_id=request.user.company_id)
             stock_item = StockItem.objects.select_for_update().get(
                 variant=variant,
-                warehouse_id=warehouse_id,
+                warehouse=warehouse,
                 company_id=request.user.company_id
             )
-        except (ProductVariant.DoesNotExist, StockItem.DoesNotExist):
-            return Response({'error': 'Variant or stock item not found'}, status=404)
+        except (ProductVariant.DoesNotExist, Warehouse.DoesNotExist, StockItem.DoesNotExist):
+            return Response({'error': 'Variant, warehouse, or stock item not found'}, status=404)
 
         with transaction.atomic():
             before = stock_item.quantity_on_hand
@@ -347,7 +384,7 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
             InventoryTransaction.objects.create(
                 transaction_id=uuid.uuid4(),
                 variant=variant,
-                warehouse_id=warehouse_id,
+                warehouse=warehouse,
                 company_id=request.user.company_id,
                 quantity_change=quantity_change,
                 quantity_before=before,
@@ -363,12 +400,10 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
 
     # -------------------- Helper Methods --------------------
     def _generate_sku(self, product):
-        """Generate a unique SKU for a new variant."""
-        # Example: product ID prefix + timestamp + random
         import time
         import random
         base = f"{product.id}{int(time.time())}{random.randint(10, 99)}"
-        return base[:50]  # limit length
+        return base[:50]
 
     def _get_default_warehouse(self, user):
         return Warehouse.objects.filter(
@@ -378,7 +413,6 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         ).first()
 
     def _adjust_stock(self, variant, change, change_type, reason, user, warehouse=None):
-        """Internal method to adjust stock without HTTP request."""
         if warehouse is None:
             warehouse = self._get_default_warehouse(user)
             if not warehouse:
@@ -391,7 +425,6 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                 company_id=user.company_id
             )
         except StockItem.DoesNotExist:
-            # Create stock item if it doesn't exist (should not happen normally)
             stock_item = StockItem.objects.create(
                 variant=variant,
                 warehouse=warehouse,
@@ -406,7 +439,7 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
             before = stock_item.quantity_on_hand
             new_quantity = before + change
             if new_quantity < 0:
-                return  # silently ignore, or raise exception
+                return
 
             stock_item.quantity_on_hand = new_quantity
             stock_item.version += 1
@@ -427,17 +460,10 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                 updated_by=user,
             )
 
-
     def destroy(self, request, *args, **kwargs):
-        """
-        Soft delete: mark product and all its variants as is_deleted=True.
-        This preserves inventory transactions and other related data.
-        """
         product = self.get_object()
         product.is_deleted = True
         product.save(update_fields=['is_deleted'])
-
-        # Also soft delete all variants (optional but recommended)
         product.variants.update(is_deleted=True)
 
         return Response({

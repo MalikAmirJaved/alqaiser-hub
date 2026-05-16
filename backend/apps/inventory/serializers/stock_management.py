@@ -3,13 +3,12 @@ from apps.inventory.models import StockItem, InventoryTransaction, ProductVarian
 
 
 class StockAdjustmentSerializer(serializers.Serializer):
-    """Serializer for stock adjustment request (damage/correction only)."""
     variant_id = serializers.UUIDField()
     warehouse_id = serializers.UUIDField()
-    quantity_change = serializers.IntegerField()          # positive = add (for correction), negative = damage
+    quantity_change = serializers.IntegerField()
     reason = serializers.CharField(max_length=255, required=True)
     transaction_type = serializers.ChoiceField(
-        choices=['DAMAGE', 'ADJUSTMENT', 'STOCK_TAKE'],   # no ADD_STOCK
+        choices=['DAMAGE', 'ADJUSTMENT', 'STOCK_TAKE'],
         default='ADJUSTMENT'
     )
 
@@ -19,7 +18,6 @@ class StockAdjustmentSerializer(serializers.Serializer):
         return value
 
     def validate(self, data):
-        # Ensure variant exists and belongs to user's company
         variant = ProductVariant.objects.filter(
             _id=data['variant_id'],
             company_id=self.context['request'].user.company_id
@@ -28,7 +26,6 @@ class StockAdjustmentSerializer(serializers.Serializer):
             raise serializers.ValidationError({"variant_id": "Variant not found."})
         data['variant'] = variant
 
-        # Ensure warehouse exists
         warehouse = Warehouse.objects.filter(
             _id=data['warehouse_id'],
             company_id=self.context['request'].user.company_id
@@ -37,7 +34,6 @@ class StockAdjustmentSerializer(serializers.Serializer):
             raise serializers.ValidationError({"warehouse_id": "Warehouse not found."})
         data['warehouse'] = warehouse
 
-        # For damage/negative adjustment, check sufficient stock
         if data['quantity_change'] < 0:
             stock_item = StockItem.objects.filter(
                 variant=variant,
@@ -54,7 +50,6 @@ class StockAdjustmentSerializer(serializers.Serializer):
 
 
 class StockHistoryFilterSerializer(serializers.Serializer):
-    """Query params for stock history."""
     variant_id = serializers.UUIDField(required=False)
     warehouse_id = serializers.UUIDField(required=False)
     start_date = serializers.DateField(required=False)
@@ -67,6 +62,9 @@ class StockHistoryFilterSerializer(serializers.Serializer):
 
 
 class StockItemSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='_id', read_only=True)
+    variant_id = serializers.UUIDField(source='variant._id', read_only=True)
+    warehouse_id = serializers.UUIDField(source='warehouse._id', read_only=True)
     variant_sku = serializers.CharField(source='variant.sku', read_only=True)
     variant_name = serializers.CharField(source='variant.product.product_name', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.warehouse_name', read_only=True)
@@ -83,6 +81,9 @@ class StockItemSerializer(serializers.ModelSerializer):
 
 
 class InventoryTransactionSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='_id', read_only=True)
+    variant_id = serializers.UUIDField(source='variant._id', read_only=True)
+    warehouse_id = serializers.UUIDField(source='warehouse._id', read_only=True)
     variant_sku = serializers.CharField(source='variant.sku', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.warehouse_name', read_only=True)
     transaction_type_display = serializers.CharField(source='get_transaction_type_display', read_only=True)
@@ -90,7 +91,7 @@ class InventoryTransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = InventoryTransaction
         fields = [
-            '_id', 'id', 'transaction_id', 'variant_id', 'variant_sku',
+            'id', 'transaction_id', 'variant_id', 'variant_sku',
             'warehouse_id', 'warehouse_name', 'quantity_change',
             'quantity_before', 'quantity_after', 'unit_cost',
             'transaction_type', 'transaction_type_display',

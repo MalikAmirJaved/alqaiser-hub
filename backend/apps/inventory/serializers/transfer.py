@@ -1,7 +1,12 @@
 from rest_framework import serializers
 from apps.inventory.models import StockTransfer, ProductVariant, Warehouse, StockItem
 
+
 class StockTransferSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='_id', read_only=True)
+    variant_id = serializers.UUIDField(source='variant._id', read_only=True)
+    source_warehouse_id = serializers.UUIDField(source='source_warehouse._id', read_only=True)
+    destination_warehouse_id = serializers.UUIDField(source='destination_warehouse._id', read_only=True)
     variant_sku = serializers.CharField(source='variant.sku', read_only=True)
     variant_name = serializers.CharField(source='variant.product.product_name', read_only=True)
     source_warehouse_name = serializers.CharField(source='source_warehouse.warehouse_name', read_only=True)
@@ -20,9 +25,9 @@ class StockTransferSerializer(serializers.ModelSerializer):
 
 
 class StockTransferCreateSerializer(serializers.Serializer):
-    variant_id = serializers.CharField()
-    source_warehouse_id = serializers.CharField()
-    destination_warehouse_id = serializers.CharField()
+    variant_id = serializers.UUIDField()
+    source_warehouse_id = serializers.UUIDField()
+    destination_warehouse_id = serializers.UUIDField()
     quantity = serializers.IntegerField(min_value=1)
     planned_date = serializers.DateField(required=False, allow_null=True)
     notes = serializers.CharField(required=False, allow_blank=True)
@@ -30,11 +35,7 @@ class StockTransferCreateSerializer(serializers.Serializer):
     def validate_variant_id(self, value):
         user = self.context['request'].user
         try:
-            # Try to parse as integer ID, else treat as UUID (_id)
-            if value.isdigit():
-                variant = ProductVariant.objects.get(id=value, company_id=user.company_id)
-            else:
-                variant = ProductVariant.objects.get(_id=value, company_id=user.company_id)
+            variant = ProductVariant.objects.get(_id=value, company_id=user.company_id)
             return variant
         except ProductVariant.DoesNotExist:
             raise serializers.ValidationError("Variant not found.")
@@ -42,10 +43,7 @@ class StockTransferCreateSerializer(serializers.Serializer):
     def validate_source_warehouse_id(self, value):
         user = self.context['request'].user
         try:
-            if value.isdigit():
-                warehouse = Warehouse.objects.get(id=value, company_id=user.company_id)
-            else:
-                warehouse = Warehouse.objects.get(_id=value, company_id=user.company_id)
+            warehouse = Warehouse.objects.get(_id=value, company_id=user.company_id)
             return warehouse
         except Warehouse.DoesNotExist:
             raise serializers.ValidationError("Source warehouse not found.")
@@ -53,10 +51,7 @@ class StockTransferCreateSerializer(serializers.Serializer):
     def validate_destination_warehouse_id(self, value):
         user = self.context['request'].user
         try:
-            if value.isdigit():
-                warehouse = Warehouse.objects.get(id=value, company_id=user.company_id)
-            else:
-                warehouse = Warehouse.objects.get(_id=value, company_id=user.company_id)
+            warehouse = Warehouse.objects.get(_id=value, company_id=user.company_id)
             return warehouse
         except Warehouse.DoesNotExist:
             raise serializers.ValidationError("Destination warehouse not found.")

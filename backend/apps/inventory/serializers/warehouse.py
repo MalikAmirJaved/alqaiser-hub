@@ -1,8 +1,8 @@
-# apps/inventory/serializers/warehouse.py
 from rest_framework import serializers
 from apps.inventory.models import Warehouse
 
 class WarehouseSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='_id', read_only=True)
     available_capacity = serializers.DecimalField(
         max_digits=12, decimal_places=2, read_only=True
     )

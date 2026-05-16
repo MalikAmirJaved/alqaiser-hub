@@ -1,4 +1,3 @@
-# apps/inventory/serializers/variant_attribute.py
 from rest_framework import serializers
 from apps.inventory.models import VariantAttribute
 
