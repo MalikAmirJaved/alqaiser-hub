@@ -42,6 +42,25 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   vendor: ["vendors", "vendorStats"],
 };
 
+
+interface Notification {
+  id: number;
+  title: string;
+  message: string;
+  is_read: boolean;
+  read_at: string | null;
+  is_favourite: boolean;
+  created_at: string;
+  notification_type: string;
+}
+
+interface PaginatedNotificationsResponse {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: Notification[];
+}
+
 interface NotificationContextProps {
   notifications: any[];
   isConnected: boolean;
@@ -73,8 +92,11 @@ export const NotificationProvider = ({
 
   const fetchNotifications = async () => {
     try {
-      const data = await api<any[]>("/api/notifications/");
-      setNotifications(data);
+      const data = await api<PaginatedNotificationsResponse>(
+  "/api/notifications/"
+);
+
+setNotifications(data.results || []);
     } catch (e) {
       console.error("Error fetching notifications", e);
     }
