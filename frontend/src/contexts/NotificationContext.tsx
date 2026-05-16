@@ -44,7 +44,7 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
 
 
 interface Notification {
-  id: number;
+  id: string;
   title: string;
   message: string;
   is_read: boolean;
@@ -64,9 +64,9 @@ interface PaginatedNotificationsResponse {
 interface NotificationContextProps {
   notifications: any[];
   isConnected: boolean;
-  markAsRead: (id: number) => Promise<void>;
+  markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
-  toggleFavourite: (id: number) => Promise<void>;
+  toggleFavourite: (id: string) => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextProps>({
@@ -212,7 +212,7 @@ setNotifications(data.results || []);
     };
   }, [api, queryClient]);
 
-  const markAsRead = async (id: number) => {
+  const markAsRead = async (id: string) => {
     try {
       await api(`/api/notifications/${id}/mark_read/`, {
         method: "POST",
@@ -252,7 +252,7 @@ setNotifications(data.results || []);
     }
   };
 
-  const toggleFavourite = async (id: number) => {
+  const toggleFavourite = async (id: string) => {
     try {
       const res = await api<{ is_favourite: boolean }>(
         `/api/notifications/${id}/toggle_favourite/`,

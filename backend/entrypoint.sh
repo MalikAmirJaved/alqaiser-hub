@@ -18,3 +18,11 @@ python manage.py seed_org || echo "Seed skipped or failed"
 
 echo "Starting server..."
 exec python manage.py runserver 0.0.0.0:8000
+
+
+# make migerations
+# docker compose exec backend python manage.py makemigrations ...
+
+
+# migerate to db
+# docker compose exec backend python manage.py migrate notifications

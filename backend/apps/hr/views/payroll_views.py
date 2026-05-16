@@ -14,8 +14,10 @@ from apps.common.baseauthentication import CompanyBranchMixin
 from apps.hr.models import (
     Employee, PayrollRecord, EmployeeLoan, Compensation
 )
+from datetime import datetime, date
 
 logger = logging.getLogger(__name__)
+
 
 
 class PayrollView(CompanyBranchMixin, APIView):
@@ -683,7 +685,7 @@ class CompensationView(CompanyBranchMixin, APIView):
             "total_monthly": str(comp.total_monthly),
             "is_active": comp.is_active,
             "status": comp.status,
-            "effective_date": comp.effective_date.isoformat() if comp.effective_date else None,
+            "effective_date": comp.effective_date.isoformat() if hasattr(comp.effective_date, "isoformat") else comp.effective_date,
             "review_date": comp.review_date.isoformat() if comp.review_date else None,
             "notes": comp.notes,
             "created_at": comp.created_at.isoformat() if comp.created_at else None,
@@ -729,7 +731,12 @@ class CompensationView(CompanyBranchMixin, APIView):
         """Create compensation"""
         company_id = request.user.company_id
         branch_id = request.user.branch_id
-        
+        effective_date = request.data.get('effective_date')
+
+        effective_date = (
+            datetime.strptime(effective_date, "%Y-%m-%d").date()
+            if effective_date else date.today()
+        )
         if not company_id:
             return Response(
                 {'error': 'User is not associated with any company'},
@@ -776,7 +783,7 @@ class CompensationView(CompanyBranchMixin, APIView):
             bonus_percentage=request.data.get('bonus_percentage', 0),
             status='ACTIVE',
             is_active=True,
-            effective_date=request.data.get('effective_date', date.today()),
+            effective_date=effective_date,
             review_date=request.data.get('review_date'),
             notes=request.data.get('notes'),
             created_by=request.user,

@@ -2,8 +2,9 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, F
 import uuid
+from decimal import Decimal
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.inventory.models import (
     Product, ProductVariant, StockItem, InventoryTransaction, Warehouse,
@@ -85,8 +86,8 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
             'unit': data.get('unit', 'PIECE'),
             'storage_requirement': data.get('storageRequirement', 'AMBIENT'),
             'tax_rate': data.get('taxRate', 0),
-            'status': 'active',
-            'is_active': True,
+            'status': data.get('status', 'active'),
+            'is_active': data.get('is_active', True),
             'company_id': user.company_id,
             'branch_id': user.branch_id,
             'created_by': user,
@@ -97,8 +98,13 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         
         product = Product.objects.create(**product_data)
 
-        # 2. Get default warehouse
+        # 2. Get default warehouse – raise error if none exists
         default_warehouse = self._get_default_warehouse(user)
+        if not default_warehouse:
+            return Response(
+                {'error': 'No active warehouse found. Please create a warehouse before adding products.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         # 3. Create Variants, StockItems, Attributes, Images
         for var_data in data.get('variants', []):
@@ -143,31 +149,30 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                 )
 
             # Stock item (default warehouse)
-            if default_warehouse:
-                initial_stock = var_data.get('stock', 0)
-                StockItem.objects.create(
+            initial_stock = var_data.get('stock', 0)
+            StockItem.objects.create(
+                variant=variant,
+                warehouse=default_warehouse,
+                company_id=user.company_id,
+                branch_id=user.branch_id,
+                quantity_on_hand=initial_stock,
+                created_by=user,
+                updated_by=user,
+            )
+            if initial_stock > 0:
+                InventoryTransaction.objects.create(
+                    transaction_id=uuid.uuid4(),
                     variant=variant,
                     warehouse=default_warehouse,
                     company_id=user.company_id,
-                    branch_id=user.branch_id,
-                    quantity_on_hand=initial_stock,
+                    quantity_change=initial_stock,
+                    quantity_before=0,
+                    quantity_after=initial_stock,
+                    unit_cost=var_data.get('buyingPrice', 0),
+                    transaction_type='INITIAL',
                     created_by=user,
                     updated_by=user,
                 )
-                if initial_stock > 0:
-                    InventoryTransaction.objects.create(
-                        transaction_id=uuid.uuid4(),
-                        variant=variant,
-                        warehouse=default_warehouse,
-                        company_id=user.company_id,
-                        quantity_change=initial_stock,
-                        quantity_before=0,
-                        quantity_after=initial_stock,
-                        unit_cost=var_data.get('buyingPrice', 0),
-                        transaction_type='INITIAL',
-                        created_by=user,
-                        updated_by=user,
-                    )
 
         serializer = self.get_serializer(product)
         return Response({
@@ -183,12 +188,14 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         user = request.user
         data = request.data
 
-        # Update product fields
+        # Update product fields – including status and is_active
         product.product_name = data.get('productName', product.product_name)
         product.description = data.get('description', product.description)
         product.unit = data.get('unit', product.unit)
         product.storage_requirement = data.get('storageRequirement', product.storage_requirement)
         product.tax_rate = data.get('taxRate', product.tax_rate)
+        product.status = data.get('status', product.status)
+        product.is_active = data.get('is_active', product.is_active)
         
         # Update category if provided
         if data.get('category'):
@@ -209,6 +216,14 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         product.updated_by = user
         product.save()
 
+        # Get default warehouse for stock operations (only if needed)
+        default_warehouse = self._get_default_warehouse(user)
+        if not default_warehouse:
+            return Response(
+                {'error': 'No active warehouse found. Cannot update stock.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # Handle variants: map received variants by UUID
         received_variants = {v.get('id'): v for v in data.get('variants', []) if v.get('id')}
         existing_variants = {str(v._id): v for v in product.variants.all()}
@@ -219,13 +234,27 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                 variant.is_deleted = True
                 variant.save()
 
-        default_warehouse = self._get_default_warehouse(user)
-
         # Process each variant from request
         for var_data in data.get('variants', []):
+            # Get the current stock (on hand) for this variant if it exists
+            current_stock_item = None
+            current_stock_qty = 0
             if var_data.get('id') and var_data['id'] in existing_variants:
-                # Update existing variant
                 variant = existing_variants[var_data['id']]
+                try:
+                    current_stock_item = StockItem.objects.get(
+                        variant=variant,
+                        warehouse=default_warehouse,
+                        company_id=user.company_id
+                    )
+                    current_stock_qty = current_stock_item.quantity_on_hand
+                except StockItem.DoesNotExist:
+                    pass
+            else:
+                variant = None
+
+            # If variant exists, update its fields
+            if variant:
                 variant.sku = var_data.get('sku', variant.sku)
                 variant.barcode = var_data.get('barcode', variant.barcode)
                 variant.qr_code = var_data.get('qrCode', variant.qr_code)
@@ -264,20 +293,39 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                             updated_by=user,
                         )
 
-                # Handle stock adjustment if provided
+                # Handle stock adjustment if provided via stockChangeAmount
                 if 'stockChangeAmount' in var_data and var_data['stockChangeAmount']:
+                    change = var_data['stockChangeAmount']
                     self._adjust_stock(
                         variant,
-                        var_data['stockChangeAmount'],
+                        change,
                         var_data.get('stockChangeType', 'ADJUSTMENT'),
                         var_data.get('stockChangeReason', ''),
                         user,
                         default_warehouse
                     )
+                # Also support absolute stock field (only if it differs from current stock)
+                elif 'stock' in var_data and var_data['stock'] is not None:
+                    new_abs = var_data['stock']
+                    # Convert to int if string
+                    try:
+                        new_abs = int(new_abs)
+                    except (ValueError, TypeError):
+                        new_abs = current_stock_qty
+                    if new_abs != current_stock_qty:
+                        change = new_abs - current_stock_qty
+                        self._adjust_stock(
+                            variant,
+                            change,
+                            'ADJUSTMENT',
+                            f'Stock set from {current_stock_qty} to {new_abs} via product update',
+                            user,
+                            default_warehouse
+                        )
 
             else:
                 # Create new variant
-                variant = ProductVariant.objects.create(
+                new_variant = ProductVariant.objects.create(
                     product=product,
                     company_id=user.company_id,
                     branch_id=user.branch_id,
@@ -295,7 +343,7 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                 # Attributes
                 for attr in var_data.get('attributes', []):
                     VariantAttribute.objects.create(
-                        variant=variant,
+                        variant=new_variant,
                         company_id=user.company_id,
                         branch_id=user.branch_id,
                         attribute_key=attr.get('key', ''),
@@ -307,7 +355,7 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                 # Images
                 for idx, url in enumerate(var_data.get('images', [])):
                     VariantImage.objects.create(
-                        variant=variant,
+                        variant=new_variant,
                         company_id=user.company_id,
                         branch_id=user.branch_id,
                         image_url=url,
@@ -318,31 +366,30 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                     )
 
                 # Initial stock (if any)
-                if default_warehouse:
-                    initial_stock = var_data.get('stock', 0)
-                    StockItem.objects.create(
-                        variant=variant,
+                initial_stock = var_data.get('stock', 0)
+                StockItem.objects.create(
+                    variant=new_variant,
+                    warehouse=default_warehouse,
+                    company_id=user.company_id,
+                    branch_id=user.branch_id,
+                    quantity_on_hand=initial_stock,
+                    created_by=user,
+                    updated_by=user,
+                )
+                if initial_stock > 0:
+                    InventoryTransaction.objects.create(
+                        transaction_id=uuid.uuid4(),
+                        variant=new_variant,
                         warehouse=default_warehouse,
                         company_id=user.company_id,
-                        branch_id=user.branch_id,
-                        quantity_on_hand=initial_stock,
+                        quantity_change=initial_stock,
+                        quantity_before=0,
+                        quantity_after=initial_stock,
+                        unit_cost=var_data.get('buyingPrice', 0),
+                        transaction_type='INITIAL',
                         created_by=user,
                         updated_by=user,
                     )
-                    if initial_stock > 0:
-                        InventoryTransaction.objects.create(
-                            transaction_id=uuid.uuid4(),
-                            variant=variant,
-                            warehouse=default_warehouse,
-                            company_id=user.company_id,
-                            quantity_change=initial_stock,
-                            quantity_before=0,
-                            quantity_after=initial_stock,
-                            unit_cost=var_data.get('buyingPrice', 0),
-                            transaction_type='INITIAL',
-                            created_by=user,
-                            updated_by=user,
-                        )
 
         serializer = self.get_serializer(product)
         return Response({
@@ -439,6 +486,7 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
             before = stock_item.quantity_on_hand
             new_quantity = before + change
             if new_quantity < 0:
+                raise ValueError("Stock cannot be negative")
                 return
 
             stock_item.quantity_on_hand = new_quantity

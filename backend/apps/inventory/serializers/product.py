@@ -112,14 +112,14 @@ class ProductVariantSerializer(serializers.ModelSerializer):
 
 class ProductSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)
-    category = serializers.UUIDField(source='category._id', read_only=True, allow_null=True)
-    brand = serializers.UUIDField(source='brand._id', read_only=True, allow_null=True)
     variants = ProductVariantSerializer(many=True, read_only=True)
+    category_id = serializers.UUIDField(source='category._id', read_only=True, allow_null=True)
+    brand_id    = serializers.UUIDField(source='brand._id',    read_only=True, allow_null=True)
 
     class Meta:
         model = Product
         fields = [
-            'id', 'product_name', 'description', 'category', 'brand',
+            'id', 'product_name', 'description', 'category_id', 'brand_id',
             'unit', 'storage_requirement', 'tax_rate', 'status', 'is_active',
             'variants', 'created_at', 'updated_at'
         ]

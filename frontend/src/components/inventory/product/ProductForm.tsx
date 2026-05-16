@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
   ArrowLeft, ArrowRight, Check, Package, Layers,
   Plus, Trash2, X, Copy, ChevronDown, ChevronUp,
@@ -21,7 +22,7 @@ import AttributeSelector from "./Attributeselector";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 // ──────────────────────────────────────────
-// Zod schema
+// Zod schema (add status and is_active)
 // ──────────────────────────────────────────
 const attributeSchema = z.object({
   key: z.string().min(1, "Key required"),
@@ -49,6 +50,8 @@ const schema = z.object({
   unit: z.enum(["PIECE", "KG", "GRAM", "LITER", "ML", "PACK", "DOZEN"]).default("PIECE"),
   storageRequirement: z.enum(["AMBIENT", "REFRIGERATED", "FROZEN"]).default("AMBIENT"),
   taxRate: z.preprocess((v) => (v === "" ? 0 : Number(v)), z.number().min(0).max(100).default(0)),
+  status: z.enum(["draft", "active", "discontinued", "archived"]).default("active"),
+  is_active: z.boolean().default(true),
   variants: z.array(variantSchema).min(1, "At least one variant required"),
 });
 
@@ -109,7 +112,7 @@ function Field({ label, required, error, children, hint }: {
 }
 
 // ──────────────────────────────────────────
-// Variant card
+// Variant card (unchanged, but stock field is now disabled for editing)
 // ──────────────────────────────────────────
 function VariantCard({
   index,
@@ -222,8 +225,9 @@ function VariantCard({
                   <Input type="number" step="0.01" min="0" {...register(`variants.${index}.sellingPrice`)} placeholder="0.00" className="pl-7" />
                 </div>
               </Field>
-              <Field label={isEditing ? "Stock (read-only)" : "Initial Stock"}>
+              <Field label={isEditing ? "Current Stock (read‑only)" : "Initial Stock"}>
                 <Input type="number" min="0" {...register(`variants.${index}.stock`)} placeholder="0" disabled={isEditing} />
+                {isEditing && <p className="text-xs text-muted-foreground mt-1">Stock changes require a separate adjustment.</p>}
               </Field>
               <div className="col-span-1" />
               <Field label="Min Stock">
@@ -326,13 +330,15 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, isLoad
         unit: initialData.unit as FormData["unit"],
         storageRequirement: initialData.storage_requirement as FormData["storageRequirement"],
         taxRate: parseFloat(initialData.tax_rate),
+        status: initialData.status as FormData["status"],
+        is_active: initialData.is_active,
         variants: initialData.variants.map((v) => ({
           sku: v.sku,
           barcode: v.barcode || "",
           qrCode: v.qr_code || "",
           buyingPrice: parseFloat(v.buying_price),
           sellingPrice: parseFloat(v.selling_price),
-          stock: 0,
+          stock: 0, // stock is not editable during edit (or we can show current but not send)
           minStockLevel: v.min_stock_level,
           maxStockLevel: v.max_stock_level,
           attributes: v.variant_attributes.map((a) => ({ key: a.attribute_key, value: a.attribute_value })),
@@ -348,6 +354,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, isLoad
       unit: "PIECE",
       storageRequirement: "AMBIENT",
       taxRate: 0,
+      status: "active",
+      is_active: true,
       variants: [{
         sku: "", barcode: "", qrCode: "",
         buyingPrice: 0, sellingPrice: 0,
@@ -387,7 +395,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, isLoad
   };
 
   const goNext = async () => {
-    const ok = await trigger(["productName", "category", "description", "unit", "storageRequirement", "taxRate"]);
+    const ok = await trigger(["productName", "category", "description", "unit", "storageRequirement", "taxRate", "status", "is_active"]);
     if (ok) setStep(1);
   };
 
@@ -400,6 +408,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, isLoad
       unit: data.unit,
       storageRequirement: data.storageRequirement,
       taxRate: data.taxRate,
+      status: data.status,
+      is_active: data.is_active,
       variants: data.variants.map((v) => ({
         sku: v.sku,
         barcode: v.barcode || "",
@@ -439,7 +449,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, isLoad
       <div className="px-6 py-6">
         {/* ── Step 0: Product Info ── */}
         {step === 0 && (
-          <div className="space-y-6 ">
+          <div className="space-y-6">
             <Field label="Product Name" required error={errors.productName?.message}>
               <Input
                 {...register("productName")}
@@ -516,6 +526,41 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, isLoad
               </Field>
               <Field label="Tax Rate (%)" error={errors.taxRate?.message}>
                 <Input type="number" step="0.01" min="0" max="100" {...register("taxRate")} placeholder="0" />
+              </Field>
+            </div>
+
+            {/* Status and Active toggle */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Status">
+                <Controller control={control} name="status" render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="draft">Draft</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="discontinued">Discontinued</SelectItem>
+                      <SelectItem value="archived">Archived</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )} />
+              </Field>
+              <Field label="Active">
+                <Controller
+                  control={control}
+                  name="is_active"
+                  render={({ field }) => (
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        id="is-active"
+                      />
+                      <label htmlFor="is-active" className="text-sm text-muted-foreground">
+                        Product is available for sale
+                      </label>
+                    </div>
+                  )}
+                />
               </Field>
             </div>
 

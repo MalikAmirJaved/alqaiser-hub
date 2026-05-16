@@ -65,7 +65,7 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-// Payload for create/update
+// Payload for create/update – now includes status and is_active
 export interface ProductVariantPayload {
   sku: string;
   barcode?: string;
@@ -87,6 +87,8 @@ export interface ProductPayload {
   unit: string;
   storageRequirement: string;
   taxRate: number;
+  status: string;        // added
+  is_active: boolean;    // added
   variants: ProductVariantPayload[];
 }
 
