@@ -17,6 +17,7 @@ from .sales import (
     CustomerSerializer, SalesOrderSerializer,
     SalesShipmentSerializer, SalesReturnSerializer,
 )
+from .variant import VariantDetailSerializer
 __all__ = [
     "CategorySerializer", "BrandSerializer", "WarehouseSerializer",
     "SupplierSerializer", "ProductVariantSerializer", "ProductSerializer",
@@ -26,5 +27,5 @@ __all__ = [
     "PurchaseOrderSerializer", "PurchaseOrderLineSerializer",
     "GoodsReceiptSerializer", "GoodsReceiptLineSerializer",
     "CustomerSerializer", "SalesOrderSerializer",
-    "SalesShipmentSerializer", "SalesReturnSerializer",
+    "SalesShipmentSerializer", "SalesReturnSerializer", "VariantDetailSerializer"
 ]
