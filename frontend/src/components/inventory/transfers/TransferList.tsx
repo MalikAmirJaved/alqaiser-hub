@@ -32,7 +32,6 @@ export default function TransferList({ refreshTrigger, onTransferCompleted }: Tr
   const { data: transfers = [], isLoading, refetch } = useTransfers({
   status: statusFilter === "all" ? undefined : statusFilter
 });
-
   const { data: stats, refetch: refetchStats } = useTransferStats();
 
   const confirmMutation = useConfirmTransfer();
@@ -102,11 +101,12 @@ const statsData = stats
 
 const columns = [
   { key: "transfer_number", label: "Transfer #", sortable: true },
-  {
-    key: "variant_name",
-    label: "Product",
-    render: (row: any) => `${row.variant_name} (${row.variant_sku})`,
-  },
+{
+  key: "variant_name",
+  label: "Product",
+  render: (_value: any, row: any) =>
+    `${row.variant_name} (${row.variant_sku})`,
+},
   { key: "source_warehouse_name", label: "From" },
   { key: "destination_warehouse_name", label: "To" },
   { key: "quantity", label: "Qty", className: "text-right" },
