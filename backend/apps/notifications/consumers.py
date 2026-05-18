@@ -44,13 +44,11 @@ class NotificationConsumer(AsyncWebsocketConsumer):
                 self.group_name,
                 self.channel_name
             )
-            logger.info(f"User {self.user.id} joined group {self.group_name}")
         
         await self.channel_layer.group_add(
             self.user_group_name,
             self.channel_name
         )
-        logger.info(f"User {self.user.id} joined personal group {self.user_group_name}")
         
         await self.accept()
         
@@ -71,7 +69,6 @@ class NotificationConsumer(AsyncWebsocketConsumer):
                 self.channel_name
             )
         
-        logger.info(f"User {self.user.id if self.user else 'Anonymous'} disconnected with code {close_code}")
     
     async def receive(self, text_data):
         """Handle incoming WebSocket messages"""

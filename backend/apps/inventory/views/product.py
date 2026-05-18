@@ -8,7 +8,7 @@ from decimal import Decimal
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.inventory.models import (
     Product, ProductVariant, StockItem, InventoryTransaction, Warehouse,
-    VariantAttribute, VariantImage, Category, Brand
+    VariantAttribute, VariantImage, Category, Brand,StockReservation
 )
 from apps.inventory.serializers import ProductSerializer
 
@@ -510,11 +510,26 @@ class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         product = self.get_object()
+        user = request.user
+
+        # Soft delete the product itself
         product.is_deleted = True
         product.save(update_fields=['is_deleted'])
-        product.variants.update(is_deleted=True)
+
+        # Get all variant IDs for this product
+        variant_ids = list(product.variants.values_list('_id', flat=True))
+
+        if variant_ids:
+            # Soft delete all related records in one go
+            StockItem.objects.filter(variant___id__in=variant_ids).update(is_deleted=True)
+            VariantAttribute.objects.filter(variant___id__in=variant_ids).update(is_deleted=True)
+            VariantImage.objects.filter(variant___id__in=variant_ids).update(is_deleted=True)
+            StockReservation.objects.filter(variant___id__in=variant_ids).update(is_deleted=True)
+
+            # Finally soft delete the variants themselves
+            product.variants.update(is_deleted=True)
 
         return Response({
             'status': 'success',
-            'message': f'Product "{product.product_name}" has been deleted (soft delete).'
+            'message': f'Product "{product.product_name}" and all related records have been soft deleted.'
         }, status=status.HTTP_200_OK)
