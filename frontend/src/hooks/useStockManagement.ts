@@ -3,8 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
 // Types (matching backend)
-export interface StockItem {
-  id: number;
+export interface StockItem extends Record<string, unknown> {
+  id: string;
   variant_id: string;      // UUID
   variant_sku: string;
   variant_name: string;
@@ -19,8 +19,7 @@ export interface StockItem {
 }
 
 export interface StockHistoryEntry {
-  _id: string;
-  id: number;
+  id: string;
   transaction_id: string;
   variant_id: string;
   variant_sku: string;
