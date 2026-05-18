@@ -3,12 +3,21 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApi } from './useApi';
 import type { GoodsReceipt, GoodsReceiptPayload } from '@/types/purchase';
 
+interface PaginatedResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
 export function useGoodsReceipts(poId?: string) {
   const api = useApi();
   const params = poId ? `?purchase_order=${poId}` : '';
-  return useQuery<GoodsReceipt[]>({
+
+  return useQuery<PaginatedResponse<GoodsReceipt>, Error, GoodsReceipt[]>({
     queryKey: ['goodsReceipts', poId],
     queryFn: () => api(`/api/inventory/goods-receipts/${params}`),
+    select: (data) => data.results, // ✅ THIS FIXES IT
   });
 }
 

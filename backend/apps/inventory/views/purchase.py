@@ -72,7 +72,7 @@ class GoodsReceiptViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
     lookup_field = '_id'
     def get_queryset(self):
         qs = super().get_queryset()
-        qs = qs.prefetch_related('lines__variant__product')
+        qs = qs.prefetch_related('lines__purchase_order_line__variant__product')
         
         status = self.request.query_params.get('status')
         if status:
