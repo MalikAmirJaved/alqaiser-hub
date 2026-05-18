@@ -94,7 +94,7 @@ class StockTransferViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         }, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
-    def confirm(self, request, pk=None):
+    def confirm(self, request, *args, **kwargs):
         transfer = self.get_object()
         user = request.user
 
