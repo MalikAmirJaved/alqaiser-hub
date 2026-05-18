@@ -15,14 +15,15 @@ from apps.inventory.models import (
     StockItem, InventoryTransaction, StockReservation, ProductVariant, Warehouse
 )
 from apps.inventory.models.sales import (
-    Customer, SalesOrder, SalesOrderLine,
+    SalesOrder, SalesOrderLine,
     SalesShipment, SalesReturn
 )
 from apps.inventory.serializers.sales import (
-    CustomerSerializer, SalesOrderSerializer,
+    SalesOrderSerializer,
     SalesShipmentSerializer, SalesReturnSerializer,
 )
-
+from apps.inventory.models.customer import Customer
+from apps.inventory.serializers.customer import CustomerSerializer
 
 class CustomerViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
     queryset = Customer.objects.all()

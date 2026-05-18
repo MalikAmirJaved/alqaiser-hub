@@ -3,22 +3,11 @@
 # ============================================================
 from rest_framework import serializers
 from apps.inventory.models.sales import (
-    Customer, SalesOrder, SalesOrderLine,
+    SalesOrder, SalesOrderLine,
     SalesShipment, SalesShipmentLine,
     SalesReturn, SalesReturnLine
 )
-from apps.inventory.models import ProductVariant, Warehouse
-
-
-class CustomerSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Customer
-        fields = [
-            'id', 'customer_code', 'name', 'contact_person', 'email', 'phone',
-            'address_line', 'city', 'state', 'postal_code', 'country', 'is_active',
-            'created_at', 'updated_at'
-        ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+from apps.inventory.models import ProductVariant
 
 
 class SalesOrderLineSerializer(serializers.ModelSerializer):

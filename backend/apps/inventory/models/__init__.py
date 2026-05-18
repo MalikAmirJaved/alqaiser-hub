@@ -13,10 +13,12 @@ from .variant_image import VariantImage
 from .transfer import StockTransfer
 from .purchase import PurchaseOrder, PurchaseOrderLine, GoodsReceipt, GoodsReceiptLine
 from .sales import (
-    Customer, SalesOrder, SalesOrderLine,
+    SalesOrder, SalesOrderLine,
     SalesShipment, SalesShipmentLine,
     SalesReturn, SalesReturnLine
 )
+from .customer import Customer
+
 __all__ = [
     "Category", "Brand", "Warehouse",
     "Product", "Supplier", "AuditLog", "StockReservation",
@@ -25,5 +27,5 @@ __all__ = [
     "PurchaseOrder", "PurchaseOrderLine", "GoodsReceipt", "GoodsReceiptLine",
     "Customer", "SalesOrder", "SalesOrderLine",
     "SalesShipment", "SalesShipmentLine",
-    "SalesReturn", "SalesReturnLine",
+    "SalesReturn", "SalesReturnLine", "Customer"
 ]

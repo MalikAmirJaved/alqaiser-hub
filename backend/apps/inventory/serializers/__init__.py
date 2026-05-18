@@ -14,10 +14,13 @@ from .purchase import (
     GoodsReceiptSerializer, GoodsReceiptLineSerializer
 )
 from .sales import (
-    CustomerSerializer, SalesOrderSerializer,
+    SalesOrderSerializer,
     SalesShipmentSerializer, SalesReturnSerializer,
 )
 from .variant import VariantDetailSerializer
+from .customer import CustomerSerializer
+
+
 __all__ = [
     "CategorySerializer", "BrandSerializer", "WarehouseSerializer",
     "SupplierSerializer", "ProductVariantSerializer", "ProductSerializer",
