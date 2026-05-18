@@ -61,7 +61,7 @@ const columns: Column<any>[] = [
       return "—";
     },
   },
-  { key: "unit_cost", label: "Unit Cost", render: (v) => `$${parseFloat(v as string).toFixed(2)}` },
+  { key: "unit_cost", label: "Unit Cost", render: (v) => `$${parseFloat(v as string)}` },
   { key: "transaction_id", label: "Transaction ID", render: (v) => (v as string).slice(0, 8) + "…" },
 ];
 
@@ -75,7 +75,7 @@ const columns: Column<any>[] = [
       {/* Backdrop */}
       <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
       {/* Drawer panel */}
-      <div className="fixed inset-y-0 right-0 w-[800px] max-w-full bg-card border-l border-border shadow-xl z-50 flex flex-col">
+      <div className="fixed inset-y-0 right-0 w-[78vw] max-w-full bg-card border-l border-border shadow-xl z-50 flex flex-col">
         <div className="p-4 border-b border-border flex justify-between items-center">
           <h2 className="text-lg font-semibold">Stock History</h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1 rounded-md">

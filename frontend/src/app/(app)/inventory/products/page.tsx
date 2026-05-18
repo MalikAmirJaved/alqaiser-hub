@@ -134,7 +134,7 @@ export default function ProductsPage() {
     { key: "brand_name", label: "Brand", sortable: true },
     {
       key: "display_price", label: "Price", sortable: true,
-      render: (val: any) => <span className="font-semibold text-primary">${Number(val).toFixed(2)}</span>,
+      render: (val: any) => <span className="font-semibold text-primary">${Number(val)}</span>,
     },
     {
       key: "total_stock", label: "Stock", sortable: true,
@@ -189,7 +189,7 @@ export default function ProductsPage() {
         </div>
         <p className="text-xs text-muted-foreground">{product.category_name}</p>
         <div className="flex items-center justify-between pt-1">
-          <span className="text-base font-bold text-primary">${product.display_price.toFixed(2)}</span>
+          <span className="text-base font-bold text-primary">${product.display_price}</span>
           <span className={`text-xs font-medium ${product.total_stock === 0 ? "text-destructive" : "text-muted-foreground"}`}>
             {product.total_stock} in stock
           </span>

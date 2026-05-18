@@ -119,7 +119,7 @@ export default function ProductDetailsModal({ productId, onClose, onEdit }: Prop
           {/* Price range */}
           <div className="mt-4 flex items-baseline gap-1">
             <span className="text-2xl font-bold text-primary">
-              ${minPrice.toFixed(2)}{minPrice !== maxPrice && ` – $${maxPrice.toFixed(2)}`}
+              ${minPrice}{minPrice !== maxPrice && ` – $${maxPrice}`}
             </span>
             <span className="text-sm text-muted-foreground ml-1">selling price</span>
           </div>
@@ -225,8 +225,8 @@ export default function ProductDetailsModal({ productId, onClose, onEdit }: Prop
                     {v.barcode && <p className="text-xs text-muted-foreground">Barcode: {v.barcode}</p>}
                   </div>
                   <div className="text-right shrink-0 ml-4">
-                    <p className="text-sm font-bold text-success">${parseFloat(v.selling_price).toFixed(2)}</p>
-                    <p className="text-xs text-muted-foreground line-through">${parseFloat(v.buying_price).toFixed(2)}</p>
+                    <p className="text-sm font-bold text-success">${parseFloat(v.selling_price)}</p>
+                    <p className="text-xs text-muted-foreground line-through">${parseFloat(v.buying_price)}</p>
                     <p className="text-xs text-muted-foreground mt-1">{v.total_stock} in stock</p>
                   </div>
                 </div>

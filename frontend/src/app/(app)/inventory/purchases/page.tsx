@@ -1,10 +1,5 @@
-
-
 "use client";
-
 import dynamic from "next/dynamic";
-const CrudPage = dynamic(() => import("@/components/CrudPage"), { ssr: false });
-import { schemas } from "@/config/schemas";
+const PurchaseOrdersPage = dynamic(() => import("@/components/inventory/purchase/PurchaseOrdersPage"), { ssr: false });
 
-export default () => <CrudPage {...schemas.purchaseOrders} />;
-
+export default () => <PurchaseOrdersPage />;
