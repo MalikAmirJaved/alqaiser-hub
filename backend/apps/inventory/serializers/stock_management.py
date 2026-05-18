@@ -88,6 +88,10 @@ class InventoryTransactionSerializer(serializers.ModelSerializer):
     warehouse_name = serializers.CharField(source='warehouse.warehouse_name', read_only=True)
     transaction_type_display = serializers.CharField(source='get_transaction_type_display', read_only=True)
 
+    # 👇 NEW FIELDS: who made the change
+    created_by_name = serializers.SerializerMethodField()
+    created_by_email = serializers.SerializerMethodField()
+
     class Meta:
         model = InventoryTransaction
         fields = [
@@ -95,6 +99,21 @@ class InventoryTransactionSerializer(serializers.ModelSerializer):
             'warehouse_id', 'warehouse_name', 'quantity_change',
             'quantity_before', 'quantity_after', 'unit_cost',
             'transaction_type', 'transaction_type_display',
-            'reason_text', 'created_by', 'created_at'
+            'reason_text', 'created_by', 'created_at',
+            'created_by_name', 'created_by_email',   # add these
         ]
         read_only_fields = fields
+
+    def get_created_by_name(self, obj):
+        user = obj.created_by
+        if not user:
+            return None
+
+        return (
+            user.get_full_name()
+            or user.username
+            or user.email
+        )
+
+    def get_created_by_email(self, obj):
+        return obj.created_by.email if obj.created_by else None

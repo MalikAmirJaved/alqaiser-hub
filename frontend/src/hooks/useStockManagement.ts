@@ -34,6 +34,8 @@ export interface StockHistoryEntry {
   reason_text: string;
   created_by: number;
   created_at: string;
+  created_by_name?: string;
+  created_by_email?: string;
 }
 
 export interface VariantStockSummary {

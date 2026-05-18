@@ -33,22 +33,37 @@ export function StockHistoryDrawer({ variantId, open, onClose }: StockHistoryDra
     : undefined,
 );
 console.log("data:: ", data)
-  const columns: Column<any>[] = [
-    { key: "created_at", label: "Date", render: (v) => new Date(v as string).toLocaleString() },
-    { key: "transaction_type_display", label: "Type" },
-    {
-      key: "quantity_change",
-      label: "Change",
-      render: (v) => {
-        const num = v as number;
-        return <span className={num > 0 ? "text-success" : "text-destructive"}>{num > 0 ? `+${num}` : num}</span>;
-      },
+const columns: Column<any>[] = [
+  { key: "created_at", label: "Date", render: (v) => new Date(v as string).toLocaleString() },
+  { key: "transaction_type_display", label: "Type" },
+  {
+    key: "quantity_change",
+    label: "Change",
+    render: (v) => {
+      const num = v as number;
+      return <span className={num > 0 ? "text-success" : "text-destructive"}>{num > 0 ? `+${num}` : num}</span>;
     },
-    { key: "quantity_before", label: "Before" },
-    { key: "quantity_after", label: "After" },
-    { key: "reason_text", label: "Reason" },
-    { key: "warehouse_name", label: "Warehouse" },
-  ];
+  },
+  { key: "quantity_before", label: "Before" },
+  { key: "quantity_after", label: "After" },
+  { key: "reason_text", label: "Reason" },
+  { key: "warehouse_name", label: "Warehouse" },
+  // 👇 new columns
+  {
+    key: "created_by",
+    label: "Adjusted By",
+    render: (_, record) => {
+      const name = record.created_by_name;
+      const email = record.created_by_email;
+      if (name && email) return `${name} (${email})`;
+      if (name) return name;
+      if (email) return email;
+      return "—";
+    },
+  },
+  { key: "unit_cost", label: "Unit Cost", render: (v) => `$${parseFloat(v as string).toFixed(2)}` },
+  { key: "transaction_id", label: "Transaction ID", render: (v) => (v as string).slice(0, 8) + "…" },
+];
 
   // Compute net change for the filtered history
   const netChange = data?.results.reduce((sum, entry) => sum + entry.quantity_change, 0) || 0;
