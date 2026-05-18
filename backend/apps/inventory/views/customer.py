@@ -31,8 +31,6 @@ class CustomerViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         }, status=status.HTTP_201_CREATED)
 
     def update(self, request, *args, **kwargs):
-        print(" the update are:: ", request.user.company_id)
-        print(" request.user.branch_id:: ", request.user.branch_id)
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
         
