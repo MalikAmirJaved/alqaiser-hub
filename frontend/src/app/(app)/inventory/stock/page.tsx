@@ -39,7 +39,6 @@ export default function StockManagementPage() {
     warehouse_id: selectedWarehouseId !== "all" ? selectedWarehouseId : undefined,
     low_stock: lowStockOnly,
   });
-console.log("data::: ", data)
 
   // Optional: compute total stock value / low stock count from data
   const totalOnHand = data?.results.reduce((sum, item) => sum + item.quantity_on_hand, 0) || 0;

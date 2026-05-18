@@ -31,7 +31,6 @@ interface StockAdjustModalProps {
   variantName: string;
   currentStock?: number;
   warehouseId: string;
-  lockWarehouse?: boolean; // NEW: prevent warehouse changes
 }
 
 export function StockAdjustModal({
@@ -41,7 +40,6 @@ export function StockAdjustModal({
   variantName,
   currentStock = 0,
   warehouseId,
-  lockWarehouse = true, // default to allow changes
 }: StockAdjustModalProps) {
   const { data: warehouses } = useWarehouses({ is_active: true });
   const adjustStock = useAdjustStock();
@@ -114,29 +112,9 @@ export function StockAdjustModal({
           {/* Warehouse field – disabled when locked */}
           <div>
             <Label>Warehouse</Label>
-            {lockWarehouse ? (
-              // Read-only display when locked
               <div className="px-3 py-2 border rounded-md bg-muted/20 text-sm">
                 {selectedWarehouse?.warehouse_name || "Loading..."}
               </div>
-            ) : (
-              <Select
-                value={selectedWarehouseId}
-                onValueChange={(val) => setValue("warehouse_id", val)}
-                disabled={lockWarehouse}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select warehouse" />
-                </SelectTrigger>
-                <SelectContent>
-                  {warehouses?.map((wh) => (
-                    <SelectItem key={wh.id} value={String(wh.id)}>
-                      {wh.warehouse_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
             {errors.warehouse_id && <p className="text-xs text-destructive mt-1">{errors.warehouse_id.message}</p>}
             {/* Hidden input ensures the value is submitted even when locked */}
             <input type="hidden" {...register("warehouse_id")} />
