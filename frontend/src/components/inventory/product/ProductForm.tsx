@@ -72,7 +72,7 @@ interface ProductFormProps {
 function StepBar({ step }: { step: number }) {
   const steps = ["Product Info", "Variants"];
   return (
-    <div className="flex items-center gap-0 mb-8">
+    <div className="flex items-center gap-0">
       {steps.map((label, i) => (
         <React.Fragment key={i}>
           <div className="flex items-center gap-2">
