@@ -19,20 +19,20 @@ interface StockHistoryDrawerProps {
 export function StockHistoryDrawer({ variantId, open, onClose }: StockHistoryDrawerProps) {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [txnType, setTxnType] = useState("");
+  const [txnType, setTxnType] = useState("all");
 
   const { data, isLoading } = useStockHistory(
-    variantId
-      ? {
-          variant_id: variantId,
-          start_date: startDate || undefined,
-          end_date: endDate || undefined,
-          transaction_type: txnType || undefined,
-          page_size: 100,
-        }
-      : undefined,
-  );
-
+  variantId
+    ? {
+        variant_id: variantId,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+        transaction_type: txnType === "all" ? undefined : txnType, // Handle "all" as undefined
+        page_size: 100,
+      }
+    : undefined,
+);
+console.log("data:: ", data)
   const columns: Column<any>[] = [
     { key: "created_at", label: "Date", render: (v) => new Date(v as string).toLocaleString() },
     { key: "transaction_type_display", label: "Type" },
@@ -86,7 +86,7 @@ export function StockHistoryDrawer({ variantId, open, onClose }: StockHistoryDra
                   <SelectValue placeholder="All" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All</SelectItem>
+                  <SelectItem value="all">All</SelectItem>
                   <SelectItem value="PURCHASE_RECEIPT">Purchase Receipt</SelectItem>
                   <SelectItem value="SALE_SHIPMENT">Sale Shipment</SelectItem>
                   <SelectItem value="RETURN_IN">Return In</SelectItem>
@@ -97,7 +97,7 @@ export function StockHistoryDrawer({ variantId, open, onClose }: StockHistoryDra
                 </SelectContent>
               </Select>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => { setStartDate(""); setEndDate(""); setTxnType(""); }} className="h-8">
+            <Button variant="ghost" size="sm" onClick={() => { setStartDate(""); setEndDate(""); setTxnType("all"); }} className="h-8">
               Clear
             </Button>
           </div>
