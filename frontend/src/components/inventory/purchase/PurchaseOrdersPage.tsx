@@ -56,7 +56,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function fmt(dateStr?: string) {
+function fmt(dateStr?: string | null) {
   if (!dateStr) return '—';
   return new Date(dateStr).toLocaleDateString('en-US', {
     month: 'short',
@@ -175,7 +175,7 @@ export default function PurchaseOrdersPage() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="p-6 space-y-5">
+    <div className=" space-y-5">
       {/* Page header */}
       <div className="flex items-start justify-between">
         <div>

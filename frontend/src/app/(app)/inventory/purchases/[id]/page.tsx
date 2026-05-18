@@ -55,7 +55,7 @@ function MiniStatusBadge({ status }: { status: string }) {
   );
 }
 
-function fmt(d?: string) {
+function fmt(d?: string | null) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
@@ -133,7 +133,7 @@ export default function PurchaseOrderDetailPage() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="p-6 space-y-5 max-w-5xl mx-auto">
+    <div className="space-y-5">
       {/* Back */}
       <button
         onClick={() => router.back()}
