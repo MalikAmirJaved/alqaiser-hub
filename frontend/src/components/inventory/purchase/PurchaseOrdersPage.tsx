@@ -14,6 +14,7 @@ import { useConfirmationModal } from '@/components/reuseable/ConfirmationModal';
 import { PurchaseOrderModal } from './PurchaseOrderModal';
 import { GoodsReceiptModal } from './GoodsReceiptModal';
 import type { PurchaseOrder, PurchaseOrderPayload, GoodsReceiptPayload } from '@/types/purchase';
+import PageHeader from '@/components/PageHeader';
 
 // ─── Status config ───────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<
@@ -176,22 +177,20 @@ export default function PurchaseOrdersPage() {
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className=" space-y-5">
+
       {/* Page header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-xl font-medium">Purchase Orders</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Manage supplier orders and inventory inflows
-          </p>
-        </div>
-        <button
-          onClick={() => { setEditingOrder(undefined); setModalOpen(true); }}
-          className="inline-flex items-center gap-1.5 px-4 py-2 bg-foreground text-background rounded-lg text-sm font-medium hover:opacity-85 transition-opacity"
-        >
-          <Plus className="w-4 h-4" />
-          New Order
-        </button>
-      </div>
+       <PageHeader
+        title="Purchase Orders"
+        subtitle="Manage supplier orders and inventory inflows"
+        actions={
+          <button
+            onClick={() => { setEditingOrder(undefined); setModalOpen(true); }}
+            className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-colors"
+          >
+            <Plus className="w-4 h-4" /> New Order
+          </button>
+        }
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-5 gap-2.5">

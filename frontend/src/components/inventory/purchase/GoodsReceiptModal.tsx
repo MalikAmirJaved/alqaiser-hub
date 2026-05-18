@@ -1,3 +1,4 @@
+// GoodsReceiptModal.tsx
 'use client';
 
 import { useState } from 'react';
@@ -308,16 +309,28 @@ export function GoodsReceiptModal({
           width: 100%;
           padding: 7px 10px;
           font-size: 13px;
-          border: 1px solid hsl(var(--border));
+          border: 1px solid var(--color-border);
           border-radius: 6px;
-          background: hsl(var(--background));
-          color: hsl(var(--foreground));
+          background: var(--color-background);
+          color: var(--color-foreground);
           outline: none;
           font-family: inherit;
           transition: border-color 0.15s;
         }
-        .field-input:focus { border-color: hsl(var(--ring)); }
-        .field-input:disabled { background: hsl(var(--muted)); }
+        .field-input:focus {
+          border-color: var(--color-ring);
+        }
+        .field-input:disabled {
+          background: var(--color-muted);
+          cursor: not-allowed;
+        }
+        .field-input::placeholder {
+          color: var(--color-muted-foreground);
+        }
+        input[type="datetime-local"].field-input,
+        select.field-input {
+          color-scheme: dark;
+        }
       `}</style>
     </div>
   );

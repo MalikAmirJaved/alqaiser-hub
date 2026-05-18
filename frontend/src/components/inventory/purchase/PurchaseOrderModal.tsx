@@ -1,3 +1,4 @@
+// PurchaseOrderModal.tsx
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -306,19 +307,36 @@ export function PurchaseOrderModal({
           width: 100%;
           padding: 7px 10px;
           font-size: 13px;
-          border: 1px solid hsl(var(--border));
+          border: 1px solid var(--color-border);
           border-radius: 6px;
-          background: hsl(var(--background));
-          color: hsl(var(--foreground));
+          background: var(--color-background);
+          color: var(--color-foreground);
           outline: none;
           font-family: inherit;
           transition: border-color 0.15s;
         }
         .field-input:focus {
-          border-color: hsl(var(--ring));
+          border-color: var(--color-ring);
         }
         .field-input::placeholder {
-          color: hsl(var(--muted-foreground));
+          color: var(--color-muted-foreground);
+        }
+        .field-input:disabled {
+          background: var(--color-muted);
+          opacity: 0.7;
+          cursor: not-allowed;
+        }
+        select.field-input {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 10px center;
+          background-size: 14px;
+          padding-right: 32px;
+          appearance: none;
+        }
+        input[type="date"].field-input,
+        input[type="datetime-local"].field-input {
+          color-scheme: dark;
         }
       `}</style>
     </div>

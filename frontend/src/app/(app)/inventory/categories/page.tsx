@@ -20,7 +20,7 @@ export default function CategoriesPage() {
   const { data: items = [], isLoading, error } = useCategories(debouncedQuery);
   const deleteCategory = useDeleteCategory();
 
-  const handleDelete = (id: number) => {
+  const handleDelete = (id: string) => {
     if (confirm("Delete this category?")) {
       deleteCategory.mutate(id);
     }
@@ -38,7 +38,7 @@ export default function CategoriesPage() {
               setEditing(null);
               setModalOpen(true);
             }}
-            className="inline-flex items-center gap-2 px-4 h-10 rounded-xl bg-primary text-primary-foreground text-sm hover:opacity-90 transition"
+            className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-colors"
           >
             <Plus className="w-4 h-4" /> Add Category
           </button>
