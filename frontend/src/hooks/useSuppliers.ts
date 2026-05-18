@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
 export interface Supplier extends Record<string, unknown> {
-  id: number;
+  id: string;
   name: string;
   code: string;
   contact_person: string;
@@ -24,17 +24,26 @@ export interface Supplier extends Record<string, unknown> {
   updated_at: string;
   partner_type?: string;
 }
-
+export type PaginatedResponse<T> = {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+};
 
 // Fetch all suppliers
 export function useSuppliers() {
   const api = useApi();
+
   return useQuery<Supplier[]>({
     queryKey: ["suppliers"],
-    queryFn: () => api("/api/inventory/suppliers/"),
-    staleTime: 30 * 1000,
-    gcTime: 5 * 60 * 1000,
-    retry: 2,
+    queryFn: async () => {
+      const res = await api<PaginatedResponse<Supplier>>(
+        "/api/inventory/suppliers/"
+      );
+
+      return res.results;
+    },
   });
 }
 
@@ -61,7 +70,7 @@ export function useUpdateSupplier() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, ...data }: Partial<Supplier> & { id: number }) =>
+    mutationFn: ({ id, ...data }: Partial<Supplier> & { id: string }) =>
       api(`/api/inventory/suppliers/${id}/`, {
         method: "PATCH",
         body: JSON.stringify(data),
@@ -78,7 +87,7 @@ export function useDeleteSupplier() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: (id: string) =>
       api(`/api/inventory/suppliers/${id}/`, {
         method: "DELETE",
       }),

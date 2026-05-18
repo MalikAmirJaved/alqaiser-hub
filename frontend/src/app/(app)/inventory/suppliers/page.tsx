@@ -151,7 +151,6 @@ export default function SuppliersVendorsPage() {
   const createVendor = useCreateVendor();
   const updateVendor = useUpdateVendor();
   const deleteVendor = useDeleteVendor();
-
   const currentData = activeTab === "suppliers" ? suppliers : vendors;
   const isLoading = activeTab === "suppliers" ? suppliersLoading : vendorsLoading;
   const createMutation = activeTab === "suppliers" ? createSupplier : createVendor;

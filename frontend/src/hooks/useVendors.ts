@@ -4,15 +4,25 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 import type { Supplier } from "./useSuppliers";
 
+type PaginatedResponse<T> = {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+};
+
 export type Vendor = Supplier; // same fields
+
+
 
 export function useVendors() {
   const api = useApi();
   return useQuery<Vendor[]>({
     queryKey: ["vendors"],
-    queryFn: () => api("/api/inventory/vendors/"),
-    staleTime: 30 * 1000,
-    gcTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const res = await api<PaginatedResponse<Vendor>>("/api/inventory/vendors/");
+      return res.results; // 👈 FIX HERE
+    },
   });
 }
 
@@ -30,7 +40,7 @@ export function useUpdateVendor() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: Partial<Vendor> & { id: number }) =>
+    mutationFn: ({ id, ...data }: Partial<Vendor> & { id: string }) =>
       api(`/api/inventory/vendors/${id}/`, { method: "PATCH", body: JSON.stringify(data) }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["vendors"] }),
   });
@@ -40,7 +50,7 @@ export function useDeleteVendor() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => api(`/api/inventory/vendors/${id}/`, { method: "DELETE" }),
+    mutationFn: (id: string) => api(`/api/inventory/vendors/${id}/`, { method: "DELETE" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["vendors"] }),
   });
 }
