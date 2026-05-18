@@ -24,7 +24,7 @@ from apps.inventory.serializers.purchase import (
 class PurchaseOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
     queryset = PurchaseOrder.objects.all()
     serializer_class = PurchaseOrderSerializer
-
+    lookup_field = '_id'
     def get_queryset(self):
         qs = super().get_queryset()
         qs = qs.prefetch_related('lines__variant__product')
@@ -48,7 +48,7 @@ class PurchaseOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         }, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
-    def confirm(self, request, pk=None):
+    def confirm(self, request, _id=None):   
         po = self.get_object()
         if po.status != 'DRAFT':
             return Response({'error': 'Only draft orders can be confirmed'}, status=400)
@@ -57,7 +57,7 @@ class PurchaseOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         return Response({'status': 'success', 'message': 'Order confirmed'})
 
     @action(detail=True, methods=['post'])
-    def cancel(self, request, pk=None):
+    def cancel(self, request, _id=None):   
         po = self.get_object()
         if po.status in ['DRAFT', 'CONFIRMED']:
             po.status = 'CANCELLED'
@@ -66,17 +66,27 @@ class PurchaseOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
             return Response({'status': 'success', 'message': 'Order cancelled'})
         return Response({'error': 'Cannot cancel this order'}, status=400)
 
-
 class GoodsReceiptViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
     queryset = GoodsReceipt.objects.all()
     serializer_class = GoodsReceiptSerializer
-
+    lookup_field = '_id'
     def get_queryset(self):
         qs = super().get_queryset()
-        qs = qs.prefetch_related('lines__purchase_order_line__variant__product')
-        po = self.request.query_params.get('purchase_order')
-        if po:
-            qs = qs.filter(purchase_order_id=po)
+        qs = qs.prefetch_related('lines__variant__product')
+        
+        status = self.request.query_params.get('status')
+        if status:
+            qs = qs.filter(status=status)
+        
+        supplier_uuid = self.request.query_params.get('supplier')
+        if supplier_uuid:
+            # Resolve UUID to integer ID
+            from apps.inventory.models import Supplier
+            try:
+                supplier = Supplier.objects.get(_id=supplier_uuid, company_id=self.request.user.company_id)
+                qs = qs.filter(supplier_id=supplier.id)
+            except Supplier.DoesNotExist:
+                return qs.none()
         return qs
 
     @transaction.atomic

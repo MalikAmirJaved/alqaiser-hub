@@ -3,54 +3,97 @@ from apps.inventory.models import (
     PurchaseOrder, PurchaseOrderLine, GoodsReceipt, GoodsReceiptLine,
     ProductVariant, Warehouse, Supplier
 )
+from apps.common.serializer_fields import UUIDForeignRelatedField
 
 
 class PurchaseOrderLineSerializer(serializers.ModelSerializer):
+    # Replace the default PrimaryKeyRelatedField with our UUID field
+    variant = UUIDForeignRelatedField(queryset=ProductVariant.objects.all())
+    id = serializers.UUIDField(source='_id', read_only=True)
+    # Read-only fields for product info
     variant_sku = serializers.CharField(source='variant.sku', read_only=True)
     variant_name = serializers.CharField(source='variant.product.product_name', read_only=True)
     line_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     quantity_pending = serializers.SerializerMethodField()
 
+    # Creator/updater info
+    created_by_info = serializers.SerializerMethodField()
+    updated_by_info = serializers.SerializerMethodField()
+
     class Meta:
         model = PurchaseOrderLine
         fields = [
-            'id', 'variant', 'variant_sku', 'variant_name',
+            'id',                       # UUID exposed for frontend
+            'variant', 'variant_sku', 'variant_name',
             'quantity_ordered', 'quantity_received', 'quantity_pending',
             'unit_cost', 'tax_rate', 'line_total', 'status', 'notes',
-            'created_at', 'updated_at'
+            'created_at', 'updated_at',
+            'created_by_info', 'updated_by_info',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'quantity_received']
+        read_only_fields = ['quantity_received', 'created_at', 'updated_at']
 
     def get_quantity_pending(self, obj):
         return obj.quantity_ordered - obj.quantity_received
 
+    def get_created_by_info(self, obj):
+        if obj.created_by:
+            return {'id': obj.created_by._id, 'username': obj.created_by.username}
+        return None
+
+    def get_updated_by_info(self, obj):
+        if obj.updated_by:
+            return {'id': obj.updated_by._id, 'username': obj.updated_by.username}
+        return None
+
+
 
 class PurchaseOrderSerializer(serializers.ModelSerializer):
+    supplier = UUIDForeignRelatedField(queryset=Supplier.objects.all())
+    warehouse = UUIDForeignRelatedField(queryset=Warehouse.objects.all())
+
+    # Read-only nested fields for display
     supplier_name = serializers.CharField(source='supplier.name', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.warehouse_name', read_only=True)
     lines = PurchaseOrderLineSerializer(many=True, read_only=True)
-    # Write-only line data
+
+    # Write-only line items (as before, but each line's 'variant' will be a UUID)
     line_items = serializers.ListField(
         child=serializers.DictField(), write_only=True, required=False
     )
 
+    # Creator/updater info
+    created_by_info = serializers.SerializerMethodField()
+    updated_by_info = serializers.SerializerMethodField()
+
     class Meta:
         model = PurchaseOrder
         fields = [
-            'id', 'order_number', 'supplier', 'supplier_name',
+            '_id', 'order_number', 'supplier', 'supplier_name',
             'warehouse', 'warehouse_name', 'status',
             'order_date', 'expected_delivery_date', 'total_amount',
-            'notes', 'lines', 'line_items', 'created_at', 'updated_at'
+            'notes', 'lines', 'line_items',
+            'created_at', 'updated_at', 'created_by_info', 'updated_by_info',
         ]
-        read_only_fields = ['id', 'order_number', 'created_at', 'updated_at']
+        read_only_fields = ['order_number', 'created_at', 'updated_at']
+
+    def get_created_by_info(self, obj):
+        if obj.created_by:
+            return {'id': obj.created_by._id, 'username': obj.created_by.username}
+        return None
+
+    def get_updated_by_info(self, obj):
+        if obj.updated_by:
+            return {'id': obj.updated_by._id, 'username': obj.updated_by.username}
+        return None
 
     def create(self, validated_data):
+        # No changes needed here – the UUIDForeignRelatedField already converted
+        # `supplier` and `warehouse` to model instances (with integer PK).
         line_items_data = validated_data.pop('line_items', [])
         user = self.context['request'].user
         company_id = user.company_id
         branch_id = user.branch_id
-
-        # Generate order number
+        
         validated_data['order_number'] = self._generate_order_number()
         validated_data['company_id'] = company_id
         validated_data['branch_id'] = branch_id
@@ -59,11 +102,13 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
 
         po = PurchaseOrder.objects.create(**validated_data)
 
-        # Create line items
         total_amount = 0
         for line_data in line_items_data:
-            variant_id = line_data.get('variant')
-            variant = ProductVariant.objects.get(id=variant_id, company_id=company_id)
+            # line_data['variant'] is now a UUID string; we need to convert to variant instance.
+            # But the frontend will send the UUID. We can use the same UUIDForeignRelatedField
+            # to resolve it. Since we are inside the serializer, we can manually resolve.
+            variant_uuid = line_data.get('variant')
+            variant = ProductVariant.objects.get(_id=variant_uuid, company_id=company_id)
             qty = line_data['quantity_ordered']
             unit_cost = line_data['unit_cost']
             line_total = qty * unit_cost
@@ -93,7 +138,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
 
 class GoodsReceiptLineSerializer(serializers.ModelSerializer):
     variant_name = serializers.CharField(source='purchase_order_line.variant.product.product_name', read_only=True)
-
+    id = serializers.UUIDField(source='_id', read_only=True)
     class Meta:
         model = GoodsReceiptLine
         fields = [
@@ -103,11 +148,16 @@ class GoodsReceiptLineSerializer(serializers.ModelSerializer):
 
 
 class GoodsReceiptSerializer(serializers.ModelSerializer):
+    purchase_order = UUIDForeignRelatedField(
+        queryset=PurchaseOrder.objects.all(),
+        help_text="UUID of the purchase order"
+    )
     purchase_order_number = serializers.CharField(source='purchase_order.order_number', read_only=True)
     lines = GoodsReceiptLineSerializer(many=True, read_only=True)
     receipt_lines = serializers.ListField(
         child=serializers.DictField(), write_only=True
     )
+    id = serializers.UUIDField(source='_id', read_only=True)
 
     class Meta:
         model = GoodsReceipt
@@ -117,6 +167,15 @@ class GoodsReceiptSerializer(serializers.ModelSerializer):
             'lines', 'receipt_lines', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'receipt_number', 'created_at', 'updated_at']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Dynamically filter purchase_order queryset to the current company
+        request = self.context.get('request')
+        if request and hasattr(request.user, 'company_id'):
+            self.fields['purchase_order'].queryset = PurchaseOrder.objects.filter(
+                company_id=request.user.company_id
+            )
 
     def create(self, validated_data):
         receipt_lines_data = validated_data.pop('receipt_lines')
@@ -134,9 +193,11 @@ class GoodsReceiptSerializer(serializers.ModelSerializer):
         gr = GoodsReceipt.objects.create(**validated_data)
 
         for line_data in receipt_lines_data:
+            po_line_uuid = line_data['purchase_order_line_id']   # frontend sends UUID
+            po_line = PurchaseOrderLine.objects.get(_id=po_line_uuid, company_id=company_id)
             GoodsReceiptLine.objects.create(
                 goods_receipt=gr,
-                purchase_order_line_id=line_data['purchase_order_line_id'],
+                purchase_order_line=po_line,    # now an instance, not an ID
                 quantity_received=line_data['quantity_received'],
                 unit_cost=line_data.get('unit_cost', 0),
                 accepted=line_data.get('accepted', True),
