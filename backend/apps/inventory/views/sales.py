@@ -26,7 +26,7 @@ from apps.inventory.serializers.sales import (
 class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
     queryset = SalesOrder.objects.all()
     serializer_class = SalesOrderSerializer
-
+    lookup_field = '_id'
     def get_queryset(self):
         qs = super().get_queryset().prefetch_related('lines__variant__product')
         status_param = self.request.query_params.get('status')
@@ -103,7 +103,7 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
 class SalesShipmentViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
     queryset = SalesShipment.objects.all()
     serializer_class = SalesShipmentSerializer
-
+    lookup_field = '_id'
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -198,7 +198,7 @@ class SalesShipmentViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
 class SalesReturnViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
     queryset = SalesReturn.objects.all()
     serializer_class = SalesReturnSerializer
-
+    lookup_field = '_id'
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

@@ -11,6 +11,7 @@ from apps.inventory.models import ProductVariant
 
 
 class SalesOrderLineSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='_id', read_only=True)
     variant_sku = serializers.CharField(source='variant.sku', read_only=True)
     variant_name = serializers.CharField(source='variant.product.product_name', read_only=True)
     line_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
@@ -31,6 +32,7 @@ class SalesOrderLineSerializer(serializers.ModelSerializer):
 
 
 class SalesOrderSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='_id', read_only=True)
     customer_name = serializers.CharField(source='customer.name', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.warehouse_name', read_only=True)
     lines = SalesOrderLineSerializer(many=True, read_only=True)
@@ -93,12 +95,14 @@ class SalesOrderSerializer(serializers.ModelSerializer):
 
 
 class SalesShipmentLineSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='_id', read_only=True)
     class Meta:
         model = SalesShipmentLine
         fields = ['id', 'sales_order_line', 'quantity_shipped']
 
 
 class SalesShipmentSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='_id', read_only=True)
     lines = SalesShipmentLineSerializer(many=True, read_only=True)
     shipment_lines = serializers.ListField(
         child=serializers.DictField(), write_only=True
@@ -145,12 +149,14 @@ class SalesShipmentSerializer(serializers.ModelSerializer):
 
 
 class SalesReturnLineSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='_id', read_only=True)
     class Meta:
         model = SalesReturnLine
         fields = ['id', 'sales_order_line', 'quantity_returned', 'restock', 'unit_cost', 'reason']
 
 
 class SalesReturnSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='_id', read_only=True)
     lines = SalesReturnLineSerializer(many=True, read_only=True)
     return_lines = serializers.ListField(
         child=serializers.DictField(), write_only=True
