@@ -26,15 +26,24 @@ from apps.inventory.serializers.sales import (
 class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
     queryset = SalesOrder.objects.all()
     serializer_class = SalesOrderSerializer
-    lookup_field = '_id'
+    lookup_field = '_id'  # Use UUID for lookups
+    
     def get_queryset(self):
-        qs = super().get_queryset().prefetch_related('lines__variant__product')
+        qs = super().get_queryset()
+        qs = qs.prefetch_related('lines__variant__product')
+        
         status_param = self.request.query_params.get('status')
         if status_param:
             qs = qs.filter(status=status_param)
-        customer = self.request.query_params.get('customer')
-        if customer:
-            qs = qs.filter(customer_id=customer)
+            
+        customer_uuid = self.request.query_params.get('customer')
+        if customer_uuid:
+            from apps.inventory.models import Customer
+            try:
+                customer = Customer.objects.get(_id=customer_uuid, company_id=self.request.user.company_id)
+                qs = qs.filter(customer_id=customer.id)
+            except Customer.DoesNotExist:
+                return qs.none()
         return qs
 
     @transaction.atomic
@@ -49,31 +58,41 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         }, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
-    def confirm(self, request, pk=None):
+    def confirm(self, request, _id=None):  # Changed pk to _id
         """Confirm order: reserve stock for every line."""
         so = self.get_object()
         if so.status != 'DRAFT':
             return Response({'error': 'Only draft orders can be confirmed'}, status=400)
+        
         user = request.user
         warehouse = so.warehouse
         reservation_type = 'SALES_ORDER'
-        reserved_until = timezone.now() + timedelta(days=7)  # example: 7-day reservation
+        reserved_until = timezone.now() + timedelta(days=7)
 
         with transaction.atomic():
             for line in so.lines.filter(status='PENDING'):
                 variant = line.variant
                 qty = line.quantity_ordered
+                
                 # Lock stock item
-                stock_item = StockItem.objects.select_for_update().get(
-                    variant=variant, warehouse=warehouse,
-                    company_id=user.company_id
-                )
+                try:
+                    stock_item = StockItem.objects.select_for_update().get(
+                        variant=variant, warehouse=warehouse,
+                        company_id=user.company_id
+                    )
+                except StockItem.DoesNotExist:
+                    return Response(
+                        {'error': f'No stock record found for {variant.sku}'},
+                        status=400
+                    )
+                
                 available = stock_item.quantity_on_hand - stock_item.quantity_reserved
                 if available < qty:
                     return Response(
                         {'error': f'Insufficient stock for {variant.sku}. Available: {available}'},
                         status=400
                     )
+                
                 # Reserve
                 StockReservation.objects.create(
                     variant=variant,
@@ -89,6 +108,7 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                     created_by=user,
                     updated_by=user,
                 )
+                
                 # Update stock reserved count
                 stock_item.quantity_reserved = F('quantity_reserved') + qty
                 stock_item.version = F('version') + 1
@@ -99,11 +119,66 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
 
         return Response({'status': 'success', 'message': 'Order confirmed and stock reserved'})
 
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, _id=None):
+        """Cancel a draft or confirmed order."""
+        so = self.get_object()
+        if so.status not in ['DRAFT', 'CONFIRMED']:
+            return Response({'error': 'Only draft or confirmed orders can be cancelled'}, status=400)
+        
+        with transaction.atomic():
+            # Release reservations if any
+            if so.status == 'CONFIRMED':
+                reservations = StockReservation.objects.filter(
+                    reference_id=so._id,
+                    status='ACTIVE'
+                )
+                for reservation in reservations:
+                    # Update stock reserved count
+                    stock_item = StockItem.objects.select_for_update().get(
+                        variant=reservation.variant,
+                        warehouse=reservation.warehouse,
+                        company_id=request.user.company_id
+                    )
+                    stock_item.quantity_reserved = F('quantity_reserved') - reservation.quantity
+                    stock_item.version = F('version') + 1
+                    stock_item.save(update_fields=['quantity_reserved', 'version'])
+                    
+                    # Cancel reservation
+                    reservation.status = 'CANCELLED'
+                    reservation.save(update_fields=['status'])
+            
+            # Update line statuses
+            so.lines.update(status='CANCELLED')
+            so.status = 'CANCELLED'
+            so.save(update_fields=['status'])
+        
+        return Response({'status': 'success', 'message': 'Order cancelled'})
+
 
 class SalesShipmentViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
     queryset = SalesShipment.objects.all()
     serializer_class = SalesShipmentSerializer
     lookup_field = '_id'
+    
+    def get_queryset(self):
+        qs = super().get_queryset()
+        qs = qs.select_related('sales_order').prefetch_related('lines__sales_order_line__variant__product')
+        
+        status = self.request.query_params.get('status')
+        if status:
+            qs = qs.filter(status=status)
+        
+        sales_order_uuid = self.request.query_params.get('sales_order')
+        if sales_order_uuid:
+            try:
+                sales_order = SalesOrder.objects.get(_id=sales_order_uuid, company_id=self.request.user.company_id)
+                qs = qs.filter(sales_order_id=sales_order.id)
+            except SalesOrder.DoesNotExist:
+                return qs.none()
+        
+        return qs
+    
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -134,20 +209,21 @@ class SalesShipmentViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
             stock_item = StockItem.objects.select_for_update().get(
                 variant=variant, warehouse=warehouse, company_id=company_id
             )
+            
             # Update reservation: find the active reservation for this line
             reservation = StockReservation.objects.filter(
                 reference_id=sales_order._id,
                 reference_line_id=sol._id,
                 status='ACTIVE'
             ).select_for_update().first()
+            
             if reservation:
                 new_reserved_qty = reservation.quantity - qty
-
                 reservation.quantity = max(new_reserved_qty, 0)
-
                 if new_reserved_qty <= 0:
                     reservation.status = 'FULFILLED'
                 reservation.save(update_fields=['quantity', 'status'])
+            
             # Deduct actual stock
             before = stock_item.quantity_on_hand
             after = before - qty
@@ -166,7 +242,7 @@ class SalesShipmentViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                 quantity_change=-qty,
                 quantity_before=before,
                 quantity_after=after,
-                unit_cost=variant.buying_price,  # or sol.unit_price if desired
+                unit_cost=variant.buying_price,
                 transaction_type='SALE_SHIPMENT',
                 source_document_type='SALES_ORDER',
                 source_document_id=sales_order._id,
@@ -180,6 +256,7 @@ class SalesShipmentViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
             sol.quantity_shipped = F('quantity_shipped') + qty
             sol.save(update_fields=['quantity_shipped'])
             sol.refresh_from_db()
+            
             if sol.quantity_shipped >= sol.quantity_ordered:
                 sol.status = 'SHIPPED'
             elif sol.quantity_shipped > 0:
@@ -199,6 +276,25 @@ class SalesReturnViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
     queryset = SalesReturn.objects.all()
     serializer_class = SalesReturnSerializer
     lookup_field = '_id'
+    
+    def get_queryset(self):
+        qs = super().get_queryset()
+        qs = qs.select_related('sales_order', 'warehouse').prefetch_related('lines__sales_order_line__variant__product')
+        
+        status = self.request.query_params.get('status')
+        if status:
+            qs = qs.filter(status=status)
+        
+        sales_order_uuid = self.request.query_params.get('sales_order')
+        if sales_order_uuid:
+            try:
+                sales_order = SalesOrder.objects.get(_id=sales_order_uuid, company_id=self.request.user.company_id)
+                qs = qs.filter(sales_order_id=sales_order.id)
+            except SalesOrder.DoesNotExist:
+                return qs.none()
+        
+        return qs
+    
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -254,4 +350,3 @@ class SalesReturnViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                     created_by=user,
                     updated_by=user,
                 )
-            # Optionally, reverse the shipment effect on the sales order line (not decreasing shipped qty usually)

@@ -45,9 +45,11 @@ class CustomerViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        name = instance.name
-        self.perform_destroy(instance)
+
+        instance.is_deleted = True
+        instance.save(update_fields=["is_deleted"])
+
         return Response({
             'status': 'success',
-            'message': f'Customer "{name}" deleted.'
-        })
+            'message': f'Customer "{instance.name}" deleted (soft).'
+        }, status=status.HTTP_200_OK)
