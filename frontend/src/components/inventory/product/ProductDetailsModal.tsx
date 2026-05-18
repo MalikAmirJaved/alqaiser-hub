@@ -83,7 +83,7 @@ export default function ProductDetailsModal({ productId, onClose, onEdit }: Prop
   // Alternatively, backend could include category_name and brand_name in serializer.
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" >
       <div
         className="w-full max-w-3xl bg-card rounded-2xl shadow-2xl flex flex-col max-h-[88vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
