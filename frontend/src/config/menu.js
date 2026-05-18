@@ -71,6 +71,7 @@ export const menu = [
       { title: "Barcode & QR", to: "/inventory/barcode", icon: QrCode },
       { title: "Reports", to: "/inventory/reports", icon: BarChart3 },
       { title: "Alerts", to: "/inventory/alerts", icon: Bell },
+      { title: "Customers", to: "/inventory/customers", icon: Users },
       { title: "Selling / POS", to: "/inventory/pos", icon: ScanLine },
       { title: "Audit Logs", to: "/inventory/audit", icon: FileText },
     ],

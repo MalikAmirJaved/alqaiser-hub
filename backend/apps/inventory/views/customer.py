@@ -7,7 +7,7 @@ from apps.inventory.serializers.customer import CustomerSerializer
 class CustomerViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
-
+    lookup_field = '_id'
     def get_queryset(self):
         qs = super().get_queryset()
         search = self.request.query_params.get('search')
@@ -31,8 +31,11 @@ class CustomerViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         }, status=status.HTTP_201_CREATED)
 
     def update(self, request, *args, **kwargs):
+        print(" the update are:: ", request.user.company_id)
+        print(" request.user.branch_id:: ", request.user.branch_id)
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
+        
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
