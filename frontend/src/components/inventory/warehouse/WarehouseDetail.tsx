@@ -96,7 +96,7 @@ export function WarehouseDetail({ warehouse, onClose, onEdit, onDelete, isOpen }
                 </div>
                 <div className="flex justify-between mt-2 text-xs text-muted-foreground">
                   <span>0%</span>
-                  <span>{warehouse.occupancy_percentage.toFixed(1)}%</span>
+                  <span>{warehouse.occupancy_percentage}%</span>
                   <span>100%</span>
                 </div>
               </div>

@@ -177,7 +177,7 @@ export default function SuppliersVendorsPage() {
       { id: "total", label: "Total", value: total, valueClassName: "text-2xl font-bold" },
       { id: "active", label: "Active", value: active, valueClassName: "text-green-600 dark:text-green-400" },
       { id: "credit", label: "Total Credit Limit", value: formatCurrency(totalCredit), valueClassName: "text-blue-600 dark:text-blue-400" },
-      { id: "rating", label: "Average Rating", value: avgRating.toFixed(1), valueClassName: "text-yellow-600 dark:text-yellow-400" },
+      { id: "rating", label: "Average Rating", value: avgRating, valueClassName: "text-yellow-600 dark:text-yellow-400" },
     ];
   }, [currentData]);
 

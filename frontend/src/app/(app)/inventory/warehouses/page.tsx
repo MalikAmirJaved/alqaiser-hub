@@ -50,7 +50,7 @@ export default function WarehousesPage() {
         { id: "total", label: "Total Warehouses", value: stats.total_warehouses },
         { id: "active", label: "Active", value: stats.active_warehouses, valueClassName: "text-success" },
         { id: "inactive", label: "Inactive", value: stats.inactive_warehouses, valueClassName: "text-warning" },
-        { id: "occupancy", label: "Overall Occupancy", value: `${stats.overall_occupancy_percentage.toFixed(1)}%`, valueClassName: "text-primary" },
+        { id: "occupancy", label: "Overall Occupancy", value: `${stats.overall_occupancy_percentage}%`, valueClassName: "text-primary" },
       ]
     : [];
 
@@ -194,7 +194,7 @@ export default function WarehousesPage() {
               warehouse.occupancy_percentage > 95 ? "text-destructive" : 
               "text-success"
             }`}>
-              {warehouse.occupancy_percentage.toFixed(1)}%
+              {warehouse.occupancy_percentage}%
             </span>
           </div>
           <div className="h-1.5 bg-muted rounded-full overflow-hidden">

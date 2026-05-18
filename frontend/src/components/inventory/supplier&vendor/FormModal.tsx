@@ -35,7 +35,6 @@ export function FormModal({ open, onClose, title, fields, initialData, onSubmit,
     defaultValues: initialData,
     mode: "onChange"
   });
-  console.log("initialData:: ",initialData)
 useEffect(() => {
     if (open) {
       reset(initialData);
