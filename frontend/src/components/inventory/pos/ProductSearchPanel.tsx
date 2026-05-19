@@ -8,9 +8,10 @@ import { ProductCard } from "./ProductCard";
 
 interface ProductSearchPanelProps {
   onAddToCart: (variant: VariantDetail) => void;
+  warehouseId?: string; // Add warehouse ID for stock display
 }
 
-export function ProductSearchPanel({ onAddToCart }: ProductSearchPanelProps) {
+export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPanelProps) {
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [brandId, setBrandId] = useState("");
@@ -76,25 +77,64 @@ export function ProductSearchPanel({ onAddToCart }: ProductSearchPanelProps) {
       {/* Product Grid */}
       <div className="flex-1 overflow-y-auto p-4">
         {variantsLoading ? (
-          <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">Loading products…</div>
+          <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
         ) : filteredVariants.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 text-muted-foreground text-sm gap-2">
             <BoxIcon />
             <span>No products found</span>
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="text-primary text-xs hover:underline"
+              >
+                Clear search
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
             {filteredVariants.map((v) => (
-              <ProductCard key={v.id} variant={v} onAdd={() => onAddToCart(v)} />
+              <ProductCard 
+                key={v.id} 
+                variant={v} 
+                onAdd={() => onAddToCart(v)} 
+                warehouseId={warehouseId}
+              />
             ))}
           </div>
         )}
       </div>
+
+      {/* Results Count */}
+      {!variantsLoading && filteredVariants.length > 0 && (
+        <div className="px-4 py-2 border-t border-border text-xs text-muted-foreground bg-muted/20">
+          Showing {filteredVariants.length} of {variants.length} products
+        </div>
+      )}
     </div>
   );
 }
 
-// Icons (keep inline for simplicity)
-function SearchIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>; }
-function XIcon({ size = 16 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>; }
-function BoxIcon() { return <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>; }
+// Icons
+function SearchIcon() { 
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8" />
+    <path d="m21 21-4.35-4.35" />
+  </svg>; 
+}
+
+function XIcon({ size = 16 }: { size?: number }) { 
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 6 6 18M6 6l12 12" />
+  </svg>; 
+}
+
+function BoxIcon() { 
+  return <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+    <line x1="12" y1="22.08" x2="12" y2="12" />
+  </svg>; 
+}

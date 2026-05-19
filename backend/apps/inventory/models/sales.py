@@ -18,7 +18,7 @@ class SalesOrder(BaseModel):
     ]
 
     order_number = models.CharField(max_length=50, unique=True)
-    customer = models.ForeignKey(Customer, on_delete=models.PROTECT, related_name='sales_orders')
+    customer = models.ForeignKey(Customer, on_delete=models.PROTECT, related_name='sales_orders',null=True, blank=True)
     warehouse = models.ForeignKey('Warehouse', on_delete=models.PROTECT,
                                   related_name='sales_orders',
                                   help_text="Source warehouse for stock deduction")

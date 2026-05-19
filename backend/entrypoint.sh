@@ -25,4 +25,4 @@ exec python manage.py runserver 0.0.0.0:8000
 
 
 # migerate to db
-# docker compose exec backend python manage.py migrate notifications
+# docker compose exec backend python manage.py migrate ...

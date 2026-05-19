@@ -25,6 +25,37 @@ export interface CreateSalesOrderParams {
 export interface ConfirmSalesOrderParams {
   orderId: string;
 }
+export interface ReturnLinePayload {
+  sales_order_line_id: string;
+  quantity_returned: number;
+  restock: boolean;
+  unit_cost: number;
+  reason: string;
+}
+
+export interface CreateSalesReturnParams {
+  sales_order: string;     
+  warehouse: string;       
+  return_date: string;
+  reason?: string;
+  return_lines: ReturnLinePayload[];
+}
+
+export interface SalesReturnResponse {
+  _id: string;
+  return_number: string;
+  sales_order: string;
+}
+
+export interface SalesOrderResponse {
+  _id: string;
+  order_number: string;
+  customer_name?: string;
+  order_date: string;
+  status: string;
+  lines?: any[];
+}
+
 type ApiResponse<T> = {
   data?: T;
   results?: T[];
@@ -133,5 +164,53 @@ export function useFetchSalesOrder(orderNumberOrId?: string) {
     },
     enabled: !!orderNumberOrId,
     staleTime: 30 * 1000,
+  });
+}
+
+export function useCreateSalesReturn() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation<SalesReturnResponse, Error, CreateSalesReturnParams>({
+    mutationFn: (params) =>
+      api<SalesReturnResponse>("/api/inventory/sales-returns/", {
+        method: "POST",
+        body: JSON.stringify(params),
+      }),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
+      queryClient.invalidateQueries({ queryKey: ["currentStock"] });
+    },
+  });
+}
+
+export function useFetchSalesOrderByNumber(orderNumber: string) {
+  const api = useApi();
+
+  return useQuery<SalesOrderResponse | null>({
+    queryKey: ["salesOrder", orderNumber],
+
+    queryFn: async () => {
+      const resp = await api<{ results: SalesOrderResponse[] }>(
+        `/api/inventory/sales-orders/?order_number=${encodeURIComponent(orderNumber)}`
+      );
+
+      return resp.results?.[0] || null;
+    },
+
+    enabled: !!orderNumber,
+    staleTime: 30_000,
+  });
+}
+
+export function useDraftSalesOrders() {
+  const api = useApi();
+  return useQuery({
+    queryKey: ["salesOrders", "draft"],
+    queryFn: () =>
+      api<{ results: any[] }>("/api/inventory/sales-orders/?status=DRAFT"),
+    select: (data) => data.results,
+    staleTime: 30_000,
   });
 }

@@ -58,67 +58,81 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         }, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
-    def confirm(self, request, _id=None):  # Changed pk to _id
-        """Confirm order: reserve stock for every line."""
+    def confirm(self, request, _id=None):
         so = self.get_object()
         if so.status != 'DRAFT':
             return Response({'error': 'Only draft orders can be confirmed'}, status=400)
-        
+
         user = request.user
         warehouse = so.warehouse
-        reservation_type = 'SALES_ORDER'
-        reserved_until = timezone.now() + timedelta(days=7)
+        company_id = user.company_id
 
         with transaction.atomic():
             for line in so.lines.filter(status='PENDING'):
                 variant = line.variant
                 qty = line.quantity_ordered
-                
-                # Lock stock item
+
+                # Lock stock item for this variant + warehouse
                 try:
                     stock_item = StockItem.objects.select_for_update().get(
-                        variant=variant, warehouse=warehouse,
-                        company_id=user.company_id
+                        variant=variant, warehouse=warehouse, company_id=company_id
                     )
                 except StockItem.DoesNotExist:
                     return Response(
-                        {'error': f'No stock record found for {variant.sku}'},
+                        {'error': f'No stock record found for {variant.sku} in warehouse {warehouse.warehouse_name}'},
                         status=400
                     )
-                
+
                 available = stock_item.quantity_on_hand - stock_item.quantity_reserved
                 if available < qty:
                     return Response(
-                        {'error': f'Insufficient stock for {variant.sku}. Available: {available}'},
+                        {'error': f'Insufficient stock for {variant.sku}. Available: {available}, Required: {qty}'},
                         status=400
                     )
-                
-                # Reserve
-                StockReservation.objects.create(
+
+                # Deduct stock directly
+                before = stock_item.quantity_on_hand
+                after = before - qty
+                stock_item.quantity_on_hand = after
+                stock_item.version = F('version') + 1
+                stock_item.save(update_fields=['quantity_on_hand', 'version'])
+
+                # Create inventory transaction (SALE_SHIPMENT type)
+                InventoryTransaction.objects.create(
+                    transaction_id=uuid.uuid4(),
                     variant=variant,
                     warehouse=warehouse,
-                    quantity=qty,
-                    reservation_type=reservation_type,
-                    reference_id=so._id,
-                    reference_line_id=line._id,
-                    reserved_until=reserved_until,
-                    status='ACTIVE',
-                    company_id=user.company_id,
+                    company_id=company_id,
                     branch_id=user.branch_id,
+                    quantity_change=-qty,
+                    quantity_before=before,
+                    quantity_after=after,
+                    unit_cost=variant.buying_price,   # or use line.unit_price? Usually cost for COGS
+                    transaction_type='SALE_SHIPMENT',
+                    source_document_type='SALES_ORDER',
+                    source_document_id=so._id,
+                    source_line_id=line._id,
+                    reason_text=f'Direct sale – order {so.order_number}',
                     created_by=user,
                     updated_by=user,
                 )
-                
-                # Update stock reserved count
-                stock_item.quantity_reserved = F('quantity_reserved') + qty
-                stock_item.version = F('version') + 1
-                stock_item.save(update_fields=['quantity_reserved', 'version'])
 
-            so.status = 'CONFIRMED'
+                # Update line shipped quantity and status
+                line.quantity_shipped = F('quantity_shipped') + qty
+                line.save(update_fields=['quantity_shipped'])
+                line.refresh_from_db()
+                if line.quantity_shipped >= line.quantity_ordered:
+                    line.status = 'SHIPPED'
+                else:
+                    line.status = 'PARTIALLY_SHIPPED'
+                line.save(update_fields=['status'])
+
+            # Update order status
+            so.status = 'SHIPPED'   # or 'COMPLETED'
             so.save(update_fields=['status'])
 
-        return Response({'status': 'success', 'message': 'Order confirmed and stock reserved'})
-
+        return Response({'status': 'success', 'message': 'Order confirmed and stock deducted'})
+    
     @action(detail=True, methods=['post'])
     def cancel(self, request, _id=None):
         """Cancel a draft or confirmed order."""

@@ -85,3 +85,20 @@ export function useAllVariantsSimple(filters?: { search?: string; product_id?: s
     staleTime: 5 * 60 * 1000,
   });
 }
+
+export function useVariantStock(variantId: string | null, warehouseId: string | null) {
+  const api = useApi();
+  const params = new URLSearchParams();
+  if (variantId) params.append("variant_id", variantId);
+  if (warehouseId) params.append("warehouse_id", warehouseId);
+  
+  return useQuery({
+    queryKey: ["variantStock", variantId, warehouseId],
+    queryFn: async () => {
+      const res = await api<{ results: any[] }>(`/api/inventory/stock/current_stock/?${params.toString()}`);
+      return res.results?.[0] || null;
+    },
+    enabled: !!variantId && !!warehouseId,
+    staleTime: 15_000,
+  });
+}
