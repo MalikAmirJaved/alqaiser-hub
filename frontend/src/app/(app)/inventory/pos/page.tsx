@@ -8,13 +8,14 @@ import {
   useCompleteSalesOrder,
   useCancelSalesOrder,
   useDraftSalesOrders,
-  cartToLineItems,CartLine
+  cartToLineItems, CartLine
 } from "@/hooks/useSalesOrder";
 import { ProductSearchPanel } from "@/components/inventory/pos/ProductSearchPanel";
 import { CartPanel } from "@/components/inventory/pos/CartPanel";
 import { ReturnPanel } from "@/components/inventory/pos/ReturnPanel";
+import { SalesListPanel } from "@/components/inventory/pos/SalesListPanel";
 
-type ActivePanel = "search" | "held" | "return";
+type ActivePanel = "search" | "held" | "return" | "sales";
 
 export default function SalesPage() {
   const queryClient = useQueryClient();
@@ -136,15 +137,14 @@ export default function SalesPage() {
       <div className="flex flex-col flex-1 min-w-0 border-r border-border">
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
           <div className="flex gap-1 bg-muted rounded-lg p-1">
-            {(["search", "held", "return"] as ActivePanel[]).map(p => (
+            {(["search", "held", "return", "sales"] as ActivePanel[]).map(p => (
               <button
                 key={p}
                 onClick={() => setActivePanel(p)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-colors ${
-                  activePanel === p ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-                }`}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-colors ${activePanel === p ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}
               >
-                {p === "held" ? `Held (${draftOrders.length})` : p}
+                {p === "held" ? `Held (${draftOrders.length})` : p === "sales" ? "All Sales" : p}
               </button>
             ))}
           </div>
@@ -167,15 +167,15 @@ export default function SalesPage() {
                   newCart[idx] = { ...newCart[idx], qty: newCart[idx].qty + 1 };
                   return newCart;
                 }
-                return [...prev, { 
-                  variant: v, 
-                  qty: 1, 
-                  unitPrice: Number(v.selling_price), 
-                  discountPct: 0, 
-                  discountFixed: 0, 
-                  taxRate: 0, 
+                return [...prev, {
+                  variant: v,
+                  qty: 1,
+                  unitPrice: Number(v.selling_price),
+                  discountPct: 0,
+                  discountFixed: 0,
+                  taxRate: 0,
                   notes: "",
-                  salesOrderLineId: undefined 
+                  salesOrderLineId: undefined
                 }];
               });
             }}
@@ -221,6 +221,8 @@ export default function SalesPage() {
         )}
 
         {activePanel === "return" && <ReturnPanel warehouses={warehouses} />}
+
+        {activePanel === "sales" && <SalesListPanel />}
       </div>
 
       <CartPanel

@@ -47,6 +47,7 @@ export interface SalesReturnResponse {
 export interface SalesOrderResponse {
   id: string;
   order_number: string;
+  total_amount: number | string;
   customer_name?: string;
   customer?: { id: string; name: string };
   warehouse?: { id: string; warehouse_name: string };
@@ -224,6 +225,25 @@ export function useDraftSalesOrders() {
   return useQuery({
     queryKey: ["salesOrders", "draft"],
     queryFn: () => api<{ results: SalesOrderResponse[] }>("/api/inventory/sales-orders/?status=DRAFT"),
+    select: (data) => data.results,
+    staleTime: 30_000,
+  });
+}
+
+
+export function useSalesOrders(filters?: { status?: string; customer?: string }) {
+  const api = useApi();
+  const params = new URLSearchParams();
+  if (filters?.status) params.append("status", filters.status);
+  if (filters?.customer) params.append("customer", filters.customer);
+  const url = `/api/inventory/sales-orders/${params.toString() ? `?${params}` : ""}`;
+  return useQuery<
+  { results: SalesOrderResponse[] }, // queryFn return type
+  Error,
+  SalesOrderResponse[]               // final selected type
+>({
+    queryKey: ["salesOrders", filters],
+    queryFn: () => api(url),
     select: (data) => data.results,
     staleTime: 30_000,
   });
