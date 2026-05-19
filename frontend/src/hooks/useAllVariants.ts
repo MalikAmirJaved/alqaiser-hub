@@ -22,6 +22,15 @@ export interface VariantDetail {
   updated_at: string;
 }
 
+// Add extended type for variants with stock data
+export interface VariantDetailWithStock extends VariantDetail {
+  stock?: {
+    available: number;
+    reserved: number;
+    on_hand: number;
+  };
+}
+
 interface PaginatedResponse<T> {
   count: number;
   next: string | null;
@@ -89,8 +98,8 @@ export function useAllVariantsSimple(filters?: { search?: string; product_id?: s
 export function useVariantStock(variantId: string | null, warehouseId: string | null) {
   const api = useApi();
   const params = new URLSearchParams();
-if (variantId) params.append("variant_id", variantId);
-if (warehouseId) params.append("warehouse_id", warehouseId);
+  if (variantId) params.append("variant_id", variantId);
+  if (warehouseId) params.append("warehouse_id", warehouseId);
   
   return useQuery({
     queryKey: ["variantStock", variantId, warehouseId],

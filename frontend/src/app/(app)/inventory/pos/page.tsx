@@ -15,6 +15,7 @@ import { ProductSearchPanel } from "@/components/inventory/pos/ProductSearchPane
 import { CartPanel } from "@/components/inventory/pos/CartPanel";
 import { ReturnPanel } from "@/components/inventory/pos/ReturnPanel";
 import { SalesListPanel } from "@/components/inventory/pos/SalesListPanel";
+import { VariantDetailWithStock } from "@/hooks/useAllVariants";
 
 type ActivePanel = "search" | "held" | "return" | "sales";
 
@@ -76,65 +77,66 @@ export default function SalesPage() {
     setActivePanel("search");
   }, []);
 
-const handleCompleteSale = useCallback(async (notes: string, payments: any[]) => {
-  if (cart.length === 0) return;
-  const notesWithPayments = notes + (payments.length ? ` | Payments: ${payments.map(p => `${p.method}:${p.amount}`).join(", ")}` : "");
+  const handleCompleteSale = useCallback(async (notes: string, payments: any[]) => {
+    if (cart.length === 0) return;
+    const notesWithPayments = notes + (payments.length ? ` | Payments: ${payments.map(p => `${p.method}:${p.amount}`).join(", ")}` : "");
 
-  try {
-    if (activeDraftId) {
-      const updatedLineItems = cartToLineItems(cart);
-      await completeOrder({ orderId: activeDraftId, line_items: updatedLineItems });
-    } else {
+    try {
+      if (activeDraftId) {
+        const updatedLineItems = cartToLineItems(cart);
+        await completeOrder({ orderId: activeDraftId, line_items: updatedLineItems });
+      } else {
+        await createSalesOrder({
+          customer: selectedCustomer?.id ?? null,
+          warehouse: selectedWarehouse.id,
+          order_date: new Date().toISOString().split("T")[0],
+          notes: notesWithPayments,
+          line_items: cartToLineItems(cart),
+          status: "COMPLETE",
+        });
+      }
+      clearCart();
+      refetchDrafts();
+      await queryClient.refetchQueries({ queryKey: ["allVariantsSimple"] });
+      await queryClient.refetchQueries({ queryKey: ["batchStock"] });
+      queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
+    } catch (err: any) {
+      console.error(err);
+    }
+  }, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, completeOrder, clearCart, refetchDrafts, queryClient]);
+
+  const handleSaveDraft = useCallback(async (notes: string) => {
+    if (cart.length === 0) return;
+    try {
+      if (activeDraftId) {
+        // If you want to update an existing draft, implement update logic here.
+        return;
+      }
       await createSalesOrder({
         customer: selectedCustomer?.id ?? null,
         warehouse: selectedWarehouse.id,
         order_date: new Date().toISOString().split("T")[0],
-        notes: notesWithPayments,
+        notes,
         line_items: cartToLineItems(cart),
-        status: "COMPLETE",
+        status: "DRAFT",
       });
+      clearCart();
+      refetchDrafts();
+      await queryClient.refetchQueries({ queryKey: ["allVariantsSimple"] });
+      await queryClient.refetchQueries({ queryKey: ["batchStock"] });
+    } catch (err: any) {
+      console.error(err);
     }
-    clearCart();
-    refetchDrafts();                                    // refresh draft list
-    await queryClient.refetchQueries({ queryKey: ["allVariantsSimple"] });  // refresh product list
-    await queryClient.refetchQueries({ queryKey: ["batchStock"] });         // refresh stock data
-    queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
-  } catch (err: any) {
-    console.error(err);
-  }
-}, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, completeOrder, clearCart, refetchDrafts, queryClient]);
-  
-const handleSaveDraft = useCallback(async (notes: string) => {
-  if (cart.length === 0) return;
-  try {
-    if (activeDraftId) {
-      // If you want to update an existing draft, implement update logic here.
-      return;
-    }
-    await createSalesOrder({
-      customer: selectedCustomer?.id ?? null,
-      warehouse: selectedWarehouse.id,
-      order_date: new Date().toISOString().split("T")[0],
-      notes,
-      line_items: cartToLineItems(cart),
-      status: "DRAFT",
-    });
-    clearCart();
-    refetchDrafts();                                    // refresh draft list
-    await queryClient.refetchQueries({ queryKey: ["allVariantsSimple"] });  // refresh product list
-    await queryClient.refetchQueries({ queryKey: ["batchStock"] });         // refresh stock data
-  } catch (err: any) {
-    console.error(err);
-  }
-}, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, clearCart, refetchDrafts, queryClient]);
+  }, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, clearCart, refetchDrafts, queryClient]);
 
-const handleCancelDraft = useCallback(async (orderId: string) => {
+  const handleCancelDraft = useCallback(async (orderId: string) => {
     if (!window.confirm("Cancel this draft order? Stock reservations will be released.")) return;
     try {
       await cancelOrder(orderId);
       refetchDrafts();
       if (activeDraftId === orderId) clearCart();
     } catch (err: any) {
+      console.error(err);
     }
   }, [cancelOrder, refetchDrafts, activeDraftId, clearCart]);
 
@@ -153,11 +155,9 @@ const handleCancelDraft = useCallback(async (orderId: string) => {
   };
 
   return (
-    <div className="flex h-full overflow-hidden relative">   
-
+    <div className="flex h-full overflow-hidden relative">
       {/* Left — product + panels */}
       <div className="flex flex-col overflow-hidden h-full flex-1 min-w-0 border-r border-border">
-
         {/* Top bar */}
         <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-card/80 backdrop-blur-sm">
           <nav className="flex gap-0.5 bg-muted/70 rounded-xl p-1 flex-1">
@@ -198,13 +198,29 @@ const handleCancelDraft = useCallback(async (orderId: string) => {
         <div className="flex-1 h-full overflow-y-auto">
           {activePanel === "search" && (
             <ProductSearchPanel
-              onAddToCart={(v) => {
+              onAddToCart={(v: VariantDetailWithStock) => {
+                // Validate stock before adding
+                const availableStock = v.stock?.available ?? 0;
+                
+                if (availableStock <= 0) {
+                  alert(`"${v.product_name}" is out of stock.`);
+                  return;
+                }
+
                 setCart(prev => {
-                  const idx = prev.findIndex(l => l.variant.id === v.id);
-                  if (idx >= 0) {
-                    const newCart = [...prev];
-                    newCart[idx] = { ...newCart[idx], qty: newCart[idx].qty + 1 };
-                    return newCart;
+                  const existing = prev.find(l => l.variant.id === v.id);
+                  const currentQty = existing ? existing.qty : 0;
+                  const newQty = currentQty + 1;
+                  
+                  if (newQty > availableStock) {
+                    alert(`Cannot add more than ${availableStock} items. Only ${availableStock} in stock.`);
+                    return prev;
+                  }
+
+                  if (existing) {
+                    return prev.map(l =>
+                      l.variant.id === v.id ? { ...l, qty: newQty } : l
+                    );
                   }
                   return [...prev, {
                     variant: v,
@@ -301,10 +317,53 @@ const handleCancelDraft = useCallback(async (orderId: string) => {
 }
 
 // Icons
-function SearchIcon({ size = 14 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>; }
-function PauseIcon({ size = 14 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>; }
-function ReturnIcon({ size = 14 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 .49-3.84" /></svg>; }
-function ListIcon({ size = 14 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>; }
-function WarehouseIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>; }
-function PlayIcon({ size = 14 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3" /></svg>; }
-function XIcon({ size = 14 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>; }
+function SearchIcon({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8" />
+    <path d="m21 21-4.35-4.35" />
+  </svg>;
+}
+
+function PauseIcon({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="6" y="4" width="4" height="16" />
+    <rect x="14" y="4" width="4" height="16" />
+  </svg>;
+}
+
+function ReturnIcon({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="1 4 1 10 7 10" />
+    <path d="M3.51 15a9 9 0 1 0 .49-3.84" />
+  </svg>;
+}
+
+function ListIcon({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="8" y1="6" x2="21" y2="6" />
+    <line x1="8" y1="12" x2="21" y2="12" />
+    <line x1="8" y1="18" x2="21" y2="18" />
+    <line x1="3" y1="6" x2="3.01" y2="6" />
+    <line x1="3" y1="12" x2="3.01" y2="12" />
+    <line x1="3" y1="18" x2="3.01" y2="18" />
+  </svg>;
+}
+
+function WarehouseIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <polyline points="9 22 9 12 15 12 15 22" />
+  </svg>;
+}
+
+function PlayIcon({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="5 3 19 12 5 21 5 3" />
+  </svg>;
+}
+
+function XIcon({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 6 6 18M6 6l12 12" />
+  </svg>;
+}
