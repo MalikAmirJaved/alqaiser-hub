@@ -14,7 +14,6 @@ from .transfer import StockTransfer
 from .purchase import PurchaseOrder, PurchaseOrderLine, GoodsReceipt, GoodsReceiptLine
 from .sales import (
     SalesOrder, SalesOrderLine,
-    SalesShipment, SalesShipmentLine,
     SalesReturn, SalesReturnLine
 )
 from .customer import Customer
@@ -26,6 +25,5 @@ __all__ = [
     "VariantAttribute", "VariantImage", "StockTransfer",
     "PurchaseOrder", "PurchaseOrderLine", "GoodsReceipt", "GoodsReceiptLine",
     "Customer", "SalesOrder", "SalesOrderLine",
-    "SalesShipment", "SalesShipmentLine",
     "SalesReturn", "SalesReturnLine", "Customer"
 ]

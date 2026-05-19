@@ -14,8 +14,7 @@ from .purchase import (
     GoodsReceiptSerializer, GoodsReceiptLineSerializer
 )
 from .sales import (
-    SalesOrderSerializer,
-    SalesShipmentSerializer, SalesReturnSerializer,
+    SalesOrderSerializer,SalesReturnSerializer,
 )
 from .variant import VariantDetailSerializer
 from .customer import CustomerSerializer
@@ -30,5 +29,5 @@ __all__ = [
     "PurchaseOrderSerializer", "PurchaseOrderLineSerializer",
     "GoodsReceiptSerializer", "GoodsReceiptLineSerializer",
     "CustomerSerializer", "SalesOrderSerializer",
-    "SalesShipmentSerializer", "SalesReturnSerializer", "VariantDetailSerializer"
+    "SalesReturnSerializer", "VariantDetailSerializer"
 ]

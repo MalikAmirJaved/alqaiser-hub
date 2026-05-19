@@ -4,7 +4,6 @@
 from rest_framework import serializers
 from apps.inventory.models.sales import (
     SalesOrder, SalesOrderLine,
-    SalesShipment, SalesShipmentLine,
     SalesReturn, SalesReturnLine
 )
 from apps.inventory.models import ProductVariant, Customer, Warehouse
@@ -12,15 +11,12 @@ from apps.common.serializer_fields import UUIDForeignRelatedField
 
 
 class SalesOrderLineSerializer(serializers.ModelSerializer):
-    # Replace with UUIDForeignRelatedField
     variant = UUIDForeignRelatedField(queryset=ProductVariant.objects.all())
     id = serializers.UUIDField(source='_id', read_only=True)
     variant_sku = serializers.CharField(source='variant.sku', read_only=True)
     variant_name = serializers.CharField(source='variant.product.product_name', read_only=True)
     line_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
-    quantity_pending = serializers.SerializerMethodField()
     
-    # Creator/updater info
     created_by_info = serializers.SerializerMethodField()
     updated_by_info = serializers.SerializerMethodField()
 
@@ -28,14 +24,11 @@ class SalesOrderLineSerializer(serializers.ModelSerializer):
         model = SalesOrderLine
         fields = [
             'id', 'variant', 'variant_sku', 'variant_name',
-            'quantity_ordered', 'quantity_shipped', 'quantity_pending',
-            'unit_price', 'tax_rate', 'line_total', 'status', 'notes',
-            'created_at', 'updated_at', 'created_by_info', 'updated_by_info',
+            'quantity_ordered', 'unit_price', 'tax_rate', 'line_total',
+            'status', 'notes', 'created_at', 'updated_at',
+            'created_by_info', 'updated_by_info',
         ]
-        read_only_fields = ['quantity_shipped', 'created_at', 'updated_at']
-
-    def get_quantity_pending(self, obj):
-        return obj.quantity_ordered - obj.quantity_shipped
+        read_only_fields = ['created_at', 'updated_at']
 
     def get_created_by_info(self, obj):
         if obj.created_by:
@@ -49,8 +42,7 @@ class SalesOrderLineSerializer(serializers.ModelSerializer):
 
 
 class SalesOrderSerializer(serializers.ModelSerializer):
-    # Replace with UUIDForeignRelatedField
-    customer = UUIDForeignRelatedField(queryset=Customer.objects.all())
+    customer = UUIDForeignRelatedField(queryset=Customer.objects.all(), allow_null=True)
     warehouse = UUIDForeignRelatedField(queryset=Warehouse.objects.all())
     
     id = serializers.UUIDField(source='_id', read_only=True)
@@ -61,7 +53,6 @@ class SalesOrderSerializer(serializers.ModelSerializer):
         child=serializers.DictField(), write_only=True, required=False
     )
     
-    # Creator/updater info
     created_by_info = serializers.SerializerMethodField()
     updated_by_info = serializers.SerializerMethodField()
 
@@ -70,8 +61,8 @@ class SalesOrderSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'order_number', 'customer', 'customer_name',
             'warehouse', 'warehouse_name', 'status',
-            'order_date', 'expected_ship_date', 'total_amount',
-            'notes', 'lines', 'line_items',
+            'order_date', 'total_amount', 'notes',
+            'lines', 'line_items',
             'created_at', 'updated_at', 'created_by_info', 'updated_by_info',
         ]
         read_only_fields = ['order_number', 'created_at', 'updated_at']
@@ -102,7 +93,6 @@ class SalesOrderSerializer(serializers.ModelSerializer):
 
         total_amount = 0
         for item in line_items_data:
-            # UUIDForeignRelatedField handles conversion from UUID to internal id
             variant_uuid = item.get('variant')
             variant = ProductVariant.objects.get(_id=variant_uuid, company_id=company_id)
             qty = item['quantity_ordered']
@@ -131,82 +121,6 @@ class SalesOrderSerializer(serializers.ModelSerializer):
         return f"SO-{int(time.time())}-{random.randint(1000, 9999)}"
 
 
-class SalesShipmentLineSerializer(serializers.ModelSerializer):
-    id = serializers.UUIDField(source='_id', read_only=True)
-    
-    class Meta:
-        model = SalesShipmentLine
-        fields = ['id', 'sales_order_line', 'quantity_shipped']
-
-
-class SalesShipmentSerializer(serializers.ModelSerializer):
-    id = serializers.UUIDField(source='_id', read_only=True)
-    sales_order = UUIDForeignRelatedField(queryset=SalesOrder.objects.all())
-    sales_order_number = serializers.CharField(source='sales_order.order_number', read_only=True)
-    lines = SalesShipmentLineSerializer(many=True, read_only=True)
-    shipment_lines = serializers.ListField(
-        child=serializers.DictField(), write_only=True
-    )
-    
-    # Creator/updater info
-    created_by_info = serializers.SerializerMethodField()
-    updated_by_info = serializers.SerializerMethodField()
-
-    class Meta:
-        model = SalesShipment
-        fields = [
-            'id', 'shipment_number', 'sales_order', 'sales_order_number',
-            'shipment_date', 'carrier', 'tracking_number', 'status', 'notes',
-            'lines', 'shipment_lines',
-            'created_at', 'updated_at', 'created_by_info', 'updated_by_info',
-        ]
-        read_only_fields = ['shipment_number', 'created_at', 'updated_at']
-
-    def get_created_by_info(self, obj):
-        if obj.created_by:
-            return {'id': obj.created_by._id, 'username': obj.created_by.username}
-        return None
-
-    def get_updated_by_info(self, obj):
-        if obj.updated_by:
-            return {'id': obj.updated_by._id, 'username': obj.updated_by.username}
-        return None
-
-    def create(self, validated_data):
-        shipment_lines_data = validated_data.pop('shipment_lines')
-        user = self.context['request'].user
-        company_id = user.company_id
-        branch_id = user.branch_id
-
-        validated_data['shipment_number'] = self._generate_shipment_number()
-        validated_data['company_id'] = company_id
-        validated_data['branch_id'] = branch_id
-        validated_data['created_by'] = user
-        validated_data['updated_by'] = user
-
-        shipment = SalesShipment.objects.create(**validated_data)
-
-        for line_data in shipment_lines_data:
-            # The frontend sends UUID for sales_order_line
-            po_line_uuid = line_data['sales_order_line_id']
-            sales_order_line = SalesOrderLine.objects.get(_id=po_line_uuid, company_id=company_id)
-            
-            SalesShipmentLine.objects.create(
-                shipment=shipment,
-                sales_order_line=sales_order_line,
-                quantity_shipped=line_data['quantity_shipped'],
-                company_id=company_id,
-                branch_id=branch_id,
-                created_by=user,
-                updated_by=user,
-            )
-        return shipment
-
-    def _generate_shipment_number(self):
-        import time, random
-        return f"SH-{int(time.time())}-{random.randint(1000, 9999)}"
-
-
 class SalesReturnLineSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)
     
@@ -226,7 +140,6 @@ class SalesReturnSerializer(serializers.ModelSerializer):
         child=serializers.DictField(), write_only=True
     )
     
-    # Creator/updater info
     created_by_info = serializers.SerializerMethodField()
     updated_by_info = serializers.SerializerMethodField()
 
@@ -265,7 +178,6 @@ class SalesReturnSerializer(serializers.ModelSerializer):
         ret = SalesReturn.objects.create(**validated_data)
 
         for line_data in return_lines_data:
-            # Frontend sends UUID for sales_order_line
             sol_uuid = line_data['sales_order_line_id']
             sales_order_line = SalesOrderLine.objects.get(_id=sol_uuid, company_id=company_id)
             

@@ -4,7 +4,7 @@ from apps.common.basemodel import BaseModel
 class InventoryTransaction(BaseModel):
     TRANSACTION_TYPES = [
         ('PURCHASE_RECEIPT', 'Purchase Receipt'),
-        ('SALE_SHIPMENT', 'Sale Shipment'),
+        ('SALE', 'Sale'),                     
         ('RETURN_IN', 'Return In'),
         ('RETURN_OUT', 'Return Out'),
         ('ADJUSTMENT', 'Adjustment'),

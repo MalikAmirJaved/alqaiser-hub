@@ -7,15 +7,12 @@ from .stock_management import StockManagementViewSet
 from .transfer import StockTransferViewSet
 from .purchase import PurchaseOrderViewSet, GoodsReceiptViewSet
 from .variant import VariantViewSet
-from .sales import (
-    SalesOrderViewSet,
-    SalesShipmentViewSet, SalesReturnViewSet,
-)
+from .sales import (SalesOrderViewSet,SalesReturnViewSet)
 from .customer import CustomerViewSet
 __all__ = [
     "CategoryViewSet", "BrandViewSet", "WarehouseViewSet",
     "BaseSupplierViewSet", "SupplierViewSet","VendorViewSet","ProductViewSet","StockManagementViewSet",
     "StockTransferViewSet","PurchaseOrderViewSet", "GoodsReceiptViewSet",
      "CustomerViewSet", "SalesOrderViewSet",
-    "SalesShipmentViewSet", "SalesReturnViewSet","VariantViewSet"
+    "SalesReturnViewSet","VariantViewSet"
 ]

@@ -10,8 +10,8 @@ interface ReturnPanelProps {
 
 export function ReturnPanel({ warehouses }: ReturnPanelProps) {
   const [orderNum, setOrderNum] = useState("");
-  const [selectedWarehouse, setSelectedWarehouse] = useState<string>(warehouses[0]?.id?.toString() ?? ""); // Changed to string
-  const [orderData, setOrderData] = useState<any>(null); // ADDED: missing state setter
+  const [selectedWarehouse, setSelectedWarehouse] = useState<string>(warehouses[0]?.id?.toString() ?? "");
+  const [orderData, setOrderData] = useState<any>(null);
   const [lines, setLines] = useState<
     {
       sol_id: string;
@@ -25,13 +25,7 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
   >([]);
   const [shouldFetch, setShouldFetch] = useState(false);
 
-  const {
-    data: fetchedOrderData,
-    isLoading,
-    refetch,
-    isFetching,
-  } = useFetchSalesOrderByNumber(shouldFetch ? orderNum : "");
-
+  const { data: fetchedOrderData, isLoading, isFetching } = useFetchSalesOrderByNumber(shouldFetch ? orderNum : "");
   const { mutateAsync: createReturn, isPending: isSubmitting } = useCreateSalesReturn();
 
   const handleFetchOrder = () => {
@@ -42,15 +36,14 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
     setShouldFetch(true);
   };
 
-  // When orderData loads, prepare lines
   useEffect(() => {
     if (fetchedOrderData && fetchedOrderData.lines) {
-      setOrderData(fetchedOrderData); // ADDED: store the fetched data
+      setOrderData(fetchedOrderData);
       setLines(
         (fetchedOrderData.lines || []).map((l: any) => ({
           sol_id: l.id,
           qty: 0,
-          maxQty: l.quantity_shipped || l.quantity_ordered,
+          maxQty: l.quantity_ordered,   // removed quantity_shipped – use ordered quantity
           restock: true,
           unit_cost: Number(l.unit_price) || 0,
           reason: "",
@@ -71,7 +64,7 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
 
     const payload = {
       sales_order: orderData._id ?? orderData.id,
-      warehouse: selectedWarehouse, // Now this is a string
+      warehouse: selectedWarehouse,
       return_date: new Date().toISOString(),
       reason: "Customer return",
       return_lines: selectedLines.map((l) => ({
@@ -85,11 +78,9 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
 
     try {
       const resp = await createReturn(payload);
-      // Fixed: Handle response safely with optional chaining
       const returnNumber = resp?.return_number ?? "";
       alert(`✓ Return ${returnNumber} processed successfully!`);
       
-      // Reset form
       setOrderNum("");
       setOrderData(null);
       setLines([]);
@@ -115,7 +106,6 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
           <ReturnIcon size={16} /> Process Customer Return
         </h3>
 
-        {/* Order Number Input */}
         <div className="flex gap-2">
           <input
             value={orderNum}
@@ -142,7 +132,6 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
           )}
         </div>
 
-        {/* Order Details */}
         {orderData && (
           <div className="space-y-4">
             <div className="bg-muted/30 rounded-lg p-3 space-y-1">
@@ -170,7 +159,6 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
               </div>
             </div>
 
-            {/* Return Lines */}
             <div className="space-y-3">
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Select Items to Return
@@ -258,7 +246,6 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
               ))}
             </div>
 
-            {/* Warehouse Selection */}
             <div className="space-y-2">
               <label className="text-xs text-muted-foreground">Return to Warehouse</label>
               <select
@@ -274,7 +261,6 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
               </select>
             </div>
 
-            {/* Submit Button */}
             <button
               onClick={handleSubmitReturn}
               disabled={isSubmitting || lines.every((l) => l.qty === 0)}
@@ -285,7 +271,6 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
           </div>
         )}
 
-        {/* No Order Found State */}
         {shouldFetch && !isLoading && !orderData && !isFetching && (
           <div className="text-center py-8 text-muted-foreground">
             <p>Order not found</p>
@@ -297,19 +282,9 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
   );
 }
 
-// Icon component
 function ReturnIcon({ size = 16 }: { size?: number }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="1 4 1 10 7 10" />
       <path d="M3.51 15a9 9 0 1 0 .49-3.84" />
     </svg>

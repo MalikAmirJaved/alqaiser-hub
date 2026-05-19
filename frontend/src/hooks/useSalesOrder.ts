@@ -1,6 +1,6 @@
 // src/hooks/useSalesOrder.ts
 "use client";
-import { useMutation,useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 import { CartLine } from "@/lib/utils";
 
@@ -19,12 +19,9 @@ export interface CreateSalesOrderParams {
   order_date: string;
   notes: string;
   line_items: SalesOrderLineItem[];
-  status: "DRAFT" | "CONFIRMED";
+  status: "DRAFT" | "COMPLETE";   // changed from CONFIRMED to COMPLETE
 }
 
-export interface ConfirmSalesOrderParams {
-  orderId: string;
-}
 export interface ReturnLinePayload {
   sales_order_line_id: string;
   quantity_returned: number;
@@ -34,8 +31,8 @@ export interface ReturnLinePayload {
 }
 
 export interface CreateSalesReturnParams {
-  sales_order: string;     
-  warehouse: string;       
+  sales_order: string;
+  warehouse: string;
   return_date: string;
   reason?: string;
   return_lines: ReturnLinePayload[];
@@ -63,6 +60,7 @@ type ApiResponse<T> = {
 type ListResponse<T> = {
   results: T[];
 };
+
 /**
  * Convert cart lines to API-ready line items
  */
@@ -78,8 +76,8 @@ export function cartToLineItems(cart: CartLine[]): SalesOrderLineItem[] {
 }
 
 /**
- * Create a sales order (DRAFT or CONFIRMED)
- * If status is CONFIRMED, automatically calls the confirm endpoint after creation
+ * Create a sales order (DRAFT or COMPLETE)
+ * Backend handles reservation (DRAFT) or direct deduction (COMPLETE)
  */
 export function useCreateSalesOrder() {
   const api = useApi();
@@ -87,34 +85,25 @@ export function useCreateSalesOrder() {
 
   return useMutation({
     mutationFn: async (params: CreateSalesOrderParams) => {
-      // First create the order
       const createPayload = {
         customer: params.customer,
         warehouse: params.warehouse,
         order_date: params.order_date,
         notes: params.notes,
         line_items: params.line_items,
+        status: params.status,
       };
 
       const resp = await api<ApiResponse<any>>("/api/inventory/sales-orders/", {
         method: "POST",
         body: JSON.stringify(createPayload),
-        });
+      });
       const order = resp.data || resp;
-
-      // If confirmed, call the confirm endpoint
-      if (params.status === "CONFIRMED" && order._id) {
-        await api(`/api/inventory/sales-orders/${order._id}/confirm/`, {
-          method: "POST",
-        });
-      }
-
       return order;
     },
     onSuccess: (data, variables) => {
-      // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
-      if (variables.status === "CONFIRMED") {
+      if (variables.status === "COMPLETE") {
         queryClient.invalidateQueries({ queryKey: ["inventory"] });
       }
     },
@@ -122,15 +111,16 @@ export function useCreateSalesOrder() {
 }
 
 /**
- * Confirm an existing DRAFT sales order
+ * Convert an existing DRAFT order to COMPLETE (consumes reservations and deducts stock)
+ * Uses the 'complete' endpoint (not 'confirm' anymore)
  */
-export function useConfirmSalesOrder() {
+export function useCompleteSalesOrder() {
   const api = useApi();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ orderId }: ConfirmSalesOrderParams) => {
-      return api(`/api/inventory/sales-orders/${orderId}/confirm/`, {
+    mutationFn: async ({ orderId }: { orderId: string }) => {
+      return api(`/api/inventory/sales-orders/${orderId}/complete/`, {
         method: "POST",
       });
     },
@@ -152,14 +142,11 @@ export function useFetchSalesOrder(orderNumberOrId?: string) {
     queryKey: ["salesOrder", orderNumberOrId],
     queryFn: async () => {
       if (!orderNumberOrId) return null;
-      // Try to fetch by order number first
       const resp = await api<ListResponse<any>>(
-  `/api/inventory/sales-orders/?order_number=${encodeURIComponent(orderNumberOrId)}`
-);
-
+        `/api/inventory/sales-orders/?order_number=${encodeURIComponent(orderNumberOrId)}`
+      );
       const order = resp?.results?.[0];
       if (order) return order;
-      // If not found, try as ID
       return api(`/api/inventory/sales-orders/${orderNumberOrId}/`);
     },
     enabled: !!orderNumberOrId,
@@ -177,7 +164,6 @@ export function useCreateSalesReturn() {
         method: "POST",
         body: JSON.stringify(params),
       }),
-
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
       queryClient.invalidateQueries({ queryKey: ["currentStock"] });
@@ -190,15 +176,12 @@ export function useFetchSalesOrderByNumber(orderNumber: string) {
 
   return useQuery<SalesOrderResponse | null>({
     queryKey: ["salesOrder", orderNumber],
-
     queryFn: async () => {
       const resp = await api<{ results: SalesOrderResponse[] }>(
         `/api/inventory/sales-orders/?order_number=${encodeURIComponent(orderNumber)}`
       );
-
       return resp.results?.[0] || null;
     },
-
     enabled: !!orderNumber,
     staleTime: 30_000,
   });
@@ -208,8 +191,7 @@ export function useDraftSalesOrders() {
   const api = useApi();
   return useQuery({
     queryKey: ["salesOrders", "draft"],
-    queryFn: () =>
-      api<{ results: any[] }>("/api/inventory/sales-orders/?status=DRAFT"),
+    queryFn: () => api<{ results: any[] }>("/api/inventory/sales-orders/?status=DRAFT"),
     select: (data) => data.results,
     staleTime: 30_000,
   });

@@ -8,7 +8,7 @@ import { useCreateSalesOrder, cartToLineItems } from "@/hooks/useSalesOrder";
 import { ProductSearchPanel } from "@/components/inventory/pos/ProductSearchPanel";
 import { CartPanel } from "@/components/inventory/pos/CartPanel";
 import { ReturnPanel } from "@/components/inventory/pos/ReturnPanel";
-import { CartLine, cartTotal, cartSubtotal, cartTax } from "@/lib/utils";
+import { CartLine } from "@/lib/utils";
 
 type ActivePanel = "search" | "held" | "return";
 
@@ -65,7 +65,7 @@ export default function SalesPage() {
         line_items: cartToLineItems(cart),
         status: "DRAFT",
       });
-      alert("Draft order saved");
+      alert("Draft order saved (stock reserved)");
       clearCart();
     } catch (err: any) {
       alert(`Error: ${err.message}`);
@@ -75,7 +75,6 @@ export default function SalesPage() {
   const handleCompleteSale = async (notes: string, payments: any[]) => {
     if (cart.length === 0) return;
     try {
-      // Append payment info to notes (as per original behavior)
       const notesWithPayments = notes + (payments.length ? ` | Payments: ${payments.map(p => `${p.method}:${p.amount}`).join(", ")}` : "");
       
       const order = await createSalesOrder({
@@ -84,9 +83,9 @@ export default function SalesPage() {
         order_date: new Date().toISOString().split("T")[0],
         notes: notesWithPayments,
         line_items: cartToLineItems(cart),
-        status: "CONFIRMED",
+        status: "COMPLETE",   // changed from CONFIRMED to COMPLETE
       });
-      alert(`Order ${order.order_number} confirmed and stock reserved`);
+      alert(`Order ${order.order_number} completed and stock deducted`);
       clearCart();
       queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
     } catch (err: any) {
@@ -109,15 +108,20 @@ export default function SalesPage() {
             {warehouses.map(w => <option key={w.id} value={w.id}>{w.warehouse_name}</option>)}
           </select>
         </div>
-        {activePanel === "search" && <ProductSearchPanel onAddToCart={(v) => setCart(prev => {
-          const idx = prev.findIndex(l => l.variant.id === v.id);
-          if (idx >= 0) {
-            const newCart = [...prev];
-            newCart[idx] = { ...newCart[idx], qty: newCart[idx].qty + 1 };
-            return newCart;
-          }
-          return [...prev, { variant: v, qty: 1, unitPrice: Number(v.selling_price), discountPct: 0, discountFixed: 0, taxRate: 0, notes: "" }];
-        })} />}
+        {activePanel === "search" && (
+          <ProductSearchPanel 
+            onAddToCart={(v) => setCart(prev => {
+              const idx = prev.findIndex(l => l.variant.id === v.id);
+              if (idx >= 0) {
+                const newCart = [...prev];
+                newCart[idx] = { ...newCart[idx], qty: newCart[idx].qty + 1 };
+                return newCart;
+              }
+              return [...prev, { variant: v, qty: 1, unitPrice: Number(v.selling_price), discountPct: 0, discountFixed: 0, taxRate: 0, notes: "" }];
+            })}
+            warehouseId={selectedWarehouse?.id}
+          />
+        )}
         {activePanel === "held" && (
           <div className="p-4 space-y-3">
             {heldOrders.length === 0 ? <div className="text-center text-muted-foreground">No held orders</div> : heldOrders.map(h => (
@@ -131,7 +135,7 @@ export default function SalesPage() {
             ))}
           </div>
         )}
-        {activePanel === "return" && <ReturnPanel api={api} queryClient={queryClient} warehouses={warehouses} />}
+        {activePanel === "return" && <ReturnPanel warehouses={warehouses} />}
       </div>
       <CartPanel
         cart={cart}
