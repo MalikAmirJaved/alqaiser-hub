@@ -61,7 +61,6 @@ export async function apiFetch<T>(
     }
 
     const data = await res.json();
-      console.log("endpoint and  method",endpoint ,  method)
 
     // Success toast
     if (

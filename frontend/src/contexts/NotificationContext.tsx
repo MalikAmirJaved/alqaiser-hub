@@ -178,9 +178,6 @@ setNotifications(data.results || []);
                 // Invalidate all queries that start with this key
                 queryClient.invalidateQueries({ queryKey: [key] });
               });
-              console.log(
-                `[Realtime] Invalidated queries for ${entity} (${action})${record_id ? ` id:${record_id}` : ""}`
-              );
             }
           }
         } catch (e) {

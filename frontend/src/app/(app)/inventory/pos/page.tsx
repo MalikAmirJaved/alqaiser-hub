@@ -76,53 +76,59 @@ export default function SalesPage() {
     setActivePanel("search");
   }, []);
 
-  const handleCompleteSale = useCallback(async (notes: string, payments: any[]) => {
-    if (cart.length === 0) return;
-    const notesWithPayments = notes + (payments.length ? ` | Payments: ${payments.map(p => `${p.method}:${p.amount}`).join(", ")}` : "");
+const handleCompleteSale = useCallback(async (notes: string, payments: any[]) => {
+  if (cart.length === 0) return;
+  const notesWithPayments = notes + (payments.length ? ` | Payments: ${payments.map(p => `${p.method}:${p.amount}`).join(", ")}` : "");
 
-    try {
-      if (activeDraftId) {
-        const updatedLineItems = cartToLineItems(cart);
-        await completeOrder({ orderId: activeDraftId, line_items: updatedLineItems });
-      } else {
-        const order = await createSalesOrder({
-          customer: selectedCustomer?.id ?? null,
-          warehouse: selectedWarehouse.id,
-          order_date: new Date().toISOString().split("T")[0],
-          notes: notesWithPayments,
-          line_items: cartToLineItems(cart),
-          status: "COMPLETE",
-        });
-      }
-      clearCart();
-      refetchDrafts();
-      queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
-      queryClient.invalidateQueries({ queryKey: ["batchStock"] });
-    } catch (err: any) {
-    }
-  }, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, completeOrder, clearCart, refetchDrafts, queryClient]);
-
-  const handleSaveDraft = useCallback(async (notes: string) => {
-    if (cart.length === 0) return;
-    try {
-      if (activeDraftId) {
-        return;
-      }
+  try {
+    if (activeDraftId) {
+      const updatedLineItems = cartToLineItems(cart);
+      await completeOrder({ orderId: activeDraftId, line_items: updatedLineItems });
+    } else {
       await createSalesOrder({
         customer: selectedCustomer?.id ?? null,
         warehouse: selectedWarehouse.id,
         order_date: new Date().toISOString().split("T")[0],
-        notes,
+        notes: notesWithPayments,
         line_items: cartToLineItems(cart),
-        status: "DRAFT",
+        status: "COMPLETE",
       });
-      clearCart();
-      refetchDrafts();
-    } catch (err: any) {
     }
-  }, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, clearCart, refetchDrafts]);
+    clearCart();
+    refetchDrafts();                                    // refresh draft list
+    await queryClient.refetchQueries({ queryKey: ["allVariantsSimple"] });  // refresh product list
+    await queryClient.refetchQueries({ queryKey: ["batchStock"] });         // refresh stock data
+    queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
+  } catch (err: any) {
+    console.error(err);
+  }
+}, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, completeOrder, clearCart, refetchDrafts, queryClient]);
+  
+const handleSaveDraft = useCallback(async (notes: string) => {
+  if (cart.length === 0) return;
+  try {
+    if (activeDraftId) {
+      // If you want to update an existing draft, implement update logic here.
+      return;
+    }
+    await createSalesOrder({
+      customer: selectedCustomer?.id ?? null,
+      warehouse: selectedWarehouse.id,
+      order_date: new Date().toISOString().split("T")[0],
+      notes,
+      line_items: cartToLineItems(cart),
+      status: "DRAFT",
+    });
+    clearCart();
+    refetchDrafts();                                    // refresh draft list
+    await queryClient.refetchQueries({ queryKey: ["allVariantsSimple"] });  // refresh product list
+    await queryClient.refetchQueries({ queryKey: ["batchStock"] });         // refresh stock data
+  } catch (err: any) {
+    console.error(err);
+  }
+}, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, clearCart, refetchDrafts, queryClient]);
 
-  const handleCancelDraft = useCallback(async (orderId: string) => {
+const handleCancelDraft = useCallback(async (orderId: string) => {
     if (!window.confirm("Cancel this draft order? Stock reservations will be released.")) return;
     try {
       await cancelOrder(orderId);
