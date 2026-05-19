@@ -2,7 +2,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { useCustomers, useCreateCustomer } from "@/hooks/useCustomers";
-import { useWarehouses } from "@/hooks/useWarehouses";
 import { CartLine, fmt, cartTotal, cartSubtotal, cartTax } from "@/hooks/useSalesOrder";
 import { CartLineItem } from "./CartLineItem";
 
@@ -18,7 +17,11 @@ interface CartPanelProps {
   onSaveDraft: (notes: string) => Promise<void>;
   onCompleteSale: (notes: string, payments: any[]) => Promise<void>;
   isSubmitting?: boolean;
+  activeDraftId?: string | null;
+  showToast?: (msg: string, type?: "success" | "error" | "info") => void;
 }
+
+type PaymentMethod = "CASH" | "CARD" | "CREDIT";
 
 export function CartPanel({
   cart,
@@ -32,6 +35,8 @@ export function CartPanel({
   onSaveDraft,
   onCompleteSale,
   isSubmitting,
+  activeDraftId,
+  showToast,
 }: CartPanelProps) {
   const [customerSearch, setCustomerSearch] = useState("");
   const [showCustomerDD, setShowCustomerDD] = useState(false);
@@ -40,18 +45,18 @@ export function CartPanel({
   const [newCustomerEmail, setNewCustomerEmail] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
   const [orderNotes, setOrderNotes] = useState("");
-  const [payments, setPayments] = useState<{ method: string; amount: number }[]>([]);
+  const [payments, setPayments] = useState<{ method: PaymentMethod; amount: number }[]>([]);
   const [newPaymentAmt, setNewPaymentAmt] = useState("");
-  const [newPaymentMethod, setNewPaymentMethod] = useState<"CASH" | "CARD" | "CREDIT">("CASH");
+  const [newPaymentMethod, setNewPaymentMethod] = useState<PaymentMethod>("CASH");
   const [globalDiscMode, setGlobalDiscMode] = useState<"pct" | "fixed">("pct");
   const [globalDisc, setGlobalDisc] = useState(0);
   const [expandedLine, setExpandedLine] = useState<number | null>(null);
+  const [showPayments, setShowPayments] = useState(false);
 
   const { data: customers = [] } = useCustomers(customerSearch || undefined);
   const createCustomer = useCreateCustomer();
   const customerRef = useRef<HTMLDivElement>(null);
 
-  // Apply global discount to cart lines
   const effectiveCart = cart.map((l) => {
     if (globalDisc <= 0) return l;
     if (globalDiscMode === "pct") return { ...l, discountPct: globalDisc, discountFixed: 0 };
@@ -63,7 +68,8 @@ export function CartPanel({
 
   const total = cartTotal(effectiveCart);
   const paidSoFar = payments.reduce((s, p) => s + p.amount, 0);
-  const remaining = Math.max(0, total - paidSoFar);
+  const remaining = total - paidSoFar;
+  const change = remaining < 0 ? Math.abs(remaining) : 0;
 
   const updateLine = (idx: number, patch: Partial<CartLine>) => {
     const newCart = [...cart];
@@ -82,6 +88,10 @@ export function CartPanel({
     setNewPaymentAmt("");
   };
 
+  const removePayment = (idx: number) => {
+    setPayments(payments.filter((_, i) => i !== idx));
+  };
+
   const handleCreateCustomer = async () => {
     if (!newCustomerName.trim()) return;
     try {
@@ -96,94 +106,154 @@ export function CartPanel({
       setNewCustomerEmail("");
       setNewCustomerPhone("");
       setCustomerSearch("");
-    } catch (err) {
-      alert("Failed to create customer");
+      setShowCustomerDD(false);
+    } catch {
+      showToast?.("Failed to create customer", "error");
     }
   };
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (customerRef.current && !customerRef.current.contains(e.target as Node)) setShowCustomerDD(false);
+      if (customerRef.current && !customerRef.current.contains(e.target as Node)) {
+        setShowCustomerDD(false);
+        setShowNewCustomerForm(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  const itemCount = cart.reduce((s, l) => s + l.qty, 0);
+
   return (
-    <div className="flex flex-col h-full bg-card">
+    <div className="flex flex-col h-full bg-card border-l border-border">
+
+      {/* Cart header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="flex items-center gap-2">
+          <CartBagIcon />
+          <span className="text-sm font-semibold">Cart</span>
+          {itemCount > 0 && (
+            <span className="min-w-[20px] h-5 rounded-full bg-primary text-primary-foreground text-xs font-semibold flex items-center justify-center px-1.5">
+              {itemCount}
+            </span>
+          )}
+          {activeDraftId && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-warning/15 text-warning">
+              DRAFT
+            </span>
+          )}
+        </div>
+        {cart.length > 0 && (
+          <button
+            onClick={onClearCart}
+            className="text-xs text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1"
+          >
+            <XIcon size={12} /> Clear
+          </button>
+        )}
+      </div>
+
       {/* Customer selector */}
-      <div className="px-4 pt-4 pb-3 border-b border-border" ref={customerRef}>
+      <div className="px-3 py-2.5 border-b border-border" ref={customerRef}>
         <div className="relative">
-          <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2 cursor-text" onClick={() => setShowCustomerDD(true)}>
-            <UserIcon />
+          <div
+            className={`flex items-center gap-2 bg-muted/60 rounded-lg px-3 py-2 cursor-text border transition-colors ${showCustomerDD ? "border-primary/40 bg-muted" : "border-transparent hover:border-border"}`}
+            onClick={() => { setShowCustomerDD(true); }}
+          >
+            <UserIcon size={14} className="text-muted-foreground flex-shrink-0" />
             <input
               value={selectedCustomer ? selectedCustomer.name : customerSearch}
-              onChange={(e) => { setCustomerSearch(e.target.value); onSelectCustomer(null); setShowCustomerDD(true); setShowNewCustomerForm(false); }}
-              placeholder="Walk-in customer / search…"
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              onChange={(e) => {
+                setCustomerSearch(e.target.value);
+                onSelectCustomer(null);
+                setShowCustomerDD(true);
+                setShowNewCustomerForm(false);
+              }}
+              placeholder="Walk-in or search customer…"
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground min-w-0"
               onFocus={() => setShowCustomerDD(true)}
             />
-            {selectedCustomer && (
-              <button onClick={(e) => { e.stopPropagation(); onSelectCustomer(null); setCustomerSearch(""); }} className="text-muted-foreground hover:text-foreground">
+            {selectedCustomer ? (
+              <button
+                onClick={(e) => { e.stopPropagation(); onSelectCustomer(null); setCustomerSearch(""); }}
+                className="text-muted-foreground hover:text-foreground flex-shrink-0"
+              >
                 <XIcon size={13} />
               </button>
+            ) : (
+              <ChevronIcon open={showCustomerDD} size={13} className="text-muted-foreground flex-shrink-0" />
             )}
           </div>
+
           {showCustomerDD && (
-            <div className="absolute z-50 mt-1 w-full bg-popover border border-border rounded-xl shadow-xl overflow-hidden">
+            <div className="absolute z-50 mt-1 w-full bg-popover border border-border rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
               {!showNewCustomerForm ? (
                 <>
-                  {customers.length === 0 && customerSearch ? (
+                  {customers.slice(0, 8).map((c) => (
+                    <button
+                      key={c.id}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-accent text-left transition-colors"
+                      onClick={() => { onSelectCustomer(c); setCustomerSearch(""); setShowCustomerDD(false); }}
+                    >
+                      <div className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                        {c.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{c.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{c.phone || c.email || "No contact info"}</p>
+                      </div>
+                    </button>
+                  ))}
+                  {(customers.length === 0 || customerSearch) && (
                     <button
                       onClick={() => setShowNewCustomerForm(true)}
-                      className="w-full text-left px-3 py-2 text-sm text-primary hover:bg-accent"
+                      className="w-full text-left px-3 py-2.5 text-sm text-primary hover:bg-accent flex items-center gap-2 transition-colors border-t border-border"
                     >
-                      + Create "{customerSearch}"
+                      <PlusIcon size={14} />
+                      {customerSearch ? `Create "${customerSearch}"` : "Add new customer"}
                     </button>
-                  ) : (
-                    customers.slice(0, 10).map((c) => (
-                      <button
-                        key={c.id}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent text-left"
-                        onClick={() => { onSelectCustomer(c); setCustomerSearch(""); setShowCustomerDD(false); }}
-                      >
-                        <div className="w-7 h-7 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-medium">
-                          {c.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{c.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">{c.phone || c.email}</p>
-                        </div>
-                      </button>
-                    ))
                   )}
                 </>
               ) : (
                 <div className="p-3 space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">New Customer</p>
                   <input
                     type="text"
-                    placeholder="Name *"
+                    placeholder="Full name *"
                     value={newCustomerName}
                     onChange={(e) => setNewCustomerName(e.target.value)}
-                    className="w-full bg-muted rounded-md px-3 py-2 text-sm outline-none"
+                    className="w-full bg-muted rounded-md px-3 py-2 text-sm outline-none focus:ring-1 ring-primary"
+                    autoFocus
                   />
                   <input
                     type="email"
-                    placeholder="Email"
+                    placeholder="Email (optional)"
                     value={newCustomerEmail}
                     onChange={(e) => setNewCustomerEmail(e.target.value)}
-                    className="w-full bg-muted rounded-md px-3 py-2 text-sm outline-none"
+                    className="w-full bg-muted rounded-md px-3 py-2 text-sm outline-none focus:ring-1 ring-primary"
                   />
                   <input
                     type="tel"
-                    placeholder="Phone"
+                    placeholder="Phone (optional)"
                     value={newCustomerPhone}
                     onChange={(e) => setNewCustomerPhone(e.target.value)}
-                    className="w-full bg-muted rounded-md px-3 py-2 text-sm outline-none"
+                    className="w-full bg-muted rounded-md px-3 py-2 text-sm outline-none focus:ring-1 ring-primary"
                   />
-                  <div className="flex gap-2 pt-2">
-                    <button onClick={() => setShowNewCustomerForm(false)} className="flex-1 py-2 rounded-lg border border-border text-sm">Cancel</button>
-                    <button onClick={handleCreateCustomer} disabled={createCustomer.isPending} className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-sm">Create</button>
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => { setShowNewCustomerForm(false); }}
+                      className="flex-1 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleCreateCustomer}
+                      disabled={createCustomer.isPending || !newCustomerName.trim()}
+                      className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
+                    >
+                      {createCustomer.isPending ? "Saving…" : "Create"}
+                    </button>
                   </div>
                 </div>
               )}
@@ -192,12 +262,17 @@ export function CartPanel({
         </div>
       </div>
 
-      {/* Cart lines */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      {/* Cart items */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
         {cart.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 p-8">
-            <CartIcon />
-            <p className="text-sm text-center">Cart is empty.<br />Search for products to add.</p>
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3 p-8">
+            <div className="w-14 h-14 rounded-2xl bg-muted/50 flex items-center justify-center">
+              <CartEmptyIcon />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium">Cart is empty</p>
+              <p className="text-xs text-muted-foreground mt-1">Tap a product to add it here</p>
+            </div>
           </div>
         ) : (
           cart.map((line, idx) => (
@@ -215,87 +290,194 @@ export function CartPanel({
         )}
       </div>
 
-      {/* Order discount */}
+      {/* Order discount + totals */}
       {cart.length > 0 && (
-        <div className="px-4 py-3 border-t border-border">
-          <div className="flex items-center gap-2">
-            <TagIcon />
-            <span className="text-xs text-muted-foreground font-medium">Order Discount</span>
+        <div className="border-t border-border">
+          {/* Discount row */}
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
+            <TagIcon size={13} className="text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Discount</span>
             <div className="flex-1" />
-            <div className="flex gap-1 bg-muted rounded-md p-0.5">
+            <div className="flex bg-muted rounded-md overflow-hidden">
               {(["pct", "fixed"] as const).map((m) => (
-                <button key={m} onClick={() => setGlobalDiscMode(m)} className={`px-2 py-0.5 rounded text-xs transition-colors ${globalDiscMode === m ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
-                  {m === "pct" ? "%" : "#"}
+                <button
+                  key={m}
+                  onClick={() => setGlobalDiscMode(m)}
+                  className={`px-2.5 py-1 text-xs font-medium transition-colors ${globalDiscMode === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  {m === "pct" ? "%" : "₦"}
                 </button>
               ))}
             </div>
-            <input type="number" min={0} value={globalDisc || ""} onChange={(e) => setGlobalDisc(Number(e.target.value))} placeholder="0" className="w-20 bg-muted rounded-md px-2 py-1 text-xs text-right outline-none focus:ring-1 ring-primary" />
+            <input
+              type="number"
+              min={0}
+              value={globalDisc || ""}
+              onChange={(e) => setGlobalDisc(Number(e.target.value))}
+              placeholder="0"
+              className="w-16 bg-muted rounded-md px-2 py-1 text-xs text-right outline-none focus:ring-1 ring-primary"
+            />
           </div>
-        </div>
-      )}
 
-      {/* Totals */}
-      {cart.length > 0 && (
-        <div className="px-4 py-3 border-t border-border space-y-1">
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>Subtotal</span><span>{fmt(cartSubtotal(effectiveCart))}</span>
-          </div>
-          {cartTax(effectiveCart) > 0 && (
+          {/* Totals */}
+          <div className="px-4 py-2.5 space-y-1.5">
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Tax</span><span>{fmt(cartTax(effectiveCart))}</span>
+              <span>Subtotal ({itemCount} item{itemCount !== 1 ? "s" : ""})</span>
+              <span>{fmt(cartSubtotal(effectiveCart))}</span>
             </div>
-          )}
-          <div className="flex justify-between text-base font-semibold pt-1 border-t border-border">
-            <span>Total</span><span>{fmt(total)}</span>
+            {cartTax(effectiveCart) > 0 && (
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Tax</span>
+                <span>{fmt(cartTax(effectiveCart))}</span>
+              </div>
+            )}
+            {globalDisc > 0 && (
+              <div className="flex justify-between text-xs text-success">
+                <span>Discount</span>
+                <span>−{fmt(cartSubtotal(cart) - cartSubtotal(effectiveCart))}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-base font-bold pt-1.5 border-t border-border">
+              <span>Total</span>
+              <span className="text-primary">{fmt(total)}</span>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Payment & Actions */}
+      {/* Payment + actions */}
       {cart.length > 0 && (
-        <div className="px-4 pb-4 pt-2 space-y-3 border-t border-border">
+        <div className="px-3 pb-3 pt-2 border-t border-border space-y-2.5">
+          {/* Notes */}
           <textarea
             value={orderNotes}
             onChange={(e) => setOrderNotes(e.target.value)}
-            placeholder="Order notes…"
-            rows={2}
-            className="w-full bg-muted rounded-lg px-3 py-2 text-xs outline-none focus:ring-1 ring-primary resize-none"
+            placeholder="Order notes (optional)…"
+            rows={1}
+            className="w-full bg-muted/60 rounded-lg px-3 py-2 text-xs outline-none focus:ring-1 ring-primary resize-none placeholder:text-muted-foreground border border-transparent focus:border-primary/20"
           />
 
-          {/* Payment section (only for complete sale) */}
-          <div className="space-y-2">
-            <div className="flex gap-1">
-              {(["CASH", "CARD", "CREDIT"] as const).map((m) => (
-                <button key={m} onClick={() => setNewPaymentMethod(m)} className={`flex-1 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1 border ${newPaymentMethod === m ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}>
-                  {m}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input type="number" value={newPaymentAmt} onChange={(e) => setNewPaymentAmt(e.target.value)} placeholder="Amount" onKeyDown={(e) => e.key === "Enter" && addPayment()} className="flex-1 bg-muted rounded-lg px-3 py-2 text-sm outline-none" />
-              <button onClick={() => setNewPaymentAmt(fmt(remaining))} className="px-2 py-2 bg-muted rounded-lg text-xs">Exact</button>
-              <button onClick={addPayment} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm">Add</button>
-            </div>
-            {payments.length > 0 && (
-              <div className="space-y-1">
-                {payments.map((p, i) => (
-                  <div key={i} className="flex justify-between text-sm">
-                    <span>{p.method}</span>
-                    <span>{fmt(p.amount)}</span>
-                  </div>
+          {/* Payment toggle */}
+          <button
+            onClick={() => setShowPayments(!showPayments)}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-muted/60 hover:bg-muted transition-colors border border-border/50"
+          >
+            <span className="flex items-center gap-2 text-xs font-medium">
+              <PaymentIcon size={13} />
+              Payment
+              {payments.length > 0 && (
+                <span className="text-xs text-success">({fmt(paidSoFar)} paid)</span>
+              )}
+            </span>
+            <ChevronIcon open={showPayments} size={12} />
+          </button>
+
+          {showPayments && (
+            <div className="space-y-2">
+              {/* Method selector */}
+              <div className="flex gap-1">
+                {(["CASH", "CARD", "CREDIT"] as PaymentMethod[]).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setNewPaymentMethod(m)}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${newPaymentMethod === m ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
+                  >
+                    {m === "CASH" ? "💵 Cash" : m === "CARD" ? "💳 Card" : "📋 Credit"}
+                  </button>
                 ))}
-                <div className="flex justify-between text-sm font-medium">
-                  <span>Remaining</span><span className={remaining > 0 ? "text-destructive" : "text-success"}>{fmt(remaining)}</span>
-                </div>
               </div>
-            )}
-          </div>
+
+              {/* Amount input */}
+              <div className="flex gap-1.5">
+                <input
+                  type="number"
+                  value={newPaymentAmt}
+                  onChange={(e) => setNewPaymentAmt(e.target.value)}
+                  placeholder="Amount"
+                  onKeyDown={(e) => e.key === "Enter" && addPayment()}
+                  className="flex-1 bg-muted rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 ring-primary"
+                />
+                <button
+                  onClick={() => setNewPaymentAmt(fmt(Math.max(0, remaining)))}
+                  className="px-2.5 py-2 bg-muted rounded-lg text-xs font-medium hover:bg-accent transition-colors"
+                  title="Fill exact amount"
+                >
+                  Exact
+                </button>
+                <button
+                  onClick={addPayment}
+                  className="px-3 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+                >
+                  Add
+                </button>
+              </div>
+
+              {/* Payment list */}
+              {payments.length > 0 && (
+                <div className="bg-muted/40 rounded-lg px-3 py-2 space-y-1.5">
+                  {payments.map((p, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs bg-muted rounded px-1.5 py-0.5 text-muted-foreground font-mono">{p.method}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{fmt(p.amount)}</span>
+                        <button onClick={() => removePayment(i)} className="text-muted-foreground hover:text-destructive transition-colors">
+                          <XIcon size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex justify-between text-sm font-semibold border-t border-border pt-1.5">
+                    {change > 0 ? (
+                      <>
+                        <span className="text-success">Change</span>
+                        <span className="text-success">{fmt(change)}</span>
+                      </>
+                    ) : remaining > 0 ? (
+                      <>
+                        <span className="text-muted-foreground">Remaining</span>
+                        <span className="text-warning">{fmt(remaining)}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-success">Paid in full</span>
+                        <span className="text-success">✓</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Action buttons */}
-          <div className="flex gap-2">
-            <button onClick={onClearCart} className="px-4 py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-muted">Clear</button>
-            <button onClick={() => onSaveDraft(orderNotes)} className="flex-1 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80">Save Draft</button>
-            <button onClick={() => onCompleteSale(orderNotes, payments)} className="flex-1 py-2.5 rounded-xl bg-success text-success-foreground text-sm font-medium hover:opacity-90">Complete Sale</button>
+          <div className="flex gap-2 pt-0.5">
+            <button
+              onClick={() => onSaveDraft(orderNotes)}
+              disabled={isSubmitting}
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 disabled:opacity-50 transition-all"
+            >
+              <SaveIcon size={14} />
+              Hold
+            </button>
+            <button
+              onClick={() => onCompleteSale(orderNotes, payments)}
+              disabled={isSubmitting}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-success text-success-foreground text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-all shadow-sm"
+            >
+              {isSubmitting ? (
+                <>
+                  <SpinnerIcon />
+                  Processing…
+                </>
+              ) : (
+                <>
+                  <CheckIcon size={15} />
+                  Complete Sale · {fmt(total)}
+                </>
+              )}
+            </button>
           </div>
         </div>
       )}
@@ -304,7 +486,14 @@ export function CartPanel({
 }
 
 // Icons
-function UserIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" /></svg>; }
-function XIcon({ size = 16 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>; }
-function CartIcon() { return <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" /></svg>; }
-function TagIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>; }
+function UserIcon({ size = 16, className = "" }: { size?: number; className?: string }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" /></svg>; }
+function XIcon({ size = 16 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>; }
+function CartBagIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 0 1-8 0" /></svg>; }
+function CartEmptyIcon() { return <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" /></svg>; }
+function TagIcon({ size = 16, className = "" }: { size?: number; className?: string }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>; }
+function ChevronIcon({ open, size = 14, className = "" }: { open: boolean; size?: number; className?: string }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}><polyline points="6 9 12 15 18 9" /></svg>; }
+function PlusIcon({ size = 14 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>; }
+function PaymentIcon({ size = 14 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2" /><line x1="1" y1="10" x2="23" y2="10" /></svg>; }
+function SaveIcon({ size = 14 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg>; }
+function CheckIcon({ size = 14 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>; }
+function SpinnerIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>; }
