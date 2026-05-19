@@ -3,7 +3,6 @@
 import { toast } from "sonner";
 
 export const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
-
 interface ErrorResponse {
   detail?: string;
   message?: string;
@@ -20,7 +19,7 @@ export async function apiFetch<T>(
   const disableToastEndpoints = ["/api/accounts/token/refresh/", "/api/inventory/stock/batch-stock/"];
 
   const shouldShowToast = !disableToastEndpoints.includes(endpoint);
-
+  
   try {
     const res = await fetch(`${BASE_URL}${endpoint}`, {
       ...options,

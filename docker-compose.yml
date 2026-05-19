@@ -32,7 +32,7 @@ services:
       target: development
     container_name: alqaiser_backend_dev
     ports:
-      - "8000:8000"
+      - "${APP_HOST}:8000:8000"
     volumes:
       - ./backend:/app
     command: sh /app/entrypoint.sh
@@ -43,6 +43,7 @@ services:
       - DB_USER=alqaiser_user
       - DB_PASSWORD=123456
       - DB_PORT=5432  # Container port, not host port
+      - APP_HOST=${APP_HOST}
     env_file:
       - ./backend/.env
     depends_on:
@@ -57,13 +58,16 @@ services:
       target: development
     container_name: alqaiser_frontend_dev
     ports:
-      - "3000:3000"
+      - "${APP_HOST}:3000:3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules
-    command: npm run dev
+    command: npm run dev -- --hostname 0.0.0.0
     environment:
       - NODE_ENV=development
+      - NODE_ENV=development
+      - HOSTNAME=0.0.0.0
+      - NEXT_PUBLIC_API_URL=http://${APP_HOST}:8000
     networks:
       - dev_network
 

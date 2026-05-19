@@ -125,8 +125,7 @@ setNotifications(data.results || []);
 
       await fetchNotifications();
 
-      const apiUrl =
-        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
 
       const wsUrl =
         apiUrl.replace(/^http/, "ws") +

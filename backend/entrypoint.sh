@@ -17,8 +17,7 @@ echo "Running seed..."
 python manage.py seed_org || echo "Seed skipped or failed"
 
 echo "Starting server..."
-exec python manage.py runserver 0.0.0.0:8000
-
+exec daphne -b 0.0.0.0 -p 8000 config.asgi:application
 
 # make migerations
 # docker compose exec backend python manage.py makemigrations ...
