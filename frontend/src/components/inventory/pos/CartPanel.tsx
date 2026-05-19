@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useCustomers, useCreateCustomer } from "@/hooks/useCustomers";
 import { useWarehouses } from "@/hooks/useWarehouses";
-import { CartLine, fmt, cartTotal, cartSubtotal, cartTax } from "@/lib/utils";
+import { CartLine, fmt, cartTotal, cartSubtotal, cartTax } from "@/hooks/useSalesOrder";
 import { CartLineItem } from "./CartLineItem";
 
 interface CartPanelProps {

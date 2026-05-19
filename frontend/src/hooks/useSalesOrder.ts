@@ -2,10 +2,10 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
-import { CartLine } from "@/lib/utils";
 
 export interface SalesOrderLineItem {
-  variant: string; // variant ID
+  line_id?: string;          
+  variant: string;
   quantity_ordered: number;
   unit_price: number;
   tax_rate: number;
@@ -19,7 +19,7 @@ export interface CreateSalesOrderParams {
   order_date: string;
   notes: string;
   line_items: SalesOrderLineItem[];
-  status: "DRAFT" | "COMPLETE";   // changed from CONFIRMED to COMPLETE
+  status: "DRAFT" | "COMPLETE";
 }
 
 export interface ReturnLinePayload {
@@ -39,33 +39,64 @@ export interface CreateSalesReturnParams {
 }
 
 export interface SalesReturnResponse {
-  _id: string;
+  id: string;
   return_number: string;
   sales_order: string;
 }
 
 export interface SalesOrderResponse {
-  _id: string;
+  id: string;
   order_number: string;
   customer_name?: string;
+  customer?: { id: string; name: string };
+  warehouse?: { id: string; warehouse_name: string };
   order_date: string;
   status: string;
-  lines?: any[];
+  notes?: string;
+  lines?: Array<{
+    id: string;
+    variant: string;
+    variant_sku: string;
+    variant_name: string;
+    quantity_ordered: number;
+    unit_price: number;
+    tax_rate: number;
+    status: string;
+  }>;
 }
 
-type ApiResponse<T> = {
-  data?: T;
-  results?: T[];
-} | T;
-type ListResponse<T> = {
-  results: T[];
-};
+export interface CartLine {
+  variant: any;
+  qty: number;
+  unitPrice: number;
+  discountPct: number;
+  discountFixed: number;
+  taxRate: number;
+  notes: string;
+  salesOrderLineId?: string,
+}
 
-/**
- * Convert cart lines to API-ready line items
- */
+export const fmt = (n: number) =>
+  new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+
+export const lineSubtotal = (l: CartLine) => {
+  const base = l.qty * l.unitPrice;
+  const disc = l.discountFixed > 0 ? l.discountFixed : (base * l.discountPct) / 100;
+  return Math.max(0, base - disc);
+};
+export const lineTax = (l: CartLine) => lineSubtotal(l) * (l.taxRate / 100);
+export const lineTotal = (l: CartLine) => lineSubtotal(l) + lineTax(l);
+export const cartTotal = (cart: CartLine[]) => cart.reduce((s, l) => s + lineTotal(l), 0);
+export const cartSubtotal = (cart: CartLine[]) => cart.reduce((s, l) => s + lineSubtotal(l), 0);
+export const cartTax = (cart: CartLine[]) => cart.reduce((s, l) => s + lineTax(l), 0);
+
+
+type ApiResponse<T> = { data?: T; results?: T[] } | T;
+type ListResponse<T> = { results: T[] };
+
 export function cartToLineItems(cart: CartLine[]): SalesOrderLineItem[] {
   return cart.map((line) => ({
+    line_id: line.salesOrderLineId,
     variant: line.variant.id,
     quantity_ordered: line.qty,
     unit_price: line.unitPrice,
@@ -75,10 +106,6 @@ export function cartToLineItems(cart: CartLine[]): SalesOrderLineItem[] {
   }));
 }
 
-/**
- * Create a sales order (DRAFT or COMPLETE)
- * Backend handles reservation (DRAFT) or direct deduction (COMPLETE)
- */
 export function useCreateSalesOrder() {
   const api = useApi();
   const queryClient = useQueryClient();
@@ -93,13 +120,11 @@ export function useCreateSalesOrder() {
         line_items: params.line_items,
         status: params.status,
       };
-
       const resp = await api<ApiResponse<any>>("/api/inventory/sales-orders/", {
         method: "POST",
         body: JSON.stringify(createPayload),
       });
-      const order = resp.data || resp;
-      return order;
+      return resp.data || resp;
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
@@ -110,18 +135,16 @@ export function useCreateSalesOrder() {
   });
 }
 
-/**
- * Convert an existing DRAFT order to COMPLETE (consumes reservations and deducts stock)
- * Uses the 'complete' endpoint (not 'confirm' anymore)
- */
 export function useCompleteSalesOrder() {
   const api = useApi();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ orderId }: { orderId: string }) => {
+    mutationFn: async ({ orderId, line_items }: { orderId: string; line_items?: SalesOrderLineItem[] }) => {
+      const payload = line_items ? { line_items } : {};
       return api(`/api/inventory/sales-orders/${orderId}/complete/`, {
         method: "POST",
+        body: JSON.stringify(payload),
       });
     },
     onSuccess: (_, { orderId }) => {
@@ -132,12 +155,23 @@ export function useCompleteSalesOrder() {
   });
 }
 
-/**
- * Fetch a single sales order by ID or order number
- */
+export function useCancelSalesOrder() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (orderId: string) => {
+      return api(`/api/inventory/sales-orders/${orderId}/cancel/`, { method: "POST" });
+    },
+    onSuccess: (_, orderId) => {
+      queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
+      queryClient.invalidateQueries({ queryKey: ["salesOrder", orderId] });
+    },
+  });
+}
+
 export function useFetchSalesOrder(orderNumberOrId?: string) {
   const api = useApi();
-
   return useQuery({
     queryKey: ["salesOrder", orderNumberOrId],
     queryFn: async () => {
@@ -157,7 +191,6 @@ export function useFetchSalesOrder(orderNumberOrId?: string) {
 export function useCreateSalesReturn() {
   const api = useApi();
   const queryClient = useQueryClient();
-
   return useMutation<SalesReturnResponse, Error, CreateSalesReturnParams>({
     mutationFn: (params) =>
       api<SalesReturnResponse>("/api/inventory/sales-returns/", {
@@ -173,7 +206,6 @@ export function useCreateSalesReturn() {
 
 export function useFetchSalesOrderByNumber(orderNumber: string) {
   const api = useApi();
-
   return useQuery<SalesOrderResponse | null>({
     queryKey: ["salesOrder", orderNumber],
     queryFn: async () => {
@@ -191,7 +223,7 @@ export function useDraftSalesOrders() {
   const api = useApi();
   return useQuery({
     queryKey: ["salesOrders", "draft"],
-    queryFn: () => api<{ results: any[] }>("/api/inventory/sales-orders/?status=DRAFT"),
+    queryFn: () => api<{ results: SalesOrderResponse[] }>("/api/inventory/sales-orders/?status=DRAFT"),
     select: (data) => data.results,
     staleTime: 30_000,
   });

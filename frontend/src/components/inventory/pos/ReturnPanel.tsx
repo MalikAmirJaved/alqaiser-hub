@@ -63,7 +63,7 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
     }
 
     const payload = {
-      sales_order: orderData._id ?? orderData.id,
+      sales_order: orderData.id ?? orderData.id,
       warehouse: selectedWarehouse,
       return_date: new Date().toISOString(),
       reason: "Customer return",

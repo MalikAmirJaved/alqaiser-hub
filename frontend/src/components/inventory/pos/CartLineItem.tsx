@@ -1,6 +1,6 @@
 // src/components/inventory/pos/CartLineItem.tsx
 "use client";
-import { CartLine, fmt } from "@/lib/utils";
+import { CartLine, fmt } from "@/hooks/useSalesOrder";
 
 export function CartLineItem({
   line,

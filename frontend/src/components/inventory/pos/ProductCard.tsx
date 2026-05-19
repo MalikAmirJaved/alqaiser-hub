@@ -1,7 +1,7 @@
 // src/components/inventory/pos/ProductCard.tsx
 "use client";
 import { VariantDetail, useVariantStock } from "@/hooks/useAllVariants";
-import { fmt } from "@/lib/utils";
+import { fmt } from "@/hooks/useSalesOrder";
 
 interface ProductCardProps {
   variant: VariantDetail;

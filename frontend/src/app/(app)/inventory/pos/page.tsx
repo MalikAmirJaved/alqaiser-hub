@@ -1,28 +1,35 @@
-// @/app/(app)/inventory/pos/page.tsx
+// src/app/(app)/inventory/pos/page.tsx
 "use client";
 import { useState, useEffect } from "react";
-import { useApi } from "@/hooks/useApi";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWarehouses } from "@/hooks/useWarehouses";
-import { useCreateSalesOrder, cartToLineItems } from "@/hooks/useSalesOrder";
+import {
+  useCreateSalesOrder,
+  useCompleteSalesOrder,
+  useCancelSalesOrder,
+  useDraftSalesOrders,
+  cartToLineItems,CartLine
+} from "@/hooks/useSalesOrder";
 import { ProductSearchPanel } from "@/components/inventory/pos/ProductSearchPanel";
 import { CartPanel } from "@/components/inventory/pos/CartPanel";
 import { ReturnPanel } from "@/components/inventory/pos/ReturnPanel";
-import { CartLine } from "@/lib/utils";
 
 type ActivePanel = "search" | "held" | "return";
 
 export default function SalesPage() {
-  const api = useApi();
   const queryClient = useQueryClient();
   const { data: warehouses = [] } = useWarehouses({ is_active: true });
+  const { data: draftOrders = [], refetch: refetchDrafts } = useDraftSalesOrders();
   const { mutateAsync: createSalesOrder, isPending: isCreatingOrder } = useCreateSalesOrder();
-  
+  const { mutateAsync: completeOrder, isPending: isCompleting } = useCompleteSalesOrder();
+  const { mutateAsync: cancelOrder, isPending: isCancelling } = useCancelSalesOrder();
+
   const [cart, setCart] = useState<CartLine[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [selectedWarehouse, setSelectedWarehouse] = useState<any>(null);
   const [activePanel, setActivePanel] = useState<ActivePanel>("search");
-  const [heldOrders, setHeldOrders] = useState<any[]>([]);
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
+  const [orderNotes, setOrderNotes] = useState("");
 
   useEffect(() => {
     if (!selectedWarehouse && warehouses.length > 0) setSelectedWarehouse(warehouses[0]);
@@ -31,32 +38,70 @@ export default function SalesPage() {
   const clearCart = () => {
     setCart([]);
     setSelectedCustomer(null);
+    setActiveDraftId(null);
+    setOrderNotes("");
   };
 
-  const holdOrder = () => {
-    if (cart.length === 0) return;
-    const held = {
-      id: crypto.randomUUID(),
-      label: selectedCustomer?.name ?? `Order #${heldOrders.length + 1}`,
-      cart,
-      customer: selectedCustomer,
-      timestamp: Date.now(),
-    };
-    setHeldOrders([...heldOrders, held]);
-    clearCart();
-  };
-
-  const resumeOrder = (h: any) => {
-    if (cart.length > 0 && !confirm("Replace current cart with held order?")) return;
-    setCart(h.cart);
-    setSelectedCustomer(h.customer);
-    setHeldOrders(heldOrders.filter(x => x.id !== h.id));
+  const loadDraftOrder = (order: any) => {
+    const loadedCart: CartLine[] = (order.lines || []).map((line: any) => ({
+      variant: {
+        id: line.variant,
+        sku: line.variant_sku,
+        product_name: line.variant_name,
+        selling_price: line.unit_price,
+      } as any,
+      qty: line.quantity_ordered,
+      unitPrice: parseFloat(line.unit_price),
+      taxRate: parseFloat(line.tax_rate || 0),
+      discountPct: 0,
+      discountFixed: 0,
+      notes: "",
+      salesOrderLineId: line.id, // Store the backend line ID
+    }));
+    setCart(loadedCart);
+    setSelectedCustomer(order.customer ? { id: order.customer.id, name: order.customer_name } : null);
+    setOrderNotes(order.notes || "");
+    setActiveDraftId(order.id);
     setActivePanel("search");
+  };
+
+  const handleCompleteSale = async (notes: string, payments: any[]) => {
+    if (cart.length === 0) return;
+    const notesWithPayments = notes + (payments.length ? ` | Payments: ${payments.map(p => `${p.method}:${p.amount}`).join(", ")}` : "");
+
+    try {
+      if (activeDraftId) {
+        // Complete existing draft order with updated cart (may have changed quantities)
+        const updatedLineItems = cartToLineItems(cart); // Now includes line_id
+        await completeOrder({ orderId: activeDraftId, line_items: updatedLineItems });
+        alert(`Order completed with updated quantities, stock deducted`);
+      } else {
+        // Create new complete order
+        const order = await createSalesOrder({
+          customer: selectedCustomer?.id ?? null,
+          warehouse: selectedWarehouse.id,
+          order_date: new Date().toISOString().split("T")[0],
+          notes: notesWithPayments,
+          line_items: cartToLineItems(cart),
+          status: "COMPLETE",
+        });
+        alert(`Order ${order.order_number} completed and stock deducted`);
+      }
+      clearCart();
+      refetchDrafts();
+      queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    }
   };
 
   const handleSaveDraft = async (notes: string) => {
     if (cart.length === 0) return;
     try {
+      if (activeDraftId) {
+        alert("Draft orders cannot be modified after creation. Please complete or cancel this order first.");
+        return;
+      }
       await createSalesOrder({
         customer: selectedCustomer?.id ?? null,
         warehouse: selectedWarehouse.id,
@@ -67,29 +112,22 @@ export default function SalesPage() {
       });
       alert("Draft order saved (stock reserved)");
       clearCart();
+      refetchDrafts();
     } catch (err: any) {
       alert(`Error: ${err.message}`);
     }
   };
 
-  const handleCompleteSale = async (notes: string, payments: any[]) => {
-    if (cart.length === 0) return;
-    try {
-      const notesWithPayments = notes + (payments.length ? ` | Payments: ${payments.map(p => `${p.method}:${p.amount}`).join(", ")}` : "");
-      
-      const order = await createSalesOrder({
-        customer: selectedCustomer?.id ?? null,
-        warehouse: selectedWarehouse.id,
-        order_date: new Date().toISOString().split("T")[0],
-        notes: notesWithPayments,
-        line_items: cartToLineItems(cart),
-        status: "COMPLETE",   // changed from CONFIRMED to COMPLETE
-      });
-      alert(`Order ${order.order_number} completed and stock deducted`);
-      clearCart();
-      queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
-    } catch (err: any) {
-      alert(`Error: ${err.message}`);
+  const handleCancelDraft = async (orderId: string) => {
+    if (confirm("Cancel this draft order? Stock reservations will be released.")) {
+      try {
+        await cancelOrder(orderId);
+        alert("Draft order cancelled");
+        refetchDrafts();
+        if (activeDraftId === orderId) clearCart();
+      } catch (err: any) {
+        alert(`Error: ${err.message}`);
+      }
     }
   };
 
@@ -99,44 +137,92 @@ export default function SalesPage() {
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
           <div className="flex gap-1 bg-muted rounded-lg p-1">
             {(["search", "held", "return"] as ActivePanel[]).map(p => (
-              <button key={p} onClick={() => setActivePanel(p)} className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-colors ${activePanel === p ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-                {p === "held" ? `Held (${heldOrders.length})` : p}
+              <button
+                key={p}
+                onClick={() => setActivePanel(p)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-colors ${
+                  activePanel === p ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {p === "held" ? `Held (${draftOrders.length})` : p}
               </button>
             ))}
           </div>
-          <select value={selectedWarehouse?.id ?? ""} onChange={(e) => setSelectedWarehouse(warehouses.find(w => String(w.id) === e.target.value) ?? null)} className="bg-muted border border-border rounded-lg px-3 py-2 text-sm outline-none">
+          <select
+            value={selectedWarehouse?.id ?? ""}
+            onChange={(e) => setSelectedWarehouse(warehouses.find(w => String(w.id) === e.target.value) ?? null)}
+            className="bg-muted border border-border rounded-lg px-3 py-2 text-sm outline-none"
+          >
             {warehouses.map(w => <option key={w.id} value={w.id}>{w.warehouse_name}</option>)}
           </select>
         </div>
+
         {activePanel === "search" && (
-          <ProductSearchPanel 
-            onAddToCart={(v) => setCart(prev => {
-              const idx = prev.findIndex(l => l.variant.id === v.id);
-              if (idx >= 0) {
-                const newCart = [...prev];
-                newCart[idx] = { ...newCart[idx], qty: newCart[idx].qty + 1 };
-                return newCart;
-              }
-              return [...prev, { variant: v, qty: 1, unitPrice: Number(v.selling_price), discountPct: 0, discountFixed: 0, taxRate: 0, notes: "" }];
-            })}
+          <ProductSearchPanel
+            onAddToCart={(v) => {
+              setCart(prev => {
+                const idx = prev.findIndex(l => l.variant.id === v.id);
+                if (idx >= 0) {
+                  const newCart = [...prev];
+                  newCart[idx] = { ...newCart[idx], qty: newCart[idx].qty + 1 };
+                  return newCart;
+                }
+                return [...prev, { 
+                  variant: v, 
+                  qty: 1, 
+                  unitPrice: Number(v.selling_price), 
+                  discountPct: 0, 
+                  discountFixed: 0, 
+                  taxRate: 0, 
+                  notes: "",
+                  salesOrderLineId: undefined 
+                }];
+              });
+            }}
             warehouseId={selectedWarehouse?.id}
           />
         )}
+
         {activePanel === "held" && (
-          <div className="p-4 space-y-3">
-            {heldOrders.length === 0 ? <div className="text-center text-muted-foreground">No held orders</div> : heldOrders.map(h => (
-              <div key={h.id} className="bg-card border rounded-xl p-4 flex justify-between">
-                <div><p className="font-medium">{h.label}</p><p className="text-xs text-muted-foreground">{h.cart.length} items</p></div>
-                <div className="flex gap-2">
-                  <button onClick={() => resumeOrder(h)} className="px-3 py-1 bg-primary text-primary-foreground rounded-lg text-xs">Resume</button>
-                  <button onClick={() => setHeldOrders(heldOrders.filter(x => x.id !== h.id))} className="px-3 py-1 bg-destructive/20 text-destructive rounded-lg text-xs">Delete</button>
+          <div className="p-4 space-y-3 overflow-y-auto">
+            {draftOrders.length === 0 ? (
+              <div className="text-center text-muted-foreground">No held orders</div>
+            ) : (
+              draftOrders.map(order => (
+                <div key={order.id} className="bg-card border rounded-xl p-4 flex justify-between items-center">
+                  <div>
+                    <p className="font-medium">{order.order_number}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {order.customer_name || "Walk-in Customer"} • {order.lines?.length || 0} items
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(order.order_date).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => loadDraftOrder(order)}
+                      className="px-3 py-1 bg-primary text-primary-foreground rounded-lg text-xs"
+                    >
+                      Resume
+                    </button>
+                    <button
+                      onClick={() => handleCancelDraft(order.id)}
+                      disabled={isCancelling}
+                      className="px-3 py-1 bg-destructive/20 text-destructive rounded-lg text-xs"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
+
         {activePanel === "return" && <ReturnPanel warehouses={warehouses} />}
       </div>
+
       <CartPanel
         cart={cart}
         onUpdateCart={setCart}
@@ -148,7 +234,7 @@ export default function SalesPage() {
         warehouses={warehouses}
         onSaveDraft={handleSaveDraft}
         onCompleteSale={handleCompleteSale}
-        isSubmitting={isCreatingOrder}
+        isSubmitting={isCreatingOrder || isCompleting}
       />
     </div>
   );
