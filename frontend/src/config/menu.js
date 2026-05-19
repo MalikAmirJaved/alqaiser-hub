@@ -65,7 +65,6 @@ export const menu = [
       { title: "Warehouse Management", to: "/inventory/warehouses", icon: Warehouse },
       { title: "Purchase Management", to: "/inventory/purchases", icon: ShoppingCart },
       { title: "Suppliers & Vendors", to: "/inventory/suppliers", icon: Truck },
-      { title: "Sales Integration", to: "/inventory/sales", icon: Receipt },
       { title: "Assets Inventory", to: "/inventory/assets", icon: Cpu },
       { title: "Inventory Transfers", to: "/inventory/transfers", icon: Repeat },
       { title: "Barcode & QR", to: "/inventory/barcode", icon: QrCode },
