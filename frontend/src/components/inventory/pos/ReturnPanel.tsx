@@ -100,7 +100,7 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+    <div className="flex-1 p-4 space-y-4">
       <div className="bg-card border border-border rounded-xl p-4 space-y-3">
         <h3 className="text-sm font-semibold flex items-center gap-2">
           <ReturnIcon size={16} /> Process Customer Return

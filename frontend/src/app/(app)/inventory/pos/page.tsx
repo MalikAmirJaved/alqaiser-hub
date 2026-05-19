@@ -154,19 +154,10 @@ export default function SalesPage() {
   };
 
   return (
-    <div className="flex h-full bg-background overflow-hidden relative">
-
-      {/* Toast notification */}
-      {toast && (
-        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-xl shadow-xl text-sm font-medium transition-all animate-in slide-in-from-top-2 duration-200
-          ${toast.type === "success" ? "bg-success text-success-foreground" : toast.type === "error" ? "bg-destructive text-destructive-foreground" : "bg-primary text-primary-foreground"}`}>
-          {toast.type === "success" ? <CheckIcon size={15} /> : toast.type === "error" ? <AlertIcon size={15} /> : <InfoIcon size={15} />}
-          {toast.message}
-        </div>
-      )}
+    <div className="flex h-full overflow-hidden relative">   
 
       {/* Left — product + panels */}
-      <div className="flex flex-col flex-1 min-w-0 border-r border-border">
+      <div className="flex flex-col overflow-hidden h-full flex-1 min-w-0 border-r border-border">
 
         {/* Top bar */}
         <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-card/80 backdrop-blur-sm">
@@ -207,7 +198,7 @@ export default function SalesPage() {
         </div>
 
         {/* Panel content */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 h-full overflow-y-auto">
           {activePanel === "search" && (
             <ProductSearchPanel
               onAddToCart={(v) => {
@@ -235,7 +226,7 @@ export default function SalesPage() {
           )}
 
           {activePanel === "held" && (
-            <div className="h-full overflow-y-auto p-4 space-y-2">
+            <div className=" p-4 space-y-2">
               {draftOrders.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-3">
                   <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">

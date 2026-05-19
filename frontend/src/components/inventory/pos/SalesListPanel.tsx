@@ -14,7 +14,7 @@ export function SalesListPanel() {
   }
 
   return (
-    <div className="p-4 space-y-3 overflow-y-auto">
+    <div className="p-4 space-y-3">
       {orders.length === 0 ? (
         <div className="text-center text-muted-foreground">No sales orders found</div>
       ) : (
