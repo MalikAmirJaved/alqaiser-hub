@@ -17,7 +17,7 @@ export async function apiFetch<T>(
   const method = options.method?.toUpperCase() || "GET";
 
   // APIs where toast should be disabled
-  const disableToastEndpoints = ["/api/accounts/token/refresh/"];
+  const disableToastEndpoints = ["/api/accounts/token/refresh/", "/api/inventory/stock/batch-stock/"];
 
   const shouldShowToast = !disableToastEndpoints.includes(endpoint);
 
@@ -47,7 +47,6 @@ export async function apiFetch<T>(
       const error = new Error(errorMessage) as any;
       error.status = res.status;
       error.response = errorBody;
-
       // Error toast
       if (
         shouldShowToast &&
@@ -62,6 +61,7 @@ export async function apiFetch<T>(
     }
 
     const data = await res.json();
+      console.log("endpoint and  method",endpoint ,  method)
 
     // Success toast
     if (

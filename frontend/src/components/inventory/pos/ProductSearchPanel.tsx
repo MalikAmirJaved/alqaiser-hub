@@ -1,34 +1,80 @@
 // src/components/inventory/pos/ProductSearchPanel.tsx
 "use client";
-import { useState } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAllVariantsSimple, VariantDetail } from "@/hooks/useAllVariants";
 import { useCategories } from "@/hooks/useCategories";
 import { useBrands } from "@/hooks/useBrands";
+import { useBatchStock } from "@/hooks/useBatchStock";
 import { ProductCard } from "./ProductCard";
+import debounce from "lodash/debounce";
 
 interface ProductSearchPanelProps {
   onAddToCart: (variant: VariantDetail) => void;
-  warehouseId?: string; // Add warehouse ID for stock display
+  warehouseId?: string;
 }
 
 export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPanelProps) {
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [brandId, setBrandId] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   
   const { data: variants = [], isLoading: variantsLoading } = useAllVariantsSimple({
-    search: search || undefined,
+    search: debouncedSearch || undefined,
     active_only: true,
   });
+  
   const { data: categories = [] } = useCategories();
   const { data: brands = [] } = useBrands();
-
-  const filteredVariants = variants.filter((v) => {
-    if (categoryId && v.category_id !== categoryId) return false;
-    if (brandId && v.brand_id !== brandId) return false;
-    return true;
-  });
-
+  
+  // Debounced search handler
+  const debouncedSetSearch = useCallback(
+    debounce((value: string) => setDebouncedSearch(value), 300),
+    []
+  );
+  
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearch(value);
+    debouncedSetSearch(value);
+  };
+  
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      debouncedSetSearch.cancel();
+    };
+  }, [debouncedSetSearch]);
+  
+  // Filter variants
+  const filteredVariants = useMemo(() => {
+    let filtered = variants;
+    if (categoryId) filtered = filtered.filter(v => v.category_id === categoryId);
+    if (brandId) filtered = filtered.filter(v => v.brand_id === brandId);
+    return filtered;
+  }, [variants, categoryId, brandId]);
+  
+  // Collect visible variant IDs for batch stock fetch
+  const visibleVariantIds = useMemo(() => {
+    return filteredVariants.map(v => v.id);
+  }, [filteredVariants]);
+  
+  // Batch stock fetch
+  const { data: stockMap, isLoading: stockLoading } = useBatchStock(
+    visibleVariantIds,
+    warehouseId || null
+  );
+  
+  // Combine variants with their stock data
+  const variantsWithStock = useMemo(() => {
+    return filteredVariants.map(variant => ({
+      ...variant,
+      stock: stockMap?.[variant.id] || { available: 0, reserved: 0, on_hand: 0 }
+    }));
+  }, [filteredVariants, stockMap]);
+  
+  const isLoading = variantsLoading || (warehouseId && stockLoading);
+  
   return (
     <div className="flex flex-col h-full">
       {/* Search Bar */}
@@ -37,13 +83,16 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
           <SearchIcon />
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={handleSearchChange}
             placeholder="Search by name, SKU, barcode… (F2)"
             className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             autoFocus
           />
           {search && (
-            <button onClick={() => setSearch("")} className="text-muted-foreground hover:text-foreground">
+            <button onClick={() => {
+              setSearch("");
+              setDebouncedSearch("");
+            }} className="text-muted-foreground hover:text-foreground">
               <XIcon size={14} />
             </button>
           )}
@@ -72,21 +121,35 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
             <option key={b.id} value={b.id}>{b.name}</option>
           ))}
         </select>
+        {(categoryId || brandId) && (
+          <button
+            onClick={() => {
+              setCategoryId("");
+              setBrandId("");
+            }}
+            className="text-xs text-muted-foreground hover:text-primary px-2"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       {/* Product Grid */}
       <div className="flex-1 overflow-y-auto p-4">
-        {variantsLoading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
-        ) : filteredVariants.length === 0 ? (
+        ) : variantsWithStock.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 text-muted-foreground text-sm gap-2">
             <BoxIcon />
             <span>No products found</span>
             {search && (
               <button
-                onClick={() => setSearch("")}
+                onClick={() => {
+                  setSearch("");
+                  setDebouncedSearch("");
+                }}
                 className="text-primary text-xs hover:underline"
               >
                 Clear search
@@ -95,12 +158,12 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
           </div>
         ) : (
           <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
-            {filteredVariants.map((v) => (
+            {variantsWithStock.map((variant) => (
               <ProductCard 
-                key={v.id} 
-                variant={v} 
-                onAdd={() => onAddToCart(v)} 
-                warehouseId={warehouseId}
+                key={variant.id} 
+                variant={variant}
+                stockData={variant.stock}
+                onAdd={() => onAddToCart(variant)} 
               />
             ))}
           </div>
@@ -108,9 +171,9 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
       </div>
 
       {/* Results Count */}
-      {!variantsLoading && filteredVariants.length > 0 && (
+      {!isLoading && variantsWithStock.length > 0 && (
         <div className="px-4 py-2 border-t border-border text-xs text-muted-foreground bg-muted/20">
-          Showing {filteredVariants.length} of {variants.length} products
+          Showing {variantsWithStock.length} of {variants.length} products
         </div>
       )}
     </div>

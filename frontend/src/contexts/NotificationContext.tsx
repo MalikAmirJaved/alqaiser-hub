@@ -9,7 +9,6 @@ import React, {
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { companyContext } from "@/services/companyContextService";
-import { toast } from "sonner";
 import { useApi } from "@/hooks/useApi";
 import {
   registerServiceWorker,
@@ -40,6 +39,8 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   tags: ["tags"],
   supplier: ["suppliers", "supplierStats"],
   vendor: ["vendors", "vendorStats"],
+  variant: ["allVariantsSimple", "allVariants", "variantStock", "batchStock"],
+  stock: ["batchStock", "currentStock", "variantStock"],
 };
 
 
@@ -160,11 +161,6 @@ setNotifications(data.results || []);
                 notification_type: data.notification_type,
               };
               return [newNotif, ...prev];
-            });
-
-            // In‑app toast
-            toast(data.title || "New Notification", {
-              description: data.message,
             });
 
             // Desktop/system notification

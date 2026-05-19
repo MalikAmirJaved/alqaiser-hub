@@ -1,28 +1,40 @@
 // src/components/inventory/pos/ProductCard.tsx
 "use client";
-import { VariantDetail, useVariantStock } from "@/hooks/useAllVariants";
+import { VariantDetail } from "@/hooks/useAllVariants";
 import { fmt } from "@/hooks/useSalesOrder";
+import { memo } from "react";
 
-interface ProductCardProps {
-  variant: VariantDetail;
-  onAdd: () => void;
-  warehouseId?: string;
+interface StockData {
+  available: number;
+  reserved: number;
+  on_hand: number;
 }
 
-export function ProductCard({ variant, onAdd, warehouseId }: ProductCardProps) {
-  const { data: stock, isLoading: stockLoading } = useVariantStock(
-    warehouseId ? variant.id : null,
-    warehouseId || null
-  );
+interface ProductCardProps {
+  variant: VariantDetail & { stock?: StockData };
+  onAdd: () => void;
+  stockData?: StockData;
+}
 
-  const availableStock = stock?.quantity_available ?? 0;
-  const reservedStock = stock?.quantity_reserved ?? 0;
+export const ProductCard = memo(function ProductCard({ 
+  variant, 
+  onAdd, 
+  stockData 
+}: ProductCardProps) {
+  const availableStock = stockData?.available ?? 0;
+  const reservedStock = stockData?.reserved ?? 0;
   const isLowStock = availableStock > 0 && availableStock <= (variant.min_stock_level || 5);
+  const isOutOfStock = availableStock === 0;
 
   return (
     <button
       onClick={onAdd}
-      className="group bg-card border border-border rounded-xl p-3 text-left hover:border-primary/40 hover:bg-accent/30 transition-all active:scale-[0.98] flex flex-col gap-2"
+      disabled={isOutOfStock}
+      className={`group bg-card border border-border rounded-xl p-3 text-left transition-all active:scale-[0.98] flex flex-col gap-2 ${
+        isOutOfStock 
+          ? 'opacity-50 cursor-not-allowed' 
+          : 'hover:border-primary/40 hover:bg-accent/30'
+      }`}
     >
       <div className="flex items-start justify-between gap-1">
         <p className="text-sm font-medium leading-tight line-clamp-2 text-foreground">
@@ -48,30 +60,26 @@ export function ProductCard({ variant, onAdd, warehouseId }: ProductCardProps) {
       )}
 
       {/* Stock Information */}
-      {warehouseId && (
-        <div className="mt-1 space-y-1">
-          {stockLoading ? (
-            <div className="h-8 flex items-center justify-center">
-              <div className="animate-pulse h-2 w-8 bg-muted rounded"></div>
-            </div>
-          ) : (
-            <>
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-muted-foreground">Available:</span>
-                <span className={`font-mono font-medium ${isLowStock ? 'text-warning' : 'text-success'}`}>
-                  {availableStock}
-                </span>
-              </div>
-              {reservedStock > 0 && (
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-muted-foreground">Reserved:</span>
-                  <span className="font-mono text-muted-foreground">{reservedStock}</span>
-                </div>
-              )}
-            </>
-          )}
+      <div className="mt-1 space-y-1">
+        <div className="flex justify-between items-center text-xs">
+          <span className="text-muted-foreground">Available:</span>
+          <span className={`font-mono font-medium ${
+            isOutOfStock 
+              ? 'text-destructive' 
+              : isLowStock 
+                ? 'text-warning' 
+                : 'text-success'
+          }`}>
+            {availableStock}
+          </span>
         </div>
-      )}
+        {reservedStock > 0 && (
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-muted-foreground">Reserved:</span>
+            <span className="font-mono text-muted-foreground">{reservedStock}</span>
+          </div>
+        )}
+      </div>
 
       {/* Price and Add Button */}
       <div className="flex items-center justify-between mt-auto pt-2 border-t border-border">
@@ -85,10 +93,12 @@ export function ProductCard({ variant, onAdd, warehouseId }: ProductCardProps) {
             </span>
           )}
         </div>
-        <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold">
-          +
-        </span>
+        {!isOutOfStock && (
+          <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold">
+            +
+          </span>
+        )}
       </div>
     </button>
   );
-}
+});

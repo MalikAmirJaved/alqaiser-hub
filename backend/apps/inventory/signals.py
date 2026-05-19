@@ -1,28 +1,44 @@
 # apps/inventory/signals.py
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from apps.notifications.models import Notification
-from .models import Category, Brand, Warehouse, Supplier, Product, ProductVariant, StockItem, InventoryTransaction, StockTransfer
+from .models import Category, Brand, Warehouse, Supplier, Product, ProductVariant, StockItem, InventoryTransaction, StockTransfer,SalesOrder
+from django.core.cache import cache
+
+import uuid as uuid_lib
+
 
 # Helper to create notification
 def create_notification(company_id, branch_id, title, message, notif_type='info'):
-    if company_id and branch_id:  # Only create if we have valid IDs
-        Notification.objects.create(
-            company_id=company_id,
-            branch_id=branch_id,
-            title=title,
-            message=message,
-            notification_type=notif_type
-        )
+    """Create a notification for important events only."""
+    if company_id and branch_id:
+        try:
+            Notification.objects.create(
+                company_id=company_id,
+                branch_id=branch_id,
+                title=title,
+                message=message,
+                notification_type=notif_type,
+            )
+        except Exception:
+            pass  # Fail silently – don't break business logic
+
 
 # Broadcast real-time data update (for cache invalidation)
 def broadcast_data_update(company_id, branch_id, entity, action=None, record_id=None):
-    """Send a data_update message to the company/branch WebSocket group."""
+    """
+    Send a real‑time data update to WebSocket clients.
+    record_id is converted to string to avoid msgpack serialization errors.
+    """
+    if not company_id or not branch_id:
+        return
     channel_layer = get_channel_layer()
     group_name = f"notify_c{company_id}_b{branch_id}"
-    
+    # Convert UUID to string if needed
+    if record_id and isinstance(record_id, uuid_lib.UUID):
+        record_id = str(record_id)
     async_to_sync(channel_layer.group_send)(
         group_name,
         {
@@ -32,6 +48,7 @@ def broadcast_data_update(company_id, branch_id, entity, action=None, record_id=
             'record_id': record_id,
         }
     )
+
 
 # Category signals
 @receiver(post_save, sender=Category)
@@ -265,3 +282,86 @@ def notify_transfer_change(sender, instance, created, **kwargs):
         "info"
     )
     broadcast_data_update(instance.company_id, instance.branch_id, 'stock_transfer', action, instance.id)
+
+
+def invalidate_variant_caches(company_id, branch_id, variant_id=None):
+    """Delete variant‑related cache keys."""
+    cache_patterns = [
+        f"variants_queryset_{company_id}_*",
+        f"allVariantsSimple_*",
+        f"batch_stock_{company_id}_*",
+    ]
+    for pattern in cache_patterns:
+        cache.delete_pattern(pattern)
+    if variant_id:
+        broadcast_data_update(company_id, branch_id, 'variant', 'update', variant_id)
+    broadcast_data_update(company_id, branch_id, 'stock', 'update', None)
+
+# ----------------------------------------------------------------------
+# Critical signals (cache invalidation only)
+# ----------------------------------------------------------------------
+@receiver(post_save, sender=Product)
+def product_post_save(sender, instance, created, **kwargs):
+    invalidate_variant_caches(instance.company_id, instance.branch_id)
+    if not created:
+        broadcast_data_update(instance.company_id, instance.branch_id, 'product', 'update', instance._id)
+
+@receiver(post_delete, sender=Product)
+def product_post_delete(sender, instance, **kwargs):
+    invalidate_variant_caches(instance.company_id, instance.branch_id)
+    broadcast_data_update(instance.company_id, instance.branch_id, 'product', 'delete', instance._id)
+
+@receiver(post_save, sender=ProductVariant)
+def variant_post_save(sender, instance, created, **kwargs):
+    invalidate_variant_caches(instance.company_id, instance.branch_id, instance._id)
+
+@receiver(pre_save, sender=StockItem)
+def stock_item_pre_save(sender, instance, **kwargs):
+    """Track quantity change before saving."""
+    if instance.pk:
+        try:
+            old = sender.objects.get(pk=instance.pk)
+            instance._quantity_change = instance.quantity_on_hand - old.quantity_on_hand
+        except sender.DoesNotExist:
+            instance._quantity_change = instance.quantity_on_hand
+    else:
+        instance._quantity_change = instance.quantity_on_hand
+
+@receiver(post_save, sender=StockItem)
+def stock_item_post_save(sender, instance, created, **kwargs):
+    quantity_change = getattr(instance, '_quantity_change', 0)
+    if quantity_change != 0:
+        # Invalidate batch stock cache for this variant
+        cache.delete_pattern(f"batch_stock_{instance.company_id}_*_{instance.variant._id}_*")
+        broadcast_data_update(instance.company_id, instance.branch_id, 'stock', 'update', instance.variant._id)
+        # Low stock alert (only once per threshold crossing)
+        if instance.quantity_on_hand <= instance.variant.min_stock_level:
+            if not getattr(instance, '_low_stock_notified', False):
+                create_notification(
+                    instance.company_id, instance.branch_id,
+                    "Low Stock Alert",
+                    f"Variant '{instance.variant.sku}' has only {instance.quantity_on_hand} units left (min: {instance.variant.min_stock_level}).",
+                    "warning"
+                )
+                instance._low_stock_notified = True
+
+@receiver(post_save, sender=SalesOrder)
+def sales_order_post_save(sender, instance, created, **kwargs):
+    """Notify frontend about draft or completed orders."""
+    if created and instance.status == 'DRAFT':
+        broadcast_data_update(instance.company_id, instance.branch_id, 'sales_order', 'draft', instance._id)
+    elif instance.status == 'COMPLETE':
+        broadcast_data_update(instance.company_id, instance.branch_id, 'sales_order', 'complete', instance._id)
+        # Invalidate stock caches (stock might have changed)
+        broadcast_data_update(instance.company_id, instance.branch_id, 'stock', 'update', None)
+
+@receiver(post_save, sender=StockTransfer)
+def stock_transfer_post_save(sender, instance, created, **kwargs):
+    if instance.status == 'COMPLETED':
+        broadcast_data_update(instance.company_id, instance.branch_id, 'stock', 'transfer', instance.variant._id)
+        create_notification(
+            instance.company_id, instance.branch_id,
+            "Stock Transfer Completed",
+            f"Transfer {instance.transfer_number} completed for {instance.variant.sku}",
+            "info"
+        )

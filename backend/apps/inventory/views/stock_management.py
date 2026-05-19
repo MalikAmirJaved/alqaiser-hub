@@ -14,9 +14,10 @@ from apps.inventory.serializers.stock_management import (
     StockItemSerializer,
     InventoryTransactionSerializer
 )
+from .batch_stock import BatchStockMixin
+from django.core.cache import cache
 
-
-class StockManagementViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
+class StockManagementViewSet(CompanyBranchMixin,BatchStockMixin, viewsets.GenericViewSet):
     queryset = StockItem.objects.all()
 
     # -------------------- STOCK ADJUST --------------------
@@ -84,46 +85,64 @@ class StockManagementViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
     # -------------------- CURRENT STOCK --------------------
     @action(detail=False, methods=['get'])
     def current_stock(self, request):
-        queryset = self.get_queryset()
         user = request.user
-
-        variant_uuid = request.query_params.get('variant_id')
-        if variant_uuid:
-            try:
-                variant = ProductVariant.objects.get(_id=variant_uuid, company_id=user.company_id)
-                queryset = queryset.filter(variant=variant)
-            except ProductVariant.DoesNotExist:
-                queryset = queryset.none()
-
+        company_id = user.company_id
+        
+        # Extract parameters
+        variant_ids = request.query_params.getlist('variant_id') or request.query_params.get('variant_ids', '').split(',')
         warehouse_uuid = request.query_params.get('warehouse_id')
+        low_stock = request.query_params.get('low_stock')
+        
+        # Build cache key (only for simple queries without low_stock)
+        cache_key = None
+        if not low_stock and variant_ids and warehouse_uuid:
+            cache_key = f"current_stock_{company_id}_{warehouse_uuid}_{'_'.join(sorted(variant_ids))}"
+            cached = cache.get(cache_key)
+            if cached:
+                return Response(cached)
+        
+        queryset = StockItem.objects.filter(company_id=company_id)
+        
+        # Warehouse filter
         if warehouse_uuid:
             try:
-                warehouse = Warehouse.objects.get(_id=warehouse_uuid, company_id=user.company_id)
+                warehouse = Warehouse.objects.get(_id=warehouse_uuid, company_id=company_id)
                 queryset = queryset.filter(warehouse=warehouse)
             except Warehouse.DoesNotExist:
                 queryset = queryset.none()
-
-        low_stock = request.query_params.get('low_stock')
+        
+        # Multiple variant filter
+        if variant_ids and variant_ids[0]:
+            variants = ProductVariant.objects.filter(_id__in=variant_ids, company_id=company_id)
+            queryset = queryset.filter(variant__in=variants)
+        
+        # Low stock filter
         if low_stock and low_stock.lower() == 'true':
-            queryset = queryset.filter(
-                quantity_on_hand__lte=F('variant__min_stock_level')
-            )
-
+            queryset = queryset.filter(quantity_on_hand__lte=F('variant__min_stock_level'))
+        
+        # Prefetch related
+        queryset = queryset.select_related('variant__product', 'warehouse')
+        
+        # Pagination
         page = int(request.query_params.get('page', 1))
-        page_size = int(request.query_params.get('page_size', 20))
-
+        page_size = int(request.query_params.get('page_size', 100))  # Increased default
         paginator = Paginator(queryset, page_size)
         page_obj = paginator.get_page(page)
-
+        
         serializer = StockItemSerializer(page_obj, many=True)
-
-        return Response({
+        response_data = {
             'count': paginator.count,
             'page': page,
             'page_size': page_size,
             'results': serializer.data
-        })
-
+        }
+        
+        # Cache response (short TTL)
+        if cache_key:
+            cache.set(cache_key, response_data, 3)  # 3 seconds
+        
+        return Response(response_data)
+    
     # -------------------- HISTORY --------------------
     @action(detail=False, methods=['get'])
     def history(self, request):

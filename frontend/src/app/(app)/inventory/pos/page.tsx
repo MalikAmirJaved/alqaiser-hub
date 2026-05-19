@@ -1,6 +1,6 @@
 // src/app/(app)/inventory/pos/page.tsx
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWarehouses } from "@/hooks/useWarehouses";
 import {
@@ -10,6 +10,7 @@ import {
   useDraftSalesOrders,
   cartToLineItems, CartLine
 } from "@/hooks/useSalesOrder";
+import { useAllVariantsSimple } from "@/hooks/useAllVariants";
 import { ProductSearchPanel } from "@/components/inventory/pos/ProductSearchPanel";
 import { CartPanel } from "@/components/inventory/pos/CartPanel";
 import { ReturnPanel } from "@/components/inventory/pos/ReturnPanel";
@@ -29,30 +30,30 @@ export default function SalesPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [selectedWarehouse, setSelectedWarehouse] = useState<any>(null);
   const [activePanel, setActivePanel] = useState<ActivePanel>("search");
-
-  // Toast notification state
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
-
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const [orderNotes, setOrderNotes] = useState("");
+
+  // Prefetch product list on mount for faster initial load
+  useEffect(() => {
+    queryClient.prefetchQuery({
+      queryKey: ["allVariantsSimple", { active_only: true }],
+      queryFn: () => useAllVariantsSimple({ active_only: true }),
+      staleTime: 5 * 60 * 1000,
+    });
+  }, [queryClient]);
 
   useEffect(() => {
     if (!selectedWarehouse && warehouses.length > 0) setSelectedWarehouse(warehouses[0]);
   }, [warehouses, selectedWarehouse]);
 
-  const showToast = (message: string, type: "success" | "error" | "info" = "success") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3500);
-  };
-
-  const clearCart = () => {
+  const clearCart = useCallback(() => {
     setCart([]);
     setSelectedCustomer(null);
     setActiveDraftId(null);
     setOrderNotes("");
-  };
+  }, []);
 
-  const loadDraftOrder = (order: any) => {
+  const loadDraftOrder = useCallback((order: any) => {
     const loadedCart: CartLine[] = (order.lines || []).map((line: any) => ({
       variant: {
         id: line.variant,
@@ -73,10 +74,9 @@ export default function SalesPage() {
     setOrderNotes(order.notes || "");
     setActiveDraftId(order.id);
     setActivePanel("search");
-    showToast(`Draft order ${order.order_number} loaded`, "info");
-  };
+  }, []);
 
-  const handleCompleteSale = async (notes: string, payments: any[]) => {
+  const handleCompleteSale = useCallback(async (notes: string, payments: any[]) => {
     if (cart.length === 0) return;
     const notesWithPayments = notes + (payments.length ? ` | Payments: ${payments.map(p => `${p.method}:${p.amount}`).join(", ")}` : "");
 
@@ -84,7 +84,6 @@ export default function SalesPage() {
       if (activeDraftId) {
         const updatedLineItems = cartToLineItems(cart);
         await completeOrder({ orderId: activeDraftId, line_items: updatedLineItems });
-        showToast("Order completed — stock deducted", "success");
       } else {
         const order = await createSalesOrder({
           customer: selectedCustomer?.id ?? null,
@@ -94,21 +93,19 @@ export default function SalesPage() {
           line_items: cartToLineItems(cart),
           status: "COMPLETE",
         });
-        showToast(`Order ${order.order_number} completed`, "success");
       }
       clearCart();
       refetchDrafts();
       queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
+      queryClient.invalidateQueries({ queryKey: ["batchStock"] });
     } catch (err: any) {
-      showToast(`Error: ${err.message}`, "error");
     }
-  };
+  }, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, completeOrder, clearCart, refetchDrafts, queryClient]);
 
-  const handleSaveDraft = async (notes: string) => {
+  const handleSaveDraft = useCallback(async (notes: string) => {
     if (cart.length === 0) return;
     try {
       if (activeDraftId) {
-        showToast("Draft orders can't be modified — complete or cancel first", "info");
         return;
       }
       await createSalesOrder({
@@ -119,25 +116,21 @@ export default function SalesPage() {
         line_items: cartToLineItems(cart),
         status: "DRAFT",
       });
-      showToast("Draft saved — stock reserved", "success");
       clearCart();
       refetchDrafts();
     } catch (err: any) {
-      showToast(`Error: ${err.message}`, "error");
     }
-  };
+  }, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, clearCart, refetchDrafts]);
 
-  const handleCancelDraft = async (orderId: string) => {
+  const handleCancelDraft = useCallback(async (orderId: string) => {
     if (!window.confirm("Cancel this draft order? Stock reservations will be released.")) return;
     try {
       await cancelOrder(orderId);
-      showToast("Draft order cancelled", "info");
       refetchDrafts();
       if (activeDraftId === orderId) clearCart();
     } catch (err: any) {
-      showToast(`Error: ${err.message}`, "error");
     }
-  };
+  }, [cancelOrder, refetchDrafts, activeDraftId, clearCart]);
 
   const panelLabels: Record<ActivePanel, string> = {
     search: "Products",
@@ -161,7 +154,6 @@ export default function SalesPage() {
 
         {/* Top bar */}
         <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-card/80 backdrop-blur-sm">
-          {/* Tab nav */}
           <nav className="flex gap-0.5 bg-muted/70 rounded-xl p-1 flex-1">
             {(["search", "held", "return", "sales"] as ActivePanel[]).map(p => (
               <button
@@ -184,7 +176,6 @@ export default function SalesPage() {
             ))}
           </nav>
 
-          {/* Warehouse selector */}
           <div className="flex items-center gap-2 bg-muted/60 rounded-lg px-3 py-1.5 border border-border/50">
             <WarehouseIcon />
             <select
@@ -226,7 +217,7 @@ export default function SalesPage() {
           )}
 
           {activePanel === "held" && (
-            <div className=" p-4 space-y-2">
+            <div className="p-4 space-y-2">
               {draftOrders.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-3">
                   <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
@@ -297,7 +288,6 @@ export default function SalesPage() {
           onCompleteSale={handleCompleteSale}
           isSubmitting={isCreatingOrder || isCompleting}
           activeDraftId={activeDraftId}
-          showToast={showToast}
         />
       </div>
     </div>
@@ -312,6 +302,3 @@ function ListIcon({ size = 14 }: { size?: number }) { return <svg width={size} h
 function WarehouseIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>; }
 function PlayIcon({ size = 14 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3" /></svg>; }
 function XIcon({ size = 14 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>; }
-function CheckIcon({ size = 14 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>; }
-function AlertIcon({ size = 14 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>; }
-function InfoIcon({ size = 14 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>; }
