@@ -89,8 +89,8 @@ export function useAllVariantsSimple(filters?: { search?: string; product_id?: s
 export function useVariantStock(variantId: string | null, warehouseId: string | null) {
   const api = useApi();
   const params = new URLSearchParams();
-if (variantId) params.append("variant___id", variantId);
-if (warehouseId) params.append("warehouse___id", warehouseId);
+if (variantId) params.append("variant_id", variantId);
+if (warehouseId) params.append("warehouse_id", warehouseId);
   
   return useQuery({
     queryKey: ["variantStock", variantId, warehouseId],
