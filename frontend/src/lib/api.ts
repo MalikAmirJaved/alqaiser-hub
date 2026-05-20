@@ -19,7 +19,7 @@ export async function apiFetch<T>(
   const disableToastEndpoints = ["/api/accounts/token/refresh/", "/api/inventory/stock/batch-stock/"];
 
   const shouldShowToast = !disableToastEndpoints.includes(endpoint);
-  
+
   try {
     const res = await fetch(`${BASE_URL}${endpoint}`, {
       ...options,
@@ -60,26 +60,20 @@ export async function apiFetch<T>(
     }
 
     const data = await res.json();
-
-    // Success toast
-    if (
-      shouldShowToast &&
-      ["POST", "PUT", "PATCH", "DELETE"].includes(method)
-    ) {
-      const successMessage =
-        data?.message ||
-        data?.detail ||
-        (method === "DELETE"
-          ? "Deleted successfully"
-          : method === "POST"
-            ? "Created successfully"
-            : "Updated successfully");
-
-      toast.success(successMessage, {
-        description: data?.detail || "",
-        duration: 4000,
-      });
-    }
+if(data?.message || data?.detail){
+  // Success toast
+  if (
+    shouldShowToast &&
+    ["POST", "PUT", "PATCH", "DELETE"].includes(method)
+  ) {
+    const successMessage = data?.message || data?.detail
+    toast.success(successMessage, {
+      description: data?.detail || "",
+      duration: 4000,
+    });
+  }
+  
+}
 
     return data;
   } catch (error: any) {
