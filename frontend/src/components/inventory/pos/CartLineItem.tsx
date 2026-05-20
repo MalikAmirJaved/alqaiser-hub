@@ -101,7 +101,6 @@ export function CartLineItem({
       
       {expanded && (
         <div className="border-t border-border px-3 py-2.5 space-y-2 bg-muted/30">
-          {/* Stock warning */}
           {isOverStock && (
             <div className="bg-destructive/10 text-destructive text-xs px-2 py-1.5 rounded-md flex items-center gap-2">
               <WarningIcon size={12} />
@@ -114,6 +113,8 @@ export function CartLineItem({
               <span className="text-xs text-muted-foreground">Unit price</span>
               <input
                 type="number"
+                min={0}
+                step={0.01}
                 value={line.unitPrice}
                 onChange={(e) => onUpdate({ unitPrice: Number(e.target.value) })}
                 className="w-full bg-muted rounded-md px-2 py-1 text-sm outline-none focus:ring-1 ring-primary"
@@ -123,6 +124,9 @@ export function CartLineItem({
               <span className="text-xs text-muted-foreground">Tax %</span>
               <input
                 type="number"
+                min={0}
+                max={100}
+                step={0.1}
                 value={line.taxRate}
                 onChange={(e) => onUpdate({ taxRate: Number(e.target.value) })}
                 className="w-full bg-muted rounded-md px-2 py-1 text-sm outline-none focus:ring-1 ring-primary"
@@ -132,8 +136,16 @@ export function CartLineItem({
               <span className="text-xs text-muted-foreground">Disc %</span>
               <input
                 type="number"
+                min={0}
+                max={100}
+                step={0.1}
                 value={line.discountPct}
-                onChange={(e) => onUpdate({ discountPct: Number(e.target.value), discountFixed: 0 })}
+                onChange={(e) => {
+                  let val = Number(e.target.value);
+                  if (val > 100) val = 100;
+                  if (val < 0) val = 0;
+                  onUpdate({ discountPct: val, discountFixed: 0 });
+                }}
                 className="w-full bg-muted rounded-md px-2 py-1 text-sm outline-none focus:ring-1 ring-primary"
               />
             </label>
@@ -141,14 +153,22 @@ export function CartLineItem({
               <span className="text-xs text-muted-foreground">Disc fixed</span>
               <input
                 type="number"
+                min={0}
+                max={line.qty * line.unitPrice}
+                step={0.01}
                 value={line.discountFixed}
-                onChange={(e) => onUpdate({ discountFixed: Number(e.target.value), discountPct: 0 })}
+                onChange={(e) => {
+                  let val = Number(e.target.value);
+                  const maxAllowed = line.qty * line.unitPrice;
+                  if (val > maxAllowed) val = maxAllowed;
+                  if (val < 0) val = 0;
+                  onUpdate({ discountFixed: val, discountPct: 0 });
+                }}
                 className="w-full bg-muted rounded-md px-2 py-1 text-sm outline-none focus:ring-1 ring-primary"
               />
             </label>
           </div>
           
-          {/* Stock info */}
           <div className="flex justify-between items-center text-xs">
             <span className="text-muted-foreground">Available stock:</span>
             <span className={`font-mono font-medium ${maxQty <= 5 ? "text-warning" : "text-success"}`}>

@@ -1,6 +1,6 @@
 // src/app/(app)/inventory/pos/page.tsx
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWarehouses } from "@/hooks/useWarehouses";
 import {
@@ -16,11 +16,14 @@ import { CartPanel } from "@/components/inventory/pos/CartPanel";
 import { ReturnPanel } from "@/components/inventory/pos/ReturnPanel";
 import { SalesListPanel } from "@/components/inventory/pos/SalesListPanel";
 import { VariantDetailWithStock } from "@/hooks/useAllVariants";
+import { useApi } from "@/hooks/useApi";
+import { debounce } from "lodash";
 
 type ActivePanel = "search" | "held" | "return" | "sales";
 
 export default function SalesPage() {
   const queryClient = useQueryClient();
+  const api = useApi();
   const { data: warehouses = [] } = useWarehouses({ is_active: true });
   const { data: draftOrders = [], refetch: refetchDrafts } = useDraftSalesOrders();
   const { mutateAsync: createSalesOrder, isPending: isCreatingOrder } = useCreateSalesOrder();
@@ -33,6 +36,53 @@ export default function SalesPage() {
   const [activePanel, setActivePanel] = useState<ActivePanel>("search");
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const [orderNotes, setOrderNotes] = useState("");
+
+  // Debounced draft updater
+  const updateDraftDebounced = useRef(
+    debounce(async (orderId: string, newCart: CartLine[], notes: string, custId: string | null, whId: string) => {
+      if (!orderId) return;
+      try {
+        const lineItems = cartToLineItems(newCart);
+        await api(`/api/inventory/sales-orders/${orderId}/`, {
+          method: "PUT",
+          body: JSON.stringify({
+            line_items: lineItems,
+            customer: custId,
+            warehouse: whId,
+            order_date: new Date().toISOString().split("T")[0],
+            notes: notes,
+            status: "DRAFT",
+          }),
+        });
+        refetchDrafts();
+      } catch (err) {
+        console.error("Failed to update draft", err);
+      }
+    }, 800)
+  ).current;
+
+  // Watch cart changes for draft auto-update
+  useEffect(() => {
+    if (activeDraftId && cart.length > 0 && selectedWarehouse) {
+      updateDraftDebounced(
+        activeDraftId,
+        cart,
+        orderNotes,
+        selectedCustomer?.id ?? null,
+        selectedWarehouse.id
+      );
+    }
+    return () => {
+      updateDraftDebounced.cancel();
+    };
+  }, [cart, activeDraftId, selectedCustomer, selectedWarehouse, orderNotes, updateDraftDebounced]);
+
+  // Clear draft ID when cart becomes empty
+  useEffect(() => {
+    if (activeDraftId && cart.length === 0) {
+      setActiveDraftId(null);
+    }
+  }, [cart, activeDraftId]);
 
   // Prefetch product list on mount for faster initial load
   useEffect(() => {
@@ -110,7 +160,7 @@ export default function SalesPage() {
     if (finalCart.length === 0) return;
     try {
       if (activeDraftId) {
-        // Update existing draft would go here
+        // Update existing draft via debounced effect
         return;
       }
       await createSalesOrder({
@@ -140,6 +190,10 @@ export default function SalesPage() {
       console.error(err);
     }
   }, [cancelOrder, refetchDrafts, activeDraftId, clearCart]);
+
+  const handleCartChange = useCallback((newCart: CartLine[]) => {
+    // Cart already updated via onUpdateCart, this is just for tracking
+  }, []);
 
   const panelLabels: Record<ActivePanel, string> = {
     search: "Products",
@@ -308,6 +362,7 @@ export default function SalesPage() {
           warehouses={warehouses}
           onSaveDraft={handleSaveDraft}
           onCompleteSale={handleCompleteSale}
+          onCartChange={handleCartChange}
           isSubmitting={isCreatingOrder || isCompleting}
           activeDraftId={activeDraftId}
         />

@@ -17,6 +17,7 @@ interface CartPanelProps {
   warehouses: any[];
   onSaveDraft: (notes: string, overrideCart?: CartLine[]) => Promise<void>;
   onCompleteSale: (notes: string, payments: any[], overrideCart?: CartLine[]) => Promise<void>;
+  onCartChange?: (newCart: CartLine[]) => void;
   isSubmitting?: boolean;
   activeDraftId?: string | null;
 }
@@ -34,6 +35,7 @@ export function CartPanel({
   warehouses,
   onSaveDraft,
   onCompleteSale,
+  onCartChange,
   isSubmitting,
   activeDraftId,
 }: CartPanelProps) {
@@ -121,11 +123,14 @@ export function CartPanel({
     
     newCart[idx] = updated;
     onUpdateCart(newCart);
-  }, [cart, onUpdateCart, stockMap]);
+    onCartChange?.(newCart);
+  }, [cart, onUpdateCart, stockMap, onCartChange]);
 
   const removeLine = useCallback((idx: number) => {
-    onUpdateCart(cart.filter((_, i) => i !== idx));
-  }, [cart, onUpdateCart]);
+    const newCart = cart.filter((_, i) => i !== idx);
+    onUpdateCart(newCart);
+    onCartChange?.(newCart);
+  }, [cart, onUpdateCart, onCartChange]);
 
   const addPayment = useCallback(() => {
     const amt = parseFloat(newPaymentAmt);
@@ -176,6 +181,11 @@ export function CartPanel({
     onSaveDraft(orderNotes, effectiveCartForSave);
   }, [getEffectiveCartForSubmission, orderNotes, onSaveDraft]);
 
+  const handleClearCart = useCallback(() => {
+    onClearCart();
+    onCartChange?.([]);
+  }, [onClearCart, onCartChange]);
+
   // Click outside handler
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -208,7 +218,7 @@ export function CartPanel({
         </div>
         {cart.length > 0 && (
           <button
-            onClick={onClearCart}
+            onClick={handleClearCart}
             className="text-xs text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1"
           >
             <XIcon size={12} /> Clear
@@ -377,8 +387,14 @@ export function CartPanel({
             <input
               type="number"
               min={0}
+              max={globalDiscMode === "pct" ? 100 : undefined}
               value={globalDisc || ""}
-              onChange={(e) => setGlobalDisc(Number(e.target.value))}
+              onChange={(e) => {
+                let val = Number(e.target.value);
+                if (globalDiscMode === "pct" && val > 100) val = 100;
+                if (val < 0) val = 0;
+                setGlobalDisc(val);
+              }}
               placeholder="0"
               className="w-16 bg-muted rounded-md px-2 py-1 text-xs text-right outline-none focus:ring-1 ring-primary"
             />
