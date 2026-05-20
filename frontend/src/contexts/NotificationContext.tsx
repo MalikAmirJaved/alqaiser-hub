@@ -1,3 +1,4 @@
+// src/contexts/NotificationContext.tsx
 "use client";
 
 import React, {
@@ -6,6 +7,7 @@ import React, {
   useEffect,
   useState,
   useRef,
+  useCallback,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { companyContext } from "@/services/companyContextService";
@@ -32,7 +34,7 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   compensations: ["compensations"],
   loans: ["loans"],
   inventory_category: ["categories"],
-  inventory_brand: ["brands"],  
+  inventory_brand: ["brands"],
   inventory_warehouse: ["warehouses", "warehouseStats"],
   product: ["products", "productStats"],
   inventory: ["inventory", "productInventory"],
@@ -41,8 +43,10 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   vendor: ["vendors", "vendorStats"],
   variant: ["allVariantsSimple", "allVariants", "variantStock", "batchStock"],
   stock: ["batchStock", "currentStock", "variantStock"],
+  sales_order: ["salesOrders"], // ✅ CRITICAL: now sales orders will invalidate
+  sales_return: ["salesReturns"],
+  stock_transfer: ["stockTransfers"],
 };
-
 
 interface Notification {
   id: string;
@@ -63,7 +67,7 @@ interface PaginatedNotificationsResponse {
 }
 
 interface NotificationContextProps {
-  notifications: any[];
+  notifications: Notification[];
   isConnected: boolean;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
@@ -80,28 +84,27 @@ const NotificationContext = createContext<NotificationContextProps>({
 
 export const useNotifications = () => useContext(NotificationContext);
 
-export const NotificationProvider = ({
-  children,
-}: {
-  children: React.ReactNode;
-}) => {
-  const [notifications, setNotifications] = useState<any[]>([]);
+export const NotificationProvider = ({ children }: { children: React.ReactNode }) => {
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+
+  const reconnectTimeoutRef =
+    useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const heartbeatIntervalRef =
+    useRef<ReturnType<typeof setInterval> | null>(null);
   const api = useApi();
   const queryClient = useQueryClient();
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     try {
-      const data = await api<PaginatedNotificationsResponse>(
-  "/api/notifications/"
-);
-
-setNotifications(data.results || []);
+      const data = await api<PaginatedNotificationsResponse>("/api/notifications/");
+      setNotifications(data.results || []);
     } catch (e) {
       console.error("Error fetching notifications", e);
     }
-  };
+  }, [api]);
 
   // Register service worker and request permission on mount
   useEffect(() => {
@@ -109,11 +112,9 @@ setNotifications(data.results || []);
     requestNotificationPermission();
   }, []);
 
-  useEffect(() => {
-    let reconnectTimeout: NodeJS.Timeout;
-    let ws: WebSocket;
-
-    const connectSocket = async () => {
+  // WebSocket connection with exponential backoff
+  const connectSocket = useCallback(
+    async (retryCount = 0) => {
       if (!companyContext.initialized) {
         await companyContext.init();
       }
@@ -121,36 +122,41 @@ setNotifications(data.results || []);
       const companyId = companyContext.getCurrentCompanyId();
       const branchId = companyContext.getCurrentBranchId();
 
-      if (!companyId || !branchId) return;
+      if (!companyId || !branchId) {
+        console.warn("Missing company or branch ID, cannot open WebSocket");
+        return;
+      }
 
       await fetchNotifications();
 
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
+      const wsUrl = apiUrl.replace(/^http/, "ws") + `/ws/notifications/${companyId}/${branchId}/`;
 
-      const wsUrl =
-        apiUrl.replace(/^http/, "ws") +
-        `/ws/notifications/${companyId}/${branchId}/`;
-
-      ws = new WebSocket(wsUrl);
+      const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
         setIsConnected(true);
+        // Reset retry count on successful connection
+        reconnectTimeoutRef.current && clearTimeout(reconnectTimeoutRef.current);
+        // Start heartbeat
+        if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ action: "ping" }));
+          }
+        }, 30000);
       };
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
 
-          // Handle notification messages
           if (data.type === "notification") {
             setNotifications((prev) => {
-              // If the message has an id, prevent duplicates
               if (data.id && prev.find((n) => n.id === data.id)) return prev;
-
-              // Convert the WebSocket message into a notification object
               const newNotif = {
-                id: data.id || Date.now(), // fallback unique ID
+                id: data.id || Date.now().toString(),
                 title: data.title,
                 message: data.message,
                 is_read: false,
@@ -162,19 +168,15 @@ setNotifications(data.results || []);
               return [newNotif, ...prev];
             });
 
-            // Desktop/system notification
             showDesktopNotification(data.title || "New Notification", {
               body: data.message,
               data: { notificationId: data.id },
             });
-          }
-          // Handle data update messages (cache invalidation)
-          else if (data.type === "data_update") {
+          } else if (data.type === "data_update") {
             const { entity, action, record_id } = data;
             const queryKeys = ENTITY_TO_QUERY_KEY[entity];
             if (queryKeys) {
               queryKeys.forEach((key) => {
-                // Invalidate all queries that start with this key
                 queryClient.invalidateQueries({ queryKey: [key] });
               });
             }
@@ -186,87 +188,85 @@ setNotifications(data.results || []);
 
       ws.onclose = () => {
         setIsConnected(false);
-        reconnectTimeout = setTimeout(connectSocket, 5000);
+        if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+        // Exponential backoff: 2^retryCount * 1000 ms, capped at 30 seconds
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
+        reconnectTimeoutRef.current = setTimeout(() => {
+          connectSocket(retryCount + 1);
+        }, delay);
       };
 
       ws.onerror = (error) => {
         console.error("WebSocket error:", error);
       };
-    };
+    },
+    [api, fetchNotifications, queryClient]
+  );
 
+  useEffect(() => {
     connectSocket();
-
     return () => {
-      clearTimeout(reconnectTimeout);
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
+      if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      if (wsRef.current) wsRef.current.close();
     };
-  }, [api, queryClient]);
+  }, [connectSocket]);
 
-  const markAsRead = async (id: string) => {
-    try {
-      await api(`/api/notifications/${id}/mark_read/`, {
-        method: "POST",
-      });
-
-      setNotifications((prev) =>
-        prev.map((n) =>
-          n.id === id
-            ? {
-                ...n,
-                is_read: true,
-                read_at: new Date().toISOString(),
-              }
-            : n
-        )
-      );
-    } catch (e) {
-      console.error("Error marking notification as read", e);
+  // Fallback polling when WebSocket is disconnected (optional)
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout;
+    if (!isConnected) {
+      pollInterval = setInterval(() => {
+        // Refresh critical data every 30 seconds when offline
+        queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
+        queryClient.invalidateQueries({ queryKey: ["currentStock"] });
+      }, 30000);
     }
-  };
+    return () => clearInterval(pollInterval);
+  }, [isConnected, queryClient]);
 
-  const markAllAsRead = async () => {
+  const markAsRead = useCallback(
+    async (id: string) => {
+      try {
+        await api(`/api/notifications/${id}/mark_read/`, { method: "POST" });
+        setNotifications((prev) =>
+          prev.map((n) =>
+            n.id === id ? { ...n, is_read: true, read_at: new Date().toISOString() } : n
+          )
+        );
+      } catch (e) {
+        console.error("Error marking notification as read", e);
+      }
+    },
+    [api]
+  );
+
+  const markAllAsRead = useCallback(async () => {
     try {
-      await api(`/api/notifications/mark_all_read/`, {
-        method: "POST",
-      });
-
+      await api("/api/notifications/mark_all_read/", { method: "POST" });
       setNotifications((prev) =>
-        prev.map((n) => ({
-          ...n,
-          is_read: true,
-          read_at: n.read_at || new Date().toISOString(),
-        }))
+        prev.map((n) => ({ ...n, is_read: true, read_at: n.read_at || new Date().toISOString() }))
       );
     } catch (e) {
       console.error("Error marking all notifications as read", e);
     }
-  };
+  }, [api]);
 
-  const toggleFavourite = async (id: string) => {
-    try {
-      const res = await api<{ is_favourite: boolean }>(
-        `/api/notifications/${id}/toggle_favourite/`,
-        {
+  const toggleFavourite = useCallback(
+    async (id: string) => {
+      try {
+        const res = await api<{ is_favourite: boolean }>(`/api/notifications/${id}/toggle_favourite/`, {
           method: "POST",
-        }
-      );
-
-      setNotifications((prev) =>
-        prev.map((n) =>
-          n.id === id
-            ? {
-                ...n,
-                is_favourite: res.is_favourite,
-              }
-            : n
-        )
-      );
-    } catch (e) {
-      console.error("Error toggling favourite", e);
-    }
-  };
+        });
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === id ? { ...n, is_favourite: res.is_favourite } : n))
+        );
+      } catch (e) {
+        console.error("Error toggling favourite", e);
+      }
+    },
+    [api]
+  );
 
   return (
     <NotificationContext.Provider
