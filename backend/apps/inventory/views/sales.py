@@ -537,11 +537,18 @@ class SalesReturnViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         company_id = user.company_id
         for ret_line in ret.lines.all():
             sol = ret_line.sales_order_line
-            variant = sol.variant
             qty = ret_line.quantity_returned
+
+            # The quantity_returned was already incremented in serializer, but if you want to be safe:
+            # sol.quantity_returned = F('quantity_returned') + qty
+            # sol.save(update_fields=['quantity_returned'])
+            # Actually we already did that in serializer; this method is for stock restocking only.
+
             if ret_line.restock:
+                variant = sol.variant
                 stock_item, _ = StockItem.objects.select_for_update().get_or_create(
-                    variant=variant, warehouse=warehouse,
+                    variant=variant,
+                    warehouse=warehouse,
                     company_id=company_id,
                     branch_id=user.branch_id,
                     defaults={'quantity_on_hand': 0, 'quantity_reserved': 0}
@@ -551,6 +558,7 @@ class SalesReturnViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                 stock_item.quantity_on_hand = after
                 stock_item.version = F('version') + 1
                 stock_item.save(update_fields=['quantity_on_hand', 'version'])
+
                 InventoryTransaction.objects.create(
                     transaction_id=uuid.uuid4(),
                     variant=variant,

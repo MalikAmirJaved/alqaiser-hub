@@ -1,4 +1,6 @@
-# backend/apps/inventory/serializers/sales.py
+# ============================================================
+# File: backend/apps/inventory/serializers/sales.py
+# ============================================================
 from rest_framework import serializers
 from apps.inventory.models.sales import (
     SalesOrder, SalesOrderLine,
@@ -13,8 +15,9 @@ class SalesOrderLineSerializer(serializers.ModelSerializer):
     variant = UUIDForeignRelatedField(queryset=ProductVariant.objects.all())
     variant_sku = serializers.CharField(source='variant.sku', read_only=True)
     variant_name = serializers.CharField(source='variant.product.product_name', read_only=True)
-    line_total = serializers.SerializerMethodField()
-    
+    line_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    max_returnable = serializers.SerializerMethodField()
+
     created_by_info = serializers.SerializerMethodField()
     updated_by_info = serializers.SerializerMethodField()
 
@@ -25,10 +28,14 @@ class SalesOrderLineSerializer(serializers.ModelSerializer):
             'quantity_ordered', 'unit_price', 'tax_rate',
             'discount_percent', 'discount_amount',
             'line_total', 'status', 'notes',
+            'quantity_returned', 'max_returnable',
             'created_at', 'updated_at',
             'created_by_info', 'updated_by_info',
         ]
         read_only_fields = ['created_at', 'updated_at']
+
+    def get_max_returnable(self, obj):
+        return obj.max_returnable
 
     def get_created_by_info(self, obj):
         if obj.created_by:
@@ -47,7 +54,6 @@ class SalesOrderLineSerializer(serializers.ModelSerializer):
 class SalesOrderSerializer(serializers.ModelSerializer):
     customer = UUIDForeignRelatedField(queryset=Customer.objects.all(), allow_null=True)
     warehouse = UUIDForeignRelatedField(queryset=Warehouse.objects.all())
-    
     id = serializers.UUIDField(source='_id', read_only=True)
     customer_name = serializers.CharField(source='customer.name', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.warehouse_name', read_only=True)
@@ -55,7 +61,6 @@ class SalesOrderSerializer(serializers.ModelSerializer):
     line_items = serializers.ListField(
         child=serializers.DictField(), write_only=True, required=False
     )
-    
     created_by_info = serializers.SerializerMethodField()
     updated_by_info = serializers.SerializerMethodField()
 
@@ -104,7 +109,6 @@ class SalesOrderSerializer(serializers.ModelSerializer):
             discount_fixed = item.get('discount_fixed', 0)
             tax_rate = item.get('tax_rate', 0)
 
-            # Calculate line total for order total
             subtotal = qty * unit_price
             if discount_fixed > 0:
                 discount = discount_fixed
@@ -121,7 +125,7 @@ class SalesOrderSerializer(serializers.ModelSerializer):
                 tax_rate=tax_rate,
                 discount_percent=discount_pct,
                 discount_amount=discount_fixed,
-                status='PENDING',  # default, will be updated later if COMPLETE
+                quantity_returned=0,
                 company_id=company_id,
                 branch_id=branch_id,
                 created_by=user,
@@ -139,10 +143,11 @@ class SalesOrderSerializer(serializers.ModelSerializer):
 
 class SalesReturnLineSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)
-    
+    refund_amount = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True)
+
     class Meta:
         model = SalesReturnLine
-        fields = ['id', 'sales_order_line', 'quantity_returned', 'restock', 'unit_cost', 'reason']
+        fields = ['id', 'sales_order_line', 'quantity_returned', 'refund_amount', 'restock', 'unit_cost', 'reason']
 
 
 class SalesReturnSerializer(serializers.ModelSerializer):
@@ -155,7 +160,6 @@ class SalesReturnSerializer(serializers.ModelSerializer):
     return_lines = serializers.ListField(
         child=serializers.DictField(), write_only=True
     )
-    
     created_by_info = serializers.SerializerMethodField()
     updated_by_info = serializers.SerializerMethodField()
 
@@ -185,6 +189,24 @@ class SalesReturnSerializer(serializers.ModelSerializer):
         company_id = user.company_id
         branch_id = user.branch_id
 
+        # Validate each return line
+        for line_data in return_lines_data:
+            sol_uuid = line_data['sales_order_line_id']
+            try:
+                sol = SalesOrderLine.objects.get(_id=sol_uuid, company_id=company_id)
+            except SalesOrderLine.DoesNotExist:
+                raise serializers.ValidationError(f"Sales order line {sol_uuid} not found.")
+            qty = line_data['quantity_returned']
+            if qty > sol.max_returnable:
+                raise serializers.ValidationError(
+                    f"Cannot return more than {sol.max_returnable} units for this line. "
+                    f"Ordered: {sol.quantity_ordered}, already returned: {sol.quantity_returned}"
+                )
+            refund_amount = line_data.get('refund_amount')
+            if refund_amount is not None:
+                if refund_amount > sol.line_total:
+                    raise serializers.ValidationError(f"Refund amount cannot exceed line total ({sol.line_total}).")
+
         validated_data['return_number'] = self._generate_return_number()
         validated_data['company_id'] = company_id
         validated_data['branch_id'] = branch_id
@@ -196,11 +218,16 @@ class SalesReturnSerializer(serializers.ModelSerializer):
         for line_data in return_lines_data:
             sol_uuid = line_data['sales_order_line_id']
             sales_order_line = SalesOrderLine.objects.get(_id=sol_uuid, company_id=company_id)
-            
+            refund_amount = line_data.get('refund_amount')
+            if refund_amount is None:
+                proportion = line_data['quantity_returned'] / sales_order_line.quantity_ordered
+                refund_amount = sales_order_line.line_total * proportion
+
             SalesReturnLine.objects.create(
                 sales_return=ret,
                 sales_order_line=sales_order_line,
                 quantity_returned=line_data['quantity_returned'],
+                refund_amount=refund_amount,
                 restock=line_data.get('restock', True),
                 unit_cost=line_data.get('unit_cost', 0),
                 reason=line_data.get('reason', ''),
@@ -209,6 +236,11 @@ class SalesReturnSerializer(serializers.ModelSerializer):
                 created_by=user,
                 updated_by=user,
             )
+
+            # Increment returned quantity on the original line
+            sales_order_line.quantity_returned += line_data['quantity_returned']
+            sales_order_line.save(update_fields=['quantity_returned'])
+
         return ret
 
     def _generate_return_number(self):

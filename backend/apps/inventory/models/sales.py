@@ -10,9 +10,9 @@ from apps.inventory.models.customer import Customer
 
 class SalesOrder(BaseModel):
     STATUS_CHOICES = [
-        ('PENDING', 'Pending'),           # No reservation
-        ('DRAFT', 'Draft'),               # Stock reserved
-        ('COMPLETE', 'Complete'),         # Stock deducted
+        ('PENDING', 'Pending'),
+        ('DRAFT', 'Draft'),
+        ('COMPLETE', 'Complete'),
         ('CANCELLED', 'Cancelled'),
     ]
 
@@ -63,11 +63,9 @@ class SalesOrderLine(BaseModel):
     quantity_ordered = models.PositiveIntegerField()
     unit_price = models.DecimalField(max_digits=12, decimal_places=4)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-
-    # Discount fields (production ready, no JSON)
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-
+    quantity_returned = models.PositiveIntegerField(default=0)
     status = models.CharField(
         max_length=20, choices=LINE_STATUS_CHOICES, default='PENDING'
     )
@@ -94,6 +92,10 @@ class SalesOrderLine(BaseModel):
     @property
     def line_total(self):
         return self.subtotal - self.discount
+
+    @property
+    def max_returnable(self):
+        return self.quantity_ordered - self.quantity_returned
 
 
 class SalesReturn(BaseModel):
@@ -133,6 +135,7 @@ class SalesReturnLine(BaseModel):
         SalesOrderLine, on_delete=models.PROTECT, related_name='return_lines'
     )
     quantity_returned = models.PositiveIntegerField()
+    refund_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     restock = models.BooleanField(
         default=True, help_text="If True, quantity is added back to stock"
     )

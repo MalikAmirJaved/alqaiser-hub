@@ -1,8 +1,8 @@
-// src/components/inventory/pos/ReturnPanel.tsx
 "use client";
 import { useState, useEffect } from "react";
 import { useFetchSalesOrderByNumber, useCreateSalesReturn } from "@/hooks/useSalesOrder";
 import type { Warehouse } from "@/hooks/useWarehouses";
+import { fmt } from "@/hooks/useSalesOrder";
 
 interface ReturnPanelProps {
   warehouses: Warehouse[];
@@ -19,8 +19,11 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
       maxQty: number;
       restock: boolean;
       unit_cost: number;
+      refundAmount: number;
       reason: string;
       name: string;
+      unitValue: number;      // price per item after discount
+      remainingTotal: number; // total value of remaining items
     }[]
   >([]);
   const [shouldFetch, setShouldFetch] = useState(false);
@@ -40,18 +43,30 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
     if (fetchedOrderData && fetchedOrderData.lines) {
       setOrderData(fetchedOrderData);
       setLines(
-        (fetchedOrderData.lines || []).map((l: any) => ({
-          sol_id: l.id,
-          qty: 0,
-          maxQty: l.quantity_ordered,   // removed quantity_shipped – use ordered quantity
-          restock: true,
-          unit_cost: Number(l.unit_price) || 0,
-          reason: "",
-          name: l.variant_name || l.variant_sku || l.variant?.sku || "Product",
-        }))
+        (fetchedOrderData.lines || []).map((l: any) => {
+          const quantityOrdered = l.quantity_ordered;
+          const lineTotal = Number(l.line_total) || 0;
+          const unitValue = lineTotal / quantityOrdered; // price per item after discounts
+          const maxQty = l.max_returnable;
+          const remainingTotal = unitValue * maxQty;
+          return {
+            sol_id: l.id,
+            qty: 0,
+            maxQty: maxQty,
+            restock: true,
+            unit_cost: Number(l.unit_price) || 0,
+            refundAmount: 0,
+            reason: "",
+            name: l.variant_name || l.variant_sku || l.variant?.sku || "Product",
+            unitValue: unitValue,
+            remainingTotal: remainingTotal,
+          };
+        })
       );
     }
   }, [fetchedOrderData]);
+
+  const totalRefund = lines.reduce((sum, l) => sum + (l.qty > 0 ? l.refundAmount : 0), 0);
 
   const handleSubmitReturn = async () => {
     if (!orderData) return;
@@ -62,14 +77,21 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
       return;
     }
 
+    const missingReason = selectedLines.some((l) => !l.reason.trim());
+    if (missingReason) {
+      alert("Please provide a reason for each returned item.");
+      return;
+    }
+
     const payload = {
-      sales_order: orderData.id ?? orderData.id,
+      sales_order: orderData.id,
       warehouse: selectedWarehouse,
       return_date: new Date().toISOString(),
       reason: "Customer return",
       return_lines: selectedLines.map((l) => ({
         sales_order_line_id: l.sol_id,
         quantity_returned: l.qty,
+        refund_amount: l.refundAmount,
         restock: l.restock,
         unit_cost: l.unit_cost,
         reason: l.reason,
@@ -80,7 +102,6 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
       const resp = await createReturn(payload);
       const returnNumber = resp?.return_number ?? "";
       alert(`✓ Return ${returnNumber} processed successfully!`);
-      
       setOrderNum("");
       setOrderData(null);
       setLines([]);
@@ -182,10 +203,14 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
                         step={1}
                         value={line.qty}
                         onChange={(e) => {
-                          const val = Math.min(Number(e.target.value), line.maxQty);
+                          const qty = Math.min(Number(e.target.value), line.maxQty);
+                          // Calculate refund based on unit value * quantity
+                          const autoRefund = line.unitValue * qty;
                           setLines((prev) =>
                             prev.map((x, j) =>
-                              j === idx ? { ...x, qty: Math.max(0, val) } : x
+                              j === idx
+                                ? { ...x, qty: Math.max(0, qty), refundAmount: autoRefund }
+                                : x
                             )
                           );
                         }}
@@ -194,25 +219,29 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
                     </label>
 
                     <label className="space-y-1">
-                      <span className="text-xs text-muted-foreground">Unit Cost (₦)</span>
+                      <span className="text-xs text-muted-foreground">Refund Amount (₦)</span>
                       <input
                         type="number"
-                        step="0.01"
                         min={0}
-                        value={line.unit_cost}
-                        onChange={(e) =>
+                        max={line.remainingTotal}
+                        step={0.01}
+                        value={line.refundAmount}
+                        onChange={(e) => {
+                          let val = Number(e.target.value);
+                          if (val > line.remainingTotal) val = line.remainingTotal;
+                          if (val < 0) val = 0;
                           setLines((prev) =>
                             prev.map((x, j) =>
-                              j === idx ? { ...x, unit_cost: Number(e.target.value) } : x
+                              j === idx ? { ...x, refundAmount: val } : x
                             )
-                          )
-                        }
+                          );
+                        }}
                         className="w-full bg-background rounded-md px-2 py-1.5 text-sm outline-none focus:ring-1 ring-primary"
                       />
                     </label>
                   </div>
 
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
                     <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
                       <input
                         type="checkbox"
@@ -228,7 +257,6 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
                       />
                       Restock to warehouse
                     </label>
-
                     <input
                       value={line.reason}
                       onChange={(e) =>
@@ -238,7 +266,8 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
                           )
                         )
                       }
-                      placeholder="Return reason (optional)"
+                      placeholder="Return reason *"
+                      required={line.qty > 0}
                       className="flex-1 bg-background rounded-md px-2 py-1.5 text-xs outline-none focus:ring-1 ring-primary placeholder:text-muted-foreground"
                     />
                   </div>
@@ -259,6 +288,11 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="flex justify-between text-sm font-semibold border-t border-border pt-2 mt-2">
+              <span>Total Refund:</span>
+              <span className="text-primary">{fmt(totalRefund)}</span>
             </div>
 
             <button
