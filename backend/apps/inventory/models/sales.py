@@ -63,6 +63,11 @@ class SalesOrderLine(BaseModel):
     quantity_ordered = models.PositiveIntegerField()
     unit_price = models.DecimalField(max_digits=12, decimal_places=4)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+
+    # Discount fields (production ready, no JSON)
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
     status = models.CharField(
         max_length=20, choices=LINE_STATUS_CHOICES, default='PENDING'
     )
@@ -77,8 +82,18 @@ class SalesOrderLine(BaseModel):
         ]
 
     @property
-    def line_total(self):
+    def subtotal(self):
         return self.quantity_ordered * self.unit_price
+
+    @property
+    def discount(self):
+        if self.discount_amount > 0:
+            return self.discount_amount
+        return self.subtotal * (self.discount_percent / 100)
+
+    @property
+    def line_total(self):
+        return self.subtotal - self.discount
 
 
 class SalesReturn(BaseModel):

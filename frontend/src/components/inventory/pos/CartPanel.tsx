@@ -15,8 +15,8 @@ interface CartPanelProps {
   selectedWarehouse: any;
   onSelectWarehouse: (warehouse: any) => void;
   warehouses: any[];
-  onSaveDraft: (notes: string) => Promise<void>;
-  onCompleteSale: (notes: string, payments: any[]) => Promise<void>;
+  onSaveDraft: (notes: string, overrideCart?: CartLine[]) => Promise<void>;
+  onCompleteSale: (notes: string, payments: any[], overrideCart?: CartLine[]) => Promise<void>;
   isSubmitting?: boolean;
   activeDraftId?: string | null;
 }
@@ -81,6 +81,23 @@ export function CartPanel({
     });
   }, [cart, globalDisc, globalDiscMode]);
 
+  // Function to get cart with global discount applied for submission
+  const getEffectiveCartForSubmission = useCallback(() => {
+    if (globalDisc <= 0) return cart;
+    
+    const totalOriginal = cart.reduce((sum, l) => sum + l.qty * l.unitPrice, 0);
+    
+    return cart.map(line => {
+      const base = line.qty * line.unitPrice;
+      if (globalDiscMode === "pct") {
+        return { ...line, discountPct: globalDisc, discountFixed: 0 };
+      } else {
+        const share = totalOriginal > 0 ? (base / totalOriginal) * globalDisc : 0;
+        return { ...line, discountFixed: share, discountPct: 0 };
+      }
+    });
+  }, [cart, globalDisc, globalDiscMode]);
+
   const total = useMemo(() => cartTotal(effectiveCart), [effectiveCart]);
   const subtotal = useMemo(() => cartSubtotal(effectiveCart), [effectiveCart]);
   const tax = useMemo(() => cartTax(effectiveCart), [effectiveCart]);
@@ -97,12 +114,9 @@ export function CartPanel({
     const newCart = [...cart];
     const updated = { ...newCart[idx], ...patch };
     
-    // Enforce stock limit when updating quantity
     const availableStock = stockMap[updated.variant.id]?.available ?? Infinity;
     if (patch.qty !== undefined && updated.qty > availableStock) {
       updated.qty = availableStock;
-      // Optional: show toast or notification
-      console.warn(`Quantity limited to available stock: ${availableStock}`);
     }
     
     newCart[idx] = updated;
@@ -151,6 +165,16 @@ export function CartPanel({
       // Error handled by hook
     }
   }, [newCustomerName, newCustomerEmail, newCustomerPhone, createCustomer, onSelectCustomer]);
+
+  const handleComplete = useCallback(() => {
+    const effectiveCartForSave = getEffectiveCartForSubmission();
+    onCompleteSale(orderNotes, payments, effectiveCartForSave);
+  }, [getEffectiveCartForSubmission, orderNotes, payments, onCompleteSale]);
+
+  const handleSave = useCallback(() => {
+    const effectiveCartForSave = getEffectiveCartForSubmission();
+    onSaveDraft(orderNotes, effectiveCartForSave);
+  }, [getEffectiveCartForSubmission, orderNotes, onSaveDraft]);
 
   // Click outside handler
   useEffect(() => {
@@ -434,7 +458,7 @@ export function CartPanel({
                   className="flex-1 bg-muted rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 ring-primary"
                 />
                 <button
-                  onClick={() => setNewPaymentAmt(fmt(Math.max(0, remaining)))}
+                  onClick={() => setNewPaymentAmt(String(Math.max(0, remaining)))}
                   className="px-2.5 py-2 bg-muted rounded-lg text-xs font-medium hover:bg-accent transition-colors"
                   title="Fill exact amount"
                 >
@@ -488,7 +512,7 @@ export function CartPanel({
 
           <div className="flex gap-2 pt-0.5">
             <button
-              onClick={() => onSaveDraft(orderNotes)}
+              onClick={handleSave}
               disabled={isSubmitting}
               className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 disabled:opacity-50 transition-all"
             >
@@ -496,7 +520,7 @@ export function CartPanel({
               Hold
             </button>
             <button
-              onClick={() => onCompleteSale(orderNotes, payments)}
+              onClick={handleComplete}
               disabled={isSubmitting}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-success text-success-foreground text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-all shadow-sm"
             >

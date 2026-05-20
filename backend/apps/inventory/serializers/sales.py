@@ -1,6 +1,4 @@
-# ============================================================
-# File: backend/apps/inventory/serializers/sales.py
-# ============================================================
+# backend/apps/inventory/serializers/sales.py
 from rest_framework import serializers
 from apps.inventory.models.sales import (
     SalesOrder, SalesOrderLine,
@@ -11,11 +9,11 @@ from apps.common.serializer_fields import UUIDForeignRelatedField
 
 
 class SalesOrderLineSerializer(serializers.ModelSerializer):
-    variant = UUIDForeignRelatedField(queryset=ProductVariant.objects.all())
     id = serializers.UUIDField(source='_id', read_only=True)
+    variant = UUIDForeignRelatedField(queryset=ProductVariant.objects.all())
     variant_sku = serializers.CharField(source='variant.sku', read_only=True)
     variant_name = serializers.CharField(source='variant.product.product_name', read_only=True)
-    line_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    line_total = serializers.SerializerMethodField()
     
     created_by_info = serializers.SerializerMethodField()
     updated_by_info = serializers.SerializerMethodField()
@@ -24,8 +22,10 @@ class SalesOrderLineSerializer(serializers.ModelSerializer):
         model = SalesOrderLine
         fields = [
             'id', 'variant', 'variant_sku', 'variant_name',
-            'quantity_ordered', 'unit_price', 'tax_rate', 'line_total',
-            'status', 'notes', 'created_at', 'updated_at',
+            'quantity_ordered', 'unit_price', 'tax_rate',
+            'discount_percent', 'discount_amount',
+            'line_total', 'status', 'notes',
+            'created_at', 'updated_at',
             'created_by_info', 'updated_by_info',
         ]
         read_only_fields = ['created_at', 'updated_at']
@@ -39,6 +39,9 @@ class SalesOrderLineSerializer(serializers.ModelSerializer):
         if obj.updated_by:
             return {'id': obj.updated_by._id, 'username': obj.updated_by.username}
         return None
+
+    def get_line_total(self, obj):
+        return obj.line_total
 
 
 class SalesOrderSerializer(serializers.ModelSerializer):
@@ -90,14 +93,24 @@ class SalesOrderSerializer(serializers.ModelSerializer):
         validated_data['updated_by'] = user
 
         order = SalesOrder.objects.create(**validated_data)
-
         total_amount = 0
+
         for item in line_items_data:
             variant_uuid = item.get('variant')
             variant = ProductVariant.objects.get(_id=variant_uuid, company_id=company_id)
             qty = item['quantity_ordered']
             unit_price = item['unit_price']
-            line_total = qty * unit_price
+            discount_pct = item.get('discount_pct', 0)
+            discount_fixed = item.get('discount_fixed', 0)
+            tax_rate = item.get('tax_rate', 0)
+
+            # Calculate line total for order total
+            subtotal = qty * unit_price
+            if discount_fixed > 0:
+                discount = discount_fixed
+            else:
+                discount = subtotal * (discount_pct / 100)
+            line_total = subtotal - discount
             total_amount += line_total
 
             SalesOrderLine.objects.create(
@@ -105,7 +118,10 @@ class SalesOrderSerializer(serializers.ModelSerializer):
                 variant=variant,
                 quantity_ordered=qty,
                 unit_price=unit_price,
-                tax_rate=item.get('tax_rate', 0),
+                tax_rate=tax_rate,
+                discount_percent=discount_pct,
+                discount_amount=discount_fixed,
+                status='PENDING',  # default, will be updated later if COMPLETE
                 company_id=company_id,
                 branch_id=branch_id,
                 created_by=user,

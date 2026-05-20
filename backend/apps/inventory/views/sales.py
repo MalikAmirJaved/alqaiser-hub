@@ -19,7 +19,8 @@ from apps.inventory.serializers.sales import (
     SalesOrderSerializer, SalesReturnSerializer
 )
 
-
+import logging
+logger = logging.getLogger(__name__)
 class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
     queryset = SalesOrder.objects.all()
     serializer_class = SalesOrderSerializer
@@ -28,11 +29,9 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
         qs = qs.prefetch_related('lines__variant__product')
-        
         status_param = self.request.query_params.get('status')
         if status_param:
             qs = qs.filter(status=status_param)
-            
         customer_uuid = self.request.query_params.get('customer')
         if customer_uuid:
             from apps.inventory.models import Customer
@@ -45,22 +44,19 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
+        # logger.error("request.data:: %s", request.data)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         status_val = serializer.validated_data.get('status', 'PENDING')
-        
         if status_val == 'COMPLETE':
-            # Complete order: deduct stock directly, no reservation
             order = self._create_complete_order(serializer, request.user)
         elif status_val == 'DRAFT':
-            # Draft order: create reservations
             order = serializer.save()
             self._create_reservations(order, request.user)
         else:
-            # PENDING or any other: just create order, no stock impact
             order = serializer.save()
-        
+
         return Response({
             'status': 'success',
             'message': f'Sales order {order.order_number} created.',
@@ -68,15 +64,12 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         }, status=status.HTTP_201_CREATED)
 
     def _create_complete_order(self, serializer, user):
-        """Create an order with status=COMPLETE and deduct stock immediately."""
         validated_data = serializer.validated_data
         line_items_data = validated_data.pop('line_items', [])
         company_id = user.company_id
         branch_id = user.branch_id
 
-        if 'order_number' not in validated_data:
-            validated_data['order_number'] = self._generate_order_number()
-
+        validated_data['order_number'] = self._generate_order_number()
         validated_data['company_id'] = company_id
         validated_data['branch_id'] = branch_id
         validated_data['created_by'] = user
@@ -91,23 +84,34 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
             variant = ProductVariant.objects.get(_id=variant_uuid, company_id=company_id)
             qty = item['quantity_ordered']
             unit_price = item['unit_price']
-            line_total = qty * unit_price
+            discount_pct = item.get('discount_pct', 0)
+            discount_fixed = item.get('discount_fixed', 0)
+            tax_rate = item.get('tax_rate', 0)
+
+            # Calculate line total
+            subtotal = qty * unit_price
+            if discount_fixed > 0:
+                discount = discount_fixed
+            else:
+                discount = subtotal * (discount_pct / 100)
+            line_total = subtotal - discount
             total_amount += line_total
 
+            # CRITICAL: set status='COMPLETE' explicitly
             order_line = SalesOrderLine.objects.create(
                 sales_order=order,
                 variant=variant,
                 quantity_ordered=qty,
                 unit_price=unit_price,
-                tax_rate=item.get('tax_rate', 0),
-                status='COMPLETE',
+                tax_rate=tax_rate,
+                discount_percent=discount_pct,
+                discount_amount=discount_fixed,
+                status='COMPLETE',   # <-- this was missing
                 company_id=company_id,
                 branch_id=branch_id,
                 created_by=user,
                 updated_by=user,
             )
-
-            # Deduct stock
             self._deduct_stock(order, order_line, variant, qty, user)
 
         order.total_amount = total_amount
@@ -184,35 +188,25 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def complete(self, request, _id=None):
-        """
-        Convert a DRAFT order to COMPLETE.
-        Accepts line_items with optional line_id to support quantity changes,
-        removal of lines, and addition of new lines.
-        """
         order = self.get_object()
         if order.status != 'DRAFT':
             return Response({'error': 'Only draft orders can be completed'}, status=400)
 
         user = request.user
-        warehouse = order.warehouse
-        company_id = user.company_id
         new_line_items = request.data.get('line_items', None)
 
-        # If no line_items provided, complete using existing lines (original behavior)
         if new_line_items is None:
             return self._complete_without_changes(order, user)
 
-        # Prepare maps of existing lines
         existing_by_id = {str(line._id): line for line in order.lines.all()}
         existing_by_variant = {str(line.variant._id): line for line in order.lines.all()}
         processed_line_ids = set()
 
         with transaction.atomic():
-            # Pre-lock all stock items we might touch
             variant_ids = [item['variant'] for item in new_line_items]
             stock_items = {
                 str(si.variant._id): si for si in StockItem.objects.select_for_update().filter(
-                    variant___id__in=variant_ids, warehouse=warehouse, company_id=company_id
+                    variant___id__in=variant_ids, warehouse=order.warehouse, company_id=user.company_id
                 )
             }
 
@@ -222,8 +216,9 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                 line_id = new_item.get('line_id')
                 unit_price = new_item['unit_price']
                 tax_rate = new_item.get('tax_rate', 0)
+                discount_pct = new_item.get('discount_pct', 0)
+                discount_fixed = new_item.get('discount_fixed', 0)
 
-                # Find existing order line (if any)
                 order_line = None
                 if line_id and line_id in existing_by_id:
                     order_line = existing_by_id[line_id]
@@ -233,30 +228,29 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                     processed_line_ids.add(str(order_line._id))
 
                 if order_line is None:
-                    # BRAND NEW LINE (not in original draft)
-                    variant = ProductVariant.objects.get(_id=variant_uuid, company_id=company_id)
+                    # New line
+                    variant = ProductVariant.objects.get(_id=variant_uuid, company_id=user.company_id)
                     stock_item = stock_items.get(variant_uuid)
                     if not stock_item:
                         stock_item, _ = StockItem.objects.select_for_update().get_or_create(
-                            variant=variant, warehouse=warehouse,
-                            company_id=company_id, branch_id=user.branch_id,
+                            variant=variant, warehouse=order.warehouse,
+                            company_id=user.company_id, branch_id=user.branch_id,
                             defaults={'quantity_on_hand': 0, 'quantity_reserved': 0}
                         )
                     available = stock_item.quantity_on_hand - stock_item.quantity_reserved
                     if available < new_qty:
-                        return Response({
-                            'error': f'Insufficient stock for variant {variant.sku}'
-                        }, status=status.HTTP_400_BAD_REQUEST)
-                    
-                    # Create new order line and deduct stock directly
+                        return Response({'error': f'Insufficient stock for variant {variant.sku}'}, status=400)
+
                     order_line = SalesOrderLine.objects.create(
                         sales_order=order,
                         variant=variant,
                         quantity_ordered=new_qty,
                         unit_price=unit_price,
                         tax_rate=tax_rate,
+                        discount_percent=discount_pct,
+                        discount_amount=discount_fixed,
                         status='COMPLETE',
-                        company_id=company_id,
+                        company_id=user.company_id,
                         branch_id=user.branch_id,
                         created_by=user,
                         updated_by=user,
@@ -264,41 +258,37 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                     self._deduct_stock_for_line(order, order_line, variant, new_qty, user)
                     continue
 
-                # EXISTING LINE: handle quantity changes
+                # Existing line
                 variant = order_line.variant
                 stock_item = stock_items.get(str(variant._id))
                 if not stock_item:
                     stock_item, _ = StockItem.objects.select_for_update().get_or_create(
-                        variant=variant, warehouse=warehouse,
-                        company_id=company_id, branch_id=user.branch_id,
+                        variant=variant, warehouse=order.warehouse,
+                        company_id=user.company_id, branch_id=user.branch_id,
                         defaults={'quantity_on_hand': 0, 'quantity_reserved': 0}
                     )
 
-                # Get active reservation for this line (should exist for drafts)
                 reservation = StockReservation.objects.filter(
-                    reference_id=order._id,
-                    variant=variant,
-                    status='ACTIVE'
+                    reference_id=order._id, variant=variant, status='ACTIVE'
                 ).select_for_update().first()
 
                 if not reservation:
-                    # No active reservation – treat as new line
                     self._deduct_stock_for_line(order, order_line, variant, new_qty, user)
                     order_line.quantity_ordered = new_qty
+                    order_line.unit_price = unit_price
+                    order_line.tax_rate = tax_rate
+                    order_line.discount_percent = discount_pct
+                    order_line.discount_amount = discount_fixed
                     order_line.status = 'COMPLETE'
-                    order_line.save(update_fields=['quantity_ordered', 'status'])
+                    order_line.save(update_fields=['quantity_ordered', 'unit_price', 'tax_rate', 'discount_percent', 'discount_amount', 'status'])
                     continue
 
                 reserved_qty = reservation.quantity
-
-                # Adjust reservation if quantity changed
                 if new_qty > reserved_qty:
                     additional = new_qty - reserved_qty
                     available = stock_item.quantity_on_hand - stock_item.quantity_reserved
                     if available < additional:
-                        return Response({
-                            'error': f'Insufficient stock for additional {additional} units of {variant.sku}'
-                        }, status=status.HTTP_400_BAD_REQUEST)
+                        return Response({'error': f'Insufficient stock for additional {additional} units'}, status=400)
                     stock_item.quantity_reserved += additional
                     reservation.quantity = new_qty
                     reservation.save(update_fields=['quantity'])
@@ -308,25 +298,21 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                     reservation.quantity = new_qty
                     reservation.save(update_fields=['quantity'])
 
-                # Deduct the final quantity from on-hand stock
-                before = stock_item.quantity_on_hand
                 if stock_item.quantity_on_hand < new_qty:
-                    return Response({
-                        'error': f'Not enough on-hand stock for {variant.sku}'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-                    
+                    return Response({'error': f'Not enough on-hand stock for {variant.sku}'}, status=400)
+
+                before = stock_item.quantity_on_hand
                 after = before - new_qty
                 stock_item.quantity_on_hand = after
-                stock_item.quantity_reserved -= new_qty   # fulfill the reservation
+                stock_item.quantity_reserved -= new_qty
                 stock_item.version += 1
                 stock_item.save(update_fields=['quantity_on_hand', 'quantity_reserved', 'version'])
 
-                # Create inventory transaction
                 InventoryTransaction.objects.create(
                     transaction_id=uuid.uuid4(),
                     variant=variant,
-                    warehouse=warehouse,
-                    company_id=company_id,
+                    warehouse=order.warehouse,
+                    company_id=user.company_id,
                     branch_id=user.branch_id,
                     quantity_change=-new_qty,
                     quantity_before=before,
@@ -341,26 +327,27 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                     updated_by=user,
                 )
 
-                # Update order line
+                # Update line with all fields including discount and status
                 order_line.quantity_ordered = new_qty
+                order_line.unit_price = unit_price
+                order_line.tax_rate = tax_rate
+                order_line.discount_percent = discount_pct
+                order_line.discount_amount = discount_fixed
                 order_line.status = 'COMPLETE'
-                order_line.save(update_fields=['quantity_ordered', 'status'])
+                order_line.save(update_fields=['quantity_ordered', 'unit_price', 'tax_rate', 'discount_percent', 'discount_amount', 'status'])
 
-                # Mark reservation as fulfilled
                 reservation.status = 'FULFILLED'
                 reservation.save(update_fields=['status'])
 
-            # Cancel any existing lines that were not present in the request
+            # Cancel lines not present
             for line in order.lines.all():
                 if str(line._id) not in processed_line_ids and line.status != 'CANCELLED':
                     reservation = StockReservation.objects.filter(
-                        reference_id=order._id,
-                        variant=line.variant,
-                        status='ACTIVE'
+                        reference_id=order._id, variant=line.variant, status='ACTIVE'
                     ).select_for_update().first()
                     if reservation:
                         stock_item = StockItem.objects.select_for_update().get(
-                            variant=line.variant, warehouse=warehouse, company_id=company_id
+                            variant=line.variant, warehouse=order.warehouse, company_id=user.company_id
                         )
                         stock_item.quantity_reserved -= reservation.quantity
                         stock_item.save(update_fields=['quantity_reserved'])
@@ -369,10 +356,16 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                     line.status = 'CANCELLED'
                     line.save(update_fields=['status'])
 
-            # Recalculate total amount
-            total_amount = sum(
-                item['quantity_ordered'] * item['unit_price'] for item in new_line_items
-            )
+            # Recalculate total with discounts
+            total_amount = 0
+            for item in new_line_items:
+                qty = item['quantity_ordered']
+                price = item['unit_price']
+                d_pct = item.get('discount_pct', 0)
+                d_fixed = item.get('discount_fixed', 0)
+                subtotal = qty * price
+                discount = d_fixed if d_fixed > 0 else subtotal * (d_pct / 100)
+                total_amount += (subtotal - discount)
             order.total_amount = total_amount
             order.status = 'COMPLETE'
             order.save(update_fields=['total_amount', 'status'])
@@ -380,14 +373,12 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         return Response({'status': 'success', 'message': 'Order completed with modifications'})
 
     def _complete_without_changes(self, order, user):
-        """Original completion logic when line_items is not provided."""
         warehouse = order.warehouse
         company_id = user.company_id
 
         with transaction.atomic():
             reservations = StockReservation.objects.filter(
-                reference_id=order._id,
-                status='ACTIVE'
+                reference_id=order._id, status='ACTIVE'
             ).select_related('variant').select_for_update()
 
             if not reservations.exists():
@@ -433,7 +424,6 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                     created_by=user,
                     updated_by=user,
                 )
-
                 reservation.status = 'FULFILLED'
                 reservation.save(update_fields=['status'])
 
@@ -451,8 +441,7 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         with transaction.atomic():
             if order.status == 'DRAFT':
                 reservations = StockReservation.objects.filter(
-                    reference_id=order._id,
-                    status='ACTIVE'
+                    reference_id=order._id, status='ACTIVE'
                 ).select_for_update()
                 for reservation in reservations:
                     stock_item = StockItem.objects.select_for_update().get(
@@ -473,7 +462,6 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         return Response({'status': 'success', 'message': 'Order cancelled'})
 
     def _deduct_stock_for_line(self, order, order_line, variant, qty, user):
-        """Helper to deduct stock directly for a line without a reservation."""
         warehouse = order.warehouse
         company_id = user.company_id
         stock_item = StockItem.objects.select_for_update().get(

@@ -65,8 +65,8 @@ export default function SalesPage() {
       qty: line.quantity_ordered,
       unitPrice: parseFloat(line.unit_price),
       taxRate: parseFloat(line.tax_rate || 0),
-      discountPct: 0,
-      discountFixed: 0,
+      discountPct: parseFloat(line.discount_percent || 0),
+      discountFixed: parseFloat(line.discount_amount || 0),
       notes: "",
       salesOrderLineId: line.id,
     }));
@@ -77,13 +77,13 @@ export default function SalesPage() {
     setActivePanel("search");
   }, []);
 
-  const handleCompleteSale = useCallback(async (notes: string, payments: any[]) => {
-    if (cart.length === 0) return;
+  const handleCompleteSale = useCallback(async (notes: string, payments: any[], overrideCart?: CartLine[]) => {
+    const finalCart = overrideCart || cart;
+    if (finalCart.length === 0) return;
     const notesWithPayments = notes + (payments.length ? ` | Payments: ${payments.map(p => `${p.method}:${p.amount}`).join(", ")}` : "");
-
     try {
       if (activeDraftId) {
-        const updatedLineItems = cartToLineItems(cart);
+        const updatedLineItems = cartToLineItems(finalCart);
         await completeOrder({ orderId: activeDraftId, line_items: updatedLineItems });
       } else {
         await createSalesOrder({
@@ -91,7 +91,7 @@ export default function SalesPage() {
           warehouse: selectedWarehouse.id,
           order_date: new Date().toISOString().split("T")[0],
           notes: notesWithPayments,
-          line_items: cartToLineItems(cart),
+          line_items: cartToLineItems(finalCart),
           status: "COMPLETE",
         });
       }
@@ -105,11 +105,12 @@ export default function SalesPage() {
     }
   }, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, completeOrder, clearCart, refetchDrafts, queryClient]);
 
-  const handleSaveDraft = useCallback(async (notes: string) => {
-    if (cart.length === 0) return;
+  const handleSaveDraft = useCallback(async (notes: string, overrideCart?: CartLine[]) => {
+    const finalCart = overrideCart || cart;
+    if (finalCart.length === 0) return;
     try {
       if (activeDraftId) {
-        // If you want to update an existing draft, implement update logic here.
+        // Update existing draft would go here
         return;
       }
       await createSalesOrder({
@@ -117,7 +118,7 @@ export default function SalesPage() {
         warehouse: selectedWarehouse.id,
         order_date: new Date().toISOString().split("T")[0],
         notes,
-        line_items: cartToLineItems(cart),
+        line_items: cartToLineItems(finalCart),
         status: "DRAFT",
       });
       clearCart();
@@ -199,7 +200,6 @@ export default function SalesPage() {
           {activePanel === "search" && (
             <ProductSearchPanel
               onAddToCart={(v: VariantDetailWithStock) => {
-                // Validate stock before adding
                 const availableStock = v.stock?.available ?? 0;
                 
                 if (availableStock <= 0) {
