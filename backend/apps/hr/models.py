@@ -7,8 +7,6 @@ from django.utils import timezone
 from datetime import date
 
 from apps.common.basemodel import BaseModel
-from apps.organization.models import Company, Branch
-from apps.compsetting.models import LeaveType
 
 
 def current_year():
@@ -549,6 +547,42 @@ class PayrollRecord(BaseModel):
 
 
 # =========================================================
+# PAYROLL DEDUCTION DETAIL (relationa
+# =========================================================
+class PayrollDeductionDetail(BaseModel):
+    """Relational table for payroll deduction details"""
+    
+    DEDUCTION_TYPES = [
+        ('LEAVE', 'Leave Deduction'),
+        ('LOAN_PRINCIPAL', 'Loan Principal'),
+        ('LOAN_INTEREST', 'Loan Interest'),
+        ('CUSTOM', 'Custom Deduction'),
+    ]
+    
+    payroll = models.ForeignKey('PayrollRecord', on_delete=models.CASCADE, related_name='deduction_details')
+    deduction_type = models.CharField(max_length=20, choices=DEDUCTION_TYPES)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    description = models.CharField(max_length=255, blank=True, null=True)
+    
+    # For leave deductions
+    leave_days = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
+    
+    # For loan deductions
+    loan = models.ForeignKey('EmployeeLoan', on_delete=models.SET_NULL, null=True, blank=True, related_name='payroll_deductions')
+    
+    class Meta:
+        verbose_name = "Payroll Deduction Detail"
+        verbose_name_plural = "Payroll Deduction Details"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['payroll', 'deduction_type']),
+            models.Index(fields=['loan']),
+        ]
+    
+    def __str__(self):
+        return f"{self.get_deduction_type_display()} - {self.amount}"
+
+# =========================================================
 # SHIFT OVERRIDE
 # =========================================================
 class ShiftOverride(BaseModel):
@@ -723,41 +757,50 @@ class EmployeeShiftSchedule(models.Model):
 # LEAVE REQUEST
 # =========================================================
 class LeaveRequest(BaseModel):
-    """Employee leave requests"""
+    """Simplified employee leave requests - no balance tracking"""
+    
+    LEAVE_TYPE_CHOICES = [
+        ('CASUAL', 'Casual Leave'),
+        ('SICK', 'Sick Leave'),
+        ('ANNUAL', 'Annual Leave'),
+        ('MATERNITY', 'Maternity Leave'),
+        ('PATERNITY', 'Paternity Leave'),
+        ('BEREAVEMENT', 'Bereavement Leave'),
+        ('OTHER', 'Other'),
+    ]
     
     STATUS_CHOICES = [
-        ('DRAFT', 'Draft'),
         ('PENDING', 'Pending'),
         ('APPROVED', 'Approved'),
         ('REJECTED', 'Rejected'),
         ('CANCELLED', 'Cancelled'),
     ]
     
-    HALF_DAY_CHOICES = [
-        ('false', 'Full Day'),
-        ('true', 'Half Day'),
-    ]
+    # Relations
+    employee = models.ForeignKey('Employee', on_delete=models.CASCADE, related_name='leave_requests')
     
-    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='leave_requests')
-    employee_name = models.CharField(max_length=255, blank=True)
-    
-    leave_type = models.ForeignKey(LeaveType, on_delete=models.PROTECT, related_name='leave_requests')
-    leave_type_name = models.CharField(max_length=100, blank=True)
-    
-    leave_year = models.PositiveSmallIntegerField(default=current_year)
+    # Leave Details
+    leave_type = models.CharField(max_length=20, choices=LEAVE_TYPE_CHOICES, default='CASUAL')
     start_date = models.DateField()
     end_date = models.DateField()
-    total_days = models.DecimalField(max_digits=5, decimal_places=1, default=0)
-    is_half_day = models.CharField(max_length=5, choices=HALF_DAY_CHOICES, default='false')
-    
+    is_half_day = models.BooleanField(default=False)
     reason = models.TextField()
-    contact_number = models.CharField(max_length=20, blank=True, null=True)
-    document_url = models.TextField(blank=True, null=True)
+    emergency_contact = models.CharField(max_length=50, blank=True, null=True)
     
+    # Calculated field (optional - can be computed on the fly)
+    total_days = models.DecimalField(max_digits=5, decimal_places=1, default=0)
+    
+    # Status & Approval
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     applied_at = models.DateTimeField(auto_now_add=True)
     
-    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_leaves')
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_leave_requests'
+    )
     approval_date = models.DateTimeField(null=True, blank=True)
     rejection_reason = models.TextField(blank=True, null=True)
     
@@ -770,124 +813,19 @@ class LeaveRequest(BaseModel):
             models.Index(fields=['company_id', 'status']),
             models.Index(fields=['employee', 'status']),
             models.Index(fields=['start_date', 'end_date']),
-            models.Index(fields=['leave_year']),
             models.Index(fields=['applied_at']),
             models.Index(fields=['company_id', 'employee', 'status']),
         ]
-
-
-# =========================================================
-# LEAVE BALANCE
-# =========================================================
-class LeaveBalance(BaseModel):
-    """Employee leave balance for each leave type and year"""
     
-    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='leave_balances')
-    employee_name = models.CharField(max_length=255, blank=True)
+    def __str__(self):
+        return f"{self.employee.full_name} - {self.get_leave_type_display()} ({self.start_date} to {self.end_date})"
     
-    leave_type = models.ForeignKey(LeaveType, on_delete=models.PROTECT, related_name='leave_balances')
-    leave_type_name = models.CharField(max_length=100, blank=True)
-    
-    year = models.PositiveSmallIntegerField()
-    allocated = models.DecimalField(max_digits=8, decimal_places=1, default=0)
-    used = models.DecimalField(max_digits=8, decimal_places=1, default=0)
-    available = models.DecimalField(max_digits=8, decimal_places=1, default=0)
-    carry_forward_from = models.DecimalField(max_digits=8, decimal_places=1, default=0)
-    
-    class Meta:
-        db_table = 'hr_leave_balances'
-        verbose_name = "Leave Balance"
-        verbose_name_plural = "Leave Balances"
-        unique_together = [['company_id', 'employee', 'leave_type', 'year']]
-        indexes = [
-            models.Index(fields=['company_id', 'employee', 'year']),
-            models.Index(fields=['employee', 'leave_type', 'year']),
-            models.Index(fields=['company_id', 'year']),
-        ]
-
-
-# =========================================================
-# LEAVE BALANCE HISTORY
-# =========================================================
-class LeaveBalanceHistory(BaseModel):
-    """Audit trail for leave balance changes"""
-    
-    ACTION_CHOICES = [
-        ('ALLOCATION', 'Initial Allocation'),
-        ('CARRY_FORWARD', 'Carry Forward'),
-        ('LEAVE_APPROVED', 'Leave Approved'),
-        ('LEAVE_CANCELLED', 'Leave Cancelled'),
-        ('MANUAL_ADJUSTMENT', 'Manual Adjustment'),
-        ('YEAR_END_PROCESS', 'Year End Process'),
-    ]
-    
-    balance = models.ForeignKey(LeaveBalance, on_delete=models.CASCADE, related_name='history')
-    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='leave_balance_histories')
-    leave_type = models.ForeignKey(LeaveType, on_delete=models.PROTECT, related_name='balance_histories')
-    
-    action = models.CharField(max_length=30, choices=ACTION_CHOICES)
-    
-    previous_used = models.DecimalField(max_digits=8, decimal_places=1, default=0)
-    new_used = models.DecimalField(max_digits=8, decimal_places=1, default=0)
-    delta = models.DecimalField(max_digits=8, decimal_places=1, default=0)
-    
-    previous_available = models.DecimalField(max_digits=8, decimal_places=1, default=0)
-    new_available = models.DecimalField(max_digits=8, decimal_places=1, default=0)
-    
-    leave_request = models.ForeignKey(LeaveRequest, on_delete=models.SET_NULL, null=True, blank=True, related_name='balance_changes')
-    notes = models.TextField(blank=True, null=True)
-    
-    performed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='leave_balance_changes')
-    
-    class Meta:
-        db_table = 'hr_leave_balance_histories'
-        verbose_name = "Leave Balance History"
-        verbose_name_plural = "Leave Balance Histories"
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['company_id', 'balance']),
-            models.Index(fields=['employee', '-created_at']),
-            models.Index(fields=['action']),
-        ]
-
-
-# =========================================================
-# YEAR END CARRY FORWARD
-# =========================================================
-class YearEndCarryForward(BaseModel):
-    """Track year-end leave carry forward processing"""
-    
-    STATUS_CHOICES = [
-        ('PENDING', 'Pending'),
-        ('PROCESSING', 'Processing'),
-        ('COMPLETED', 'Completed'),
-        ('FAILED', 'Failed'),
-    ]
-    
-    from_year = models.PositiveSmallIntegerField()
-    to_year = models.PositiveSmallIntegerField()
-    
-    processed_at = models.DateTimeField(auto_now_add=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
-    
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
-    
-    total_employees_processed = models.PositiveIntegerField(default=0)
-    total_balances_updated = models.PositiveIntegerField(default=0)
-    total_days_carried = models.DecimalField(max_digits=12, decimal_places=1, default=0)
-    
-    error_log = models.TextField(blank=True, null=True)
-    
-    processed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='carry_forward_processes')
-    
-    class Meta:
-        db_table = 'hr_year_end_carry_forward'
-        verbose_name = "Year End Carry Forward"
-        verbose_name_plural = "Year End Carry Forwards"
-        indexes = [
-            models.Index(fields=['company_id', 'from_year', 'to_year']),
-            models.Index(fields=['status']),
-        ]
+    def save(self, *args, **kwargs):
+        """Auto-calculate total days before saving"""
+        if self.start_date and self.end_date:
+            delta = (self.end_date - self.start_date).days + 1
+            self.total_days = delta - 0.5 if self.is_half_day and delta == 1 else float(delta)
+        super().save(*args, **kwargs)
 
 
 # =========================================================

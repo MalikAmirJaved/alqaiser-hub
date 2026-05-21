@@ -19,7 +19,6 @@ export default function WarehousesPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null);
   const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse | null>(null);
-  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
 
   // Queries
   const { data: warehouses = [], isLoading, refetch } = useWarehouses({ search: searchTerm });

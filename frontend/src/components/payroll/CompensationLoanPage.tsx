@@ -103,7 +103,7 @@ export default function CompensationLoanPage({ formatCurrency }: CompensationLoa
     }
   };
 
-  const handleDelete = async (type: string, id: number) => {
+  const handleDelete = async (type: string, id: string) => {
     if (!confirm("Are you sure you want to delete this record?")) return;
     try {
       if (type === "compensation") {
@@ -118,7 +118,7 @@ export default function CompensationLoanPage({ formatCurrency }: CompensationLoa
     }
   };
 
-  const handleStatusChange = async (id: number, newStatus: string) => {
+  const handleStatusChange = async (id: string, newStatus: string) => {
     try {
       await updateLoanStatus.mutateAsync({ id, status: newStatus });
       toast.success(`Loan status updated to ${newStatus}`);

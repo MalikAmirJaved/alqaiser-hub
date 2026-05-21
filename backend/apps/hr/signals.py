@@ -11,6 +11,7 @@ from .models import (
 )
 from apps.notifications.models import Notification
 
+
 # ---------- Helper: broadcast real‑time data update ----------
 def broadcast_data_update(company_id, branch_id, entity, action=None, record_id=None):
     """Send a data_update message to the company/branch WebSocket group."""
@@ -26,6 +27,7 @@ def broadcast_data_update(company_id, branch_id, entity, action=None, record_id=
             'record_id': record_id,
         }
     )
+
 
 # ---------- Model → entity name mapping ----------
 MODEL_TO_ENTITY = {
@@ -45,6 +47,7 @@ MODEL_TO_ENTITY = {
     EmployeeLoan: 'loans',
 }
 
+
 # ---------- Real‑time data updates (create, update, delete) ----------
 @receiver(post_save)
 def realtime_data_update_save(sender, instance, created, **kwargs):
@@ -61,6 +64,7 @@ def realtime_data_update_save(sender, instance, created, **kwargs):
 
         if company_id:
             broadcast_data_update(company_id, branch_id, entity, action, record_id)
+
 
 @receiver(post_delete)
 def realtime_data_update_delete(sender, instance, **kwargs):
@@ -79,8 +83,7 @@ def realtime_data_update_delete(sender, instance, **kwargs):
             broadcast_data_update(company_id, branch_id, entity, action, record_id)
 
 
-# ---------- Real‑time notifications (create/update/delete) ----------
-# Helper to create notification
+# ---------- Helper to create notification ----------
 def create_notification(company_id, branch_id, title, message, notif_type='info'):
     Notification.objects.create(
         company_id=company_id,
@@ -90,6 +93,51 @@ def create_notification(company_id, branch_id, title, message, notif_type='info'
         notification_type=notif_type
     )
 
+
+# =========================================================
+# LEAVE REQUEST SIGNALS (FIXED)
+# =========================================================
+@receiver(post_save, sender=LeaveRequest)
+def notify_leave_change(sender, instance, created, **kwargs):
+    company_id = instance.company_id
+    branch_id = instance.employee.branch_id if instance.employee else None
+    emp_name = instance.employee.full_name if instance.employee else "Unknown"
+
+    if created:
+        create_notification(
+            company_id, branch_id,
+            "New Leave Request",
+            f"Leave request submitted by {emp_name} from {instance.start_date} to {instance.end_date}.",
+            "warning"
+        )
+    else:
+        # Fix: handle case where update_fields may be None
+        update_fields = kwargs.get('update_fields')
+        # If update_fields is None or 'status' is in update_fields, send notification
+        if update_fields is None or 'status' in update_fields:
+            create_notification(
+                company_id, branch_id,
+                "Leave Request Status Changed",
+                f"Leave request for {emp_name} is now {instance.status}.",
+                "info"
+            )
+
+
+@receiver(post_delete, sender=LeaveRequest)
+def notify_leave_delete(sender, instance, **kwargs):
+    emp_name = instance.employee.full_name if instance.employee else "Unknown"
+    create_notification(
+        instance.company_id,
+        instance.employee.branch_id if instance.employee else None,
+        "Leave Request Cancelled",
+        f"Leave request for {emp_name} has been cancelled.",
+        "info"
+    )
+
+
+# =========================================================
+# ALL OTHER SIGNALS (unchanged, but keep them as they are)
+# =========================================================
 # Employee
 @receiver(post_save, sender=Employee)
 def notify_employee_change(sender, instance, created, **kwargs):
@@ -138,32 +186,6 @@ def notify_loan_delete(sender, instance, **kwargs):
         "Loan Request Removed",
         f"Loan request for {instance.employee.full_name} has been deleted.",
         "warning")
-
-# LeaveRequest
-@receiver(post_save, sender=LeaveRequest)
-def notify_leave_change(sender, instance, created, **kwargs):
-    company_id = instance.company_id
-    branch_id = instance.employee.branch_id if instance.employee else None
-    emp_name = instance.employee_name
-    if created:
-        create_notification(company_id, branch_id,
-            "New Leave Request",
-            f"Leave request submitted by {emp_name} from {instance.start_date} to {instance.end_date}.",
-            "warning")
-    else:
-        # Only notify if status changed significantly
-        if 'status' in kwargs.get('update_fields', []) or hasattr(instance, '_status_changed'):
-            create_notification(company_id, branch_id,
-                "Leave Request Status Changed",
-                f"Leave request for {emp_name} is now {instance.status}.",
-                "info")
-
-@receiver(post_delete, sender=LeaveRequest)
-def notify_leave_delete(sender, instance, **kwargs):
-    create_notification(instance.company_id, instance.employee.branch_id,
-        "Leave Request Cancelled",
-        f"Leave request for {instance.employee_name} has been cancelled.",
-        "info")
 
 # ShiftTemplate
 @receiver(post_save, sender=ShiftTemplate)
@@ -247,8 +269,8 @@ def notify_assignment_change(sender, instance, created, **kwargs):
             f"Asset '{asset_name}' has been assigned to {emp_name}.",
             "info")
     else:
-        # status change (returned, lost, etc.)
-        if 'status' in kwargs.get('update_fields', []):
+        update_fields = kwargs.get('update_fields')
+        if update_fields is None or 'status' in update_fields:
             create_notification(company_id, branch_id,
                 "Asset Assignment Status Changed",
                 f"Asset '{asset_name}' assigned to {emp_name} is now {instance.status}.",
@@ -320,8 +342,8 @@ def notify_exit_change(sender, instance, created, **kwargs):
             f"Exit process started for {emp_name}.",
             "warning")
     else:
-        # Clearance status change
-        if 'clearance_status' in kwargs.get('update_fields', []):
+        update_fields = kwargs.get('update_fields')
+        if update_fields is None or 'clearance_status' in update_fields:
             create_notification(company_id, branch_id,
                 "Exit Clearance Updated",
                 f"Exit clearance for {emp_name} is now {instance.clearance_status}.",

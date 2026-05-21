@@ -1,7 +1,7 @@
 // components/payroll/types.ts
 export interface Compensation {
-  id: number;
-  employee_id: number;
+  id: string;
+  employee_id: string;
   employee_name?: string;
   grade?: string;
   basic_salary?: string;
@@ -20,8 +20,8 @@ export interface Compensation {
 }
 
 export interface Loan {
-  id: number;
-  employee_id: number;
+  id: string;
+  employee_id: string;
   employee_name?: string;
   loan_type: string;
   loan_type_display?: string;

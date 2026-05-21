@@ -7,7 +7,7 @@ interface CompensationTabProps {
   filteredCompensations: any[];
   formatCurrency: (amount: number) => string;
   onEdit: (compensation: any) => void;
-  onDelete: (id: number) => void;
+  onDelete: (id: string) => void;
 }
 
 export default function CompensationTab({ filteredCompensations, formatCurrency, onEdit, onDelete }: CompensationTabProps) {

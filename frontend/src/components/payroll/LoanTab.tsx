@@ -10,8 +10,8 @@ interface LoanTabProps {
     statusDropdownId: number | null;
     setStatusDropdownId: (id: number | null) => void;
     onEdit: (loan: any) => void;
-    onDelete: (id: number) => void;
-    onStatusChange: (id: number, status: string) => void;
+    onDelete: (id: string) => void;
+    onStatusChange: (id: string, status: string) => void;
 }
 
 export default function LoanTab({

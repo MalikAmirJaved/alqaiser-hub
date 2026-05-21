@@ -38,7 +38,6 @@ export default function CompanySetupModal() {
     defaultStartTime: "09:00",
     defaultEndTime: "18:00",
     workingHoursPerDay: "8.00",
-    leaveDuringProbation: false,
     allowCarryForward: false,
     maxCarryForwardDays: 0,
   });
@@ -335,14 +334,6 @@ const handleSubmit = async () => {
 
               <div className="space-y-4 pt-4 border-t">
                 <h4 className="font-medium flex items-center gap-2"><Briefcase className="w-4 h-4" /> Leave Policies</h4>
-
-                <label className="flex items-center justify-between">
-                  <div>
-                    <p>Allow leave during probation</p>
-                    <p className="text-xs text-muted-foreground">New employees can apply for leave</p>
-                  </div>
-                  <input type="checkbox" checked={formData.leaveDuringProbation} onChange={(e) => handleChange("leaveDuringProbation", e.target.checked)} className="w-5 h-5 accent-primary" />
-                </label>
 
                 <label className="flex items-center justify-between">
                   <div>

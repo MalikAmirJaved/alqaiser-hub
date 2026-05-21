@@ -5,7 +5,7 @@ import { useApi } from "@/hooks/useApi";
 
 // ---------- Types ----------
 export interface AssetBasic {
-  id: number;
+  id: string;
   name: string;
   brand?: string;
   model?: string;
@@ -13,11 +13,11 @@ export interface AssetBasic {
 }
 
 export interface EmployeeAssetAssignment {
-  id: number;
+  id: string;
   asset: AssetBasic;
   source_type: 'DIRECT' | 'KIT';
   source_kit?: {
-    id: number;
+    id: string;
     name: string;
   };
   assigned_date: string;
@@ -26,14 +26,14 @@ export interface EmployeeAssetAssignment {
 }
 
 export interface AssignedKit {
-  id: number;
+  id: string;
   name: string;
   description?: string;
   assets: AssetBasic[];
 }
 
 export interface AssignmentHistoryEntry {
-  id: number;
+  id: string;
   asset_name: string;
   assigned_date: string;
   returned_date?: string;
@@ -65,7 +65,7 @@ export interface AvailableAssetsData {
 }
 
 // ---------- Hooks ----------
-export function useEmployeeAssignments(employeeId?: number) {
+export function useEmployeeAssignments(employeeId?: string) {
   const api = useApi();
   return useQuery<EmployeeAssignmentsData>({
     queryKey: ["employee-assignments", employeeId],
@@ -75,7 +75,7 @@ export function useEmployeeAssignments(employeeId?: number) {
   });
 }
 
-export function useAvailableAssets(employeeId?: number) {
+export function useAvailableAssets(employeeId?: string) {
   const api = useApi();
   const queryString = employeeId ? `?employee_id=${employeeId}` : '';
   return useQuery<AvailableAssetsData>({
@@ -91,9 +91,9 @@ export function useAssignAssets() {
   
   return useMutation({
     mutationFn: (data: {
-      employee_id: number;
-      asset_ids?: number[];
-      kit_ids?: number[];
+      employee_id: string;
+      asset_ids?: string[];
+      kit_ids?: string[];
       condition?: string;
       notes?: string;
     }) => api("/api/hr/employee-assets/assignments/", {
@@ -113,7 +113,7 @@ export function useReturnAssets() {
   
   return useMutation({
     mutationFn: (data: {
-      assignment_ids: number[];
+      assignment_ids: string[];
       condition_on_return?: string;
       return_notes?: string;
     }) => api("/api/hr/employee-assets/assignments/", {

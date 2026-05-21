@@ -26,7 +26,7 @@ export default function EmployeesPage() {
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
-  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
 
   const { data: employees = [], isLoading } = useEmployees(
@@ -34,7 +34,6 @@ export default function EmployeesPage() {
   );
   const { data: stats } = useEmployeeStats();
   const { data: shiftTemplates = [] } = useShiftTemplates();
-
   const createEmployee = useCreateEmployee();
   const updateEmployee = useUpdateEmployee();
   const deleteEmployee = useDeleteEmployee();

@@ -4,8 +4,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
 export interface PayrollRecord {
-  id: number;
-  employee_id: number;
+  id: string;
+  employee_id: string;
   employee_name: string;
   employee_code: string;
   department: string;
@@ -37,8 +37,8 @@ export interface PayrollStats {
 }
 
 export interface EmployeeLoan {
-  id: number;
-  employee_id: number;
+  id: string;
+  employee_id: string;
   employee_name: string;
   employee_code: string;
   department: string;
@@ -64,8 +64,8 @@ export interface EmployeeLoan {
 }
 
 export interface Compensation {
-  id: number;
-  employee_id: number;
+  id: string;
+  employee_id: string;
   employee_name: string;
   employee_code: string;
   department: string;
@@ -94,6 +94,29 @@ export interface Compensation {
   notes?: string;
   created_at?: string;
 }
+
+export interface PayrollPreview {
+  base_salary: number;
+  compensation: number;
+  overtime_hours: number;
+  overtime_amount: number;
+  bonus: number;
+  leave_deduction: number;
+  leave_days: number;
+  loan_deductions: number;
+  loan_details: Array<{
+    loan_id: string;
+    loan_type: string;
+    principal: number;
+    interest: number;
+    total: number;
+  }>;
+  custom_deductions: number;
+  total_deductions: number;
+  net_salary: number;
+}
+
+
 
 // ===== Payroll Hooks =====
 export function usePayroll(params?: Record<string, string>) {
@@ -172,7 +195,7 @@ export function useDeleteEmployeeLoan() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => api("/api/hr/loans/", { method: "DELETE", body: JSON.stringify({ id }) }),
+    mutationFn: (id: string) => api("/api/hr/loans/", { method: "DELETE", body: JSON.stringify({ id }) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employeeLoans"] });
     },
@@ -220,7 +243,7 @@ export function useDeleteCompensation() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => api("/api/hr/compensations/", { method: "DELETE", body: JSON.stringify({ id }) }),
+    mutationFn: (id: string) => api("/api/hr/compensations/", { method: "DELETE", body: JSON.stringify({ id }) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["compensations"] });
       queryClient.invalidateQueries({ queryKey: ["employees"] });
@@ -232,10 +255,18 @@ export function useUpdateLoanStatus() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: number; status: string }) => 
+    mutationFn: (data: { id: string; status: string }) => 
       api("/api/hr/loans/status/", { method: "POST", body: JSON.stringify(data) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employeeLoans"] });
     },
+  });
+}
+
+
+export function usePayrollPreview() {
+  const api = useApi();
+  return useMutation<PayrollPreview, Error, any>({
+    mutationFn: (data: any) => api("/api/hr/payroll/preview/", { method: "POST", body: JSON.stringify(data) }),
   });
 }

@@ -5,7 +5,7 @@ from apps.hr.views.asset_views import AssetView, AssetStatsView
 from apps.hr.views.asset_category_views import AssetCategoryView, AssetCategoryStatsView
 from apps.hr.views.employee_views import EmployeeView, EmployeeStatsView
 from apps.hr.views.payroll_views import (
-    PayrollView, PayrollStatsView, 
+    PayrollView, PayrollStatsView, PayrollPreviewView,
     EmployeeLoanView, CompensationView,
     LoanStatusUpdateView 
 )
@@ -24,10 +24,7 @@ from apps.hr.views.shift_management_views import (
 from apps.hr.views.leave_views import (
     LeaveRequestView,
     LeaveApprovalView,
-    LeaveBalanceView,
     LeaveStatsView,
-    LeaveHistoryView,
-    YearEndCarryForwardView,
 )
 
 from apps.hr.views.recruitment_views import (
@@ -78,7 +75,8 @@ urlpatterns = [
     # Payroll
     path('payroll/', PayrollView.as_view(), name='payroll'),
     path('payroll/stats/', PayrollStatsView.as_view(), name='payroll-stats'),
-    
+    path('payroll/preview/', PayrollPreviewView.as_view(), name='payroll-preview'),
+
     # Loans (with individual update/delete support)
     path('loans/', EmployeeLoanView.as_view(), name='employee-loans'),
     path('loans/status/', LoanStatusUpdateView.as_view(), name='loan-status-update'),  # New endpoint
@@ -103,10 +101,8 @@ urlpatterns = [
     # leave Management
     path('leaves/', LeaveRequestView.as_view(), name='leave-requests'),
     path('leaves/approve/', LeaveApprovalView.as_view(), name='leave-approve'),
-    path('leaves/balances/', LeaveBalanceView.as_view(), name='leave-balances'),
     path('leaves/stats/', LeaveStatsView.as_view(), name='leave-stats'),
-    path('leaves/history/', LeaveHistoryView.as_view(), name='leave-history'),
-    path('leaves/carry-forward/', YearEndCarryForwardView.as_view(), name='leave-carry-forward'),
+
 
     # recruitment Management
     path('recruitment/candidates/', RecruitmentCandidateView.as_view(), name='recruitment-candidates'),

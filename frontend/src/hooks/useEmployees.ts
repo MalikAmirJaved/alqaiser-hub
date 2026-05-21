@@ -4,8 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
 export interface Employee {
-  id: number;
-  _id?: string;
+  id: string;
   employee_id: string;
   first_name: string;
   last_name?: string;
@@ -34,9 +33,9 @@ export interface Employee {
   confirmation_date?: string;
   probation_days: number;
   work_location: 'OFFICE' | 'REMOTE' | 'HYBRID';
-  reporting_manager_id?: number;
+  reporting_manager_id?: string;
   reporting_manager_name?: string;
-  default_shift_id?: number;
+  default_shift_id?: string;
   default_shift_name?: string;
   asset_category_id?: string;
   bank_name?: string;
@@ -107,7 +106,7 @@ export function useUpdateEmployee() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (employee: Partial<Employee> & { id: number }) =>
+    mutationFn: (employee: Partial<Employee> & { id: string }) =>
       api("/api/hr/employees/", {
         method: "PATCH",
         body: JSON.stringify(employee),
@@ -125,7 +124,7 @@ export function useDeleteEmployee() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: (id: string) =>
       api("/api/hr/employees/", {
         method: "DELETE",
         body: JSON.stringify({ id }),

@@ -4,54 +4,33 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
 export type CreateLeaveRequestData = {
-  employee_id: number;
-  leave_type_id: number;
-  leave_year: number;
+  employee_id: string;
+  leave_type: string;
   start_date: string;
-  end_date: string;
-  total_days: number;
-  is_half_day: "false" | "true";
+  end_date?: string;
+  is_half_day: boolean;
   reason: string;
-  contact_number?: string;
-  document_url?: string;
+  emergency_contact?: string;
 };
 
 export interface LeaveRequest {
-  id: number;
-  employee_id: number;
+  id: string;
+  employee_id: string;
   employee_name: string;
-  leave_type_id: number;
-  leave_type_name: string;
-  leave_year: number;
+  leave_type: string;
+  leave_type_display: string;
   start_date: string;
   end_date: string;
   total_days: number;
-  is_half_day: "false" | "true";
+  is_half_day: boolean;
   reason: string;
-  contact_number?: string;
-  document_url?: string;
-  status: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+  emergency_contact?: string;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
   applied_at: string;
   approval_date?: string;
   rejection_reason?: string;
-  approved_by?: string;
-  approved_by_name?: string;  // Added
-  approver_role?: string;      // Added
-  created_by?: number;
-  created_by_name?: string;    // Added
-}
-
-export interface LeaveBalance {
-  id: number;
-  employee_id: number;
-  employee_name: string;
-  leave_type_id: number;
-  leave_type_name: string;
-  year: number;
-  allocated: number;
-  used: number;
-  available: number;
-  carry_forward_from: number;
+  approved_by_id?: string;
+  approved_by_name?: string;
 }
 
 export interface LeaveStats {
@@ -63,35 +42,22 @@ export interface LeaveStats {
   };
   pending_approvals: number;
   leave_type_usage: Array<{
-    leave_type_name: string;
-    total_days: number;
-    request_count: number;
-  }>;
-  monthly_trends: Array<{
-    month: number;
+    leave_type: string;
     total_days: number;
     request_count: number;
   }>;
 }
 
-export interface LeaveType {
-  id: number;
-  name: string;
-  code: string;
-  description?: string;
-  isPaid: boolean;
-  defaultDaysPerYear: number;
-  maxCarryForwardDays: number;
-  minDaysPerRequest: number;
-  maxDaysPerRequest: number;
-  requiresApproval: boolean;
-  requiresDocument: boolean;
-  applicableAfterMonths: number;
-  isActive: boolean;
-  genderSpecific: 'ALL' | 'MALE' | 'FEMALE';
-  colorCode: string;
-  order: number;
-}
+// Fixed leave types (no backend dependency)
+export const LEAVE_TYPES = [
+  { value: "CASUAL", label: "Casual Leave" },
+  { value: "SICK", label: "Sick Leave" },
+  { value: "ANNUAL", label: "Annual Leave" },
+  { value: "MATERNITY", label: "Maternity Leave" },
+  { value: "PATERNITY", label: "Paternity Leave" },
+  { value: "BEREAVEMENT", label: "Bereavement Leave" },
+  { value: "OTHER", label: "Other" },
+];
 
 // Fetch leaves
 export function useLeaves(params?: Record<string, string>) {
@@ -107,20 +73,6 @@ export function useLeaves(params?: Record<string, string>) {
   });
 }
 
-// Fetch leave balances
-export function useLeaveBalances(params?: Record<string, string>) {
-  const api = useApi();
-  const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
-  
-  return useQuery<LeaveBalance[]>({
-    queryKey: ["leaveBalances", params],
-    queryFn: () => api(`/api/hr/leaves/balances/${queryString}`),
-    staleTime: 30 * 1000,
-    gcTime: 5 * 60 * 1000,
-    retry: 2,
-  });
-}
-
 // Fetch leave stats
 export function useLeaveStats() {
   const api = useApi();
@@ -128,19 +80,6 @@ export function useLeaveStats() {
   return useQuery<LeaveStats>({
     queryKey: ["leaveStats"],
     queryFn: () => api("/api/hr/leaves/stats/"),
-    staleTime: 30 * 1000,
-    gcTime: 5 * 60 * 1000,
-    retry: 2,
-  });
-}
-
-// Fetch leave types (from company settings)
-export function useLeaveTypes() {
-  const api = useApi();
-  
-  return useQuery<LeaveType[]>({
-    queryKey: ["leaveTypes"],
-    queryFn: () => api("/api/company/settings/leave-types/"),
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
@@ -161,7 +100,6 @@ export function useCreateLeaveRequest() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leaves"] });
       queryClient.invalidateQueries({ queryKey: ["leaveStats"] });
-      queryClient.invalidateQueries({ queryKey: ["leaveBalances"] });
     },
   });
 }
@@ -172,10 +110,28 @@ export function useUpdateLeaveRequest() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: Partial<LeaveRequest> & { id: number }) =>
+    mutationFn: (data: Partial<LeaveRequest> & { id: string }) =>
       api("/api/hr/leaves/", {
         method: "PATCH",
         body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leaves"] });
+      queryClient.invalidateQueries({ queryKey: ["leaveStats"] });
+    },
+  });
+}
+
+// Delete leave request
+export function useDeleteLeaveRequest() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) =>
+      api("/api/hr/leaves/", {
+        method: "DELETE",
+        body: JSON.stringify({ id }),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leaves"] });
@@ -190,7 +146,7 @@ export function useApproveLeave() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, action, rejection_reason }: { id: number; action: "APPROVED" | "REJECTED"; rejection_reason?: string }) =>
+    mutationFn: ({ id, action, rejection_reason }: { id: string; action: "APPROVED" | "REJECTED"; rejection_reason?: string }) =>
       api("/api/hr/leaves/approve/", {
         method: "POST",
         body: JSON.stringify({ id, action, rejection_reason }),
@@ -198,19 +154,6 @@ export function useApproveLeave() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leaves"] });
       queryClient.invalidateQueries({ queryKey: ["leaveStats"] });
-      queryClient.invalidateQueries({ queryKey: ["leaveBalances"] });
     },
-  });
-}
-
-// Get leave history for employee
-export function useLeaveHistory(employeeId: number) {
-  const api = useApi();
-  
-  return useQuery({
-    queryKey: ["leaveHistory", employeeId],
-    queryFn: () => api(`/api/hr/leaves/history/?employee_id=${employeeId}`),
-    enabled: !!employeeId,
-    staleTime: 30 * 1000,
   });
 }

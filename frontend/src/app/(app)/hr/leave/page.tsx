@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
-import { useLeaves, useLeaveBalances, useCreateLeaveRequest, useApproveLeave, useLeaveStats, useLeaveTypes } from "@/hooks/useLeaves";
+import { useLeaves, useCreateLeaveRequest, useApproveLeave, useLeaveStats, LEAVE_TYPES } from "@/hooks/useLeaves";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useQueryClient } from "@tanstack/react-query";
 import PageHeader from "@/components/PageHeader";
@@ -13,9 +13,8 @@ import { StatsCards } from "@/components/reuseable/StatsCards";
 import { TableView, Column } from "@/components/reuseable/TableGridView";
 import { LeaveFormModal } from "@/components/leave/LeaveFormModal";
 import { LeaveDetailDrawer } from "@/components/leave/LeaveDetailDrawer";
-import { LeaveBalanceCard } from "@/components/leave/LeaveBalanceCard";
-import { ApprovalActions } from "@/components/leave/ApprovalActions";
 import { LeaveCard } from "@/components/leave/LeaveCard";
+import { ApprovalActions } from "@/components/leave/ApprovalActions";
 import {
   CalendarDays,
   UserCheck,
@@ -27,25 +26,19 @@ import {
   XCircle,
   Eye,
   Trash2,
-  AlertCircle,
-  TrendingUp,
-  Calendar,
-  Users,
-  FileText,
   LayoutGrid,
   Table,
+  FileText,
 } from "lucide-react";
 
 interface LeaveFormData {
   employee_id: string;
-  leave_type_id: string;
-  leave_year: number;
+  leave_type: string;
   start_date: string;
   end_date: string;
-  is_half_day: "false" | "true";
+  is_half_day: boolean;
   reason: string;
-  contact_number: string;
-  document_url: string;
+  emergency_contact: string;
 }
 
 type ViewMode = "grid" | "table";
@@ -60,12 +53,9 @@ export default function LeaveManagementPage() {
   const [isApplyOpen, setIsApplyOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedLeave, setSelectedLeave] = useState<any>(null);
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
 
   // Fetch data with React Query
   const { data: leaves = [], refetch: refetchLeaves, isLoading: leavesLoading } = useLeaves();
-  const { data: leaveBalances = [], refetch: refetchBalances } = useLeaveBalances({ year: currentYear.toString() });
-  const { data: leaveTypes = [] } = useLeaveTypes();
   const { data: employees = [] } = useEmployees();
   const { data: stats, refetch: refetchStats } = useLeaveStats();
 
@@ -81,7 +71,7 @@ export default function LeaveManagementPage() {
   });
 
   useEffect(() => {
-    const canApprove = user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
+    const canApprove = user?.role === "COMPANY_ADMIN" || user?.role === "SUPER_ADMIN";
     const canCreate = true;
 
     setPermissions({
@@ -94,9 +84,8 @@ export default function LeaveManagementPage() {
 
   const refreshData = useCallback(() => {
     refetchLeaves();
-    refetchBalances();
     refetchStats();
-  }, [refetchLeaves, refetchBalances, refetchStats]);
+  }, [refetchLeaves, refetchStats]);
 
   const getUserLeaves = () => {
     const userEmployee = employees.find((e: any) => e.email === user?.email);
@@ -112,34 +101,16 @@ export default function LeaveManagementPage() {
     return leaves;
   };
 
-  const calculateTotalDays = (startDate: string, endDate: string, isHalfDay: string) => {
-    if (!startDate) return 0;
-    const start = new Date(startDate);
-    const end = endDate ? new Date(endDate) : start;
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-    return isHalfDay === "true" && diffDays === 1 ? 0.5 : diffDays;
-  };
-
   const handleApply = async (formData: LeaveFormData) => {
     try {
-      const totalDays = calculateTotalDays(
-        formData.start_date,
-        formData.end_date || formData.start_date,
-        formData.is_half_day
-      );
-
       await createLeave.mutateAsync({
-        employee_id: parseInt(formData.employee_id),
-        leave_type_id: parseInt(formData.leave_type_id),
-        leave_year: formData.leave_year,
+        employee_id: formData.employee_id,
+        leave_type: formData.leave_type,
         start_date: formData.start_date,
         end_date: formData.end_date || formData.start_date,
         is_half_day: formData.is_half_day,
-        total_days: totalDays,
         reason: formData.reason,
-        contact_number: formData.contact_number,
-        document_url: formData.document_url,
+        emergency_contact: formData.emergency_contact,
       });
 
       setIsApplyOpen(false);
@@ -149,7 +120,7 @@ export default function LeaveManagementPage() {
     }
   };
 
-  const handleApproval = async (leaveId: number, status: string, rejectionReason = "") => {
+  const handleApproval = async (leaveId: string, status: string, rejectionReason = "") => {
     try {
       await approveLeave.mutateAsync({
         id: leaveId,
@@ -163,7 +134,7 @@ export default function LeaveManagementPage() {
     }
   };
 
-  const handleDelete = async (leaveId: number) => {
+  const handleDelete = async (leaveId: string) => {
     if (!confirm("Delete this leave request?")) return;
 
     try {
@@ -179,11 +150,10 @@ export default function LeaveManagementPage() {
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
-      PENDING: "bg-yellow-100 text-yellow-800 border-yellow-200",
-      APPROVED: "bg-green-100 text-green-800 border-green-200",
-      REJECTED: "bg-red-100 text-red-800 border-red-200",
-      CANCELLED: "bg-gray-100 text-gray-600 border-gray-200",
-      DRAFT: "bg-gray-100 text-gray-500 border-gray-200",
+      PENDING: "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800",
+      APPROVED: "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800",
+      REJECTED: "bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800",
+      CANCELLED: "bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800/30 dark:text-gray-400 dark:border-gray-700",
     };
     return styles[status] || styles.PENDING;
   };
@@ -192,6 +162,11 @@ export default function LeaveManagementPage() {
   const formatDateTime = (dateStr: string) => {
     if (!dateStr) return "—";
     return new Date(dateStr).toLocaleString();
+  };
+
+  const getLeaveTypeLabel = (leaveType: string) => {
+    const found = LEAVE_TYPES.find(t => t.value === leaveType);
+    return found?.label || leaveType;
   };
 
   if (permissions.loading || !ready) {
@@ -231,9 +206,9 @@ export default function LeaveManagementPage() {
     { id: "rejected", label: "Rejected", value: myStats.rejected, valueClassName: "text-red-600" },
   ];
 
-  // Enhanced Table columns for My Leaves with approval info
+  // Table columns for My Leaves
   const myLeavesColumns: Column<any>[] = [
-    { key: "leave_type_name", label: "Leave Type", sortable: true },
+    { key: "leave_type_display", label: "Leave Type", sortable: true },
     { key: "start_date", label: "Start Date", sortable: true },
     { key: "end_date", label: "End Date", sortable: true },
     { 
@@ -241,7 +216,7 @@ export default function LeaveManagementPage() {
       label: "Days", 
       sortable: true,
       render: (value: unknown, row: any) => (
-        <span>{String(value)}{row.is_half_day === "true" && " (Half)"}</span>
+        <span>{String(value)}{row.is_half_day && " (Half)"}</span>
       )
     },
     { 
@@ -306,11 +281,19 @@ export default function LeaveManagementPage() {
     },
   ];
 
-  // Enhanced Table columns for Approvals
+  // Table columns for Approvals
   const approvalsColumns: Column<any>[] = [
     { key: "employee_name", label: "Employee", sortable: true },
-    { key: "department", label: "Department", sortable: true },
-    { key: "leave_type_name", label: "Leave Type", sortable: true },
+    { 
+      key: "department", 
+      label: "Department", 
+      sortable: true,
+      render: (_: unknown, row: any) => {
+        const employee = employees.find((e: any) => e.id === row.employee_id);
+        return employee?.department || "—";
+      }
+    },
+    { key: "leave_type_display", label: "Leave Type", sortable: true },
     { 
       key: "dates", 
       label: "Dates", 
@@ -336,10 +319,10 @@ export default function LeaveManagementPage() {
     },
   ];
 
-  // All Leaves columns for admin (with approval info)
+  // Table columns for All Leaves (admin)
   const allLeavesColumns: Column<any>[] = [
     { key: "employee_name", label: "Employee", sortable: true },
-    { key: "leave_type_name", label: "Leave Type", sortable: true },
+    { key: "leave_type_display", label: "Leave Type", sortable: true },
     { key: "start_date", label: "Start Date", sortable: true },
     { key: "end_date", label: "End Date", sortable: true },
     { key: "total_days", label: "Days", sortable: true },
@@ -456,9 +439,6 @@ export default function LeaveManagementPage() {
               <FileText className="w-4 h-4 mr-2" /> All Leaves
             </TabsTrigger>
           )}
-          <TabsTrigger value="balances">
-            <Clock className="w-4 h-4 mr-2" /> Leave Balances
-          </TabsTrigger>
         </TabsList>
 
         {/* My Leaves Tab */}
@@ -520,10 +500,7 @@ export default function LeaveManagementPage() {
           <TabsContent value="approvals" className="m-0">
             <TableView
               columns={approvalsColumns}
-              data={pendingApprovals.map((l: any) => ({
-                ...l,
-                department: employees.find((e: any) => e.id === l.employee_id)?.department || "—"
-              }))}
+              data={pendingApprovals}
               loading={leavesLoading}
               emptyMessage="No pending leave requests."
               actions={(row) => (
@@ -585,33 +562,6 @@ export default function LeaveManagementPage() {
             )}
           </TabsContent>
         )}
-
-        {/* Leave Balances Tab */}
-        <TabsContent value="balances" className="m-0">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {leaveBalances.length === 0 && (
-              <div className="col-span-full text-center py-10 text-muted-foreground">
-                No leave balance records found.
-              </div>
-            )}
-            {leaveBalances.map((balance: any) => {
-              const employee = employees.find((e: any) => e.id === balance.employee_id);
-              return (
-                <LeaveBalanceCard
-                  key={balance.id}
-                  employeeName={balance.employee_name}
-                  employeeId={employee?.employee_id}
-                  department={employee?.department}
-                  leaveType={balance.leave_type_name}
-                  allocated={balance.allocated}
-                  used={balance.used}
-                  available={balance.available}
-                  carriedForward={balance.carry_forward_from}
-                />
-              );
-            })}
-          </div>
-        </TabsContent>
       </Tabs>
 
       {/* Apply Leave Modal */}
@@ -620,8 +570,6 @@ export default function LeaveManagementPage() {
         onClose={() => setIsApplyOpen(false)}
         onSubmit={handleApply}
         employees={employees}
-        leaveTypes={leaveTypes}
-        leaveBalances={leaveBalances}
         isSubmitting={createLeave.isPending}
       />
 

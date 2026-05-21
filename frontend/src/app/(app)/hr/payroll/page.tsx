@@ -2,8 +2,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useEmployees } from "@/hooks/useEmployees";
-import { usePayroll, usePayrollStats, useProcessPayroll } from "@/hooks/usePayroll";
-import { useEmployeeLoans } from "@/hooks/usePayroll";
+import { usePayroll, usePayrollStats } from "@/hooks/usePayroll";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { permissionService } from "@/services/permissionService";
 import PageHeader from "@/components/PageHeader";
@@ -33,9 +32,6 @@ export default function PayrollPage() {
     month: String(selectedMonth),
     year: String(selectedYear),
   });
-  const { data: loans = [] } = useEmployeeLoans();
-  const processPayroll = useProcessPayroll();
-
   const [permissions, setPermissions] = useState({
     canCreate: false,
     canUpdate: false,
@@ -54,7 +50,7 @@ export default function PayrollPage() {
   }, []);
 
   // Get payment status for employee in selected month
-  const getPaymentStatus = (employeeId: number) => {
+  const getPaymentStatus = (employeeId: string) => {
     const record = payrollRecords.find(
       r => r.employee_id === employeeId && r.month === selectedMonth && r.year === selectedYear
     );
@@ -62,7 +58,7 @@ export default function PayrollPage() {
   };
 
   // Get payroll record for employee
-  const getPayrollRecord = (employeeId: number) => {
+  const getPayrollRecord = (employeeId: string) => {
     return payrollRecords.find(
       r => r.employee_id === employeeId && r.month === selectedMonth && r.year === selectedYear
     );
@@ -338,6 +334,8 @@ const handleRefresh = () => {
             setSelectedEmployee(null);
           }}
           onSuccess={handleRefresh}
+          selectedMonth={selectedMonth}
+          selectedYear={selectedYear}
         />
       )}
       {payslipModalOpen && selectedEmployee && (
