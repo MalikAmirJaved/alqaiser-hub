@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from django.forms.models import model_to_dict
 from django.db import models as django_models
 from .models import AuditLog, AuditFieldChange
+from apps.common.middleware import get_current_request
 
 # Thread pool for async logging (prevents blocking main transaction)
 _executor = ThreadPoolExecutor(max_workers=4)
@@ -142,6 +143,9 @@ def log_change(
     2. From request.user (if request provided)
     3. From instance attributes
     """
+    if request is None:
+        request = get_current_request()
+
     # Determine user_id
     if not user_id:
         if request and hasattr(request, 'user') and request.user and request.user.is_authenticated:
@@ -274,6 +278,9 @@ def log_bulk_action(
         request: HTTP request object (extracts user, IP, user_agent)
         source_module: Module name
     """
+    if request is None:
+        request = get_current_request()
+
     # Determine user_id
     if not user_id and request and hasattr(request, 'user') and request.user:
         user_id = request.user.id
