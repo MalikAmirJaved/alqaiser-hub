@@ -110,7 +110,9 @@ def _create_audit_log_sync(
                 audit_log=audit_log,
                 field_name=field_name,
                 old_value=old_val,
-                new_value=new_val
+                new_value=new_val,
+                company_id=company_id,
+                branch_id=branch_id,
             )
             for field_name, old_val, new_val in field_changes
         ]
