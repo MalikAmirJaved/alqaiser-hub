@@ -19,6 +19,13 @@ from apps.compsetting.models import CompanySettings, WorkingDay, PublicHoliday
 
 logger = logging.getLogger(__name__)
 
+def safe_date(value):
+    if not value:
+        return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return value
+
 
 class PayrollView(CompanyBranchMixin, APIView):
     """Payroll management with UUID support - Leave deduction uses working days only"""
@@ -650,8 +657,8 @@ class EmployeeLoanView(CompanyBranchMixin, APIView):
             "remaining_months": loan.remaining_months,
             "interest_rate": str(loan.interest_rate),
             "total_payable": str(loan.total_payable),
-            "start_date": loan.start_date.isoformat() if loan.start_date else None,
-            "end_date": loan.end_date.isoformat() if loan.end_date else None,
+            "start_date": safe_date(loan.start_date),
+            "end_date": safe_date(loan.end_date),
             "status": loan.status,
             "purpose": loan.purpose,
             "transaction_number": loan.transaction_number,
