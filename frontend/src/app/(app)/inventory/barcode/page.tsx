@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useBarcodes, type BarcodeItem } from "@/hooks/useBarcodes";
+import { useBarcodes, printBarcode, type BarcodeItem } from "@/hooks/useBarcodes";
 import { TableView, type Column } from "@/components/reuseable/TableGridView";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,7 @@ export default function BarcodesPage() {
   const totalCount = data?.count || 0;
   const totalPages = Math.ceil(totalCount / pageSize);
 
-  // Stats: total variants, variants with barcode, without barcode
+  // Stats
   const totalVariants = totalCount;
   const withBarcode = items.filter(i => i.barcode && i.barcode.trim() !== "").length;
   const withoutBarcode = totalVariants - withBarcode;
@@ -36,13 +36,6 @@ export default function BarcodesPage() {
     setPage(1);
   };
 
-  const handlePrint = (barcode: string, sku: string) => {
-    // You can implement a print dialog or open a barcode image generator
-    // For now, just console log
-    console.log("Print barcode:", barcode, sku);
-    // Example: window.open(`/api/inventory/barcodes/print/?barcode=${barcode}`, "_blank");
-  };
-
   const columns: Column<BarcodeItem & Record<string, unknown>>[] = [
     { key: "product_name", label: "Product" },
     { key: "sku", label: "SKU" },
@@ -52,7 +45,7 @@ export default function BarcodesPage() {
       label: "",
       render: (_, row) =>
         row.barcode ? (
-          <Button variant="ghost" size="sm" onClick={() => handlePrint(row.barcode, row.sku)}>
+          <Button variant="ghost" size="sm" onClick={() => printBarcode(row.barcode)}>
             <Printer className="h-4 w-4" />
           </Button>
         ) : null,
@@ -84,6 +77,7 @@ export default function BarcodesPage() {
         data={items}
         loading={isLoading}
         emptyMessage="No barcodes found."
+        
       />
     </div>
   );
