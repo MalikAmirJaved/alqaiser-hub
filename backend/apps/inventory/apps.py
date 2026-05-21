@@ -7,3 +7,4 @@ class InventoryConfig(AppConfig):
 
     def ready(self):
         import apps.inventory.signals  
+        import apps.inventory.signals_audit
