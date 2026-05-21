@@ -52,7 +52,7 @@ export interface AvailableAsset extends AssetBasic {
 }
 
 export interface AvailableKit {
-  id: number;
+  id: string;
   name: string;
   description?: string;
   asset_count: number;

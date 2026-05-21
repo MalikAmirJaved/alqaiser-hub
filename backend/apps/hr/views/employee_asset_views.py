@@ -31,20 +31,7 @@ class EmployeeAssetAssignmentView(CompanyBranchMixin, APIView):
         
         data = AssetAssignmentService.get_employee_assignments(employee.id, company_id)
         
-        # Convert integer IDs to UUIDs in response
-        if 'active_assignments' in data:
-            for assignment in data['active_assignments']:
-                assignment['id'] = str(assignment['id'])
-                if assignment.get('source_kit'):
-                    assignment['source_kit']['id'] = str(assignment['source_kit']['id'])
         
-        if 'kits' in data:
-            for kit in data['kits']:
-                kit['id'] = str(kit['id'])
-        
-        if 'history' in data:
-            for history in data['history']:
-                history['id'] = str(history['id'])
         
         return Response(data)
     

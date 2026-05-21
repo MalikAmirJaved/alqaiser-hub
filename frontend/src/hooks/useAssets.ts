@@ -4,8 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
 export interface Asset {
-  id: number;
-  _id?: string;
+  id: string;
   name: string;
   brand?: string;
   model?: string;
@@ -83,7 +82,7 @@ export function useUpdateAsset() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (asset: Partial<Asset> & { id: number }) =>
+    mutationFn: (asset: Partial<Asset> & { id: string }) =>
       api("/api/hr/assets/", {
         method: "PATCH",
         body: JSON.stringify(asset),
@@ -101,7 +100,7 @@ export function useDeleteAsset() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: (id: string) =>
       api("/api/hr/assets/", {
         method: "DELETE",
         body: JSON.stringify({ id }),

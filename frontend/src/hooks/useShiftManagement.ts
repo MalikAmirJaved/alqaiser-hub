@@ -4,10 +4,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
 export interface ResolvedShift {
-  employee_id: number;
+  employee_id: string;
   employee_name: string;
   employee_department: string;
-  template_id: number | null;
+  template_id: string | null;
   template_name: string | null;
   start_time: string | null;
   end_time: string | null;
@@ -17,17 +17,17 @@ export interface ResolvedShift {
 }
 
 export interface ShiftOverride {
-  id: number;
-  employee_id: number;
-  template_id: number;
+  id: string;
+  employee_id: string;
+  template_id: string;
   date: string;
   reason: string;
 }
 
 export interface ShiftDateRangeAssignment {
-  id: number;
-  employee_id: number;
-  template_id: number;
+  id: string;
+  employee_id: string;
+  template_id: string;
   start_date: string;
   end_date: string;
   reason: string;
@@ -37,7 +37,7 @@ export interface ShiftDateRangeAssignment {
 export interface ShiftHistoryResponse {
   data: Array<{
     id: string;
-    employee_id: number;
+    employee_id: string;
     employee_name: string;
     change_type: string;
     from_template_name: string;
@@ -63,7 +63,7 @@ export interface ShiftStatistics {
   overrides_today: number;
   shift_distribution: Record<string, number>;
   template_statistics: Array<{
-    template_id: number;
+    template_id: string;
     template_name: string;
     is_active: boolean;
     overrides_count: number;
@@ -75,12 +75,12 @@ export interface ShiftStatistics {
 
 // Response type for resolved shifts
 export interface ResolvedShiftsResponse {
-  [employeeId: number]: {
+  [employeeId: string]: {
     employee_name: string;
     employee_department: string;
     shifts: {
       [date: string]: {
-        template_id: number | null;
+        template_id: string | null;
         template_name: string | null;
         start_time: string | null;
         end_time: string | null;
@@ -94,7 +94,7 @@ export interface ResolvedShiftsResponse {
 
 // Get resolved shifts for employees
 export function useResolvedShifts(
-  employeeIds: number[], 
+  employeeIds: string[], 
   date?: string, 
   startDate?: string, 
   endDate?: string
@@ -118,7 +118,7 @@ export function useResolvedShifts(
 }
 
 // Get shift overrides
-export function useShiftOverrides(employeeId?: number, startDate?: string, endDate?: string) {
+export function useShiftOverrides(employeeId?: string, startDate?: string, endDate?: string) {
   const api = useApi();
   
   const params = new URLSearchParams();
@@ -133,7 +133,7 @@ export function useShiftOverrides(employeeId?: number, startDate?: string, endDa
 }
 
 // Get shift date range assignments
-export function useShiftDateRangeAssignments(employeeId?: number, activeOnly: boolean = true) {
+export function useShiftDateRangeAssignments(employeeId?: string, activeOnly: boolean = true) {
   const api = useApi();
   
   const params = new URLSearchParams();
@@ -152,7 +152,7 @@ export function useCreateShiftOverride() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (data: { employee_id: number; template_id: number; date: string; reason?: string }) =>
+    mutationFn: (data: { employee_id: string; template_id: string; date: string; reason?: string }) =>
       api('/api/hr/shifts/overrides/', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -171,7 +171,7 @@ export function useUpdateShiftOverride() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (data: { id: number; reason?: string }) =>
+    mutationFn: (data: { id: string; reason?: string }) =>
       api('/api/hr/shifts/overrides/', {
         method: 'PATCH',
         body: JSON.stringify(data),
@@ -189,7 +189,7 @@ export function useDeleteShiftOverride() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: (id: string) =>
       api('/api/hr/shifts/overrides/', {
         method: 'DELETE',
         body: JSON.stringify({ id }),
@@ -209,7 +209,7 @@ export function useCreateDateRangeAssignment() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (data: { employee_id: number; template_id: number; start_date: string; end_date?: string; reason?: string }) =>
+    mutationFn: (data: { employee_id: string; template_id: string; start_date: string; end_date?: string; reason?: string }) =>
       api('/api/hr/shifts/date-range/', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -228,7 +228,7 @@ export function useUpdateDateRangeAssignment() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (data: { id: number; is_active?: boolean; reason?: string }) =>
+    mutationFn: (data: { id: string; is_active?: boolean; reason?: string }) =>
       api('/api/hr/shifts/date-range/', {
         method: 'PATCH',
         body: JSON.stringify(data),
@@ -246,7 +246,7 @@ export function useDeleteDateRangeAssignment() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: (id: string) =>
       api('/api/hr/shifts/date-range/', {
         method: 'DELETE',
         body: JSON.stringify({ id }),
@@ -266,8 +266,8 @@ export function useBulkShiftAssignment() {
   
   return useMutation({
     mutationFn: (data: {
-      employee_ids: number[];
-      template_id: number;
+      employee_ids: string[];
+      template_id: string;
       start_date: string;
       end_date?: string;
       assignment_type: 'OVERRIDE' | 'DATE_RANGE';
@@ -288,7 +288,7 @@ export function useBulkShiftAssignment() {
 }
 
 // Get shift change history
-export function useShiftHistory(employeeId?: number, limit: number = 50, offset: number = 0) {
+export function useShiftHistory(employeeId?: string, limit: number = 50, offset: number = 0) {
   const api = useApi();
   
   const params = new URLSearchParams();

@@ -4,8 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
 export interface ShiftTemplate {
-  id: number;
-  _id?: string;
+  id: string;
   name: string;
   startTime: string;
   endTime: string;
@@ -52,7 +51,7 @@ export function useUpdateShiftTemplate() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (template: Partial<ShiftTemplate> & { id: number }) =>
+    mutationFn: (template: Partial<ShiftTemplate> & { id: string }) =>
       api("/api/hr/shift-templates/", {
         method: "PATCH",
         body: JSON.stringify(template),
@@ -69,7 +68,7 @@ export function useDeleteShiftTemplate() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: (id: string) =>
       api("/api/hr/shift-templates/", {
         method: "DELETE",
         body: JSON.stringify({ id }),

@@ -33,7 +33,7 @@ import {
 
 interface ShiftChangeHistory {
   id: string;
-  employee_id: number;
+  employee_id: string;
   employee_name: string;
   change_type: string;
   from_template_name: string;
@@ -61,7 +61,7 @@ export default function ShiftsManagementPage() {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showShiftDetailModal, setShowShiftDetailModal] = useState<{ date: string; template: ShiftTemplate } | null>(null);
-  const [selectedEmployees, setSelectedEmployees] = useState<number[]>([]);
+  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [scheduleFormData, setScheduleFormData] = useState({
     template_id: "",
     date_range: { start: "", end: "" },
@@ -143,7 +143,7 @@ export default function ShiftsManagementPage() {
   
   // Parse resolved shifts data
   const resolvedShifts = useMemo(() => {
-    const result: Record<string, Record<number, { template: ShiftTemplate | null; isOverride: boolean }>> = {};
+    const result: Record<string, Record<string, { template: ShiftTemplate | null; isOverride: boolean }>> = {};
     
     if (!resolvedShiftsData) return result;
     
@@ -172,7 +172,7 @@ export default function ShiftsManagementPage() {
   }, [resolvedShiftsData, filteredEmployees, templates, days]);
   
   // Get employees for a specific shift on a date
-  const getEmployeesForShift = useCallback((dateStr: string, templateId: number) => {
+  const getEmployeesForShift = useCallback((dateStr: string, templateId: string) => {
     if (!resolvedShifts[dateStr]) return [];
     
     return filteredEmployees.filter(emp => {
@@ -185,7 +185,7 @@ export default function ShiftsManagementPage() {
   const getShiftsOnDate = useCallback((dateStr: string) => {
     if (!resolvedShifts[dateStr]) return [];
     
-    const shiftsMap = new Map<number, ShiftTemplate>();
+    const shiftsMap = new Map<string, ShiftTemplate>();
     
     filteredEmployees.forEach(emp => {
       const resolved = resolvedShifts[dateStr]?.[emp.id]?.template;
@@ -227,7 +227,7 @@ export default function ShiftsManagementPage() {
     
     const startDate = scheduleFormData.date_range.start;
     const endDate = scheduleFormData.date_range.end || scheduleFormData.date_range.start;
-    const templateId = parseInt(scheduleFormData.template_id);
+    const templateId = scheduleFormData.template_id;
     const template = templates.find(t => t.id === templateId);
     
     if (!template) return;
@@ -277,7 +277,7 @@ export default function ShiftsManagementPage() {
   };
   
   // Handle delete override
-  const handleDeleteAssignment = async (overrideId: number) => {
+  const handleDeleteAssignment = async (overrideId: string) => {
     if (!confirm("Remove this shift assignment?")) return;
     
     try {
@@ -291,7 +291,7 @@ export default function ShiftsManagementPage() {
   };
   
   // Handle clear all assignments on a date
-  const handleClearDateAssignments = async (dateStr: string, employeeId?: number) => {
+  const handleClearDateAssignments = async (dateStr: string, employeeId?: string) => {
     const overridesToDelete = overrides.filter(o => {
       if (employeeId) {
         return o.date === dateStr && o.employee_id === employeeId;
@@ -458,7 +458,7 @@ export default function ShiftsManagementPage() {
               <SearchableSelect 
                 value={filters.templateId} 
                 onChange={(v) => setFilters({...filters, templateId: v})} 
-                options={templates.filter(t=>t.is_active).map(t => ({value: t.id.toString(), label: t.name}))} 
+                options={templates.filter(t=>t.is_active).map(t => ({value: t.id, label: t.name}))} 
                 placeholder="Filter by Shift"
                 className="min-w-[150px]"
               />
@@ -514,7 +514,7 @@ export default function ShiftsManagementPage() {
                     const isTod = isToday(day);
                     const shiftsOnDay = getShiftsOnDate(dayStr);
                     const filteredShifts = filters.templateId 
-                      ? shiftsOnDay.filter(s => s.id.toString() === filters.templateId)
+                      ? shiftsOnDay.filter(s => s.id === filters.templateId)
                       : shiftsOnDay;
                     
                     return (
@@ -729,7 +729,7 @@ export default function ShiftsManagementPage() {
                 <SearchableSelect 
                   value={scheduleFormData.template_id} 
                   onChange={(v) => setScheduleFormData({...scheduleFormData, template_id: v})} 
-                  options={templates.filter(t => t.is_active).map(t => ({value: t.id.toString(), label: `${t.name} (${t.startTime} - ${t.endTime})`}))} 
+                  options={templates.filter(t => t.is_active).map(t => ({value: t.id, label: `${t.name} (${t.startTime} - ${t.endTime})`}))} 
                   placeholder="Select shift template"
                 />
               </label>
@@ -923,7 +923,7 @@ export default function ShiftsManagementPage() {
                   setShowShiftDetailModal(null);
                   setSelectedEmployees([]);
                   setScheduleFormData({
-                    template_id: showShiftDetailModal.template.id.toString(),
+                    template_id: showShiftDetailModal.template.id,
                     date_range: { start: showShiftDetailModal.date, end: "" },
                     reason: "",
                     assignment_type: "OVERRIDE"

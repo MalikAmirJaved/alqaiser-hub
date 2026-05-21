@@ -127,7 +127,7 @@ export default function AssetsList() {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     try {
       await deleteAsset.mutateAsync(id);
     } catch (error: any) {

@@ -57,11 +57,11 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 function AssetMultiSelect({ options, selected, onChange, assets }: any) {
-  const toggle = (id: number) => {
-    onChange(selected.includes(id) ? selected.filter((i: number) => i !== id) : [...selected, id]);
+  const toggle = (id: string) => {
+    onChange(selected.includes(id) ? selected.filter((i: string) => i !== id) : [...selected, id]);
   };
 
-  const getAssetDetails = (id: number) => assets.find((a: any) => a.id === id);
+  const getAssetDetails = (id: string) => assets.find((a: any) => a.id === id);
 
   const selectAll = () => onChange(options.map((opt: any) => opt.value));
   const deselectAll = () => onChange([]);
@@ -86,7 +86,7 @@ function AssetMultiSelect({ options, selected, onChange, assets }: any) {
         {selected.length === 0 && (
           <span className="text-xs text-muted-foreground">No assets selected</span>
         )}
-        {selected.map((id: number) => {
+        {selected.map((id: string) => {
           const asset = getAssetDetails(id);
           return (
             <Badge key={id} variant="secondary" className="gap-1 pl-2 pr-1">
@@ -151,7 +151,7 @@ export default function AssetCategories() {
   
   const [form, setForm] = useState({ 
     name: "", 
-    assetIds: [] as number[], 
+    assetIds: [] as string[], 
     description: "" 
   });
 
@@ -189,7 +189,7 @@ export default function AssetCategories() {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     try {
       await deleteCategory.mutateAsync(id);
     } catch (error: any) {
@@ -395,7 +395,7 @@ export default function AssetCategories() {
               <AssetMultiSelect
                 options={assets.map(a => ({ value: a.id, label: `${a.name}${a.brand ? ` (${a.brand})` : ''}` }))}
                 selected={form.assetIds}
-                onChange={(v: number[]) => setForm({ ...form, assetIds: v })}
+                onChange={(v: string[]) => setForm({ ...form, assetIds: v })}
                 assets={assets}
               />
             </div>

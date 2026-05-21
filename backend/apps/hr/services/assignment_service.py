@@ -184,9 +184,9 @@ class AssetAssignmentService:
             'employee_name': employee.full_name,
             'active_assignments': [
                 {
-                    'id': a.id,
+                    'id': str(a._id),
                     'asset': {
-                        'id': a.asset.id,
+                        'id': str(a.asset._id),
                         'name': a.asset.name,
                         'brand': a.asset.brand,
                         'model': a.asset.model,
@@ -194,7 +194,7 @@ class AssetAssignmentService:
                     },
                     'source_type': a.source_type,
                     'source_kit': {
-                        'id': a.source_kit.id,
+                        'id': str(a.source_kit._id),
                         'name': a.source_kit.name,
                     } if a.source_kit else None,
                     'assigned_date': a.assigned_date.isoformat(),
@@ -205,10 +205,10 @@ class AssetAssignmentService:
             ],
             'kits': [
                 {
-                    'id': kit.id,
+                    'id': str(kit._id),
                     'name': kit.name,
                     'assets': [
-                        {'id': asset.id, 'name': asset.name}
+                        {'id': str(asset._id), 'name': asset.name}
                         for asset in kit.assets.filter(is_deleted=False)
                     ]
                 }
@@ -216,7 +216,7 @@ class AssetAssignmentService:
             ],
             'history': [
                 {
-                    'id': h.id,
+                    'id': str(h._id),
                     'asset_name': h.asset.name,
                     'assigned_date': h.assigned_date.isoformat(),
                     'returned_date': h.returned_date.isoformat() if h.returned_date else None,

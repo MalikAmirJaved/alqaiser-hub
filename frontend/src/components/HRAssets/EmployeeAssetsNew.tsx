@@ -37,7 +37,7 @@ import { cn } from "@/lib/utils";
 
 // Define Employee type (adjust according to your actual employee data)
 interface Employee {
-  id: number;
+  id: string;
   first_name: string;
   last_name: string;
   employee_id: string;
@@ -51,12 +51,12 @@ export default function EmployeeAssetsNew() {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showDetailPanel, setShowDetailPanel] = useState(false);
   
-  const [selectedKitIds, setSelectedKitIds] = useState<Set<number>>(new Set());
-  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<number>>(new Set());
-  const [deselectedKitAssets, setDeselectedKitAssets] = useState<Set<number>>(new Set());
+  const [selectedKitIds, setSelectedKitIds] = useState<Set<string>>(new Set());
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+  const [deselectedKitAssets, setDeselectedKitAssets] = useState<Set<string>>(new Set());
   const [assignmentNotes, setAssignmentNotes] = useState("");
   const [assignmentCondition, setAssignmentCondition] = useState("GOOD");
-  const [selectedReturnIds, setSelectedReturnIds] = useState<Set<number>>(new Set());
+  const [selectedReturnIds, setSelectedReturnIds] = useState<Set<string>>(new Set());
 
   // Explicitly type the hook returns
   const { data: employees = [], isLoading: employeesLoading } = useEmployees(
@@ -74,7 +74,7 @@ export default function EmployeeAssetsNew() {
   const assignMutation = useAssignAssets();
   const returnMutation = useReturnAssets();
 
-  const handleKitToggle = (kitId: number, kit: AvailableKit) => {
+  const handleKitToggle = (kitId: string, kit: AvailableKit) => {
     const newKitIds = new Set(selectedKitIds);
     const newDeselected = new Set(deselectedKitAssets);
     
@@ -99,7 +99,7 @@ export default function EmployeeAssetsNew() {
   };
 
   const finalAssetIds = useMemo(() => {
-    const assetIds = new Set<number>(selectedAssetIds);
+    const assetIds = new Set<string>(selectedAssetIds);
     
     selectedKitIds.forEach(kitId => {
       const kit = availableData?.kits?.find((k) => k.id === kitId);

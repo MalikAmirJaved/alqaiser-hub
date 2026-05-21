@@ -4,15 +4,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
 export interface AssetCategory {
-  id: number;
-  _id?: string;
+  id: string;
   name: string;
   description?: string;
   isActive: boolean;
-  assetIds: number[];
+  assetIds: string[];
   assetCount: number;
   assets?: {
-    id: number;
+    id: string;
     name: string;
     brand?: string;
     model?: string;
@@ -65,7 +64,7 @@ export function useCreateAssetCategory() {
       name: string; 
       description?: string; 
       isActive?: boolean; 
-      assetIds?: number[] 
+      assetIds?: string[] 
     }) =>
       api("/api/hr/asset-categories/", {
         method: "POST",
@@ -84,7 +83,7 @@ export function useUpdateAssetCategory() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (category: Partial<AssetCategory> & { id: number }) =>
+    mutationFn: (category: Partial<AssetCategory> & { id: string }) =>
       api("/api/hr/asset-categories/", {
         method: "PATCH",
         body: JSON.stringify(category),
@@ -102,7 +101,7 @@ export function useDeleteAssetCategory() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: (id: string) =>
       api("/api/hr/asset-categories/", {
         method: "DELETE",
         body: JSON.stringify({ id }),
