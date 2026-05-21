@@ -12,11 +12,11 @@ from .customer import CustomerViewSet
 from .batch_stock import BatchStockMixin
 from .report import ReportViewSet
 from .audit import AuditLogViewSet
-
+from .alert import AlertViewSet
 __all__ = [
     "CategoryViewSet", "BrandViewSet", "WarehouseViewSet",
     "BaseSupplierViewSet", "SupplierViewSet","VendorViewSet","ProductViewSet","StockManagementViewSet",
     "StockTransferViewSet","PurchaseOrderViewSet", "GoodsReceiptViewSet",
      "CustomerViewSet", "SalesOrderViewSet",
-    "SalesReturnViewSet","VariantViewSet","BatchStockMixin", "ReportViewSet", "AuditLogViewSet"
+    "SalesReturnViewSet","VariantViewSet","BatchStockMixin", "ReportViewSet", "AuditLogViewSet","AlertViewSet"
 ]

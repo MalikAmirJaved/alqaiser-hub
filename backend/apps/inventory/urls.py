@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     CategoryViewSet, BrandViewSet, WarehouseViewSet,
     ProductViewSet,SupplierViewSet,VendorViewSet,StockManagementViewSet,StockTransferViewSet,PurchaseOrderViewSet, GoodsReceiptViewSet,
-    CustomerViewSet,SalesOrderViewSet,SalesReturnViewSet,VariantViewSet,ReportViewSet,AuditLogViewSet
+    CustomerViewSet,SalesOrderViewSet,SalesReturnViewSet,VariantViewSet,ReportViewSet,AuditLogViewSet, AlertViewSet
 )
 router = DefaultRouter()
 router.register(r'categories', CategoryViewSet, basename='inventory-category')
@@ -22,6 +22,7 @@ router.register(r'sales-returns', SalesReturnViewSet, basename='sales-returns')
 router.register(r'variants', VariantViewSet, basename='variant')
 router.register(r'reports', ReportViewSet, basename='inventory-reports')
 router.register(r'audit-logs', AuditLogViewSet, basename='audit-log')
+router.register(r'alerts', AlertViewSet, basename='alerts')
 
 
 urlpatterns = [

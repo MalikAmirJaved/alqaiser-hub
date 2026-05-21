@@ -17,6 +17,7 @@ from .sales import (
     SalesReturn, SalesReturnLine
 )
 from .customer import Customer
+from .alert import Alert
 
 __all__ = [
     "Category", "Brand", "Warehouse",
@@ -25,5 +26,5 @@ __all__ = [
     "VariantAttribute", "VariantImage", "StockTransfer",
     "PurchaseOrder", "PurchaseOrderLine", "GoodsReceipt", "GoodsReceiptLine",
     "Customer", "SalesOrder", "SalesOrderLine",
-    "SalesReturn", "SalesReturnLine", "Customer"
+    "SalesReturn", "SalesReturnLine", "Customer", "Alert"
 ]

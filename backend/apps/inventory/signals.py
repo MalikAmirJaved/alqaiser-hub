@@ -14,6 +14,7 @@ from .models import (
     Category, Brand, Warehouse, Supplier, Product, ProductVariant,
     StockItem, InventoryTransaction, StockTransfer, SalesOrder
 )
+from .alert_utils import create_alert   # <-- ADD THIS
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,7 @@ def notify_category_change(sender, instance, created, **kwargs):
     branch_id = instance.branch_id
     action = 'create' if created else 'update'
     def do_notify():
+        # Existing notification
         if created:
             create_notification(company_id, branch_id, "New Category Created",
                                 f"Category '{instance.name}' ({instance.code}) has been created.", "success")
@@ -91,6 +93,20 @@ def notify_category_change(sender, instance, created, **kwargs):
             create_notification(company_id, branch_id, "Category Updated",
                                 f"Category '{instance.name}' ({instance.code}) has been updated.", "info")
         broadcast_data_update(company_id, branch_id, 'inventory_category', action, instance.id)
+
+        # NEW ALERT
+        alert_title = "Category Created" if created else "Category Updated"
+        alert_msg = f"Category '{instance.name}' ({instance.code}) was {action}d."
+        create_alert(
+            company_id=company_id,
+            branch_id=branch_id,
+            alert_type='SYSTEM',
+            severity='info',
+            title=alert_title,
+            message=alert_msg,
+            entity_type='category',
+            entity_id=instance._id,
+        )
     transaction.on_commit(do_notify)
 
 @receiver(post_delete, sender=Category)
@@ -101,6 +117,18 @@ def notify_category_delete(sender, instance, **kwargs):
         create_notification(company_id, branch_id, "Category Deleted",
                             f"Category '{instance.name}' ({instance.code}) has been deleted.", "warning")
         broadcast_data_update(company_id, branch_id, 'inventory_category', 'delete', instance.id)
+
+        # NEW ALERT
+        create_alert(
+            company_id=company_id,
+            branch_id=branch_id,
+            alert_type='SYSTEM',
+            severity='warning',
+            title="Category Deleted",
+            message=f"Category '{instance.name}' ({instance.code}) was deleted.",
+            entity_type='category',
+            entity_id=instance._id,
+        )
     transaction.on_commit(do_notify)
 
 
@@ -120,6 +148,20 @@ def notify_brand_change(sender, instance, created, **kwargs):
             create_notification(company_id, branch_id, "Brand Updated",
                                 f"Brand '{instance.name}' ({instance.code}) details have been updated.", "info")
         broadcast_data_update(company_id, branch_id, 'inventory_brand', action, instance.id)
+
+        # NEW ALERT
+        alert_title = "Brand Created" if created else "Brand Updated"
+        alert_msg = f"Brand '{instance.name}' ({instance.code}) was {action}d."
+        create_alert(
+            company_id=company_id,
+            branch_id=branch_id,
+            alert_type='SYSTEM',
+            severity='info',
+            title=alert_title,
+            message=alert_msg,
+            entity_type='brand',
+            entity_id=instance._id,
+        )
     transaction.on_commit(do_notify)
 
 @receiver(post_delete, sender=Brand)
@@ -130,6 +172,18 @@ def notify_brand_delete(sender, instance, **kwargs):
         create_notification(company_id, branch_id, "Brand Deleted",
                             f"Brand '{instance.name}' ({instance.code}) has been removed.", "warning")
         broadcast_data_update(company_id, branch_id, 'inventory_brand', 'delete', instance.id)
+
+        # NEW ALERT
+        create_alert(
+            company_id=company_id,
+            branch_id=branch_id,
+            alert_type='SYSTEM',
+            severity='warning',
+            title="Brand Deleted",
+            message=f"Brand '{instance.name}' ({instance.code}) was deleted.",
+            entity_type='brand',
+            entity_id=instance._id,
+        )
     transaction.on_commit(do_notify)
 
 
@@ -149,6 +203,20 @@ def notify_warehouse_change(sender, instance, created, **kwargs):
             create_notification(company_id, branch_id, "Warehouse Updated",
                                 f"Warehouse '{instance.warehouse_name}' ({instance.code}) details have been updated.", "info")
         broadcast_data_update(company_id, branch_id, 'inventory_warehouse', action, instance.id)
+
+        # NEW ALERT
+        alert_title = "Warehouse Created" if created else "Warehouse Updated"
+        alert_msg = f"Warehouse '{instance.warehouse_name}' ({instance.code}) was {action}d."
+        create_alert(
+            company_id=company_id,
+            branch_id=branch_id,
+            alert_type='SYSTEM',
+            severity='info',
+            title=alert_title,
+            message=alert_msg,
+            entity_type='warehouse',
+            entity_id=instance._id,
+        )
     transaction.on_commit(do_notify)
 
 @receiver(post_delete, sender=Warehouse)
@@ -159,6 +227,18 @@ def notify_warehouse_delete(sender, instance, **kwargs):
         create_notification(company_id, branch_id, "Warehouse Deleted",
                             f"Warehouse '{instance.warehouse_name}' ({instance.code}) has been removed.", "warning")
         broadcast_data_update(company_id, branch_id, 'inventory_warehouse', 'delete', instance.id)
+
+        # NEW ALERT
+        create_alert(
+            company_id=company_id,
+            branch_id=branch_id,
+            alert_type='SYSTEM',
+            severity='warning',
+            title="Warehouse Deleted",
+            message=f"Warehouse '{instance.warehouse_name}' ({instance.code}) was deleted.",
+            entity_type='warehouse',
+            entity_id=instance._id,
+        )
     transaction.on_commit(do_notify)
 
 
@@ -177,6 +257,20 @@ def notify_supplier_change(sender, instance, created, **kwargs):
                             f"{partner_type} '{instance.name}' ({instance.code}) has been {action}d.",
                             "success" if created else "info")
         broadcast_data_update(company_id, branch_id, entity, action, instance.id)
+
+        # NEW ALERT
+        alert_title = f"{partner_type} Created" if created else f"{partner_type} Updated"
+        alert_msg = f"{partner_type} '{instance.name}' ({instance.code}) was {action}d."
+        create_alert(
+            company_id=company_id,
+            branch_id=branch_id,
+            alert_type='SYSTEM',
+            severity='info',
+            title=alert_title,
+            message=alert_msg,
+            entity_type=entity,
+            entity_id=instance._id,
+        )
     transaction.on_commit(do_notify)
 
 @receiver(post_delete, sender=Supplier)
@@ -189,6 +283,18 @@ def notify_supplier_delete(sender, instance, **kwargs):
         create_notification(company_id, branch_id, f"{partner_type} Deleted",
                             f"{partner_type} '{instance.name}' ({instance.code}) has been deleted.", "warning")
         broadcast_data_update(company_id, branch_id, entity, 'delete', instance.id)
+
+        # NEW ALERT
+        create_alert(
+            company_id=company_id,
+            branch_id=branch_id,
+            alert_type='SYSTEM',
+            severity='warning',
+            title=f"{partner_type} Deleted",
+            message=f"{partner_type} '{instance.name}' ({instance.code}) was deleted.",
+            entity_type=entity,
+            entity_id=instance._id,
+        )
     transaction.on_commit(do_notify)
 
 
@@ -205,6 +311,20 @@ def notify_product_change(sender, instance, created, **kwargs):
                             f"Product '{instance.product_name}' has been {action}d.",
                             "success" if created else "info")
         broadcast_data_update(company_id, branch_id, 'product', action, instance.id)
+
+        # NEW ALERT
+        alert_title = f"Product {action}d"
+        alert_msg = f"Product '{instance.product_name}' has been {action}d."
+        create_alert(
+            company_id=company_id,
+            branch_id=branch_id,
+            alert_type='SYSTEM',
+            severity='info' if not created else 'info',
+            title=alert_title,
+            message=alert_msg,
+            entity_type='product',
+            entity_id=instance._id,
+        )
     transaction.on_commit(do_notify)
 
 @receiver(post_delete, sender=Product)
@@ -215,6 +335,18 @@ def notify_product_delete(sender, instance, **kwargs):
         create_notification(company_id, branch_id, "Product Deleted",
                             f"Product '{instance.product_name}' has been deleted.", "warning")
         broadcast_data_update(company_id, branch_id, 'product', 'delete', instance.id)
+
+        # NEW ALERT
+        create_alert(
+            company_id=company_id,
+            branch_id=branch_id,
+            alert_type='SYSTEM',
+            severity='warning',
+            title="Product Deleted",
+            message=f"Product '{instance.product_name}' was deleted.",
+            entity_type='product',
+            entity_id=instance._id,
+        )
     transaction.on_commit(do_notify)
 
 
@@ -231,6 +363,20 @@ def notify_variant_change(sender, instance, created, **kwargs):
                             f"Variant '{instance.sku}' of product '{instance.product.product_name}' has been {action}d.",
                             "info")
         broadcast_data_update(company_id, branch_id, 'variant', action, instance.id)
+
+        # NEW ALERT
+        alert_title = f"Variant {action}d"
+        alert_msg = f"Variant '{instance.sku}' of product '{instance.product.product_name}' was {action}d."
+        create_alert(
+            company_id=company_id,
+            branch_id=branch_id,
+            alert_type='SYSTEM',
+            severity='info',
+            title=alert_title,
+            message=alert_msg,
+            entity_type='productvariant',
+            entity_id=instance._id,
+        )
     transaction.on_commit(do_notify)
 
 
@@ -255,12 +401,38 @@ def stock_item_post_save(sender, instance, created, **kwargs):
         def do_notify():
             cache.delete_pattern(f"batch_stock_{instance.company_id}_*_{instance.variant._id}_*")
             broadcast_data_update(instance.company_id, instance.branch_id, 'stock', 'update', instance.variant._id)
+
+            # Existing low stock notification
             if instance.quantity_on_hand <= instance.variant.min_stock_level:
                 if not getattr(instance, '_low_stock_notified', False):
                     create_notification(instance.company_id, instance.branch_id, "Low Stock Alert",
                                         f"Variant '{instance.variant.sku}' has only {instance.quantity_on_hand} units left (min: {instance.variant.min_stock_level}).",
                                         "warning")
+                    # NEW ALERT for low stock
+                    create_alert(
+                        company_id=instance.company_id,
+                        branch_id=instance.branch_id,
+                        alert_type='LOW_STOCK',
+                        severity='warning',
+                        title="Low Stock Alert",
+                        message=f"Variant '{instance.variant.sku}' has only {instance.quantity_on_hand} units left (min: {instance.variant.min_stock_level}).",
+                        entity_type='productvariant',
+                        entity_id=instance.variant._id,
+                    )
                     instance._low_stock_notified = True
+
+            # Also alert for significant stock changes (optional)
+            if abs(quantity_change) >= 100:   # threshold
+                create_alert(
+                    company_id=instance.company_id,
+                    branch_id=instance.branch_id,
+                    alert_type='STOCK_MOVEMENT',
+                    severity='info',
+                    title="Bulk Stock Update",
+                    message=f"Stock for '{instance.variant.sku}' changed by {quantity_change} units.",
+                    entity_type='stockitem',
+                    entity_id=instance._id,
+                )
         transaction.on_commit(do_notify)
 
 
@@ -274,6 +446,17 @@ def log_transaction_notification(sender, instance, created, **kwargs):
             create_notification(instance.company_id, None, "Bulk Stock Movement",
                                 f"{instance.get_transaction_type_display()}: {abs(instance.quantity_change)} units of {instance.variant.sku}",
                                 "info")
+            # NEW ALERT
+            create_alert(
+                company_id=instance.company_id,
+                branch_id=instance.branch_id,
+                alert_type='STOCK_MOVEMENT',
+                severity='info',
+                title="Bulk Stock Movement",
+                message=f"{instance.get_transaction_type_display()}: {abs(instance.quantity_change)} units of {instance.variant.sku}",
+                entity_type='productvariant',
+                entity_id=instance.variant._id,
+            )
         transaction.on_commit(do_notify)
 
 
@@ -290,6 +473,17 @@ def notify_transfer_change(sender, instance, created, **kwargs):
         broadcast_data_update(instance.company_id, instance.branch_id, 'stock_transfer', action, instance.id)
         if instance.status == 'COMPLETED':
             broadcast_data_update(instance.company_id, instance.branch_id, 'stock', 'transfer', instance.variant._id)
+            # NEW ALERT for completed transfer
+            create_alert(
+                company_id=instance.company_id,
+                branch_id=instance.branch_id,
+                alert_type='TRANSFER_CONFIRMED',
+                severity='info',
+                title="Stock Transfer Completed",
+                message=f"Transfer {instance.transfer_number} for {instance.variant.sku} ({instance.quantity} units) completed.",
+                entity_type='stocktransfer',
+                entity_id=instance._id,
+            )
     transaction.on_commit(do_notify)
 
 
@@ -336,6 +530,41 @@ def sales_order_post_save(sender, instance, created, **kwargs):
         # Additional for completed orders
         if instance.status == 'COMPLETE':
             broadcast_data_update(instance.company_id, instance.branch_id, 'sales_order', 'complete', instance._id)
+            # NEW ALERT: Order completed
+            create_alert(
+                company_id=instance.company_id,
+                branch_id=instance.branch_id,
+                alert_type='ORDER_COMPLETED',
+                severity='info',
+                title="Sales Order Completed",
+                message=f"Order {instance.order_number} has been completed.",
+                entity_type='salesorder',
+                entity_id=instance._id,
+            )
+        elif instance.status == 'CANCELLED':
+            # NEW ALERT: Order cancelled
+            create_alert(
+                company_id=instance.company_id,
+                branch_id=instance.branch_id,
+                alert_type='ORDER_CANCELLED',
+                severity='warning',
+                title="Sales Order Cancelled",
+                message=f"Order {instance.order_number} has been cancelled.",
+                entity_type='salesorder',
+                entity_id=instance._id,
+            )
+        elif created and instance.status == 'DRAFT':
+            # NEW ALERT: Draft order created
+            create_alert(
+                company_id=instance.company_id,
+                branch_id=instance.branch_id,
+                alert_type='ORDER_CREATED',
+                severity='info',
+                title="Sales Order Created",
+                message=f"Draft order {instance.order_number} has been created.",
+                entity_type='salesorder',
+                entity_id=instance._id,
+            )
 
     # Execute immediately (not just on_commit) to ensure broadcast for cancel
     # But still wrap the notification and other DB writes in on_commit
