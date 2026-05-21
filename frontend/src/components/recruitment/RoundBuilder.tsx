@@ -9,7 +9,7 @@ interface Round {
   round_number: number;
   round_title: string;
   interview_type: string;
-  interviewer_id?: number;
+  interviewer_id?: string;
   duration_minutes?: number;
   notes?: string;
 }
@@ -193,8 +193,8 @@ export function RoundBuilder({ onChange, value = [], employees }: RoundBuilderPr
                       <Users className="w-3 h-3" /> Interviewer
                     </span>
                     <SearchableSelect
-                      value={round.interviewer_id?.toString() || ""}
-                      onChange={(v) => updateRound(round.round_number, "interviewer_id", v ? parseInt(v) : undefined)}
+                      value={round.interviewer_id || ""}
+                      onChange={(v) => updateRound(round.round_number, "interviewer_id", v ? v : undefined)}
                       options={employeeOptions}
                       placeholder="Assign interviewer"
                     />

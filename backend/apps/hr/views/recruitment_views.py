@@ -14,17 +14,17 @@ from django.db import models, transaction
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.hr.models import RecruitmentCandidate, RecruitmentActivityLog, Employee, InterviewRound
 from apps.hr.serializers.recruitment_serializers import (
-    RecruitmentCandidateSerializer,
-    RecruitmentActivityLogSerializer,
-    RecruitmentStatsSerializer,
-    InterviewRoundSerializer, 
-    InterviewRoundUpdateSerializer,
     RoundBulkCreateSerializer,
-    RecruitmentCandidateDetailSerializer,
 )
 
 logger = logging.getLogger(__name__)
 
+def safe_date(value):
+    if not value:
+        return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return value
 
 class RecruitmentCandidateView(CompanyBranchMixin, APIView):
     """CRUD operations for Recruitment Candidates with UUID support"""
@@ -41,8 +41,8 @@ class RecruitmentCandidateView(CompanyBranchMixin, APIView):
             "department": candidate.department,
             "stage": candidate.stage,
             "status": candidate.status,
-            "apply_date": candidate.apply_date.isoformat() if candidate.apply_date else None,
-            "interview_date": candidate.interview_date.isoformat() if candidate.interview_date else None,
+            "apply_date": safe_date(candidate.apply_date),
+            "interview_date": safe_date(candidate.interview_date),
             "assigned_to_id": str(candidate.assigned_to._id) if candidate.assigned_to else None,
             "assigned_to_name": candidate.assigned_to.full_name if candidate.assigned_to else None,
             "assigned_name": candidate.assigned_name,
@@ -54,14 +54,14 @@ class RecruitmentCandidateView(CompanyBranchMixin, APIView):
             "current_position": candidate.current_position,
             "years_of_experience": float(candidate.years_of_experience) if candidate.years_of_experience else None,
             "notice_period_days": candidate.notice_period_days,
-            "offer_sent_date": candidate.offer_sent_date.isoformat() if candidate.offer_sent_date else None,
-            "offer_accepted_date": candidate.offer_accepted_date.isoformat() if candidate.offer_accepted_date else None,
+            "offer_sent_date": safe_date(candidate.offer_sent_date),
+            "offer_accepted_date": safe_date(candidate.offer_accepted_date),
             "offer_amount": str(candidate.offer_amount) if candidate.offer_amount else None,
-            "joining_date": candidate.joining_date.isoformat() if candidate.joining_date else None,
+            "joining_date": safe_date(candidate.joining_date),
             "rejection_reason": candidate.rejection_reason,
-            "rejection_date": candidate.rejection_date.isoformat() if candidate.rejection_date else None,
-            "created_at": candidate.created_at.isoformat() if candidate.created_at else None,
-            "updated_at": candidate.updated_at.isoformat() if candidate.updated_at else None,
+            "rejection_date": safe_date(candidate.rejection_date),
+            "created_at": safe_date(candidate.created_at),
+            "updated_at": safe_date(candidate.updated_at),
         }
     
     def get(self, request):
@@ -584,7 +584,7 @@ class InterviewRoundView(CompanyBranchMixin, APIView):
                 "interview_type_display": r.get_interview_type_display(),
                 "status": r.status,
                 "status_display": r.get_status_display(),
-                "interview_date": r.interview_date.isoformat() if r.interview_date else None,
+                "interview_date": safe_date(r.interview_date),
                 "interviewer_id": str(r.interviewer._id) if r.interviewer else None,
                 "interviewer_name": r.interviewer_name,
                 "feedback": r.feedback,
@@ -944,8 +944,8 @@ class RecruitmentCandidateDetailView(CompanyBranchMixin, APIView):
             "department": candidate.department,
             "stage": candidate.stage,
             "status": candidate.status,
-            "apply_date": candidate.apply_date.isoformat() if candidate.apply_date else None,
-            "interview_date": candidate.interview_date.isoformat() if candidate.interview_date else None,
+            "apply_date": safe_date(candidate.apply_date),
+            "interview_date": safe_date(candidate.interview_date),
             "assigned_to_id": str(candidate.assigned_to._id) if candidate.assigned_to else None,
             "assigned_to_name": candidate.assigned_to.full_name if candidate.assigned_to else None,
             "resume_url": candidate.resume_url,
@@ -956,10 +956,10 @@ class RecruitmentCandidateDetailView(CompanyBranchMixin, APIView):
             "current_position": candidate.current_position,
             "years_of_experience": float(candidate.years_of_experience) if candidate.years_of_experience else None,
             "notice_period_days": candidate.notice_period_days,
-            "offer_sent_date": candidate.offer_sent_date.isoformat() if candidate.offer_sent_date else None,
-            "offer_accepted_date": candidate.offer_accepted_date.isoformat() if candidate.offer_accepted_date else None,
+            "offer_sent_date": safe_date(candidate.offer_sent_date),
+            "offer_accepted_date": safe_date(candidate.offer_accepted_date),
             "offer_amount": str(candidate.offer_amount) if candidate.offer_amount else None,
-            "joining_date": candidate.joining_date.isoformat() if candidate.joining_date else None,
+            "joining_date": safe_date(candidate.joining_date),
             "rejection_reason": candidate.rejection_reason,
             "interview_rounds": [
                 {

@@ -4,8 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
 export interface InterviewRound {
-  id: number;
-  _id: string;
+  id: string;
   round_number: number;
   round_title: string;
   interview_type: string;
@@ -13,7 +12,7 @@ export interface InterviewRound {
   status: "PENDING" | "PASSED" | "FAILED" | "SCHEDULED" | "CANCELLED";
   status_display: string;
   interview_date?: string;
-  interviewer?: number;
+  interviewer?: string;
   interviewer_name?: string;
   interviewer_name_display?: string;
   feedback?: string;
@@ -25,7 +24,7 @@ export interface InterviewRound {
   updated_at: string;
 }
 
-export function useInterviewRounds(candidateId?: number) {
+export function useInterviewRounds(candidateId?: string) {
   const api = useApi();
   
   return useQuery<InterviewRound[]>({
@@ -52,7 +51,7 @@ export function useCreateInterviewRound() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ candidateId, roundData }: { candidateId: number; roundData: any }) =>
+    mutationFn: ({ candidateId, roundData }: { candidateId: string; roundData: any }) =>
       api(`/api/hr/recruitment/candidates/${candidateId}/rounds/`, {
         method: "POST",
         body: JSON.stringify(roundData),
@@ -68,7 +67,7 @@ export function useUpdateInterviewRound() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ candidateId, roundId, data }: { candidateId: number; roundId: number; data: any }) =>
+    mutationFn: ({ candidateId, roundId, data }: { candidateId: string; roundId: string; data: any }) =>
       api(`/api/hr/recruitment/candidates/${candidateId}/rounds/${roundId}/`, {
         method: "PATCH",
         body: JSON.stringify(data),
@@ -84,7 +83,7 @@ export function useDeleteInterviewRound() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ candidateId, roundId }: { candidateId: number; roundId: number }) =>
+    mutationFn: ({ candidateId, roundId }: { candidateId: string; roundId: string }) =>
       api(`/api/hr/recruitment/candidates/${candidateId}/rounds/${roundId}/`, {
         method: "DELETE",
       }),
@@ -99,7 +98,7 @@ export function useBulkCreateRounds() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ candidateId, rounds }: { candidateId: number; rounds: any[] }) =>
+    mutationFn: ({ candidateId, rounds }: { candidateId: string; rounds: any[] }) =>
       api(`/api/hr/recruitment/candidates/${candidateId}/rounds/bulk/`, {
         method: "POST",
         body: JSON.stringify({ rounds }),
@@ -116,7 +115,7 @@ export function useBulkUpdateRoundStatus() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ candidateId, updates }: { candidateId: number; updates: Array<{ round_id: number; status: string; feedback?: string; rating?: number; interview_date?: string }> }) =>
+    mutationFn: ({ candidateId, updates }: { candidateId: string; updates: Array<{ round_id: string; status: string; feedback?: string; rating?: number; interview_date?: string }> }) =>
       api(`/api/hr/recruitment/candidates/${candidateId}/rounds/bulk-status/`, {
         method: "POST",
         body: JSON.stringify({ updates }),

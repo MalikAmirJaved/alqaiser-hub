@@ -4,9 +4,8 @@
 import { useState } from "react";
 import { X, CheckCircle, XCircle, Clock, Calendar, User, MessageSquare, Star, ChevronDown} from "lucide-react";
 import { DatePicker } from "@/components/reuseable/DatePicker";
-import SearchableSelect from "@/components/reuseable/SearchableSelect";
 interface Round {
-  id: number;
+  id: string;
   round_number: number;
   round_title: string;
   status: "PENDING" | "PASSED" | "FAILED" | "SCHEDULED" | "CANCELLED";
@@ -19,7 +18,7 @@ interface Round {
 interface RoundStatusModalProps {
   rounds: Round[];
   onClose: () => void;
-  onUpdate: (updates: Array<{ round_id: number; status: string; feedback?: string; rating?: number; interview_date?: string }>) => void;
+  onUpdate: (updates: Array<{ round_id: string; status: string; feedback?: string; rating?: number; interview_date?: string }>) => void;
   candidateName: string;
 }
 
@@ -32,12 +31,12 @@ const STATUS_OPTIONS = [
 ];
 
 export function RoundStatusModal({ rounds, onClose, onUpdate, candidateName }: RoundStatusModalProps) {
-  const [roundUpdates, setRoundUpdates] = useState<Record<number, any>>({});
-  const [selectedRound, setSelectedRound] = useState<number | null>(null);
+  const [roundUpdates, setRoundUpdates] = useState<Record<string, any>>({});
+  const [selectedRound, setSelectedRound] = useState<string | null>(null);
 
   const sortedRounds = [...rounds].sort((a, b) => a.round_number - b.round_number);
 
-  const updateRoundStatus = (roundId: number, field: string, value: any) => {
+  const updateRoundStatus = (roundId: string, field: string, value: any) => {
     setRoundUpdates(prev => ({
       ...prev,
       [roundId]: { ...prev[roundId], [field]: value, round_id: roundId }

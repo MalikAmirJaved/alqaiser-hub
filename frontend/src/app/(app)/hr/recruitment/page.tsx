@@ -32,8 +32,7 @@ import { ConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 // TYPES & CONSTANTS
 // ==========================================
 interface RecruitmentRecord {
-  id: number;
-  _id: string;
+  id: string;
   name: string;
   email?: string;
   phone?: string;
@@ -41,7 +40,7 @@ interface RecruitmentRecord {
   department: string;
   apply_date: string;
   interview_date?: string;
-  assigned_to_id?: number;
+  assigned_to_id?: string;
   assigned_to_name?: string;
   assigned_name?: string;
   stage: "Applied" | "Screening" | "Interview" | "Offer" | "Hired" | "Rejected";
@@ -68,7 +67,7 @@ interface RecruitmentRecord {
 }
 
 interface InterviewRound {
-  id: number;
+  id: string;
   round_number: number;
   round_title: string;
   interview_type: string;
@@ -243,7 +242,7 @@ export default function RecruitmentPage() {
     setRoundsModalOpen(true);
   };
 
-  const handleUpdateRounds = async (updates: Array<{ round_id: number; status: string; feedback?: string; rating?: number; interview_date?: string }>) => {
+  const handleUpdateRounds = async (updates: Array<{ round_id: string; status: string; feedback?: string; rating?: number; interview_date?: string }>) => {
     if (!selectedCandidate) return;
     try {
       await updateRoundsMutation.mutateAsync({ candidateId: selectedCandidate.id, updates });
@@ -598,11 +597,16 @@ function CandidateFormModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+  if (!isEditing && step === "rounds" && rounds.length === 0) {
+    toast.error("Please add at least one interview round before creating the candidate.");
+    return;
+  }
+
     setLoading(true);
     const assigned = employeeOptions.find(emp => emp.id.toString() === assignedId);
     const submitData = {
       ...formData,
-      assigned_to_id: assignedId ? parseInt(assignedId) : undefined,
+      assigned_to_id: assignedId ? assignedId : undefined,
       assigned_name: assigned ? `${assigned.first_name} ${assigned.last_name}` : undefined,
     };
     const roundsToSubmit = !isEditing && rounds.length > 0 ? rounds : undefined;
@@ -611,7 +615,7 @@ function CandidateFormModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
       <form
         onSubmit={handleSubmit}
         className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-3xl max-h-[92vh] overflow-y-auto my-auto"
@@ -756,7 +760,11 @@ function CandidateFormModal({
                 Next <ChevronRight className="w-4 h-4" />
               </button>
             ) : (
-              <button type="submit" disabled={loading} className="inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50">
+              <button
+                type="submit"
+                disabled={loading || (!isEditing && step === "rounds" && rounds.length === 0)}
+                className="..."
+              >
                 {loading && <Loader2 className="w-4 h-4 animate-spin" />}
                 {isEditing ? "Save Changes" : "Create Candidate"}
               </button>

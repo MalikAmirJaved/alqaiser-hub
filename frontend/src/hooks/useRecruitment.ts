@@ -4,8 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
 export interface RecruitmentCandidate {
-  id: number;
-  _id: string;
+  id: string;
   name: string;
   email?: string;
   phone?: string;
@@ -13,7 +12,7 @@ export interface RecruitmentCandidate {
   department: string;
   apply_date: string;
   interview_date?: string;
-  assigned_to_id?: number;
+  assigned_to_id?: string;
   assigned_to_name?: string;
   assigned_name?: string;
   stage: "Applied" | "Screening" | "Interview" | "Offer" | "Hired" | "Rejected";
@@ -54,7 +53,7 @@ export interface RecruitmentStats {
 }
 
 interface InterviewRound {
-  id: number;
+  id: string;
   round_number: number;
   round_title: string;
   interview_type: string;
@@ -72,7 +71,7 @@ export function useRecruitment(params?: {
   stage?: string;
   status?: string;
   source?: string;
-  assigned_to?: number;
+  assigned_to?: string;
   date_from?: string;
   date_to?: string;
   search?: string;
@@ -141,7 +140,7 @@ export function useUpdateRecruitmentCandidate() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (candidate: Partial<RecruitmentCandidate> & { id: number }) =>
+    mutationFn: (candidate: Partial<RecruitmentCandidate> & { id: string }) =>
       api("/api/hr/recruitment/candidates/", {
         method: "PATCH",
         body: JSON.stringify(candidate),
@@ -158,7 +157,7 @@ export function useDeleteRecruitmentCandidate() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: (id: string) =>
       api("/api/hr/recruitment/candidates/", {
         method: "DELETE",
         body: JSON.stringify({ id }),
@@ -177,9 +176,9 @@ export function useRecruitmentBulkAction() {
   return useMutation({
     mutationFn: ({ action, candidate_ids, new_stage, assigned_to_id }: { 
       action: string; 
-      candidate_ids: number[]; 
+      candidate_ids: string[]; 
       new_stage?: string; 
-      assigned_to_id?: number;
+      assigned_to_id?: string;
     }) =>
       api("/api/hr/recruitment/bulk-action/", {
         method: "POST",
@@ -192,7 +191,7 @@ export function useRecruitmentBulkAction() {
   });
 }
 
-export function useRecruitmentActivities(candidateId?: number, params?: {
+export function useRecruitmentActivities(candidateId?: string, params?: {
   action?: string;
   date_from?: string;
   date_to?: string;
@@ -228,7 +227,7 @@ export interface RecruitmentCandidateDetail extends RecruitmentCandidate {
   overall_status: string;
 }
 
-export function useRecruitmentDetail(candidateId?: number) {
+export function useRecruitmentDetail(candidateId?: string) {
   const api = useApi();
   
   return useQuery<RecruitmentCandidateDetail>({

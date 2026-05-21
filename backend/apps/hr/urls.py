@@ -79,7 +79,7 @@ urlpatterns = [
 
     # Loans (with individual update/delete support)
     path('loans/', EmployeeLoanView.as_view(), name='employee-loans'),
-    path('loans/status/', LoanStatusUpdateView.as_view(), name='loan-status-update'),  # New endpoint
+    path('loans/status/', LoanStatusUpdateView.as_view(), name='loan-status-update'),
 
     # Compensations
     path('compensations/', CompensationView.as_view(), name='compensations'),
@@ -103,19 +103,22 @@ urlpatterns = [
     path('leaves/approve/', LeaveApprovalView.as_view(), name='leave-approve'),
     path('leaves/stats/', LeaveStatsView.as_view(), name='leave-stats'),
 
-
     # recruitment Management
     path('recruitment/candidates/', RecruitmentCandidateView.as_view(), name='recruitment-candidates'),
     path('recruitment/stats/', RecruitmentStatsView.as_view(), name='recruitment-stats'),
     path('recruitment/activities/', RecruitmentActivityLogView.as_view(), name='recruitment-activities'),
-    path('recruitment/activities/<int:candidate_id>/', RecruitmentActivityLogView.as_view(), name='recruitment-candidate-activities'),
+    path('recruitment/activities/<str:candidate_id>/', RecruitmentActivityLogView.as_view(), name='recruitment-candidate-activities'),
     path('recruitment/bulk-action/', RecruitmentBulkActionView.as_view(), name='recruitment-bulk-action'),
 
-path('recruitment/candidates/<int:candidate_id>/detail/', RecruitmentCandidateDetailView.as_view(), name='recruitment-candidate-detail'),
-    path('recruitment/candidates/<int:candidate_id>/rounds/', InterviewRoundView.as_view(), name='interview-rounds'),
-    path('recruitment/candidates/<int:candidate_id>/rounds/<int:round_id>/', InterviewRoundView.as_view(), name='interview-round-detail'),
-    path('recruitment/candidates/<int:candidate_id>/rounds/bulk/', RoundBulkCreateView.as_view(), name='rounds-bulk-create'),
-    path('recruitment/candidates/<int:candidate_id>/rounds/bulk-status/', RoundStatusBulkUpdateView.as_view(), name='rounds-bulk-status'),
+    path('recruitment/candidates/<str:candidate_id>/detail/', RecruitmentCandidateDetailView.as_view(), name='recruitment-candidate-detail'),
+    
+    # ✅ IMPORTANT: Bulk endpoints must come BEFORE the generic <str:round_id> pattern
+    path('recruitment/candidates/<str:candidate_id>/rounds/bulk/', RoundBulkCreateView.as_view(), name='rounds-bulk-create'),
+    path('recruitment/candidates/<str:candidate_id>/rounds/bulk-status/', RoundStatusBulkUpdateView.as_view(), name='rounds-bulk-status'),
+    
+    # Generic round operations (list, create single round, retrieve, update, delete)
+    path('recruitment/candidates/<str:candidate_id>/rounds/', InterviewRoundView.as_view(), name='interview-rounds'),
+    path('recruitment/candidates/<str:candidate_id>/rounds/<str:round_id>/', InterviewRoundView.as_view(), name='interview-round-detail'),
 
     # Exit Management
     path('exits/', ExitRecordView.as_view(), name='exit-records'),
@@ -123,27 +126,26 @@ path('recruitment/candidates/<int:candidate_id>/detail/', RecruitmentCandidateDe
     path('exits/checklist/', ExitChecklistView.as_view(), name='exit-checklist'),
     path('exits/bulk-action/', ExitBulkActionView.as_view(), name='exit-bulk-action'),
 
-
     # Policy Management
     path('policies/', PolicyView.as_view(), name='policies'),
     path('policies/stats/', PolicyStatsView.as_view(), name='policy-stats'),
     path('policies/bulk-action/', PolicyBulkActionView.as_view(), name='policy-bulk-action'),
     
     # Policy Detail with ID
-    path('policies/<int:pk>/', PolicyView.as_view(), name='policy-detail'),
+    path('policies/<str:pk>/', PolicyView.as_view(), name='policy-detail'),
     
     # Policy Versions
-    path('policies/<int:policy_id>/versions/', PolicyVersionView.as_view(), name='policy-versions'),
+    path('policies/<str:policy_id>/versions/', PolicyVersionView.as_view(), name='policy-versions'),
     
     # Policy Acknowledgments
-    path('policies/<int:policy_id>/acknowledgments/', PolicyAcknowledgmentView.as_view(), name='policy-acknowledgments'),
-    path('policies/<int:policy_id>/acknowledge/', PolicyAcknowledgmentView.as_view(), name='policy-acknowledge'),
+    path('policies/<str:policy_id>/acknowledgments/', PolicyAcknowledgmentView.as_view(), name='policy-acknowledgments'),
+    path('policies/<str:policy_id>/acknowledge/', PolicyAcknowledgmentView.as_view(), name='policy-acknowledge'),
     
     # Custom Categories
     path('policies/categories/', PolicyCategoryView.as_view(), name='policy-categories'),
     
     # Employee-specific
-    path('employees/<int:employee_id>/pending-acknowledgments/', 
+    path('employees/<str:employee_id>/pending-acknowledgments/', 
          EmployeePendingAcknowledgmentsView.as_view(), 
          name='employee-pending-acknowledgments'),
 ]
