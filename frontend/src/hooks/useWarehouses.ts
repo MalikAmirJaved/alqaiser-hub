@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
 export interface Warehouse {
-  id: number;
+  id: string;
   warehouse_name: string;
   code: string;
   manager_name: string;
@@ -40,7 +40,12 @@ interface PaginatedResponse<T> {
   previous: string | null;
   results: T[];
 }
-
+export interface WarehouseUtilization {
+  occupancy_percentage: number;
+  current_occupancy: number;
+  available_capacity: number;
+  total_capacity: number;
+}
 // Fetch all warehouses
 export function useWarehouses(filters?: {
   search?: string;
@@ -91,7 +96,7 @@ export function useWarehouses(filters?: {
 
 
 // Fetch single warehouse
-export function useWarehouse(id: number | null) {
+export function useWarehouse(id: string | null) {
   const api = useApi();
   
   return useQuery<Warehouse>({
@@ -115,10 +120,10 @@ export function useWarehouseStats() {
 }
 
 // Fetch warehouse utilization
-export function useWarehouseUtilization(id: number | null) {
+export function useWarehouseUtilization(id: string | null) {
   const api = useApi();
-  
-  return useQuery({
+
+  return useQuery<WarehouseUtilization>({
     queryKey: ["warehouseUtilization", id],
     queryFn: () => api(`/api/inventory/warehouses/${id}/utilization/`),
     enabled: !!id,
@@ -150,7 +155,7 @@ export function useUpdateWarehouse() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (warehouse: Partial<Warehouse> & { id: number }) =>
+    mutationFn: (warehouse: Partial<Warehouse> & { id: string }) =>
       api(`/api/inventory/warehouses/${warehouse.id}/`, {
         method: "PATCH",
         body: JSON.stringify(warehouse),
@@ -169,7 +174,7 @@ export function useDeleteWarehouse() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: (id: string) =>
       api(`/api/inventory/warehouses/${id}/`, {
         method: "DELETE",
       }),

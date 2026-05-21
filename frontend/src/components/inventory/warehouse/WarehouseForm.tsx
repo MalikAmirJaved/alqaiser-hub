@@ -7,7 +7,7 @@ import { CountrySelect, StateSelect, CitySelect } from "@/components/reuseable/L
 import { Checkbox } from "@/components/reuseable/Checkbox";
 
 interface WarehouseFormData {
-  id?: number;
+  id?: string;
   warehouse_name: string;
   code: string;
   manager_name: string;

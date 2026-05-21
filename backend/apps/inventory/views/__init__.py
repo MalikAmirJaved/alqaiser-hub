@@ -10,10 +10,11 @@ from .variant import VariantViewSet
 from .sales import (SalesOrderViewSet,SalesReturnViewSet)
 from .customer import CustomerViewSet
 from .batch_stock import BatchStockMixin
+from .report import ReportViewSet
 __all__ = [
     "CategoryViewSet", "BrandViewSet", "WarehouseViewSet",
     "BaseSupplierViewSet", "SupplierViewSet","VendorViewSet","ProductViewSet","StockManagementViewSet",
     "StockTransferViewSet","PurchaseOrderViewSet", "GoodsReceiptViewSet",
      "CustomerViewSet", "SalesOrderViewSet",
-    "SalesReturnViewSet","VariantViewSet","BatchStockMixin"
+    "SalesReturnViewSet","VariantViewSet","BatchStockMixin", "ReportViewSet"
 ]

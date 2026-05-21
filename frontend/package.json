@@ -50,11 +50,13 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "country-state-city": "^3.2.1",
-    "date-fns": "^4.1.0",
+    "date-fns": "^4.2.1",
     "embla-carousel-react": "^8.6.0",
     "eslint-config-next": "^16.2.4",
     "framer-motion": "^12.38.0",
     "input-otp": "^1.4.2",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.575.0",
     "next": "^16.2.4",
     "postcss": "^8.5.13",
@@ -71,6 +73,7 @@
     "tailwindcss": "^4.2.1",
     "tw-animate-css": "^1.3.4",
     "vaul": "^1.1.2",
+    "xlsx": "^0.18.5",
     "zod": "^3.24.2"
   },
   "devDependencies": {

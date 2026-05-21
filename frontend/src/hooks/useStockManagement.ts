@@ -44,7 +44,7 @@ export interface VariantStockSummary {
   total_reserved: number;
   total_available: number;
   warehouses: {
-    warehouse_id: number;
+    warehouse_id: string;
     warehouse_name: string;
     quantity_on_hand: number;
     quantity_reserved: number;

@@ -69,6 +69,12 @@ class StockItemSerializer(serializers.ModelSerializer):
     variant_name = serializers.CharField(source='variant.product.product_name', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.warehouse_name', read_only=True)
     quantity_available = serializers.IntegerField(read_only=True)
+    
+    # User info
+    created_by_name = serializers.SerializerMethodField()
+    created_by_email = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
+    updated_by_email = serializers.SerializerMethodField()
 
     class Meta:
         model = StockItem
@@ -76,8 +82,25 @@ class StockItemSerializer(serializers.ModelSerializer):
             'id', 'variant_id', 'variant_sku', 'variant_name',
             'warehouse_id', 'warehouse_name', 'quantity_on_hand',
             'quantity_reserved', 'quantity_available', 'bin_location',
-            'version', 'updated_at'
+            'version', 'created_at', 'updated_at',
+            'created_by_name', 'created_by_email',
+            'updated_by_name', 'updated_by_email',
         ]
+
+    def get_created_by_name(self, obj):
+        user = obj.created_by
+        return user.get_full_name() or user.username if user else None
+
+    def get_created_by_email(self, obj):
+        return obj.created_by.email if obj.created_by else None
+
+    def get_updated_by_name(self, obj):
+        user = obj.updated_by
+        return user.get_full_name() or user.username if user else None
+
+    def get_updated_by_email(self, obj):
+        return obj.updated_by.email if obj.updated_by else None
+
 
 
 class InventoryTransactionSerializer(serializers.ModelSerializer):
