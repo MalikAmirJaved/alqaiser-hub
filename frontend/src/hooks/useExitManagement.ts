@@ -5,8 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
 export interface ExitRecord {
-  id: number;
-  _id: string;
+  id: string;
   employee_id: string;
   employee_name: string;
   department: string;
@@ -29,6 +28,19 @@ export interface ExitRecord {
   status_value: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface ExitChecklistItem {
+  id: string;
+  exit_record_id: string;
+  item_type: string;
+  item_name: string;
+  description: string;
+  status: string;
+  assigned_to: string | null;
+  assigned_to_name: string | null;
+  completed_at: string | null;
+  notes: string;
 }
 
 export interface ExitStats {
@@ -115,7 +127,7 @@ export function useDeleteExitRecord() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: (id: string) =>
       api("/api/hr/exits/", {
         method: "DELETE",
         body: JSON.stringify({ id }),
@@ -133,7 +145,7 @@ export function useBulkAction() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: { action: string; ids: number[] }) =>
+    mutationFn: (data: { action: string; ids: string[] }) =>
       api("/api/hr/exits/bulk-action/", {
         method: "POST",
         body: JSON.stringify(data),

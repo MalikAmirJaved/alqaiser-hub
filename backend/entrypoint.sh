@@ -20,8 +20,8 @@ echo "Starting server..."
 exec daphne -b 0.0.0.0 -p 8000 config.asgi:application
 
 # make migerations
-# docker compose exec backend python manage.py makemigrations ...
+# docker compose exec backend python manage.py makemigrations
 
 
 # migerate to db
-# docker compose exec backend python manage.py migrate ...
+# docker compose exec backend python manage.py migrate

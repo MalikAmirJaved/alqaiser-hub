@@ -1085,6 +1085,18 @@ class ExitRecord(BaseModel):
     
     status = models.CharField(max_length=20, choices=RECORD_STATUS, default='ACTIVE', db_index=True)
     
+    @property
+    def clearance_progress(self):
+        """Calculate clearance progress percentage based on four department clearances."""
+        total = 4
+        completed = sum([
+            self.clearance_hr,
+            self.clearance_it,
+            self.clearance_finance,
+            self.clearance_admin
+        ])
+        return int((completed / total) * 100) if total > 0 else 0
+    
     class Meta:
         db_table = 'hr_exit_records'
         verbose_name = "Exit Record"
@@ -1109,6 +1121,7 @@ class ExitRecord(BaseModel):
                 name='unique_active_exit_per_employee'
             )
         ]
+
 
 
 # =========================================================

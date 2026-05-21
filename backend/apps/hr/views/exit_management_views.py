@@ -276,7 +276,7 @@ class ExitRecordView(BaseExitView):
                 else:
                     setattr(exit_record, field, request.data[field])
         
-        if request.data.get('status') == 'CLOSED' and exit_record.status == 'CLOSED':
+        if request.data.get('status') == 'CLOSED' and exit_record.status != 'CLOSED':
             employee = exit_record.employee
             if employee and employee.employment_status in ['ACTIVE', 'ON_LEAVE']:
                 employee.employment_status = 'RESIGNED' if exit_record.reason == 'RESIGNATION' else 'TERMINATED'

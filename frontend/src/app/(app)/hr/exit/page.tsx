@@ -1,9 +1,7 @@
 // src/app/(dashboard)/hr/exit-management/page.tsx
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { useApi } from "@/hooks/useApi";
-import { useEmployees } from "@/hooks/useEmployees";
+import { useState, useMemo, useCallback } from "react";
 import PageHeader from "@/components/PageHeader";
 import StatCard from "@/components/cards/StatCard";
 import SearchableSelect, { SearchableSelectOption } from "@/components/reuseable/SearchableSelect";
@@ -11,72 +9,22 @@ import { DatePicker } from "@/components/reuseable/DatePicker";
 import { Checkbox } from "@/components/reuseable/Checkbox";
 import ConfirmationModal, { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import {
-  Search, Plus, Filter, Eye, Trash2, Pencil, LogOut, ShieldCheck,
-  Briefcase, Wallet, Clock, ArrowRight, CheckCircle2, AlertTriangle,
-  X, RefreshCw, Download, ChevronDown, ChevronUp, FileText
+  Search, Plus, RefreshCw, Trash2, Pencil, LogOut, Briefcase,
+  AlertTriangle, Clock, CheckCircle2, X, FileText, ShieldCheck
 } from "lucide-react";
-
-// ==========================================
-// TYPES & INTERFACES
-// ==========================================
-interface ExitRecord {
-  id: number;
-  _id: string;
-  employee_id: string;
-  employee_name: string;
-  department: string;
-  designation: string;
-  exit_date: string;
-  last_working_day: string;
-  reason: string;
-  reason_value: string;
-  notice_served: boolean;
-  clearance_hr: boolean;
-  clearance_it: boolean;
-  clearance_finance: boolean;
-  clearance_admin: boolean;
-  clearance_status: string;
-  clearance_status_value: string;
-  clearance_progress: number;
-  final_settlement: number;
-  notes: string;
-  status: string;
-  status_value: string;
-  company_id?: string;
-  branch_id?: string;
-  created_at?: string;
-  updated_at?: string;
-}
-
-interface ExitStats {
-  total_exits: number;
-  active_exits: number;
-  closed_exits: number;
-  pending_clearance: number;
-  in_progress_clearance: number;
-  completed_clearance: number;
-  avg_settlement: number;
-  total_settlement: number;
-  by_reason: Array<{ reason: string; count: number }>;
-  by_department: Array<{ department: string; count: number }>;
-  monthly_trend: Array<{ month: number; count: number }>;
-  clearance_completion_rate: number;
-  notice_compliance_rate: number;
-}
-
-interface ExitChecklistItem {
-  id: number;
-  _id: string;
-  exit_record_id: number;
-  item_type: string;
-  item_name: string;
-  description: string;
-  status: string;
-  assigned_to: number | null;
-  assigned_to_name: string | null;
-  completed_at: string | null;
-  notes: string;
-}
+import {
+  useExitRecords,
+  useExitStats,
+  useCreateExitRecord,
+  useUpdateExitRecord,
+  useDeleteExitRecord,
+  useBulkAction,
+  ExitRecord,
+  ExitChecklistItem
+} from "@/hooks/useExitManagement";
+import { useEmployees } from "@/hooks/useEmployees";
+import { toast } from "sonner";
+import { useApi } from "@/hooks/useApi";
 
 const EXIT_REASONS: SearchableSelectOption[] = [
   { value: "RESIGNATION", label: "👋 Resignation" },
@@ -93,70 +41,47 @@ const CLEARANCE_STATUSES: SearchableSelectOption[] = [
   { value: "COMPLETED", label: "Completed" },
 ];
 
-// ==========================================
-// MAIN PAGE COMPONENT
-// ==========================================
 export default function ExitManagementPage() {
   const api = useApi();
   const { data: employees = [] } = useEmployees();
   const confirmationModal = useConfirmationModal();
 
-  const [records, setRecords] = useState<ExitRecord[]>([]);
-  const [stats, setStats] = useState<ExitStats | null>(null);
-  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterReason, setFilterReason] = useState("");
   const [filterClearance, setFilterClearance] = useState("");
+  const [selectedRecords, setSelectedRecords] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<ExitRecord | null>(null);
-  const [selectedRecords, setSelectedRecords] = useState<Set<number>>(new Set());
-  const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
   const [checklistModal, setChecklistModal] = useState(false);
-  const [interviewModal, setInterviewModal] = useState(false);
   const [activeRecord, setActiveRecord] = useState<ExitRecord | null>(null);
   const [checklistItems, setChecklistItems] = useState<ExitChecklistItem[]>([]);
 
-  // Load data
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [exitData, statsData] = await Promise.all([
-        api<{ data: ExitRecord[] }>("/api/hr/exits/"),
-        api<ExitStats>("/api/hr/exits/stats/"),
-      ]);
-      setRecords(exitData.data);
-      setStats(statsData);
-    } catch (error) {
-      console.error("Failed to load exit records:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [api]);
+  const { data: recordsData, isLoading, refetch } = useExitRecords();
+  const { data: stats } = useExitStats();
+  const createMutation = useCreateExitRecord();
+  const updateMutation = useUpdateExitRecord();
+  const deleteMutation = useDeleteExitRecord();
+  const bulkActionMutation = useBulkAction();
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const records = recordsData?.data || [];
 
-  // Load checklist items
-  const loadChecklist = useCallback(async (recordId: number) => {
+  const loadChecklist = useCallback(async (recordId: string) => {
     try {
       const items = await api<ExitChecklistItem[]>(`/api/hr/exits/checklist/?exit_record_id=${recordId}`);
       setChecklistItems(items);
     } catch (error) {
-      console.error("Failed to load checklist:", error);
+      toast.error("Failed to load checklist");
     }
   }, [api]);
 
-  // ==========================================
-  // FILTERING
-  // ==========================================
   const filteredRecords = useMemo(() => {
     return records.filter(r => {
       const matchesSearch = query === "" ||
         r.employee_name.toLowerCase().includes(query.toLowerCase()) ||
         r.department.toLowerCase().includes(query.toLowerCase()) ||
-        r.designation?.toLowerCase().includes(query.toLowerCase());
+        (r.designation?.toLowerCase() || "").includes(query.toLowerCase());
       const matchesStatus = filterStatus === "" || r.status_value === filterStatus;
       const matchesReason = filterReason === "" || r.reason_value === filterReason;
       const matchesClearance = filterClearance === "" || r.clearance_status_value === filterClearance;
@@ -164,86 +89,57 @@ export default function ExitManagementPage() {
     });
   }, [records, query, filterStatus, filterReason, filterClearance]);
 
-  // ==========================================
-  // ACTIONS
-  // ==========================================
   const handleSave = async (data: Partial<ExitRecord>) => {
     try {
       if (editingRecord) {
-        await api(`/api/hr/exits/`, {
-          method: "PATCH",
-          body: JSON.stringify({ id: editingRecord.id, ...data }),
-        });
+        await updateMutation.mutateAsync({ id: editingRecord.id, ...data });
+        toast.success("Exit record updated");
       } else {
-        await api("/api/hr/exits/", {
-          method: "POST",
-          body: JSON.stringify(data),
-        });
+        await createMutation.mutateAsync(data);
+        toast.success("Exit record created");
       }
-      await loadData();
+      await refetch();
       setModalOpen(false);
       setEditingRecord(null);
     } catch (error: any) {
-      alert(error.message || "Failed to save exit record");
+      toast.error(error.message || "Failed to save");
     }
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = (id: string) => {
     confirmationModal.confirm({
       title: "Delete Exit Record",
-      message: "Are you sure you want to delete this exit record? This action cannot be undone.",
+      message: "Are you sure you want to delete this exit record?",
       type: "danger",
       confirmText: "Delete",
       onConfirm: async () => {
-        try {
-          await api("/api/hr/exits/", {
-            method: "DELETE",
-            body: JSON.stringify({ id }),
-          });
-          await loadData();
-        } catch (error: any) {
-          alert(error.message || "Failed to delete exit record");
-        }
+        await deleteMutation.mutateAsync(id);
+        toast.success("Deleted");
+        await refetch();
       },
     });
   };
 
   const handleBulkAction = (action: string) => {
     if (selectedRecords.size === 0) {
-      alert("Please select records first");
+      toast.error("Select records first");
       return;
     }
-
-    const actionLabels: Record<string, string> = {
-      CLOSE: "Close",
-      REOPEN: "Reopen",
-      DELETE: "Delete",
-    };
-
     confirmationModal.confirm({
-      title: `${actionLabels[action]} Records`,
-      message: `Are you sure you want to ${action.toLowerCase()} ${selectedRecords.size} selected record(s)?`,
+      title: `${action} Records`,
+      message: `Are you sure you want to ${action.toLowerCase()} ${selectedRecords.size} record(s)?`,
       type: action === "DELETE" ? "danger" : "warning",
-      confirmText: actionLabels[action],
+      confirmText: action,
       onConfirm: async () => {
-        try {
-          await api("/api/hr/exits/bulk-action/", {
-            method: "POST",
-            body: JSON.stringify({
-              action,
-              ids: Array.from(selectedRecords),
-            }),
-          });
-          setSelectedRecords(new Set());
-          await loadData();
-        } catch (error: any) {
-          alert(error.message || "Failed to perform bulk action");
-        }
+        await bulkActionMutation.mutateAsync({ action, ids: Array.from(selectedRecords) });
+        setSelectedRecords(new Set());
+        toast.success(`${action} completed`);
+        await refetch();
       },
     });
   };
 
-  const handleUpdateChecklistItem = async (itemId: number, status: string) => {
+  const handleUpdateChecklistItem = async (itemId: string, status: string) => {
     try {
       await api("/api/hr/exits/checklist/", {
         method: "PATCH",
@@ -251,17 +147,15 @@ export default function ExitManagementPage() {
       });
       if (activeRecord) {
         await loadChecklist(activeRecord.id);
-        await loadData(); // Refresh main data to update clearance status
+        await refetch();
       }
+      toast.success("Checklist updated");
     } catch (error: any) {
-      alert(error.message || "Failed to update checklist item");
+      toast.error(error.message);
     }
   };
 
-  // ==========================================
-  // RENDER
-  // ==========================================
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
@@ -277,7 +171,7 @@ export default function ExitManagementPage() {
         actions={
           <div className="flex items-center gap-2">
             <button
-              onClick={() => loadData()}
+              onClick={() => refetch()}
               className="inline-flex items-center gap-2 px-3 h-9 rounded-md border border-border text-sm hover:bg-muted"
             >
               <RefreshCw className="w-4 h-4" /> Refresh
@@ -292,7 +186,6 @@ export default function ExitManagementPage() {
         }
       />
 
-      {/* Stats Grid */}
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <StatCard label="Total Exits" value={stats.total_exits} icon={LogOut} accent="info" />
@@ -303,7 +196,6 @@ export default function ExitManagementPage() {
         </div>
       )}
 
-      {/* Filters & Search */}
       <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
         <div className="p-3 border-b border-border flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
@@ -311,7 +203,7 @@ export default function ExitManagementPage() {
             <input
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Search by employee name, department, or designation..."
+              placeholder="Search by employee name, department..."
               className="w-full bg-muted/40 pl-9 pr-3 h-9 rounded-md text-sm outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
@@ -319,10 +211,7 @@ export default function ExitManagementPage() {
             <SearchableSelect
               value={filterStatus}
               onChange={setFilterStatus}
-              options={[
-                { value: "ACTIVE", label: "Active" },
-                { value: "CLOSED", label: "Closed" },
-              ]}
+              options={[{ value: "ACTIVE", label: "Active" }, { value: "CLOSED", label: "Closed" }]}
               placeholder="Status"
               className="w-32"
             />
@@ -330,7 +219,7 @@ export default function ExitManagementPage() {
               value={filterClearance}
               onChange={setFilterClearance}
               options={CLEARANCE_STATUSES}
-              placeholder="Clearance Status"
+              placeholder="Clearance"
               className="w-40"
             />
             <SearchableSelect
@@ -344,24 +233,15 @@ export default function ExitManagementPage() {
               <button
                 onClick={() => setViewMode(viewMode === "table" ? "kanban" : "table")}
                 className="px-3 h-9 rounded-md border border-border text-sm hover:bg-muted"
-                title="Toggle View"
               >
                 {viewMode === "table" ? "Kanban" : "Table"}
               </button>
               {selectedRecords.size > 0 && (
                 <>
-                  <button
-                    onClick={() => handleBulkAction("CLOSE")}
-                    className="px-3 h-9 rounded-md border border-border text-sm hover:bg-muted text-success"
-                    title="Close Selected"
-                  >
+                  <button onClick={() => handleBulkAction("CLOSE")} className="px-3 h-9 rounded-md border border-border text-sm text-success">
                     Close
                   </button>
-                  <button
-                    onClick={() => handleBulkAction("DELETE")}
-                    className="px-3 h-9 rounded-md border border-border text-sm hover:bg-muted text-destructive"
-                    title="Delete Selected"
-                  >
+                  <button onClick={() => handleBulkAction("DELETE")} className="px-3 h-9 rounded-md border border-border text-sm text-destructive">
                     Delete
                   </button>
                 </>
@@ -370,7 +250,6 @@ export default function ExitManagementPage() {
           </div>
         </div>
 
-        {/* Table View */}
         {viewMode === "table" && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -381,11 +260,8 @@ export default function ExitManagementPage() {
                       checked={selectedRecords.size === filteredRecords.length && filteredRecords.length > 0}
                       indeterminate={selectedRecords.size > 0 && selectedRecords.size < filteredRecords.length}
                       onChange={(checked) => {
-                        if (checked) {
-                          setSelectedRecords(new Set(filteredRecords.map(r => r.id)));
-                        } else {
-                          setSelectedRecords(new Set());
-                        }
+                        if (checked) setSelectedRecords(new Set(filteredRecords.map(r => r.id)));
+                        else setSelectedRecords(new Set());
                       }}
                     />
                   </th>
@@ -393,31 +269,22 @@ export default function ExitManagementPage() {
                   <th className="text-left px-4 py-2.5">Department</th>
                   <th className="text-left px-4 py-2.5">Exit / LWD</th>
                   <th className="text-left px-4 py-2.5">Reason</th>
-                  <th className="text-left px-4 py-2.5">Clearance Status</th>
+                  <th className="text-left px-4 py-2.5">Clearance</th>
                   <th className="text-left px-4 py-2.5">Progress</th>
                   <th className="text-left px-4 py-2.5">Settlement</th>
                   <th className="px-4 py-2.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredRecords.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="text-center py-10 text-muted-foreground">
-                      No exit records found.
-                    </td>
-                  </tr>
-                ) : filteredRecords.map(r => (
+                {filteredRecords.map(r => (
                   <tr key={r.id} className="border-t border-border hover:bg-muted/30">
                     <td className="px-4 py-2.5">
                       <Checkbox
                         checked={selectedRecords.has(r.id)}
                         onChange={(checked) => {
                           const newSet = new Set(selectedRecords);
-                          if (checked) {
-                            newSet.add(r.id);
-                          } else {
-                            newSet.delete(r.id);
-                          }
+                          if (checked) newSet.add(r.id);
+                          else newSet.delete(r.id);
                           setSelectedRecords(newSet);
                         }}
                       />
@@ -432,57 +299,24 @@ export default function ExitManagementPage() {
                       <div className="text-[10px] text-muted-foreground">LWD: {r.last_working_day || "—"}</div>
                     </td>
                     <td className="px-4 py-2.5 text-xs">
-                      <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${r.reason_value === "RESIGNATION" ? "bg-info/15 text-info border-info/30" :
-                          r.reason_value === "TERMINATION" ? "bg-destructive/15 text-destructive border-destructive/30" :
-                            "bg-muted text-muted-foreground border-border"
-                        }`}>
+                      <span className="inline-flex px-2 py-0.5 text-[11px] rounded-full border bg-muted">
                         {r.reason}
                       </span>
                     </td>
                     <td className="px-4 py-2.5">
-                      <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${r.clearance_status_value === "COMPLETED" ? "bg-success/15 text-success border-success/30" :
-                          r.clearance_status_value === "APPROVED" ? "bg-info/15 text-info border-info/30" :
-                            r.clearance_status_value === "IN_PROGRESS" ? "bg-warning/15 text-warning border-warning/30" :
-                              "bg-muted text-muted-foreground border-border"
-                        }`}>
+                      <span className="inline-flex px-2 py-0.5 text-[11px] rounded-full border">
                         {r.clearance_status}
                       </span>
                       <div className="flex gap-1 mt-1">
-                        <span title="HR">
-                          <ShieldCheck
-                            className={`w-3 h-3 ${r.clearance_hr ? "text-success" : "text-muted-foreground/40"
-                              }`}
-                          />
-                        </span>
-
-                        <span title="IT">
-                          <ShieldCheck
-                            className={`w-3 h-3 ${r.clearance_it ? "text-success" : "text-muted-foreground/40"
-                              }`}
-                          />
-                        </span>
-
-                        <span title="Finance">
-                          <ShieldCheck
-                            className={`w-3 h-3 ${r.clearance_finance ? "text-success" : "text-muted-foreground/40"
-                              }`}
-                          />
-                        </span>
-
-                        <span title="Admin">
-                          <ShieldCheck
-                            className={`w-3 h-3 ${r.clearance_admin ? "text-success" : "text-muted-foreground/40"
-                              }`}
-                          />
-                        </span>
+                        <ShieldCheck className={`w-3 h-3 ${r.clearance_hr ? "text-success" : "text-muted-foreground/40"}`} />
+                        <ShieldCheck className={`w-3 h-3 ${r.clearance_it ? "text-success" : "text-muted-foreground/40"}`} />
+                        <ShieldCheck className={`w-3 h-3 ${r.clearance_finance ? "text-success" : "text-muted-foreground/40"}`} />
+                        <ShieldCheck className={`w-3 h-3 ${r.clearance_admin ? "text-success" : "text-muted-foreground/40"}`} />
                       </div>
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="w-20 bg-muted rounded-full h-1.5">
-                        <div
-                          className="bg-primary h-1.5 rounded-full"
-                          style={{ width: `${r.clearance_progress}%` }}
-                        />
+                        <div className="bg-primary h-1.5 rounded-full" style={{ width: `${r.clearance_progress}%` }} />
                       </div>
                       <div className="text-[10px] text-muted-foreground mt-0.5">{r.clearance_progress}%</div>
                     </td>
@@ -490,7 +324,7 @@ export default function ExitManagementPage() {
                       {r.final_settlement ? `PKR ${r.final_settlement.toLocaleString()}` : "—"}
                     </td>
                     <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1">
+                      <div className="flex justify-end gap-1">
                         <button
                           onClick={() => {
                             setActiveRecord(r);
@@ -502,53 +336,53 @@ export default function ExitManagementPage() {
                         >
                           <FileText className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => { setEditingRecord(r); setModalOpen(true); }}
-                          className="p-1.5 rounded-md hover:bg-muted"
-                        >
+                        <button onClick={() => { setEditingRecord(r); setModalOpen(true); }} className="p-1.5 rounded-md hover:bg-muted">
                           <Pencil className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => handleDelete(r.id)}
-                          className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
-                        >
+                        <button onClick={() => handleDelete(r.id)} className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </td>
                   </tr>
                 ))}
+                {filteredRecords.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="text-center py-10 text-muted-foreground">No exit records found.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
         )}
 
-        {/* Kanban View */}
         {viewMode === "kanban" && (
           <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {["PENDING", "IN_PROGRESS", "APPROVED", "COMPLETED"].map(status => {
               const statusRecords = filteredRecords.filter(r => r.clearance_status_value === status);
               return (
                 <div key={status} className="bg-muted/20 rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex justify-between mb-3">
                     <h3 className="text-sm font-semibold">{status.replace("_", " ")}</h3>
                     <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{statusRecords.length}</span>
                   </div>
                   <div className="space-y-2">
                     {statusRecords.map(r => (
-                      <div key={r.id} className="bg-card border border-border rounded-lg p-3 cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setEditingRecord(r); setModalOpen(true); }}>
+                      <div
+                        key={r.id}
+                        className="bg-card border border-border rounded-lg p-3 cursor-pointer hover:shadow-md"
+                        onClick={() => { setEditingRecord(r); setModalOpen(true); }}
+                      >
                         <div className="font-medium text-sm">{r.employee_name}</div>
                         <div className="text-xs text-muted-foreground">{r.department}</div>
                         <div className="text-xs mt-1">{r.reason}</div>
-                        <div className="flex justify-between items-center mt-2">
-                          <span className="text-[10px]">{r.exit_date}</span>
-                          <span className="text-xs font-medium">PKR {r.final_settlement.toLocaleString()}</span>
+                        <div className="flex justify-between mt-2 text-xs">
+                          <span>{r.exit_date}</span>
+                          <span>PKR {r.final_settlement.toLocaleString()}</span>
                         </div>
                       </div>
                     ))}
-                    {statusRecords.length === 0 && (
-                      <div className="text-xs text-muted-foreground text-center py-4">No records</div>
-                    )}
+                    {statusRecords.length === 0 && <div className="text-xs text-muted-foreground text-center py-4">No records</div>}
                   </div>
                 </div>
               );
@@ -558,11 +392,9 @@ export default function ExitManagementPage() {
 
         <div className="p-3 border-t border-border text-xs text-muted-foreground text-center">
           Showing {filteredRecords.length} of {records.length} records
-          {selectedRecords.size > 0 && ` • ${selectedRecords.size} selected`}
         </div>
       </div>
 
-      {/* Exit Form Modal */}
       {modalOpen && (
         <ExitFormModal
           employees={employees}
@@ -572,7 +404,6 @@ export default function ExitManagementPage() {
         />
       )}
 
-      {/* Checklist Modal */}
       {checklistModal && activeRecord && (
         <ChecklistModal
           record={activeRecord}
@@ -582,7 +413,6 @@ export default function ExitManagementPage() {
         />
       )}
 
-      {/* Confirmation Modal */}
       <confirmationModal.Modal />
     </div>
   );
@@ -618,14 +448,14 @@ function ExitFormModal({
   });
 
   const employeeOpts: SearchableSelectOption[] = employees
-    .filter(e => e.employment_status === "ACTIVE")
-    .map(e => ({
+    .filter((e: any) => e.employment_status === "ACTIVE")
+    .map((e: any) => ({
       value: String(e.id),
       label: `${e.first_name} ${e.last_name || ""} (${e.department || "N/A"})`
     }));
 
   const handleEmployeeSelect = (empId: string) => {
-    const emp = employees.find(e => String(e.id) === empId);
+    const emp = employees.find((e: any) => String(e.id) === empId);
     if (emp) {
       setFormData(prev => ({
         ...prev,
@@ -637,13 +467,13 @@ function ExitFormModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.employee_id || !formData.exit_date) {
-      alert("Employee and Exit Date are required.");
+      toast.error("Employee and Exit Date are required.");
       return;
     }
     onSubmit(formData);
   };
 
-  const selectedEmployee = employees.find(e => String(e.id) === formData.employee_id);
+  const selectedEmployee = employees.find((e: any) => String(e.id) === formData.employee_id);
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4 overflow-y-auto" onClick={onClose}>
@@ -663,7 +493,6 @@ function ExitFormModal({
               onChange={handleEmployeeSelect}
               options={employeeOpts}
               placeholder="Select Employee"
-              required
             />
           </label>
 
@@ -695,7 +524,6 @@ function ExitFormModal({
               onChange={v => setFormData({ ...formData, reason: v })}
               options={EXIT_REASONS}
               placeholder="Select Reason"
-              required
             />
           </label>
 
@@ -704,7 +532,6 @@ function ExitFormModal({
             <DatePicker
               value={formData.exit_date}
               onChange={v => setFormData({ ...formData, exit_date: v || "" })}
-              required
             />
           </label>
 
@@ -721,7 +548,7 @@ function ExitFormModal({
             <select
               value={formData.notice_served.toString()}
               onChange={e => setFormData({ ...formData, notice_served: e.target.value === "true" })}
-              className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
+              className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none"
             >
               <option value="true">Yes</option>
               <option value="false">No</option>
@@ -755,7 +582,7 @@ function ExitFormModal({
                 type="number"
                 value={formData.final_settlement}
                 onChange={e => setFormData({ ...formData, final_settlement: Number(e.target.value) })}
-                className="bg-muted/40 border border-border rounded-md h-9 pl-10 pr-3 outline-none focus:ring-2 focus:ring-ring w-full"
+                className="bg-muted/40 border border-border rounded-md h-9 pl-10 pr-3 outline-none w-full"
                 placeholder="0.00"
               />
             </div>
@@ -767,7 +594,7 @@ function ExitFormModal({
               rows={3}
               value={formData.notes}
               onChange={e => setFormData({ ...formData, notes: e.target.value })}
-              className="bg-muted/40 border border-border rounded-md p-3 outline-none focus:ring-2 focus:ring-ring"
+              className="bg-muted/40 border border-border rounded-md p-3 outline-none"
               placeholder="Asset return details, final handover notes, etc."
             />
           </label>
@@ -808,7 +635,7 @@ function ChecklistModal({
 }: {
   record: ExitRecord;
   items: ExitChecklistItem[];
-  onUpdateItem: (itemId: number, status: string) => void;
+  onUpdateItem: (itemId: string, status: string) => void;
   onClose: () => void;
 }) {
   const groupedItems = items.reduce((acc, item) => {
