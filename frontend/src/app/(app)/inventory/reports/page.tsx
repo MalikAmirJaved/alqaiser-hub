@@ -16,7 +16,7 @@ import { useWarehouses } from "@/hooks/useWarehouses";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { DateRangePickerRac } from "@/components/reuseable/DateRangePickerRac";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
@@ -98,20 +98,29 @@ export default function ReportsPage() {
           <Button variant="outline" size="sm" onClick={() => refetchSummary()}>
             <RefreshCcw className="mr-2 h-4 w-4" /> Refresh
           </Button>
-          <Dialog open={filterModalOpen} onOpenChange={setFilterModalOpen}>
+          {/* <Dialog open={filterModalOpen} onOpenChange={setFilterModalOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm">
                 <Filter className="mr-2 h-4 w-4" /> Filters
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="overflow-visible sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle>Report Filters</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
                   <Label>Date Range</Label>
-                  <DateRangePicker value={dateRange} onChange={setDateRange} />
+                  <DateRangePickerRac
+                  startDate={startDate}
+                  endDate={endDate}
+                  onChange={(start, end) => {
+                    setDateRange({
+                      from: start ? new Date(start) : undefined,
+                      to: end ? new Date(end) : undefined,
+                    });
+                  }}
+                />
                 </div>
                 <div className="space-y-2">
                   <Label>Warehouse</Label>
@@ -134,7 +143,7 @@ export default function ReportsPage() {
                 </Button>
               </div>
             </DialogContent>
-          </Dialog>
+          </Dialog> */}
         </div>
       </div>
 

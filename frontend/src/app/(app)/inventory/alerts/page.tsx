@@ -84,22 +84,22 @@ export default function AlertsPage() {
         </div>
       ),
     },
-    {
-      key: "is_read",
-      label: "Read",
-      render: (_, row) =>
-        row.is_read ? (
-          <CheckCircle className="h-4 w-4 text-green-600" />
-        ) : (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleMarkRead(row.id)}
-          >
-            Mark read
-          </Button>
-        ),
-    },
+    // {
+    //   key: "is_read",
+    //   label: "Read",
+    //   render: (_, row) =>
+    //     row.is_read ? (
+    //       <CheckCircle className="h-4 w-4 text-green-600" />
+    //     ) : (
+    //       <Button
+    //         variant="ghost"
+    //         size="sm"
+    //         onClick={() => handleMarkRead(row.id)}
+    //       >
+    //         Mark read
+    //       </Button>
+    //     ),
+    // },
   ];
 
   return (
