@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import Barcode from "react-barcode";
 import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
 
 import { useBarcodes, type BarcodeItem } from "@/hooks/useBarcodes";
-import { TableView, type Column } from "@/components/reuseable/TableGridView";
+import {
+  TableView,
+  type Column,
+} from "@/components/reuseable/TableGridView";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -28,14 +30,17 @@ import {
 
 export default function BarcodesPage() {
   const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] =
+    useState("");
   const [page, setPage] = useState(1);
 
-  const [selectedBarcode, setSelectedBarcode] = useState<BarcodeItem | null>(
-    null
-  );
+  const [
+    selectedBarcode,
+    setSelectedBarcode,
+  ] = useState<BarcodeItem | null>(null);
 
-  const barcodeRef = useRef<HTMLDivElement>(null);
+  const barcodeRef =
+    useRef<HTMLDivElement>(null);
 
   const pageSize = 20;
 
@@ -58,7 +63,8 @@ export default function BarcodesPage() {
     (i) => i.barcode && i.barcode.trim() !== ""
   ).length;
 
-  const withoutBarcode = totalVariants - withBarcode;
+  const withoutBarcode =
+    totalVariants - withBarcode;
 
   const stats = [
     {
@@ -86,14 +92,22 @@ export default function BarcodesPage() {
     setPage(1);
   };
 
-  const handleOpenBarcode = (row: BarcodeItem) => {
+  const handleOpenBarcode = (
+    row: BarcodeItem
+  ) => {
     setSelectedBarcode(row);
   };
 
+  // =========================
+  // PRINT
+  // =========================
   const handlePrint = () => {
     if (!barcodeRef.current) return;
 
-    const printWindow = window.open("", "_blank");
+    const printWindow = window.open(
+      "",
+      "_blank"
+    );
 
     if (!printWindow) return;
 
@@ -101,19 +115,39 @@ export default function BarcodesPage() {
       <html>
         <head>
           <title>Print Barcode</title>
+
+          <link
+            rel="stylesheet"
+            href="/globals.css"
+          />
+
           <style>
             body {
               display: flex;
               justify-content: center;
               align-items: center;
-              height: 100vh;
+              min-height: 100vh;
+              padding: 20px;
+              background: white;
               font-family: Arial, sans-serif;
-              flex-direction: column;
+            }
+
+            .barcode-print-wrapper {
+              width: 100%;
+              max-width: 500px;
+            }
+
+            svg {
+              width: 100% !important;
+              height: auto !important;
             }
           </style>
         </head>
+
         <body>
-          ${barcodeRef.current.innerHTML}
+          <div class="barcode-print-wrapper">
+            ${barcodeRef.current.innerHTML}
+          </div>
         </body>
       </html>
     `);
@@ -128,111 +162,147 @@ export default function BarcodesPage() {
     }, 500);
   };
 
-const handleDownloadPDF = async () => {
-  if (!barcodeRef.current || !selectedBarcode) return;
+  // =========================
+  // PDF DOWNLOAD
+  // =========================
+  const handleDownloadPDF = async () => {
+    if (
+      !barcodeRef.current ||
+      !selectedBarcode
+    )
+      return;
 
-  try {
-    // Get barcode SVG
-    const svgElement =
-      barcodeRef.current.querySelector("svg");
+    try {
+      const svgElement =
+        barcodeRef.current.querySelector(
+          "svg"
+        );
 
-    if (!svgElement) return;
+      if (!svgElement) return;
 
-    // Convert SVG to string
-    const svgData = new XMLSerializer().serializeToString(
-      svgElement
-    );
+      const svgData =
+        new XMLSerializer().serializeToString(
+          svgElement
+        );
 
-    // Create SVG blob
-    const svgBlob = new Blob([svgData], {
-      type: "image/svg+xml;charset=utf-8",
-    });
-
-    const url = URL.createObjectURL(svgBlob);
-
-    // Load image
-    const img = new Image();
-
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-
-      canvas.width = img.width * 2;
-      canvas.height = img.height * 2;
-
-      const ctx = canvas.getContext("2d");
-
-      if (!ctx) return;
-
-      // White background
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      ctx.drawImage(
-        img,
-        0,
-        0,
-        canvas.width,
-        canvas.height
-      );
-
-      const imgData = canvas.toDataURL("image/png");
-
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
+      const svgBlob = new Blob([svgData], {
+        type: "image/svg+xml;charset=utf-8",
       });
 
-      pdf.setFontSize(18);
+      const url =
+        URL.createObjectURL(svgBlob);
 
-      pdf.text(
-        selectedBarcode.product_name,
-        15,
-        20
+      const img = new Image();
+
+      img.onload = () => {
+        const canvas =
+          document.createElement("canvas");
+
+        canvas.width = img.width * 2;
+        canvas.height = img.height * 2;
+
+        const ctx = canvas.getContext("2d");
+
+        if (!ctx) return;
+
+        // White background
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(
+          0,
+          0,
+          canvas.width,
+          canvas.height
+        );
+
+        ctx.drawImage(
+          img,
+          0,
+          0,
+          canvas.width,
+          canvas.height
+        );
+
+        const imgData =
+          canvas.toDataURL("image/png");
+
+        const pdf = new jsPDF({
+          orientation: "portrait",
+          unit: "mm",
+          format: "a4",
+        });
+
+        // Theme-like styling
+        pdf.setFillColor(248, 250, 252);
+
+        pdf.roundedRect(
+          10,
+          10,
+          190,
+          90,
+          4,
+          4,
+          "F"
+        );
+
+        pdf.setFontSize(18);
+
+        pdf.text(
+          selectedBarcode.product_name,
+          15,
+          25
+        );
+
+        pdf.setFontSize(12);
+
+        pdf.text(
+          `SKU: ${selectedBarcode.sku}`,
+          15,
+          35
+        );
+
+        pdf.addImage(
+          imgData,
+          "PNG",
+          15,
+          45,
+          180,
+          40
+        );
+
+        pdf.save(
+          `${selectedBarcode.sku}-barcode.pdf`
+        );
+
+        URL.revokeObjectURL(url);
+      };
+
+      img.src = url;
+    } catch (error) {
+      console.error(
+        "PDF generation failed:",
+        error
       );
+    }
+  };
 
-      pdf.setFontSize(12);
+  const columns: Column<
+    BarcodeItem & Record<string, unknown>
+  >[] = [
+    {
+      key: "product_name",
+      label: "Product",
+    },
 
-      pdf.text(
-        `SKU: ${selectedBarcode.sku}`,
-        15,
-        28
-      );
-
-      pdf.addImage(
-        imgData,
-        "PNG",
-        15,
-        40,
-        180,
-        60
-      );
-
-      pdf.save(
-        `${selectedBarcode.sku}-barcode.pdf`
-      );
-
-      URL.revokeObjectURL(url);
-    };
-
-    img.src = url;
-  } catch (error) {
-    console.error(
-      "PDF generation failed:",
-      error
-    );
-  }
-};
-
-  const columns: Column<BarcodeItem & Record<string, unknown>>[] = [
-    { key: "product_name", label: "Product" },
-
-    { key: "sku", label: "SKU" },
+    {
+      key: "sku",
+      label: "SKU",
+    },
 
     {
       key: "barcode",
       label: "Barcode",
-      render: (_, row) => row.barcode || "—",
+      render: (_, row) =>
+        row.barcode || "—",
     },
 
     {
@@ -243,7 +313,9 @@ const handleDownloadPDF = async () => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => handleOpenBarcode(row)}
+            onClick={() =>
+              handleOpenBarcode(row)
+            }
           >
             <BarcodeIcon className="h-4 w-4" />
           </Button>
@@ -260,14 +332,18 @@ const handleDownloadPDF = async () => {
 
       <StatsCards stats={stats} />
 
+      {/* Search */}
       <div className="flex gap-2 items-end">
         <div className="flex-1">
           <Input
             placeholder="Search by product, SKU, or barcode..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) =>
+              setSearch(e.target.value)
+            }
             onKeyDown={(e) =>
-              e.key === "Enter" && handleSearch()
+              e.key === "Enter" &&
+              handleSearch()
             }
           />
         </div>
@@ -278,6 +354,7 @@ const handleDownloadPDF = async () => {
         </Button>
       </div>
 
+      {/* Table */}
       <TableView
         columns={columns}
         data={items}
@@ -288,9 +365,18 @@ const handleDownloadPDF = async () => {
       {/* Barcode Popup */}
       <Dialog
         open={!!selectedBarcode}
-        onOpenChange={() => setSelectedBarcode(null)}
+        onOpenChange={() =>
+          setSelectedBarcode(null)
+        }
       >
-        <DialogContent className="sm:max-w-md">
+        <DialogContent
+          className="
+            sm:max-w-md
+            bg-card
+            text-card-foreground
+            border-border
+          "
+        >
           <DialogHeader>
             <DialogTitle>
               Barcode Preview
@@ -299,28 +385,49 @@ const handleDownloadPDF = async () => {
 
           {selectedBarcode && (
             <div className="space-y-6">
+              {/* Barcode Panel */}
               <div
                 id="barcode-pdf"
                 ref={barcodeRef}
-                className="border rounded-xl p-6 flex flex-col items-center bg-white"
+                className="
+                  barcode-panel
+                  p-6
+                  flex
+                  flex-col
+                  items-center
+                  shadow-sm
+                "
               >
-                <h3 className="font-semibold text-lg">
-                  {selectedBarcode.product_name}
+                <h3 className="font-semibold text-lg text-center">
+                  {
+                    selectedBarcode.product_name
+                  }
                 </h3>
 
-                <p className="text-sm text-gray-500 mb-4">
+                <p
+                  className="
+                    text-sm
+                    text-muted-foreground
+                    mb-4
+                  "
+                >
                   SKU: {selectedBarcode.sku}
                 </p>
 
-                <Barcode
-                  value={selectedBarcode.barcode}
-                  width={2}
-                  height={80}
-                  fontSize={16}
-                  displayValue
-                />
+                <div className="w-full overflow-x-auto flex justify-center">
+                  <Barcode
+                    value={
+                      selectedBarcode.barcode
+                    }
+                    width={2}
+                    height={80}
+                    fontSize={16}
+                    displayValue
+                  />
+                </div>
               </div>
 
+              {/* Actions */}
               <div className="flex gap-2 justify-end">
                 <Button
                   variant="outline"
@@ -330,7 +437,11 @@ const handleDownloadPDF = async () => {
                   Print
                 </Button>
 
-                <Button onClick={handleDownloadPDF}>
+                <Button
+                  onClick={
+                    handleDownloadPDF
+                  }
+                >
                   <Download className="h-4 w-4 mr-2" />
                   Download PDF
                 </Button>
