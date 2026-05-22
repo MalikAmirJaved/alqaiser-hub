@@ -144,7 +144,7 @@ export default function AssetsList() {
   }
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="space-y-6 ">
       <PageHeader 
         title="Asset Library" 
         subtitle="Manage your hardware inventory - laptops, monitors, peripherals, and more"

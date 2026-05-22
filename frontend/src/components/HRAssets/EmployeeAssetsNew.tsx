@@ -172,7 +172,7 @@ export default function EmployeeAssetsNew() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-120px)] gap-4 p-4 md:p-6">
+    <div className="flex h-[calc(100vh-120px)] gap-4">
       {/* Left Panel - Employee List (unchanged but typed) */}
       <div className={cn(
         "flex flex-col bg-card rounded-xl border border-border overflow-hidden transition-all",

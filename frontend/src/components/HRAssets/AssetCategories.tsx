@@ -206,7 +206,7 @@ export default function AssetCategories() {
   }
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="space-y-6">
       <PageHeader 
         title="Equipment Kits" 
         subtitle="Bundle multiple assets together for easy assignment to employees"
