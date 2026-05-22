@@ -21,7 +21,7 @@ function Dashboard() {
   const expenses = ls.get<any[]>("expenses") || [];
   const alerts = ls.get<any[]>("alerts") || [];
   const sales = ls.get<any[]>("salesOrders") || [];
-const { formatCurrency, isReady } = useCompanySettings();
+const { formatCurrency } = useCompanySettings();
 
   const revenue = invoices.reduce((s, i) => s + (Number(i.amount) || 0), 0);
   const expenseTotal = expenses.reduce((s, i) => s + (Number(i.amount) || 0), 0);

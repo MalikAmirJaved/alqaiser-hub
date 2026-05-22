@@ -24,7 +24,7 @@ export interface Asset {
 export interface AssetStats {
   totalAssets: number;
   withSerialNumbers: number;
-  totalValue: string;
+  totalValue: number;
   assignedAssets: number;
   availableAssets: number;
   uniqueVendors: number;

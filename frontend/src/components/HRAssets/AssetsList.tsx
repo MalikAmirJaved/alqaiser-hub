@@ -54,8 +54,10 @@ import {
 } from "@/components/ui/table";
 import { DatePicker } from "@/components/reuseable/DatePicker";
 import { toast } from "sonner";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 export default function AssetsList() {
+const { formatCurrency } = useCompanySettings();
   const [searchQuery, setSearchQuery] = useState("");
   const { data: assets = [], isLoading } = useAssets(
     searchQuery ? { search: searchQuery } : undefined
@@ -198,8 +200,7 @@ export default function AssetsList() {
               <div>
                 <p className="text-xs text-muted-foreground">Total Value</p>
                 <p className="text-2xl font-bold">
-                  ${stats?.totalValue ? parseFloat(stats.totalValue).toLocaleString() : 
-                    assets.reduce((sum, a) => sum + (parseFloat(a.purchasePrice || '0') || 0), 0).toLocaleString()}
+                  {formatCurrency(stats?.totalValue ?? 0) }
                 </p>
               </div>
               <div className="p-2 rounded-lg bg-amber-500/10">
@@ -285,7 +286,7 @@ export default function AssetsList() {
                       <TableCell>
                         <div className="text-xs space-y-0.5">
                           {asset.purchaseDate && <div>📅 {asset.purchaseDate}</div>}
-                          {asset.purchasePrice && <div>💰 ${parseFloat(asset.purchasePrice).toLocaleString()}</div>}
+                          {asset.purchasePrice && <div>💰 ${parseFloat(asset.purchasePrice)}</div>}
                           {asset.vendor && <div>🏢 {asset.vendor}</div>}
                         </div>
                       </TableCell>

@@ -314,7 +314,7 @@ class AssetStatsView(CompanyBranchMixin, APIView):
             "withSerialNumbers": assets.exclude(
                 models.Q(serial_number__isnull=True) | models.Q(serial_number='')
             ).count(),
-            "totalValue": str(total_value),
+            "totalValue": total_value,
             "assignedAssets": assets.filter(is_assigned=True).count(),
             "availableAssets": assets.filter(is_assigned=False, is_active=True).count(),
             "uniqueVendors": assets.exclude(
