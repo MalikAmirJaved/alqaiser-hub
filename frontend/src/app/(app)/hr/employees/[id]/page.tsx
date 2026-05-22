@@ -628,19 +628,10 @@ export default function EmployeeDetailPage() {
 
       {/* ── Hero / Profile Card ───────────────────────────────── */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
-        {/* Gradient banner */}
-        <div className="h-24 bg-gradient-to-r from-primary/30 via-primary/10 to-transparent relative">
-          <div className="absolute inset-0 opacity-20"
-            style={{
-              backgroundImage: `radial-gradient(circle at 20% 50%, oklch(0.7 0.18 250 / 0.4) 0%, transparent 60%),
-                                radial-gradient(circle at 80% 50%, oklch(0.7 0.17 155 / 0.2) 0%, transparent 60%)`
-            }}
-          />
-        </div>
 
-        <div className="px-6 pb-6">
+        <div className="px-6 pb-6 z-10">
           {/* Avatar row */}
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 -mt-12">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mt-4">
             {/* Avatar */}
             <div className="flex items-end gap-4">
               <div className="w-20 h-20 rounded-2xl border-4 border-card bg-gradient-to-br from-primary/40 to-primary/10 flex items-center justify-center text-2xl font-bold text-primary shadow-lg shrink-0">
