@@ -102,7 +102,6 @@ export default function CompanySetupModal() {
   const setupDesignations = useSetupDesignations();
   const createWarehouse = useCreateWarehouse();
   const { profile, updateProfile, isUpdating: isUpdatingProfile } = useUserProfile();
-  console.log("profile sate:: ", profile)
   const updateBranch = useUpdateBranch();
 
   const [step, setStep] = useState<Step>(1);
@@ -193,7 +192,6 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
 
   // ── Fetch existing branch when on step 3 ──
   const { data: existingBranch, isLoading: branchLoading } = useBranch();
-console.log("existingBranch:: ",existingBranch)
   // ── Prefill from existing data ──
 
   useEffect(() => {
@@ -386,9 +384,7 @@ console.log("existingBranch:: ",existingBranch)
   };
 
   // ── Submit all ──
-console.log(
-        "branch", branch
-      )
+
   const handleSubmit = async () => {
     setErrorMsg("");
     
