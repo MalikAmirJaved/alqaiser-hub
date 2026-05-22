@@ -48,12 +48,7 @@ export interface CompanySettings {
   defaultStartTime: string;
   defaultEndTime: string;
   workingHoursPerDay: string;
-  
-  // Leave Policies
-  leaveDuringProbation: boolean;
-  allowCarryForward: boolean;
-  maxCarryForwardDays: number;
-  
+    
   // Status
   isSetupCompleted: boolean;
   

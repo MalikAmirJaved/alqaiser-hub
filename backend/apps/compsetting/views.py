@@ -118,8 +118,6 @@ class CompanySettingsView(BaseCompanyView):
             "defaultStartTime": settings.default_start_time.strftime("%H:%M"),
             "defaultEndTime": settings.default_end_time.strftime("%H:%M"),
             "workingHoursPerDay": str(settings.working_hours_per_day),
-            "allowCarryForward": settings.allow_carry_forward,
-            "maxCarryForwardDays": settings.max_carry_forward_days,
             "isSetupCompleted": settings.is_setup_completed,
             "workingDays": [
                 {
@@ -190,8 +188,6 @@ class CompanySettingsView(BaseCompanyView):
             'defaultStartTime': 'default_start_time',
             'defaultEndTime': 'default_end_time',
             'workingHoursPerDay': 'working_hours_per_day',
-            'allowCarryForward': 'allow_carry_forward',
-            'maxCarryForwardDays': 'max_carry_forward_days',
         }
 
         for request_field, model_field in settings_fields.items():

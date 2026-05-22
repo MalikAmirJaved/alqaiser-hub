@@ -42,10 +42,6 @@ interface FormData {
   defaultEndTime: string;
   workingHoursPerDay: string;
   
-  // Leave Policies
-  leaveDuringProbation: boolean;
-  allowCarryForward: boolean;
-  maxCarryForwardDays: number;
 }
 
 export default function CompanyProfile() {
@@ -76,9 +72,6 @@ export default function CompanyProfile() {
     defaultStartTime: "09:00",
     defaultEndTime: "18:00",
     workingHoursPerDay: "8.00",
-    leaveDuringProbation: false,
-    allowCarryForward: false,
-    maxCarryForwardDays: 0,
   });
 
   const [workingDays, setWorkingDays] = useState<WorkingDayDisplay[]>([
@@ -110,9 +103,6 @@ export default function CompanyProfile() {
         defaultStartTime: settings.defaultStartTime || "09:00",
         defaultEndTime: settings.defaultEndTime || "18:00",
         workingHoursPerDay: settings.workingHoursPerDay || "8.00",
-        leaveDuringProbation: settings.leaveDuringProbation || false,
-        allowCarryForward: settings.allowCarryForward || false,
-        maxCarryForwardDays: settings.maxCarryForwardDays || 0,
       });
 
       if (settings.workingDays && Array.isArray(settings.workingDays)) {
@@ -190,7 +180,7 @@ export default function CompanyProfile() {
     <div className="max-w-5xl mx-auto pb-10">
       <PageHeader 
         title="Company Settings" 
-        subtitle="Manage organization details, financials, and leave policies" 
+        subtitle="Manage organization details and financials" 
         actions={null}
       />
       
@@ -450,65 +440,6 @@ export default function CompanyProfile() {
                 />
               </label>
             </div>
-          </div>
-        </div>
-
-        {/* Leave Policies */}
-        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-          <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex items-center gap-2">
-            <Briefcase className="w-5 h-5 text-blue-600" />
-            <h3 className="font-semibold text-lg">Leave Policies</h3>
-          </div>
-          <div className="p-6 space-y-5">
-            <div className="flex items-center justify-between py-2">
-              <div>
-                <p className="font-medium">Leave During Probation</p>
-                <p className="text-sm text-gray-500">Allow employees to take leave during probation period</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleChange("leaveDuringProbation", !formData.leaveDuringProbation)}
-                className={`relative w-12 h-6 rounded-full transition-colors ${
-                  formData.leaveDuringProbation ? "bg-blue-600" : "bg-gray-300"
-                }`}
-              >
-                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                  formData.leaveDuringProbation ? "left-7" : "left-1"
-                }`} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between py-2">
-              <div>
-                <p className="font-medium">Allow Carry Forward</p>
-                <p className="text-sm text-gray-500">Allow employees to carry forward unused leaves</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleChange("allowCarryForward", !formData.allowCarryForward)}
-                className={`relative w-12 h-6 rounded-full transition-colors ${
-                  formData.allowCarryForward ? "bg-blue-600" : "bg-gray-300"
-                }`}
-              >
-                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                  formData.allowCarryForward ? "left-7" : "left-1"
-                }`} />
-              </button>
-            </div>
-
-            {formData.allowCarryForward && (
-              <label className="block">
-                <span className="text-sm text-gray-600 mb-1.5 block">Max Carry Forward Days</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="365"
-                  value={formData.maxCarryForwardDays}
-                  onChange={e => handleChange("maxCarryForwardDays", parseInt(e.target.value) || 0)}
-                  className="w-full sm:w-48 h-10 px-3 rounded-md border border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-                />
-              </label>
-            )}
           </div>
         </div>
 

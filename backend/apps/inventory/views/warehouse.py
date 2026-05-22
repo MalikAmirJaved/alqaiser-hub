@@ -80,11 +80,13 @@ class WarehouseViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         instance = self.get_object()
         warehouse_name = instance.warehouse_name
 
-        self.perform_destroy(instance)
+        instance.is_deleted = True
+        instance.save()
 
         return Response({
-            'status': 'success',
-            'message': f'Warehouse "{warehouse_name}" has been deleted successfully.'
+            "status": "success",
+            "deleted": True,
+            "message": f'Warehouse "{warehouse_name}" has been soft deleted.'
         })
 
     @action(detail=False, methods=['get'])
