@@ -18,6 +18,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useConfirmation } from "@/contexts/ConfirmationModalContext";
+import { useRouter } from "next/navigation";
 
 
 export default function EmployeesPage() {
@@ -28,7 +29,7 @@ export default function EmployeesPage() {
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
-
+  const router = useRouter();
   const { data: employees = [], isLoading } = useEmployees(
     query ? { search: query } : undefined
   );
@@ -583,7 +584,7 @@ const handleDelete = async (employee) => {
           selectedRows={selectedRows}
           onRowSelect={setSelectedRows}
           onRowClick={(row, idx) => {
-            // Optional: Navigate to employee detail page
+            router.push(`employees/${row.id}`)
           }}
           actions={permissions.canUpdate || permissions.canDelete ? renderActions : undefined}
           stickyHeader={true}
