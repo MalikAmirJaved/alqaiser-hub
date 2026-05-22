@@ -30,6 +30,7 @@ export interface CompanySettings {
   companyShortName: string;
   address: string;
   city: string;
+  state: string;
   country: string;
   phone: string;
   email: string;

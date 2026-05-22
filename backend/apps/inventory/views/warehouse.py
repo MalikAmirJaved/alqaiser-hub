@@ -23,6 +23,7 @@ class WarehouseViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                 Q(code__icontains=search) |
                 Q(manager_name__icontains=search) |
                 Q(city__icontains=search) |
+                Q(state__icontains=search) |
                 Q(country__icontains=search)
             )
 
@@ -33,6 +34,10 @@ class WarehouseViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         country = self.request.query_params.get('country')
         if country:
             qs = qs.filter(country__icontains=country)
+
+        state = self.request.query_params.get('state')
+        if state:
+            qs = qs.filter(state__icontains=state)
 
         city = self.request.query_params.get('city')
         if city:

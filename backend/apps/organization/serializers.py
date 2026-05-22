@@ -39,7 +39,7 @@ class BranchSerializer(serializers.ModelSerializer):
         fields = [
             'id', '_id',
             'name', 'code',
-            'address', 'city', 'country',
+            'address', 'city', 'state', 'country',
             'phone', 'email',
             'is_hq', 'currency_code', 'tax_id',
             'created_by', 'updated_by'

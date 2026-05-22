@@ -16,6 +16,7 @@ class Company(models.Model):
 
     address = models.TextField(blank=True, null=True)
     city = models.CharField(max_length=100)
+    state = models.CharField(max_length=100,blank=True, null=True)
     country = models.CharField(max_length=100)
 
     phone = models.CharField(max_length=30, blank=True, null=True)
@@ -54,6 +55,7 @@ class Branch(models.Model):
 
     address = models.TextField(blank=True, null=True)
     city = models.CharField(max_length=100)
+    state = models.CharField(max_length=100, blank=True, null=True)
     country = models.CharField(max_length=100)
 
     phone = models.CharField(max_length=30, blank=True, null=True)

@@ -9,6 +9,7 @@ export interface Branch {
   code: string;
   address: string;
   city: string;
+  state: string;
   country: string;
   phone: string;
   email: string;
@@ -22,6 +23,7 @@ export interface BranchInput {
   code: string;
   address: string;
   city: string;
+  state: string;
   country: string;
   phone: string;
   email: string;

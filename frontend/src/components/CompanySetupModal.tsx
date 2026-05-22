@@ -14,7 +14,8 @@ import {
   Phone, Mail, MapPin, Plus, Trash2, Package, UserCircle, Home, Eye, EyeOff, Lock
 } from "lucide-react";
 import { DEPARTMENT_CHOICES } from "@/lib/departments";
-
+import { LocationGroup } from "@/components/reuseable/LocationSelectors";
+import CurrencySelect from "@/components/reuseable/CurrencySelect";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
@@ -60,6 +61,7 @@ type BranchForm = {
   code: string;
   address: string;
   city: string;
+  state: string;
   country: string;
   phone: string;
   email: string;
@@ -71,14 +73,14 @@ type BranchForm = {
 // ─── Step meta ────────────────────────────────────────────────────────────────
 
 const STEPS: { id: Step; label: string; icon: React.ReactNode; description: string }[] = [
-  { id: 1, label: "Company",    icon: <Building2 className="w-4 h-4" />,    description: "Basic info" },
-  { id: 2, label: "Admin User", icon: <UserCircle className="w-4 h-4" />,   description: "Your profile" },
-  { id: 3, label: "Branch",     icon: <Home className="w-4 h-4" />,         description: "First location" },
-  { id: 4, label: "Schedule",   icon: <CalendarDays className="w-4 h-4" />, description: "Working days" },
-  { id: 5, label: "Financial",  icon: <DollarSign className="w-4 h-4" />,   description: "Currency & tax" },
-  { id: 6, label: "Roles",      icon: <Briefcase className="w-4 h-4" />,    description: "Designations" },
-  { id: 7, label: "Warehouse",  icon: <Warehouse className="w-4 h-4" />,    description: "Storage" },
-  { id: 8, label: "Complete",   icon: <Sparkles className="w-4 h-4" />,     description: "All done!" },
+  { id: 1, label: "Company", icon: <Building2 className="w-4 h-4" />, description: "Basic info" },
+  { id: 2, label: "Admin User", icon: <UserCircle className="w-4 h-4" />, description: "Your profile" },
+  { id: 3, label: "Branch", icon: <Home className="w-4 h-4" />, description: "First location" },
+  { id: 4, label: "Schedule", icon: <CalendarDays className="w-4 h-4" />, description: "Working days" },
+  { id: 5, label: "Financial", icon: <DollarSign className="w-4 h-4" />, description: "Currency & tax" },
+  { id: 6, label: "Roles", icon: <Briefcase className="w-4 h-4" />, description: "Designations" },
+  { id: 7, label: "Warehouse", icon: <Warehouse className="w-4 h-4" />, description: "Storage" },
+  { id: 8, label: "Complete", icon: <Sparkles className="w-4 h-4" />, description: "All done!" },
 ];
 
 // ─── Shared field styles ──────────────────────────────────────────────────────
@@ -113,33 +115,34 @@ export default function CompanySetupModal() {
   // ── Form state ──
 
   const [formData, setFormData] = useState({
-    companyName:       "",
-    companyShortName:  "",
-    address:           "",
-    city:              "",
-    country:           "PK",
-    phone:             "",
-    email:             "",
-    currency:          "PKR",
-    taxRate:           "17",
-    taxId:             "",
-    timezone:          "Asia/Karachi",
-    defaultStartTime:  "09:00",
-    defaultEndTime:    "18:00",
-    workingHoursPerDay:"8.00",
+    companyName: "",
+    companyShortName: "",
+    address: "",
+    city: "",
+    state: "",
+    country: "PK",
+    phone: "",
+    email: "",
+    currency: "PKR",
+    taxRate: "17",
+    taxId: "",
+    timezone: "Asia/Karachi",
+    defaultStartTime: "09:00",
+    defaultEndTime: "18:00",
+    workingHoursPerDay: "8.00",
   });
 
-const [adminUser, setAdminUser] = useState<AdminUserForm>({
-  full_name: "",
-  username: "",
-  first_name: "",
-  last_name: "",
-  email: "",              
-  role: "COMPANY_ADMIN",
-  department: "",
-  designation: "",
-  phone_number: "",
-});
+  const [adminUser, setAdminUser] = useState<AdminUserForm>({
+    full_name: "",
+    username: "",
+    first_name: "",
+    last_name: "",
+    email: "",
+    role: "COMPANY_ADMIN",
+    department: "",
+    designation: "",
+    phone_number: "",
+  });
 
 
   const [password, setPassword] = useState("");
@@ -151,6 +154,7 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
     code: "",
     address: "",
     city: "",
+    state: "",
     country: "PK",
     phone: "",
     email: "",
@@ -160,11 +164,11 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
   });
 
   const [workingDays, setWorkingDays] = useState([
-    { day: 0, label: "Mon", isWorking: true  },
-    { day: 1, label: "Tue", isWorking: true  },
-    { day: 2, label: "Wed", isWorking: true  },
-    { day: 3, label: "Thu", isWorking: true  },
-    { day: 4, label: "Fri", isWorking: true  },
+    { day: 0, label: "Mon", isWorking: true },
+    { day: 1, label: "Tue", isWorking: true },
+    { day: 2, label: "Wed", isWorking: true },
+    { day: 3, label: "Thu", isWorking: true },
+    { day: 4, label: "Fri", isWorking: true },
     { day: 5, label: "Sat", isWorking: false },
     { day: 6, label: "Sun", isWorking: false },
   ]);
@@ -174,20 +178,20 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
   ]);
 
   const [warehouse, setWarehouse] = useState<WarehouseForm>({
-    warehouse_name:    "",
-    code:              "",
-    manager_name:      "",
-    phone:             "",
-    email:             "",
-    capacity:          "",
+    warehouse_name: "",
+    code: "",
+    manager_name: "",
+    phone: "",
+    email: "",
+    capacity: "",
     current_occupancy: 0,
-    country:           "PK",
-    state:             "",
-    city:              "",
-    address_line:      "",
-    postal_code:       "",
-    is_active:         true,
-    description:       "",
+    country: "PK",
+    state: "",
+    city: "",
+    address_line: "",
+    postal_code: "",
+    is_active: true,
+    description: "",
   });
 
   // ── Fetch existing branch when on step 3 ──
@@ -198,15 +202,16 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
     if (isReady && settings && !settings.isSetupCompleted) {
       setFormData(prev => ({
         ...prev,
-        companyName:      settings.companyName      || prev.companyName,
+        companyName: settings.companyName || prev.companyName,
         companyShortName: settings.companyShortName || prev.companyShortName,
-        email:            settings.email            || prev.email,
-        currency:         settings.currency         || prev.currency,
-        timezone:         settings.timezone         || prev.timezone,
-        address:          settings.address          || prev.address,
-        city:             settings.city             || prev.city,
-        country:          settings.country          || prev.country,
-        phone:            settings.phone            || prev.phone,
+        email: settings.email || prev.email,
+        currency: settings.currency || prev.currency,
+        timezone: settings.timezone || prev.timezone,
+        address: settings.address || prev.address,
+        city: settings.city || prev.city,
+        state: settings.state || prev.state,
+        country: settings.country || prev.country,
+        phone: settings.phone || prev.phone,
       }));
     }
   }, [isReady, settings]);
@@ -231,6 +236,7 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
         code: existingBranch.code,
         address: existingBranch.address,
         city: existingBranch.city,
+        state: existingBranch.state,
         country: existingBranch.country,
         phone: existingBranch.phone,
         email: existingBranch.email,
@@ -280,6 +286,7 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
       if (!formData.email.trim()) { setErrorMsg("Company email is required."); return false; }
       if (!formData.phone.trim()) { setErrorMsg("Phone number is required."); return false; }
       if (!formData.city.trim()) { setErrorMsg("City is required."); return false; }
+      if (!formData.state.trim()) { setErrorMsg("State is required."); return false; }
       if (!formData.country) { setErrorMsg("Country is required."); return false; }
       if (!formData.address.trim()) { setErrorMsg("Address is required."); return false; }
       if (!formData.timezone) { setErrorMsg("Timezone is required."); return false; }
@@ -288,10 +295,10 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
     if (step === 2) {
       if (!adminUser.full_name.trim()) { setErrorMsg("Your full name is required."); return false; }
       if (!adminUser.email.trim()) { setErrorMsg("Email address is required."); return false; }
-  if (!adminUser.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
-    setErrorMsg("Please enter a valid email address.");
-    return false;
-  }
+      if (!adminUser.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+        setErrorMsg("Please enter a valid email address.");
+        return false;
+      }
 
       if (password && password !== confirmPassword) {
         setErrorMsg("Passwords do not match.");
@@ -308,12 +315,13 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
       if (!branch.code.trim()) { setErrorMsg("Branch code is required."); return false; }
       if (!branch.address.trim()) { setErrorMsg("Branch address is required."); return false; }
       if (!branch.city.trim()) { setErrorMsg("Branch city is required."); return false; }
+      if (!branch.state.trim()) { setErrorMsg("Branch state is required."); return false; }
       if (!branch.country) { setErrorMsg("Branch country is required."); return false; }
       if (!branch.phone.trim()) { setErrorMsg("Branch phone number is required."); return false; }
       if (!branch.email.trim()) { setErrorMsg("Branch email is required."); return false; }
-      if (!branch.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) { 
-        setErrorMsg("Please enter a valid branch email address."); 
-        return false; 
+      if (!branch.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+        setErrorMsg("Please enter a valid branch email address.");
+        return false;
       }
     }
 
@@ -321,17 +329,17 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
       if (!workingDays.some(d => d.isWorking)) { setErrorMsg("Select at least one working day."); return false; }
       if (!formData.defaultStartTime) { setErrorMsg("Start time is required."); return false; }
       if (!formData.defaultEndTime) { setErrorMsg("End time is required."); return false; }
-      if (!formData.workingHoursPerDay || Number(formData.workingHoursPerDay) <= 0) { 
-        setErrorMsg("Working hours per day must be greater than 0."); 
-        return false; 
+      if (!formData.workingHoursPerDay || Number(formData.workingHoursPerDay) <= 0) {
+        setErrorMsg("Working hours per day must be greater than 0.");
+        return false;
       }
     }
 
     if (step === 5) {
       if (!formData.currency) { setErrorMsg("Currency is required."); return false; }
-      if (formData.taxRate === "" || Number(formData.taxRate) < 0) { 
-        setErrorMsg("Tax rate is required and cannot be negative."); 
-        return false; 
+      if (formData.taxRate === "" || Number(formData.taxRate) < 0) {
+        setErrorMsg("Tax rate is required and cannot be negative.");
+        return false;
       }
       if (!formData.taxId.trim()) { setErrorMsg("Tax ID / GST number is required."); return false; }
     }
@@ -339,7 +347,7 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
     if (step === 6) {
       const valid = designations.filter(d => d.name.trim());
       if (valid.length === 0) { setErrorMsg("Add at least one designation."); return false; }
-      
+
       for (let i = 0; i < designations.length; i++) {
         const des = designations[i];
         if (des.name.trim() && !des.department) {
@@ -355,9 +363,9 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
       if (!warehouse.manager_name.trim()) { setErrorMsg("Warehouse manager name is required."); return false; }
       if (!warehouse.phone.trim()) { setErrorMsg("Warehouse phone number is required."); return false; }
       if (!warehouse.email.trim()) { setErrorMsg("Warehouse email is required."); return false; }
-      if (!warehouse.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) { 
-        setErrorMsg("Please enter a valid warehouse email address."); 
-        return false; 
+      if (!warehouse.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+        setErrorMsg("Please enter a valid warehouse email address.");
+        return false;
       }
       if (!warehouse.city.trim()) { setErrorMsg("Warehouse city is required."); return false; }
       if (!warehouse.country) { setErrorMsg("Warehouse country is required."); return false; }
@@ -387,16 +395,16 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
 
   const handleSubmit = async () => {
     setErrorMsg("");
-    
+
     // Final validation for last step
     if (!warehouse.warehouse_name.trim()) { setErrorMsg("Warehouse name is required."); return; }
     if (!warehouse.code.trim()) { setErrorMsg("Warehouse code is required."); return; }
     if (!warehouse.manager_name.trim()) { setErrorMsg("Warehouse manager name is required."); return; }
     if (!warehouse.phone.trim()) { setErrorMsg("Warehouse phone number is required."); return; }
     if (!warehouse.email.trim()) { setErrorMsg("Warehouse email is required."); return; }
-    if (!warehouse.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) { 
-      setErrorMsg("Please enter a valid warehouse email address."); 
-      return; 
+    if (!warehouse.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+      setErrorMsg("Please enter a valid warehouse email address.");
+      return;
     }
     if (!warehouse.city.trim()) { setErrorMsg("Warehouse city is required."); return; }
     if (!warehouse.country) { setErrorMsg("Warehouse country is required."); return; }
@@ -421,11 +429,11 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
       // 2. Update user profile (Admin User) with optional password
       const profileUpdates: any = {
         full_name: adminUser.full_name,
-          username: adminUser.username,
-  first_name: adminUser.first_name,
-  last_name: adminUser.last_name,
-  email: adminUser.email,
-  phone_number: adminUser.phone_number,
+        username: adminUser.username,
+        first_name: adminUser.first_name,
+        last_name: adminUser.last_name,
+        email: adminUser.email,
+        phone_number: adminUser.phone_number,
       };
       if (password) {
         profileUpdates.password = password;
@@ -434,19 +442,20 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
       await updateProfile(profileUpdates);
 
       // 3. Create or update branch
-      
-        await updateBranch.mutateAsync({
-          name: branch.name,
-          code: branch.code,
-          address: branch.address,
-          city: branch.city,
-          country: branch.country,
-          phone: branch.phone,
-          email: branch.email,
-          is_hq: branch.is_hq,
-          currency_code: formData.currency,
-          tax_id: branch.tax_id,
-        });
+
+      await updateBranch.mutateAsync({
+        name: branch.name,
+        code: branch.code,
+        address: branch.address,
+        city: branch.city,
+        state: branch.state,
+        country: branch.country,
+        phone: branch.phone,
+        email: branch.email,
+        is_hq: branch.is_hq,
+        currency_code: formData.currency,
+        tax_id: branch.tax_id,
+      });
 
       // 4. Working days
       await updateWorkingDays(workingDays);
@@ -515,9 +524,9 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
                   onClick={() => { if (s.id < step) { setErrorMsg(""); setStep(s.id as Step); } }}
                   className={`
                     relative flex items-center justify-center w-8 h-8 rounded-full text-xs font-semibold shrink-0 transition-all
-                    ${step > s.id  ? "bg-primary text-primary-foreground cursor-pointer hover:opacity-80" : ""}
+                    ${step > s.id ? "bg-primary text-primary-foreground cursor-pointer hover:opacity-80" : ""}
                     ${step === s.id ? "bg-primary/20 text-primary ring-2 ring-primary/40" : ""}
-                    ${step < s.id  ? "bg-muted text-muted-foreground cursor-default" : ""}
+                    ${step < s.id ? "bg-muted text-muted-foreground cursor-default" : ""}
                   `}
                 >
                   {step > s.id ? <CheckCircle className="w-4 h-4" /> : s.id}
@@ -581,25 +590,18 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
                   </div>
                 </Field>
 
-                <Field label="City" required>
-                  <input className={inputCls} placeholder="Karachi"
-                    value={formData.city}
-                    onChange={e => setField("city", e.target.value)} />
-                </Field>
-
-                <Field label="Country" required>
-                  <select className={selectCls} value={formData.country}
-                    onChange={e => setField("country", e.target.value)}>
-                    <option value="PK">🇵🇰 Pakistan</option>
-                    <option value="AE">🇦🇪 UAE</option>
-                    <option value="SA">🇸🇦 Saudi Arabia</option>
-                    <option value="US">🇺🇸 United States</option>
-                    <option value="GB">🇬🇧 United Kingdom</option>
-                    <option value="IN">🇮🇳 India</option>
-                  </select>
-                </Field>
-
-                <Field label="Address" required className="sm:col-span-2">
+                <div className="sm:col-span-2">
+                  <LocationGroup
+                    country={formData.country}
+                    setCountry={(val) => setField("country", val)}
+                    state={formData.state}   // optional for company
+                    setState={(val) => setField("state", val)}
+                    city={formData.city}
+                    setCity={(val) => setField("city", val)}
+                    required={true}
+                  />
+                </div>
+                <Field label="Address" required className="">
                   <div className="relative">
                     <MapPin className="absolute left-3 top-3 w-3.5 h-3.5 text-muted-foreground" />
                     <textarea className={inputCls + " pl-8 pt-2 h-auto resize-none"} rows={2}
@@ -608,7 +610,6 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
                       onChange={e => setField("address", e.target.value)} />
                   </div>
                 </Field>
-
                 <Field label="Timezone" required>
                   <select className={selectCls} value={formData.timezone}
                     onChange={e => setField("timezone", e.target.value)}>
@@ -640,35 +641,35 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
                     onChange={e => setAdmin("full_name", e.target.value)} />
                 </Field>
                 <Field label="Username" required>
-  <input className={inputCls} placeholder="johndoe"
-    value={adminUser.username}
-    onChange={e => setAdmin("username", e.target.value)} />
-</Field>
+                  <input className={inputCls} placeholder="johndoe"
+                    value={adminUser.username}
+                    onChange={e => setAdmin("username", e.target.value)} />
+                </Field>
 
-<Field label="First Name">
-  <input className={inputCls} placeholder="John"
-    value={adminUser.first_name}
-    onChange={e => setAdmin("first_name", e.target.value)} />
-</Field>
+                <Field label="First Name">
+                  <input className={inputCls} placeholder="John"
+                    value={adminUser.first_name}
+                    onChange={e => setAdmin("first_name", e.target.value)} />
+                </Field>
 
-<Field label="Last Name">
-  <input className={inputCls} placeholder="Doe"
-    value={adminUser.last_name}
-    onChange={e => setAdmin("last_name", e.target.value)} />
-</Field>
+                <Field label="Last Name">
+                  <input className={inputCls} placeholder="Doe"
+                    value={adminUser.last_name}
+                    onChange={e => setAdmin("last_name", e.target.value)} />
+                </Field>
 
                 <Field label="Email" required>
-  <div className="relative">
-    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground mt-0.5" />
-    <input
-      className={inputCls + " pl-8"}
-      type="email"
-      placeholder="admin@company.com"
-      value={adminUser.email}
-      onChange={e => setAdmin("email", e.target.value)}
-    />
-  </div>
-</Field>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground mt-0.5" />
+                    <input
+                      className={inputCls + " pl-8"}
+                      type="email"
+                      placeholder="admin@company.com"
+                      value={adminUser.email}
+                      onChange={e => setAdmin("email", e.target.value)}
+                    />
+                  </div>
+                </Field>
 
                 <Field label="Phone (Optional)">
                   <input className={inputCls} type="tel" placeholder="+92 300 0000000"
@@ -679,12 +680,12 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
                 <Field label="New Password (Optional)">
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground mt-0.5" />
-                    <input 
-                      className={inputCls + " pl-8 pr-10"} 
+                    <input
+                      className={inputCls + " pl-8 pr-10"}
                       type={showPassword ? "text" : "password"}
                       placeholder="••••••"
                       value={password}
-                      onChange={e => setPassword(e.target.value)} 
+                      onChange={e => setPassword(e.target.value)}
                     />
                     <button
                       type="button"
@@ -702,12 +703,12 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
                 <Field label="Confirm Password">
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground mt-0.5" />
-                    <input 
-                      className={inputCls + " pl-8 pr-10"} 
+                    <input
+                      className={inputCls + " pl-8 pr-10"}
                       type={showConfirmPassword ? "text" : "password"}
                       placeholder="••••••"
                       value={confirmPassword}
-                      onChange={e => setConfirmPassword(e.target.value)} 
+                      onChange={e => setConfirmPassword(e.target.value)}
                     />
                     <button
                       type="button"
@@ -772,23 +773,17 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
                       </div>
                     </Field>
 
-                    <Field label="City" required>
-                      <input className={inputCls} placeholder="Karachi"
-                        value={branch.city}
-                        onChange={e => setBranchField("city", e.target.value)} />
-                    </Field>
-
-                    <Field label="Country" required>
-                      <select className={selectCls} value={branch.country}
-                        onChange={e => setBranchField("country", e.target.value)}>
-                        <option value="PK">🇵🇰 Pakistan</option>
-                        <option value="AE">🇦🇪 UAE</option>
-                        <option value="SA">🇸🇦 Saudi Arabia</option>
-                        <option value="US">🇺🇸 United States</option>
-                        <option value="GB">🇬🇧 United Kingdom</option>
-                        <option value="IN">🇮🇳 India</option>
-                      </select>
-                    </Field>
+                    <div className="sm:col-span-2">
+                      <LocationGroup
+                        country={branch.country}
+                        setCountry={(val) => setBranchField("country", val)}
+                        state={branch.state}
+                        setState={(val) => setBranchField("state", val)}
+                        city={branch.city}
+                        setCity={(val) => setBranchField("city", val)}
+                        required={true}
+                      />
+                    </div>
 
                     <Field label="Address" required className="sm:col-span-2">
                       <div className="relative">
@@ -886,18 +881,11 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
               <SectionTitle icon={<DollarSign />} title="Financial Settings" />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Currency" required>
-                  <select className={selectCls} value={formData.currency}
-                    onChange={e => setField("currency", e.target.value)}>
-                    <option value="PKR">PKR — Pakistani Rupee (₨)</option>
-                    <option value="USD">USD — US Dollar ($)</option>
-                    <option value="AED">AED — UAE Dirham (د.إ)</option>
-                    <option value="SAR">SAR — Saudi Riyal (﷼)</option>
-                    <option value="GBP">GBP — British Pound (£)</option>
-                    <option value="EUR">EUR — Euro (€)</option>
-                    <option value="INR">INR — Indian Rupee (₹)</option>
-                  </select>
-                </Field>
+               <CurrencySelect
+  value={formData.currency}
+  onChange={(val) => setField("currency", val)}
+  required
+/>
 
                 <Field label="Tax Rate (%)" required>
                   <input className={inputCls} type="number" step="0.01" min="0" max="100"
@@ -1016,29 +1004,17 @@ const [adminUser, setAdminUser] = useState<AdminUserForm>({
                   </div>
                 </Field>
 
-                <Field label="Country" required>
-                  <select className={selectCls} value={warehouse.country}
-                    onChange={e => setW("country", e.target.value)}>
-                    <option value="PK">🇵🇰 Pakistan</option>
-                    <option value="AE">🇦🇪 UAE</option>
-                    <option value="SA">🇸🇦 Saudi Arabia</option>
-                    <option value="US">🇺🇸 United States</option>
-                    <option value="GB">🇬🇧 United Kingdom</option>
-                    <option value="IN">🇮🇳 India</option>
-                  </select>
-                </Field>
-
-                <Field label="City" required>
-                  <input className={inputCls} placeholder="Karachi"
-                    value={warehouse.city}
-                    onChange={e => setW("city", e.target.value)} />
-                </Field>
-
-                <Field label="State / Province" required>
-                  <input className={inputCls} placeholder="Sindh"
-                    value={warehouse.state}
-                    onChange={e => setW("state", e.target.value)} />
-                </Field>
+                <div className="sm:col-span-2">
+                  <LocationGroup
+                    country={warehouse.country}
+                    setCountry={(val) => setW("country", val)}
+                    state={warehouse.state}
+                    setState={(val) => setW("state", val)}
+                    city={warehouse.city}
+                    setCity={(val) => setW("city", val)}
+                    required={true}
+                  />
+                </div>
 
                 <Field label="Postal Code" required>
                   <input className={inputCls} placeholder="75000"
