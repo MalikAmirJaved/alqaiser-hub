@@ -46,6 +46,9 @@ export default function PaymentModal({
     l => l.employee_id === employee?.id && l.status === "ACTIVE"
   );
 
+
+  
+
   // Reset selections when modal opens
   useEffect(() => {
     if (isOpen && employee) {
@@ -110,6 +113,11 @@ export default function PaymentModal({
 
   const isLoading = previewMutation.isPending;
   const preview = previewMutation.data;
+
+
+  const leaveDeduction = preview?.leave_deduction ?? 0;
+const loanDeductions = preview?.loan_deductions ?? 0;
+const leaveDays = preview?.leave_days ?? 0;
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4 overflow-y-auto">
@@ -318,18 +326,19 @@ export default function PaymentModal({
                 <span className="text-success">+{formatCurrency(bonus)}</span>
               </div>
             )}
-            {preview?.leave_deduction > 0 && (
-              <div className="flex justify-between text-sm text-muted-foreground">
-                <span>Leave Deduction ({preview?.leave_days?.toFixed(1)} day(s) off work)</span>
-                <span className="text-destructive">-{formatCurrency(preview?.leave_deduction)}</span>
-              </div>
-            )}
-            {preview?.loan_deductions > 0 && (
-              <div className="flex justify-between text-sm text-muted-foreground">
-                <span>Loan Deductions</span>
-                <span className="text-destructive">-{formatCurrency(preview?.loan_deductions)}</span>
-              </div>
-            )}
+           {leaveDeduction > 0 && (
+  <div className="flex justify-between text-sm text-muted-foreground">
+    <span>Leave Deduction ({leaveDays.toFixed(1)} day(s) off work)</span>
+    <span className="text-destructive">-{formatCurrency(leaveDeduction)}</span>
+  </div>
+)}
+
+{loanDeductions > 0 && (
+  <div className="flex justify-between text-sm text-muted-foreground">
+    <span>Loan Deductions</span>
+    <span className="text-destructive">-{formatCurrency(loanDeductions)}</span>
+  </div>
+)}
             {deductions > 0 && (
               <div className="flex justify-between text-sm text-muted-foreground">
                 <span>Additional Deductions</span>

@@ -21,7 +21,7 @@ export default function BrandsPage() {
   const { data: items = [], isLoading, error } = useBrands(debouncedQuery);
   const deleteBrand = useDeleteBrand();
 
-  const handleDelete = (id: number, name: string) => {
+  const handleDelete = (id: string, name: string) => {
     if (confirm(`Delete brand "${name}"?`)) {
       deleteBrand.mutate(id);
     }

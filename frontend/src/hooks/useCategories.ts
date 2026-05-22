@@ -65,7 +65,7 @@ export function useUpdateCategory() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<Omit<Category, "id" | "created_at" | "updated_at">> }) =>
+    mutationFn: ({ id, data }: { id: string; data: Partial<Omit<Category, "id" | "created_at" | "updated_at">> }) =>
       api(`/api/inventory/categories/${id}/`, {
         method: "PUT",
         body: JSON.stringify(data),

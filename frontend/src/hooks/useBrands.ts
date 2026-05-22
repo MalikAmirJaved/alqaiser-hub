@@ -83,7 +83,7 @@ export function useDeleteBrand() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: (id: string) =>
       api(`/api/inventory/brands/${id}/`, {
         method: "DELETE",
       }),
