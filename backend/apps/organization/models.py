@@ -1,6 +1,7 @@
 import uuid
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.conf import settings
 
 
 # -----------------------------
@@ -66,7 +67,21 @@ class Branch(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="branches_created"
+    )
 
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="branches_updated"
+    )
 # -----------------------------
 # USER MODEL
 # -----------------------------
@@ -77,10 +92,9 @@ class User(AbstractUser):
     role = models.CharField(max_length=50, default="staff")
     full_name = models.CharField(max_length=255, blank=True, null=True)
 
-    # New fields from your spec
     department = models.CharField(max_length=100, blank=True, null=True)
     designation = models.CharField(max_length=100, blank=True, null=True)
-
+    phone_number = models.CharField(max_length=30, blank=True, null=True)  
     company = models.ForeignKey(
         Company,
         on_delete=models.CASCADE,

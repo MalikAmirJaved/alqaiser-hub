@@ -122,7 +122,6 @@ export const menu = [
       { title: "Users & Roles", to: "/settings/users", icon: UserCog },
       { title: "Departments", to: "/settings/departments", icon: ClipboardList },
       { title: "Designations", to: "/settings/designations", icon: Briefcase },
-      { title: "Leave Types", to: "/settings/leave-types", icon: CalendarDays },
       { title: "Preferences", to: "/settings/preferences", icon: Settings },
     ],
   },

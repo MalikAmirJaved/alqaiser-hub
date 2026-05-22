@@ -29,8 +29,20 @@ class BaseCompanyView(APIView):
         return get_object_or_404(Company, id=user.company_id, is_deleted=False)
 
     def _get_settings(self, user):
-        """Get or create settings for user's company"""
-        company = self._get_company(user)
+        """Get or create settings for user's company - auto-create company if missing"""
+        company = None
+        
+        # If user has company, use it
+        if user.company_id:
+            company = get_object_or_404(Company, id=user.company_id, is_deleted=False)
+        else:
+            # Company creation will happen on first PATCH request with company data
+            # Return a placeholder for GET requests
+            if self.request.method == 'GET':
+                raise ValueError("User not associated with any company")
+            # For PATCH, company will be created in patch method
+            return None, None
+        
         settings, _ = CompanySettings.objects.get_or_create(
             company=company,
             defaults={
@@ -41,7 +53,6 @@ class BaseCompanyView(APIView):
             }
         )
         return company, settings
-
     def _log_change(self, settings, company, field_name, old_value, new_value, user):
         """Log settings changes to history"""
         CompanySettingHistory.objects.create(
@@ -216,6 +227,8 @@ class CompanySettingsView(BaseCompanyView):
         settings.save()
 
         return Response(self._serialize_settings(company, settings))
+
+
 
 
 class WorkingDaysView(BaseCompanyView):

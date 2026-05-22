@@ -4,18 +4,20 @@
 import { useState, useEffect } from "react";
 import { useCompanySettings, useSetupDesignations } from "@/hooks/useCompanySettings";
 import { useCreateWarehouse } from "@/hooks/useWarehouses";
+import { useUserProfile } from "@/hooks/useUserProfile";
+import { useBranch, useUpdateBranch } from "@/hooks/useBranches";
 import { Button } from "@/components/ui/button";
 import {
   Building2, Globe, CalendarDays, Briefcase,
   CheckCircle, AlertCircle, Warehouse, Clock,
   DollarSign, Users, ArrowRight, ArrowLeft, Sparkles,
-  Phone, Mail, MapPin, Plus, Trash2, Package
+  Phone, Mail, MapPin, Plus, Trash2, Package, UserCircle, Home, Eye, EyeOff, Lock
 } from "lucide-react";
 import { DEPARTMENT_CHOICES } from "@/lib/departments";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Step = 1 | 2 | 3 | 4 | 5 | 6;
+type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 type DesignationForm = {
   name: string;
@@ -40,15 +42,43 @@ type WarehouseForm = {
   description: string;
 };
 
+type AdminUserForm = {
+  full_name: string;
+  username: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+  department: string;
+  email: string;
+  designation: string;
+  phone_number: string;
+};
+
+type BranchForm = {
+  id?: string;
+  name: string;
+  code: string;
+  address: string;
+  city: string;
+  country: string;
+  phone: string;
+  email: string;
+  is_hq: boolean;
+  currency_code: string;
+  tax_id: string;
+};
+
 // ─── Step meta ────────────────────────────────────────────────────────────────
 
 const STEPS: { id: Step; label: string; icon: React.ReactNode; description: string }[] = [
   { id: 1, label: "Company",    icon: <Building2 className="w-4 h-4" />,    description: "Basic info" },
-  { id: 2, label: "Schedule",   icon: <CalendarDays className="w-4 h-4" />, description: "Working days" },
-  { id: 3, label: "Financial",  icon: <DollarSign className="w-4 h-4" />,   description: "Currency & tax" },
-  { id: 4, label: "Roles",      icon: <Briefcase className="w-4 h-4" />,    description: "Designations" },
-  { id: 5, label: "Warehouse",  icon: <Warehouse className="w-4 h-4" />,    description: "Storage" },
-  { id: 6, label: "Complete",   icon: <Sparkles className="w-4 h-4" />,     description: "All done!" },
+  { id: 2, label: "Admin User", icon: <UserCircle className="w-4 h-4" />,   description: "Your profile" },
+  { id: 3, label: "Branch",     icon: <Home className="w-4 h-4" />,         description: "First location" },
+  { id: 4, label: "Schedule",   icon: <CalendarDays className="w-4 h-4" />, description: "Working days" },
+  { id: 5, label: "Financial",  icon: <DollarSign className="w-4 h-4" />,   description: "Currency & tax" },
+  { id: 6, label: "Roles",      icon: <Briefcase className="w-4 h-4" />,    description: "Designations" },
+  { id: 7, label: "Warehouse",  icon: <Warehouse className="w-4 h-4" />,    description: "Storage" },
+  { id: 8, label: "Complete",   icon: <Sparkles className="w-4 h-4" />,     description: "All done!" },
 ];
 
 // ─── Shared field styles ──────────────────────────────────────────────────────
@@ -70,11 +100,16 @@ const requiredLabelCls = "text-xs font-medium text-muted-foreground uppercase tr
 export default function CompanySetupModal() {
   const { settings, isReady, updateSettings, updateWorkingDays, isUpdating } = useCompanySettings();
   const setupDesignations = useSetupDesignations();
-  const createWarehouse   = useCreateWarehouse();
+  const createWarehouse = useCreateWarehouse();
+  const { profile, updateProfile, isUpdating: isUpdatingProfile } = useUserProfile();
+  console.log("profile sate:: ", profile)
+  const updateBranch = useUpdateBranch();
 
-  const [step, setStep]         = useState<Step>(1);
+  const [step, setStep] = useState<Step>(1);
   const [errorMsg, setErrorMsg] = useState("");
-  const [saving, setSaving]     = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // ── Form state ──
 
@@ -93,6 +128,36 @@ export default function CompanySetupModal() {
     defaultStartTime:  "09:00",
     defaultEndTime:    "18:00",
     workingHoursPerDay:"8.00",
+  });
+
+const [adminUser, setAdminUser] = useState<AdminUserForm>({
+  full_name: "",
+  username: "",
+  first_name: "",
+  last_name: "",
+  email: "",              
+  role: "COMPANY_ADMIN",
+  department: "",
+  designation: "",
+  phone_number: "",
+});
+
+
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const [branch, setBranch] = useState<BranchForm>({
+    id: undefined,
+    name: "",
+    code: "",
+    address: "",
+    city: "",
+    country: "PK",
+    phone: "",
+    email: "",
+    is_hq: true,
+    currency_code: "PKR",
+    tax_id: "",
   });
 
   const [workingDays, setWorkingDays] = useState([
@@ -126,7 +191,10 @@ export default function CompanySetupModal() {
     description:       "",
   });
 
-  // ── Prefill from existing partial settings ──
+  // ── Fetch existing branch when on step 3 ──
+  const { data: existingBranch, isLoading: branchLoading } = useBranch();
+console.log("existingBranch:: ",existingBranch)
+  // ── Prefill from existing data ──
 
   useEffect(() => {
     if (isReady && settings && !settings.isSetupCompleted) {
@@ -145,12 +213,48 @@ export default function CompanySetupModal() {
     }
   }, [isReady, settings]);
 
+  useEffect(() => {
+    if (profile) {
+      setAdminUser(prev => ({
+        ...prev,
+        full_name: profile.full_name || prev.full_name,
+        email: profile.email || prev.email,
+        phone_number: profile.phone_number || prev.phone_number,
+      }));
+    }
+  }, [profile]);
+
+  // Pre-fill branch when existing branch loads
+  useEffect(() => {
+    if (existingBranch && step === 3) {
+      setBranch({
+        id: existingBranch.id,
+        name: existingBranch.name,
+        code: existingBranch.code,
+        address: existingBranch.address,
+        city: existingBranch.city,
+        country: existingBranch.country,
+        phone: existingBranch.phone,
+        email: existingBranch.email,
+        is_hq: existingBranch.is_hq,
+        currency_code: existingBranch.currency_code,
+        tax_id: existingBranch.tax_id || "",
+      });
+    }
+  }, [existingBranch, step]);
+
   if (!isReady || (settings && settings.isSetupCompleted)) return null;
 
   // ── Helpers ──
 
-  const set = (field: string, value: unknown) =>
+  const setField = (field: string, value: unknown) =>
     setFormData(prev => ({ ...prev, [field]: value }));
+
+  const setAdmin = (field: string, value: unknown) =>
+    setAdminUser(prev => ({ ...prev, [field]: value }));
+
+  const setBranchField = (field: string, value: unknown) =>
+    setBranch(prev => ({ ...prev, [field]: value }));
 
   const toggleDay = (day: number) =>
     setWorkingDays(prev => prev.map(d => d.day === day ? { ...d, isWorking: !d.isWorking } : d));
@@ -184,6 +288,38 @@ export default function CompanySetupModal() {
     }
 
     if (step === 2) {
+      if (!adminUser.full_name.trim()) { setErrorMsg("Your full name is required."); return false; }
+      if (!adminUser.email.trim()) { setErrorMsg("Email address is required."); return false; }
+  if (!adminUser.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+    setErrorMsg("Please enter a valid email address.");
+    return false;
+  }
+
+      if (password && password !== confirmPassword) {
+        setErrorMsg("Passwords do not match.");
+        return false;
+      }
+      if (password && password.length < 6) {
+        setErrorMsg("Password must be at least 6 characters.");
+        return false;
+      }
+    }
+
+    if (step === 3) {
+      if (!branch.name.trim()) { setErrorMsg("Branch name is required."); return false; }
+      if (!branch.code.trim()) { setErrorMsg("Branch code is required."); return false; }
+      if (!branch.address.trim()) { setErrorMsg("Branch address is required."); return false; }
+      if (!branch.city.trim()) { setErrorMsg("Branch city is required."); return false; }
+      if (!branch.country) { setErrorMsg("Branch country is required."); return false; }
+      if (!branch.phone.trim()) { setErrorMsg("Branch phone number is required."); return false; }
+      if (!branch.email.trim()) { setErrorMsg("Branch email is required."); return false; }
+      if (!branch.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) { 
+        setErrorMsg("Please enter a valid branch email address."); 
+        return false; 
+      }
+    }
+
+    if (step === 4) {
       if (!workingDays.some(d => d.isWorking)) { setErrorMsg("Select at least one working day."); return false; }
       if (!formData.defaultStartTime) { setErrorMsg("Start time is required."); return false; }
       if (!formData.defaultEndTime) { setErrorMsg("End time is required."); return false; }
@@ -193,7 +329,7 @@ export default function CompanySetupModal() {
       }
     }
 
-    if (step === 3) {
+    if (step === 5) {
       if (!formData.currency) { setErrorMsg("Currency is required."); return false; }
       if (formData.taxRate === "" || Number(formData.taxRate) < 0) { 
         setErrorMsg("Tax rate is required and cannot be negative."); 
@@ -202,11 +338,10 @@ export default function CompanySetupModal() {
       if (!formData.taxId.trim()) { setErrorMsg("Tax ID / GST number is required."); return false; }
     }
 
-    if (step === 4) {
+    if (step === 6) {
       const valid = designations.filter(d => d.name.trim());
       if (valid.length === 0) { setErrorMsg("Add at least one designation."); return false; }
       
-      // Check each designation has a department selected
       for (let i = 0; i < designations.length; i++) {
         const des = designations[i];
         if (des.name.trim() && !des.department) {
@@ -216,7 +351,7 @@ export default function CompanySetupModal() {
       }
     }
 
-    if (step === 5) {
+    if (step === 7) {
       if (!warehouse.warehouse_name.trim()) { setErrorMsg("Warehouse name is required."); return false; }
       if (!warehouse.code.trim()) { setErrorMsg("Warehouse code is required."); return false; }
       if (!warehouse.manager_name.trim()) { setErrorMsg("Warehouse manager name is required."); return false; }
@@ -242,7 +377,7 @@ export default function CompanySetupModal() {
 
   const handleNext = () => {
     if (!validate()) return;
-    setStep(prev => Math.min(prev + 1, 6) as Step);
+    setStep(prev => Math.min(prev + 1, 8) as Step);
   };
 
   const handlePrev = () => {
@@ -251,66 +386,99 @@ export default function CompanySetupModal() {
   };
 
   // ── Submit all ──
-
+console.log(
+        "branch", branch
+      )
   const handleSubmit = async () => {
-  setErrorMsg("");
-  
-  // STEP 5 VALIDATION - All fields required except description
-  if (!warehouse.warehouse_name.trim()) { setErrorMsg("Warehouse name is required."); return; }
-  if (!warehouse.code.trim()) { setErrorMsg("Warehouse code is required."); return; }
-  if (!warehouse.manager_name.trim()) { setErrorMsg("Warehouse manager name is required."); return; }
-  if (!warehouse.phone.trim()) { setErrorMsg("Warehouse phone number is required."); return; }
-  if (!warehouse.email.trim()) { setErrorMsg("Warehouse email is required."); return; }
-  if (!warehouse.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) { 
-    setErrorMsg("Please enter a valid warehouse email address."); 
-    return; 
-  }
-  if (!warehouse.city.trim()) { setErrorMsg("Warehouse city is required."); return; }
-  if (!warehouse.country) { setErrorMsg("Warehouse country is required."); return; }
-  if (!warehouse.state.trim()) { setErrorMsg("Warehouse state/province is required."); return; }
-  if (!warehouse.address_line.trim()) { setErrorMsg("Warehouse address is required."); return; }
-  if (!warehouse.postal_code.trim()) { setErrorMsg("Warehouse postal code is required."); return; }
-  if (!warehouse.capacity || Number(warehouse.capacity) <= 0) {
-    setErrorMsg("Warehouse capacity must be greater than 0.");
-    return;
-  }
+    setErrorMsg("");
+    
+    // Final validation for last step
+    if (!warehouse.warehouse_name.trim()) { setErrorMsg("Warehouse name is required."); return; }
+    if (!warehouse.code.trim()) { setErrorMsg("Warehouse code is required."); return; }
+    if (!warehouse.manager_name.trim()) { setErrorMsg("Warehouse manager name is required."); return; }
+    if (!warehouse.phone.trim()) { setErrorMsg("Warehouse phone number is required."); return; }
+    if (!warehouse.email.trim()) { setErrorMsg("Warehouse email is required."); return; }
+    if (!warehouse.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) { 
+      setErrorMsg("Please enter a valid warehouse email address."); 
+      return; 
+    }
+    if (!warehouse.city.trim()) { setErrorMsg("Warehouse city is required."); return; }
+    if (!warehouse.country) { setErrorMsg("Warehouse country is required."); return; }
+    if (!warehouse.state.trim()) { setErrorMsg("Warehouse state/province is required."); return; }
+    if (!warehouse.address_line.trim()) { setErrorMsg("Warehouse address is required."); return; }
+    if (!warehouse.postal_code.trim()) { setErrorMsg("Warehouse postal code is required."); return; }
+    if (!warehouse.capacity || Number(warehouse.capacity) <= 0) {
+      setErrorMsg("Warehouse capacity must be greater than 0.");
+      return;
+    }
 
-  setSaving(true);
+    setSaving(true);
 
     try {
-      // 1. Company settings
+      // 1. Company settings (this will create company if needed)
       await updateSettings({
         ...formData,
-        taxRate:         parseFloat(formData.taxRate) || 0,
+        taxRate: parseFloat(formData.taxRate) || 0,
         isSetupCompleted: true,
       });
 
-      // 2. Working days
+      // 2. Update user profile (Admin User) with optional password
+      const profileUpdates: any = {
+        full_name: adminUser.full_name,
+          username: adminUser.username,
+  first_name: adminUser.first_name,
+  last_name: adminUser.last_name,
+  email: adminUser.email,
+  phone_number: adminUser.phone_number,
+      };
+      if (password) {
+        profileUpdates.password = password;
+        profileUpdates.confirm_password = confirmPassword;
+      }
+      await updateProfile(profileUpdates);
+
+      // 3. Create or update branch
+      
+        await updateBranch.mutateAsync({
+          name: branch.name,
+          code: branch.code,
+          address: branch.address,
+          city: branch.city,
+          country: branch.country,
+          phone: branch.phone,
+          email: branch.email,
+          is_hq: branch.is_hq,
+          currency_code: formData.currency,
+          tax_id: branch.tax_id,
+        });
+
+      // 4. Working days
       await updateWorkingDays(workingDays);
 
-      // 3. Designations
+      // 5. Designations
       const validDes = designations.filter(d => d.name.trim());
       if (validDes.length > 0) {
         await setupDesignations.mutateAsync(
           validDes.map(d => ({
-            name:       d.name.trim(),
+            name: d.name.trim(),
             department: d.department || undefined,
-            isActive:   d.isActive,
+            isActive: d.isActive,
           }))
         );
       }
 
-      // 4. Warehouse
+      // 6. Warehouse
       await createWarehouse.mutateAsync({
         ...warehouse,
-        capacity:          Number(warehouse.capacity),
+        capacity: Number(warehouse.capacity),
         current_occupancy: Number(warehouse.current_occupancy) || 0,
       } as any);
 
-      setStep(6);
+      setStep(8);
       setTimeout(() => window.location.reload(), 2000);
 
     } catch (err) {
+      console.error("Setup error:", err);
       setErrorMsg("Something went wrong. Please check your inputs and try again.");
     } finally {
       setSaving(false);
@@ -336,18 +504,16 @@ export default function CompanySetupModal() {
               Complete these {STEPS.length - 1} steps to configure your workspace.
             </p>
           </div>
-          {/* Step badge */}
           <span className="text-xs font-mono bg-muted px-2.5 py-1 rounded-full text-muted-foreground shrink-0 mt-1">
-            {step < 6 ? `${step} / 5` : "Done"}
+            {step < 8 ? `${step} / 7` : "Done"}
           </span>
         </div>
 
         {/* ── Step Tracker ── */}
         <div className="px-6 py-3 border-b border-border bg-muted/30 shrink-0">
-          <div className="flex items-center gap-1">
-            {STEPS.filter(s => s.id < 6).map((s, idx) => (
-              <div key={s.id} className="flex items-center flex-1 last:flex-none">
-                {/* Circle */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-1">
+            {STEPS.filter(s => s.id < 8).map((s, idx) => (
+              <div key={s.id} className="flex items-center flex-1 min-w-[60px] last:flex-none">
                 <button
                   type="button"
                   onClick={() => { if (s.id < step) { setErrorMsg(""); setStep(s.id as Step); } }}
@@ -360,14 +526,12 @@ export default function CompanySetupModal() {
                 >
                   {step > s.id ? <CheckCircle className="w-4 h-4" /> : s.id}
                 </button>
-                {/* Connector line */}
-                {idx < STEPS.filter(s => s.id < 6).length - 1 && (
+                {idx < STEPS.filter(s => s.id < 8).length - 1 && (
                   <div className={`h-0.5 flex-1 mx-1 rounded transition-all ${step > s.id ? "bg-primary" : "bg-border"}`} />
                 )}
               </div>
             ))}
           </div>
-          {/* Current step label */}
           <p className="text-xs text-muted-foreground mt-2">
             <span className="text-foreground font-medium">{currentStepMeta.label}</span>
             {" — "}{currentStepMeta.description}
@@ -394,13 +558,13 @@ export default function CompanySetupModal() {
                 <Field label="Company Name" required>
                   <input className={inputCls} placeholder="Acme Corporation"
                     value={formData.companyName}
-                    onChange={e => set("companyName", e.target.value)} />
+                    onChange={e => setField("companyName", e.target.value)} />
                 </Field>
 
                 <Field label="Short Name / Abbreviation" required>
                   <input className={inputCls} placeholder="ACME"
                     value={formData.companyShortName}
-                    onChange={e => set("companyShortName", e.target.value)} />
+                    onChange={e => setField("companyShortName", e.target.value)} />
                 </Field>
 
                 <Field label="Business Email" required>
@@ -408,7 +572,7 @@ export default function CompanySetupModal() {
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground mt-0.5" />
                     <input className={inputCls + " pl-8"} type="email" placeholder="info@company.com"
                       value={formData.email}
-                      onChange={e => set("email", e.target.value)} />
+                      onChange={e => setField("email", e.target.value)} />
                   </div>
                 </Field>
 
@@ -417,19 +581,19 @@ export default function CompanySetupModal() {
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground mt-0.5" />
                     <input className={inputCls + " pl-8"} type="tel" placeholder="+92 300 0000000"
                       value={formData.phone}
-                      onChange={e => set("phone", e.target.value)} />
+                      onChange={e => setField("phone", e.target.value)} />
                   </div>
                 </Field>
 
                 <Field label="City" required>
                   <input className={inputCls} placeholder="Karachi"
                     value={formData.city}
-                    onChange={e => set("city", e.target.value)} />
+                    onChange={e => setField("city", e.target.value)} />
                 </Field>
 
                 <Field label="Country" required>
                   <select className={selectCls} value={formData.country}
-                    onChange={e => set("country", e.target.value)}>
+                    onChange={e => setField("country", e.target.value)}>
                     <option value="PK">🇵🇰 Pakistan</option>
                     <option value="AE">🇦🇪 UAE</option>
                     <option value="SA">🇸🇦 Saudi Arabia</option>
@@ -445,13 +609,13 @@ export default function CompanySetupModal() {
                     <textarea className={inputCls + " pl-8 pt-2 h-auto resize-none"} rows={2}
                       placeholder="Street address, area…"
                       value={formData.address}
-                      onChange={e => set("address", e.target.value)} />
+                      onChange={e => setField("address", e.target.value)} />
                   </div>
                 </Field>
 
                 <Field label="Timezone" required>
                   <select className={selectCls} value={formData.timezone}
-                    onChange={e => set("timezone", e.target.value)}>
+                    onChange={e => setField("timezone", e.target.value)}>
                     <option value="Asia/Karachi">Asia/Karachi (PKT, UTC+5)</option>
                     <option value="Asia/Dubai">Asia/Dubai (GST, UTC+4)</option>
                     <option value="Asia/Riyadh">Asia/Riyadh (AST, UTC+3)</option>
@@ -465,8 +629,202 @@ export default function CompanySetupModal() {
             </div>
           )}
 
-          {/* ── STEP 2: Working Schedule ── */}
+          {/* ── STEP 2: Admin User Info with Password ── */}
           {step === 2 && (
+            <div className="space-y-5">
+              <SectionTitle icon={<UserCircle />} title="Your Profile (Admin User)" />
+              <p className="text-sm text-muted-foreground -mt-2">
+                This will be your administrator account for the system.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Full Name" required>
+                  <input className={inputCls} placeholder="John Doe"
+                    value={adminUser.full_name}
+                    onChange={e => setAdmin("full_name", e.target.value)} />
+                </Field>
+                <Field label="Username" required>
+  <input className={inputCls} placeholder="johndoe"
+    value={adminUser.username}
+    onChange={e => setAdmin("username", e.target.value)} />
+</Field>
+
+<Field label="First Name">
+  <input className={inputCls} placeholder="John"
+    value={adminUser.first_name}
+    onChange={e => setAdmin("first_name", e.target.value)} />
+</Field>
+
+<Field label="Last Name">
+  <input className={inputCls} placeholder="Doe"
+    value={adminUser.last_name}
+    onChange={e => setAdmin("last_name", e.target.value)} />
+</Field>
+
+                <Field label="Email" required>
+  <div className="relative">
+    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground mt-0.5" />
+    <input
+      className={inputCls + " pl-8"}
+      type="email"
+      placeholder="admin@company.com"
+      value={adminUser.email}
+      onChange={e => setAdmin("email", e.target.value)}
+    />
+  </div>
+</Field>
+
+                <Field label="Phone (Optional)">
+                  <input className={inputCls} type="tel" placeholder="+92 300 0000000"
+                    value={adminUser.phone_number}
+                    onChange={e => setAdmin("phone_number", e.target.value)} />
+                </Field>
+
+                <Field label="New Password (Optional)">
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground mt-0.5" />
+                    <input 
+                      className={inputCls + " pl-8 pr-10"} 
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)} 
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition"
+                    >
+                      {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Leave blank to keep current password
+                  </p>
+                </Field>
+
+                <Field label="Confirm Password">
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground mt-0.5" />
+                    <input 
+                      className={inputCls + " pl-8 pr-10"} 
+                      type={showConfirmPassword ? "text" : "password"}
+                      placeholder="••••••"
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)} 
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition"
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </Field>
+              </div>
+
+              <InfoBox>
+                As the first user, you'll have full administrative privileges. You can manage
+                other users and their permissions later from the Users section.
+              </InfoBox>
+            </div>
+          )}
+
+          {/* ── STEP 3: Branch Setup ── */}
+          {step === 3 && (
+            <div className="space-y-5">
+              <SectionTitle icon={<Home />} title="Primary Branch / Location" />
+              <p className="text-sm text-muted-foreground -mt-2">
+                Your company's main office or headquarters.
+              </p>
+
+              {branchLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent"></div>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Field label="Branch Name" required>
+                      <input className={inputCls} placeholder="Head Office"
+                        value={branch.name}
+                        onChange={e => setBranchField("name", e.target.value)} />
+                    </Field>
+
+                    <Field label="Branch Code" required>
+                      <input className={inputCls} placeholder="HO-001"
+                        value={branch.code}
+                        onChange={e => setBranchField("code", e.target.value.toUpperCase())} />
+                    </Field>
+
+                    <Field label="Email" required>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground mt-0.5" />
+                        <input className={inputCls + " pl-8"} type="email" placeholder="branch@company.com"
+                          value={branch.email}
+                          onChange={e => setBranchField("email", e.target.value)} />
+                      </div>
+                    </Field>
+
+                    <Field label="Phone" required>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground mt-0.5" />
+                        <input className={inputCls + " pl-8"} type="tel" placeholder="+92 300 0000000"
+                          value={branch.phone}
+                          onChange={e => setBranchField("phone", e.target.value)} />
+                      </div>
+                    </Field>
+
+                    <Field label="City" required>
+                      <input className={inputCls} placeholder="Karachi"
+                        value={branch.city}
+                        onChange={e => setBranchField("city", e.target.value)} />
+                    </Field>
+
+                    <Field label="Country" required>
+                      <select className={selectCls} value={branch.country}
+                        onChange={e => setBranchField("country", e.target.value)}>
+                        <option value="PK">🇵🇰 Pakistan</option>
+                        <option value="AE">🇦🇪 UAE</option>
+                        <option value="SA">🇸🇦 Saudi Arabia</option>
+                        <option value="US">🇺🇸 United States</option>
+                        <option value="GB">🇬🇧 United Kingdom</option>
+                        <option value="IN">🇮🇳 India</option>
+                      </select>
+                    </Field>
+
+                    <Field label="Address" required className="sm:col-span-2">
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-3 w-3.5 h-3.5 text-muted-foreground" />
+                        <textarea className={inputCls + " pl-8 pt-2 h-auto resize-none"} rows={2}
+                          placeholder="Street address, area…"
+                          value={branch.address}
+                          onChange={e => setBranchField("address", e.target.value)} />
+                      </div>
+                    </Field>
+
+                    <Field label="Tax ID / GST (Optional)">
+                      <input className={inputCls} placeholder="Branch-specific tax ID"
+                        value={branch.tax_id}
+                        onChange={e => setBranchField("tax_id", e.target.value)} />
+                    </Field>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 text-sm flex gap-3 items-start">
+                    <CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                    <span className="text-muted-foreground">
+                      This will be set as your <strong className="text-foreground">Headquarters (HQ)</strong> by default.
+                      You can add more branches later.
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── STEP 4: Working Schedule ── */}
+          {step === 4 && (
             <div className="space-y-5">
               <SectionTitle icon={<CalendarDays />} title="Working Schedule" />
 
@@ -493,7 +851,7 @@ export default function CompanySetupModal() {
                     <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground mt-0.5" />
                     <input className={inputCls + " pl-8"} type="time"
                       value={formData.defaultStartTime}
-                      onChange={e => set("defaultStartTime", e.target.value)} />
+                      onChange={e => setField("defaultStartTime", e.target.value)} />
                   </div>
                 </Field>
 
@@ -502,18 +860,17 @@ export default function CompanySetupModal() {
                     <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground mt-0.5" />
                     <input className={inputCls + " pl-8"} type="time"
                       value={formData.defaultEndTime}
-                      onChange={e => set("defaultEndTime", e.target.value)} />
+                      onChange={e => setField("defaultEndTime", e.target.value)} />
                   </div>
                 </Field>
 
                 <Field label="Hours / Day" required>
                   <input className={inputCls} type="number" step="0.5" min="1" max="24"
                     value={formData.workingHoursPerDay}
-                    onChange={e => set("workingHoursPerDay", e.target.value)} />
+                    onChange={e => setField("workingHoursPerDay", e.target.value)} />
                 </Field>
               </div>
 
-              {/* Preview */}
               <div className="p-3 rounded-xl bg-muted/40 border border-border text-sm flex gap-3 items-start">
                 <CalendarDays className="w-4 h-4 text-primary mt-0.5 shrink-0" />
                 <span className="text-muted-foreground">
@@ -527,15 +884,15 @@ export default function CompanySetupModal() {
             </div>
           )}
 
-          {/* ── STEP 3: Financial ── */}
-          {step === 3 && (
+          {/* ── STEP 5: Financial ── */}
+          {step === 5 && (
             <div className="space-y-5">
               <SectionTitle icon={<DollarSign />} title="Financial Settings" />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Currency" required>
                   <select className={selectCls} value={formData.currency}
-                    onChange={e => set("currency", e.target.value)}>
+                    onChange={e => setField("currency", e.target.value)}>
                     <option value="PKR">PKR — Pakistani Rupee (₨)</option>
                     <option value="USD">USD — US Dollar ($)</option>
                     <option value="AED">AED — UAE Dirham (د.إ)</option>
@@ -550,13 +907,13 @@ export default function CompanySetupModal() {
                   <input className={inputCls} type="number" step="0.01" min="0" max="100"
                     placeholder="17"
                     value={formData.taxRate}
-                    onChange={e => set("taxRate", e.target.value)} />
+                    onChange={e => setField("taxRate", e.target.value)} />
                 </Field>
 
                 <Field label="Tax ID / GST No." required className="sm:col-span-2">
                   <input className={inputCls} placeholder="e.g., 0000000-0"
                     value={formData.taxId}
-                    onChange={e => set("taxId", e.target.value)} />
+                    onChange={e => setField("taxId", e.target.value)} />
                 </Field>
               </div>
 
@@ -567,8 +924,8 @@ export default function CompanySetupModal() {
             </div>
           )}
 
-          {/* ── STEP 4: Designations ── */}
-          {step === 4 && (
+          {/* ── STEP 6: Designations ── */}
+          {step === 6 && (
             <div className="space-y-5">
               <SectionTitle icon={<Briefcase />} title="Job Designations" />
               <p className="text-sm text-muted-foreground -mt-2">
@@ -615,8 +972,8 @@ export default function CompanySetupModal() {
             </div>
           )}
 
-          {/* ── STEP 5: Warehouse ── */}
-          {step === 5 && (
+          {/* ── STEP 7: Warehouse ── */}
+          {step === 7 && (
             <div className="space-y-5">
               <SectionTitle icon={<Warehouse />} title="Primary Warehouse" />
               <p className="text-sm text-muted-foreground -mt-2">
@@ -710,8 +1067,8 @@ export default function CompanySetupModal() {
             </div>
           )}
 
-          {/* ── STEP 6: Complete ── */}
-          {step === 6 && (
+          {/* ── STEP 8: Complete ── */}
+          {step === 8 && (
             <div className="flex flex-col items-center justify-center py-10 text-center gap-4">
               <div className="w-16 h-16 rounded-full bg-success/15 flex items-center justify-center">
                 <CheckCircle className="w-9 h-9 text-success" />
@@ -732,7 +1089,7 @@ export default function CompanySetupModal() {
         </div>
 
         {/* ── Footer ── */}
-        {step < 6 && (
+        {step < 8 && (
           <div className="px-6 py-4 border-t border-border flex justify-between items-center bg-muted/20 shrink-0 gap-3">
             <Button variant="outline" onClick={handlePrev} disabled={step === 1}
               className="gap-1.5">
@@ -740,15 +1097,15 @@ export default function CompanySetupModal() {
             </Button>
 
             <div className="flex-1 text-center">
-              <span className="text-xs text-muted-foreground">Step {step} of 5</span>
+              <span className="text-xs text-muted-foreground">Step {step} of 7</span>
             </div>
 
-            {step < 5 ? (
+            {step < 7 ? (
               <Button onClick={handleNext} className="gap-1.5">
                 Continue <ArrowRight className="w-4 h-4" />
               </Button>
             ) : (
-              <Button onClick={handleSubmit} disabled={saving}
+              <Button onClick={handleSubmit} disabled={saving || isUpdating || isUpdatingProfile}
                 className="gap-1.5 min-w-[130px]">
                 {saving ? (
                   <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> Saving…</>
@@ -764,7 +1121,7 @@ export default function CompanySetupModal() {
   );
 }
 
-// ─── Tiny helper components ────────────────────────────────────────────────────
+// ─── Helper components ────────────────────────────────────────────────────────────
 
 function SectionTitle({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
