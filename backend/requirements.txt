@@ -13,5 +13,3 @@ daphne==4.1.2
 django-redis==5.4.0
 hiredis==2.2.3
 django-filter==25.1
-python-barcode==0.16.1
-Pillow==10.4.0
