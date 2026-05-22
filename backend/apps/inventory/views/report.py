@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db.models import Sum, F, Q, DecimalField, FloatField, Count, Avg
+from django.db.models import Sum, F, Q, DecimalField, FloatField, Count, Avg, Value
 from django.db.models.functions import Coalesce, TruncDay
 from django.utils import timezone
 from datetime import datetime, timedelta
@@ -20,56 +20,58 @@ from apps.inventory.serializers.report import (
 
 class ReportViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
     permission_classes = CompanyBranchMixin.permission_classes
-    branch_filter_enabled = True   # respect branch isolation
+    branch_filter_enabled = True
 
     @action(detail=False, methods=['get'], url_path='overall-summary')
     def overall_summary(self, request):
-        """
-        GET /api/inventory/reports/overall-summary/
-        Query params: start_date (YYYY-MM-DD), end_date, warehouse_id (optional)
-        """
         user = request.user
         company_id = user.company_id
 
-        # Date range
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
         warehouse_id = request.query_params.get('warehouse_id')
 
-        # Base filters
         variant_qs = ProductVariant.objects.filter(company_id=company_id, is_deleted=False)
         stock_qs = StockItem.objects.filter(company_id=company_id)
 
         if warehouse_id:
             stock_qs = stock_qs.filter(warehouse___id=warehouse_id)
 
-        # Total stock value (sum of quantity_on_hand * buying_price)
         total_value = 0
         for stock in stock_qs.select_related('variant'):
             total_value += stock.quantity_on_hand * stock.variant.buying_price
 
-        # Low stock count
         low_stock_count = stock_qs.filter(
             quantity_on_hand__lt=F('variant__min_stock_level')
         ).count()
 
-        # Purchase order totals within date range
         po_qs = PurchaseOrder.objects.filter(company_id=company_id)
         if start_date:
             po_qs = po_qs.filter(order_date__gte=start_date)
         if end_date:
             po_qs = po_qs.filter(order_date__lte=end_date)
-        total_purchase = po_qs.aggregate(total=Coalesce(Sum('total_amount'), 0))['total']
 
-        # Sales order totals within date range
+        # FIX: Use Value with output_field for DecimalField
+        total_purchase = po_qs.aggregate(
+            total=Coalesce(
+                Sum('total_amount'),
+                Value(0, output_field=DecimalField(max_digits=15, decimal_places=2))
+            )
+        )['total']
+
         so_qs = SalesOrder.objects.filter(company_id=company_id, status='COMPLETE')
         if start_date:
             so_qs = so_qs.filter(order_date__gte=start_date)
         if end_date:
             so_qs = so_qs.filter(order_date__lte=end_date)
-        total_sales = so_qs.aggregate(total=Coalesce(Sum('total_amount'), 0))['total']
 
-        # Warehouses count
+        total_sales = so_qs.aggregate(
+            total=Coalesce(
+                Sum('total_amount'),
+                Value(0, output_field=DecimalField(max_digits=15, decimal_places=2))
+            )
+        )['total']
+
         wh_qs = Warehouse.objects.filter(company_id=company_id, is_active=True)
         if warehouse_id:
             wh_qs = wh_qs.filter(_id=warehouse_id)
@@ -88,9 +90,6 @@ class ReportViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
 
     @action(detail=False, methods=['get'], url_path='stock-report')
     def stock_report(self, request):
-        """
-        Detailed stock report for export.
-        """
         user = request.user
         company_id = user.company_id
 
@@ -117,9 +116,6 @@ class ReportViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
 
     @action(detail=False, methods=['get'], url_path='stock-summary')
     def stock_summary(self, request):
-        """
-        Stock Summary by Product, Category, and Warehouse.
-        """
         user = request.user
         company_id = user.company_id
         warehouse_id = request.query_params.get('warehouse_id')
@@ -146,15 +142,11 @@ class ReportViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
                 'unit_cost': item.variant.buying_price,
                 'total_value': item.quantity_on_hand * item.variant.buying_price,
             })
-        
         serializer = StockSummarySerializer(results, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='inventory-valuation')
     def inventory_valuation(self, request):
-        """
-        Inventory Valuation Report (cost basis methodology).
-        """
         user = request.user
         company_id = user.company_id
         warehouse_id = request.query_params.get('warehouse_id')
@@ -177,26 +169,21 @@ class ReportViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
             'total_value': total_value,
             'average_unit_cost': average_unit_cost,
         }
-
         serializer = ValuationReportSerializer(valuation_data)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='stock-movement')
     def stock_movement(self, request):
-        """
-        Stock Movement tracking (daily views) over a given period.
-        """
         user = request.user
         company_id = user.company_id
         start_date_str = request.query_params.get('start_date')
         end_date_str = request.query_params.get('end_date')
 
-        # Fallback to last 30 days if no range provided
         if start_date_str:
             start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
         else:
             start_date = datetime.now() - timedelta(days=30)
-            
+
         if end_date_str:
             end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
         else:
@@ -220,15 +207,11 @@ class ReportViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
                 'total_quantity': abs(tx['total_qty']),
                 'transaction_count': tx['tx_count'],
             })
-
         serializer = StockMovementSerializer(results, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='sales-vs-purchase')
     def sales_vs_purchase(self, request):
-        """
-        Sales vs Purchase comparison analytics.
-        """
         user = request.user
         company_id = user.company_id
         start_date_str = request.query_params.get('start_date')
@@ -238,13 +221,12 @@ class ReportViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
             start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
         else:
             start_date = datetime.now() - timedelta(days=30)
-            
+
         if end_date_str:
             end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
         else:
             end_date = datetime.now()
 
-        # Sales grouping
         sales_data = SalesOrder.objects.filter(
             company_id=company_id,
             status='COMPLETE',
@@ -253,7 +235,6 @@ class ReportViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
             total_sales=Sum('total_amount')
         )
 
-        # Purchase grouping
         purchase_data = PurchaseOrder.objects.filter(
             company_id=company_id,
             status__in=['CONFIRMED', 'PARTIALLY_RECEIVED', 'FULLY_RECEIVED'],
@@ -262,7 +243,6 @@ class ReportViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
             total_purchases=Sum('total_amount')
         )
 
-        # Merge daily statistics
         timeline = {}
         curr = start_date
         while curr <= end_date:
@@ -287,20 +267,15 @@ class ReportViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
                 'sales_amount': vals['sales_amount'],
                 'purchase_amount': vals['purchase_amount'],
             })
-
         serializer = SalesVsPurchaseSerializer(results, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='profit-loss')
     def profit_loss(self, request):
-        """
-        Profit & Loss per product variant (Sales Revenue - Cost of Goods Sold).
-        """
         user = request.user
         company_id = user.company_id
         warehouse_id = request.query_params.get('warehouse_id')
 
-        # Filter completed sales order lines
         lines_qs = SalesOrderLine.objects.filter(
             company_id=company_id,
             sales_order__status='COMPLETE'
@@ -320,10 +295,8 @@ class ReportViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
                     'sales_revenue': 0,
                     'buying_price': line.variant.buying_price,
                 }
-            
             qty = line.quantity_ordered
             aggregations[sku]['sales_quantity'] += qty
-            # Subtract discount from line subtotal
             revenue = (line.quantity_ordered * line.unit_price) - line.discount_amount
             aggregations[sku]['sales_revenue'] += revenue
 
@@ -333,7 +306,6 @@ class ReportViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
             cogs = data['sales_quantity'] * data['buying_price']
             gross_profit = sales_revenue - cogs
             margin_percent = float((gross_profit / sales_revenue) * 100) if sales_revenue > 0 else 0.0
-
             results.append({
                 'product_name': data['product_name'],
                 'variant_sku': sku,
@@ -344,17 +316,12 @@ class ReportViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
                 'margin_percent': margin_percent,
             })
 
-        # Order by gross profit descending
         results.sort(key=lambda x: x['gross_profit'], reverse=True)
-
         serializer = ProfitLossSerializer(results, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='slow-moving')
     def slow_moving(self, request):
-        """
-        Slow-moving & obsolete stock identification.
-        """
         user = request.user
         company_id = user.company_id
         warehouse_id = request.query_params.get('warehouse_id')
@@ -362,13 +329,11 @@ class ReportViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
         stock_qs = StockItem.objects.filter(company_id=company_id).select_related(
             'variant__product', 'warehouse'
         )
-
         if warehouse_id:
             stock_qs = stock_qs.filter(warehouse___id=warehouse_id)
 
         results = []
         for item in stock_qs:
-            # Query last sale transaction in InventoryTransaction
             last_sale = InventoryTransaction.objects.filter(
                 company_id=company_id,
                 variant=item.variant,
@@ -378,7 +343,6 @@ class ReportViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
             if last_sale:
                 days = (timezone.now() - last_sale.created_at).days
             else:
-                # If never sold, calculate days from item registration date
                 days = (timezone.now() - item.created_at).days
 
             if days > 90:
@@ -397,45 +361,33 @@ class ReportViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
                 'status': status_label,
             })
 
-        # Order by days since last sale descending
         results.sort(key=lambda x: x['days_since_last_sale'], reverse=True)
-
         serializer = SlowMovingSerializer(results, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='reorder-planning')
     def reorder_planning(self, request):
-        """
-        Reorder planning report with smart recommendations.
-        """
         user = request.user
         company_id = user.company_id
         warehouse_id = request.query_params.get('warehouse_id')
 
-        # Find all variants
         variants = ProductVariant.objects.filter(company_id=company_id, is_deleted=False).select_related('product')
         results = []
 
         for var in variants:
-            # Aggregate total stock across warehouses
             stock_qs = StockItem.objects.filter(company_id=company_id, variant=var)
             if warehouse_id:
                 stock_qs = stock_qs.filter(warehouse___id=warehouse_id)
-            
+
             total_on_hand = stock_qs.aggregate(total=Coalesce(Sum('quantity_on_hand'), 0))['total']
 
             if total_on_hand <= var.min_stock_level:
-                # Get suggested supplier (latest purchase order supplier or first supplier)
                 latest_po = PurchaseOrder.objects.filter(
                     company_id=company_id,
                     lines__variant=var
                 ).select_related('supplier').first()
-
                 supplier_name = latest_po.supplier.name if latest_po else "Default Supplier"
-
                 reorder_qty = max(0, var.max_stock_level - total_on_hand)
-                
-                # Urgency score logic (higher when stock gets closer to 0)
                 diff = var.min_stock_level - total_on_hand
                 if var.min_stock_level > 0:
                     urgency = min(100.0, float(diff) / float(var.min_stock_level) * 100.0)
@@ -453,17 +405,12 @@ class ReportViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
                     'suggested_supplier_name': supplier_name,
                 })
 
-        # Sort by urgency descending
         results.sort(key=lambda x: x['urgency_score'], reverse=True)
-
         serializer = ReorderPlanningSerializer(results, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='supplier-performance')
     def supplier_performance(self, request):
-        """
-        Supplier performance metrics & scoring.
-        """
         user = request.user
         company_id = user.company_id
 
@@ -473,23 +420,25 @@ class ReportViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
         for sup in suppliers:
             po_qs = PurchaseOrder.objects.filter(company_id=company_id, supplier=sup)
             po_count = po_qs.count()
-            total_spend = po_qs.aggregate(total=Coalesce(Sum('total_amount'), 0))['total']
 
-            # Fulfillment rate calculations
+            # FIX: Use Value with output_field for DecimalField
+            total_spend = po_qs.aggregate(
+                total=Coalesce(
+                    Sum('total_amount'),
+                    Value(0, output_field=DecimalField(max_digits=15, decimal_places=2))
+                )
+            )['total']
+
             lines = PurchaseOrderLine.objects.filter(company_id=company_id, purchase_order__supplier=sup)
             totals = lines.aggregate(
                 ordered=Coalesce(Sum('quantity_ordered'), 0),
                 received=Coalesce(Sum('quantity_received'), 0)
             )
-            
             ordered = totals['ordered']
             received = totals['received']
             fulfillment = float(received / ordered * 100) if ordered > 0 else 100.0
 
-            # Delivery lead time days (mock standard averages based on supplier ratings)
             lead_time = max(1.0, 6.0 - float(sup.rating))
-
-            # Performance Score: 60% fulfillment, 40% delivery speed
             performance = (fulfillment * 0.6) + ((5.0 - min(5.0, lead_time)) / 5.0 * 100.0 * 0.4)
 
             results.append({
@@ -502,8 +451,6 @@ class ReportViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
                 'performance_score': round(performance, 2),
             })
 
-        # Order by performance descending
         results.sort(key=lambda x: x['performance_score'], reverse=True)
-
         serializer = SupplierPerformanceSerializer(results, many=True)
         return Response(serializer.data)
