@@ -15,6 +15,8 @@ import { PurchaseOrderModal } from './PurchaseOrderModal';
 import { GoodsReceiptModal } from './GoodsReceiptModal';
 import type { PurchaseOrder, PurchaseOrderPayload, GoodsReceiptPayload } from '@/types/purchase';
 import PageHeader from '@/components/PageHeader';
+import { StatsCards } from '@/components/reuseable/StatsCards';
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 // ─── Status config ───────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<
@@ -66,10 +68,6 @@ function fmt(dateStr?: string | null) {
   });
 }
 
-function fmtAmount(val?: string | number) {
-  const n = Number(val ?? 0);
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-}
 
 // ─── Stat card ───────────────────────────────────────────────────────────────
 function StatCard({
@@ -100,6 +98,7 @@ export default function PurchaseOrdersPage() {
   const confirmMutation = useConfirmPurchaseOrder();
   const createReceiptMutation = useCreateGoodsReceipt();
   const { confirm, Modal: ConfirmModal } = useConfirmationModal();
+  const { formatCurrency } = useCompanySettings();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<PurchaseOrder | undefined>();
@@ -179,7 +178,7 @@ export default function PurchaseOrdersPage() {
     <div className=" space-y-5">
 
       {/* Page header */}
-       <PageHeader
+      <PageHeader
         title="Purchase Orders"
         subtitle="Manage supplier orders and inventory inflows"
         actions={
@@ -193,13 +192,39 @@ export default function PurchaseOrdersPage() {
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-5 gap-2.5">
-        <StatCard label="Total Orders" value={stats.total} />
-        <StatCard label="Draft" value={stats.draft} valueClass="text-muted-foreground" />
-        <StatCard label="Confirmed" value={stats.confirmed} valueClass="text-blue-600" />
-        <StatCard label="Fully Received" value={stats.received} valueClass="text-green-600" />
-        <StatCard label="Cancelled" value={stats.cancelled} valueClass="text-red-500" />
-      </div>
+      <StatsCards
+        stats={[
+          {
+            id: "total-orders",
+            label: "Total Orders",
+            value: stats.total,
+          },
+          {
+            id: "draft",
+            label: "Draft",
+            value: stats.draft,
+            valueClassName: "text-muted-foreground",
+          },
+          {
+            id: "confirmed",
+            label: "Confirmed",
+            value: stats.confirmed,
+            valueClassName: "text-blue-600",
+          },
+          {
+            id: "received",
+            label: "Fully Received",
+            value: stats.received,
+            valueClassName: "text-green-600",
+          },
+          {
+            id: "cancelled",
+            label: "Cancelled",
+            value: stats.cancelled,
+            valueClassName: "text-red-500",
+          },
+        ]}
+      />
 
       {/* Toolbar */}
       <div className="flex items-center gap-2">
@@ -286,7 +311,7 @@ export default function PurchaseOrdersPage() {
                 <td className="px-4 py-3 text-muted-foreground">{order.warehouse_name}</td>
                 <td className="px-4 py-3 tabular-nums text-muted-foreground">{fmt(order.order_date)}</td>
                 <td className="px-4 py-3 tabular-nums text-muted-foreground">{fmt(order.expected_delivery_date)}</td>
-                <td className="px-4 py-3 tabular-nums font-medium">{fmtAmount(order.total_amount)}</td>
+                <td className="px-4 py-3 tabular-nums font-medium">{formatCurrency(order.total_amount)}</td>
                 <td className="px-4 py-3">
                   <StatusBadge status={order.status} />
                 </td>

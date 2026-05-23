@@ -20,6 +20,7 @@ import { useGoodsReceipts, useCreateGoodsReceipt } from '@/hooks/useGoodsReceipt
 import { useConfirmationModal } from '@/components/reuseable/ConfirmationModal';
 import { GoodsReceiptModal } from '@/components/inventory/purchase/GoodsReceiptModal';
 import type { GoodsReceiptPayload } from '@/types/purchase';
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
@@ -83,6 +84,7 @@ export default function PurchaseOrderDetailPage() {
   const createReceiptMutation = useCreateGoodsReceipt();
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const { confirm, Modal: ConfirmModal } = useConfirmationModal();
+  const { formatCurrency } = useCompanySettings();
 
   if (isLoading) {
     return (
@@ -210,7 +212,7 @@ export default function PurchaseOrderDetailPage() {
             <InfoRow label="Expected delivery" value={fmt(order.expected_delivery_date)} />
             <InfoRow
               label="Order total"
-              value={<span className="font-medium text-base">{fmtAmt(order.total_amount)}</span>}
+              value={<span className="font-medium text-base">{formatCurrency(order.total_amount)}</span>}
             />
             {order.notes && <InfoRow label="Notes" value={order.notes} />}
           </dl>
@@ -296,10 +298,10 @@ export default function PurchaseOrderDetailPage() {
                     {line.quantity_pending}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
-                    {fmtAmt(line.unit_cost)}
+                    {formatCurrency(line.unit_cost)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums font-medium">
-                    {fmtAmt(line.line_total)}
+                    {formatCurrency(line.line_total)}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <MiniStatusBadge status={lineStatus} />
@@ -313,7 +315,7 @@ export default function PurchaseOrderDetailPage() {
                 Order total
               </td>
               <td className="px-4 py-2.5 text-right text-sm font-semibold">
-                {fmtAmt(order.total_amount)}
+                {formatCurrency(order.total_amount)}
               </td>
               <td />
             </tr>

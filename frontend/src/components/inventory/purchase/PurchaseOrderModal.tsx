@@ -7,6 +7,7 @@ import { useSuppliers } from '@/hooks/useSuppliers';
 import { useWarehouses } from '@/hooks/useWarehouses';
 import { useProducts } from '@/hooks/useProducts';
 import type { PurchaseOrder, PurchaseOrderPayload } from '@/types/purchase';
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 interface PurchaseOrderModalProps {
   isOpen: boolean;
@@ -399,7 +400,7 @@ function LineRow({
   onRemove: () => void;
   canRemove: boolean;
 }) {
-  const lineTotal = line.quantity_ordered * line.unit_cost * (1 + line.tax_rate / 100);
+  const { CurrencyCode } = useCompanySettings();
 
   return (
     <div
@@ -427,14 +428,14 @@ function LineRow({
       />
 
       <div className="relative">
-        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">$</span>
+        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">{CurrencyCode()}</span>
         <input
           type="number"
           step="0.01"
           min="0"
           value={line.unit_cost}
           onChange={(e) => onChange(line.id, 'unit_cost', parseFloat(e.target.value) || 0)}
-          className="field-input text-xs text-right tabular-nums pl-5"
+          className="field-input text-xs text-right tabular-nums pl-5 "
         />
       </div>
 
