@@ -4,9 +4,10 @@ import { useCompanySettings, type CompanySettings } from "@/hooks/useCompanySett
 import PageHeader from "@/components/PageHeader";
 import { 
   Building2, Globe, CalendarDays, 
-  CheckCircle, Save, Briefcase, Mail, 
+  CheckCircle, Save, Mail, 
   Phone, MapPin, Hash, AlertCircle
 } from "lucide-react";
+import { LocationGroup } from "@/components/reuseable/LocationSelectors";
 
 // Define proper types matching your API
 interface WorkingDayDisplay {
@@ -25,6 +26,7 @@ interface FormData {
   companyShortName: string;
   address: string;
   city: string;
+  state: string;
   country: string;
   phone: string;
   email: string;
@@ -41,7 +43,6 @@ interface FormData {
   defaultStartTime: string;
   defaultEndTime: string;
   workingHoursPerDay: string;
-  
 }
 
 export default function CompanyProfile() {
@@ -62,6 +63,7 @@ export default function CompanyProfile() {
     companyShortName: "",
     address: "",
     city: "",
+    state: "",
     country: "",
     phone: "",
     email: "",
@@ -87,12 +89,12 @@ export default function CompanyProfile() {
   // Load settings when ready
   useEffect(() => {
     if (isReady && settings) {
-      // Use settings directly without casting
       setFormData({
         companyName: settings.companyName || "",
         companyShortName: settings.companyShortName || "",
         address: settings.address || "",
         city: settings.city || "",
+        state: settings.state || "",
         country: settings.country || "",
         phone: settings.phone || "",
         email: settings.email || "",
@@ -177,7 +179,7 @@ export default function CompanyProfile() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto pb-10">
+    <div className=" pb-10">
       <PageHeader 
         title="Company Settings" 
         subtitle="Manage organization details and financials" 
@@ -289,33 +291,20 @@ export default function CompanyProfile() {
               />
             </label>
 
-            <div className="grid sm:grid-cols-2 gap-5">
-              <label className="block">
-                <span className="text-sm text-muted-foreground mb-1.5 block">City</span>
-                <input
-                  type="text"
-                  value={formData.city}
-                  onChange={e => handleChange("city", e.target.value)}
-                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
-                />
-              </label>
-              <label className="block">
-                <span className="text-sm text-muted-foreground mb-1.5 block">Country</span>
-                <select
-                  value={formData.country}
-                  onChange={e => handleChange("country", e.target.value)}
-                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
-                >
-                  <option value="">Select country</option>
-                  <option value="US">United States</option>
-                  <option value="GB">United Kingdom</option>
-                  <option value="IN">India</option>
-                  <option value="PK">Pakistan</option>
-                  <option value="AE">UAE</option>
-                  <option value="SA">Saudi Arabia</option>
-                </select>
-              </label>
-            </div>
+            {/* Location Group - Country, State, City Selectors */}
+            <LocationGroup
+              country={formData.country}
+              setCountry={(val) => handleChange("country", val)}
+              state={formData.state}
+              setState={(val) => handleChange("state", val)}
+              city={formData.city}
+              setCity={(val) => handleChange("city", val)}
+              required={false}
+              countryLabel="Country"
+              stateLabel="State/Region"
+              cityLabel="City"
+              cssCol="3"
+            />
           </div>
         </div>
 
