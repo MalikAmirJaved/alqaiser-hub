@@ -15,6 +15,7 @@ import { useCategories } from "@/hooks/useCategories";
 import { useBrands } from "@/hooks/useBrands";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import { Button } from "@/components/ui/button";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 export default function ProductsPage() {
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
@@ -22,6 +23,7 @@ export default function ProductsPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | undefined>(undefined);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [filters, setFilters] = useState({ search: "", category: "", brand: "", status: "" });
+  const { formatCurrency } = useCompanySettings();
 
   const { data: products = [], isLoading, refetch } = useProducts(filters);
   const { data: categories = [] } = useCategories();
@@ -32,7 +34,7 @@ export default function ProductsPage() {
   const deleteConfirm = useConfirmationModal();
 
   const getProductPrice = (p: Product) =>
-    p.variants.length ? Math.min(...p.variants.map(v => parseFloat(v.selling_price))) : 0;
+    p.variants.length ? Math.min(...p.variants.map(v => v.selling_price)) : 0;
 
   const getTotalStock = (p: Product) =>
     p.variants.reduce((s, v) => s + v.total_stock, 0);
@@ -134,7 +136,7 @@ export default function ProductsPage() {
     { key: "brand_name", label: "Brand", sortable: true },
     {
       key: "display_price", label: "Price", sortable: true,
-      render: (val: any) => <span className="font-semibold text-primary">${Number(val)}</span>,
+      render: (val: any) => <span className="font-semibold text-primary">{formatCurrency(val)}</span>,
     },
     {
       key: "total_stock", label: "Stock", sortable: true,
@@ -189,7 +191,7 @@ export default function ProductsPage() {
         </div>
         <p className="text-xs text-muted-foreground">{product.category_name}</p>
         <div className="flex items-center justify-between pt-1">
-          <span className="text-base font-bold text-primary">${product.display_price}</span>
+          <span className="text-base font-bold text-primary">{formatCurrency(product.display_price)}</span>
           <span className={`text-xs font-medium ${product.total_stock === 0 ? "text-destructive" : "text-muted-foreground"}`}>
             {product.total_stock} in stock
           </span>

@@ -28,8 +28,8 @@ export interface ProductVariant {
   sku: string;
   barcode: string;
   qr_code: string;
-  buying_price: string;
-  selling_price: string;
+  buying_price: number;
+  selling_price: number;
   min_stock_level: number;
   max_stock_level: number;
   is_deleted: boolean;
@@ -49,7 +49,7 @@ export interface Product {
   brand_id: string | null;
   unit: string;
   storage_requirement: string;
-  tax_rate: string;
+  tax_rate: number;
   status: string;
   is_active: boolean;
   variants: ProductVariant[];

@@ -20,6 +20,7 @@ import { useCategories, Category } from "@/hooks/useCategories";
 import { useBrands, Brand } from "@/hooks/useBrands";
 import AttributeSelector from "./Attributeselector";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 // ──────────────────────────────────────────
 // Zod schema
@@ -129,6 +130,7 @@ function VariantCard({
   const [expanded, setExpanded] = useState(index === 0);
   const [imgUrl, setImgUrl] = useState("");
   const [addingImg, setAddingImg] = useState(false);
+  const { CurrencyCode } = useCompanySettings();
 
   const images: string[] = watch(`variants.${index}.images`) || [];
   const sku: string = watch(`variants.${index}.sku`) || `Variant ${index + 1}`;
@@ -218,14 +220,14 @@ function VariantCard({
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <Field label="Buying Price" error={errors?.variants?.[index]?.buyingPrice?.message}>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
-                  <Input type="number" step="0.01" min="0" {...register(`variants.${index}.buyingPrice`)} placeholder="0.00" className="pl-7" />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">{CurrencyCode()}</span>
+                  <Input type="number" step="0.01" min="0" {...register(`variants.${index}.buyingPrice`)} placeholder="0.00" className="pl-12" />
                 </div>
               </Field>
               <Field label="Selling Price" required error={errors?.variants?.[index]?.sellingPrice?.message}>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
-                  <Input type="number" step="0.01" min="0" {...register(`variants.${index}.sellingPrice`)} placeholder="0.00" className="pl-7" />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">{CurrencyCode()}</span>
+                  <Input type="number" step="0.01" min="0" {...register(`variants.${index}.sellingPrice`)} placeholder="0.00" className="pl-12" />
                 </div>
               </Field>
               <Field label={isExistingVariant ? "Current Stock (read‑only)" : "Initial Stock"}>
@@ -340,7 +342,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, isLoad
         brand: initialData.brand_id || null,
         unit: initialData.unit as FormData["unit"],
         storageRequirement: initialData.storage_requirement as FormData["storageRequirement"],
-        taxRate: parseFloat(initialData.tax_rate),
+        taxRate: initialData.tax_rate,
         status: initialData.status as FormData["status"],
         is_active: initialData.is_active,
         variants: initialData.variants.map((v) => ({
@@ -349,8 +351,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, isLoad
           barcode: v.barcode || "",
           qrCode: v.qr_code || "",
           stock: v.total_stock || 0,
-          buyingPrice: parseFloat(v.buying_price),
-          sellingPrice: parseFloat(v.selling_price),
+          buyingPrice: v.buying_price,
+          sellingPrice: v.selling_price,
           // Do NOT include stock for existing variants
           minStockLevel: v.min_stock_level,
           maxStockLevel: v.max_stock_level,

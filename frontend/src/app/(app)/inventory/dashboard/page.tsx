@@ -5,6 +5,7 @@ import StatCard from "@/components/cards/StatCard";
 import PageHeader from "@/components/PageHeader";
 import { Boxes, Layers, AlertTriangle, ShoppingCart, TrendingUp } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 export default function InventoryDashboard() {
   const products = ls.get<any[]>("products", []) || [];
@@ -12,6 +13,7 @@ export default function InventoryDashboard() {
   const lowStock = products.filter((p: any) => Number(p.stock) <= Number(p.reorder)).length;
   const purchases = ls.get<any[]>("purchaseOrders", []) || [];
   const sales = ls.get<any[]>("salesOrders", []) || [];
+  const { formatCurrency } = useCompanySettings();
 
 
   return (
@@ -19,7 +21,7 @@ export default function InventoryDashboard() {
       <PageHeader title="Inventory Dashboard" subtitle="Live overview of stock and operations" />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Total Products" value={products.length} icon={Boxes} accent="primary" />
-        <StatCard label="Stock Value" value={"PKR " + stockValue.toLocaleString()} icon={Layers} accent="success" />
+        <StatCard label="Stock Value" value={formatCurrency(stockValue)} icon={Layers} accent="success" />
         <StatCard label="Low Stock" value={lowStock} icon={AlertTriangle} accent="warning" />
         <StatCard label="Purchase Orders" value={purchases.length} icon={ShoppingCart} accent="info" />
       </div>
@@ -43,7 +45,7 @@ export default function InventoryDashboard() {
           <h3 className="font-semibold mb-3">Recent Purchases</h3>
           <ul className="text-sm divide-y divide-border">
             {purchases.slice(0, 6).map(p => (
-              <li key={p.id} className="py-2 flex justify-between"><span>{p.code} · {p.supplier}</span><span className="text-muted-foreground">PKR {Number(p.total).toLocaleString()}</span></li>
+              <li key={p.id} className="py-2 flex justify-between"><span>{p.code} · {p.supplier}</span><span className="text-muted-foreground"> {formatCurrency(p.total)}</span></li>
             ))}
           </ul>
         </div>
@@ -51,7 +53,7 @@ export default function InventoryDashboard() {
           <h3 className="font-semibold mb-3">Sales Summary</h3>
           <ul className="text-sm divide-y divide-border">
             {sales.slice(0, 6).map(s => (
-              <li key={s.id} className="py-2 flex justify-between"><span>{s.code} · {s.customer}</span><span className="text-muted-foreground">PKR {Number(s.total).toLocaleString()}</span></li>
+              <li key={s.id} className="py-2 flex justify-between"><span>{s.code} · {s.customer}</span><span className="text-muted-foreground">{formatCurrency(s.total)}</span></li>
             ))}
           </ul>
         </div>

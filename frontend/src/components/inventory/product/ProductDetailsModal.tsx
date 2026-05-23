@@ -4,9 +4,10 @@
 import { X, Edit, Package, Layers, Warehouse, User, Calendar, Tag } from "lucide-react";
 import { useProduct } from "@/hooks/useProducts";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 interface Props {
-  productId: string;        // change from product object to ID
+  productId: string; 
   onClose: () => void;
   onEdit: () => void;
 }
@@ -38,6 +39,7 @@ const STATUS_STYLE: Record<string, string> = {
 
 export default function ProductDetailsModal({ productId, onClose, onEdit }: Props) {
   const { data: product, isLoading, error } = useProduct(productId);
+  const { CurrencyCode, formatCurrency } = useCompanySettings();
 
   if (isLoading) {
     return (
@@ -69,8 +71,8 @@ export default function ProductDetailsModal({ productId, onClose, onEdit }: Prop
     (s, v) => s + v.stock_by_warehouse.reduce((a, w) => a + w.quantity_reserved, 0), 0
   );
   const totalAvailable = totalStock - totalReserved;
-  const minPrice = Math.min(...product.variants.map(v => parseFloat(v.selling_price)));
-  const maxPrice = Math.max(...product.variants.map(v => parseFloat(v.selling_price)));
+  const minPrice = Math.min(...product.variants.map(v => v.selling_price));
+  const maxPrice = Math.max(...product.variants.map(v => v.selling_price));
 
   const tabs = [
     { id: "info", label: "Details", icon: Package },
@@ -119,7 +121,7 @@ export default function ProductDetailsModal({ productId, onClose, onEdit }: Prop
           {/* Price range */}
           <div className="mt-4 flex items-baseline gap-1">
             <span className="text-2xl font-bold text-primary">
-              ${minPrice}{minPrice !== maxPrice && ` – $${maxPrice}`}
+              {CurrencyCode()}{minPrice}{minPrice !== maxPrice && ` – ${CurrencyCode()}${maxPrice}`}
             </span>
             <span className="text-sm text-muted-foreground ml-1">selling price</span>
           </div>
@@ -225,8 +227,8 @@ export default function ProductDetailsModal({ productId, onClose, onEdit }: Prop
                     {v.barcode && <p className="text-xs text-muted-foreground">Barcode: {v.barcode}</p>}
                   </div>
                   <div className="text-right shrink-0 ml-4">
-                    <p className="text-sm font-bold text-success">${parseFloat(v.selling_price)}</p>
-                    <p className="text-xs text-muted-foreground line-through">${parseFloat(v.buying_price)}</p>
+                    <p className="text-sm font-bold text-success">{formatCurrency(v.selling_price)}</p>
+                    <p className="text-xs text-muted-foreground line-through">{formatCurrency(v.buying_price)}</p>
                     <p className="text-xs text-muted-foreground mt-1">{v.total_stock} in stock</p>
                   </div>
                 </div>
