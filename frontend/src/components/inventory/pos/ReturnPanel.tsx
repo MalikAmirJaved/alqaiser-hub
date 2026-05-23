@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useFetchSalesOrderByNumber, useCreateSalesReturn } from "@/hooks/useSalesOrder";
 import type { Warehouse } from "@/hooks/useWarehouses";
 import { fmt } from "@/hooks/useSalesOrder";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 interface ReturnPanelProps {
   warehouses: Warehouse[];
@@ -12,6 +13,7 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
   const [orderNum, setOrderNum] = useState("");
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>(warehouses[0]?.id?.toString() ?? "");
   const [orderData, setOrderData] = useState<any>(null);
+   const { formatCurrency } = useCompanySettings();
   const [lines, setLines] = useState<
     {
       sol_id: string;
@@ -292,7 +294,7 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
 
             <div className="flex justify-between text-sm font-semibold border-t border-border pt-2 mt-2">
               <span>Total Refund:</span>
-              <span className="text-primary">{fmt(totalRefund)}</span>
+              <span className="text-primary">{formatCurrency(totalRefund)}</span>
             </div>
 
             <button

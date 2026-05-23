@@ -1,6 +1,7 @@
 "use client";
 import { useSalesOrders } from "@/hooks/useSalesOrder";
 import { fmt } from "@/hooks/useSalesOrder";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 export function SalesListPanel() {
   const { data: orders = [], isLoading } = useSalesOrders(); // fetch all orders (no status filter)
@@ -12,6 +13,7 @@ export function SalesListPanel() {
       </div>
     );
   }
+  const { formatCurrency } = useCompanySettings();
 
   return (
     <div className="p-4 space-y-3">
@@ -31,7 +33,7 @@ export function SalesListPanel() {
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-sm font-semibold">{fmt(Number(order.total_amount))}</p>
+                <p className="text-sm font-semibold">{formatCurrency(order.total_amount)}</p>
                 <span
                   className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                     order.status === "COMPLETE"

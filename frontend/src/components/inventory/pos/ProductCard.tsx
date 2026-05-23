@@ -3,6 +3,7 @@
 import { VariantDetail } from "@/hooks/useAllVariants";
 import { fmt } from "@/hooks/useSalesOrder";
 import { memo } from "react";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 interface StockData {
   available: number;
@@ -25,6 +26,7 @@ export const ProductCard = memo(function ProductCard({
   const reservedStock = stockData?.reserved ?? 0;
   const isLowStock = availableStock > 0 && availableStock <= (variant.min_stock_level || 5);
   const isOutOfStock = availableStock === 0;
+  const { formatCurrency } = useCompanySettings();
 
   return (
     <button
@@ -85,11 +87,11 @@ export const ProductCard = memo(function ProductCard({
       <div className="flex items-center justify-between mt-auto pt-2 border-t border-border">
         <div className="flex flex-col">
           <span className="text-base font-semibold text-primary">
-            {fmt(Number(variant.selling_price))}
+            {formatCurrency(variant.selling_price)}
           </span>
           {variant.buying_price > 0 && (
             <span className="text-xs text-muted-foreground line-through">
-              {fmt(Number(variant.buying_price))}
+              {formatCurrency(variant.buying_price)}
             </span>
           )}
         </div>

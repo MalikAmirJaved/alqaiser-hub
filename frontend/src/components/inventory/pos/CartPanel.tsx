@@ -5,6 +5,7 @@ import { useCustomers, useCreateCustomer } from "@/hooks/useCustomers";
 import { CartLine, fmt, cartTotal, cartSubtotal, cartTax } from "@/hooks/useSalesOrder";
 import { useBatchStock } from "@/hooks/useBatchStock";
 import { CartLineItem } from "./CartLineItem";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 interface CartPanelProps {
   cart: CartLine[];
@@ -53,6 +54,7 @@ export function CartPanel({
   const [globalDisc, setGlobalDisc] = useState(0);
   const [expandedLine, setExpandedLine] = useState<number | null>(null);
   const [showPayments, setShowPayments] = useState(false);
+  const { formatCurrency } = useCompanySettings();
 
   const { data: customers = [] } = useCustomers(customerSearch || undefined);
   const createCustomer = useCreateCustomer();
@@ -403,7 +405,7 @@ export function CartPanel({
           <div className="px-4 py-2.5 space-y-1.5">
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Subtotal ({itemCount} item{itemCount !== 1 ? "s" : ""})</span>
-              <span>{fmt(subtotal)}</span>
+              <span>{formatCurrency(subtotal)}</span>
             </div>
             {tax > 0 && (
               <div className="flex justify-between text-xs text-muted-foreground">
@@ -419,7 +421,7 @@ export function CartPanel({
             )}
             <div className="flex justify-between text-base font-bold pt-1.5 border-t border-border">
               <span>Total</span>
-              <span className="text-primary">{fmt(total)}</span>
+              <span className="text-primary">{formatCurrency(total)}</span>
             </div>
           </div>
         </div>

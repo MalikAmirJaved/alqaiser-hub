@@ -47,7 +47,7 @@ export interface SalesReturnResponse {
 export interface SalesOrderResponse {
   id: string;
   order_number: string;
-  total_amount: number | string;
+  total_amount: number ;
   customer_name?: string;
   customer?: { id: string; name: string };
   warehouse?: { id: string; warehouse_name: string };

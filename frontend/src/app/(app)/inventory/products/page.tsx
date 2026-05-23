@@ -14,7 +14,6 @@ import { useProducts, useDeleteProduct, useCreateProduct, useUpdateProduct, Prod
 import { useCategories } from "@/hooks/useCategories";
 import { useBrands } from "@/hooks/useBrands";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
-import { Button } from "@/components/ui/button";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 export default function ProductsPage() {
