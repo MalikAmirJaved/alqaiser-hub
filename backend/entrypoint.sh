@@ -16,15 +16,17 @@ echo "Starting server..."
 exec daphne -b 0.0.0.0 -p 8000 config.asgi:application
 
 
-# initilize the Company
-# docker compose exec backend python manage.py seed_org
-
-# initilize the permissions
-# docker compose exec backend python manage.py seed_permissions
-
 # make migerations
 # docker compose exec backend python manage.py makemigrations
 
 
 # migerate to db
 # docker compose exec backend python manage.py migrate
+
+
+# initilize the Company
+# docker compose exec backend python manage.py seed_org
+
+
+# initilize the permissions
+# docker compose exec backend python manage.py seed_permissions

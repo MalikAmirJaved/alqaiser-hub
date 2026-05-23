@@ -60,20 +60,8 @@ ROLE_PERMISSIONS = {
         'AI_MONITORING': ['*'],
         'SETTINGS': ['*'],
     },
-    'BRANCH_ADMIN': {
-        'HR': ['employee:view', 'employee:update', 'leave:approve', 'payroll:view', 'attendance:view'],
-        'INVENTORY': ['product:view', 'stock:view', 'warehouse:view', 'purchase_order:view', 'sales_order:view'],
-        'FINANCE': ['invoice:view', 'expense:create', 'expense:view'],
-        'AI_MONITORING': ['live_dashboard:view', 'workforce:view'],
-        'SETTINGS': ['company:view', 'user:view', 'role:view'],
-    },
-    'STAFF': {
-        'HR': ['employee:view', 'leave:create', 'leave:view', 'attendance:view'],
-        'INVENTORY': ['product:view', 'stock:view'],
-        'FINANCE': ['expense:create', 'expense:view'],
-        'AI_MONITORING': ['live_dashboard:view'],
-        'SETTINGS': ['company:view'],
-    },
+    'BRANCH_ADMIN': {},
+    'STAFF': {},
 }
 
 class Command(BaseCommand):
