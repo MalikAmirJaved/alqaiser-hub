@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Edit, Trash2 } from "lucide-react";
 import { useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier, type Supplier } from "@/hooks/useSuppliers";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { useVendors, useCreateVendor, useUpdateVendor, useDeleteVendor, type Vendor } from "@/hooks/useVendors";
 
 // Helper to render status badge
@@ -42,48 +43,7 @@ const RatingStars = ({ rating }: { rating: number }) => {
   );
 };
 
-// Format currency
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
-};
 
-// Define columns for TableView
-const getTableColumns = (): Column<Supplier>[] => [
-  { key: "code", label: "Code", sortable: true },
-  { key: "name", label: "Name", sortable: true },
-  { key: "contact_person", label: "Contact Person", sortable: true },
-  { key: "email", label: "Email", sortable: true },
-  { key: "phone", label: "Phone", sortable: true },
-  { key: "payment_terms", label: "Payment Terms", sortable: true },
-  {
-    key: "credit_limit",
-    label: "Credit Limit",
-    sortable: true,
-    render: (value) => <span className="font-medium">{formatCurrency(value as number)}</span>,
-    sortAccessor: (row) => row.credit_limit,
-  },
-  {
-    key: "balance",
-    label: "Balance",
-    sortable: true,
-    render: (value) => <span className={Number(value) > 0 ? "text-yellow-600" : "text-green-600"}>{formatCurrency(value as number)}</span>,
-    sortAccessor: (row) => row.balance,
-  },
-  {
-    key: "rating",
-    label: "Rating",
-    sortable: true,
-    render: (value) => <RatingStars rating={value as number} />,
-    sortAccessor: (row) => row.rating,
-  },
-  {
-    key: "status",
-    label: "Status",
-    sortable: true,
-    render: (value) => <StatusBadge status={value as string} />,
-    sortAccessor: (row) => row.status,
-  },
-];
 
 // Form fields configuration
 const formFields = [
@@ -113,31 +73,14 @@ const formFields = [
   },
 ];
 
-// Detail fields configuration
-const detailFields = [
-  { label: "Code", key: "code" },
-  { label: "Name", key: "name" },
-  { label: "Contact Person", key: "contact_person" },
-  { label: "Email", key: "email" },
-  { label: "Phone", key: "phone" },
-  { label: "Address", key: "address_line" },
-  { label: "Location", key: (row: Supplier) => `${row.city}, ${row.state}, ${row.country}` },
-  { label: "Postal Code", key: "postal_code" },
-  { label: "Payment Terms", key: "payment_terms" },
-  { label: "Credit Limit", key: "credit_limit", formatter: (val: number) => formatCurrency(val) },
-  { label: "Current Balance", key: "balance", formatter: (val: number) => formatCurrency(val) },
-  { label: "Rating", key: "rating", formatter: (val: number) => <RatingStars rating={val} /> },
-  { label: "Status", key: "status", formatter: (val: string) => <StatusBadge status={val} /> },
-  { label: "Created", key: "created_at", formatter: (val: string) => new Date(val).toLocaleDateString() },
-  { label: "Last Updated", key: "updated_at", formatter: (val: string) => new Date(val).toLocaleString() },
-];
+
 
 export default function SuppliersVendorsPage() {
   const [activeTab, setActiveTab] = useState<"suppliers" | "vendors">("suppliers");
   const [selectedItem, setSelectedItem] = useState<Supplier | Vendor | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Supplier | Vendor | null>(null);
-  
+  const { formatCurrency } = useCompanySettings();
   const { confirm, Modal: ConfirmationModal } = useConfirmationModal();
 
   // Suppliers hooks
@@ -181,6 +124,62 @@ export default function SuppliersVendorsPage() {
     ];
   }, [currentData]);
 
+// Define columns for TableView
+  const getTableColumns = (): Column<Supplier>[] => [
+  { key: "code", label: "Code", sortable: true },
+  { key: "name", label: "Name", sortable: true },
+  { key: "contact_person", label: "Contact Person", sortable: true },
+  { key: "email", label: "Email", sortable: true },
+  { key: "phone", label: "Phone", sortable: true },
+  { key: "payment_terms", label: "Payment Terms", sortable: true },
+  {
+    key: "credit_limit",
+    label: "Credit Limit",
+    sortable: true,
+    render: (value) => <span className="font-medium">{formatCurrency(value as number)}</span>,
+    sortAccessor: (row) => row.credit_limit,
+  },
+  {
+    key: "balance",
+    label: "Balance",
+    sortable: true,
+    render: (value) => <span className={Number(value) > 0 ? "text-yellow-600" : "text-green-600"}>{formatCurrency(value as number)}</span>,
+    sortAccessor: (row) => row.balance,
+  },
+  {
+    key: "rating",
+    label: "Rating",
+    sortable: true,
+    render: (value) => <RatingStars rating={value as number} />,
+    sortAccessor: (row) => row.rating,
+  },
+  {
+    key: "status",
+    label: "Status",
+    sortable: true,
+    render: (value) => <StatusBadge status={value as string} />,
+    sortAccessor: (row) => row.status,
+  },
+];
+
+// Detail fields configuration
+const detailFields = [
+  { label: "Code", key: "code" },
+  { label: "Name", key: "name" },
+  { label: "Contact Person", key: "contact_person" },
+  { label: "Email", key: "email" },
+  { label: "Phone", key: "phone" },
+  { label: "Address", key: "address_line" },
+  { label: "Location", key: (row: Supplier) => `${row.city}, ${row.state}, ${row.country}` },
+  { label: "Postal Code", key: "postal_code" },
+  { label: "Payment Terms", key: "payment_terms" },
+  { label: "Credit Limit", key: "credit_limit", formatter: (val: number) => formatCurrency(val) },
+  { label: "Current Balance", key: "balance", formatter: (val: number) => formatCurrency(val) },
+  { label: "Rating", key: "rating", formatter: (val: number) => <RatingStars rating={val} /> },
+  { label: "Status", key: "status", formatter: (val: string) => <StatusBadge status={val} /> },
+  { label: "Created", key: "created_at", formatter: (val: string) => new Date(val).toLocaleDateString() },
+  { label: "Last Updated", key: "updated_at", formatter: (val: string) => new Date(val).toLocaleString() },
+];
   const handleAdd = () => {
     setEditingItem(null);
     setModalOpen(true);
