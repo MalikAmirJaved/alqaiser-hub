@@ -171,7 +171,7 @@ export default function CompanyProfile() {
   if (!isReady) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -186,7 +186,7 @@ export default function CompanyProfile() {
       
       {/* Success Message */}
       {successMsg && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
+        <div className="bg-success/10 border border-success/20 text-success-foreground px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
           <CheckCircle className="w-5 h-5 flex-shrink-0" />
           <span>{successMsg}</span>
         </div>
@@ -194,7 +194,7 @@ export default function CompanyProfile() {
 
       {/* Error Message */}
       {errorMsg && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
+        <div className="bg-destructive/10 border border-destructive/20 text-destructive-foreground px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
           <AlertCircle className="w-5 h-5 flex-shrink-0" />
           <span>{errorMsg}</span>
         </div>
@@ -202,34 +202,34 @@ export default function CompanyProfile() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Company Details */}
-        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-          <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-blue-600" />
-            <h3 className="font-semibold text-lg">Company Details</h3>
+        <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+          <div className="bg-muted px-6 py-4 border-b border-border flex items-center gap-2">
+            <Building2 className="w-5 h-5 text-primary" />
+            <h3 className="font-semibold text-lg text-card-foreground">Company Details</h3>
           </div>
           <div className="p-6 space-y-5">
             <div className="grid sm:grid-cols-2 gap-5">
               <label className="block">
-                <span className="text-sm text-gray-600 mb-1.5 block">
-                  Company Name <span className="text-red-500">*</span>
+                <span className="text-sm text-muted-foreground mb-1.5 block">
+                  Company Name <span className="text-destructive">*</span>
                 </span>
                 <input
                   type="text"
                   value={formData.companyName}
                   onChange={e => handleChange("companyName", e.target.value)}
-                  className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
                   required
                 />
               </label>
               <label className="block">
-                <span className="text-sm text-gray-600 mb-1.5 block">
+                <span className="text-sm text-muted-foreground mb-1.5 block">
                   Short Name
                 </span>
                 <input
                   type="text"
                   value={formData.companyShortName}
                   onChange={e => handleChange("companyShortName", e.target.value)}
-                  className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
                   placeholder="e.g., ABC Corp"
                 />
               </label>
@@ -237,26 +237,26 @@ export default function CompanyProfile() {
 
             <div className="grid sm:grid-cols-2 gap-5">
               <label className="block">
-                <span className="text-sm text-gray-600 mb-1.5 block flex items-center gap-1">
+                <span className="text-sm text-muted-foreground mb-1.5 block flex items-center gap-1">
                   <Hash className="w-3.5 h-3.5" /> Tax ID / VAT
                 </span>
                 <input
                   type="text"
                   value={formData.taxId}
                   onChange={e => handleChange("taxId", e.target.value)}
-                  className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
                   placeholder="e.g., GST123456789"
                 />
               </label>
               <label className="block">
-                <span className="text-sm text-gray-600 mb-1.5 block flex items-center gap-1">
+                <span className="text-sm text-muted-foreground mb-1.5 block flex items-center gap-1">
                   <Mail className="w-3.5 h-3.5" /> Email
                 </span>
                 <input
                   type="email"
                   value={formData.email}
                   onChange={e => handleChange("email", e.target.value)}
-                  className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
                   placeholder="company@example.com"
                 />
               </label>
@@ -264,47 +264,47 @@ export default function CompanyProfile() {
 
             <div className="grid sm:grid-cols-2 gap-5">
               <label className="block">
-                <span className="text-sm text-gray-600 mb-1.5 block flex items-center gap-1">
+                <span className="text-sm text-muted-foreground mb-1.5 block flex items-center gap-1">
                   <Phone className="w-3.5 h-3.5" /> Phone
                 </span>
                 <input
                   type="tel"
                   value={formData.phone}
                   onChange={e => handleChange("phone", e.target.value)}
-                  className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
                   placeholder="+1 234 567 890"
                 />
               </label>
             </div>
 
             <label className="block">
-              <span className="text-sm text-gray-600 mb-1.5 block flex items-center gap-1">
+              <span className="text-sm text-muted-foreground mb-1.5 block flex items-center gap-1">
                 <MapPin className="w-3.5 h-3.5" /> Address
               </span>
               <textarea
                 value={formData.address}
                 onChange={e => handleChange("address", e.target.value)}
-                className="w-full min-h-[80px] px-3 py-2 rounded-md border border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors resize-y"
+                className="w-full min-h-[80px] px-3 py-2 rounded-md border border-input bg-background text-foreground focus:border-primary focus:ring-1 focus:ring-primary transition-colors resize-y"
                 placeholder="Street address..."
               />
             </label>
 
             <div className="grid sm:grid-cols-2 gap-5">
               <label className="block">
-                <span className="text-sm text-gray-600 mb-1.5 block">City</span>
+                <span className="text-sm text-muted-foreground mb-1.5 block">City</span>
                 <input
                   type="text"
                   value={formData.city}
                   onChange={e => handleChange("city", e.target.value)}
-                  className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
                 />
               </label>
               <label className="block">
-                <span className="text-sm text-gray-600 mb-1.5 block">Country</span>
+                <span className="text-sm text-muted-foreground mb-1.5 block">Country</span>
                 <select
                   value={formData.country}
                   onChange={e => handleChange("country", e.target.value)}
-                  className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
                 >
                   <option value="">Select country</option>
                   <option value="US">United States</option>
@@ -320,20 +320,20 @@ export default function CompanyProfile() {
         </div>
 
         {/* Financial & Localization */}
-        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-          <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex items-center gap-2">
-            <Globe className="w-5 h-5 text-blue-600" />
-            <h3 className="font-semibold text-lg">Financial & Localization</h3>
+        <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+          <div className="bg-muted px-6 py-4 border-b border-border flex items-center gap-2">
+            <Globe className="w-5 h-5 text-primary" />
+            <h3 className="font-semibold text-lg text-card-foreground">Financial & Localization</h3>
           </div>
           <div className="p-6 grid sm:grid-cols-2 gap-5">
             <label className="block">
-              <span className="text-sm text-gray-600 mb-1.5 block">
+              <span className="text-sm text-muted-foreground mb-1.5 block">
                 Primary Currency
               </span>
               <select
                 value={formData.currency}
                 onChange={e => handleChange("currency", e.target.value)}
-                className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
               >
                 <option value="USD">USD ($)</option>
                 <option value="PKR">PKR (₨)</option>
@@ -345,7 +345,7 @@ export default function CompanyProfile() {
               </select>
             </label>
             <label className="block">
-              <span className="text-sm text-gray-600 mb-1.5 block">
+              <span className="text-sm text-muted-foreground mb-1.5 block">
                 Default Tax Rate (%)
               </span>
               <input
@@ -355,15 +355,15 @@ export default function CompanyProfile() {
                 max="100"
                 value={formData.taxRate}
                 onChange={e => handleChange("taxRate", e.target.value)}
-                className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
               />
             </label>
             <label className="block">
-              <span className="text-sm text-gray-600 mb-1.5 block">Timezone</span>
+              <span className="text-sm text-muted-foreground mb-1.5 block">Timezone</span>
               <select
                 value={formData.timezone}
                 onChange={e => handleChange("timezone", e.target.value)}
-                className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
               >
                 <option value="UTC">UTC</option>
                 <option value="America/New_York">Eastern Time (US)</option>
@@ -380,14 +380,14 @@ export default function CompanyProfile() {
         </div>
 
         {/* Working Days & Hours */}
-        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-          <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex items-center gap-2">
-            <CalendarDays className="w-5 h-5 text-blue-600" />
-            <h3 className="font-semibold text-lg">Working Days & Hours</h3>
+        <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+          <div className="bg-muted px-6 py-4 border-b border-border flex items-center gap-2">
+            <CalendarDays className="w-5 h-5 text-primary" />
+            <h3 className="font-semibold text-lg text-card-foreground">Working Days & Hours</h3>
           </div>
           <div className="p-6 space-y-5">
             <div>
-              <span className="text-sm text-gray-600 mb-2 block">
+              <span className="text-sm text-muted-foreground mb-2 block">
                 Working Days
               </span>
               <div className="flex gap-2 flex-wrap">
@@ -398,8 +398,8 @@ export default function CompanyProfile() {
                     onClick={() => toggleWorkingDay(day.day)}
                     className={`px-4 py-2 rounded-md text-sm font-medium border transition-all ${
                       day.isWorking
-                        ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                        : "bg-gray-100 text-gray-600 border-gray-300 hover:bg-gray-200"
+                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                        : "bg-muted text-muted-foreground border-border hover:bg-accent hover:text-accent-foreground"
                     }`}
                   >
                     {day.label}
@@ -410,25 +410,25 @@ export default function CompanyProfile() {
 
             <div className="grid sm:grid-cols-3 gap-5">
               <label className="block">
-                <span className="text-sm text-gray-600 mb-1.5 block">Start Time</span>
+                <span className="text-sm text-muted-foreground mb-1.5 block">Start Time</span>
                 <input
                   type="time"
                   value={formData.defaultStartTime}
                   onChange={e => handleChange("defaultStartTime", e.target.value)}
-                  className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
                 />
               </label>
               <label className="block">
-                <span className="text-sm text-gray-600 mb-1.5 block">End Time</span>
+                <span className="text-sm text-muted-foreground mb-1.5 block">End Time</span>
                 <input
                   type="time"
                   value={formData.defaultEndTime}
                   onChange={e => handleChange("defaultEndTime", e.target.value)}
-                  className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
                 />
               </label>
               <label className="block">
-                <span className="text-sm text-gray-600 mb-1.5 block">Hours Per Day</span>
+                <span className="text-sm text-muted-foreground mb-1.5 block">Hours Per Day</span>
                 <input
                   type="number"
                   step="0.5"
@@ -436,7 +436,7 @@ export default function CompanyProfile() {
                   max="24"
                   value={formData.workingHoursPerDay}
                   onChange={e => handleChange("workingHoursPerDay", e.target.value)}
-                  className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
                 />
               </label>
             </div>
@@ -448,11 +448,11 @@ export default function CompanyProfile() {
           <button
             type="submit"
             disabled={loading || isUpdating}
-            className="px-6 h-11 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 flex items-center gap-2 min-w-[140px] justify-center transition-all disabled:opacity-70 shadow-sm"
+            className="px-6 h-11 bg-primary text-primary-foreground font-medium rounded-md hover:bg-primary/90 flex items-center gap-2 min-w-[140px] justify-center transition-all disabled:opacity-70 shadow-sm"
           >
             {loading || isUpdating ? (
               <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
                 Saving...
               </>
             ) : (
