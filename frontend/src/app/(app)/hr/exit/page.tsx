@@ -25,6 +25,8 @@ import {
 import { useEmployees } from "@/hooks/useEmployees";
 import { toast } from "sonner";
 import { useApi } from "@/hooks/useApi";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { StatsCards } from "@/components/reuseable/StatsCards";
 
 const EXIT_REASONS: SearchableSelectOption[] = [
   { value: "RESIGNATION", label: "👋 Resignation" },
@@ -45,7 +47,7 @@ export default function ExitManagementPage() {
   const api = useApi();
   const { data: employees = [] } = useEmployees();
   const confirmationModal = useConfirmationModal();
-
+  const { formatCurrency } = useCompanySettings();
   const [query, setQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterReason, setFilterReason] = useState("");
@@ -186,15 +188,40 @@ export default function ExitManagementPage() {
         }
       />
 
-      {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          <StatCard label="Total Exits" value={stats.total_exits} icon={LogOut} accent="info" />
-          <StatCard label="Active Exits" value={stats.active_exits} icon={Briefcase} accent="info" />
-          <StatCard label="Pending Clearance" value={stats.pending_clearance} icon={AlertTriangle} accent="warning" />
-          <StatCard label="In Progress" value={stats.in_progress_clearance} icon={Clock} accent="destructive" />
-          <StatCard label="Completed" value={stats.completed_clearance} icon={CheckCircle2} accent="success" />
-        </div>
-      )}
+{stats && (
+  <StatsCards
+    stats={[
+      {
+        id: "total-exits",
+        label: "Total Exits",
+        value: stats.total_exits,
+      },
+      {
+        id: "active-exits",
+        label: "Active Exits",
+        value: stats.active_exits,
+      },
+      {
+        id: "pending-clearance",
+        label: "Pending Clearance",
+        value: stats.pending_clearance,
+        valueClassName: "text-warning",
+      },
+      {
+        id: "in-progress",
+        label: "In Progress",
+        value: stats.in_progress_clearance,
+        valueClassName: "text-destructive",
+      },
+      {
+        id: "completed",
+        label: "Completed",
+        value: stats.completed_clearance,
+        valueClassName: "text-success",
+      },
+    ]}
+  />
+)}
 
       <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
         <div className="p-3 border-b border-border flex flex-col sm:flex-row gap-3">
@@ -321,7 +348,7 @@ export default function ExitManagementPage() {
                       <div className="text-[10px] text-muted-foreground mt-0.5">{r.clearance_progress}%</div>
                     </td>
                     <td className="px-4 py-2.5 text-xs font-medium">
-                      {r.final_settlement ? `PKR ${r.final_settlement.toLocaleString()}` : "—"}
+                      {r.final_settlement ? `${formatCurrency(r.final_settlement)}` : "—"}
                     </td>
                     <td className="px-4 py-2.5 text-right whitespace-nowrap">
                       <div className="flex justify-end gap-1">
@@ -378,7 +405,7 @@ export default function ExitManagementPage() {
                         <div className="text-xs mt-1">{r.reason}</div>
                         <div className="flex justify-between mt-2 text-xs">
                           <span>{r.exit_date}</span>
-                          <span>PKR {r.final_settlement.toLocaleString()}</span>
+                          <span>{formatCurrency(r.final_settlement)}</span>
                         </div>
                       </div>
                     ))}
@@ -397,6 +424,7 @@ export default function ExitManagementPage() {
 
       {modalOpen && (
         <ExitFormModal
+          formatCurrency={formatCurrency}
           employees={employees}
           initialData={editingRecord}
           onSubmit={handleSave}
@@ -422,11 +450,13 @@ export default function ExitManagementPage() {
 // EXIT FORM MODAL
 // ==========================================
 function ExitFormModal({
+  formatCurrency,
   initialData,
   employees,
   onSubmit,
   onClose
 }: {
+  formatCurrency: (amount?: number, decimals?: number) => string;
   initialData: ExitRecord | null;
   employees: any[];
   onSubmit: (d: any) => void;
@@ -577,7 +607,7 @@ function ExitFormModal({
           <label className="text-sm flex flex-col gap-1 sm:col-span-2">
             <span className="text-muted-foreground">Final Settlement Amount</span>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">PKR</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">{formatCurrency()}</span>
               <input
                 type="number"
                 value={formData.final_settlement}

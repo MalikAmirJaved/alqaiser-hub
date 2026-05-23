@@ -27,6 +27,7 @@ import {
   useBulkUpdateRoundStatus,
 } from "@/hooks/useInterviewRound";
 import { ConfirmationModal } from "@/components/reuseable/ConfirmationModal";
+import { StatsCards } from "@/components/reuseable/StatsCards";
 
 // ==========================================
 // TYPES & CONSTANTS
@@ -281,14 +282,14 @@ export default function RecruitmentPage() {
       />
 
       {/* Stats Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {stats.map(s => (
-          <div key={s.label} className="bg-card border border-border rounded-xl p-4">
-            <p className="text-xs text-muted-foreground mb-1">{s.label}</p>
-            <p className={`text-2xl font-semibold ${s.color}`}>{s.value}</p>
-          </div>
-        ))}
-      </div>
+<StatsCards
+  stats={stats.map((s) => ({
+    id: s.label,
+    label: s.label,
+    value: s.value,
+    valueClassName: s.color, // keeps your color logic
+  }))}
+/>
 
       {/* Filters */}
       <div className="bg-card border border-border rounded-xl p-3 flex flex-col sm:flex-row gap-2">
