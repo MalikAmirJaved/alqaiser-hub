@@ -219,21 +219,21 @@ export default function ProductsPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setViewMode(v => v === "table" ? "grid" : "table")}
-              className="p-2 rounded-xl border border-border hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+              className="p-2 rounded-md border border-border hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
               title="Toggle view"
             >
               {viewMode === "table" ? <Grid className="w-4 h-4" /> : <List className="w-4 h-4" />}
             </button>
             <button
               onClick={handleExport}
-              className="p-2 rounded-xl border border-border hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+              className="p-2 rounded-md border border-border hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
               title="Export CSV"
             >
               <Download className="w-4 h-4" />
             </button>
             <button
               onClick={handleCreate}
-              className="inline-flex items-center gap-2 px-4 h-9 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-opacity text-sm font-medium"
+              className="inline-flex items-center gap-2 px-4 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity text-sm font-medium"
             >
               <Plus className="w-4 h-4" /> Add Product
             </button>

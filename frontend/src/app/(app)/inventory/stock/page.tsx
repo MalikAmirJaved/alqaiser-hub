@@ -14,6 +14,7 @@ import { useWarehouses } from "@/hooks/useWarehouses";
 import { StockAdjustModal } from "@/components/inventory/stock/StockAdjustModal";
 import { StockHistoryDrawer } from "@/components/inventory/stock/StockHistoryDrawer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import PageHeader from "@/components/PageHeader";
 
 export default function StockManagementPage() {
   const [page, setPage] = useState(1);
@@ -114,13 +115,10 @@ export default function StockManagementPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Stock Management</h1>
-          <p className="text-muted-foreground text-sm">Monitor and adjust inventory levels across warehouses</p>
-        </div>
-      </div>
-
+      <PageHeader
+        title="Stock Management"
+        subtitle="Monitor and adjust inventory levels across warehouses"
+      />
       {/* Stats Cards */}
       <StatsCards stats={stats} />
 

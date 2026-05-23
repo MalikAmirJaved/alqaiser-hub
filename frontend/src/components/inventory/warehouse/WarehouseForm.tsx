@@ -202,7 +202,6 @@ export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: Wa
                 setFormData({ ...formData, country: val, state: "", city: "" });
                 if (errors.country) setErrors({ ...errors, country: "" });
               }}
-              className={cn(inputClassName, errors.country && "border-destructive")}
             />
             {errors.country && <span className="text-xs text-destructive mt-0.5">{errors.country}</span>}
           </label>
@@ -215,7 +214,6 @@ export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: Wa
               countryCode={formData.country}
               value={formData.state}
               onChange={(val) => setFormData({ ...formData, state: val, city: "" })}
-              className={inputClassName}
             />
           </label>
         </div>
@@ -231,7 +229,6 @@ export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: Wa
                 setFormData({ ...formData, city: val });
                 if (errors.city) setErrors({ ...errors, city: "" });
               }}
-              className={cn(inputClassName, errors.city && "border-destructive")}
             />
             {errors.city && <span className="text-xs text-destructive mt-0.5">{errors.city}</span>}
           </label>

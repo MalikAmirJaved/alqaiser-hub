@@ -78,7 +78,7 @@ export function CitySelect({ countryCode, stateCode, value, onChange, required =
   useEffect(() => {
     if (countryCode && stateCode) {
       const citiesOfState = City.getCitiesOfState(countryCode, stateCode);
-      setCities(citiesOfState.map(c => ({ value: c.isoCode, label: c.name })));
+      setCities(citiesOfState.map(c => ({ value: c.name, label: c.name })));
     } else {
       setCities([]);
     }
