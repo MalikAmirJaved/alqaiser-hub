@@ -11,7 +11,7 @@ export interface Asset {
   serialNumber?: string;
   description?: string;
   purchaseDate?: string;
-  purchasePrice?: string;
+  purchasePrice?: number;
   warrantyUntil?: string;
   vendor?: string;
   isActive: boolean;

@@ -1,6 +1,6 @@
 // components/hr/AssetsList.tsx
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAssets, useAssetStats, useCreateAsset, useUpdateAsset, useDeleteAsset } from "@/hooks/useAssets";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,6 @@ import {
   DollarSign,
   Building2,
   Hash,
-  Calendar as CalendarIcon,
-  X
 } from "lucide-react";
 
 import {
@@ -55,6 +53,7 @@ import {
 import { DatePicker } from "@/components/reuseable/DatePicker";
 import { toast } from "sonner";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { StatsCards } from "@/components/reuseable/StatsCards";
 
 export default function AssetsList() {
 const { formatCurrency } = useCompanySettings();
@@ -77,7 +76,7 @@ const { formatCurrency } = useCompanySettings();
     serialNumber: "",
     description: "",
     purchaseDate: "",
-    purchasePrice: "",
+    purchasePrice: 0,
     warrantyUntil: "",
     vendor: ""
   });
@@ -98,7 +97,7 @@ const { formatCurrency } = useCompanySettings();
           serialNumber: form.serialNumber || undefined,
           description: form.description || undefined,
           purchaseDate: form.purchaseDate || undefined,
-          purchasePrice: form.purchasePrice || undefined,
+          purchasePrice: form.purchasePrice || 0,
           warrantyUntil: form.warrantyUntil || undefined,
           vendor: form.vendor || undefined,
         });
@@ -110,7 +109,7 @@ const { formatCurrency } = useCompanySettings();
           serialNumber: form.serialNumber || undefined,
           description: form.description || undefined,
           purchaseDate: form.purchaseDate || undefined,
-          purchasePrice: form.purchasePrice || undefined,
+          purchasePrice: form.purchasePrice || 0,
           warrantyUntil: form.warrantyUntil || undefined,
           vendor: form.vendor || undefined,
           isActive: true,
@@ -121,7 +120,7 @@ const { formatCurrency } = useCompanySettings();
       setEditing(null);
       setForm({ 
         name: "", brand: "", model: "", serialNumber: "",
-        description: "", purchaseDate: "", purchasePrice: "", 
+        description: "", purchaseDate: "", purchasePrice: 0, 
         warrantyUntil: "", vendor: "" 
       });
     } catch (error: any) {
@@ -155,7 +154,7 @@ const { formatCurrency } = useCompanySettings();
             setEditing(null); 
             setForm({ 
               name: "", brand: "", model: "", serialNumber: "",
-              description: "", purchaseDate: "", purchasePrice: "", 
+              description: "", purchaseDate: "", purchasePrice: 0, 
               warrantyUntil: "", vendor: "" 
             }); 
             setShowModal(true); 
@@ -167,62 +166,36 @@ const { formatCurrency } = useCompanySettings();
       />
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Total Assets</p>
-                <p className="text-2xl font-bold">{stats?.totalAssets || assets.length}</p>
-              </div>
-              <div className="p-2 rounded-lg bg-blue-500/10">
-                <Package className="w-5 h-5 text-blue-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">With Serial Numbers</p>
-                <p className="text-2xl font-bold">{stats?.withSerialNumbers || assets.filter(a => a.serialNumber).length}</p>
-              </div>
-              <div className="p-2 rounded-lg bg-emerald-500/10">
-                <Hash className="w-5 h-5 text-emerald-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Total Value</p>
-                <p className="text-2xl font-bold">
-                  {formatCurrency(stats?.totalValue ?? 0) }
-                </p>
-              </div>
-              <div className="p-2 rounded-lg bg-amber-500/10">
-                <DollarSign className="w-5 h-5 text-amber-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Vendors</p>
-                <p className="text-2xl font-bold">{stats?.uniqueVendors || new Set(assets.map(a => a.vendor).filter(Boolean)).size}</p>
-              </div>
-              <div className="p-2 rounded-lg bg-purple-500/10">
-                <Building2 className="w-5 h-5 text-purple-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+<StatsCards
+  stats={[
+    {
+      id: "total-assets",
+      label: "Total Assets",
+      value: stats?.totalAssets || assets.length,
+    },
+    {
+      id: "serials",
+      label: "With Serial Numbers",
+      value:
+        stats?.withSerialNumbers ||
+        assets.filter((a) => a.serialNumber).length,
+    },
+    {
+      id: "total-value",
+      label: "Total Value",
+      value: formatCurrency(stats?.totalValue ?? 0),
+    },
+    {
+      id: "vendors",
+      label: "Vendors",
+      value:
+        stats?.uniqueVendors ||
+        new Set(
+          assets.map((a) => a.vendor).filter(Boolean)
+        ).size,
+    },
+  ]}
+/>
 
       {/* Search and Table */}
       <Card>
@@ -286,7 +259,7 @@ const { formatCurrency } = useCompanySettings();
                       <TableCell>
                         <div className="text-xs space-y-0.5">
                           {asset.purchaseDate && <div>📅 {asset.purchaseDate}</div>}
-                          {asset.purchasePrice && <div>💰 ${parseFloat(asset.purchasePrice)}</div>}
+                          {asset.purchasePrice && <div>💰 {formatCurrency(asset.purchasePrice)}</div>}
                           {asset.vendor && <div>🏢 {asset.vendor}</div>}
                         </div>
                       </TableCell>
@@ -318,7 +291,7 @@ const { formatCurrency } = useCompanySettings();
                                 serialNumber: asset.serialNumber || "",
                                 description: asset.description || "",
                                 purchaseDate: asset.purchaseDate || "",
-                                purchasePrice: asset.purchasePrice || "",
+                                purchasePrice: asset.purchasePrice || 0,
                                 warrantyUntil: asset.warrantyUntil || "",
                                 vendor: asset.vendor || "",
                               }); 
@@ -402,12 +375,12 @@ const { formatCurrency } = useCompanySettings();
                 />
               </div>
               <div className="grid gap-2">
-                <Label>Purchase Price ($)</Label>
+                <Label>Purchase Price ({formatCurrency()})</Label>
                 <Input
                   type="number"
                   step="0.01"
                   value={form.purchasePrice}
-                  onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })}
+                  onChange={(e) => setForm({ ...form, purchasePrice: Number(e.target.value) })}
                   placeholder="0.00"
                 />
               </div>

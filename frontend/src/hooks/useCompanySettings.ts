@@ -156,8 +156,11 @@ export function useCompanySettings() {
     deletePublicHoliday: useDeletePublicHoliday(),
   };
 
-  const formatCurrency = (amount: number, decimals = 2) => {
+  const formatCurrency = (amount?: number, decimals = 2) => {
     const currency = settings?.currency || "USD";
+    if (amount === undefined || amount === null) {
+    return currency;
+  }
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency,
