@@ -1,0 +1,170 @@
+import json
+from django.core.management.base import BaseCommand
+from django.db import transaction
+from apps.permissions.models import Module, Resource, Action, Permission, Role, RolePermission
+
+# ------------------------------------------------------------------
+# Data definitions (single source of truth)
+# ------------------------------------------------------------------
+
+MODULES = {
+    'HR': {'name': 'Human Resources', 'ordering': 1},
+    'INVENTORY': {'name': 'Inventory Management', 'ordering': 2},
+    'FINANCE': {'name': 'Finance', 'ordering': 3},
+    'AI_MONITORING': {'name': 'AI Monitoring', 'ordering': 4},
+    'SETTINGS': {'name': 'System Settings', 'ordering': 5},
+}
+
+RESOURCES = {
+    'HR': [
+        'employee', 'leave', 'payroll', 'attendance', 'shift_template', 'shift_override',
+        'recruitment', 'performance', 'exit', 'compensation', 'policy', 'asset'
+    ],
+    'INVENTORY': [
+        'product', 'variant', 'category', 'brand', 'warehouse', 'supplier', 'vendor',
+        'customer', 'purchase_order', 'sales_order', 'stock', 'stock_transfer',
+        'report', 'alert', 'audit_log'
+    ],
+    'FINANCE': [
+        'account', 'invoice', 'expense', 'payable', 'receivable', 'budget',
+        'bank_account', 'tax', 'forecast', 'asset', 'payroll'
+    ],
+    'AI_MONITORING': [
+        'live_dashboard', 'workforce', 'inventory', 'alert', 'report'
+    ],
+    'SETTINGS': [
+        'company', 'user', 'role', 'department', 'designation', 'preference'
+    ],
+}
+
+ACTIONS = [
+    ('create', 'Create'),
+    ('view', 'View'),
+    ('update', 'Update'),
+    ('delete', 'Delete'),
+    ('export', 'Export'),
+    ('approve', 'Approve'),
+    ('reject', 'Reject'),
+    ('assign', 'Assign'),
+    ('publish', 'Publish'),
+    ('archive', 'Archive'),
+]
+
+# Role permissions: role -> { module: [resource_action_patterns] }
+# Patterns: 'resource:action' or '*' for all actions of that module
+ROLE_PERMISSIONS = {
+    'COMPANY_ADMIN': {
+        'HR': ['*'],
+        'INVENTORY': ['*'],
+        'FINANCE': ['*'],
+        'AI_MONITORING': ['*'],
+        'SETTINGS': ['*'],
+    },
+    'BRANCH_ADMIN': {
+        'HR': ['employee:view', 'employee:update', 'leave:approve', 'payroll:view', 'attendance:view'],
+        'INVENTORY': ['product:view', 'stock:view', 'warehouse:view', 'purchase_order:view', 'sales_order:view'],
+        'FINANCE': ['invoice:view', 'expense:create', 'expense:view'],
+        'AI_MONITORING': ['live_dashboard:view', 'workforce:view'],
+        'SETTINGS': ['company:view', 'user:view', 'role:view'],
+    },
+    'STAFF': {
+        'HR': ['employee:view', 'leave:create', 'leave:view', 'attendance:view'],
+        'INVENTORY': ['product:view', 'stock:view'],
+        'FINANCE': ['expense:create', 'expense:view'],
+        'AI_MONITORING': ['live_dashboard:view'],
+        'SETTINGS': ['company:view'],
+    },
+}
+
+class Command(BaseCommand):
+    help = 'Seed modules, resources, actions, permissions, and role permissions (idempotent)'
+
+    @transaction.atomic
+    def handle(self, *args, **options):
+        self.stdout.write('Seeding permissions...')
+
+        # 1. Create modules
+        module_objs = {}
+        for code, data in MODULES.items():
+            obj, created = Module.objects.update_or_create(
+                code=code,
+                defaults={
+                    'name': data['name'],
+                    'ordering': data.get('ordering', 0),
+                    'is_active': True
+                }
+            )
+            module_objs[code] = obj
+            self.stdout.write(f"  {'Created' if created else 'Updated'} module: {code}")
+
+        # 2. Create actions
+        action_objs = {}
+        for code, name in ACTIONS:
+            obj, created = Action.objects.update_or_create(
+                code=code,
+                defaults={'name': name}
+            )
+            action_objs[code] = obj
+
+        # 3. Create resources and permissions
+        permission_map = {}  # code -> Permission object
+        for module_code, resources_list in RESOURCES.items():
+            module = module_objs[module_code]
+            for resource_code in resources_list:
+                resource_obj, _ = Resource.objects.update_or_create(
+                    module=module,
+                    code=resource_code,
+                    defaults={'name': resource_code.replace('_', ' ').title(), 'is_active': True}
+                )
+                # For each action, create a permission
+                for action_code, action_name in ACTIONS:
+                    perm_code = f"{module_code}:{resource_code}:{action_code}"
+                    perm, created = Permission.objects.update_or_create(
+                        resource=resource_obj,
+                        action=action_objs[action_code],
+                        defaults={'code': perm_code, 'description': f"{resource_code} {action_code}"}
+                    )
+                    permission_map[perm_code] = perm
+                    if created:
+                        self.stdout.write(f"    Created permission: {perm_code}")
+
+        # 4. Create roles
+        role_objs = {}
+        for role_name in ROLE_PERMISSIONS.keys():
+            role, created = Role.objects.update_or_create(
+                name=role_name,
+                defaults={'description': f'{role_name} role', 'is_system': True}
+            )
+            role_objs[role_name] = role
+            self.stdout.write(f"  {'Created' if created else 'Updated'} role: {role_name}")
+
+        # 5. Assign role permissions
+        for role_name, module_perms in ROLE_PERMISSIONS.items():
+            role = role_objs[role_name]
+            # Delete existing role permissions (idempotency)
+            RolePermission.objects.filter(role=role).delete()
+            count = 0
+            for module_code, patterns in module_perms.items():
+                if patterns == ['*']:
+                    # Give all permissions of this module
+                    perms = Permission.objects.filter(resource__module__code=module_code)
+                    for perm in perms:
+                        RolePermission.objects.create(role=role, permission=perm, granted=True)
+                        count += 1
+                else:
+                    for pattern in patterns:
+                        resource_code, action_code = pattern.split(':')
+                        perm_code = f"{module_code}:{resource_code}:{action_code}"
+                        perm = permission_map.get(perm_code)
+                        if perm:
+                            RolePermission.objects.create(role=role, permission=perm, granted=True)
+                            count += 1
+                        else:
+                            self.stdout.write(self.style.WARNING(f"  Warning: Permission {perm_code} not found"))
+            self.stdout.write(f"  Assigned {count} permissions to role {role_name}")
+
+        self.stdout.write(self.style.SUCCESS(
+            f"Seeding complete: {Module.objects.count()} modules, {Resource.objects.count()} resources, "
+            f"{Action.objects.count()} actions, {Permission.objects.count()} permissions, "
+            f"{Role.objects.count()} roles, {RolePermission.objects.count()} role permissions"
+        ))

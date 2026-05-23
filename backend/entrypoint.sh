@@ -10,14 +10,17 @@ echo "DB is ready."
 
 # Collect static
 echo "Collecting static files..."
-python manage.py collectstatic --no-input 2>/dev/null || true
-
-# Seed data
-echo "Running seed..."
-python manage.py seed_org || echo "Seed skipped or failed"
+python manage.py collectstatic --noinput 2>/dev/null || true
 
 echo "Starting server..."
 exec daphne -b 0.0.0.0 -p 8000 config.asgi:application
+
+
+# initilize the Company
+# docker compose exec backend python manage.py seed_org
+
+# initilize the permissions
+# docker compose exec backend python manage.py seed_permissions
 
 # make migerations
 # docker compose exec backend python manage.py makemigrations
