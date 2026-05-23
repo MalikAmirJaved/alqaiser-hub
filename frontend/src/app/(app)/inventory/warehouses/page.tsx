@@ -10,6 +10,8 @@ import { ConfirmationModal, useConfirmationModal } from "@/components/reuseable/
 import { WarehouseForm } from "@/components/inventory/warehouse/WarehouseForm";
 import { WarehouseDetail } from "@/components/inventory/warehouse/WarehouseDetail";
 import { useWarehouses, useWarehouseStats, useCreateWarehouse, useUpdateWarehouse, useDeleteWarehouse, Warehouse } from "@/hooks/useWarehouses";
+import PageHeader from "@/components/PageHeader";
+import { Button } from "@/components/ui/button";
 
 type ViewMode = "table" | "grid";
 
@@ -248,19 +250,17 @@ export default function WarehousesPage() {
   return (
     <div className="">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Warehouses</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage your warehouse locations and storage facilities</p>
-        </div>
-        <button
-          onClick={handleCreate}
-          className="inline-flex items-center gap-2 px-4 h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
-        >
-          <Plus className="w-4 h-4" />
-          Add Warehouse
-        </button>
-      </div>
+      <PageHeader
+        title="Warehouses"
+        subtitle="Manage your warehouse locations and storage facilities"
+        actions={
+            <Button
+              onClick={handleCreate}
+            >
+              <Plus className="w-4 h-4 mr-2" /> Add Warehouse
+            </Button>
+        }
+      />
 
       {/* Stats Cards */}
       {!statsLoading && statsData.length > 0 && <StatsCards stats={statsData} />}
