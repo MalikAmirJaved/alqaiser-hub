@@ -9,7 +9,7 @@ import PageHeader from "@/components/PageHeader";
 import PaymentModal from "@/components/payroll/PaymentModal";
 import PayslipModal from "@/components/payroll/PayslipModal";
 import MonthSelectorModal from "@/components/payroll/MonthSelectorModal";
-import { DollarSign, Users, Clock, TrendingUp, Search, Filter, Eye, CreditCard, Calendar, RefreshCw } from "lucide-react";
+import { Search, Filter, Eye, CreditCard, Calendar, RefreshCw } from "lucide-react";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 
 export default function PayrollPage() {

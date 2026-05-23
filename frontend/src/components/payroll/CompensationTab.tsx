@@ -5,7 +5,7 @@ import { Pencil, Trash2, TrendingUp, DollarSign, Calendar } from "lucide-react";
 
 interface CompensationTabProps {
   filteredCompensations: any[];
-  formatCurrency: (amount: number) => string;
+  formatCurrency: (amount: number) => number;
   onEdit: (compensation: any) => void;
   onDelete: (id: string) => void;
 }

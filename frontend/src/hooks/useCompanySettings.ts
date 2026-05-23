@@ -167,6 +167,12 @@ export function useCompanySettings() {
       minimumFractionDigits: decimals,
     }).format(amount);
   };
+
+  const CurrencyCode = () => {
+    const currency = settings?.currency || "-";
+    
+    return currency;
+  };
   
   return {
     settings: settings as CompanySettings | undefined,
@@ -174,7 +180,7 @@ export function useCompanySettings() {
     isReady: !isLoading && !error,
     error,
     formatCurrency,
-    
+    CurrencyCode,
     // Mutations
     updateSettings: mutations.updateSettings.mutate,
     updateWorkingDays: mutations.updateWorkingDays.mutate,

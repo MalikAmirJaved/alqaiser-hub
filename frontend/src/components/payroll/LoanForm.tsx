@@ -4,14 +4,15 @@
 import { useState, useEffect, useCallback } from "react";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { DatePicker } from "@/components/reuseable/DatePicker";
-import { AlertCircle, Calculator, DollarSign, Calendar, Target, FileText } from "lucide-react";
+import { AlertCircle, Calculator,  Calendar, Target, FileText } from "lucide-react";
 
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 interface LoanFormProps {
   formData: any;
   setFormData: (data: any) => void;
   employeeOptions: Array<{ value: string; label: string }>;
   selectedEmployeeSalary: number;
-  formatCurrency: (amount: number) => string;
+  formatCurrency: (amount: number) => number;
   errors: string[];
   onValidationChange?: (hasErrors: boolean) => void;
 }
@@ -27,6 +28,7 @@ export default function LoanForm({
 }: LoanFormProps) {
   const [calculationMode, setCalculationMode] = useState<'deduction' | 'months'>('deduction');
   const [localErrors, setLocalErrors] = useState<string[]>([]);
+  const { CurrencyCode } = useCompanySettings();
 
   // Calculate loan fields
   const calculateLoanFields = useCallback((data: any, mode: 'deduction' | 'months') => {
@@ -157,7 +159,9 @@ let totalMonths: number | null = null;
         />
         {selectedEmployeeSalary > 0 && (
           <div className="flex items-center gap-2 mt-2 p-2 bg-primary/5 rounded-lg text-sm">
-            <DollarSign className="w-4 h-4 text-primary" />
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+              {CurrencyCode()}
+            </span>
             <span className="text-muted-foreground">Monthly Salary:</span>
             <span className="font-semibold text-primary">{formatCurrency(selectedEmployeeSalary)}</span>
           </div>
@@ -191,13 +195,15 @@ let totalMonths: number | null = null;
             <span className="text-red-500">*</span> Principal Amount
           </label>
           <div className="relative">
-            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+              {CurrencyCode()}
+            </span>
             <input 
               type="number" 
               value={formData.principal_amount || ""} 
               onChange={(e) => handleFieldChange("principal_amount", Number(e.target.value))}
               placeholder="0.00"
-              className="w-full bg-muted/40 border border-border rounded-lg h-10 pl-9 pr-3 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="w-full bg-muted/40 border border-border rounded-lg h-10 pl-12 pr-3 focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
         </div>
@@ -225,13 +231,15 @@ let totalMonths: number | null = null;
             <span className="text-xs text-muted-foreground">(auto-calculates months)</span>
           </label>
           <div className={`relative ${isMonthlyDeductionExceeds ? 'ring-2 ring-red-500 rounded-lg' : ''}`}>
-            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+              {CurrencyCode()}
+            </span>
             <input 
               type="number" 
               value={formData.monthly_deduction || ""} 
               onChange={(e) => handleFieldChange("monthly_deduction", Number(e.target.value))}
               placeholder="Auto from months"
-              className={`w-full rounded-lg h-10 pl-9 pr-3 focus:outline-none focus:ring-2 focus:ring-primary/20 ${
+              className={`w-full rounded-lg h-10 pl-12 pr-3 focus:outline-none focus:ring-2 focus:ring-primary/20 ${
                 isMonthlyDeductionExceeds 
                   ? "bg-red-50 dark:bg-red-950/20 border-2 border-red-500" 
                   : "bg-muted/40 border border-border"

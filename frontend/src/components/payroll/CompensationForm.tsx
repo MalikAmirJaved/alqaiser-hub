@@ -3,13 +3,13 @@
 
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { DatePicker } from "@/components/reuseable/DatePicker";
-import { DollarSign, Calendar, FileText, TrendingUp, Briefcase, Car, Phone, Home, Plus } from "lucide-react";
-
+import { Calendar, FileText, TrendingUp, Briefcase, Car, Phone, Home, Plus } from "lucide-react";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 interface CompensationFormProps {
   formData: any;
   setFormData: (data: any) => void;
   employeeOptions: Array<{ value: string; label: string }>;
-  formatCurrency: (amount: number) => string;
+  formatCurrency: (amount: number) => number;
 }
 
 export default function CompensationForm({ formData, setFormData, employeeOptions, formatCurrency }: CompensationFormProps) {
@@ -19,7 +19,7 @@ export default function CompensationForm({ formData, setFormData, employeeOption
     { key: 'transport_allowance', label: 'Transport Allowance', icon: Car, placeholder: 'Monthly transport' },
     { key: 'fuel_allowance', label: 'Fuel Allowance', icon: Car, placeholder: 'Monthly fuel' },
     { key: 'phone_allowance', label: 'Phone Allowance', icon: Phone, placeholder: 'Monthly phone' },
-    { key: 'other_allowances', label: 'Other Allowances', icon: DollarSign, placeholder: 'Other allowances' },
+    { key: 'other_allowances', label: 'Other Allowances', icon: Plus, placeholder: 'Other allowances' },
   ];
 
   const calculateTotalAllowances = () => {
@@ -29,7 +29,7 @@ export default function CompensationForm({ formData, setFormData, employeeOption
   };
 
   const totalAllowances = calculateTotalAllowances();
-
+  const { CurrencyCode } = useCompanySettings();
   return (
     <div className="space-y-6">
       {/* Employee Selection */}
@@ -53,9 +53,9 @@ export default function CompensationForm({ formData, setFormData, employeeOption
             <Briefcase className="w-4 h-4" />
             Grade/Band
           </label>
-          <input 
-            type="text" 
-            value={formData.grade || ""} 
+          <input
+            type="text"
+            value={formData.grade || ""}
             onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
             placeholder="e.g., A1, B2, Senior"
             className="w-full bg-muted/40 border border-border rounded-lg h-10 px-3 focus:outline-none focus:ring-2 focus:ring-primary/20"
@@ -69,13 +69,15 @@ export default function CompensationForm({ formData, setFormData, employeeOption
             Overtime Rate (per hour)
           </label>
           <div className="relative">
-            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input 
-              type="number" 
-              value={formData.overtime_rate || ""} 
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+              {CurrencyCode()}
+            </span>
+            <input
+              type="number"
+              value={formData.overtime_rate || ""}
               onChange={(e) => setFormData({ ...formData, overtime_rate: Number(e.target.value) })}
               placeholder="0.00"
-              className="w-full bg-muted/40 border border-border rounded-lg h-10 pl-9 pr-3 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="w-full bg-muted/40 border border-border rounded-lg h-10 pl-12 pr-3 focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
         </div>
@@ -86,9 +88,9 @@ export default function CompensationForm({ formData, setFormData, employeeOption
             <Calendar className="w-4 h-4" />
             <span className="text-red-500">*</span> Effective Date
           </label>
-          <DatePicker 
-            value={formData.effective_date} 
-            onChange={(val) => setFormData({ ...formData, effective_date: val || "" })} 
+          <DatePicker
+            value={formData.effective_date}
+            onChange={(val) => setFormData({ ...formData, effective_date: val || "" })}
           />
         </div>
       </div>
@@ -97,7 +99,9 @@ export default function CompensationForm({ formData, setFormData, employeeOption
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium flex items-center gap-2">
-            <DollarSign className="w-4 h-4" />
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+              {CurrencyCode()}
+            </span>
             Allowances
           </h3>
           {totalAllowances > 0 && (
@@ -106,7 +110,7 @@ export default function CompensationForm({ formData, setFormData, employeeOption
             </div>
           )}
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {allowanceFields.map(({ key, label, icon: Icon, placeholder }) => (
             <div key={key} className="space-y-2">
@@ -115,13 +119,15 @@ export default function CompensationForm({ formData, setFormData, employeeOption
                 {label}
               </label>
               <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input 
-                  type="number" 
-                  value={formData[key] || ""} 
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+              {CurrencyCode()}
+            </span>
+                <input
+                  type="number"
+                  value={formData[key] || ""}
                   onChange={(e) => setFormData({ ...formData, [key]: Number(e.target.value) })}
                   placeholder={placeholder}
-                  className="w-full bg-muted/40 border border-border rounded-lg h-10 pl-9 pr-3 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  className="w-full bg-muted/40 border border-border rounded-lg h-10 pl-12 pr-3 focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
               </div>
             </div>
@@ -135,9 +141,9 @@ export default function CompensationForm({ formData, setFormData, employeeOption
           <FileText className="w-4 h-4" />
           Notes
         </label>
-        <textarea 
-          rows={3} 
-          value={formData.notes || ""} 
+        <textarea
+          rows={3}
+          value={formData.notes || ""}
           onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
           placeholder="Additional notes about this compensation structure..."
           className="w-full bg-muted/40 border border-border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"

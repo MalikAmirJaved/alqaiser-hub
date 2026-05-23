@@ -6,7 +6,7 @@ import { Pencil, Trash2, MoreHorizontal, HandCoins, Calendar, DollarSign, Trendi
 
 interface LoanTabProps {
     filteredLoans: any[];
-    formatCurrency: (amount: number) => string;
+    formatCurrency: (amount: number) => number;
     statusDropdownId: number | null;
     setStatusDropdownId: (id: number | null) => void;
     onEdit: (loan: any) => void;
