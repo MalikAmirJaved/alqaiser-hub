@@ -5,7 +5,6 @@ import { useState, useEffect, useMemo } from "react";
 import { usePolicies, usePolicyStats, useCreatePolicy, useUpdatePolicy, useDeletePolicy, useBulkPolicyAction } from "@/hooks/usePolicies";
 import type { PolicyRecord, PolicyFilters, PolicyFormData, BulkActionPayload } from "@/hooks/usePolicies";
 import PageHeader from "@/components/PageHeader";
-import StatCard from "@/components/cards/StatCard";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { DatePicker } from "@/components/reuseable/DatePicker";
 import { ConfirmationModal, useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
@@ -15,6 +14,7 @@ import {
   CheckSquare, Square, RotateCcw
 } from "lucide-react";
 import { toast } from "sonner";
+import { StatsCards } from "@/components/reuseable/StatsCards";
 
 // ==========================================
 // CONSTANTS
@@ -227,32 +227,32 @@ export default function HRPolicyPage() {
       />
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard 
-          label="Total Policies" 
-          value={stats?.totalPolicies || 0} 
-          icon={FileText} 
-          accent="primary" 
-        />
-        <StatCard 
-          label="Published" 
-          value={stats?.publishedPolicies || 0} 
-          icon={BookOpen} 
-          accent="success" 
-        />
-        <StatCard 
-          label="Pending Review" 
-          value={(stats?.pendingReview || 0) + (stats?.approvedPolicies || 0)} 
-          icon={Clock} 
-          accent="warning" 
-        />
-        <StatCard 
-          label="Awaiting Ack" 
-          value={stats?.policiesRequiringAck || 0} 
-          icon={Users} 
-          accent="info" 
-        />
-      </div>
+<StatsCards
+  stats={[
+    {
+      id: "total-policies",
+      label: "Total Policies",
+      value: stats?.totalPolicies || 0,
+    },
+    {
+      id: "published",
+      label: "Published",
+      value: stats?.publishedPolicies || 0,
+    },
+    {
+      id: "pending-review",
+      label: "Pending Review",
+      value:
+        (stats?.pendingReview || 0) +
+        (stats?.approvedPolicies || 0),
+    },
+    {
+      id: "awaiting-ack",
+      label: "Awaiting Ack",
+      value: stats?.policiesRequiringAck || 0,
+    },
+  ]}
+/>
 
       {/* Bulk Actions Bar */}
       {selectedIds.size > 0 && (
