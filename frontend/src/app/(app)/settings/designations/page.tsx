@@ -9,7 +9,6 @@ import FormModal from "@/components/reuseable/FormModal";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2, Briefcase, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { permissionService } from "@/services/permissionService";
 import { useAuth } from "@/hooks/useAuth";
 import { DEPARTMENT_CHOICES } from "@/lib/departments";
 
@@ -29,23 +28,6 @@ export default function DesignationsPage() {
     description: "",
     isActive: true,
   });
-
-  const [permissions, setPermissions] = useState({
-    canCreate: false,
-    canUpdate: false,
-    canDelete: false,
-    loading: true,
-  });
-
-  useEffect(() => {
-    permissionService.init();
-    setPermissions({
-      canCreate: permissionService.hasPermission("SETTINGS", "Designations", "create"),
-      canUpdate: permissionService.hasPermission("SETTINGS", "Designations", "update"),
-      canDelete: permissionService.hasPermission("SETTINGS", "Designations", "delete"),
-      loading: false,
-    });
-  }, []);
 
   const handleCreate = () => {
     setFormData({
@@ -157,45 +139,17 @@ export default function DesignationsPage() {
     },
   ];
 
-  if (permissions.loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground">Loading permissions...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!permissions.canCreate && !permissions.canUpdate && !permissions.canDelete && user?.role !== "COMPANY_ADMIN") {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center max-w-md">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-destructive/15 flex items-center justify-center">
-            <Shield className="w-8 h-8 text-destructive" />
-          </div>
-          <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
-          <p className="text-sm text-muted-foreground">
-            You don't have permission to access designations.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div>
       <PageHeader
         title="Designations"
         subtitle="Manage job titles and designations"
         actions={
-          (permissions.canCreate || user?.role === "COMPANY_ADMIN") && (
             <Button onClick={handleCreate}>
               <Plus className="w-4 h-4 mr-2" />
               Add Designation
             </Button>
-          )
+          
         }
       />
 
@@ -226,8 +180,8 @@ export default function DesignationsPage() {
         subtitle={`${designations.length} designation${designations.length !== 1 ? "s" : ""} found`}
         searchable
         searchFields={["name", "department", "payGrade"]}
-        onEdit={(row) => (permissions.canUpdate || user?.role === "COMPANY_ADMIN") && handleEdit(row)}
-        onDelete={(row) => (permissions.canDelete || user?.role === "COMPANY_ADMIN") && handleDelete(row)}
+        onEdit={(row) =>  handleEdit(row)}
+        onDelete={(row) => handleDelete(row)}
         defaultPageSize={10}
       />
 

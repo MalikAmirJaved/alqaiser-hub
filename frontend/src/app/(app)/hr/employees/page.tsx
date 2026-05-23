@@ -8,7 +8,6 @@
 import { useState, useEffect } from "react";
 import { useEmployees, useEmployeeStats, useCreateEmployee, useUpdateEmployee, useDeleteEmployee } from "@/hooks/useEmployees";
 import { useShiftTemplates } from "@/hooks/useShiftTemplates";
-import { permissionService } from "@/services/permissionService";
 import PageHeader from "@/components/PageHeader";
 import EmployeeForm from "@/components/Forms/EmployeeForm";
 import { StatsCards } from "@/components/reuseable/StatsCards";
@@ -39,25 +38,7 @@ export default function EmployeesPage() {
   const updateEmployee = useUpdateEmployee();
   const deleteEmployee = useDeleteEmployee();
 
-  const [permissions, setPermissions] = useState({
-    canCreate: false,
-    canUpdate: false,
-    canDelete: false,
-    canView: true,
-    loading: true,
-  });
 
-  useEffect(() => {
-    permissionService.init();
-
-    setPermissions({
-      canCreate: permissionService.hasPermission("HR", "Employee Management", "create"),
-      canUpdate: permissionService.hasPermission("HR", "Employee Management", "update"),
-      canDelete: permissionService.hasPermission("HR", "Employee Management", "delete"),
-      canView: permissionService.hasPermission("HR", "Employee Management", "view"),
-      loading: false,
-    });
-  }, []);
 
   const getEmployeeDefaultShiftName = (employee) => {
     if (employee.default_shift_name) return employee.default_shift_name;
@@ -88,10 +69,7 @@ export default function EmployeesPage() {
   };
 
 const handleDelete = async (employee) => {
-    if (!permissions.canDelete) {
-      toast.error("You don't have permission to delete employees.");
-      return;
-    }
+
 
     confirm({
       title: "Delete Employee",
@@ -112,10 +90,7 @@ const handleDelete = async (employee) => {
 
 
   const handleBulkDelete = async () => {
-    if (!permissions.canDelete) {
-      toast.error("You don't have permission to delete employees.");
-      return;
-    }
+
 
     const selectedEmployees = Array.from(selectedRows).map(idx => employees[idx]);
     if (selectedEmployees.length === 0) return;
@@ -138,19 +113,11 @@ const handleDelete = async (employee) => {
   };
 
   const openAddModal = () => {
-    if (!permissions.canCreate) {
-      toast.error("You don't have permission to add employees.");
-      return;
-    }
     setEditingEmployee(null);
     setModalOpen(true);
   };
 
   const openEditModal = (employee) => {
-    if (!permissions.canUpdate) {
-      toast.error("You don't have permission to edit employees.");
-      return;
-    }
     setEditingEmployee(employee);
     setModalOpen(true);
   };
@@ -292,7 +259,6 @@ const handleDelete = async (employee) => {
   // Define actions for each row
   const renderActions = (row, idx) => (
     <>
-      {permissions.canUpdate && (
         <button
           onClick={() => openEditModal(row)}
           className="p-1.5 rounded-md hover:bg-muted transition-colors"
@@ -300,8 +266,6 @@ const handleDelete = async (employee) => {
         >
           <Pencil className="w-4 h-4" />
         </button>
-      )}
-      {permissions.canDelete && (
         <button
           onClick={() => handleDelete(row)}
           className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive transition-colors"
@@ -309,7 +273,6 @@ const handleDelete = async (employee) => {
         >
           <Trash2 className="w-4 h-4" />
         </button>
-      )}
     </>
   );
 
@@ -453,10 +416,7 @@ const handleDelete = async (employee) => {
           {/* Actions Footer */}
           <div className={cn(
             "flex items-center justify-between pt-3 border-t border-border",
-            "transition-all duration-200",
-            permissions.canUpdate || permissions.canDelete
-              ? "opacity-100"
-              : "opacity-0"
+            "transition-all duration-200"
           )}>
             <span className="text-xs text-muted-foreground">
               Updated {new Date(employee.updated_at || Date.now()).toLocaleDateString()}
@@ -481,21 +441,6 @@ const handleDelete = async (employee) => {
     );
   }
 
-  if (!permissions.canView && !(user?.role === "COMPANY_ADMIN")) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center max-w-md">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-destructive/15 flex items-center justify-center">
-            <Shield className="w-8 h-8 text-destructive" />
-          </div>
-          <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
-          <p className="text-sm text-muted-foreground">
-            You don't have permission to view Employee Management.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div>
@@ -505,7 +450,7 @@ const handleDelete = async (employee) => {
         actions={
           <div className="flex items-center gap-2">
             {/* Bulk Delete Button */}
-            {selectedRows.size > 0 && permissions.canDelete && (
+            {selectedRows.size > 0  && (
               <button
                 onClick={handleBulkDelete}
                 className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-destructive text-destructive-foreground text-sm hover:bg-destructive/90 transition-colors"
@@ -547,14 +492,12 @@ const handleDelete = async (employee) => {
             </div>
 
             {/* Add Employee Button */}
-            {permissions.canCreate && (
               <button
                 onClick={openAddModal}
                 className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-colors"
               >
                 <Plus className="w-4 h-4" /> Add Employee
               </button>
-            )}
           </div>
         }
       />
@@ -586,7 +529,7 @@ const handleDelete = async (employee) => {
           onRowClick={(row, idx) => {
             router.push(`employees/${row.id}`)
           }}
-          actions={permissions.canUpdate || permissions.canDelete ? renderActions : undefined}
+          actions={ renderActions || undefined}
           stickyHeader={true}
         />
       ) : (
@@ -596,12 +539,11 @@ const handleDelete = async (employee) => {
           loading={isLoading}
           emptyMessage="No employees found"
           emptyAction={
-            permissions.canCreate
-              ? {
+              {
                 label: "Add Employee",
                 onClick: openAddModal,
               }
-              : undefined
+               || undefined
           }
           columns={4}
           gap={4}
@@ -615,14 +557,12 @@ const handleDelete = async (employee) => {
             <span className="text-sm font-medium">
               {selectedRows.size} employee{selectedRows.size !== 1 && 's'} selected
             </span>
-            {permissions.canDelete && (
               <button
                 onClick={handleBulkDelete}
                 className="text-xs px-2 py-1 rounded bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
               >
                 Delete All
               </button>
-            )}
             <button
               onClick={() => setSelectedRows(new Set())}
               className="text-xs px-2 py-1 rounded border border-border hover:bg-muted transition-colors"

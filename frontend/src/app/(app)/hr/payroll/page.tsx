@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useEmployees } from "@/hooks/useEmployees";
 import { usePayroll, usePayrollStats } from "@/hooks/usePayroll";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
-import { permissionService } from "@/services/permissionService";
 import PageHeader from "@/components/PageHeader";
 import PaymentModal from "@/components/payroll/PaymentModal";
 import PayslipModal from "@/components/payroll/PayslipModal";
@@ -33,22 +32,7 @@ export default function PayrollPage() {
     month: String(selectedMonth),
     year: String(selectedYear),
   });
-  const [permissions, setPermissions] = useState({
-    canCreate: false,
-    canUpdate: false,
-    canView: true,
-    loading: true,
-  });
 
-  useEffect(() => {
-    permissionService.init();
-    setPermissions({
-      canCreate: permissionService.hasPermission("HR", "Payroll", "create"),
-      canUpdate: permissionService.hasPermission("HR", "Payroll", "update"),
-      canView: permissionService.hasPermission("HR", "Payroll", "view"),
-      loading: false,
-    });
-  }, []);
 
   // Get payment status for employee in selected month
   const getPaymentStatus = (employeeId: string) => {
@@ -102,7 +86,7 @@ const handleRefresh = () => {
   statsQuery.refetch();
 };
 
-  if (permissions.loading || employeesLoading) {
+  if ( employeesLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
@@ -280,7 +264,7 @@ const handleRefresh = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {!isPaid && permissions.canCreate && (
+                        {!isPaid && (
                           <button
                             onClick={() => {
                               setSelectedEmployee(employee);

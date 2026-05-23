@@ -6,7 +6,6 @@ import PageHeader from "@/components/PageHeader";
 import { Plus, Clock, Edit, Trash2, Search, Palette, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
-import { permissionService } from "@/services/permissionService";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function ShiftTemplatesPage() {
@@ -27,23 +26,6 @@ export default function ShiftTemplatesPage() {
     description: "",
     is_active: true,
   });
-
-  const [permissions, setPermissions] = useState({
-    canCreate: false,
-    canUpdate: false,
-    canDelete: false,
-    loading: true,
-  });
-
-  useEffect(() => {
-    permissionService.init();
-    setPermissions({
-      canCreate: permissionService.hasPermission("HR", "Shift Management", "create"),
-      canUpdate: permissionService.hasPermission("HR", "Shift Management", "update"),
-      canDelete: permissionService.hasPermission("HR", "Shift Management", "delete"),
-      loading: false,
-    });
-  }, []);
 
   const filtered = templates.filter((t) =>
     t.name.toLowerCase().includes(search.toLowerCase())
@@ -93,40 +75,12 @@ export default function ShiftTemplatesPage() {
     }
   };
 
-  if (permissions.loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground">Loading permissions...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!permissions.canCreate && !permissions.canUpdate && !permissions.canDelete && user?.role !== "COMPANY_ADMIN") {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center max-w-md">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-destructive/15 flex items-center justify-center">
-            <Shield className="w-8 h-8 text-destructive" />
-          </div>
-          <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
-          <p className="text-sm text-muted-foreground">
-            You don't have permission to access shift templates.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div>
       <PageHeader
         title="Shift Templates"
         subtitle="Define reusable shift patterns & working hours"
         actions={
-          (permissions.canCreate || user?.role === "COMPANY_ADMIN") && (
             <Button
               onClick={() => {
                 setEditing(null);
@@ -143,7 +97,7 @@ export default function ShiftTemplatesPage() {
             >
               <Plus className="w-4 h-4 mr-2" /> New Template
             </Button>
-          )
+          
         }
       />
 
@@ -196,12 +150,9 @@ export default function ShiftTemplatesPage() {
               <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{t.description}</p>
             )}
             <div className="flex gap-2 pt-3 border-t border-border opacity-0 group-hover:opacity-100 transition-opacity">
-              {(permissions.canUpdate || user?.role === "COMPANY_ADMIN") && (
                 <Button variant="ghost" size="sm" onClick={() => handleEdit(t)}>
                   <Edit className="w-3.5 h-3.5 mr-1" /> Edit
                 </Button>
-              )}
-              {(permissions.canDelete || user?.role === "COMPANY_ADMIN") && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -210,7 +161,7 @@ export default function ShiftTemplatesPage() {
                 >
                   <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
                 </Button>
-              )}
+              
             </div>
           </div>
         ))}
