@@ -100,10 +100,11 @@ export function StockMovementChart({ data, loading = false }: MovementChartProps
  * ────────────────────────────────────────────────────────────── */
 interface SalesVsPurchaseChartProps {
   data: { period: string; sales_amount: number; purchase_amount: number }[];
-  loading?: boolean;
+  loading?: boolean; 
+  currency?: string;
 }
 
-export function SalesVsPurchaseChart({ data, loading = false }: SalesVsPurchaseChartProps) {
+export function SalesVsPurchaseChart({ data, loading = false, currency="$" }: SalesVsPurchaseChartProps) {
   return (
     <Card className="border bg-card/65 backdrop-blur-md">
       <CardHeader>
@@ -139,7 +140,7 @@ export function SalesVsPurchaseChart({ data, loading = false }: SalesVsPurchaseC
               <Tooltip
                 contentStyle={{ borderRadius: "0.5rem", backdropFilter: "blur(8px)", background: "var(--card)", border: "1px solid var(--border)" }}
                 labelStyle={{ fontWeight: 600 }}
-                formatter={(value: number) => `$${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                formatter={(value: number) => `${currency} ${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Area type="monotone" dataKey="sales_amount" name="Sales" stroke={PALETTE.blue} fill={`url(#${CHART_GRADIENT_ID})`} strokeWidth={2} />
@@ -158,9 +159,10 @@ export function SalesVsPurchaseChart({ data, loading = false }: SalesVsPurchaseC
 interface ProfitLossChartProps {
   data: { product_name: string; variant_sku: string; sales_revenue: number; cogs: number; gross_profit: number; margin_percent: number }[];
   loading?: boolean;
+  currency?: string;
 }
 
-export function ProfitLossChart({ data, loading = false }: ProfitLossChartProps) {
+export function ProfitLossChart({ data, loading = false, currency = "$"}: ProfitLossChartProps) {
   const chartData = React.useMemo(() => (data || []).slice(0, 15).map((d) => ({
     name: d.variant_sku.length > 12 ? d.variant_sku.substring(0, 12) + "…" : d.variant_sku,
     Revenue: Number(d.sales_revenue),
@@ -192,7 +194,7 @@ export function ProfitLossChart({ data, loading = false }: ProfitLossChartProps)
               <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" />
               <Tooltip
                 contentStyle={{ borderRadius: "0.5rem", backdropFilter: "blur(8px)", background: "var(--card)", border: "1px solid var(--border)" }}
-                formatter={(value: number) => `$${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                formatter={(value: number) => `${currency} ${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="Revenue" fill={PALETTE.blue} radius={[3, 3, 0, 0]} barSize={16} />

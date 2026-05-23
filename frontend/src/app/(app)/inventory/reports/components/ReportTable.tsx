@@ -16,9 +16,10 @@ interface ReportTableProps {
   data: any[];
   title: string;
   loading?: boolean;
+  currency?:string;
 }
 
-export function ReportTable({ headers, keys, data, title, loading = false }: ReportTableProps) {
+export function ReportTable({ headers, keys, data, title, loading = false, currency='$' }: ReportTableProps) {
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -217,7 +218,7 @@ export function ReportTable({ headers, keys, data, title, loading = false }: Rep
                     // Formatter logic
                     if (key.includes("amount") || key.includes("revenue") || key.includes("cogs") || key.includes("profit") || key.includes("value") || key.includes("cost")) {
                       const numVal = Number(value);
-                      displayValue = !isNaN(numVal) ? `$${numVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `$${value}`;
+                      displayValue = !isNaN(numVal) ? `${currency} ${numVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `$${value}`;
                     } else if (key.includes("rate") || key.includes("percent")) {
                       const numVal = Number(value);
                       displayValue = !isNaN(numVal) ? `${numVal.toFixed(2)}%` : `${value}%`;

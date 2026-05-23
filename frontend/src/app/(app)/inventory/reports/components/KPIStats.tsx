@@ -12,6 +12,7 @@ interface KPIStatsProps {
   turnoverRate?: number;
   slowMovingCount?: number;
   loading?: boolean;
+  CurrencyCode?: string;
 }
 
 export function KPIStats({
@@ -22,11 +23,12 @@ export function KPIStats({
   turnoverRate = 0,
   slowMovingCount = 0,
   loading = false,
+  CurrencyCode =  "$",
 }: KPIStatsProps) {
   const cards = [
     {
       title: "Total Stock Value",
-      value: `$${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      value: `${CurrencyCode} ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       description: "Asset cost-basis total",
       icon: DollarSign,
       colorClass: "text-blue-500 bg-blue-50/50 dark:bg-blue-950/20",

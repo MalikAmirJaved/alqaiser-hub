@@ -15,13 +15,10 @@ import {
 import { useWarehouses } from "@/hooks/useWarehouses";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { DateRangePickerRac } from "@/components/reuseable/DateRangePickerRac";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Label } from "@/components/ui/label";
-import { Filter, RefreshCcw, BarChart3, TrendingUp, PiggyBank, ClipboardList } from "lucide-react";
+import { RefreshCcw, BarChart3, TrendingUp, PiggyBank, ClipboardList } from "lucide-react";
 import { format } from "date-fns";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 import { KPIStats } from "./components/KPIStats";
 import { ReportTable } from "./components/ReportTable";
@@ -34,6 +31,8 @@ import {
 } from "./components/ReportCharts";
 
 export default function ReportsPage() {
+  const { CurrencyCode } = useCompanySettings();
+const currency = CurrencyCode();
   /* ───── Global Filters ───── */
   const [filterModalOpen, setFilterModalOpen] = useState(false);
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
@@ -156,6 +155,7 @@ export default function ReportsPage() {
         turnoverRate={0}
         slowMovingCount={slowMovingCount}
         loading={summaryLoading}
+        CurrencyCode={currency}
       />
 
       {/* ─── Tabbed Reports ─── */}
@@ -210,7 +210,7 @@ export default function ReportsPage() {
                   <div className="h-7 w-32 bg-muted animate-pulse rounded" />
                 ) : (
                   <p className="text-2xl font-bold text-foreground">
-                    ${Number(valuation?.total_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    {currency} {Number(valuation?.total_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </p>
                 )}
               </CardContent>
@@ -224,7 +224,7 @@ export default function ReportsPage() {
                   <div className="h-7 w-24 bg-muted animate-pulse rounded" />
                 ) : (
                   <p className="text-2xl font-bold text-foreground">
-                    ${Number(valuation?.average_unit_cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                    {currency} {Number(valuation?.average_unit_cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                   </p>
                 )}
               </CardContent>
@@ -245,6 +245,7 @@ export default function ReportsPage() {
                 headers={["Product", "Category", "SKU", "Warehouse", "On Hand", "Reserved", "Available", "Unit Cost", "Total Value"]}
                 keys={["product_name", "category_name", "variant_sku", "warehouse_name", "quantity_on_hand", "quantity_reserved", "quantity_available", "unit_cost", "total_value"]}
                 data={stockSummary || []}
+                currency={currency}
               />
             </CardContent>
           </Card>
@@ -255,7 +256,7 @@ export default function ReportsPage() {
         {/* ═══════════════════════════════════════════════════════════ */}
         <TabsContent value="movement" className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-1">
-            <SalesVsPurchaseChart data={salesVsPurchase || []} loading={svpLoading} />
+            <SalesVsPurchaseChart data={salesVsPurchase || []} loading={svpLoading} currency={currency} />
           </div>
           <StockMovementChart data={movementData || []} loading={movementLoading} />
         </TabsContent>
@@ -264,7 +265,7 @@ export default function ReportsPage() {
         {/*  TAB 3 – Financial Intelligence                            */}
         {/* ═══════════════════════════════════════════════════════════ */}
         <TabsContent value="finance" className="space-y-6">
-          <ProfitLossChart data={profitLoss || []} loading={plLoading} />
+          <ProfitLossChart data={profitLoss || []} loading={plLoading} currency={currency}/>
 
           {/* Profit & Loss Detail Table */}
           <Card className="border bg-card/65 backdrop-blur-md">
@@ -280,6 +281,7 @@ export default function ReportsPage() {
                 headers={["Product", "SKU", "Qty Sold", "Revenue", "COGS", "Gross Profit", "Margin %"]}
                 keys={["product_name", "variant_sku", "sales_quantity", "sales_revenue", "cogs", "gross_profit", "margin_percent"]}
                 data={profitLoss || []}
+                currency={currency}
               />
             </CardContent>
           </Card>
@@ -300,6 +302,7 @@ export default function ReportsPage() {
                   headers={["Product", "SKU", "Warehouse", "On Hand", "Days Since Sale", "Status"]}
                   keys={["product_name", "variant_sku", "warehouse_name", "quantity_on_hand", "days_since_last_sale", "status"]}
                   data={slowMoving || []}
+                  currency={currency}
                 />
               </CardContent>
             </Card>
@@ -324,6 +327,7 @@ export default function ReportsPage() {
                 headers={["Product", "SKU", "On Hand", "Min Level", "Max Level", "Reorder Qty", "Urgency Score", "Suggested Supplier"]}
                 keys={["product_name", "variant_sku", "quantity_on_hand", "min_stock_level", "max_stock_level", "recommended_reorder_qty", "urgency_score", "suggested_supplier_name"]}
                 data={reorderData || []}
+                currency={currency}
               />
             </CardContent>
           </Card>
@@ -344,6 +348,7 @@ export default function ReportsPage() {
                   headers={["Supplier", "Code", "Fulfillment %", "Lead Time (days)", "Total Spend", "Orders", "Score"]}
                   keys={["supplier_name", "supplier_code", "fulfillment_rate", "average_lead_time_days", "total_purchase_amount", "orders_count", "performance_score"]}
                   data={supplierData || []}
+                  currency={currency}
                 />
               </CardContent>
             </Card>

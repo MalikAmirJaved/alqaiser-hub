@@ -7,6 +7,7 @@ import CreateTransferForm from "@/components/inventory/transfers/CreateTransferF
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import PageHeader from "@/components/PageHeader";
 
 export default function TransfersPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -16,12 +17,21 @@ export default function TransfersPage() {
 
   return (
     <div className="space-y-6 ">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold tracking-tight">Stock Transfers</h1>
-        <Button onClick={() => setIsCreateModalOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" /> New Transfer
-        </Button>
-      </div>
+
+       <PageHeader
+        title="Stock Transfers"
+        subtitle="Transfer Stock one Warehouse to another"
+        actions={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity text-sm font-medium"
+            >
+              <Plus className="w-4 h-4" /> New Transfer
+            </button>
+          </div>
+        }
+      />
 
       <TransferList refreshTrigger={refreshKey} onTransferCompleted={handleRefresh} />
 
