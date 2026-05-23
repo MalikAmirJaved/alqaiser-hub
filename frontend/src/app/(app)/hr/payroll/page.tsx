@@ -10,6 +10,7 @@ import PaymentModal from "@/components/payroll/PaymentModal";
 import PayslipModal from "@/components/payroll/PayslipModal";
 import MonthSelectorModal from "@/components/payroll/MonthSelectorModal";
 import { DollarSign, Users, Clock, TrendingUp, Search, Filter, Eye, CreditCard, Calendar, RefreshCw } from "lucide-react";
+import { StatsCards } from "@/components/reuseable/StatsCards";
 
 export default function PayrollPage() {
   const { formatCurrency } = useCompanySettings();
@@ -143,50 +144,36 @@ const handleRefresh = () => {
       />
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wide text-muted-foreground">Total Payroll</span>
-            <div className="w-9 h-9 rounded-lg bg-primary/15 text-primary grid place-items-center">
-              <DollarSign className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 text-2xl font-semibold">{formatCurrency(totalPayroll)}</div>
-          <div className="mt-1 text-[11px] text-muted-foreground">For {monthNames[selectedMonth - 1]}, {selectedYear}</div>
-        </div>
-        <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wide text-muted-foreground">Paid Employees</span>
-            <div className="w-9 h-9 rounded-lg bg-success/15 text-success grid place-items-center">
-              <Users className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 text-2xl font-semibold">{paidCount}</div>
-          <div className="mt-1 text-[11px] text-muted-foreground">
-            {activeEmployees.length > 0 ? Math.round((paidCount / activeEmployees.length) * 100) : 0}% of all staff
-          </div>
-        </div>
-        <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wide text-muted-foreground">Pending Payments</span>
-            <div className="w-9 h-9 rounded-lg bg-warning/15 text-warning grid place-items-center">
-              <Clock className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 text-2xl font-semibold">{pendingCount}</div>
-          <div className="mt-1 text-[11px] text-muted-foreground">Require processing</div>
-        </div>
-        <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wide text-muted-foreground">Avg. Salary</span>
-            <div className="w-9 h-9 rounded-lg bg-info/15 text-info grid place-items-center">
-              <TrendingUp className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 text-2xl font-semibold">{formatCurrency(avgSalary)}</div>
-          <div className="mt-1 text-[11px] text-muted-foreground">Across all employees</div>
-        </div>
-      </div>
+<StatsCards
+  className="mb-5"
+  stats={[
+    {
+      id: "total-payroll",
+      label: "Total Payroll",
+      value: `${formatCurrency(totalPayroll)}`,
+    },
+    {
+      id: "paid-employees",
+      label: "Paid Employees",
+      value:
+        activeEmployees.length > 0
+          ? `${paidCount} (${Math.round(
+              (paidCount / activeEmployees.length) * 100
+            )}%)`
+          : paidCount,
+    },
+    {
+      id: "pending-payments",
+      label: "Pending Payments",
+      value: `${pendingCount}`,
+    },
+    {
+      id: "avg-salary",
+      label: "Avg. Salary",
+      value: `${formatCurrency(avgSalary)}`,
+    },
+  ]}
+/>
 
       {/* Employee Payment Table */}
       <div className="bg-card border border-border rounded-2xl shadow-sm">
