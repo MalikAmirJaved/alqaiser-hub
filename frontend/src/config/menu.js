@@ -119,6 +119,7 @@ export const menu = [
     children: [
       { title: "Company Profile", to: "/settings/company", icon: Building2 },
       { title: "Users & Roles", to: "/settings/users", icon: UserCog },
+      { title: "Permissions", to: "/settings/permissions", icon: Shield },
       { title: "Departments", to: "/settings/departments", icon: ClipboardList },
       { title: "Designations", to: "/settings/designations", icon: Briefcase },
       { title: "Preferences", to: "/settings/preferences", icon: Settings },
