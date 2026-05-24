@@ -259,7 +259,7 @@ function UserListItem({
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
+      className={`w-full flex items-center gap-3 pr-3 py-2.5 rounded-lg text-left transition-all ${
         selected
           ? "bg-primary/15 border border-primary/30"
           : "border border-transparent hover:bg-muted/50"
@@ -457,9 +457,9 @@ console.log("users:: ", users)
     acc + m.resources.reduce((a2, r) => a2 + r.actions.length, 0), 0);
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col gap-0 overflow-hidden">
+    <div className="h-full flex flex-col gap-0 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
+      <div className="flex items-center justify-between pb-4 border-b border-border flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center">
             <Shield className="w-4 h-4 text-primary" />
@@ -484,7 +484,7 @@ console.log("users:: ", users)
       <div className="flex flex-1 overflow-hidden">
         {/* ── Left Panel: User List ─────────────────────────────────────────── */}
         <div className="w-72 flex-shrink-0 border-r border-border flex flex-col overflow-hidden">
-          <div className="p-3 border-b border-border">
+          <div className="py-3 pr-3 border-b border-border">
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -496,7 +496,7 @@ console.log("users:: ", users)
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+          <div className="flex-1 overflow-y-auto py-2 space-y-0.5">
             {usersLoading ? (
               <div className="flex justify-center py-8">
                 <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -515,7 +515,7 @@ console.log("users:: ", users)
             )}
           </div>
 
-          <div className="p-3 border-t border-border text-xs text-muted-foreground">
+          <div className="py-3 border-t border-border text-xs text-muted-foreground">
             {users.length} user{users.length !== 1 ? "s" : ""} total
           </div>
         </div>
