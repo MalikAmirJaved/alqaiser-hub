@@ -7,7 +7,6 @@ import Topbar from "@/components/navbar/Topbar";
 import { useAuth } from "@/hooks/useAuth";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import CompanySetupModal from "@/components/CompanySetupModal";
-import { companyContext } from "@/services/companyContextService";
 import { loadPermissions } from "@/store/slices/permissionSlice";
 import type { AppDispatch, RootState } from "@/store";
 
@@ -24,7 +23,6 @@ const dispatch = useDispatch<AppDispatch>();
     async function initializeContext() {
       if (ready && user) {
         // Initialize company context from backend
-        await companyContext.init();
         setContextReady(true);
       }
     }

@@ -5,6 +5,8 @@ export interface User {
   username: string;
   email: string;
   role: string;
+  companyId: number;
+  branchId: number;
 }
 
 interface AuthState {

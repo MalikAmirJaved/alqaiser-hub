@@ -10,13 +10,14 @@ import React, {
   useCallback,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { companyContext } from "@/services/companyContextService";
 import { useApi } from "@/hooks/useApi";
 import {
   registerServiceWorker,
   requestNotificationPermission,
   showDesktopNotification,
 } from "@/lib/notifications";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 
 // Map backend entity names to React Query keys for cache invalidation
 const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
@@ -88,7 +89,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
-
+  const user = useSelector((state: RootState) => state.auth.user);
   const reconnectTimeoutRef =
     useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -115,12 +116,9 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
   // WebSocket connection with exponential backoff
   const connectSocket = useCallback(
     async (retryCount = 0) => {
-      if (!companyContext.initialized) {
-        await companyContext.init();
-      }
-
-      const companyId = companyContext.getCurrentCompanyId();
-      const branchId = companyContext.getCurrentBranchId();
+      console.log("  :: ", user)
+      const companyId = user?.companyId;
+      const branchId = user?.branchId;
 
       if (!companyId || !branchId) {
         console.warn("Missing company or branch ID, cannot open WebSocket");

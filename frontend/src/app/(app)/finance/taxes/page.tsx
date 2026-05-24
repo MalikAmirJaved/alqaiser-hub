@@ -9,7 +9,6 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 const CrudPage = dynamic(() => import("@/components/CrudPage"), { ssr: false });
 import { schemas } from "@/config/schemas";
-import TaxReport from "@/components/Finance/TaxReport";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default TaxesPage;
@@ -24,7 +23,6 @@ function TaxesPage() {
           <TabsTrigger value="taxes">Tax Rates</TabsTrigger>
           <TabsTrigger value="rules">Tax Rules</TabsTrigger>
           <TabsTrigger value="transactions">Tax Transactions</TabsTrigger>
-          <TabsTrigger value="report">Tax Report</TabsTrigger>
         </TabsList>
         
         <TabsContent value="taxes">
@@ -39,9 +37,6 @@ function TaxesPage() {
           <CrudPage {...schemas.taxTransactions} />
         </TabsContent>
         
-        <TabsContent value="report">
-          <TaxReport />
-        </TabsContent>
       </Tabs>
     </div>
   );

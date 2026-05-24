@@ -393,7 +393,6 @@ export default function PermissionsPage() {
 
   // Real-time WebSocket
   usePermissionSocket(selectedUserId);
-console.log("users:: ", users)
   const selectedUser = users.find(u => u.id === selectedUserId);
   const hasPendingChanges = Object.keys(pendingChanges).length > 0;
 

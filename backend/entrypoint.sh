@@ -33,3 +33,7 @@ exec daphne -b 0.0.0.0 -p 8000 config.asgi:application
 
 # initilize the permissions
 # docker compose exec backend python manage.py seed_permissions
+
+
+# for localy start backend server
+# daphne -b 0.0.0.0 -p 8000 config.asgi:application

@@ -20,7 +20,8 @@ class Company(models.Model):
     country = models.CharField(max_length=100)
 
     phone = models.CharField(max_length=30, blank=True, null=True)
-    email = models.EmailField(blank=True, null=True)
+    email = models.EmailField(unique=True)
+
     
     tax_id = models.CharField(max_length=100, blank=True, null=True)
     is_deleted = models.BooleanField(default=False)
@@ -57,7 +58,7 @@ class Branch(models.Model):
     country = models.CharField(max_length=100)
 
     phone = models.CharField(max_length=30, blank=True, null=True)
-    email = models.EmailField(blank=True, null=True)
+    email = models.EmailField(unique=True)
 
     currency_code = models.CharField(max_length=10, default="USD")
     tax_id = models.CharField(max_length=100, blank=True, null=True)
@@ -92,7 +93,7 @@ class User(AbstractUser):
 
     id = models.BigAutoField(primary_key=True)
     _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
-
+    email = models.EmailField(unique=True)
     role = models.CharField(max_length=50, default="staff")
     full_name = models.CharField(max_length=255, blank=True, null=True)
 
