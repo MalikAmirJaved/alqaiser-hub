@@ -38,7 +38,6 @@ class UserContextView(APIView):
             company = get_object_or_404(Company, id=request.data['companyId'])
             context.current_company = company
             
-            # Verify user belongs to this company
             if request.user.company_id != company.id:
                 return Response(
                     {'error': 'You do not belong to this company'},
@@ -48,7 +47,6 @@ class UserContextView(APIView):
         if 'branchId' in request.data:
             if request.data['branchId']:
                 branch = get_object_or_404(Branch, id=request.data['branchId'])
-                # Verify branch belongs to user's company
                 if branch.company_id != (context.current_company.id if context.current_company else request.user.company_id):
                     return Response(
                         {'error': 'Branch does not belong to your company'},
@@ -141,25 +139,19 @@ class BranchDetailView(RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         user = self.request.user
-
         if not user.company_id:
             return Branch.objects.none()
-
         return Branch.objects.filter(company_id=user.company_id)
 
     def get_object(self):
         user = self.request.user
-
         branch_id = getattr(user, "branch_id", None)
-
         if not branch_id:
             raise NotFound("User does not have a branch assigned.")
-
         try:
             obj = self.get_queryset().get(pk=branch_id)
         except Branch.DoesNotExist:
             raise NotFound("Branch not found for this user.")
-
         self.check_object_permissions(self.request, obj)
         return obj
 
@@ -187,7 +179,6 @@ class UserProfileView(APIView):
         user = request.user
         data = request.data.copy()
 
-        # Handle password update if provided
         password = data.pop('password', None)
         if password:
             confirm_password = data.pop('confirm_password', None)
@@ -212,39 +203,44 @@ class UserProfileView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# FIXED: Added serializer_class
 class UserListView(generics.ListCreateAPIView):
     serializer_class = UserProfileSerializer
     
     def get_queryset(self):
-        # Exclude users with role 'COMPANY_ADMIN' from the list
+        # Get users for the current user's company only, exclude deleted
         return User.objects.filter(
-            company=self.request.user.company, 
+            company=self.request.user.company,
             is_deleted=False
-        ).exclude(role='COMPANY_ADMIN')
+        ).exclude(id=self.request.user.id)  # Exclude current user from list
 
     def perform_create(self, serializer):
+        # Set company, branch, and other required fields
         serializer.save(
             company=self.request.user.company,
+            branch=self.request.user.branch,  # Assign to current user's branch
             created_by=self.request.user,
             updated_by=self.request.user
         )
 
 
-
-# FIXED: Added proper queryset filtering for soft delete
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = UserProfileSerializer
 
     def get_queryset(self):
-        return User.objects.filter(company=self.request.user.company, is_deleted=False)
+        return User.objects.filter(
+            company=self.request.user.company,
+            is_deleted=False
+        )
 
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
 
     def perform_destroy(self, instance):
-        # Soft delete
+        # Prevent deleting yourself
+        if instance.id == self.request.user.id:
+            raise NotFound("You cannot delete your own account")
         instance.is_deleted = True
         instance.deleted_by = self.request.user
+        instance.is_active = False
         instance.save()

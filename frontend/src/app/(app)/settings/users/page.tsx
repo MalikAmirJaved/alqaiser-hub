@@ -45,8 +45,7 @@ export default function UsersPage() {
     u.username?.toLowerCase().includes(query.toLowerCase()) ||
     u.email?.toLowerCase().includes(query.toLowerCase()) ||
     u.first_name?.toLowerCase().includes(query.toLowerCase()) ||
-    u.last_name?.toLowerCase().includes(query.toLowerCase()) ||
-    u.role?.toLowerCase().includes(query.toLowerCase())
+    u.last_name?.toLowerCase().includes(query.toLowerCase())
   );
 
   if (isLoading) {
@@ -75,32 +74,6 @@ export default function UsersPage() {
         }
       />
 
-      {/* Stats Cards */}
-      <div className="grid sm:grid-cols-4 gap-3 mb-4">
-        <div className="bg-card border border-border rounded-xl p-3">
-          <div className="text-xs text-muted-foreground">Total Users</div>
-          <div className="text-xl font-semibold">{users.length}</div>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-3">
-          <div className="text-xs text-muted-foreground">Company Admins</div>
-          <div className="text-xl font-semibold">
-            {users.filter(u => u.role === "COMPANY_ADMIN").length}
-          </div>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-3">
-          <div className="text-xs text-muted-foreground">Branch Admins</div>
-          <div className="text-xl font-semibold">
-            {users.filter(u => u.role === "BRANCH_ADMIN").length}
-          </div>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-3">
-          <div className="text-xs text-muted-foreground">Staff</div>
-          <div className="text-xl font-semibold">
-            {users.filter(u => u.role === "STAFF").length}
-          </div>
-        </div>
-      </div>
-
       {/* Search */}
       <div className="bg-card border border-border rounded-2xl shadow-sm">
         <div className="p-3 border-b border-border">
@@ -122,7 +95,6 @@ export default function UsersPage() {
                 <th className="text-left px-4 py-2.5">Username</th>
                 <th className="text-left px-4 py-2.5">Full Name</th>
                 <th className="text-left px-4 py-2.5">Email</th>
-                <th className="text-left px-4 py-2.5">Role</th>
                 <th className="text-left px-4 py-2.5">Department</th>
                 <th className="text-left px-4 py-2.5">Status</th>
                 <th className="px-4 py-2.5 text-right">Actions</th>
@@ -143,17 +115,6 @@ export default function UsersPage() {
                     {user.first_name} {user.last_name}
                   </td>
                   <td className="px-4 py-2.5">{user.email}</td>
-                  <td className="px-4 py-2.5">
-                    <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
-                      user.role === "COMPANY_ADMIN" 
-                        ? "bg-primary/15 text-primary border-primary/30"
-                        : user.role === "BRANCH_ADMIN"
-                        ? "bg-info/15 text-info border-info/30"
-                        : "bg-muted text-muted-foreground border-border"
-                    }`}>
-                      {user.role}
-                    </span>
-                  </td>
                   <td className="px-4 py-2.5">{user.department || "—"}</td>
                   <td className="px-4 py-2.5">
                     <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${

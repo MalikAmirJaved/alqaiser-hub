@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { X } from "lucide-react";
+import { X, Eye, EyeOff } from "lucide-react";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 interface UserFormProps {
@@ -23,12 +23,14 @@ export default function UserForm({
     email: "",
     first_name: "",
     last_name: "",
-    role: "STAFF",
     department: "",
     designation: "",
     phone_number: "",
-    is_active: true,
+    password: "",
+    confirm_password: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
     if (initialData) {
@@ -37,11 +39,11 @@ export default function UserForm({
         email: initialData.email || "",
         first_name: initialData.first_name || "",
         last_name: initialData.last_name || "",
-        role: initialData.role || "STAFF",
         department: initialData.department || "",
         designation: initialData.designation || "",
         phone_number: initialData.phone_number || "",
-        is_active: initialData.is_active ?? true,
+        password: "",
+        confirm_password: "",
       });
     }
   }, [initialData]);
@@ -52,7 +54,28 @@ export default function UserForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData);
+    
+    // Validate password for new user creation
+    if (!initialData && !formData.password) {
+      alert("Password is required for new user");
+      return;
+    }
+    
+    // Validate password match
+    if (formData.password !== formData.confirm_password) {
+      alert("Passwords do not match");
+      return;
+    }
+    
+    // Validate password length
+    if (formData.password && formData.password.length < 6) {
+      alert("Password must be at least 6 characters");
+      return;
+    }
+    
+    // Remove confirm_password before submitting
+    const { confirm_password, ...submitData } = formData;
+    onSubmit(submitData);
   };
 
   return (
@@ -116,18 +139,6 @@ export default function UserForm({
 
           <div className="grid sm:grid-cols-2 gap-3">
             <label className="text-sm flex flex-col gap-1">
-              <span className="text-muted-foreground">Role</span>
-              <SearchableSelect
-                value={formData.role}
-                onChange={(val) => handleChange("role", val)}
-                options={[
-                  { value: "COMPANY_ADMIN", label: "Company Admin" },
-                  { value: "BRANCH_ADMIN", label: "Branch Admin" },
-                  { value: "STAFF", label: "Staff" },
-                ]}
-              />
-            </label>
-            <label className="text-sm flex flex-col gap-1">
               <span className="text-muted-foreground">Department</span>
               <SearchableSelect
                 value={formData.department}
@@ -136,18 +147,17 @@ export default function UserForm({
                 placeholder="Select department"
               />
             </label>
+            <label className="text-sm flex flex-col gap-1">
+              <span className="text-muted-foreground">Designation</span>
+              <input
+                type="text"
+                value={formData.designation}
+                onChange={(e) => handleChange("designation", e.target.value)}
+                className="bg-muted/40 border border-border rounded-md h-9 px-3"
+                placeholder="e.g., Software Engineer"
+              />
+            </label>
           </div>
-
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground">Designation</span>
-            <input
-              type="text"
-              value={formData.designation}
-              onChange={(e) => handleChange("designation", e.target.value)}
-              className="bg-muted/40 border border-border rounded-md h-9 px-3"
-              placeholder="e.g., Software Engineer"
-            />
-          </label>
 
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground">Phone Number</span>
@@ -159,15 +169,53 @@ export default function UserForm({
             />
           </label>
 
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="is_active"
-              checked={formData.is_active}
-              onChange={(e) => handleChange("is_active", e.target.checked)}
-              className="rounded border-border"
-            />
-            <label htmlFor="is_active" className="text-sm">Active</label>
+          {/* Password Fields */}
+          <div className="grid sm:grid-cols-2 gap-3">
+            <label className="text-sm flex flex-col gap-1">
+              <span className="text-muted-foreground">
+                {initialData ? "New Password" : "Password *"}
+              </span>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={formData.password}
+                  onChange={(e) => handleChange("password", e.target.value)}
+                  required={!initialData}
+                  className="bg-muted/40 border border-border rounded-md h-9 px-3 pr-8 outline-none focus:ring-2 focus:ring-ring w-full"
+                  placeholder={initialData ? "Leave blank to keep current" : "Enter password"}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </label>
+
+            <label className="text-sm flex flex-col gap-1">
+              <span className="text-muted-foreground">
+                {initialData ? "Confirm New Password" : "Confirm Password *"}
+              </span>
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={formData.confirm_password}
+                  onChange={(e) => handleChange("confirm_password", e.target.value)}
+                  required={!initialData}
+                  className="bg-muted/40 border border-border rounded-md h-9 px-3 pr-8 outline-none focus:ring-2 focus:ring-ring w-full"
+                  placeholder="Confirm password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </label>
           </div>
         </div>
 

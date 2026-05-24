@@ -10,23 +10,14 @@ export interface User {
   email: string;
   first_name: string;
   last_name: string;
-  full_name: string;
-  role: string;
   department: string;
   designation: string;
   phone_number: string;
-  company: number | null;
-  branch: number | null;
+  is_active: boolean;
   branch_id?: string;
   branch_name?: string;
-  employee_id: string;
-  status: string;
-  is_active: boolean;
-  is_deleted: boolean;
   created_at: string;
   updated_at: string;
-  created_by: number | null;
-  updated_by: number | null;
 }
 
 export interface UserFormData {
@@ -34,11 +25,10 @@ export interface UserFormData {
   email: string;
   first_name?: string;
   last_name?: string;
-  role: string;
   department?: string;
   designation?: string;
   phone_number?: string;
-  is_active: boolean;
+  password?: string;  // Added password field
 }
 
 interface PaginatedResponse<T> {
@@ -48,7 +38,7 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-// Fetch all users (handles pagination)
+// Fetch all users
 export function useUsers() {
   const api = useApi();
 
@@ -83,11 +73,17 @@ export function useCreateUser() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (userData: UserFormData) =>
-      api<User>("/api/organization/users/", {
+    mutationFn: (userData: UserFormData) => {
+      // Remove any undefined or empty password for update
+      const data = { ...userData };
+      if (!data.password) {
+        delete data.password;
+      }
+      return api<User>("/api/organization/users/", {
         method: "POST",
-        body: JSON.stringify(userData),
-      }),
+        body: JSON.stringify(data),
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
     },
@@ -100,11 +96,17 @@ export function useUpdateUser() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<UserFormData> }) =>
-      api<User>(`/api/organization/users/${id}/`, {
+    mutationFn: ({ id, data }: { id: number; data: Partial<UserFormData> }) => {
+      // Remove any undefined or empty password for update
+      const updateData = { ...data };
+      if (!updateData.password) {
+        delete updateData.password;
+      }
+      return api<User>(`/api/organization/users/${id}/`, {
         method: "PATCH",
-        body: JSON.stringify(data),
-      }),
+        body: JSON.stringify(updateData),
+      });
+    },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       queryClient.invalidateQueries({ queryKey: ["user", variables.id] });
