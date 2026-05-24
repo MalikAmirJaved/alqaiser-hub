@@ -16,7 +16,7 @@ import { GoodsReceiptModal } from './GoodsReceiptModal';
 import type { PurchaseOrder, PurchaseOrderPayload, GoodsReceiptPayload } from '@/types/purchase';
 import PageHeader from '@/components/PageHeader';
 import { StatsCards } from '@/components/reuseable/StatsCards';
-import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { formatCurrency } from "@/lib/currency";
 
 // ─── Status config ───────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<
@@ -98,7 +98,6 @@ export default function PurchaseOrdersPage() {
   const confirmMutation = useConfirmPurchaseOrder();
   const createReceiptMutation = useCreateGoodsReceipt();
   const { confirm, Modal: ConfirmModal } = useConfirmationModal();
-  const { formatCurrency } = useCompanySettings();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<PurchaseOrder | undefined>();

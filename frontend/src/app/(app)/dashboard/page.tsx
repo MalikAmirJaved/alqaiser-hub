@@ -10,7 +10,7 @@ import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar, PieChart, Pie, Cell, Legend,
 } from "recharts";
-import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { formatCurrency } from "@/lib/currency";
 
 export default Dashboard;
 
@@ -21,7 +21,6 @@ function Dashboard() {
   const expenses = ls.get<any[]>("expenses") || [];
   const alerts = ls.get<any[]>("alerts") || [];
   const sales = ls.get<any[]>("salesOrders") || [];
-const { formatCurrency } = useCompanySettings();
 
   const revenue = invoices.reduce((s, i) => s + (Number(i.amount) || 0), 0);
   const expenseTotal = expenses.reduce((s, i) => s + (Number(i.amount) || 0), 0);

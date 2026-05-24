@@ -116,7 +116,6 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
   // WebSocket connection with exponential backoff
   const connectSocket = useCallback(
     async (retryCount = 0) => {
-      console.log("  :: ", user)
       const companyId = user?.companyId;
       const branchId = user?.branchId;
 

@@ -5,7 +5,7 @@ import StatCard from "@/components/cards/StatCard";
 import PageHeader from "@/components/PageHeader";
 import { Boxes, Layers, AlertTriangle, ShoppingCart, TrendingUp } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
-import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { formatCurrency } from "@/lib/currency";
 
 export default function InventoryDashboard() {
   const products = ls.get<any[]>("products", []) || [];
@@ -13,7 +13,6 @@ export default function InventoryDashboard() {
   const lowStock = products.filter((p: any) => Number(p.stock) <= Number(p.reorder)).length;
   const purchases = ls.get<any[]>("purchaseOrders", []) || [];
   const sales = ls.get<any[]>("salesOrders", []) || [];
-  const { formatCurrency } = useCompanySettings();
 
 
   return (

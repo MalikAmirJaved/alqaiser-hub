@@ -14,7 +14,7 @@ import { useProducts, useDeleteProduct, useCreateProduct, useUpdateProduct, Prod
 import { useCategories } from "@/hooks/useCategories";
 import { useBrands } from "@/hooks/useBrands";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
-import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { formatCurrency } from "@/lib/currency";
 
 export default function ProductsPage() {
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
@@ -22,7 +22,6 @@ export default function ProductsPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | undefined>(undefined);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [filters, setFilters] = useState({ search: "", category: "", brand: "", status: "" });
-  const { formatCurrency } = useCompanySettings();
 
   const { data: products = [], isLoading, refetch } = useProducts(filters);
   const { data: categories = [] } = useCategories();

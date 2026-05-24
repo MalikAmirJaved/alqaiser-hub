@@ -4,8 +4,7 @@
 import { X, Edit, Package, Layers, Warehouse, User, Calendar, Tag } from "lucide-react";
 import { useProduct } from "@/hooks/useProducts";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useCompanySettings } from "@/hooks/useCompanySettings";
-
+import { formatCurrency, CurrencyCode } from "@/lib/currency";
 interface Props {
   productId: string; 
   onClose: () => void;
@@ -39,7 +38,6 @@ const STATUS_STYLE: Record<string, string> = {
 
 export default function ProductDetailsModal({ productId, onClose, onEdit }: Props) {
   const { data: product, isLoading, error } = useProduct(productId);
-  const { CurrencyCode, formatCurrency } = useCompanySettings();
 
   if (isLoading) {
     return (

@@ -9,7 +9,7 @@ interface CompensationFormProps {
   formData: any;
   setFormData: (data: any) => void;
   employeeOptions: Array<{ value: string; label: string }>;
-  formatCurrency: (amount: number) => number;
+  formatCurrency: (amount: number) => string;
 }
 
 export default function CompensationForm({ formData, setFormData, employeeOptions, formatCurrency }: CompensationFormProps) {

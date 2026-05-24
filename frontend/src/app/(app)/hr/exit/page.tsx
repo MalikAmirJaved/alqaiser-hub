@@ -25,7 +25,7 @@ import {
 import { useEmployees } from "@/hooks/useEmployees";
 import { toast } from "sonner";
 import { useApi } from "@/hooks/useApi";
-import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { formatCurrency } from "@/lib/currency";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 
 const EXIT_REASONS: SearchableSelectOption[] = [
@@ -47,7 +47,6 @@ export default function ExitManagementPage() {
   const api = useApi();
   const { data: employees = [] } = useEmployees();
   const confirmationModal = useConfirmationModal();
-  const { formatCurrency } = useCompanySettings();
   const [query, setQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterReason, setFilterReason] = useState("");

@@ -52,11 +52,10 @@ import {
 } from "@/components/ui/table";
 import { DatePicker } from "@/components/reuseable/DatePicker";
 import { toast } from "sonner";
-import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { formatCurrency } from "@/lib/currency";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 
 export default function AssetsList() {
-const { formatCurrency } = useCompanySettings();
   const [searchQuery, setSearchQuery] = useState("");
   const { data: assets = [], isLoading } = useAssets(
     searchQuery ? { search: searchQuery } : undefined

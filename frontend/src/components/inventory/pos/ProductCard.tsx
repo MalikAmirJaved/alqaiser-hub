@@ -1,10 +1,8 @@
 // src/components/inventory/pos/ProductCard.tsx
 "use client";
 import { VariantDetail } from "@/hooks/useAllVariants";
-import { fmt } from "@/hooks/useSalesOrder";
 import { memo } from "react";
-import { useCompanySettings } from "@/hooks/useCompanySettings";
-
+import { formatCurrency } from "@/lib/currency";
 interface StockData {
   available: number;
   reserved: number;
@@ -26,7 +24,6 @@ export const ProductCard = memo(function ProductCard({
   const reservedStock = stockData?.reserved ?? 0;
   const isLowStock = availableStock > 0 && availableStock <= (variant.min_stock_level || 5);
   const isOutOfStock = availableStock === 0;
-  const { formatCurrency } = useCompanySettings();
 
   return (
     <button

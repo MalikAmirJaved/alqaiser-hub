@@ -1,7 +1,6 @@
 "use client";
 import { useSalesOrders } from "@/hooks/useSalesOrder";
-import { fmt } from "@/hooks/useSalesOrder";
-import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { formatCurrency } from "@/lib/currency";
 
 export function SalesListPanel() {
   const { data: orders = [], isLoading } = useSalesOrders(); // fetch all orders (no status filter)
@@ -13,7 +12,6 @@ export function SalesListPanel() {
       </div>
     );
   }
-  const { formatCurrency } = useCompanySettings();
 
   return (
     <div className="p-4 space-y-3">

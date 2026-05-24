@@ -12,9 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Edit, Trash2 } from "lucide-react";
 import { useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier, type Supplier } from "@/hooks/useSuppliers";
-import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { useVendors, useCreateVendor, useUpdateVendor, useDeleteVendor, type Vendor } from "@/hooks/useVendors";
-
+import { formatCurrency } from "@/lib/currency";
 // Helper to render status badge
 const StatusBadge = ({ status }: { status: string }) => {
   const variants: Record<string, string> = {
@@ -80,7 +79,6 @@ export default function SuppliersVendorsPage() {
   const [selectedItem, setSelectedItem] = useState<Supplier | Vendor | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Supplier | Vendor | null>(null);
-  const { formatCurrency } = useCompanySettings();
   const { confirm, Modal: ConfirmationModal } = useConfirmationModal();
 
   // Suppliers hooks

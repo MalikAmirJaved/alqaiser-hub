@@ -5,8 +5,7 @@ import { useCustomers, useCreateCustomer } from "@/hooks/useCustomers";
 import { CartLine, fmt, cartTotal, cartSubtotal, cartTax } from "@/hooks/useSalesOrder";
 import { useBatchStock } from "@/hooks/useBatchStock";
 import { CartLineItem } from "./CartLineItem";
-import { useCompanySettings } from "@/hooks/useCompanySettings";
-
+import { formatCurrency } from "@/lib/currency";
 interface CartPanelProps {
   cart: CartLine[];
   onUpdateCart: (newCart: CartLine[]) => void;
@@ -54,7 +53,6 @@ export function CartPanel({
   const [globalDisc, setGlobalDisc] = useState(0);
   const [expandedLine, setExpandedLine] = useState<number | null>(null);
   const [showPayments, setShowPayments] = useState(false);
-  const { formatCurrency } = useCompanySettings();
 
   const { data: customers = [] } = useCustomers(customerSearch || undefined);
   const createCustomer = useCreateCustomer();

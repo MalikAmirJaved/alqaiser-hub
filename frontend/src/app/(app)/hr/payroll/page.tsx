@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useEmployees } from "@/hooks/useEmployees";
 import { usePayroll, usePayrollStats } from "@/hooks/usePayroll";
-import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { formatCurrency } from "@/lib/currency";
 import PageHeader from "@/components/PageHeader";
 import PaymentModal from "@/components/payroll/PaymentModal";
 import PayslipModal from "@/components/payroll/PayslipModal";
@@ -12,7 +12,6 @@ import { Search, Filter, Eye, CreditCard, Calendar, RefreshCw } from "lucide-rea
 import { StatsCards } from "@/components/reuseable/StatsCards";
 
 export default function PayrollPage() {
-  const { formatCurrency } = useCompanySettings();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);

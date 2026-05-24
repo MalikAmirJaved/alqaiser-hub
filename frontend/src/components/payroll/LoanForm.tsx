@@ -12,7 +12,7 @@ interface LoanFormProps {
   setFormData: (data: any) => void;
   employeeOptions: Array<{ value: string; label: string }>;
   selectedEmployeeSalary: number;
-  formatCurrency: (amount: number) => number;
+  formatCurrency: (amount: number) => string;
   errors: string[];
   onValidationChange?: (hasErrors: boolean) => void;
 }

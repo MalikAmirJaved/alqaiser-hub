@@ -17,7 +17,7 @@ import LoanTab from "./LoanTab";
 import { toast } from "sonner";
 
 interface CompensationLoanPageProps {
-  formatCurrency: (amount: number) => number;
+  formatCurrency: (amount: number) => string;
 }
 
 export default function CompensationLoanPage({ formatCurrency }: CompensationLoanPageProps) {

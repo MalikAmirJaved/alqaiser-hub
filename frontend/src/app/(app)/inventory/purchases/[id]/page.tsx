@@ -20,7 +20,7 @@ import { useGoodsReceipts, useCreateGoodsReceipt } from '@/hooks/useGoodsReceipt
 import { useConfirmationModal } from '@/components/reuseable/ConfirmationModal';
 import { GoodsReceiptModal } from '@/components/inventory/purchase/GoodsReceiptModal';
 import type { GoodsReceiptPayload } from '@/types/purchase';
-import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { formatCurrency } from "@/lib/currency";
 
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
@@ -84,7 +84,6 @@ export default function PurchaseOrderDetailPage() {
   const createReceiptMutation = useCreateGoodsReceipt();
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const { confirm, Modal: ConfirmModal } = useConfirmationModal();
-  const { formatCurrency } = useCompanySettings();
 
   if (isLoading) {
     return (
