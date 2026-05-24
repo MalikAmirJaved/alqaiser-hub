@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Sidebar from "@/components/sidebar/Sidebar";
 import Topbar from "@/components/navbar/Topbar";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,14 +9,16 @@ import CompanySetupModal from "@/components/CompanySetupModal";
 import { loadPermissions } from "@/store/slices/permissionSlice";
 import { loadCompanySettings } from "@/store/slices/companySettingsSlice";
 import type { AppDispatch, RootState } from "@/store";
+import { publicRoutes, getRequiredPermission } from "@/config/routePermissions";
 
 export default function AppLayout({ children }) {
   const { user, ready } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const dispatch = useDispatch<AppDispatch>();
   const [open, setOpen] = useState(false);
   
-  const { initialized: permissionsInitialized } = useSelector((state: RootState) => state.permissions);
+  const { initialized: permissionsInitialized, permissions } = useSelector((state: RootState) => state.permissions);
   const { initialized: settingsInitialized, data: settings } = useSelector((state: RootState) => state.companySettings);
 
   // Load permissions and company settings after user is ready
@@ -31,9 +33,27 @@ export default function AppLayout({ children }) {
     }
   }, [ready, user, permissionsInitialized, settingsInitialized, dispatch]);
 
+  // Route protection based on permissions
   useEffect(() => {
-    if (ready && !user) router.push("/login");
-  }, [ready, user, router]);
+    if (ready && user && permissionsInitialized && pathname) {
+      // Skip public routes
+      if (publicRoutes.includes(pathname)) return;
+      
+      const requiredPerm = getRequiredPermission(pathname);
+      if (requiredPerm) {
+        const hasAccess = permissions.some(p => p.toLowerCase() === requiredPerm.toLowerCase());
+        if (!hasAccess) {
+          router.replace("/unauthorized");
+        }
+      }
+    }
+  }, [ready, user, permissionsInitialized, pathname, permissions, router]);
+
+  useEffect(() => {
+    if (ready && !user && !publicRoutes.includes(pathname)) {
+      router.push("/login");
+    }
+  }, [ready, user, pathname, router]);
 
   if (!ready || !permissionsInitialized || !settingsInitialized) {
     return (
@@ -46,6 +66,7 @@ export default function AppLayout({ children }) {
     );
   }
 
+  // If user is not authenticated and route is not public, redirect already happened
   if (!user) return null;
 
   const showSetupModal =

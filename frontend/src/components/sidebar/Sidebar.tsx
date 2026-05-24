@@ -8,12 +8,13 @@ import { RootState } from "@/store";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { menu } from "@/config/menu";
 import { motion, AnimatePresence } from "framer-motion";
+import { getPermissionForMenuItem, menuPermissionMapping } from "@/config/routePermissions";
 
 export default function Sidebar({ open, onClose }) {
   const path = usePathname() || "";
   const permissions = useSelector((state: RootState) => state.permissions.permissions);
   const user = useSelector((state: RootState) => state.auth.user);
-  const {data} = useSelector((state: RootState) => state.companySettings);
+  const { data } = useSelector((state: RootState) => state.companySettings);
 
   const isCompanyAdmin = user?.role === "COMPANY_ADMIN";
   const hasPermission = (permCode: string) =>
@@ -22,101 +23,14 @@ export default function Sidebar({ open, onClose }) {
   const hasAnyModulePermission = (moduleCode: string) =>
     permissions.some(p => p.toLowerCase().startsWith(moduleCode.toLowerCase() + ":"));
 
-  // Complete mapping – every menu item that requires a permission must be listed here.
-  const getPermissionForMenuItem = useMemo(() => {
-    const mapping: Record<string, string | null> = {
-      // Top‑level dashboard (always visible)
-      Dashboard: null,
-
-      // ========== HUMAN RESOURCES ==========
-      "Employee Management": "HR:employee:view",
-      Payroll: "HR:payroll:view",
-      "Time & Attendance": "HR:attendance:view",
-      "Leave Management": "HR:leave:view",
-      Performance: "HR:performance:view",
-      Recruitment: "HR:recruitment:view",
-      "Exit Management": "HR:exit:view",
-      "HR Policies": "HR:policy:view",
-      "Compensation & Loan": "HR:compensation:view",
-      Shifts: "HR:shift_override:view",
-      "Shift Templates": "HR:shift_template:view",
-      Assets: "HR:asset:view",                 // under Employee Assets → Assets
-      "Asset Kits": "HR:asset_category:view",
-      "Employee Assignments": "HR:asset:assign",
-
-      // ========== INVENTORY ==========
-      "Inventory Dashboard": "INVENTORY:dashboard:view",
-      Categories: "INVENTORY:category:view",
-      Brands: "INVENTORY:brand:view",
-      "Product Management": "INVENTORY:product:view",
-      "Stock Management": "INVENTORY:stock:view",
-      "Warehouse Management": "INVENTORY:warehouse:view",
-      "Purchase Management": "INVENTORY:purchase_order:view",
-      "Suppliers & Vendors": "INVENTORY:supplier:view",
-      "Assets Inventory": "INVENTORY:asset:view",
-      "Inventory Transfers": "INVENTORY:stock_transfer:view",
-      "Barcode & QR": "INVENTORY:barcode:view",
-      Reports: "INVENTORY:report:view",
-      Alerts: "INVENTORY:alert:view",
-      Customers: "INVENTORY:customer:view",
-      "Selling / POS": "INVENTORY:sales_order:create",
-      "Audit Logs": "INVENTORY:audit_log:view",
-
-      // ========== FINANCE ==========
-      "Finance Dashboard": "FINANCE:dashboard:view",
-      Accounts: "FINANCE:account:view",
-      Invoices: "FINANCE:invoice:view",
-      Expenses: "FINANCE:expense:view",
-      Payables: "FINANCE:payable:view",
-      Receivables: "FINANCE:receivable:view",
-      Budgets: "FINANCE:budget:view",
-      "Bank & Cash": "FINANCE:bank_account:view",
-      "Payroll Finance": "FINANCE:payroll:view",
-      Taxes: "FINANCE:tax:view",
-      Forecasting: "FINANCE:forecast:view",
-      "Settings": "FINANCE:setting:view",      // Finance → Settings (was missing)
-
-      // ========== AI MONITORING ==========
-      "Live Dashboard": "AI_MONITORING:live_dashboard:view",
-      "Activity Tracking": "AI_MONITORING:activity:view",
-      "Inventory Monitoring": "AI_MONITORING:inventory:view",
-      "Workforce Monitoring": "AI_MONITORING:workforce:view",
-      "Alerts & Events": "AI_MONITORING:alert:view",
-      "Reports & Insights": "AI_MONITORING:report:view",
-
-      // ========== SETTINGS ==========
-      "Company Profile": "SETTINGS:company:view",
-      "Users & Roles": "SETTINGS:user:view",
-      Departments: "SETTINGS:department:view",
-      Designations: "SETTINGS:designation:view",
-      Preferences: "SETTINGS:preference:view",
-      "Permissions": "SETTINGS:permissions:view",
-    };
-
-    // Development helper: warn about unmapped items (only in dev mode)
-    const warnUnmapped = (title: string, parent?: string) => {
-      if (process.env.NODE_ENV === "development" && !mapping[title]) {
-        console.warn(`⚠️ Sidebar: Unmapped menu item "${title}"${parent ? ` (under ${parent})` : ""}`);
-      }
-    };
-
-    return (title: string, parentTitle?: string) => {
-      if (mapping[title]) return mapping[title];
-      // Fallback for nested children (e.g., inside Shift Management / Employee Assets)
-      if (parentTitle === "Shift Management") {
-        if (title === "Shifts") return mapping["Shifts"];
-        if (title === "Shift Templates") return mapping["Shift Templates"];
-      }
-      if (parentTitle === "Employee Assets") {
-        if (title === "Assets") return mapping["Assets"];
-        if (title === "Asset Kits") return mapping["Asset Kits"];
-        if (title === "Employee Assignments") return mapping["Employee Assignments"];
-      }
-      warnUnmapped(title, parentTitle);
-      return null; // unmapped → no permission required (be careful!)
-    };
-  }, []);
-
+  // Helper to check if a menu item is allowed based on role
+  const isMenuAllowedForRole = (title: string): boolean => {
+    if (title === "Permissions") {
+      return isCompanyAdmin; // only admin can see this
+    }
+    return true;
+  };
+  // Helper to get module code from group title
   const getModuleCodeFromTitle = (title: string): string => {
     const map: Record<string, string> = {
       "Human Resources": "HR",
@@ -127,12 +41,7 @@ export default function Sidebar({ open, onClose }) {
     };
     return map[title] || title.toUpperCase();
   };
-const isMenuAllowedForRole = (title: string): boolean => {
-  if (title === "Permissions") {
-    return isCompanyAdmin; // only admin can see this
-  }
-  return true;
-};
+  // Filter menu using the shared mapping
   const filteredMenu = useMemo(() => {
     const filterItems = (items: any[], parentTitle?: string): any[] => {
       return items.reduce((acc: any[], item) => {
@@ -145,11 +54,11 @@ const isMenuAllowedForRole = (title: string): boolean => {
             return acc;
           }
           const perm = getPermissionForMenuItem(item.title, parentTitle);
-         if (isMenuAllowedForRole(item.title)) {
-  if (!perm || hasPermission(perm)) {
-    acc.push(item);
-  }
-}
+          if (isMenuAllowedForRole(item.title)) {
+            if (!perm || hasPermission(perm)) {
+              acc.push(item);
+            }
+          }
         } else if (isGroup) {
           const moduleCode = getModuleCodeFromTitle(item.title);
           const hasModuleAccess = hasAnyModulePermission(moduleCode);
@@ -169,7 +78,7 @@ const isMenuAllowedForRole = (title: string): boolean => {
       }, []);
     };
     return filterItems(menu);
-  }, [permissions, getPermissionForMenuItem]);
+  }, [permissions]);
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
@@ -201,6 +110,8 @@ const isMenuAllowedForRole = (title: string): boolean => {
 
   const toggle = (key: string) => setOpenGroups((s) => ({ ...s, [key]: !s[key] }));
   const isActive = (to: string) => path === to || (to !== "/dashboard" && path.startsWith(to + "/"));
+
+
 
   return (
     <>
@@ -290,8 +201,7 @@ const isMenuAllowedForRole = (title: string): boolean => {
                                     {c.children.map((subC: any) => {
                                       const subPerm = getPermissionForMenuItem(subC.title, c.title);
                                       if (!isMenuAllowedForRole(subC.title)) return null;
-
-if (subPerm && !hasPermission(subPerm)) return null;
+                                      if (subPerm && !hasPermission(subPerm)) return null;
                                       return (
                                         <Link
                                           key={subC.to}
@@ -316,7 +226,7 @@ if (subPerm && !hasPermission(subPerm)) return null;
                         }
                         const perm = getPermissionForMenuItem(c.title, item.title);
                         if (!isMenuAllowedForRole(c.title)) return null;
-if (perm && !hasPermission(perm)) return null;
+                        if (perm && !hasPermission(perm)) return null;
                         return (
                           <Link
                             key={c.to}
