@@ -13,6 +13,8 @@ export default function Sidebar({ open, onClose }) {
   const path = usePathname() || "";
   const permissions = useSelector((state: RootState) => state.permissions.permissions);
   const user = useSelector((state: RootState) => state.auth.user);
+  const {data} = useSelector((state: RootState) => state.companySettings);
+
   const isCompanyAdmin = user?.role === "COMPANY_ADMIN";
   const hasPermission = (permCode: string) =>
     permissions.some(p => p.toLowerCase() === permCode.toLowerCase());
@@ -211,7 +213,7 @@ const isMenuAllowedForRole = (title: string): boolean => {
         <div className="px-4 py-4 border-b border-sidebar-border">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-lg bg-sidebar-primary text-sidebar-primary-foreground grid place-items-center font-bold">C</div>
-            <div className="font-semibold text-sm">Company Name</div>
+            <div className="font-semibold text-sm">{data?.companyName || "Alpha"}</div>
           </div>
         </div>
 
