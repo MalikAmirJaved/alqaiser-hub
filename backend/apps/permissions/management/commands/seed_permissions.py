@@ -33,7 +33,7 @@ RESOURCES = {
         'live_dashboard', 'workforce', 'inventory', 'alert', 'report', 'activity', 'dashboard'
     ],
     'SETTINGS': [
-        'company', 'user', 'role', 'department', 'designation', 'preference', 'dashboard'
+        'company', 'user', 'role', 'department', 'designation', 'preference', 'dashboard', 'permissions'
     ],
 }
 

@@ -12,7 +12,8 @@ import { motion, AnimatePresence } from "framer-motion";
 export default function Sidebar({ open, onClose }) {
   const path = usePathname() || "";
   const permissions = useSelector((state: RootState) => state.permissions.permissions);
-
+  const user = useSelector((state: RootState) => state.auth.user);
+  const isCompanyAdmin = user?.role === "COMPANY_ADMIN";
   const hasPermission = (permCode: string) =>
     permissions.some(p => p.toLowerCase() === permCode.toLowerCase());
 
@@ -87,6 +88,7 @@ export default function Sidebar({ open, onClose }) {
       Departments: "SETTINGS:department:view",
       Designations: "SETTINGS:designation:view",
       Preferences: "SETTINGS:preference:view",
+      "Permissions": "SETTINGS:permissions:view",
     };
 
     // Development helper: warn about unmapped items (only in dev mode)
@@ -123,7 +125,12 @@ export default function Sidebar({ open, onClose }) {
     };
     return map[title] || title.toUpperCase();
   };
-
+const isMenuAllowedForRole = (title: string): boolean => {
+  if (title === "Permissions") {
+    return isCompanyAdmin; // only admin can see this
+  }
+  return true;
+};
   const filteredMenu = useMemo(() => {
     const filterItems = (items: any[], parentTitle?: string): any[] => {
       return items.reduce((acc: any[], item) => {
@@ -136,9 +143,11 @@ export default function Sidebar({ open, onClose }) {
             return acc;
           }
           const perm = getPermissionForMenuItem(item.title, parentTitle);
-          if (!perm || hasPermission(perm)) {
-            acc.push(item);
-          }
+         if (isMenuAllowedForRole(item.title)) {
+  if (!perm || hasPermission(perm)) {
+    acc.push(item);
+  }
+}
         } else if (isGroup) {
           const moduleCode = getModuleCodeFromTitle(item.title);
           const hasModuleAccess = hasAnyModulePermission(moduleCode);
@@ -278,7 +287,9 @@ export default function Sidebar({ open, onClose }) {
                                   >
                                     {c.children.map((subC: any) => {
                                       const subPerm = getPermissionForMenuItem(subC.title, c.title);
-                                      if (subPerm && !hasPermission(subPerm)) return null;
+                                      if (!isMenuAllowedForRole(subC.title)) return null;
+
+if (subPerm && !hasPermission(subPerm)) return null;
                                       return (
                                         <Link
                                           key={subC.to}
@@ -302,7 +313,8 @@ export default function Sidebar({ open, onClose }) {
                           );
                         }
                         const perm = getPermissionForMenuItem(c.title, item.title);
-                        if (perm && !hasPermission(perm)) return null;
+                        if (!isMenuAllowedForRole(c.title)) return null;
+if (perm && !hasPermission(perm)) return null;
                         return (
                           <Link
                             key={c.to}

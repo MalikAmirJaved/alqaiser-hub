@@ -6,7 +6,6 @@ import { useSelector, useDispatch } from "react-redux";
 import { toggleTheme } from "@/store/slices/themeSlice";
 import { RootState } from "@/store";
 import { useAuth } from "@/hooks/useAuth";
-import { useRouter } from "next/navigation";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatDistanceToNow } from "date-fns";
@@ -16,12 +15,10 @@ export default function Topbar({ onToggleSidebar }) {
   const dispatch = useDispatch();
   const toggle = () => dispatch(toggleTheme());
   const { user, logout } = useAuth();
-  const router = useRouter();
   const { notifications, markAsRead, markAllAsRead, toggleFavourite } = useNotifications();
 
   const handleLogout = () => {
     logout();
-    router.push("/login");
   };
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;

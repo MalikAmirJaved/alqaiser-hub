@@ -5,6 +5,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store";
 import { setUser, setUnauthenticated, setInitialized } from "@/store/slices/authSlice";
 import { useEffect, useState } from "react";
+import { resetApp } from "@/store/reset";
 
 interface User {
   id: number;
@@ -71,14 +72,25 @@ export function useAuth() {
     },
   });
 
-  const logoutMutation = useMutation({
-    mutationFn: () => api("/api/accounts/logout/", { method: "POST" }).catch(() => {}),
-    onSuccess: () => {
-      queryClient.clear();
-      dispatch(setUnauthenticated());
-      router.push("/login");
-    },
-  });
+const logoutMutation = useMutation({
+  mutationFn: () =>
+    api("/api/accounts/logout/", { method: "POST" }).catch(() => {}),
+
+  onSuccess: () => {
+    // 1. clear react-query cache
+    queryClient.clear();
+
+    // 2. reset redux completely
+    dispatch(resetApp());
+
+    // 3. clear storage
+    localStorage.clear();
+    sessionStorage.clear();
+
+    // 4. redirect
+    router.push("/login");
+  },
+});
 
   return {
     user,
