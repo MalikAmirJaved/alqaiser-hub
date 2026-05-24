@@ -90,7 +90,6 @@ export const menu = [
       { title: "Budgets", to: "/finance/budgets", icon: Target },
       { title: "Bank & Cash", to: "/finance/bank", icon: Landmark },
       { title: "Payroll Finance", to: "/finance/payroll", icon: Wallet },
-      { title: "Assets", to: "/finance/assets", icon: Coins },
       { title: "Taxes", to: "/finance/taxes", icon: Calculator },
       { title: "Reports", to: "/finance/reports", icon: BarChart3 },
       { title: "Forecasting", to: "/finance/forecasting", icon: LineChart },

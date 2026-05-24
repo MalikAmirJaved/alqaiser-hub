@@ -69,7 +69,6 @@ export default function Sidebar({ open, onClose }) {
       Budgets: "FINANCE:budget:view",
       "Bank & Cash": "FINANCE:bank_account:view",
       "Payroll Finance": "FINANCE:payroll:view",
-      "Assets": "FINANCE:asset:view",          // Finance → Assets
       Taxes: "FINANCE:tax:view",
       Forecasting: "FINANCE:forecast:view",
       "Settings": "FINANCE:setting:view",      // Finance → Settings (was missing)
