@@ -32,7 +32,6 @@ export function StockHistoryDrawer({ variantId, open, onClose }: StockHistoryDra
       }
     : undefined,
 );
-console.log("data:: ", data)
 const columns: Column<any>[] = [
   { key: "created_at", label: "Date", render: (v) => new Date(v as string).toLocaleString() },
   { key: "transaction_type_display", label: "Type" },

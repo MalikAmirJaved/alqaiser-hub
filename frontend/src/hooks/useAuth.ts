@@ -33,7 +33,6 @@ export function useAuth() {
       if (isAuthenticated && !user) {
         try {
           const data = await api<User>("/api/accounts/me/");
-          console.log("data:: ", data)
           if (mounted) {
             dispatch(setUser(data));
           }
