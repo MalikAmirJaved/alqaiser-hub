@@ -13,14 +13,19 @@ export default function Sidebar({ open, onClose }) {
   const path = usePathname() || "";
   const permissions = useSelector((state: RootState) => state.permissions.permissions);
 
-  // Case‑insensitive permission check
   const hasPermission = (permCode: string) =>
     permissions.some(p => p.toLowerCase() === permCode.toLowerCase());
 
+  const hasAnyModulePermission = (moduleCode: string) =>
+    permissions.some(p => p.toLowerCase().startsWith(moduleCode.toLowerCase() + ":"));
+
+  // Complete mapping – every menu item that requires a permission must be listed here.
   const getPermissionForMenuItem = useMemo(() => {
     const mapping: Record<string, string | null> = {
+      // Top‑level dashboard (always visible)
       Dashboard: null,
-      // HR
+
+      // ========== HUMAN RESOURCES ==========
       "Employee Management": "HR:employee:view",
       Payroll: "HR:payroll:view",
       "Time & Attendance": "HR:attendance:view",
@@ -30,13 +35,13 @@ export default function Sidebar({ open, onClose }) {
       "Exit Management": "HR:exit:view",
       "HR Policies": "HR:policy:view",
       "Compensation & Loan": "HR:compensation:view",
-      // HR nested items
       Shifts: "HR:shift_override:view",
       "Shift Templates": "HR:shift_template:view",
-      "HR Assets": "HR:asset:view",          // renamed to avoid duplicate
+      Assets: "HR:asset:view",                 // under Employee Assets → Assets
       "Asset Kits": "HR:asset_category:view",
       "Employee Assignments": "HR:asset:assign",
-      // Inventory
+
+      // ========== INVENTORY ==========
       "Inventory Dashboard": "INVENTORY:dashboard:view",
       Categories: "INVENTORY:category:view",
       Brands: "INVENTORY:brand:view",
@@ -53,7 +58,8 @@ export default function Sidebar({ open, onClose }) {
       Customers: "INVENTORY:customer:view",
       "Selling / POS": "INVENTORY:sales_order:create",
       "Audit Logs": "INVENTORY:audit_log:view",
-      // Finance
+
+      // ========== FINANCE ==========
       "Finance Dashboard": "FINANCE:dashboard:view",
       Accounts: "FINANCE:account:view",
       Invoices: "FINANCE:invoice:view",
@@ -61,44 +67,64 @@ export default function Sidebar({ open, onClose }) {
       Payables: "FINANCE:payable:view",
       Receivables: "FINANCE:receivable:view",
       Budgets: "FINANCE:budget:view",
-      "Bank & Cash": "FINANCE:bank:view",
+      "Bank & Cash": "FINANCE:bank_account:view",
       "Payroll Finance": "FINANCE:payroll:view",
-      "Finance Assets": "FINANCE:asset:view", // renamed to avoid duplicate
+      "Assets": "FINANCE:asset:view",          // Finance → Assets
       Taxes: "FINANCE:tax:view",
       Forecasting: "FINANCE:forecast:view",
-      "Finance Settings": "FINANCE:setting:view",
-      // AI Monitoring
+      "Settings": "FINANCE:setting:view",      // Finance → Settings (was missing)
+
+      // ========== AI MONITORING ==========
       "Live Dashboard": "AI_MONITORING:live_dashboard:view",
       "Activity Tracking": "AI_MONITORING:activity:view",
-      "Inventory Monitoring": "AI_MONITORING:inventory_monitoring:view",
+      "Inventory Monitoring": "AI_MONITORING:inventory:view",
       "Workforce Monitoring": "AI_MONITORING:workforce:view",
       "Alerts & Events": "AI_MONITORING:alert:view",
       "Reports & Insights": "AI_MONITORING:report:view",
-      // Settings
+
+      // ========== SETTINGS ==========
       "Company Profile": "SETTINGS:company:view",
       "Users & Roles": "SETTINGS:user:view",
       Departments: "SETTINGS:department:view",
       Designations: "SETTINGS:designation:view",
       Preferences: "SETTINGS:preference:view",
     };
+
+    // Development helper: warn about unmapped items (only in dev mode)
+    const warnUnmapped = (title: string, parent?: string) => {
+      if (process.env.NODE_ENV === "development" && !mapping[title]) {
+        console.warn(`⚠️ Sidebar: Unmapped menu item "${title}"${parent ? ` (under ${parent})` : ""}`);
+      }
+    };
+
     return (title: string, parentTitle?: string) => {
-      // Exact match
       if (mapping[title]) return mapping[title];
-      // Fallback for nested groups
+      // Fallback for nested children (e.g., inside Shift Management / Employee Assets)
       if (parentTitle === "Shift Management") {
         if (title === "Shifts") return mapping["Shifts"];
         if (title === "Shift Templates") return mapping["Shift Templates"];
       }
       if (parentTitle === "Employee Assets") {
-        if (title === "Assets") return mapping["HR Assets"];
+        if (title === "Assets") return mapping["Assets"];
         if (title === "Asset Kits") return mapping["Asset Kits"];
         if (title === "Employee Assignments") return mapping["Employee Assignments"];
       }
-      return null;
+      warnUnmapped(title, parentTitle);
+      return null; // unmapped → no permission required (be careful!)
     };
   }, []);
 
-  // Recursively filter menu items – treat items with 'to' as links
+  const getModuleCodeFromTitle = (title: string): string => {
+    const map: Record<string, string> = {
+      "Human Resources": "HR",
+      "Inventory": "INVENTORY",
+      "Finance": "FINANCE",
+      "AI Monitoring": "AI_MONITORING",
+      "Settings": "SETTINGS",
+    };
+    return map[title] || title.toUpperCase();
+  };
+
   const filteredMenu = useMemo(() => {
     const filterItems = (items: any[], parentTitle?: string): any[] => {
       return items.reduce((acc: any[], item) => {
@@ -106,18 +132,27 @@ export default function Sidebar({ open, onClose }) {
         const isGroup = !isLink && item.children && item.children.length > 0;
 
         if (isLink) {
-          const perm = getPermissionForMenuItem(item.title, parentTitle);
-          if (!perm) {
-            acc.push(item);               // Dashboard
-          } else if (hasPermission(perm)) {
+          if (item.title === "Dashboard") {
             acc.push(item);
-          } else {
+            return acc;
+          }
+          const perm = getPermissionForMenuItem(item.title, parentTitle);
+          if (!perm || hasPermission(perm)) {
+            acc.push(item);
           }
         } else if (isGroup) {
+          const moduleCode = getModuleCodeFromTitle(item.title);
+          const hasModuleAccess = hasAnyModulePermission(moduleCode);
           const filteredChildren = filterItems(item.children, item.title);
-          if (filteredChildren.length > 0) {
-            acc.push({ ...item, children: filteredChildren });
-          } else {
+
+          if (filteredChildren.length > 0 || hasModuleAccess) {
+            let children = filteredChildren;
+            // If module is accessible but dashboard not yet present, add it automatically
+            if (hasModuleAccess && !children.some(c => c.title === "Dashboard")) {
+              const dashboardItem = item.children?.find(c => c.title === "Dashboard");
+              if (dashboardItem) children = [dashboardItem, ...children];
+            }
+            acc.push({ ...item, children });
           }
         }
         return acc;
@@ -126,7 +161,6 @@ export default function Sidebar({ open, onClose }) {
     return filterItems(menu);
   }, [permissions, getPermissionForMenuItem]);
 
-  // Expanded groups state
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -139,7 +173,6 @@ export default function Sidebar({ open, onClose }) {
             c.to && (path === c.to || path.startsWith(c.to + "/"))
           );
           if (hasActiveChild) initial[groupKey] = true;
-          // nested groups
           m.children.forEach((child: any, childIndex: number) => {
             if (child.children) {
               const nestedKey = `${groupKey}-${childIndex}`;
@@ -217,7 +250,6 @@ export default function Sidebar({ open, onClose }) {
                     >
                       {item.children.map((c: any, childIndex: number) => {
                         if (c.children && c.children.length) {
-                          // Nested group (Shift Management / Employee Assets)
                           const nestedKey = `${String(i)}-${childIndex}`;
                           const isNestedOpen = openGroups[nestedKey];
                           return (
@@ -270,7 +302,6 @@ export default function Sidebar({ open, onClose }) {
                             </div>
                           );
                         }
-                        // Regular child link
                         const perm = getPermissionForMenuItem(c.title, item.title);
                         if (perm && !hasPermission(perm)) return null;
                         return (

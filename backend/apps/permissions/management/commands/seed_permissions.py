@@ -3,9 +3,9 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from apps.permissions.models import Module, Resource, Action, Permission, Role, RolePermission
 
-# ------------------------------------------------------------------
-# Data definitions (single source of truth)
-# ------------------------------------------------------------------
+# ──────────────────────────────────────────────────────────────────────────────
+# Data definitions – single source of truth
+# ──────────────────────────────────────────────────────────────────────────────
 
 MODULES = {
     'HR': {'name': 'Human Resources', 'ordering': 1},
@@ -18,22 +18,22 @@ MODULES = {
 RESOURCES = {
     'HR': [
         'employee', 'leave', 'payroll', 'attendance', 'shift_template', 'shift_override',
-        'recruitment', 'performance', 'exit', 'compensation', 'policy', 'asset'
+        'recruitment', 'performance', 'exit', 'compensation', 'policy', 'asset', 'dashboard'
     ],
     'INVENTORY': [
         'product', 'variant', 'category', 'brand', 'warehouse', 'supplier', 'vendor',
         'customer', 'purchase_order', 'sales_order', 'stock', 'stock_transfer',
-        'report', 'alert', 'audit_log'
+        'report', 'alert', 'audit_log', 'dashboard', 'asset'
     ],
     'FINANCE': [
         'account', 'invoice', 'expense', 'payable', 'receivable', 'budget',
-        'bank_account', 'tax', 'forecast', 'asset', 'payroll'
+        'bank_account', 'tax', 'forecast', 'asset', 'payroll', 'dashboard', 'setting'
     ],
     'AI_MONITORING': [
-        'live_dashboard', 'workforce', 'inventory', 'alert', 'report'
+        'live_dashboard', 'workforce', 'inventory', 'alert', 'report', 'activity', 'dashboard'
     ],
     'SETTINGS': [
-        'company', 'user', 'role', 'department', 'designation', 'preference'
+        'company', 'user', 'role', 'department', 'designation', 'preference', 'dashboard'
     ],
 }
 
@@ -50,8 +50,8 @@ ACTIONS = [
     ('archive', 'Archive'),
 ]
 
-# Role permissions: role -> { module: [resource_action_patterns] }
-# Patterns: 'resource:action' or '*' for all actions of that module
+# Role permissions: role → { module: [resource:action patterns] }
+# '*' means all actions for that module
 ROLE_PERMISSIONS = {
     'COMPANY_ADMIN': {
         'HR': ['*'],
@@ -95,7 +95,7 @@ class Command(BaseCommand):
             action_objs[code] = obj
 
         # 3. Create resources and permissions
-        permission_map = {}  # code -> Permission object
+        permission_map = {}
         for module_code, resources_list in RESOURCES.items():
             module = module_objs[module_code]
             for resource_code in resources_list:
@@ -104,7 +104,6 @@ class Command(BaseCommand):
                     code=resource_code,
                     defaults={'name': resource_code.replace('_', ' ').title(), 'is_active': True}
                 )
-                # For each action, create a permission
                 for action_code, action_name in ACTIONS:
                     perm_code = f"{module_code}:{resource_code}:{action_code}"
                     perm, created = Permission.objects.update_or_create(
@@ -126,21 +125,23 @@ class Command(BaseCommand):
             role_objs[role_name] = role
             self.stdout.write(f"  {'Created' if created else 'Updated'} role: {role_name}")
 
-        # 5. Assign role permissions
+        # 5. Assign role permissions (idempotent: delete existing then recreate)
+        RolePermission.objects.all().delete()
+        count_total = 0
         for role_name, module_perms in ROLE_PERMISSIONS.items():
             role = role_objs[role_name]
-            # Delete existing role permissions (idempotency)
-            RolePermission.objects.filter(role=role).delete()
             count = 0
             for module_code, patterns in module_perms.items():
                 if patterns == ['*']:
-                    # Give all permissions of this module
                     perms = Permission.objects.filter(resource__module__code=module_code)
                     for perm in perms:
                         RolePermission.objects.create(role=role, permission=perm, granted=True)
                         count += 1
                 else:
                     for pattern in patterns:
+                        if ':' not in pattern:
+                            self.stdout.write(self.style.WARNING(f"  Invalid pattern: {pattern} – skipped"))
+                            continue
                         resource_code, action_code = pattern.split(':')
                         perm_code = f"{module_code}:{resource_code}:{action_code}"
                         perm = permission_map.get(perm_code)
@@ -150,9 +151,10 @@ class Command(BaseCommand):
                         else:
                             self.stdout.write(self.style.WARNING(f"  Warning: Permission {perm_code} not found"))
             self.stdout.write(f"  Assigned {count} permissions to role {role_name}")
+            count_total += count
 
         self.stdout.write(self.style.SUCCESS(
             f"Seeding complete: {Module.objects.count()} modules, {Resource.objects.count()} resources, "
             f"{Action.objects.count()} actions, {Permission.objects.count()} permissions, "
-            f"{Role.objects.count()} roles, {RolePermission.objects.count()} role permissions"
+            f"{Role.objects.count()} roles, {count_total} role permissions"
         ))
