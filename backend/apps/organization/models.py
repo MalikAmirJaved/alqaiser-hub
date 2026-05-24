@@ -86,6 +86,10 @@ class Branch(models.Model):
 # USER MODEL
 # -----------------------------
 class User(AbstractUser):
+    """
+    Custom User model for multi-tenant (Company / Branch) system
+    """
+
     id = models.BigAutoField(primary_key=True)
     _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 
@@ -94,16 +98,18 @@ class User(AbstractUser):
 
     department = models.CharField(max_length=100, blank=True, null=True)
     designation = models.CharField(max_length=100, blank=True, null=True)
-    phone_number = models.CharField(max_length=30, blank=True, null=True)  
+    phone_number = models.CharField(max_length=30, blank=True, null=True)
+
     company = models.ForeignKey(
-        Company,
+        "organization.Company",
         on_delete=models.CASCADE,
         null=True,
         blank=True,
         related_name="users"
     )
+
     branch = models.ForeignKey(
-        Branch,
+        "organization.Branch",
         on_delete=models.CASCADE,
         null=True,
         blank=True,
@@ -113,22 +119,44 @@ class User(AbstractUser):
     employee_id = models.CharField(max_length=50, blank=True, null=True)
     status = models.CharField(max_length=20, default="active")
 
-    # Who created this user (self-reference)
+    # Audit fields (self references)
     created_by = models.ForeignKey(
-        "self",
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="created_users"
     )
 
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_users"
+    )
+
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="deleted_users"
+    )
+
+    is_deleted = models.BooleanField(default=False, db_index=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # Django's is_staff, is_superuser, etc. remain from AbstractUser.
-    # They are not shown in your list but are required for auth.
+    class Meta:
+        indexes = [
+            models.Index(fields=['is_deleted']),
+            models.Index(fields=['company', 'branch']),
+        ]
 
-
+    def __str__(self):
+        return self.username
 
 class UserCompanyContext(models.Model):
     """Tracks which company and branch a user is currently working with"""

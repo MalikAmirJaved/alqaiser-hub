@@ -11,11 +11,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'email', 'full_name', 'first_name', 'last_name',
-            'role', 'employee_id', 'department', 'designation', 'phone_number',
-            'branch_id', 'branch_name'
+            'id', '_id', 'username', 'email', 'first_name', 'last_name',
+            'full_name', 'role', 'department', 'designation', 'phone_number',
+            'company', 'branch', 'branch_id', 'branch_name', 'employee_id', 
+            'status', 'is_active', 'created_at', 'updated_at', 'created_by', 
+            'updated_by', 'is_deleted'
         ]
-        read_only_fields = ['id', 'username', 'role', 'branch_id', 'branch_name']
+        read_only_fields = ['id', '_id', 'created_at', 'updated_at', 'created_by', 
+                           'updated_by', 'branch_id', 'branch_name']
 
     def update(self, instance, validated_data):
         instance.full_name = validated_data.get('full_name', instance.full_name)
@@ -23,13 +26,21 @@ class UserProfileSerializer(serializers.ModelSerializer):
         instance.phone_number = validated_data.get('phone_number', instance.phone_number)
         instance.department = validated_data.get('department', instance.department)
         instance.designation = validated_data.get('designation', instance.designation)
-        # NEW
         instance.first_name = validated_data.get('first_name', instance.first_name)
         instance.last_name = validated_data.get('last_name', instance.last_name)
-        instance.username = validated_data.get('username', instance.last_name)
-
+        instance.username = validated_data.get('username', instance.username)
+        instance.role = validated_data.get('role', instance.role)
+        instance.is_active = validated_data.get('is_active', instance.is_active)
         instance.save()
         return instance
+
+    def create(self, validated_data):
+        # For creating users via admin panel
+        user = User(**validated_data)
+        user.set_unusable_password()  # or set a default password
+        user.save()
+        return user
+
 
 
     

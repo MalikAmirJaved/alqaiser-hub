@@ -2,10 +2,10 @@ from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework import status
+from rest_framework import generics, status
 from django.db import transaction
 from .models import (
-    UserCompanyContext, Company, Branch
+    UserCompanyContext, Company, Branch, User
 )
 from .serializers import (UserProfileSerializer, BranchSerializer)
 from rest_framework.generics import RetrieveUpdateDestroyAPIView
@@ -87,7 +87,6 @@ class SwitchCompanyView(APIView):
 
         context, _ = UserCompanyContext.objects.get_or_create(user=request.user)
 
-        # ✅ FIXED (object not ID)
         context.current_company = company
         context.current_branch = None
         context.save()
@@ -117,7 +116,6 @@ class BranchCreateView(APIView):
 
         serializer.is_valid(raise_exception=True)
 
-        # ✅ FIXED HQ LOGIC
         is_first = not Branch.objects.filter(company=user.company).exists()
 
         branch = serializer.save(
@@ -157,7 +155,6 @@ class BranchDetailView(RetrieveUpdateDestroyAPIView):
         if not branch_id:
             raise NotFound("User does not have a branch assigned.")
 
-        # IMPORTANT: use correct field (change if needed)
         try:
             obj = self.get_queryset().get(pk=branch_id)
         except Branch.DoesNotExist:
@@ -210,6 +207,44 @@ class UserProfileView(APIView):
         if serializer.is_valid():
             serializer.save()
             if password:
-                user.save()  # save the password change
+                user.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# FIXED: Added serializer_class
+class UserListView(generics.ListCreateAPIView):
+    serializer_class = UserProfileSerializer
+    
+    def get_queryset(self):
+        # Exclude users with role 'COMPANY_ADMIN' from the list
+        return User.objects.filter(
+            company=self.request.user.company, 
+            is_deleted=False
+        ).exclude(role='COMPANY_ADMIN')
+
+    def perform_create(self, serializer):
+        serializer.save(
+            company=self.request.user.company,
+            created_by=self.request.user,
+            updated_by=self.request.user
+        )
+
+
+
+# FIXED: Added proper queryset filtering for soft delete
+class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserProfileSerializer
+
+    def get_queryset(self):
+        return User.objects.filter(company=self.request.user.company, is_deleted=False)
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=self.request.user)
+
+    def perform_destroy(self, instance):
+        # Soft delete
+        instance.is_deleted = True
+        instance.deleted_by = self.request.user
+        instance.save()
