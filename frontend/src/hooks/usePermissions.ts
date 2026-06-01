@@ -250,22 +250,34 @@ type WsMessage =
  *
  * Backend endpoint: ws://<BACKEND_HOST>/ws/permissions/
  */
+// hooks/usePermissions.ts (only the usePermissionSocket function)
+
 export function usePermissionSocket(watchedUserId?: number | null) {
   const queryClient = useQueryClient();
   const dispatch = useDispatch<AppDispatch>();
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Helper to reload permissions for the current user
+  const reloadCurrentUserPermissions = useCallback(() => {
+    if (mountedRef.current && watchedUserId) {
+      console.log("[usePermissionSocket] Reloading Redux permissions for current user");
+      dispatch(loadPermissions());
+    }
+  }, [dispatch, watchedUserId]);
 
   const connect = useCallback(
     (retryCount = 0) => {
       if (!mountedRef.current) return;
-
+      if (!watchedUserId && !(typeof window !== 'undefined' && document.cookie.includes('access_token'))) {
+        console.log("[usePermissionSocket] Waiting for user authentication...");
+        return;
+      }
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
       if (!apiUrl) {
-        console.error(
-          "[usePermissionSocket] NEXT_PUBLIC_API_URL is not defined. WebSocket will not connect."
-        );
+        console.error("[usePermissionSocket] NEXT_PUBLIC_API_URL is not defined.");
         return;
       }
 
@@ -277,8 +289,16 @@ export function usePermissionSocket(watchedUserId?: number | null) {
 
       ws.onopen = () => {
         console.log("[usePermissionSocket] WebSocket opened");
-        // Reset retry count on success
         reconnectTimerRef.current && clearTimeout(reconnectTimerRef.current);
+        // ✅ 1. Reload permissions immediately after connection
+        reloadCurrentUserPermissions();
+        // ✅ 2. Start periodic refresh (every 30s) as a safety net
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        intervalRef.current = setInterval(() => {
+          if (mountedRef.current && ws.readyState === WebSocket.OPEN) {
+            reloadCurrentUserPermissions();
+          }
+        }, 30000);
       };
 
       ws.onmessage = (event) => {
@@ -289,20 +309,20 @@ export function usePermissionSocket(watchedUserId?: number | null) {
           switch (msg.type) {
             case "permission_changed":
             case "role_changed":
-              // Invalidate the specific user's data
               queryClient.invalidateQueries({ queryKey: permissionKeys.userModules(msg.user_id) });
               queryClient.invalidateQueries({ queryKey: permissionKeys.userRoles(msg.user_id) });
               queryClient.invalidateQueries({ queryKey: permissionKeys.userOverrides(msg.user_id) });
 
-              // If it is the watched user in the UI panel, also invalidate the panel
               if (watchedUserId && msg.user_id === watchedUserId) {
                 queryClient.invalidateQueries({ queryKey: permissionKeys.userModules(watchedUserId) });
+                // ✅ Also reload Redux permissions for the current user
+                reloadCurrentUserPermissions();
               }
               break;
 
             case "self_permission_changed":
-              // Re-load the current user's own permissions into Redux (updates Sidebar, etc.)
-              dispatch(loadPermissions());
+              console.log("[usePermissionSocket] Self permission changed");
+              reloadCurrentUserPermissions();
               break;
 
             default:
@@ -316,27 +336,26 @@ export function usePermissionSocket(watchedUserId?: number | null) {
       ws.onclose = (event) => {
         if (!mountedRef.current) return;
         console.warn(`[usePermissionSocket] Closed (code ${event.code}). Reconnecting...`);
-
-        // Exponential back-off: 2^retryCount * 1000 ms, capped at 30s
+        if (intervalRef.current) clearInterval(intervalRef.current);
         const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
         reconnectTimerRef.current = setTimeout(() => connect(retryCount + 1), delay);
       };
 
       ws.onerror = (err) => {
         console.error("[usePermissionSocket] Error", err);
-        ws.close(); // trigger reconnect
+        ws.close();
       };
     },
-    [queryClient, dispatch, watchedUserId]
+    [queryClient, dispatch, watchedUserId, reloadCurrentUserPermissions]
   );
 
   useEffect(() => {
     mountedRef.current = true;
     connect();
-
     return () => {
       mountedRef.current = false;
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
       wsRef.current?.close();
     };
   }, [connect]);
