@@ -78,7 +78,7 @@ export default function PaymentModal({
       overtime_hours: overtimeHours,
       bonus: bonus,
       deductions: deductions,
-      selected_loans: selectedLoanIds.map(Number),
+      selected_loans: selectedLoanIds,
     });
   }, [isOpen, employee, selectedMonth, selectedYear, overtimeHours, bonus, deductions, selectedLoanDeductions]);
 
@@ -99,7 +99,7 @@ export default function PaymentModal({
         payment_method: paymentMethod,
         custom_note: customNote,
         overtime_hours: overtimeHours,
-        selected_loans: Object.keys(selectedLoanDeductions).filter(id => selectedLoanDeductions[id]).map(Number),
+        selected_loans: Object.keys(selectedLoanDeductions).filter(id => selectedLoanDeductions[id]),
       });
       toast.success("Payment processed successfully");
       onSuccess();
