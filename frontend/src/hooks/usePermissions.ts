@@ -263,7 +263,6 @@ export function usePermissionSocket(watchedUserId?: number | null) {
   // Helper to reload permissions for the current user
   const reloadCurrentUserPermissions = useCallback(() => {
     if (mountedRef.current && watchedUserId) {
-      console.log("[usePermissionSocket] Reloading Redux permissions");
       dispatch(loadPermissions());
     }
   }, [dispatch, watchedUserId]);
@@ -272,7 +271,6 @@ export function usePermissionSocket(watchedUserId?: number | null) {
     (retryCount = 0) => {
       if (!mountedRef.current) return;
       if (!watchedUserId && !(typeof window !== 'undefined' && document.cookie.includes('access_token'))) {
-        console.log("[usePermissionSocket] Waiting for user authentication...");
         return;
       }
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -282,13 +280,11 @@ export function usePermissionSocket(watchedUserId?: number | null) {
       }
 
       const wsUrl = apiUrl.replace(/^http/, "ws") + "/ws/permissions/";
-      console.log(`[usePermissionSocket] Connecting to ${wsUrl} (attempt ${retryCount + 1})`);
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log("[usePermissionSocket] WebSocket opened");
         reconnectTimerRef.current && clearTimeout(reconnectTimerRef.current);
 
         // ✅ Reload permissions immediately after reconnect
@@ -306,7 +302,6 @@ export function usePermissionSocket(watchedUserId?: number | null) {
       ws.onmessage = (event) => {
         try {
           const msg: WsMessage = JSON.parse(event.data);
-          console.log("[usePermissionSocket] Message received", msg);
 
           switch (msg.type) {
             case "permission_changed":
@@ -316,13 +311,11 @@ export function usePermissionSocket(watchedUserId?: number | null) {
               queryClient.invalidateQueries({ queryKey: permissionKeys.userOverrides(msg.user_id) });
 
               if (watchedUserId && msg.user_id === watchedUserId) {
-                console.log(`[usePermissionSocket] Message for current user (${msg.user_id}) – reloading Redux permissions`);
                 reloadCurrentUserPermissions();
               }
               break;
 
             case "self_permission_changed":
-              console.log("[usePermissionSocket] Received self_permission_changed – reloading Redux permissions");
               reloadCurrentUserPermissions();
               break;
 
