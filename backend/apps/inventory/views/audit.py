@@ -4,9 +4,12 @@ from django.db.models import Q
 from apps.inventory.models import AuditLog
 from apps.inventory.serializers.audit import AuditLogSerializer
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 
 
-class AuditLogViewSet(CompanyBranchMixin, viewsets.ReadOnlyModelViewSet):
+class AuditLogViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ReadOnlyModelViewSet):
+    permission_module = 'INVENTORY'
+    permission_resource = 'audit_log'
     """
     Read-only viewset for audit logs.
     Accessible only to authenticated users, filtered by company.

@@ -1,11 +1,14 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models.customer import Customer
 from apps.inventory.serializers.customer import CustomerSerializer
 import uuid
 
-class CustomerViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
+class CustomerViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+    permission_module = 'INVENTORY'
+    permission_resource = 'customer'
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
     lookup_field = '_id'

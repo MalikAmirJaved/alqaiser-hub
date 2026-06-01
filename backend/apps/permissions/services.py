@@ -1,5 +1,6 @@
 import logging
 from typing import Optional, Set
+from django.conf import settings
 from django.core.cache import cache
 from django.contrib.auth import get_user_model
 from .models import Permission, RolePermission, UserPermission, UserRole
@@ -7,9 +8,11 @@ from .models import Permission, RolePermission, UserPermission, UserRole
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
+
 class PermissionService:
-    CACHE_TTL = 300  # 5 seconds (adjust to 300 in production)
-    # In production set to 300-600 seconds (5-10 minutes)
+    @classmethod
+    def cache_ttl(cls) -> int:
+        return getattr(settings, 'PERMISSION_CACHE_TTL', 300)
 
     @classmethod
     def _get_permission_id(cls, perm_code: str) -> Optional[int]:
@@ -19,7 +22,7 @@ class PermissionService:
         if pid is None:
             try:
                 pid = Permission.objects.get(code=perm_code).id
-                cache.set(cache_key, pid, cls.CACHE_TTL)
+                cache.set(cache_key, pid, cls.cache_ttl())
             except Permission.DoesNotExist:
                 logger.warning(f"Permission {perm_code} not found")
                 return None
@@ -47,10 +50,10 @@ class PermissionService:
             try:
                 up = UserPermission.objects.get(user=user, permission_id=perm_id)
                 override = up.granted
-                cache.set(override_key, override, cls.CACHE_TTL)
+                cache.set(override_key, override, cls.cache_ttl())
             except UserPermission.DoesNotExist:
                 override = None
-                cache.set(override_key, None, cls.CACHE_TTL)
+                cache.set(override_key, None, cls.cache_ttl())
 
         if override is not None:
             return override   # explicit grant or deny
@@ -60,7 +63,7 @@ class PermissionService:
         role_ids = cache.get(role_key)
         if role_ids is None:
             role_ids = list(UserRole.objects.filter(user=user).values_list('role_id', flat=True))
-            cache.set(role_key, role_ids, cls.CACHE_TTL)
+            cache.set(role_key, role_ids, cls.cache_ttl())
 
         if not role_ids:
             return False
@@ -71,14 +74,17 @@ class PermissionService:
         if role_perms is None:
             role_perms = set(RolePermission.objects.filter(role_id__in=role_ids, granted=True)
                              .values_list('permission_id', flat=True))
-            cache.set(perms_key, role_perms, cls.CACHE_TTL)
+            cache.set(perms_key, role_perms, cls.cache_ttl())
 
         return perm_id in role_perms
 
     @classmethod
     def invalidate_user_cache(cls, user):
         """Call after any permission change for a user."""
-        cache.delete_pattern(f"user_override:{user.id}:*")
+        try:
+            cache.delete_pattern(f"user_override:{user.id}:*")
+        except AttributeError:
+            pass
         cache.delete(f"user_roles:{user.id}")
 
     @classmethod

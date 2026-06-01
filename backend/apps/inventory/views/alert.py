@@ -4,10 +4,13 @@ from rest_framework.response import Response
 from django.db.models import Q
 from django.utils import timezone  # <-- ADD THIS IMPORT
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import Alert
 from apps.inventory.serializers.alert import AlertSerializer
 
-class AlertViewSet(CompanyBranchMixin, viewsets.ReadOnlyModelViewSet):
+class AlertViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ReadOnlyModelViewSet):
+    permission_module = 'INVENTORY'
+    permission_resource = 'alert'
     serializer_class = AlertSerializer
     lookup_field = '_id'
     # Define queryset to satisfy DRF (even though we override get_queryset, but base classes may need it)

@@ -58,6 +58,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.permissions.middleware.PermissionMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'apps.common.middleware.CurrentRequestMiddleware',
@@ -235,3 +236,6 @@ CACHES = {
 
 # For per-view caching
 CACHE_MIDDLEWARE_SECONDS = 60
+
+# Permission cache (seconds) — role/permission lookups
+PERMISSION_CACHE_TTL = env.int('PERMISSION_CACHE_TTL', default=300)

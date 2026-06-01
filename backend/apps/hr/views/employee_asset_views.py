@@ -9,13 +9,16 @@ from datetime import date
 import logging
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.services.assignment_service import AssetAssignmentService
 from apps.hr.models import Asset, AssetCategory, EmployeeAssetAssignment, Employee
 
 logger = logging.getLogger(__name__)
 
 
-class EmployeeAssetAssignmentView(CompanyBranchMixin, APIView):
+class EmployeeAssetAssignmentView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'asset_assignment'
     """Main assignment CRUD endpoint with UUID support"""
     permission_classes = [IsAuthenticated]
     
@@ -231,7 +234,14 @@ class AvailableAssetsView(CompanyBranchMixin, APIView):
         })
 
 
-class BulkAssignmentView(CompanyBranchMixin, APIView):
+class BulkAssignmentView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'asset_assignment'
+
+    def get_permission_action(self):
+        if self.request.method.upper() == 'POST':
+            return 'assign'
+        return super().get_permission_action()
     """Bulk operations endpoint with UUID support"""
     permission_classes = [IsAuthenticated]
     

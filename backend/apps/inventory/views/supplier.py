@@ -2,11 +2,13 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from django.db.models import Q
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import Supplier
 from apps.inventory.serializers import SupplierSerializer
 
 
-class BaseSupplierViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
+class BaseSupplierViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+    permission_module = 'INVENTORY'
     queryset = Supplier.objects.all()
     serializer_class = SupplierSerializer
     lookup_field = '_id'
@@ -93,7 +95,9 @@ class BaseSupplierViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
 
 class SupplierViewSet(BaseSupplierViewSet):
     partner_type = 'supplier'
+    permission_resource = 'supplier'
 
 
 class VendorViewSet(BaseSupplierViewSet):
     partner_type = 'vendor'
+    permission_resource = 'vendor'

@@ -10,12 +10,15 @@ from rest_framework import status
 import logging
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import AssetCategory, Asset
 
 logger = logging.getLogger(__name__)
 
 
-class AssetCategoryView(CompanyBranchMixin, APIView):
+class AssetCategoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'asset_kit'
     """CRUD for Asset Categories/Kits with UUID support"""
     permission_classes = [IsAuthenticated]
     
@@ -221,7 +224,9 @@ class AssetCategoryView(CompanyBranchMixin, APIView):
         return Response({'message': 'Category deleted successfully'})
 
 
-class AssetCategoryStatsView(CompanyBranchMixin, APIView):
+class AssetCategoryStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'asset_kit'
     """Get asset category statistics"""
     permission_classes = [IsAuthenticated]
     

@@ -10,12 +10,15 @@ from rest_framework import status
 import logging
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import Asset
 
 logger = logging.getLogger(__name__)
 
 
-class AssetView(CompanyBranchMixin, APIView):
+class AssetView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'emp_asset'
     """CRUD for HR Assets with UUID support"""
     permission_classes = [IsAuthenticated]
     
@@ -292,7 +295,9 @@ class AssetView(CompanyBranchMixin, APIView):
         return Response({'message': 'Asset deleted successfully'})
 
 
-class AssetStatsView(CompanyBranchMixin, APIView):
+class AssetStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'emp_asset'
     """Get asset statistics"""
     permission_classes = [IsAuthenticated]
     

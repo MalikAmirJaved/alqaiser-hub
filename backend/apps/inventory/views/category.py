@@ -2,11 +2,14 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from django.db.models import Q
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import Category
 from apps.inventory.serializers import CategorySerializer
 
 
-class CategoryViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
+class CategoryViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+    permission_module = 'INVENTORY'
+    permission_resource = 'category'
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     lookup_field = '_id'

@@ -11,6 +11,7 @@ from rest_framework import status
 import logging
 from django.db import transaction, models
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import Employee, LeaveRequest
 
 logger = logging.getLogger(__name__)
@@ -279,10 +280,20 @@ class LeaveRequestView(CompanyBranchMixin, APIView):
         return Response({'message': 'Leave request deleted successfully'})
 
 
-class LeaveApprovalView(CompanyBranchMixin, APIView):
+class LeaveApprovalView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     """Handle leave request approvals/rejections with UUID support"""
     permission_classes = [IsAuthenticated]
-    
+    permission_module = 'HR'
+    permission_resource = 'leave'
+
+    def get_permission_action(self):
+        action = (self.request.data.get('action') or '').upper()
+        if action == 'APPROVED':
+            return 'approve'
+        if action == 'REJECTED':
+            return 'reject'
+        return 'approve'
+
     @transaction.atomic
     def post(self, request):
         company_id = request.user.company_id
@@ -291,13 +302,6 @@ class LeaveApprovalView(CompanyBranchMixin, APIView):
             return Response(
                 {'error': 'User is not associated with any company'},
                 status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Check permission
-        if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
-            return Response(
-                {'error': 'Only admins can approve/reject leave requests'},
-                status=status.HTTP_403_FORBIDDEN
             )
         
         leave_uuid = request.data.get('id')
@@ -344,7 +348,9 @@ class LeaveApprovalView(CompanyBranchMixin, APIView):
         })
 
 
-class LeaveStatsView(CompanyBranchMixin, APIView):
+class LeaveStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'leave'
     """Get simple leave statistics for dashboard"""
     permission_classes = [IsAuthenticated]
     

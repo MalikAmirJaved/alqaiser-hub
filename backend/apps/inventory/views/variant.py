@@ -5,11 +5,14 @@ from rest_framework.decorators import action
 from django.db.models import Q
 from django.core.cache import cache
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import ProductVariant
 from apps.inventory.serializers.variant import VariantDetailSerializer, VariantPOSSerializer
 
 
-class VariantViewSet(CompanyBranchMixin, viewsets.ReadOnlyModelViewSet):
+class VariantViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ReadOnlyModelViewSet):
+    permission_module = 'INVENTORY'
+    permission_resource = 'product'
     """
     Read-only endpoint for product variants.
     Supports filtering by product, search, active status, etc.

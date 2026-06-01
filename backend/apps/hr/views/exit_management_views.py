@@ -12,6 +12,7 @@ from rest_framework import status
 from django.db.models import Count, Sum, Avg, Q
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import (
     ExitRecord, ExitChecklist, Employee
 )
@@ -19,7 +20,9 @@ from apps.hr.models import (
 logger = logging.getLogger(__name__)
 
 
-class BaseExitView(CompanyBranchMixin, APIView):
+class BaseExitView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'exit'
     """Base class for exit management views with UUID support"""
     permission_classes = [IsAuthenticated]
     

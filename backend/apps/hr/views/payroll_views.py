@@ -12,6 +12,7 @@ from django.db.models import Q
 import logging
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import (
     Employee, PayrollRecord, EmployeeLoan, Compensation, LeaveRequest, PayrollDeductionDetail
 )
@@ -27,7 +28,9 @@ def safe_date(value):
     return value
 
 
-class PayrollView(CompanyBranchMixin, APIView):
+class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'payroll'
     """Payroll management with UUID support - Leave deduction uses working days only"""
     permission_classes = [IsAuthenticated]
     
@@ -587,7 +590,10 @@ class PayrollView(CompanyBranchMixin, APIView):
 
 class PayrollPreviewView(PayrollView):
     """Preview payroll without saving - Uses working days for leave deduction"""
-    
+
+    def get_permission_action(self):
+        return 'view'
+
     def post(self, request):
         """Handle preview requests"""
         return self.preview(request)
@@ -597,7 +603,9 @@ class PayrollPreviewView(PayrollView):
 # Other views (PayrollStatsView, EmployeeLoanView, etc.) remain unchanged
 # ============================================================================
 
-class PayrollStatsView(CompanyBranchMixin, APIView):
+class PayrollStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'payroll'
     """Payroll statistics"""
     permission_classes = [IsAuthenticated]
     
@@ -635,7 +643,9 @@ class PayrollStatsView(CompanyBranchMixin, APIView):
         })
 
 
-class EmployeeLoanView(CompanyBranchMixin, APIView):
+class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'compensation'
     """Employee loans management with UUID support"""
     permission_classes = [IsAuthenticated]
     
@@ -847,7 +857,9 @@ class EmployeeLoanView(CompanyBranchMixin, APIView):
         return Response({'message': 'Loan deleted successfully'})
 
 
-class LoanStatusUpdateView(CompanyBranchMixin, APIView):
+class LoanStatusUpdateView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'compensation'
     permission_classes = [IsAuthenticated]
     @transaction.atomic
     def post(self, request):
@@ -896,7 +908,9 @@ class LoanStatusUpdateView(CompanyBranchMixin, APIView):
         })
 
 
-class CompensationView(CompanyBranchMixin, APIView):
+class CompensationView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'compensation'
     permission_classes = [IsAuthenticated]
     
     def _serialize_compensation(self, comp):

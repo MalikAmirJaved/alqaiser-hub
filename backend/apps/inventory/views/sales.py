@@ -9,6 +9,7 @@ from datetime import timedelta
 import uuid
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import (
     StockItem, InventoryTransaction, StockReservation, ProductVariant
 )
@@ -499,7 +500,9 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         return f"SO-{int(time.time())}-{random.randint(1000, 9999)}"
 
 
-class SalesReturnViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
+class SalesReturnViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+    permission_module = 'INVENTORY'
+    permission_resource = 'sales_order'
     queryset = SalesReturn.objects.all()
     serializer_class = SalesReturnSerializer
     lookup_field = '_id'

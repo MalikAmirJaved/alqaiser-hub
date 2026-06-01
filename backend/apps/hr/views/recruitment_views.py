@@ -12,6 +12,7 @@ from datetime import datetime, date, timedelta
 import logging
 from django.db import models, transaction
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import RecruitmentCandidate, RecruitmentActivityLog, Employee, InterviewRound
 from apps.hr.serializers.recruitment_serializers import (
     RoundBulkCreateSerializer,
@@ -26,7 +27,9 @@ def safe_date(value):
         return value.isoformat()
     return value
 
-class RecruitmentCandidateView(CompanyBranchMixin, APIView):
+class RecruitmentCandidateView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'recruitment'
     """CRUD operations for Recruitment Candidates with UUID support"""
     permission_classes = [IsAuthenticated]
     
@@ -310,7 +313,9 @@ class RecruitmentCandidateView(CompanyBranchMixin, APIView):
         return Response({'message': 'Candidate deleted successfully'})
 
 
-class RecruitmentStatsView(CompanyBranchMixin, APIView):
+class RecruitmentStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'recruitment'
     """Get recruitment statistics"""
     permission_classes = [IsAuthenticated]
     
@@ -385,7 +390,9 @@ class RecruitmentStatsView(CompanyBranchMixin, APIView):
         return Response(stats)
 
 
-class RecruitmentActivityLogView(CompanyBranchMixin, APIView):
+class RecruitmentActivityLogView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'recruitment'
     """Get recruitment activity logs with UUID support"""
     permission_classes = [IsAuthenticated]
     
@@ -457,7 +464,9 @@ class RecruitmentActivityLogView(CompanyBranchMixin, APIView):
         })
 
 
-class RecruitmentBulkActionView(CompanyBranchMixin, APIView):
+class RecruitmentBulkActionView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'recruitment'
     """Bulk actions for recruitment candidates with UUID support"""
     permission_classes = [IsAuthenticated]
     
@@ -552,7 +561,9 @@ class RecruitmentBulkActionView(CompanyBranchMixin, APIView):
             )
 
 
-class InterviewRoundView(CompanyBranchMixin, APIView):
+class InterviewRoundView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'recruitment'
     """CRUD operations for Interview Rounds with UUID support"""
     permission_classes = [IsAuthenticated]
     
@@ -751,7 +762,9 @@ class InterviewRoundView(CompanyBranchMixin, APIView):
         return Response({'message': 'Round deleted successfully'})
 
 
-class RoundBulkCreateView(CompanyBranchMixin, APIView):
+class RoundBulkCreateView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'recruitment'
     """Bulk create interview rounds for a candidate"""
     permission_classes = [IsAuthenticated]
     
@@ -829,7 +842,9 @@ class RoundBulkCreateView(CompanyBranchMixin, APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class RoundStatusBulkUpdateView(CompanyBranchMixin, APIView):
+class RoundStatusBulkUpdateView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'recruitment'
     """Bulk update round statuses with cascade logic"""
     permission_classes = [IsAuthenticated]
     
@@ -915,7 +930,9 @@ class RoundStatusBulkUpdateView(CompanyBranchMixin, APIView):
         })
 
 
-class RecruitmentCandidateDetailView(CompanyBranchMixin, APIView):
+class RecruitmentCandidateDetailView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'recruitment'
     """Get detailed candidate information with rounds using UUID"""
     permission_classes = [IsAuthenticated]
     

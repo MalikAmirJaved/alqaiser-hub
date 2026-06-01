@@ -6,11 +6,14 @@ from django.utils import timezone
 import uuid
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import StockTransfer, StockItem, InventoryTransaction, ProductVariant, Warehouse
 from apps.inventory.serializers.transfer import StockTransferSerializer, StockTransferCreateSerializer
 
 
-class StockTransferViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
+class StockTransferViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+    permission_module = 'INVENTORY'
+    permission_resource = 'stock_transfer'
     queryset = StockTransfer.objects.all()
     serializer_class = StockTransferSerializer
     lookup_field = '_id'

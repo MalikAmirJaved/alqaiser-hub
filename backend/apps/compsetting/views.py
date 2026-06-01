@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from datetime import datetime, time
 
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.compsetting.models import (
     CompanySettings, WorkingDay, PublicHoliday,
     CompanySettingHistory, Designation
@@ -18,9 +19,10 @@ from apps.organization.models import Company
 logger = logging.getLogger(__name__)
 
 
-class BaseCompanyView(APIView):
+class BaseCompanyView(PermissionRequiredMixin, APIView):
     """Base view with common methods"""
     permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
 
     def _get_company(self, user):
         """Get company with error handling"""
@@ -67,6 +69,7 @@ class BaseCompanyView(APIView):
 
 class CompanySettingsView(BaseCompanyView):
     """Main company settings CRUD"""
+    permission_resource = 'company'
 
     def _get_or_create_settings(self, company, user):
         """Get or create settings with defaults"""
@@ -234,6 +237,7 @@ class CompanySettingsView(BaseCompanyView):
 
 
 class WorkingDaysView(BaseCompanyView):
+    permission_resource = 'preference'
     """Manage working days"""
 
     @transaction.atomic
@@ -321,6 +325,7 @@ class WorkingDaysView(BaseCompanyView):
 
 
 class PublicHolidaysView(BaseCompanyView):
+    permission_resource = 'preference'
     """CRUD for public holidays using UUIDs"""
 
     def get(self, request):
@@ -420,6 +425,7 @@ class PublicHolidaysView(BaseCompanyView):
 
 
 class SettingHistoryView(BaseCompanyView):
+    permission_resource = 'company'
     """View settings change history"""
 
     def get(self, request):
@@ -453,6 +459,7 @@ class SettingHistoryView(BaseCompanyView):
 
 
 class DesignationView(BaseCompanyView):
+    permission_resource = 'designation'
     """CRUD for company designations using UUIDs"""
 
     def get(self, request):
@@ -587,6 +594,12 @@ class DesignationView(BaseCompanyView):
 
 
 class WelcomeDesignationSetupView(BaseCompanyView):
+    permission_resource = 'designation'
+
+    def get_permission_action(self):
+        if self.request.method.upper() == 'POST':
+            return 'create'
+        return super().get_permission_action()
     """Dedicated bulk create for initial company setup wizard"""
 
     @transaction.atomic

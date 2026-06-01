@@ -7,6 +7,7 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import (
     ProductVariant, StockItem, PurchaseOrder, SalesOrder, Warehouse,
     Category, PurchaseOrderLine, SalesOrderLine, Supplier, InventoryTransaction
@@ -18,7 +19,9 @@ from apps.inventory.serializers.report import (
     SupplierPerformanceSerializer
 )
 
-class ReportViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
+class ReportViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.GenericViewSet):
+    permission_module = 'INVENTORY'
+    permission_resource = 'report'
     permission_classes = CompanyBranchMixin.permission_classes
     branch_filter_enabled = True
 

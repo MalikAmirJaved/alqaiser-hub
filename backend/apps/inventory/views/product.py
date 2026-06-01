@@ -6,6 +6,7 @@ from django.db.models import Q, F
 import uuid
 from decimal import Decimal
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import (
     Product, ProductVariant, StockItem, InventoryTransaction, Warehouse,
     VariantAttribute, VariantImage, Category, Brand,StockReservation
@@ -13,7 +14,9 @@ from apps.inventory.models import (
 from apps.inventory.serializers import ProductSerializer
 
 
-class ProductViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
+class ProductViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+    permission_module = 'INVENTORY'
+    permission_resource = 'product'
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
     lookup_field = '_id'

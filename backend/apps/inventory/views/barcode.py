@@ -2,10 +2,13 @@ from rest_framework import viewsets
 from rest_framework.filters import SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import ProductVariant
 from apps.inventory.serializers.barcode import BarcodeSerializer
 
-class BarcodeViewSet(CompanyBranchMixin, viewsets.ReadOnlyModelViewSet):
+class BarcodeViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ReadOnlyModelViewSet):
+    permission_module = 'INVENTORY'
+    permission_resource = 'barcode'
     """
     Read-only endpoint for barcode list.
     Returns all variants with their barcodes, SKUs, and product names.

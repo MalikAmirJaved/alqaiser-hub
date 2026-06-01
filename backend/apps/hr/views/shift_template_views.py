@@ -5,10 +5,13 @@ from rest_framework import status
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import ShiftTemplate
 from django.utils import timezone
 
-class ShiftTemplateView(CompanyBranchMixin, APIView):
+class ShiftTemplateView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'shift_template'
     """CRUD for shift templates with UUID support"""
     lookup_field = '_id'
     

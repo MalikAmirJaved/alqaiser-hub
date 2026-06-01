@@ -2,11 +2,14 @@ from rest_framework import viewsets
 from rest_framework.response import Response
 from django.db.models import Q
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import Brand
 from apps.inventory.serializers import BrandSerializer
 
 
-class BrandViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
+class BrandViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+    permission_module = 'INVENTORY'
+    permission_resource = 'brand'
     queryset = Brand.objects.all()
     serializer_class = BrandSerializer
     lookup_field = '_id'

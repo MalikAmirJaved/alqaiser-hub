@@ -3,11 +3,14 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.db.models import Q, Sum
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import Warehouse
 from apps.inventory.serializers import WarehouseSerializer
 
 
-class WarehouseViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
+class WarehouseViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+    permission_module = 'INVENTORY'
+    permission_resource = 'warehouse'
     queryset = Warehouse.objects.all()
     serializer_class = WarehouseSerializer
     lookup_field = '_id'

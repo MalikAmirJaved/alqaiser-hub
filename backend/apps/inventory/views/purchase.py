@@ -11,6 +11,7 @@ from django.db.models import F
 import uuid
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import (
     PurchaseOrder, PurchaseOrderLine, GoodsReceipt, GoodsReceiptLine,
     StockItem, InventoryTransaction, ProductVariant
@@ -21,7 +22,9 @@ from apps.inventory.serializers.purchase import (
 )
 
 
-class PurchaseOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
+class PurchaseOrderViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+    permission_module = 'INVENTORY'
+    permission_resource = 'purchase_order'
     queryset = PurchaseOrder.objects.all()
     serializer_class = PurchaseOrderSerializer
     lookup_field = '_id'
@@ -66,7 +69,9 @@ class PurchaseOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
             return Response({'status': 'success', 'message': 'Order cancelled'})
         return Response({'error': 'Cannot cancel this order'}, status=400)
 
-class GoodsReceiptViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
+class GoodsReceiptViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+    permission_module = 'INVENTORY'
+    permission_resource = 'purchase_order'
     queryset = GoodsReceipt.objects.all()
     serializer_class = GoodsReceiptSerializer
     lookup_field = '_id'

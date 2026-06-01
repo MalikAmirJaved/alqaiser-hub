@@ -11,6 +11,7 @@ from rest_framework.pagination import PageNumberPagination
 import logging
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import (
     Policy, PolicyAcknowledgment, PolicyVersion, PolicyCategory, Employee
 )
@@ -33,7 +34,9 @@ class StandardResultsSetPagination(PageNumberPagination):
     max_page_size = 200
 
 
-class PolicyView(CompanyBranchMixin, APIView):
+class PolicyView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'policy'
     """
     CRUD operations for HR Policies with UUID support.
     """
@@ -221,7 +224,9 @@ class PolicyView(CompanyBranchMixin, APIView):
         )
 
 
-class PolicyStatsView(CompanyBranchMixin, APIView):
+class PolicyStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'policy'
     """
     GET /api/hr/policies/stats/ - Get policy statistics
     """
@@ -300,7 +305,9 @@ class PolicyStatsView(CompanyBranchMixin, APIView):
         })
 
 
-class PolicyAcknowledgmentView(CompanyBranchMixin, APIView):
+class PolicyAcknowledgmentView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'policy'
     """
     Manage policy acknowledgments with UUID support.
     """
@@ -382,7 +389,9 @@ class PolicyAcknowledgmentView(CompanyBranchMixin, APIView):
         return Response(response_data, status=status.HTTP_201_CREATED)
 
 
-class PolicyBulkActionView(CompanyBranchMixin, APIView):
+class PolicyBulkActionView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'policy'
     """
     Bulk actions for policies with UUID support.
     """
@@ -495,7 +504,9 @@ class PolicyBulkActionView(CompanyBranchMixin, APIView):
         })
 
 
-class PolicyVersionView(CompanyBranchMixin, APIView):
+class PolicyVersionView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'policy'
     """
     View policy version history with UUID support.
     """
@@ -541,7 +552,9 @@ class PolicyVersionView(CompanyBranchMixin, APIView):
         return Response(response_data)
 
 
-class PolicyCategoryView(CompanyBranchMixin, APIView):
+class PolicyCategoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'policy'
     """
     CRUD for custom policy categories with UUID support.
     """
@@ -660,7 +673,9 @@ class PolicyCategoryView(CompanyBranchMixin, APIView):
         return Response({'message': 'Category deleted successfully'})
 
 
-class EmployeePendingAcknowledgmentsView(CompanyBranchMixin, APIView):
+class EmployeePendingAcknowledgmentsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'policy'
     """
     Get pending acknowledgments for an employee with UUID support.
     """

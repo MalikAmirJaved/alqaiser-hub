@@ -12,6 +12,7 @@ from rest_framework import status
 import logging
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import (
     Employee, ShiftTemplate, ShiftOverride, 
     ShiftDateRangeAssignment, ShiftChangeHistory,
@@ -27,7 +28,9 @@ from apps.hr.services.shift_service import ShiftResolutionService
 logger = logging.getLogger(__name__)
 
 
-class EmployeeShiftResolveView(CompanyBranchMixin, APIView):
+class EmployeeShiftResolveView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'shift_override'
     """Resolve shifts for employees on specific dates with UUID support"""
     permission_classes = [IsAuthenticated]
     
@@ -128,7 +131,9 @@ class EmployeeShiftResolveView(CompanyBranchMixin, APIView):
         )
 
 
-class ShiftOverrideView(CompanyBranchMixin, APIView):
+class ShiftOverrideView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'shift_override'
     """CRUD for shift overrides with UUID support"""
     permission_classes = [IsAuthenticated]
     
@@ -268,7 +273,9 @@ class ShiftOverrideView(CompanyBranchMixin, APIView):
             )
 
 
-class ShiftDateRangeView(CompanyBranchMixin, APIView):
+class ShiftDateRangeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'shift_override'
     """CRUD for date range assignments with UUID support"""
     permission_classes = [IsAuthenticated]
     
@@ -433,7 +440,14 @@ class ShiftDateRangeView(CompanyBranchMixin, APIView):
             )
 
 
-class BulkShiftAssignmentView(CompanyBranchMixin, APIView):
+class BulkShiftAssignmentView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'shift_override'
+
+    def get_permission_action(self):
+        if self.request.method.upper() == 'POST':
+            return 'assign'
+        return super().get_permission_action()
     """Bulk shift assignment for multiple employees with UUID support"""
     permission_classes = [IsAuthenticated]
     
@@ -526,7 +540,9 @@ class BulkShiftAssignmentView(CompanyBranchMixin, APIView):
         return Response(results, status=status.HTTP_200_OK)
 
 
-class ShiftHistoryView(CompanyBranchMixin, APIView):
+class ShiftHistoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'shift_override'
     """Get shift change history with UUID support"""
     permission_classes = [IsAuthenticated]
     
@@ -592,7 +608,9 @@ class ShiftHistoryView(CompanyBranchMixin, APIView):
         })
 
 
-class ShiftStatisticsView(CompanyBranchMixin, APIView):
+class ShiftStatisticsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'shift_override'
     """Get shift statistics with UUID support"""
     permission_classes = [IsAuthenticated]
     
@@ -675,7 +693,9 @@ class ShiftStatisticsView(CompanyBranchMixin, APIView):
         })
 
 
-class ShiftScheduleGenerateView(CompanyBranchMixin, APIView):
+class ShiftScheduleGenerateView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'shift_template'
     """Generate and cache shift schedules for performance with UUID support"""
     permission_classes = [IsAuthenticated]
     

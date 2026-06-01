@@ -10,12 +10,15 @@ from rest_framework import status
 import logging
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import Employee, EmployeeDefaultShift, EmployeeAssetAssignment, AssetCategory
 
 logger = logging.getLogger(__name__)
 
 
-class EmployeeView(CompanyBranchMixin, APIView):
+class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'employee'
     """CRUD for Employees with UUID support"""
     permission_classes = [IsAuthenticated]
     
@@ -376,7 +379,9 @@ class EmployeeView(CompanyBranchMixin, APIView):
         return Response({'message': 'Employee deleted successfully'})
 
 
-class EmployeeStatsView(CompanyBranchMixin, APIView):
+class EmployeeStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'employee'
     """Get employee statistics"""
     permission_classes = [IsAuthenticated]
     

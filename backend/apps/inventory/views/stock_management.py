@@ -7,6 +7,7 @@ from django.core.paginator import Paginator
 import uuid
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import StockItem, InventoryTransaction, ProductVariant, Warehouse
 from apps.inventory.serializers.stock_management import (
     StockAdjustmentSerializer,
@@ -17,7 +18,9 @@ from apps.inventory.serializers.stock_management import (
 from .batch_stock import BatchStockMixin
 from django.core.cache import cache
 
-class StockManagementViewSet(CompanyBranchMixin,BatchStockMixin, viewsets.GenericViewSet):
+class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchStockMixin, viewsets.GenericViewSet):
+    permission_module = 'INVENTORY'
+    permission_resource = 'stock'
     queryset = StockItem.objects.all()
 
     # -------------------- STOCK ADJUST --------------------
