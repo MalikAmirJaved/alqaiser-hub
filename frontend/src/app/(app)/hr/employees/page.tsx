@@ -19,6 +19,8 @@ import { cn } from "@/lib/utils";
 import { useConfirmation } from "@/contexts/ConfirmationModalContext";
 import { useRouter } from "next/navigation";
 import { getPermissions } from "@/lib/permissions";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 
 export default function EmployeesPage() {
   const { user, ready } = useAuth();
@@ -32,8 +34,15 @@ export default function EmployeesPage() {
   const { data: employees = [], isLoading } = useEmployees(
     query ? { search: query } : undefined
   );
-  const employeePermissions = getPermissions("HR", "employee");
-  console.log(employeePermissions);
+  const permissions = useSelector(
+  (state: RootState) => state.permissions.permissions
+);
+
+const employeePermissions = getPermissions(
+  permissions,
+  "HR",
+  "employee"
+);
 
   const { data: stats } = useEmployeeStats();
   const { data: shiftTemplates = [] } = useShiftTemplates();
@@ -262,6 +271,7 @@ export default function EmployeesPage() {
   // Define actions for each row
   const renderActions = (row, idx) => (
     <>
+    {employeePermissions.update && (
       <button
         onClick={() => openEditModal(row)}
         className="p-1.5 rounded-md hover:bg-muted transition-colors"
@@ -269,6 +279,8 @@ export default function EmployeesPage() {
       >
         <Pencil className="w-4 h-4" />
       </button>
+    )} 
+    {employeePermissions.delete && (
       <button
         onClick={() => handleDelete(row)}
         className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive transition-colors"
@@ -276,6 +288,7 @@ export default function EmployeesPage() {
       >
         <Trash2 className="w-4 h-4" />
       </button>
+    )}
     </>
   );
 
@@ -582,7 +595,7 @@ export default function EmployeesPage() {
       )}
 
       {/* Employee Form Modal */}
-      {(modalOpen && employeePermissions.create) && (
+      {(modalOpen && (editingEmployee? employeePermissions.update: employeePermissions.create)) && (
         <EmployeeForm
           initialData={editingEmployee}
           onSubmit={handleSaveEmployee}
