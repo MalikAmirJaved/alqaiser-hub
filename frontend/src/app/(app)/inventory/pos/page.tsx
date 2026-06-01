@@ -87,7 +87,7 @@ export default function SalesPage() {
   // Prefetch product list on mount for faster initial load
   useEffect(() => {
     queryClient.prefetchQuery({
-      queryKey: ["allVariantsSimple", { active_only: true }],
+      queryKey: ["inventory_variant", { active_only: true }],
       queryFn: () => useAllVariantsSimple({ active_only: true }),
       staleTime: 5 * 60 * 1000,
     });
@@ -147,9 +147,9 @@ export default function SalesPage() {
       }
       clearCart();
       refetchDrafts();
-      await queryClient.refetchQueries({ queryKey: ["allVariantsSimple"] });
+      await queryClient.refetchQueries({ queryKey: ["inventory_variant"] });
       await queryClient.refetchQueries({ queryKey: ["batchStock"] });
-      queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
     } catch (err: any) {
       console.error(err);
     }
@@ -173,7 +173,7 @@ export default function SalesPage() {
       });
       clearCart();
       refetchDrafts();
-      await queryClient.refetchQueries({ queryKey: ["allVariantsSimple"] });
+      await queryClient.refetchQueries({ queryKey: ["inventory_variant"] });
       await queryClient.refetchQueries({ queryKey: ["batchStock"] });
     } catch (err: any) {
       console.error(err);

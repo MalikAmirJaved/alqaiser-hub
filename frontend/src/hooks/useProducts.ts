@@ -102,37 +102,19 @@ export interface ProductMutationResponse {
 }
 
 // ---------- Hook with pagination handling ----------
-export function useProducts(filters?: {
-  search?: string;
-  category?: string;
-  brand?: string;
-  status?: string;
-}) {
+export function useProducts(filters?: any) {
   const api = useApi();
-
   let url = "/api/inventory/products/";
-
   const params = new URLSearchParams();
-
-  if (filters) {
-    if (filters.search) params.append("search", filters.search);
-    if (filters.category) params.append("category", filters.category);
-    if (filters.brand) params.append("brand", filters.brand);
-    if (filters.status) params.append("status", filters.status);
-  }
-
+  if (filters?.search) params.append("search", filters.search);
+  if (filters?.category) params.append("category", filters.category);
+  if (filters?.brand) params.append("brand", filters.brand);
+  if (filters?.status) params.append("status", filters.status);
   const queryString = params.toString();
+  if (queryString) url += `?${queryString}`;
 
-  if (queryString) {
-    url += `?${queryString}`;
-  }
-
-  return useQuery<
-    PaginatedResponse<Product>,
-    Error,
-    Product[]
-  >({
-    queryKey: ["inventory_product", filters],
+  return useQuery<PaginatedResponse<Product>, Error, Product[]>({
+    queryKey: ["inventory_product", filters],    // ✅ changed
     queryFn: () => api<PaginatedResponse<Product>>(url),
     select: (data) => data.results,
     staleTime: 30 * 1000,
@@ -142,7 +124,7 @@ export function useProducts(filters?: {
 export function useProduct(id: string | null) {
   const api = useApi();
   return useQuery<Product>({
-    queryKey: ["product", id],
+    queryKey: ["inventory_product", id],        // ✅ changed
     queryFn: () => api<Product>(`/api/inventory/products/${id}/`),
     enabled: !!id,
   });
@@ -158,7 +140,7 @@ export function useCreateProduct() {
         body: JSON.stringify(data),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });   // ✅ changed
     },
   });
 }
@@ -174,7 +156,7 @@ export function useUpdateProduct() {
       }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
-      queryClient.invalidateQueries({ queryKey: ["product", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product", variables.id] });
     },
   });
 }

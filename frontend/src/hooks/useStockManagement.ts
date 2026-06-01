@@ -140,8 +140,8 @@ export function useAdjustStock() {
       // Invalidate all stock-related queries
       queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
       queryClient.invalidateQueries({ queryKey: ["stockHistory"] });
-      queryClient.invalidateQueries({ queryKey: ["product"] });
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
       queryClient.invalidateQueries({ queryKey: ["variantSummary"] });
     },
   });
