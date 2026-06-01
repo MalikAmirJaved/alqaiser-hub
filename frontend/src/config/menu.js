@@ -65,7 +65,6 @@ export const menu = [
       { title: "Warehouse Management", to: "/inventory/warehouses", icon: Warehouse },
       { title: "Purchase Management", to: "/inventory/purchases", icon: ShoppingCart },
       { title: "Suppliers & Vendors", to: "/inventory/suppliers", icon: Truck },
-      { title: "Assets Inventory", to: "/inventory/assets", icon: Cpu },
       { title: "Inventory Transfers", to: "/inventory/transfers", icon: Repeat },
       { title: "Barcode & QR", to: "/inventory/barcode", icon: QrCode },
       { title: "Reports", to: "/inventory/reports", icon: BarChart3 },
@@ -104,7 +103,7 @@ export const menu = [
     icon: Eye,
     children: [
       { title: "Live Dashboard", to: "/monitoring/dashboard", icon: Video },
-      { title: "Activity Tracking", to: "/monitoring/activiy-tracking", icon: DoorOpen },
+      { title: "Activity Tracking", to: "/monitoring/activity-tracking", icon: DoorOpen },
       { title: "Inventory Monitoring", to: "/monitoring/inventory-monitoring", icon: Camera },
       { title: "Workforce Monitoring", to: "/monitoring/workforce-monitoring", icon: Video },
       { title: "Alerts & Events", to: "/monitoring/alerts-events", icon: DoorOpen },

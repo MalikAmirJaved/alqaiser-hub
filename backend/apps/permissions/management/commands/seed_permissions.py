@@ -17,20 +17,19 @@ MODULES = {
 
 RESOURCES = {
     'HR': [
-        'employee', 'leave', 'payroll', 'attendance', 'shift_template', 'shift_override',
-        'recruitment', 'performance', 'exit', 'compensation', 'policy', 'asset', 'dashboard'
+        'dashboard', 'employee', 'payroll', 'attendance','leave',  'shift_template', 'shift_override','emp_asset','asset_kit','asset_assignment',
+        'performance','recruitment',  'exit', 'policy','compensation',
     ],
     'INVENTORY': [
-        'product', 'variant', 'category', 'brand', 'warehouse', 'supplier', 'vendor',
-        'customer', 'purchase_order', 'sales_order', 'stock', 'stock_transfer',
-        'report', 'alert', 'audit_log', 'dashboard', 'asset'
+        'dashboard','category', 'brand', 'product','stock','warehouse','purchase_order',  'supplier', 'vendor',
+        'stock_transfer', 'barcode','report', 'alert', 'customer', 'sales_order',  'audit_log',
     ],
     'FINANCE': [
-        'account', 'invoice', 'expense', 'payable', 'receivable', 'budget',
-        'bank_account', 'tax', 'forecast', 'payroll', 'dashboard', 'setting'
+         'dashboard', 'account', 'invoice', 'expense', 'payable', 'receivable', 'budget',
+        'bank_account',  'payroll', 'report', 'tax', 'forecast','setting','audit_log',
     ],
     'AI_MONITORING': [
-        'live_dashboard', 'workforce', 'inventory', 'alert', 'report', 'activity', 'dashboard'
+        'live_dashboard', 'workforce', 'inventory', 'alert', 'report', 'activity', 
     ],
     'SETTINGS': [
         'company', 'user', 'role', 'department', 'designation', 'preference', 'dashboard', 'permissions'

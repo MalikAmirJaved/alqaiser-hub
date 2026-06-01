@@ -11,9 +11,9 @@ export const routePermissions: Record<string, string> = {
   "/hr/leave": "HR:leave:view",
   "/hr/shifts/list": "HR:shift_override:view",
   "/hr/shifts/templates": "HR:shift_template:view",
-  "/hr/assets/list": "HR:asset:view",
-  "/hr/assets/kits": "HR:asset_category:view",
-  "/hr/assets/employee-assets": "HR:asset:assign",
+  "/hr/assets/list": "HR:emp_asset:view",
+  "/hr/assets/kits": "HR:asset_kit:view",
+  "/hr/assets/employee-assets": "HR:asset_assignment:view",
   "/hr/performance": "HR:performance:view",
   "/hr/recruitment": "HR:recruitment:view",
   "/hr/exit": "HR:exit:view",
@@ -54,7 +54,7 @@ export const routePermissions: Record<string, string> = {
 
   // AI Monitoring routes
   "/monitoring/dashboard": "AI_MONITORING:live_dashboard:view",
-  "/monitoring/activiy-tracking": "AI_MONITORING:activity:view",
+  "/monitoring/activity-tracking": "AI_MONITORING:activity:view",
   "/monitoring/inventory-monitoring": "AI_MONITORING:inventory:view",
   "/monitoring/workforce-monitoring": "AI_MONITORING:workforce:view",
   "/monitoring/alerts-events": "AI_MONITORING:alert:view",
@@ -88,9 +88,9 @@ export const menuPermissionMapping: Record<string, string | null> = {
   "Compensation & Loan": "HR:compensation:view",
   Shifts: "HR:shift_override:view",
   "Shift Templates": "HR:shift_template:view",
-  Assets: "HR:asset:view",                 // under Employee Assets → Assets
-  "Asset Kits": "HR:asset_category:view",
-  "Employee Assignments": "HR:asset:assign",
+  Assets: "HR:emp_asset:view",                
+  "Asset Kits": "HR:asset_kit:view",
+  "Employee Assignments": "HR:asset_assignment:view",
 
   // ========== INVENTORY ==========
   "Inventory Dashboard": "INVENTORY:dashboard:view",

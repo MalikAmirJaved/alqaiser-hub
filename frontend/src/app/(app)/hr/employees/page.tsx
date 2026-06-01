@@ -18,11 +18,11 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useConfirmation } from "@/contexts/ConfirmationModalContext";
 import { useRouter } from "next/navigation";
-
+import { getPermissions } from "@/lib/permissions";
 
 export default function EmployeesPage() {
   const { user, ready } = useAuth();
-  const { confirm } = useConfirmation(); 
+  const { confirm } = useConfirmation();
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
@@ -32,6 +32,9 @@ export default function EmployeesPage() {
   const { data: employees = [], isLoading } = useEmployees(
     query ? { search: query } : undefined
   );
+  const employeePermissions = getPermissions("HR", "employee");
+  console.log(employeePermissions);
+
   const { data: stats } = useEmployeeStats();
   const { data: shiftTemplates = [] } = useShiftTemplates();
   const createEmployee = useCreateEmployee();
@@ -68,7 +71,7 @@ export default function EmployeesPage() {
     }
   };
 
-const handleDelete = async (employee) => {
+  const handleDelete = async (employee) => {
 
 
     confirm({
@@ -259,20 +262,20 @@ const handleDelete = async (employee) => {
   // Define actions for each row
   const renderActions = (row, idx) => (
     <>
-        <button
-          onClick={() => openEditModal(row)}
-          className="p-1.5 rounded-md hover:bg-muted transition-colors"
-          aria-label="Edit"
-        >
-          <Pencil className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => handleDelete(row)}
-          className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive transition-colors"
-          aria-label="Delete"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+      <button
+        onClick={() => openEditModal(row)}
+        className="p-1.5 rounded-md hover:bg-muted transition-colors"
+        aria-label="Edit"
+      >
+        <Pencil className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => handleDelete(row)}
+        className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive transition-colors"
+        aria-label="Delete"
+      >
+        <Trash2 className="w-4 h-4" />
+      </button>
     </>
   );
 
@@ -450,7 +453,7 @@ const handleDelete = async (employee) => {
         actions={
           <div className="flex items-center gap-2">
             {/* Bulk Delete Button */}
-            {selectedRows.size > 0  && (
+            {selectedRows.size > 0 && (
               <button
                 onClick={handleBulkDelete}
                 className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-destructive text-destructive-foreground text-sm hover:bg-destructive/90 transition-colors"
@@ -460,12 +463,14 @@ const handleDelete = async (employee) => {
             )}
 
             {/* Export Button */}
-            <button
-              onClick={exportCsv}
-              className="inline-flex items-center gap-2 px-3 h-9 rounded-md border border-border text-sm hover:bg-muted transition-colors"
-            >
-              <Download className="w-4 h-4" /> Export
-            </button>
+            {employeePermissions.export && (
+              <button
+                onClick={exportCsv}
+                className="inline-flex items-center gap-2 px-3 h-9 rounded-md border border-border text-sm hover:bg-muted transition-colors"
+              >
+                <Download className="w-4 h-4" /> Export
+              </button>
+            )}
 
             {/* View Toggle Buttons */}
             <div className="flex items-center gap-1 p-0.5 rounded-md border border-border">
@@ -492,12 +497,15 @@ const handleDelete = async (employee) => {
             </div>
 
             {/* Add Employee Button */}
-              <button
-                onClick={openAddModal}
-                className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-colors"
-              >
-                <Plus className="w-4 h-4" /> Add Employee
-              </button>
+            {employeePermissions.create && (
+
+            <button
+              onClick={openAddModal}
+              className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Add Employee
+            </button>
+            )}
           </div>
         }
       />
@@ -529,7 +537,7 @@ const handleDelete = async (employee) => {
           onRowClick={(row, idx) => {
             router.push(`employees/${row.id}`)
           }}
-          actions={ renderActions || undefined}
+          actions={renderActions || undefined}
           stickyHeader={true}
         />
       ) : (
@@ -539,11 +547,11 @@ const handleDelete = async (employee) => {
           loading={isLoading}
           emptyMessage="No employees found"
           emptyAction={
-              {
-                label: "Add Employee",
-                onClick: openAddModal,
-              }
-               || undefined
+            {
+              label: "Add Employee",
+              onClick: openAddModal,
+            }
+            || undefined
           }
           columns={4}
           gap={4}
@@ -557,12 +565,12 @@ const handleDelete = async (employee) => {
             <span className="text-sm font-medium">
               {selectedRows.size} employee{selectedRows.size !== 1 && 's'} selected
             </span>
-              <button
-                onClick={handleBulkDelete}
-                className="text-xs px-2 py-1 rounded bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
-              >
-                Delete All
-              </button>
+            <button
+              onClick={handleBulkDelete}
+              className="text-xs px-2 py-1 rounded bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+            >
+              Delete All
+            </button>
             <button
               onClick={() => setSelectedRows(new Set())}
               className="text-xs px-2 py-1 rounded border border-border hover:bg-muted transition-colors"
@@ -574,7 +582,7 @@ const handleDelete = async (employee) => {
       )}
 
       {/* Employee Form Modal */}
-      {modalOpen && (
+      {(modalOpen && employeePermissions.create) && (
         <EmployeeForm
           initialData={editingEmployee}
           onSubmit={handleSaveEmployee}
