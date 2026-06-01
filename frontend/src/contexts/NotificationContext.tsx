@@ -152,13 +152,11 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
       await fetchNotifications();
 
       const wsUrl = apiUrl.replace(/^http/, "ws") + `/ws/notifications/${companyId}/${branchId}/`;
-      console.log(`[NotificationContext] Connecting to ${wsUrl} (attempt ${retryCount + 1})`);
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log("[NotificationContext] WebSocket opened");
         setIsConnected(true);
         reconnectTimeoutRef.current && clearTimeout(reconnectTimeoutRef.current);
 

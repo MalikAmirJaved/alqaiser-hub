@@ -257,13 +257,13 @@ export function usePermissionSocket(watchedUserId?: number | null) {
   const dispatch = useDispatch<AppDispatch>();
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mountedRef = useRef(true);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Helper to reload permissions for the current user
   const reloadCurrentUserPermissions = useCallback(() => {
     if (mountedRef.current && watchedUserId) {
-      console.log("[usePermissionSocket] Reloading Redux permissions for current user");
+      console.log("[usePermissionSocket] Reloading Redux permissions");
       dispatch(loadPermissions());
     }
   }, [dispatch, watchedUserId]);
@@ -290,15 +290,17 @@ export function usePermissionSocket(watchedUserId?: number | null) {
       ws.onopen = () => {
         console.log("[usePermissionSocket] WebSocket opened");
         reconnectTimerRef.current && clearTimeout(reconnectTimerRef.current);
-        // ✅ 1. Reload permissions immediately after connection
+
+        // ✅ Reload permissions immediately after reconnect
         reloadCurrentUserPermissions();
-        // ✅ 2. Start periodic refresh (every 30s) as a safety net
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        intervalRef.current = setInterval(() => {
-          if (mountedRef.current && ws.readyState === WebSocket.OPEN) {
-            reloadCurrentUserPermissions();
+
+        // ✅ Start heartbeat (keep connection alive)
+        if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "ping" }));
           }
-        }, 30000);
+        }, 25000);
       };
 
       ws.onmessage = (event) => {
@@ -314,14 +316,13 @@ export function usePermissionSocket(watchedUserId?: number | null) {
               queryClient.invalidateQueries({ queryKey: permissionKeys.userOverrides(msg.user_id) });
 
               if (watchedUserId && msg.user_id === watchedUserId) {
-                queryClient.invalidateQueries({ queryKey: permissionKeys.userModules(watchedUserId) });
-                // ✅ Also reload Redux permissions for the current user
+                console.log(`[usePermissionSocket] Message for current user (${msg.user_id}) – reloading Redux permissions`);
                 reloadCurrentUserPermissions();
               }
               break;
 
             case "self_permission_changed":
-              console.log("[usePermissionSocket] Self permission changed");
+              console.log("[usePermissionSocket] Received self_permission_changed – reloading Redux permissions");
               reloadCurrentUserPermissions();
               break;
 
@@ -336,7 +337,7 @@ export function usePermissionSocket(watchedUserId?: number | null) {
       ws.onclose = (event) => {
         if (!mountedRef.current) return;
         console.warn(`[usePermissionSocket] Closed (code ${event.code}). Reconnecting...`);
-        if (intervalRef.current) clearInterval(intervalRef.current);
+        if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
         const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
         reconnectTimerRef.current = setTimeout(() => connect(retryCount + 1), delay);
       };
@@ -355,7 +356,7 @@ export function usePermissionSocket(watchedUserId?: number | null) {
     return () => {
       mountedRef.current = false;
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
       wsRef.current?.close();
     };
   }, [connect]);

@@ -35,6 +35,7 @@ import json
 import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
+from asgiref.sync import async_to_sync   # ✅ Fix: use async_to_sync instead of manual event loop
 
 logger = logging.getLogger(__name__)
 
@@ -118,36 +119,28 @@ class PermissionConsumer(AsyncWebsocketConsumer):
                 get_channel_layer(), user.id
             )
         """
-        import asyncio
-        loop = asyncio.get_event_loop()
-        coros = [
-            channel_layer.group_send(
+        async def _broadcast():
+            await channel_layer.group_send(
                 PERMISSION_GROUP,
                 {"type": "permission_changed", "user_id": user_id},
-            ),
+            )
             # Also push self_permission_changed directly to the affected user
-            channel_layer.group_send(
+            await channel_layer.group_send(
                 f"user_permissions_{user_id}",
                 {"type": "self_permission_changed"},
-            ),
-        ]
-        for coro in coros:
-            loop.run_until_complete(coro)
+            )
+        async_to_sync(_broadcast)()
 
     @classmethod
     def broadcast_role_changed(cls, channel_layer, user_id: int):
         """Call after UserRole create/delete for `user_id`."""
-        import asyncio
-        loop = asyncio.get_event_loop()
-        coros = [
-            channel_layer.group_send(
+        async def _broadcast():
+            await channel_layer.group_send(
                 PERMISSION_GROUP,
                 {"type": "role_changed", "user_id": user_id},
-            ),
-            channel_layer.group_send(
+            )
+            await channel_layer.group_send(
                 f"user_permissions_{user_id}",
                 {"type": "self_permission_changed"},
-            ),
-        ]
-        for coro in coros:
-            loop.run_until_complete(coro)
+            )
+        async_to_sync(_broadcast)()
