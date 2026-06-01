@@ -32,7 +32,7 @@ CUSTOM_ACTION_TO_PERMISSION = {
     'cancel': 'update',
     'complete': 'update',
     'adjust': 'update',
-    'batch_stock': 'update',
+    'batch_stock': 'view',
     'overall_summary': 'view',
     'stock_report': 'view',
     'stock_summary': 'view',
@@ -68,14 +68,26 @@ class PermissionRequiredMixin:
         permission_module = 'INVENTORY'   # matches Module.code in seed
         permission_resource = 'product'   # matches Resource.code in seed
 
-  Optional:
+    Optional:
         permission_action_map = {'custom_action': 'approve'}
         skip_permission_check = True      # health checks, webhooks, etc.
+
+    Cross-module access (for shared read endpoints like batch-stock):
+        action_permission_any_of = {
+            'batch_stock': [
+                ('INVENTORY', 'stock'),
+                ('INVENTORY', 'sales_order'),
+                ('INVENTORY', 'product'),
+            ],
+        }
+        When the current action matches a key, access is granted if the user
+        has the resolved action on ANY of the listed (module, resource) pairs.
     """
 
     permission_module: str | None = None
     permission_resource: str | None = None
     permission_action_map: dict[str, str] = {}
+    action_permission_any_of: dict[str, list[tuple[str, str]]] = {}
     skip_permission_check: bool = False
 
     def get_permission_action(self) -> str:
@@ -120,6 +132,35 @@ class PermissionRequiredMixin:
         if not user or not user.is_authenticated:
             return
 
+        # ── Cross-module "any-of" check ──────────────────────────────
+        # For actions that legitimately serve multiple modules (e.g.
+        # batch_stock is used by POS, product detail, and stock pages),
+        # allow access if the user has the resolved action on ANY of
+        # the listed (module, resource) alternatives.
+        viewset_action = getattr(self, 'action', None) or ''
+        normalized_action = viewset_action.replace('-', '_')
+        any_of = (
+            self.action_permission_any_of.get(viewset_action)
+            or self.action_permission_any_of.get(normalized_action)
+        )
+
+        if any_of:
+            for alt_module, alt_resource in any_of:
+                if check_permission(user, alt_module, alt_resource, action):
+                    return  # ✅ Granted via cross-module alternative
+            # None of the alternatives matched — deny with helpful detail
+            codes = [
+                build_permission_code(m, r, action) for m, r in any_of
+            ]
+            raise PermissionDenied(
+                detail={
+                    'error': 'You do not have permission to perform this action.',
+                    'required_any_of': codes,
+                    'action': action.lower(),
+                }
+            )
+
+        # ── Standard single-resource check ───────────────────────────
         if check_permission(user, module, resource, action):
             return
 

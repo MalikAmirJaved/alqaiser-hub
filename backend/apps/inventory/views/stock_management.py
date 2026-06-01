@@ -23,6 +23,27 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
     permission_resource = 'stock'
     queryset = StockItem.objects.all()
 
+    # Cross-module read access: these read-only actions serve multiple
+    # features (POS, product details, reports) — grant access if the
+    # user has view permission on ANY of the listed resources.
+    action_permission_any_of = {
+        'batch_stock': [
+            ('INVENTORY', 'stock'),
+            ('INVENTORY', 'sales_order'),
+            ('INVENTORY', 'product'),
+        ],
+        'current_stock': [
+            ('INVENTORY', 'stock'),
+            ('INVENTORY', 'sales_order'),
+            ('INVENTORY', 'product'),
+        ],
+        'variant_summary': [
+            ('INVENTORY', 'stock'),
+            ('INVENTORY', 'sales_order'),
+            ('INVENTORY', 'product'),
+        ],
+    }
+
     # -------------------- STOCK ADJUST --------------------
     @action(detail=False, methods=['post'])
     def adjust(self, request):
