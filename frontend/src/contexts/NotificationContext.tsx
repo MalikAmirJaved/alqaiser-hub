@@ -21,6 +21,7 @@ import { RootState } from "@/store";
 
 // Map backend entity names to React Query keys for cache invalidation
 const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
+  // HR
   assets: ["assets", "assetStats"],
   assetCategories: ["assetCategories", "assetCategoryStats"],
   employees: ["employees", "employeeStats"],
@@ -34,19 +35,36 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   policies: ["policies"],
   compensations: ["compensations"],
   loans: ["loans"],
-  inventory_category: ["categories"],
-  inventory_brand: ["brands"],
-  inventory_warehouse: ["warehouses", "warehouseStats"],
-  product: ["products", "productStats"],
-  inventory: ["inventory", "productInventory"],
-  tags: ["tags"],
-  supplier: ["suppliers", "supplierStats"],
-  vendor: ["vendors", "vendorStats"],
-  variant: ["allVariantsSimple", "allVariants", "variantStock", "batchStock"],
-  stock: ["batchStock", "currentStock", "variantStock"],
-  sales_order: ["salesOrders"], // ✅ CRITICAL: now sales orders will invalidate
-  sales_return: ["salesReturns"],
-  stock_transfer: ["stockTransfers"],
+
+  // Inventory – exact matches (sent from backend)
+  inventory_category: ["inventory_category"],
+  inventory_brand: ["inventory_brand"],
+  inventory_warehouse: ["inventory_warehouse"],
+  inventory_product: ["inventory_product"],
+  inventory_supplier: ["inventory_supplier"],
+  inventory_variant: ["inventory_variant"],
+  inventory_stock: ["inventory_stock"],
+  inventory_sales_order: ["inventory_sales_order"],
+  inventory_stock_transfer: ["inventory_stock_transfer"],
+
+  // Inventory – alias keys for convenience (optional)
+  product: ["inventory_product"],
+  inventory: ["inventory_product"],
+  supplier: ["inventory_supplier"],
+  vendor: ["inventory_supplier"],
+  variant: ["inventory_variant"],
+  stock: ["inventory_stock"],
+  sales_order: ["inventory_sales_order"],
+  sales_return: ["inventory_sales_order"],
+  stock_transfer: ["inventory_stock_transfer"],
+  inventory_purchase_order: ["inventory_purchase_order"],
+
+  // Company & settings
+  company: ["company_settings"],
+  branch: ["branch"],
+  user: ["users", "user"],
+  company_settings: ["companySettings"],
+  designation: ["designation", "companySettings"],
 };
 
 interface Notification {
@@ -90,11 +108,9 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const user = useSelector((state: RootState) => state.auth.user);
-  const reconnectTimeoutRef =
-    useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const heartbeatIntervalRef =
-    useRef<ReturnType<typeof setInterval> | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const api = useApi();
   const queryClient = useQueryClient();
 
@@ -118,24 +134,34 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
     async (retryCount = 0) => {
       const companyId = user?.companyId;
       const branchId = user?.branchId;
-
       if (!companyId || !branchId) {
-        console.warn("Missing company or branch ID, cannot open WebSocket");
+        console.warn(
+          "[NotificationContext] Missing company or branch ID – waiting for user data. Retry will happen when user loads."
+        );
+        return;
+      }
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (!apiUrl) {
+        console.error(
+          "[NotificationContext] NEXT_PUBLIC_API_URL is not defined. WebSocket will not connect."
+        );
         return;
       }
 
       await fetchNotifications();
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
       const wsUrl = apiUrl.replace(/^http/, "ws") + `/ws/notifications/${companyId}/${branchId}/`;
+      console.log(`[NotificationContext] Connecting to ${wsUrl} (attempt ${retryCount + 1})`);
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
+        console.log("[NotificationContext] WebSocket opened");
         setIsConnected(true);
-        // Reset retry count on successful connection
         reconnectTimeoutRef.current && clearTimeout(reconnectTimeoutRef.current);
+
         // Start heartbeat
         if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
         heartbeatIntervalRef.current = setInterval(() => {
@@ -179,14 +205,16 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             }
           }
         } catch (e) {
-          console.error("Error parsing websocket message", e);
+          console.error("[NotificationContext] Error parsing websocket message", e);
         }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
+        if (!wsRef.current) return;
+        console.warn(`[NotificationContext] Closed (code ${event.code}). Reconnecting...`);
         setIsConnected(false);
         if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
-        // Exponential backoff: 2^retryCount * 1000 ms, capped at 30 seconds
+
         const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
         reconnectTimeoutRef.current = setTimeout(() => {
           connectSocket(retryCount + 1);
@@ -194,10 +222,11 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
       };
 
       ws.onerror = (error) => {
-        console.error("WebSocket error:", error);
+        console.error("[NotificationContext] WebSocket error:", error);
+        ws.close(); // trigger reconnect
       };
     },
-    [api, fetchNotifications, queryClient]
+    [api, fetchNotifications, queryClient, user?.companyId, user?.branchId]
   );
 
   useEffect(() => {
@@ -214,7 +243,6 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
     let pollInterval: NodeJS.Timeout;
     if (!isConnected) {
       pollInterval = setInterval(() => {
-        // Refresh critical data every 30 seconds when offline
         queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
         queryClient.invalidateQueries({ queryKey: ["currentStock"] });
       }, 30000);

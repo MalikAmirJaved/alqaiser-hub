@@ -89,7 +89,7 @@ export function useCurrentStock(filters?: {
   const url = `/api/inventory/stock/current_stock/${params.toString() ? `?${params}` : ""}`;
 
   return useQuery<PaginatedResponse<StockItem>>({
-    queryKey: ["currentStock", filters],
+    queryKey: ["inventory_stock", filters],
     queryFn: () => api(url),
     staleTime: 30_000,
   });
@@ -138,7 +138,7 @@ export function useAdjustStock() {
       }),
     onSuccess: () => {
       // Invalidate all stock-related queries
-      queryClient.invalidateQueries({ queryKey: ["currentStock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
       queryClient.invalidateQueries({ queryKey: ["stockHistory"] });
       queryClient.invalidateQueries({ queryKey: ["product"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });

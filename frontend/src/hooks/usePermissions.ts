@@ -8,7 +8,7 @@ import { loadPermissions } from "@/store/slices/permissionSlice";
 import { AppDispatch } from "@/store";
 
 // ─────────────────────────────────────────────────────────────
-// Types
+// Types (unchanged)
 // ─────────────────────────────────────────────────────────────
 
 export interface PermissionUser {
@@ -93,7 +93,7 @@ export interface AssignRolePayload {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Query Keys
+// Query Keys (unchanged)
 // ─────────────────────────────────────────────────────────────
 
 export const permissionKeys = {
@@ -107,10 +107,9 @@ export const permissionKeys = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// Hooks
+// Hooks (unchanged)
 // ─────────────────────────────────────────────────────────────
 
-/** All users in the current company (for the left panel list) */
 export function usePermissionUsers() {
   const api = useApi();
   return useQuery<PermissionUser[]>({
@@ -123,7 +122,6 @@ export function usePermissionUsers() {
   });
 }
 
-/** Full module → resource → action tree for a specific user with granted flags */
 export function useUserModules(userId: number | null) {
   const api = useApi();
   return useQuery<ModuleNode[]>({
@@ -136,7 +134,6 @@ export function useUserModules(userId: number | null) {
   });
 }
 
-/** Roles assigned to a user */
 export function useUserRoles(userId: number | null) {
   const api = useApi();
   return useQuery<UserRole[]>({
@@ -147,7 +144,6 @@ export function useUserRoles(userId: number | null) {
   });
 }
 
-/** User-specific permission overrides */
 export function useUserOverrides(userId: number | null) {
   const api = useApi();
   return useQuery<UserPermissionOverride[]>({
@@ -158,7 +154,6 @@ export function useUserOverrides(userId: number | null) {
   });
 }
 
-/** All available roles */
 export function useRoles() {
   const api = useApi();
   return useQuery<Role[]>({
@@ -169,10 +164,9 @@ export function useRoles() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Mutations
+// Mutations (unchanged)
 // ─────────────────────────────────────────────────────────────
 
-/** Bulk set permission overrides for a user */
 export function useBulkSetPermissions() {
   const api = useApi();
   const queryClient = useQueryClient();
@@ -190,7 +184,6 @@ export function useBulkSetPermissions() {
   });
 }
 
-/** Assign a role to a user */
 export function useAssignRole() {
   const api = useApi();
   const queryClient = useQueryClient();
@@ -208,7 +201,6 @@ export function useAssignRole() {
   });
 }
 
-/** Remove a role from a user */
 export function useRemoveRole() {
   const api = useApi();
   const queryClient = useQueryClient();
@@ -225,7 +217,6 @@ export function useRemoveRole() {
   });
 }
 
-/** Remove a specific user override */
 export function useRemoveOverride() {
   const api = useApi();
   const queryClient = useQueryClient();
@@ -243,7 +234,7 @@ export function useRemoveOverride() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// WebSocket Hook — real-time permission invalidation
+// FIXED WebSocket Hook — connects to BACKEND, not frontend
 // ─────────────────────────────────────────────────────────────
 
 type WsMessage =
@@ -254,17 +245,10 @@ type WsMessage =
 /**
  * usePermissionSocket
  *
- * Connects to the Django Channels WebSocket endpoint and automatically
- * invalidates React Query cache when the server pushes a change event.
+ * Connects to the Django Channels WebSocket endpoint (via NEXT_PUBLIC_API_URL)
+ * and automatically invalidates React Query cache + Redux store when a change occurs.
  *
- * Also re-dispatches loadPermissions so the Redux store (used by Sidebar)
- * updates in real time without a page refresh.
- *
- * Backend endpoint: ws://<host>/ws/permissions/
- * Expected message shape: { type: "permission_changed", user_id: 42 }
- *
- * Django Channels consumer should be placed at:
- *   consumers/permission_consumer.py  (see companion file)
+ * Backend endpoint: ws://<BACKEND_HOST>/ws/permissions/
  */
 export function usePermissionSocket(watchedUserId?: number | null) {
   const queryClient = useQueryClient();
@@ -273,52 +257,78 @@ export function usePermissionSocket(watchedUserId?: number | null) {
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
 
-  const connect = useCallback(() => {
-    if (!mountedRef.current) return;
-
-    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${protocol}://${window.location.host}/ws/permissions/`);
-    wsRef.current = ws;
-
-    ws.onmessage = (event) => {
-      try {
-        const msg: WsMessage = JSON.parse(event.data);
-
-        switch (msg.type) {
-          case "permission_changed":
-          case "role_changed":
-            // Invalidate the specific user's data
-            queryClient.invalidateQueries({ queryKey: permissionKeys.userModules(msg.user_id) });
-            queryClient.invalidateQueries({ queryKey: permissionKeys.userRoles(msg.user_id) });
-            queryClient.invalidateQueries({ queryKey: permissionKeys.userOverrides(msg.user_id) });
-
-            // If it is the watched user in the UI panel, also invalidate the panel
-            if (watchedUserId && msg.user_id === watchedUserId) {
-              queryClient.invalidateQueries({ queryKey: permissionKeys.userModules(watchedUserId) });
-            }
-            break;
-
-          case "self_permission_changed":
-            // Re-load the current user's own permissions into Redux (updates Sidebar, etc.)
-            dispatch(loadPermissions());
-            break;
-
-          default:
-            break;
-        }
-      } catch {
-        // ignore malformed messages
-      }
-    };
-
-    ws.onclose = () => {
+  const connect = useCallback(
+    (retryCount = 0) => {
       if (!mountedRef.current) return;
-      // Exponential back-off reconnect (max 30 s)
-      reconnectTimerRef.current = setTimeout(connect, Math.min(30_000, 3_000));
-    };
 
-    ws.onerror = () => ws.close();
-  }, [queryClient, dispatch, watchedUserId]);
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (!apiUrl) {
+        console.error(
+          "[usePermissionSocket] NEXT_PUBLIC_API_URL is not defined. WebSocket will not connect."
+        );
+        return;
+      }
+
+      const wsUrl = apiUrl.replace(/^http/, "ws") + "/ws/permissions/";
+      console.log(`[usePermissionSocket] Connecting to ${wsUrl} (attempt ${retryCount + 1})`);
+
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log("[usePermissionSocket] WebSocket opened");
+        // Reset retry count on success
+        reconnectTimerRef.current && clearTimeout(reconnectTimerRef.current);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg: WsMessage = JSON.parse(event.data);
+          console.log("[usePermissionSocket] Message received", msg);
+
+          switch (msg.type) {
+            case "permission_changed":
+            case "role_changed":
+              // Invalidate the specific user's data
+              queryClient.invalidateQueries({ queryKey: permissionKeys.userModules(msg.user_id) });
+              queryClient.invalidateQueries({ queryKey: permissionKeys.userRoles(msg.user_id) });
+              queryClient.invalidateQueries({ queryKey: permissionKeys.userOverrides(msg.user_id) });
+
+              // If it is the watched user in the UI panel, also invalidate the panel
+              if (watchedUserId && msg.user_id === watchedUserId) {
+                queryClient.invalidateQueries({ queryKey: permissionKeys.userModules(watchedUserId) });
+              }
+              break;
+
+            case "self_permission_changed":
+              // Re-load the current user's own permissions into Redux (updates Sidebar, etc.)
+              dispatch(loadPermissions());
+              break;
+
+            default:
+              break;
+          }
+        } catch (err) {
+          console.error("[usePermissionSocket] Failed to parse message", err);
+        }
+      };
+
+      ws.onclose = (event) => {
+        if (!mountedRef.current) return;
+        console.warn(`[usePermissionSocket] Closed (code ${event.code}). Reconnecting...`);
+
+        // Exponential back-off: 2^retryCount * 1000 ms, capped at 30s
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
+        reconnectTimerRef.current = setTimeout(() => connect(retryCount + 1), delay);
+      };
+
+      ws.onerror = (err) => {
+        console.error("[usePermissionSocket] Error", err);
+        ws.close(); // trigger reconnect
+      };
+    },
+    [queryClient, dispatch, watchedUserId]
+  );
 
   useEffect(() => {
     mountedRef.current = true;

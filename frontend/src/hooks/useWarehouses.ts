@@ -85,7 +85,7 @@ export function useWarehouses(filters?: {
     Error,
     Warehouse[]
   >({
-    queryKey: ["warehouses", filters],
+    queryKey: ["inventory_warehouse", filters],
     queryFn: () => api<PaginatedResponse<Warehouse>>(url),
     select: (data) => data.results,
     staleTime: 30 * 1000,
@@ -143,7 +143,7 @@ export function useCreateWarehouse() {
         body: JSON.stringify(warehouse),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["warehouses"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_warehouse"] });
       queryClient.invalidateQueries({ queryKey: ["warehouseStats"] });
     },
   });
@@ -161,7 +161,7 @@ export function useUpdateWarehouse() {
         body: JSON.stringify(warehouse),
       }),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["warehouses"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_warehouse"] });
       queryClient.invalidateQueries({ queryKey: ["warehouse", variables.id] });
       queryClient.invalidateQueries({ queryKey: ["warehouseStats"] });
     },
@@ -179,7 +179,7 @@ export function useDeleteWarehouse() {
         method: "DELETE",
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["warehouses"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_warehouse"] });
       queryClient.invalidateQueries({ queryKey: ["warehouseStats"] });
     },
   });

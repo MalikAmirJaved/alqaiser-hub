@@ -18,7 +18,7 @@ export function usePurchaseOrders(filters?: { status?: string; supplier?: string
   const url = `/api/inventory/purchase-orders/${params.toString() ? `?${params}` : ''}`;
 
   return useQuery<PaginatedResponse<PurchaseOrder>, Error, PurchaseOrder[]>({
-    queryKey: ['purchaseOrders', filters],
+    queryKey: ['inventory_purchase_order', filters],
     queryFn: () => api(url),
     select: (data) => data.results,
   });
@@ -43,7 +43,7 @@ export function useCreatePurchaseOrder() {
         body: JSON.stringify(data),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory_purchase_order'] });
     },
   });
 }
@@ -55,7 +55,7 @@ export function useCancelPurchaseOrder() {
     mutationFn: (id: string) =>
       api(`/api/inventory/purchase-orders/${id}/cancel/`, { method: 'POST' }),
     onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory_purchase_order'] });
       queryClient.invalidateQueries({ queryKey: ['purchaseOrder', id] });
     },
   });
@@ -68,7 +68,7 @@ export function useConfirmPurchaseOrder() {
     mutationFn: (id: string) =>
       api(`/api/inventory/purchase-orders/${id}/confirm/`, { method: 'POST' }),
     onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory_purchase_order'] });
       queryClient.invalidateQueries({ queryKey: ['purchaseOrder', id] });
     },
   });

@@ -1,9 +1,3 @@
-# apps/permissions/signals.py
-# ─────────────────────────────────────────────────────────────────────────────
-# Django signals that:
-#   1. Invalidate the Redis permission cache (existing behaviour)
-#   2. Broadcast a WebSocket push to connected clients via Django Channels
-# ─────────────────────────────────────────────────────────────────────────────
 
 import logging
 from asgiref.sync import async_to_sync

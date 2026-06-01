@@ -36,7 +36,7 @@ export function useSuppliers() {
   const api = useApi();
 
   return useQuery<Supplier[]>({
-    queryKey: ["suppliers"],
+    queryKey: ["inventory_supplier"],
     queryFn: async () => {
       const res = await api<PaginatedResponse<Supplier>>(
         "/api/inventory/suppliers/"
@@ -59,7 +59,7 @@ export function useCreateSupplier() {
         body: JSON.stringify(data),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_supplier"] });
     },
   });
 }
@@ -76,7 +76,7 @@ export function useUpdateSupplier() {
         body: JSON.stringify(data),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_supplier"] });
     },
   });
 }
@@ -92,7 +92,7 @@ export function useDeleteSupplier() {
         method: "DELETE",
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_supplier"] });
     },
   });
 }

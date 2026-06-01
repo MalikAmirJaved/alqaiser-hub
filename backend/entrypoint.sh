@@ -19,6 +19,10 @@ exec daphne -b 0.0.0.0 -p 8000 config.asgi:application
 #  for menually (without docker)
 # source venv/bin/activate
 
+#  deactivate teh source
+# deactivate
+
+
 # make migerations
 # docker compose exec backend python manage.py makemigrations
 

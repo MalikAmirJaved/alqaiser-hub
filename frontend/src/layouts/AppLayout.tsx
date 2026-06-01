@@ -10,6 +10,7 @@ import { loadPermissions } from "@/store/slices/permissionSlice";
 import { loadCompanySettings } from "@/store/slices/companySettingsSlice";
 import type { AppDispatch, RootState } from "@/store";
 import { publicRoutes, getRequiredPermission } from "@/config/routePermissions";
+import { usePermissionSocket } from "@/hooks/usePermissions";
 
 export default function AppLayout({ children }) {
   const { user, ready } = useAuth();
@@ -20,6 +21,10 @@ export default function AppLayout({ children }) {
   
   const { initialized: permissionsInitialized, permissions } = useSelector((state: RootState) => state.permissions);
   const { initialized: settingsInitialized, data: settings } = useSelector((state: RootState) => state.companySettings);
+
+
+  usePermissionSocket(user?.id);
+
 
   // Load permissions and company settings after user is ready
   useEffect(() => {

@@ -32,7 +32,7 @@ export function useCategories(search?: string) {
     Error,
     Category[]
   >({
-    queryKey: ["categories", search],
+    queryKey: ["inventory_category", search],
     queryFn: () => api<PaginatedResponse<Category>>(url),
     select: (data) => data.results,
     staleTime: 30 * 1000,
@@ -54,7 +54,7 @@ export function useCreateCategory() {
         body: JSON.stringify(category),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_category"] });
     },
   });
 }
@@ -71,7 +71,7 @@ export function useUpdateCategory() {
         body: JSON.stringify(data),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_category"] });
     },
   });
 }
@@ -87,7 +87,7 @@ export function useDeleteCategory() {
         method: "DELETE",
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_category"] });
     },
   });
 }

@@ -33,7 +33,7 @@ export function useBrands(search?: string) {
     Error,
     Brand[]
   >({
-    queryKey: ["brands", search],
+    queryKey: ["inventory_brand", search],
     queryFn: () => api<PaginatedResponse<Brand>>(url),
     select: (data) => data.results,
     staleTime: 30 * 1000,
@@ -42,7 +42,7 @@ export function useBrands(search?: string) {
   });
 }
 
-
+  
 // Create brand
 export function useCreateBrand() {
   const api = useApi();
@@ -55,7 +55,7 @@ export function useCreateBrand() {
         body: JSON.stringify(brand),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["brands"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_brand"] });
     },
   });
 }
@@ -72,7 +72,7 @@ export function useUpdateBrand() {
         body: JSON.stringify(data),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["brands"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_brand"] });
     },
   });
 }
@@ -88,7 +88,7 @@ export function useDeleteBrand() {
         method: "DELETE",
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["brands"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_brand"] });
     },
   });
 }

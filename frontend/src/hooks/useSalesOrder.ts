@@ -128,7 +128,7 @@ export function useCreateSalesOrder() {
       return resp.data || resp;
     },
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
       if (variables.status === "COMPLETE") {
         queryClient.invalidateQueries({ queryKey: ["inventory"] });
       }
@@ -149,7 +149,7 @@ export function useCompleteSalesOrder() {
       });
     },
     onSuccess: (_, { orderId }) => {
-      queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
       queryClient.invalidateQueries({ queryKey: ["salesOrder", orderId] });
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
     },
@@ -165,7 +165,7 @@ export function useCancelSalesOrder() {
       return api(`/api/inventory/sales-orders/${orderId}/cancel/`, { method: "POST" });
     },
     onSuccess: (_, orderId) => {
-      queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
       queryClient.invalidateQueries({ queryKey: ["salesOrder", orderId] });
     },
   });
@@ -199,7 +199,7 @@ export function useCreateSalesReturn() {
         body: JSON.stringify(params),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
       queryClient.invalidateQueries({ queryKey: ["currentStock"] });
     },
   });
@@ -223,7 +223,7 @@ export function useFetchSalesOrderByNumber(orderNumber: string) {
 export function useDraftSalesOrders() {
   const api = useApi();
   return useQuery({
-    queryKey: ["salesOrders", "draft"],
+    queryKey: ["inventory_sales_order", "draft"],
     queryFn: () => api<{ results: SalesOrderResponse[] }>("/api/inventory/sales-orders/?status=DRAFT"),
     select: (data) => data.results,
     staleTime: 30_000,
@@ -242,7 +242,7 @@ export function useSalesOrders(filters?: { status?: string; customer?: string })
   Error,
   SalesOrderResponse[]               // final selected type
 >({
-    queryKey: ["salesOrders", filters],
+    queryKey: ["inventory_sales_order", filters],
     queryFn: () => api(url),
     select: (data) => data.results,
     staleTime: 30_000,

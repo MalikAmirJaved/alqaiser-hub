@@ -55,7 +55,7 @@ export function useTransfers(filters?: { status?: string; variant_id?: string; s
   const url = `/api/inventory/transfers/${queryString ? `?${queryString}` : ""}`;
 
   return useQuery<PaginatedResponse<StockTransfer>, Error, StockTransfer[]>({
-    queryKey: ["transfers", filters],
+    queryKey: ["inventory_stock_transfer", filters],
     queryFn: () => api<PaginatedResponse<StockTransfer>>(url),
     select: (data) => data.results,
     staleTime: 30 * 1000,
@@ -101,7 +101,7 @@ export function useCreateTransfer() {
         body: JSON.stringify(data),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["transfers"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_stock_transfer"] });
       queryClient.invalidateQueries({ queryKey: ["transferStats"] });
     },
   });
@@ -114,7 +114,7 @@ export function useConfirmTransfer() {
     mutationFn: (id: string) =>
       api(`/api/inventory/transfers/${id}/confirm/`, { method: "POST" }),
     onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: ["transfers"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_stock_transfer"] });
       queryClient.invalidateQueries({ queryKey: ["transfer", id] });
       queryClient.invalidateQueries({ queryKey: ["transferStats"] });
     },
@@ -128,7 +128,7 @@ export function useCancelTransfer() {
     mutationFn: (id: string) =>
       api(`/api/inventory/transfers/${id}/cancel/`, { method: "POST" }),
     onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: ["transfers"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_stock_transfer"] });
       queryClient.invalidateQueries({ queryKey: ["transfer", id] });
       queryClient.invalidateQueries({ queryKey: ["transferStats"] });
     },

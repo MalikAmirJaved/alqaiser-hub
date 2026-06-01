@@ -86,7 +86,7 @@ export function useAllVariantsSimple(filters?: { search?: string; product_id?: s
   const url = `/api/inventory/variants/?${params.toString()}`;
 
   return useQuery<VariantDetail[]>({
-    queryKey: ["allVariantsSimple", filters],
+    queryKey: ["inventory_variant", filters],
     queryFn: async () => {
       const response = await api<PaginatedResponse<VariantDetail>>(url);
       return response.results;

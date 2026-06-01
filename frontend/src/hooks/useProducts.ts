@@ -132,7 +132,7 @@ export function useProducts(filters?: {
     Error,
     Product[]
   >({
-    queryKey: ["products", filters],
+    queryKey: ["inventory_product", filters],
     queryFn: () => api<PaginatedResponse<Product>>(url),
     select: (data) => data.results,
     staleTime: 30 * 1000,
@@ -158,7 +158,7 @@ export function useCreateProduct() {
         body: JSON.stringify(data),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
     },
   });
 }
@@ -173,7 +173,7 @@ export function useUpdateProduct() {
         body: JSON.stringify(data),
       }),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
       queryClient.invalidateQueries({ queryKey: ["product", variables.id] });
     },
   });
@@ -186,7 +186,7 @@ export function useDeleteProduct() {
     mutationFn: (id: string) =>
       api(`/api/inventory/products/${id}/`, { method: "DELETE" }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
     },
   });
 }
