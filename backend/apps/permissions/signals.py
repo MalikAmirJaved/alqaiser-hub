@@ -1,5 +1,5 @@
-
 import logging
+import threading
 from asgiref.sync import async_to_sync
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
@@ -8,6 +8,21 @@ from .models import UserPermission, RolePermission, UserRole
 from .services import PermissionService
 
 logger = logging.getLogger(__name__)
+
+# Thread-local flag to disable broadcasts during bulk operations
+_broadcast_disabled = threading.local()
+
+def disable_permission_broadcasts():
+    """Disable WebSocket broadcasts for the current thread (used during bulk operations)."""
+    _broadcast_disabled.enabled = True
+
+def enable_permission_broadcasts():
+    """Re-enable WebSocket broadcasts for the current thread."""
+    _broadcast_disabled.enabled = False
+
+def should_broadcast():
+    """Check if broadcasts are enabled for the current thread."""
+    return not getattr(_broadcast_disabled, 'enabled', False)
 
 
 def _get_channel_layer():
@@ -20,6 +35,11 @@ def _get_channel_layer():
 
 
 def _broadcast_permission(user_id: int):
+    """Send permission change broadcast via WebSocket (if enabled)."""
+    if not should_broadcast():
+        logger.debug(f"Skipping broadcast for user {user_id} (bulk mode)")
+        return
+    
     channel_layer = _get_channel_layer()
     if channel_layer is None:
         return
@@ -31,6 +51,11 @@ def _broadcast_permission(user_id: int):
 
 
 def _broadcast_role(user_id: int):
+    """Send role change broadcast via WebSocket (if enabled)."""
+    if not should_broadcast():
+        logger.debug(f"Skipping broadcast for user {user_id} (bulk mode)")
+        return
+    
     channel_layer = _get_channel_layer()
     if channel_layer is None:
         return

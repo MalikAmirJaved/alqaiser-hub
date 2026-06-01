@@ -300,10 +300,15 @@ class BulkOverrideView(APIView):
       - If the resulting grant state matches the user's role-inherited state,
         remove any existing override (keep it clean).
       - Otherwise, upsert a UserPermission override.
+      
+    Performance optimization: Disables individual WebSocket broadcasts during
+    the bulk operation and sends a single broadcast at the end.
     """
     permission_classes = [IsAuthenticated]
 
     def post(self, request, user_id: int):
+        from .signals import disable_permission_broadcasts, enable_permission_broadcasts, _broadcast_permission
+        
         target = _get_company_user(request, user_id)
         items = request.data.get("permissions", [])
         if not items:
@@ -319,57 +324,65 @@ class BulkOverrideView(APIView):
         errors = []
         processed = 0
 
-        for item in items:
-            code = item.get("permission_code")
-            granted = item.get("granted")
-            reason = item.get("reason", "")
+        # Disable individual WebSocket broadcasts during bulk operation
+        disable_permission_broadcasts()
+        
+        try:
+            for item in items:
+                code = item.get("permission_code")
+                granted = item.get("granted")
+                reason = item.get("reason", "")
 
-            if code is None or granted is None:
-                errors.append(f"Invalid entry: {item}")
-                continue
+                if code is None or granted is None:
+                    errors.append(f"Invalid entry: {item}")
+                    continue
 
-            try:
-                perm = Permission.objects.get(code=code)
-            except Permission.DoesNotExist:
-                errors.append(f"Permission not found: {code}")
-                continue
+                try:
+                    perm = Permission.objects.get(code=code)
+                except Permission.DoesNotExist:
+                    errors.append(f"Permission not found: {code}")
+                    continue
 
-            # Determine role-inherited state (True = granted via role, False = denied)
-            inherited = perm.id in role_perm_ids
+                # Determine role-inherited state (True = granted via role, False = denied)
+                inherited = perm.id in role_perm_ids
 
-            if granted == inherited:
-                # No override needed — remove any existing one
-                UserPermission.objects.filter(user=target, permission=perm).delete()
-            else:
-                # Upsert override
-                obj, created = UserPermission.objects.update_or_create(
-                    user=target,
-                    permission=perm,
-                    defaults={
-                        "granted": granted,
-                        "granted_by": request.user,
-                        "reason": reason,
-                    },
-                )
-                PermissionAuditLog.objects.create(
-                    user=request.user,
-                    action="override_added" if created else "override_updated",
-                    target_user=target,
-                    permission=perm,
-                    old_value=not granted if not created else None,
-                    new_value=granted,
-                    ip_address=request.META.get("REMOTE_ADDR"),
-                )
+                if granted == inherited:
+                    # No override needed — remove any existing one
+                    UserPermission.objects.filter(user=target, permission=perm).delete()
+                else:
+                    # Upsert override
+                    obj, created = UserPermission.objects.update_or_create(
+                        user=target,
+                        permission=perm,
+                        defaults={
+                            "granted": granted,
+                            "granted_by": request.user,
+                            "reason": reason,
+                        },
+                    )
+                    PermissionAuditLog.objects.create(
+                        user=request.user,
+                        action="override_added" if created else "override_updated",
+                        target_user=target,
+                        permission=perm,
+                        old_value=not granted if not created else None,
+                        new_value=granted,
+                        ip_address=request.META.get("REMOTE_ADDR"),
+                    )
 
-            processed += 1
+                processed += 1
+        finally:
+            # Re-enable broadcasts
+            enable_permission_broadcasts()
 
+        # Invalidate cache and send a single broadcast after all changes
         PermissionService.invalidate_user_cache(target)
+        _broadcast_permission(target.id)
 
         response = {"processed": processed}
         if errors:
             response["errors"] = errors
         return Response(response, status=200 if not errors else 207)
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # urls.py addition

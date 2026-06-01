@@ -234,7 +234,7 @@ export function useRemoveOverride() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// FIXED WebSocket Hook — connects to BACKEND, not frontend
+// OPTIMIZED WebSocket Hook — with debounced Redux reload
 // ─────────────────────────────────────────────────────────────
 
 type WsMessage =
@@ -242,29 +242,31 @@ type WsMessage =
   | { type: "role_changed"; user_id: number }
   | { type: "self_permission_changed" };
 
-/**
- * usePermissionSocket
- *
- * Connects to the Django Channels WebSocket endpoint (via NEXT_PUBLIC_API_URL)
- * and automatically invalidates React Query cache + Redux store when a change occurs.
- *
- * Backend endpoint: ws://<BACKEND_HOST>/ws/permissions/
- */
-// hooks/usePermissions.ts (only the usePermissionSocket function)
-
 export function usePermissionSocket(watchedUserId?: number | null) {
   const queryClient = useQueryClient();
   const dispatch = useDispatch<AppDispatch>();
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pendingReloadRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
 
-  // Helper to reload permissions for the current user
+  // Debounced helper to reload permissions for the current user
   const reloadCurrentUserPermissions = useCallback(() => {
-    if (mountedRef.current && watchedUserId) {
-      dispatch(loadPermissions());
+    if (!mountedRef.current || !watchedUserId) return;
+
+    // Clear any pending reload
+    if (pendingReloadRef.current) {
+      clearTimeout(pendingReloadRef.current);
     }
+
+    // Schedule a new reload after 300ms
+    pendingReloadRef.current = setTimeout(() => {
+      if (mountedRef.current && watchedUserId) {
+        dispatch(loadPermissions());
+      }
+      pendingReloadRef.current = null;
+    }, 300);
   }, [dispatch, watchedUserId]);
 
   const connect = useCallback(
@@ -287,10 +289,10 @@ export function usePermissionSocket(watchedUserId?: number | null) {
       ws.onopen = () => {
         reconnectTimerRef.current && clearTimeout(reconnectTimerRef.current);
 
-        // ✅ Reload permissions immediately after reconnect
+        // Reload permissions immediately after reconnect (debounced)
         reloadCurrentUserPermissions();
 
-        // ✅ Start heartbeat (keep connection alive)
+        // Start heartbeat to keep connection alive
         if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
         heartbeatIntervalRef.current = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
@@ -306,10 +308,12 @@ export function usePermissionSocket(watchedUserId?: number | null) {
           switch (msg.type) {
             case "permission_changed":
             case "role_changed":
+              // Invalidate React Query cache for the affected user
               queryClient.invalidateQueries({ queryKey: permissionKeys.userModules(msg.user_id) });
               queryClient.invalidateQueries({ queryKey: permissionKeys.userRoles(msg.user_id) });
               queryClient.invalidateQueries({ queryKey: permissionKeys.userOverrides(msg.user_id) });
 
+              // If this message is for the current user, reload Redux permissions
               if (watchedUserId && msg.user_id === watchedUserId) {
                 reloadCurrentUserPermissions();
               }
@@ -350,6 +354,7 @@ export function usePermissionSocket(watchedUserId?: number | null) {
       mountedRef.current = false;
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+      if (pendingReloadRef.current) clearTimeout(pendingReloadRef.current);
       wsRef.current?.close();
     };
   }, [connect]);
