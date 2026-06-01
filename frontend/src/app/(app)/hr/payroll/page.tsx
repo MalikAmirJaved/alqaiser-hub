@@ -10,7 +10,9 @@ import PayslipModal from "@/components/payroll/PayslipModal";
 import MonthSelectorModal from "@/components/payroll/MonthSelectorModal";
 import { Search, Filter, Eye, CreditCard, Calendar, RefreshCw } from "lucide-react";
 import { StatsCards } from "@/components/reuseable/StatsCards";
-
+import { getPermissions } from "@/lib/permissions";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 export default function PayrollPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -32,6 +34,15 @@ export default function PayrollPage() {
     year: String(selectedYear),
   });
 
+  const permissions = useSelector(
+  (state: RootState) => state.permissions.permissions
+);
+
+const payrollPermissions = getPermissions(
+  permissions,
+  "HR",
+  "payroll"
+);
 
   // Get payment status for employee in selected month
   const getPaymentStatus = (employeeId: string) => {
@@ -263,7 +274,7 @@ const handleRefresh = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {!isPaid && (
+                        {(!isPaid && payrollPermissions.create) && (
                           <button
                             onClick={() => {
                               setSelectedEmployee(employee);
@@ -294,7 +305,7 @@ const handleRefresh = () => {
       </div>
 
       {/* Modals */}
-      {paymentModalOpen && selectedEmployee && (
+      {(paymentModalOpen && selectedEmployee && payrollPermissions.create)&& (
         <PaymentModal
           formatCurrency={formatCurrency}
           employee={selectedEmployee}
