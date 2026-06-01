@@ -18,10 +18,12 @@ import { SalesListPanel } from "@/components/inventory/pos/SalesListPanel";
 import { VariantDetailWithStock } from "@/hooks/useAllVariants";
 import { useApi } from "@/hooks/useApi";
 import { debounce } from "lodash";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 type ActivePanel = "search" | "held" | "return" | "sales";
 
 export default function SalesPage() {
+  const permissions = useFeaturePermissions("INVENTORY", "sales_order");
   const queryClient = useQueryClient();
   const api = useApi();
   const { data: warehouses = [] } = useWarehouses({ is_active: true });
@@ -329,13 +331,15 @@ export default function SalesPage() {
                         >
                           <PlayIcon size={12} /> Resume
                         </button>
-                        <button
-                          onClick={() => handleCancelDraft(order.id)}
-                          disabled={isCancelling}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-destructive/10 text-destructive rounded-lg text-xs font-medium hover:bg-destructive/20 transition-colors disabled:opacity-50"
-                        >
-                          <XIcon size={12} /> Cancel
-                        </button>
+                        {permissions.delete && (
+                          <button
+                            onClick={() => handleCancelDraft(order.id)}
+                            disabled={isCancelling}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-destructive/10 text-destructive rounded-lg text-xs font-medium hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                          >
+                            <XIcon size={12} /> Cancel
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -365,6 +369,8 @@ export default function SalesPage() {
           onCartChange={handleCartChange}
           isSubmitting={isCreatingOrder || isCompleting}
           activeDraftId={activeDraftId}
+          canCreate={permissions.create}
+          canUpdate={permissions.update}
         />
       </div>
     </div>

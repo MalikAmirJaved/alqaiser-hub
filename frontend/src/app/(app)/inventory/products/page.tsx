@@ -15,8 +15,10 @@ import { useCategories } from "@/hooks/useCategories";
 import { useBrands } from "@/hooks/useBrands";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import { formatCurrency } from "@/lib/currency";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 export default function ProductsPage() {
+  const permissions = useFeaturePermissions("INVENTORY", "product");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [showProductModal, setShowProductModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | undefined>(undefined);
@@ -159,8 +161,12 @@ export default function ProductsPage() {
   const actions = (row: Product) => (
     <>
       <button onClick={() => handleViewDetails(row)} className="px-2 py-1 text-xs rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">View</button>
-      <button onClick={() => handleEdit(row)} className="px-2 py-1 text-xs rounded-md hover:bg-muted transition-colors">Edit</button>
-      <button onClick={() => handleDelete(row)} className="px-2 py-1 text-xs rounded-md text-destructive hover:bg-destructive/10 transition-colors">Delete</button>
+      {permissions.update && (
+        <button onClick={() => handleEdit(row)} className="px-2 py-1 text-xs rounded-md hover:bg-muted transition-colors">Edit</button>
+      )}
+      {permissions.delete && (
+        <button onClick={() => handleDelete(row)} className="px-2 py-1 text-xs rounded-md text-destructive hover:bg-destructive/10 transition-colors">Delete</button>
+      )}
     </>
   );
 
@@ -194,16 +200,22 @@ export default function ProductsPage() {
             {product.total_stock} in stock
           </span>
         </div>
-        <div className="flex gap-2 pt-2 border-t border-border/60">
-          <button
-            onClick={(e) => { e.stopPropagation(); handleEdit(product); }}
-            className="flex-1 py-1.5 text-xs rounded-lg border border-border hover:bg-muted transition-colors font-medium"
-          >Edit</button>
-          <button
-            onClick={(e) => { e.stopPropagation(); handleDelete(product); }}
-            className="flex-1 py-1.5 text-xs rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors font-medium"
-          >Delete</button>
-        </div>
+        {(permissions.update || permissions.delete) && (
+          <div className="flex gap-2 pt-2 border-t border-border/60">
+            {permissions.update && (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleEdit(product); }}
+                className="flex-1 py-1.5 text-xs rounded-lg border border-border hover:bg-muted transition-colors font-medium"
+              >Edit</button>
+            )}
+            {permissions.delete && (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDelete(product); }}
+                className="flex-1 py-1.5 text-xs rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors font-medium"
+              >Delete</button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -222,19 +234,23 @@ export default function ProductsPage() {
             >
               {viewMode === "table" ? <Grid className="w-4 h-4" /> : <List className="w-4 h-4" />}
             </button>
-            <button
-              onClick={handleExport}
-              className="p-2 rounded-md border border-border hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-              title="Export CSV"
-            >
-              <Download className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleCreate}
-              className="inline-flex items-center gap-2 px-4 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity text-sm font-medium"
-            >
-              <Plus className="w-4 h-4" /> Add Product
-            </button>
+            {permissions.export && (
+              <button
+                onClick={handleExport}
+                className="p-2 rounded-md border border-border hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                title="Export CSV"
+              >
+                <Download className="w-4 h-4" />
+              </button>
+            )}
+            {permissions.create && (
+              <button
+                onClick={handleCreate}
+                className="inline-flex items-center gap-2 px-4 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity text-sm font-medium"
+              >
+                <Plus className="w-4 h-4" /> Add Product
+              </button>
+            )}
           </div>
         }
       />
@@ -261,13 +277,13 @@ export default function ProductsPage() {
           renderCard={renderCard}
           loading={isLoading}
           emptyMessage="No products found"
-          emptyAction={{ label: "Add Product", onClick: handleCreate }}
+          emptyAction={permissions.create ? { label: "Add Product", onClick: handleCreate } : undefined}
           columns={4}
         />
       )}
 
       {/* Product Form Modal */}
-      {showProductModal && (
+      {(showProductModal && (selectedProduct ? permissions.update : permissions.create)) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-4xl bg-card rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
             <ProductForm
@@ -286,7 +302,7 @@ export default function ProductsPage() {
         <ProductDetailsModal
           productId={selectedProduct.id}   
           onClose={() => setShowDetailsModal(false)}
-          onEdit={() => { setShowDetailsModal(false); handleEdit(selectedProduct); }}
+          onEdit={permissions.update ? () => { setShowDetailsModal(false); handleEdit(selectedProduct); } : undefined}
         />
       )}
 

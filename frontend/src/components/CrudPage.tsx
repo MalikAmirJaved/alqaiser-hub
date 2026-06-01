@@ -13,6 +13,7 @@ import { CountrySelect, StateSelect, CitySelect } from "./reuseable/LocationSele
 import SearchableSelect from "./reuseable/SearchableSelect";
 import { DatePicker } from "@/components/reuseable/DatePicker";
 import { useAuth } from "@/hooks/useAuth";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 // Map storeKey to module and feature
 const getModuleAndFeature = (storeKey: string) => {
@@ -64,6 +65,45 @@ const getModuleAndFeature = (storeKey: string) => {
   return mapping[storeKey] || { module: "SETTINGS", feature: "General" };
 };
 
+const getPermissionModuleAndFeature = (storeKey: string) => {
+  const mapping = {
+    // HR
+    employees: { module: "HR", feature: "employee" },
+    payroll: { module: "HR", feature: "payroll" },
+    attendance: { module: "HR", feature: "attendance" },
+    leaves: { module: "HR", feature: "leave" },
+    shifts: { module: "HR", feature: "shift_override" },
+    empAssets: { module: "HR", feature: "emp_asset" },
+    performance: { module: "HR", feature: "performance" },
+    recruitment: { module: "HR", feature: "recruitment" },
+    exits: { module: "HR", feature: "exit" },
+    policies: { module: "HR", feature: "policy" },
+    compensation: { module: "HR", feature: "compensation" },
+    
+    // Inventory
+    products: { module: "INVENTORY", feature: "product" },
+    categories: { module: "INVENTORY", feature: "category" },
+    brands: { module: "INVENTORY", feature: "brand" },
+    warehouses: { module: "INVENTORY", feature: "warehouse" },
+    purchaseOrders: { module: "INVENTORY", feature: "purchase_order" },
+    suppliers: { module: "INVENTORY", feature: "supplier" },
+    salesOrders: { module: "INVENTORY", feature: "sales_order" },
+    assetsInv: { module: "INVENTORY", feature: "asset" },
+    transfers: { module: "INVENTORY", feature: "stock_transfer" },
+    barcodes: { module: "INVENTORY", feature: "barcode" },
+    posReceipts: { module: "INVENTORY", feature: "sales_order" },
+    alerts: { module: "INVENTORY", feature: "alert" },
+    auditLogs: { module: "INVENTORY", feature: "audit_log" },
+    
+    // Settings
+    users: { module: "SETTINGS", feature: "user" },
+    designations: { module: "SETTINGS", feature: "designation" },
+    departments: { module: "SETTINGS", feature: "department" },
+  };
+  return mapping[storeKey] || { module: "SETTINGS", feature: "company" };
+};
+
+
 interface Field {
   key: string;
   label: string;
@@ -100,6 +140,9 @@ export default function CrudPage({
   hideAddbtn = false
 }: CrudPageProps) {
   const { user, ready } = useAuth();
+  const { module: permModule, feature: permFeature } = getPermissionModuleAndFeature(storeKey);
+  const permissions = useFeaturePermissions(permModule, permFeature);
+
   const [rows, setRows] = useState<any[]>([]);
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<string | null>(null);
@@ -392,10 +435,12 @@ const openEdit = (row) => {
         subtitle={subtitle}
         actions={
           <>
-            <button onClick={exportCsv} className="inline-flex items-center gap-2 px-3 h-9 rounded-md border border-border text-sm hover:bg-muted">
-              <Download className="w-4 h-4" /> Export
-            </button>
-            {!hideAddbtn  && (
+            {permissions.export && (
+              <button onClick={exportCsv} className="inline-flex items-center gap-2 px-3 h-9 rounded-md border border-border text-sm hover:bg-muted">
+                <Download className="w-4 h-4" /> Export
+              </button>
+            )}
+            {!hideAddbtn && permissions.create && (
               <button onClick={openAdd} className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90">
                 <Plus className="w-4 h-4" /> Add new
               </button>
@@ -481,17 +526,21 @@ const openEdit = (row) => {
                     );
                   })}
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    {permissions.update && (
                       <button onClick={() => openEdit(r)} className="p-1.5 rounded-md hover:bg-muted" aria-label="Edit">
                         <Pencil className="w-4 h-4" />
                       </button>
+                    )}
 
+                    {permissions.delete && (
                       <button onClick={() => handleDelete(r.id)} className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive" aria-label="Delete">
                         <Trash2 className="w-4 h-4" />
                       </button>
+                    )}
 
-
+                    {!permissions.update && !permissions.delete && (
                       <span className="text-xs text-muted-foreground">—</span>
-
+                    )}
                   </td>
                 </tr>
               ))}
@@ -512,7 +561,7 @@ const openEdit = (row) => {
         </div>
       </div>
 
-      {modalOpen && (
+      {(modalOpen && (editing ? permissions.update : permissions.create)) && (
         <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4">
           <form
             onClick={(e) => e.stopPropagation()}

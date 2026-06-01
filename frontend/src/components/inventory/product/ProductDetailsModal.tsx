@@ -8,7 +8,7 @@ import { formatCurrency, CurrencyCode } from "@/lib/currency";
 interface Props {
   productId: string; 
   onClose: () => void;
-  onEdit: () => void;
+  onEdit?: () => void;
 }
 
 function StatPill({ label, value, colorClass }: { label: string; value: number | string; colorClass: string }) {
@@ -104,12 +104,14 @@ export default function ProductDetailsModal({ productId, onClose, onEdit }: Prop
               <p className="text-xs text-muted-foreground font-mono mt-0.5">ID: {product.id}</p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={onEdit}
-                className="flex items-center gap-1.5 px-3 h-8 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
-              >
-                <Edit className="w-3.5 h-3.5" /> Edit
-              </button>
+              {onEdit && (
+                <button
+                  onClick={onEdit}
+                  className="flex items-center gap-1.5 px-3 h-8 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
+                >
+                  <Edit className="w-3.5 h-3.5" /> Edit
+                </button>
+              )}
               <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground">
                 <X className="w-4 h-4" />
               </button>

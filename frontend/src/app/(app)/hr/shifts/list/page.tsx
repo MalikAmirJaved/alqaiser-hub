@@ -30,6 +30,7 @@ import {
   useGenerateShiftSchedule,
   type ResolvedShiftsResponse
 } from "@/hooks/useShiftManagement";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 interface ShiftChangeHistory {
   id: string;
@@ -46,6 +47,7 @@ interface ShiftChangeHistory {
 }
 
 export default function ShiftsManagementPage() {
+  const permissions = useFeaturePermissions("HR", "shift_override");
   const queryClient = useQueryClient();
   
   // State
@@ -374,13 +376,15 @@ export default function ShiftsManagementPage() {
             >
               <History className="w-4 h-4 mr-2" /> Change History
             </Button>
-            <Button onClick={() => {
-              setSelectedEmployees([]);
-              setScheduleFormData({ template_id: "", date_range: { start: format(new Date(), "yyyy-MM-dd"), end: "" }, reason: "", assignment_type: "OVERRIDE" });
-              setShowScheduleModal(true);
-            }}>
-              <CalendarRange className="w-4 h-4 mr-2" /> Schedule Shift
-            </Button>
+            {permissions.create && (
+              <Button onClick={() => {
+                setSelectedEmployees([]);
+                setScheduleFormData({ template_id: "", date_range: { start: format(new Date(), "yyyy-MM-dd"), end: "" }, reason: "", assignment_type: "OVERRIDE" });
+                setShowScheduleModal(true);
+              }}>
+                <CalendarRange className="w-4 h-4 mr-2" /> Schedule Shift
+              </Button>
+            )}
           </div>
         }
       />
@@ -852,19 +856,21 @@ export default function ShiftsManagementPage() {
               <div>
                 <div className="text-xs text-muted-foreground mb-2 flex items-center justify-between">
                   <span>Employees on this shift</span>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-6 text-xs text-destructive hover:text-destructive"
-                    onClick={() => {
-                      if (confirm(`Remove all employees from this shift on ${showShiftDetailModal.date}?`)) {
-                        handleClearDateAssignments(showShiftDetailModal.date);
-                        setShowShiftDetailModal(null);
-                      }
-                    }}
-                  >
-                    <Trash2 className="w-3 h-3 mr-1" /> Clear All
-                  </Button>
+                  {permissions.delete && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-6 text-xs text-destructive hover:text-destructive"
+                      onClick={() => {
+                        if (confirm(`Remove all employees from this shift on ${showShiftDetailModal.date}?`)) {
+                          handleClearDateAssignments(showShiftDetailModal.date);
+                          setShowShiftDetailModal(null);
+                        }
+                      }}
+                    >
+                      <Trash2 className="w-3 h-3 mr-1" /> Clear All
+                    </Button>
+                  )}
                 </div>
                 <div className="space-y-1 max-h-64 overflow-y-auto">
                   {getEmployeesForShift(showShiftDetailModal.date, showShiftDetailModal.template.id).map(emp => {
@@ -886,23 +892,25 @@ export default function ShiftsManagementPage() {
                           {isOverride && (
                             <span className="text-[10px] bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 px-1.5 py-0.5 rounded-full">Override</span>
                           )}
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                            onClick={() => {
-                              if (confirm(`Remove ${emp.first_name} ${emp.last_name} from this shift?`)) {
-                                if (overrideRecord) {
-                                  handleDeleteAssignment(overrideRecord.id);
-                                } else {
-                                  handleClearDateAssignments(showShiftDetailModal.date, emp.id);
+                          {permissions.delete && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                              onClick={() => {
+                                if (confirm(`Remove ${emp.first_name} ${emp.last_name} from this shift?`)) {
+                                  if (overrideRecord) {
+                                    handleDeleteAssignment(overrideRecord.id);
+                                  } else {
+                                    handleClearDateAssignments(showShiftDetailModal.date, emp.id);
+                                  }
+                                  setShowShiftDetailModal(null);
                                 }
-                                setShowShiftDetailModal(null);
-                              }
-                            }}
-                          >
-                            <X className="w-3 h-3" />
-                          </Button>
+                              }}
+                            >
+                              <X className="w-3 h-3" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     );
@@ -918,21 +926,23 @@ export default function ShiftsManagementPage() {
             
             <div className="p-4 border-t border-border flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowShiftDetailModal(null)}>Close</Button>
-              <Button 
-                onClick={() => {
-                  setShowShiftDetailModal(null);
-                  setSelectedEmployees([]);
-                  setScheduleFormData({
-                    template_id: showShiftDetailModal.template.id,
-                    date_range: { start: showShiftDetailModal.date, end: "" },
-                    reason: "",
-                    assignment_type: "OVERRIDE"
-                  });
-                  setShowScheduleModal(true);
-                }}
-              >
-                <UserPlus className="w-3.5 h-3.5 mr-1.5" /> Add Employees
-              </Button>
+              {permissions.create && (
+                <Button 
+                  onClick={() => {
+                    setShowShiftDetailModal(null);
+                    setSelectedEmployees([]);
+                    setScheduleFormData({
+                      template_id: showShiftDetailModal.template.id,
+                      date_range: { start: showShiftDetailModal.date, end: "" },
+                      reason: "",
+                      assignment_type: "OVERRIDE"
+                    });
+                    setShowScheduleModal(true);
+                  }}
+                >
+                  <UserPlus className="w-3.5 h-3.5 mr-1.5" /> Add Employees
+                </Button>
+              )}
             </div>
           </div>
         </div>

@@ -8,8 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import PageHeader from "@/components/PageHeader";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 export default function TransfersPage() {
+  const permissions = useFeaturePermissions("INVENTORY", "stock_transfer");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -22,20 +24,22 @@ export default function TransfersPage() {
         title="Stock Transfers"
         subtitle="Transfer Stock one Warehouse to another"
         actions={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity text-sm font-medium"
-            >
-              <Plus className="w-4 h-4" /> New Transfer
-            </button>
-          </div>
+          permissions.create && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsCreateModalOpen(true)}
+                className="inline-flex items-center gap-2 px-4 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity text-sm font-medium"
+              >
+                <Plus className="w-4 h-4" /> New Transfer
+              </button>
+            </div>
+          )
         }
       />
 
-      <TransferList refreshTrigger={refreshKey} onTransferCompleted={handleRefresh} />
+      <TransferList refreshTrigger={refreshKey} onTransferCompleted={handleRefresh} permissions={permissions} />
 
-      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+      <Dialog open={isCreateModalOpen && permissions.create} onOpenChange={setIsCreateModalOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Create Stock Transfer</DialogTitle>

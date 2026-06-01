@@ -9,9 +9,9 @@ interface LoanTabProps {
     formatCurrency: (amount: number) => string;
     statusDropdownId: number | null;
     setStatusDropdownId: (id: number | null) => void;
-    onEdit: (loan: any) => void;
-    onDelete: (id: string) => void;
-    onStatusChange: (id: string, status: string) => void;
+    onEdit?: (loan: any) => void;
+    onDelete?: (id: string) => void;
+    onStatusChange?: (id: string, status: string) => void;
 }
 
 export default function LoanTab({
@@ -103,45 +103,57 @@ export default function LoanTab({
                                 </td>
                                 <td className="px-4 py-3 relative overflow-visible">
                                     <div className="relative">
-                                        <button
-                                            onClick={() => setStatusDropdownId(statusDropdownId === item.id ? null : item.id)}
-                                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border cursor-pointer transition-all hover:scale-105 ${getStatusColor(item.status)}`}
-                                        >
-                                            <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                                        {onStatusChange ? (
+                                          <>
+                                            <button
+                                                onClick={() => setStatusDropdownId(statusDropdownId === item.id ? null : item.id)}
+                                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border cursor-pointer transition-all hover:scale-105 ${getStatusColor(item.status)}`}
+                                            >
+                                                <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                                                {item.status}
+                                                <MoreHorizontal className="w-3 h-3" />
+                                            </button>
+                                            {statusDropdownId === item.id && (
+                                                <div className="absolute top-full mt-1 left-0 bg-popover border border-border rounded-lg shadow-lg z-[9999] py-1 min-w-[120px] animate-in fade-in zoom-in-95 duration-100">                        {['PENDING', 'ACTIVE', 'PAID', 'CANCELLED'].map(status => (
+                                                    <button
+                                                        key={status}
+                                                        onClick={() => onStatusChange(item.id, status)}
+                                                        className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors ${item.status === status ? 'bg-primary/10 text-primary font-medium' : ''
+                                                            }`}
+                                                    >
+                                                        {status}
+                                                    </button>
+                                                ))}
+                                                </div>
+                                            )}
+                                          </>
+                                        ) : (
+                                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border ${getStatusColor(item.status)}`}>
                                             {item.status}
-                                            <MoreHorizontal className="w-3 h-3" />
-                                        </button>
-                                        {statusDropdownId === item.id && (
-                                            <div className="absolute top-full mt-1 left-0 bg-popover border border-border rounded-lg shadow-lg z-[9999] py-1 min-w-[120px] animate-in fade-in zoom-in-95 duration-100">                        {['PENDING', 'ACTIVE', 'PAID', 'CANCELLED'].map(status => (
-                                                <button
-                                                    key={status}
-                                                    onClick={() => onStatusChange(item.id, status)}
-                                                    className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors ${item.status === status ? 'bg-primary/10 text-primary font-medium' : ''
-                                                        }`}
-                                                >
-                                                    {status}
-                                                </button>
-                                            ))}
-                                            </div>
+                                          </span>
                                         )}
                                     </div>
                                 </td>
                                 <td className="px-4 py-3 text-right whitespace-nowrap">
                                     <div className="flex items-center justify-end gap-1">
-                                        <button
-                                            onClick={() => onEdit(item)}
-                                            className="p-1.5 rounded-md hover:bg-muted transition-colors"
-                                            title="Edit"
-                                        >
-                                            <Pencil className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={() => onDelete(item.id)}
-                                            className="p-1.5 rounded-md hover:bg-red-500/10 text-red-500 transition-colors"
-                                            title="Delete"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        {onEdit && (
+                                          <button
+                                              onClick={() => onEdit(item)}
+                                              className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                                              title="Edit"
+                                          >
+                                              <Pencil className="w-4 h-4" />
+                                          </button>
+                                        )}
+                                        {onDelete && (
+                                          <button
+                                              onClick={() => onDelete(item.id)}
+                                              className="p-1.5 rounded-md hover:bg-red-500/10 text-red-500 transition-colors"
+                                              title="Delete"
+                                          >
+                                              <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        )}
                                     </div>
                                 </td>
                             </tr>

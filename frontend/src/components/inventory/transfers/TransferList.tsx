@@ -12,10 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar, CheckCircle, XCircle, Clock, Eye } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
+import type { PermissionActions } from "@/lib/permissions";
 
 interface TransferListProps {
   refreshTrigger?: number;
   onTransferCompleted?: () => void;
+  permissions?: PermissionActions;
 }
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" }> = {
@@ -24,7 +26,7 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
   CANCELLED: { label: "Cancelled", variant: "destructive" },
 };
 
-export default function TransferList({ refreshTrigger, onTransferCompleted }: TransferListProps) {
+export default function TransferList({ refreshTrigger, onTransferCompleted, permissions }: TransferListProps) {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [selectedTransfer, setSelectedTransfer] = useState<any>(null);
   const [confirmAction, setConfirmAction] = useState<"confirm" | "cancel" | null>(null);
@@ -138,30 +140,34 @@ const columns = [
       </Link>
       {row.status === "PENDING" && (
         <>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-green-600"
-            onClick={() => {
-              setSelectedTransfer(row);
-              setConfirmAction("confirm");
-            }}
-            title="Confirm Transfer"
-          >
-            <CheckCircle className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-red-600"
-            onClick={() => {
-              setSelectedTransfer(row);
-              setConfirmAction("cancel");
-            }}
-            title="Cancel Transfer"
-          >
-            <XCircle className="h-4 w-4" />
-          </Button>
+          {permissions?.approve && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-green-600"
+              onClick={() => {
+                setSelectedTransfer(row);
+                setConfirmAction("confirm");
+              }}
+              title="Confirm Transfer"
+            >
+              <CheckCircle className="h-4 w-4" />
+            </Button>
+          )}
+          {permissions?.delete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-red-600"
+              onClick={() => {
+                setSelectedTransfer(row);
+                setConfirmAction("cancel");
+              }}
+              title="Cancel Transfer"
+            >
+              <XCircle className="h-4 w-4" />
+            </Button>
+          )}
         </>
       )}
     </div>

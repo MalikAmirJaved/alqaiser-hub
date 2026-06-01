@@ -54,8 +54,10 @@ import { DatePicker } from "@/components/reuseable/DatePicker";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/currency";
 import { StatsCards } from "@/components/reuseable/StatsCards";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 export default function AssetsList() {
+  const permissions = useFeaturePermissions("HR", "emp_asset");
   const [searchQuery, setSearchQuery] = useState("");
   const { data: assets = [], isLoading } = useAssets(
     searchQuery ? { search: searchQuery } : undefined
@@ -149,18 +151,20 @@ export default function AssetsList() {
         title="Asset Library" 
         subtitle="Manage your hardware inventory - laptops, monitors, peripherals, and more"
         actions={
-          <Button onClick={() => { 
-            setEditing(null); 
-            setForm({ 
-              name: "", brand: "", model: "", serialNumber: "",
-              description: "", purchaseDate: "", purchasePrice: 0, 
-              warrantyUntil: "", vendor: "" 
-            }); 
-            setShowModal(true); 
-          }}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Asset
-          </Button>
+          permissions.create && (
+            <Button onClick={() => { 
+              setEditing(null); 
+              setForm({ 
+                name: "", brand: "", model: "", serialNumber: "",
+                description: "", purchaseDate: "", purchasePrice: 0, 
+                warrantyUntil: "", vendor: "" 
+              }); 
+              setShowModal(true); 
+            }}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Asset
+            </Button>
+          )
         }
       />
 
@@ -281,33 +285,39 @@ export default function AssetsList() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => { 
-                              setEditing(asset); 
-                              setForm({
-                                name: asset.name || "",
-                                brand: asset.brand || "",
-                                model: asset.model || "",
-                                serialNumber: asset.serialNumber || "",
-                                description: asset.description || "",
-                                purchaseDate: asset.purchaseDate || "",
-                                purchasePrice: asset.purchasePrice || 0,
-                                warrantyUntil: asset.warrantyUntil || "",
-                                vendor: asset.vendor || "",
-                              }); 
-                              setShowModal(true); 
-                            }}>
-                              <Edit className="w-4 h-4 mr-2" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem 
-                              onClick={() => handleDelete(asset.id)} 
-                              className="text-destructive"
-                              disabled={asset.isAssigned}
-                            >
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
+                            {permissions.update && (
+                              <DropdownMenuItem onClick={() => { 
+                                setEditing(asset); 
+                                setForm({
+                                  name: asset.name || "",
+                                  brand: asset.brand || "",
+                                  model: asset.model || "",
+                                  serialNumber: asset.serialNumber || "",
+                                  description: asset.description || "",
+                                  purchaseDate: asset.purchaseDate || "",
+                                  purchasePrice: asset.purchasePrice || 0,
+                                  warrantyUntil: asset.warrantyUntil || "",
+                                  vendor: asset.vendor || "",
+                                }); 
+                                setShowModal(true); 
+                              }}>
+                                <Edit className="w-4 h-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                            )}
+                            {permissions.update && permissions.delete && (
+                              <DropdownMenuSeparator />
+                            )}
+                            {permissions.delete && (
+                              <DropdownMenuItem 
+                                onClick={() => handleDelete(asset.id)} 
+                                className="text-destructive"
+                                disabled={asset.isAssigned}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -321,7 +331,10 @@ export default function AssetsList() {
       </Card>
 
       {/* Asset Modal */}
-      <Dialog open={showModal} onOpenChange={setShowModal}>
+      <Dialog
+        open={showModal && (editing ? permissions.update : permissions.create)}
+        onOpenChange={setShowModal}
+      >
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit Asset" : "Add New Asset"}</DialogTitle>

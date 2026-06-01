@@ -15,8 +15,10 @@ import { StockAdjustModal } from "@/components/inventory/stock/StockAdjustModal"
 import { StockHistoryDrawer } from "@/components/inventory/stock/StockHistoryDrawer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import PageHeader from "@/components/PageHeader";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 export default function StockManagementPage() {
+  const permissions = useFeaturePermissions("INVENTORY", "stock");
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("all");
@@ -94,21 +96,23 @@ export default function StockManagementPage() {
       <Button variant="ghost" size="sm" onClick={() => setHistoryVariantId(row.variant_id)}>
         <Eye className="w-4 h-4" />
       </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => {
-          setSelectedVariant({
-            id: row.variant_id,
-            name: row.variant_name,
-            currentStock: row.quantity_on_hand,
-            warehouseId: row.warehouse_id,
-          });
-          setAdjustModalOpen(true);
-        }}
-      >
-        <TrendingUp className="w-4 h-4" />
-      </Button>
+      {permissions.update && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setSelectedVariant({
+              id: row.variant_id,
+              name: row.variant_name,
+              currentStock: row.quantity_on_hand,
+              warehouseId: row.warehouse_id,
+            });
+            setAdjustModalOpen(true);
+          }}
+        >
+          <TrendingUp className="w-4 h-4" />
+        </Button>
+      )}
     </div>
   );
 
@@ -193,7 +197,7 @@ export default function StockManagementPage() {
       )}
 
       {/* Modals & Drawers */}
-      {selectedVariant && (
+      {selectedVariant && permissions.update && (
         <StockAdjustModal
           open={adjustModalOpen}
           onClose={() => {

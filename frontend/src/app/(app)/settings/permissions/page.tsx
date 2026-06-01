@@ -31,6 +31,7 @@ import {
   PermissionUser,
   ModuleNode,
 } from "@/hooks/usePermissions";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -78,10 +79,12 @@ function ModuleCard({
   module,
   pendingChanges,
   onToggle,
+  canEdit = true,
 }: {
   module: ModuleNode;
   pendingChanges: Record<string, boolean>;
   onToggle: (code: string, current: boolean) => void;
+  canEdit?: boolean;
 }) {
   const [expanded, setExpanded] = useState(true);
 
@@ -99,6 +102,7 @@ function ModuleCard({
   const noneGranted = grantedCount === 0;
 
   const handleModuleToggle = () => {
+    if (!canEdit) return;
     const target = !allGranted;
     allActions.forEach(a => onToggle(a.code, !target));
   };
@@ -113,6 +117,7 @@ function ModuleCard({
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={e => { e.stopPropagation(); handleModuleToggle(); }}
+            disabled={!canEdit}
             className={`flex-shrink-0 w-5 h-5 rounded flex items-center justify-center border transition-all ${
               allGranted
                 ? "bg-primary border-primary text-primary-foreground"
@@ -157,6 +162,7 @@ function ModuleCard({
                   resource={resource}
                   pendingChanges={pendingChanges}
                   onToggle={onToggle}
+                  canEdit={canEdit}
                 />
               ))}
             </div>
@@ -172,11 +178,13 @@ function ResourceRow({
   resource,
   pendingChanges,
   onToggle,
+  canEdit = true,
 }: {
   moduleCode: string;
   resource: ModuleNode["resources"][0];
   pendingChanges: Record<string, boolean>;
   onToggle: (code: string, current: boolean) => void;
+  canEdit?: boolean;
 }) {
   const codes = resource.actions.map(a => `${moduleCode}:${resource.code}:${a.code}`);
   const effective = resource.actions.map(a => {
@@ -187,6 +195,7 @@ function ResourceRow({
   const noneGranted = effective.every(v => !v);
 
   const handleRowToggle = () => {
+    if (!canEdit) return;
     const target = !allGranted;
     codes.forEach((code, i) => onToggle(code, effective[i] !== target ? effective[i] : !target));
     resource.actions.forEach(a => {
@@ -200,6 +209,7 @@ function ResourceRow({
       {/* Row checkbox */}
       <button
         onClick={handleRowToggle}
+        disabled={!canEdit}
         className={`flex-shrink-0 w-4 h-4 rounded flex items-center justify-center border transition-all ${
           allGranted
             ? "bg-primary border-primary text-primary-foreground"
@@ -227,7 +237,8 @@ function ResourceRow({
           return (
             <button
               key={action.code}
-              onClick={() => onToggle(code, isGranted)}
+              onClick={() => canEdit && onToggle(code, isGranted)}
+              disabled={!canEdit}
               title={`${action.name}: ${isGranted ? "Granted — click to revoke" : "Not granted — click to grant"}`}
               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border transition-all ${
                 isGranted
@@ -281,7 +292,15 @@ function UserListItem({
 
 // ─── Roles Panel ────────────────────────────────────────────────────────────
 
-function RolesPanel({ userId }: { userId: number }) {
+function RolesPanel({
+  userId,
+  canAssign = true,
+  canRemove = true,
+}: {
+  userId: number;
+  canAssign?: boolean;
+  canRemove?: boolean;
+}) {
   const { data: userRoles = [], isLoading } = useUserRoles(userId);
   const { data: allRoles = [] } = useRoles();
   const assignRole = useAssignRole();
@@ -326,25 +345,29 @@ function RolesPanel({ userId }: { userId: number }) {
             {ur.role.is_system && <Crown className="w-3.5 h-3.5 text-warning" />}
             <span className="text-sm font-medium">{ur.role.name}</span>
           </div>
-          <button
-            onClick={() => handleRemove(ur.role.id)}
-            disabled={ur.role.is_system}
-            className="p-1 rounded hover:bg-destructive/15 text-destructive disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            title={ur.role.is_system ? "System roles cannot be removed" : "Remove role"}
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
+          {canRemove && (
+            <button
+              onClick={() => handleRemove(ur.role.id)}
+              disabled={ur.role.is_system}
+              className="p-1 rounded hover:bg-destructive/15 text-destructive disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              title={ur.role.is_system ? "System roles cannot be removed" : "Remove role"}
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ))}
 
       {!showAdd ? (
-        <button
-          onClick={() => setShowAdd(true)}
-          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed border-border text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" /> Add Role
-        </button>
-      ) : (
+        canAssign && (
+          <button
+            onClick={() => setShowAdd(true)}
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed border-border text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" /> Add Role
+          </button>
+        )
+      ) : canAssign ? (
         <div className="flex gap-2">
           <select
             value={selectedRoleId}
@@ -367,7 +390,7 @@ function RolesPanel({ userId }: { userId: number }) {
             ✕
           </button>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -377,6 +400,7 @@ function RolesPanel({ userId }: { userId: number }) {
 type Tab = "permissions" | "roles" | "overrides";
 
 export default function PermissionsPage() {
+  const permissions = useFeaturePermissions("SETTINGS", "permissions");
   const [search, setSearch] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("permissions");
@@ -573,7 +597,7 @@ export default function PermissionsPage() {
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
                     </button>
-                    {hasPendingChanges && (
+                    {hasPendingChanges && permissions.update && (
                       <>
                         <button
                           onClick={handleDiscard}
@@ -636,6 +660,7 @@ export default function PermissionsPage() {
                         module={module}
                         pendingChanges={pendingChanges}
                         onToggle={handleToggle}
+                        canEdit={permissions.update}
                       />
                     ))
                   )}
@@ -651,7 +676,11 @@ export default function PermissionsPage() {
                       Roles grant a base set of permissions. User-level overrides (Overrides tab) take precedence.
                     </p>
                   </div>
-                  <RolesPanel userId={selectedUserId} />
+                  <RolesPanel
+                    userId={selectedUserId}
+                    canAssign={permissions.assign}
+                    canRemove={permissions.delete}
+                  />
                 </div>
               )}
 

@@ -54,6 +54,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { toast } from "sonner";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { cn } from "@/lib/utils";
 
 function AssetMultiSelect({ options, selected, onChange, assets }: any) {
@@ -134,6 +135,7 @@ function AssetMultiSelect({ options, selected, onChange, assets }: any) {
 }
 
 export default function AssetCategories() {
+  const permissions = useFeaturePermissions("HR", "asset_kit");
   const [searchQuery, setSearchQuery] = useState("");
   const navigate = useRouter();
   
@@ -211,14 +213,16 @@ export default function AssetCategories() {
         title="Equipment Kits" 
         subtitle="Bundle multiple assets together for easy assignment to employees"
         actions={
-          <Button onClick={() => { 
-            setEditing(null); 
-            setForm({ name: "", assetIds: [], description: "" }); 
-            setShowModal(true); 
-          }}>
-            <Plus className="w-4 h-4 mr-2" />
-            Create Kit
-          </Button>
+          permissions.create && (
+            <Button onClick={() => { 
+              setEditing(null); 
+              setForm({ name: "", assetIds: [], description: "" }); 
+              setShowModal(true); 
+            }}>
+              <Plus className="w-4 h-4 mr-2" />
+              Create Kit
+            </Button>
+          )
         }
       />
 
@@ -313,23 +317,29 @@ export default function AssetCategories() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => { 
-                            setEditing(cat); 
-                            setForm({ 
-                              name: cat.name, 
-                              assetIds: cat.assetIds || [], 
-                              description: cat.description || "" 
-                            }); 
-                            setShowModal(true); 
-                          }}>
-                            <Edit className="w-4 h-4 mr-2" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleDelete(cat.id)} className="text-destructive">
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
+                          {permissions.update && (
+                            <DropdownMenuItem onClick={() => { 
+                              setEditing(cat); 
+                              setForm({ 
+                                name: cat.name, 
+                                assetIds: cat.assetIds || [], 
+                                description: cat.description || "" 
+                              }); 
+                              setShowModal(true); 
+                            }}>
+                              <Edit className="w-4 h-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                          )}
+                          {permissions.update && permissions.delete && (
+                            <DropdownMenuSeparator />
+                          )}
+                          {permissions.delete && (
+                            <DropdownMenuItem onClick={() => handleDelete(cat.id)} className="text-destructive">
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -373,7 +383,10 @@ export default function AssetCategories() {
       </Card>
 
       {/* Category Modal */}
-      <Dialog open={showModal} onOpenChange={setShowModal}>
+      <Dialog
+        open={showModal && (editing ? permissions.update : permissions.create)}
+        onOpenChange={setShowModal}
+      >
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit Kit" : "Create Equipment Kit"}</DialogTitle>

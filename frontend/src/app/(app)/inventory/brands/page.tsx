@@ -5,8 +5,10 @@ import PageHeader from "@/components/PageHeader";
 import { Search, Plus, Tag, Trash2, Pencil, Globe } from "lucide-react";
 import BrandFormModal from "@/components/inventory/brand/BrandFormModal";
 import { useBrands, useDeleteBrand, Brand } from "@/hooks/useBrands";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 export default function BrandsPage() {
+  const permissions = useFeaturePermissions("INVENTORY", "brand");
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
@@ -33,15 +35,17 @@ export default function BrandsPage() {
         title="Brand Management" 
         subtitle="Manage manufacturers & origins"
         actions={
-          <button
-            onClick={() => {
-              setEditing(null);
-              setModalOpen(true);
-            }}
-            className="inline-flex items-center gap-2 px-4 h-10 rounded-xl bg-primary text-primary-foreground text-sm hover:opacity-90 transition"
-          >
-            <Plus className="w-4 h-4" /> Add Brand
-          </button>
+          permissions.create && (
+            <button
+              onClick={() => {
+                setEditing(null);
+                setModalOpen(true);
+              }}
+              className="inline-flex items-center gap-2 px-4 h-10 rounded-xl bg-primary text-primary-foreground text-sm hover:opacity-90 transition"
+            >
+              <Plus className="w-4 h-4" /> Add Brand
+            </button>
+          )
         }
       />
       <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
@@ -92,21 +96,25 @@ export default function BrandsPage() {
                   </td>
                   <td className="px-4 py-3 text-muted-foreground max-w-xs truncate">{item.description || "—"}</td>
                   <td className="px-4 py-3 text-right whitespace-nowrap flex justify-end gap-2">
-                    <button
-                      onClick={() => {
-                        setEditing(item);
-                        setModalOpen(true);
-                      }}
-                      className="p-2 hover:bg-primary/10 text-primary rounded-lg transition"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(item.id, item.name)}
-                      className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {permissions.update && (
+                      <button
+                        onClick={() => {
+                          setEditing(item);
+                          setModalOpen(true);
+                        }}
+                        className="p-2 hover:bg-primary/10 text-primary rounded-lg transition"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    )}
+                    {permissions.delete && (
+                      <button
+                        onClick={() => handleDelete(item.id, item.name)}
+                        className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -114,11 +122,13 @@ export default function BrandsPage() {
           </table>
         </div>
       </div>
-      <BrandFormModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        initialData={editing}
-      />
+      {(modalOpen && (editing ? permissions.update : permissions.create)) && (
+        <BrandFormModal
+          isOpen={modalOpen}
+          onClose={() => setModalOpen(false)}
+          initialData={editing}
+        />
+      )}
     </div>
   );
 }

@@ -20,6 +20,8 @@ interface CartPanelProps {
   onCartChange?: (newCart: CartLine[]) => void;
   isSubmitting?: boolean;
   activeDraftId?: string | null;
+  canCreate?: boolean;
+  canUpdate?: boolean;
 }
 
 type PaymentMethod = "CASH" | "CARD" | "CREDIT";
@@ -38,6 +40,8 @@ export function CartPanel({
   onCartChange,
   isSubmitting,
   activeDraftId,
+  canCreate = true,
+  canUpdate = true,
 }: CartPanelProps) {
   const [customerSearch, setCustomerSearch] = useState("");
   const [showCustomerDD, setShowCustomerDD] = useState(false);
@@ -277,7 +281,7 @@ export function CartPanel({
                       </div>
                     </button>
                   ))}
-                  {(customers.length === 0 || customerSearch) && (
+                  {(customers.length === 0 || customerSearch) && canCreate && (
                     <button
                       onClick={() => setShowNewCustomerForm(true)}
                       className="w-full text-left px-3 py-2.5 text-sm text-primary hover:bg-accent flex items-center gap-2 transition-colors border-t border-border"
@@ -527,14 +531,17 @@ export function CartPanel({
           )}
 
           <div className="flex gap-2 pt-0.5">
-            <button
-              onClick={handleSave}
-              disabled={isSubmitting}
-              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 disabled:opacity-50 transition-all"
-            >
-              <SaveIcon size={14} />
-              Hold
-            </button>
+            {canCreate && (
+              <button
+                onClick={handleSave}
+                disabled={isSubmitting}
+                className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 disabled:opacity-50 transition-all"
+              >
+                <SaveIcon size={14} />
+                Hold
+              </button>
+            )}
+            {canCreate && (
             <button
               onClick={handleComplete}
               disabled={isSubmitting}
@@ -552,6 +559,7 @@ export function CartPanel({
                 </>
               )}
             </button>
+            )}
           </div>
         </div>
       )}

@@ -9,8 +9,10 @@ import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import { Plus, Eye, Edit, Trash2 } from "lucide-react";
 import CustomerForm from "@/components/inventory/customers/CustomerForm";
 import { useCreateCustomer, useUpdateCustomer } from "@/hooks/useCustomers";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 export default function CustomersPage() {
+  const permissions = useFeaturePermissions("INVENTORY", "customer");
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -84,9 +86,11 @@ export default function CustomersPage() {
         title="Customers"
         subtitle="Manage your customer base"
         actions={
-          <button onClick={() => setShowForm(true)} className="inline-flex items-center gap-2 px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm">
-            <Plus className="w-4 h-4" /> Add Customer
-          </button>
+          permissions.create && (
+            <button onClick={() => setShowForm(true)} className="inline-flex items-center gap-2 px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm">
+              <Plus className="w-4 h-4" /> Add Customer
+            </button>
+          )
         }
       />
 
@@ -112,18 +116,22 @@ export default function CustomersPage() {
             <button onClick={(e) => { e.stopPropagation(); router.push(`customers/${row.id}`); }} className="p-1 rounded hover:bg-muted">
               <Eye className="w-4 h-4" />
             </button>
-            <button onClick={(e) => { e.stopPropagation(); setEditingCustomer(row); setShowForm(true); }} className="p-1 rounded hover:bg-muted">
-              <Edit className="w-4 h-4" />
-            </button>
-            <button onClick={(e) => { e.stopPropagation(); handleDelete(row.id, row.name); }} className="p-1 rounded hover:bg-destructive/10 text-destructive">
-              <Trash2 className="w-4 h-4" />
-            </button>
+            {permissions.update && (
+              <button onClick={(e) => { e.stopPropagation(); setEditingCustomer(row); setShowForm(true); }} className="p-1 rounded hover:bg-muted">
+                <Edit className="w-4 h-4" />
+              </button>
+            )}
+            {permissions.delete && (
+              <button onClick={(e) => { e.stopPropagation(); handleDelete(row.id, row.name); }} className="p-1 rounded hover:bg-destructive/10 text-destructive">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </>
         )}
       />
 
       {/* Modal Form */}
-      {showForm && (
+      {showForm && (editingCustomer ? permissions.update : permissions.create) && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-card rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
             <h2 className="text-xl font-semibold mb-4">{editingCustomer ? "Edit Customer" : "New Customer"}</h2>

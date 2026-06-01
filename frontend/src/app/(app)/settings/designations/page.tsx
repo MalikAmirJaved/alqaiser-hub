@@ -11,8 +11,10 @@ import { Plus, Pencil, Trash2, Briefcase, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { DEPARTMENT_CHOICES } from "@/lib/departments";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 export default function DesignationsPage() {
+  const permissions = useFeaturePermissions("SETTINGS", "designation");
   const { user } = useAuth();
   const { data: designations = [], isLoading, error } = useDesignations();
   const createDesignation = useCreateDesignation();
@@ -145,11 +147,12 @@ export default function DesignationsPage() {
         title="Designations"
         subtitle="Manage job titles and designations"
         actions={
+          permissions.create && (
             <Button onClick={handleCreate}>
               <Plus className="w-4 h-4 mr-2" />
               Add Designation
             </Button>
-          
+          )
         }
       />
 
@@ -180,14 +183,14 @@ export default function DesignationsPage() {
         subtitle={`${designations.length} designation${designations.length !== 1 ? "s" : ""} found`}
         searchable
         searchFields={["name", "department", "payGrade"]}
-        onEdit={(row) =>  handleEdit(row)}
-        onDelete={(row) => handleDelete(row)}
+        onEdit={permissions.update ? (row) => handleEdit(row) : undefined}
+        onDelete={permissions.delete ? (row) => handleDelete(row) : undefined}
         defaultPageSize={10}
       />
 
       {/* Create/Edit Modal */}
       <FormModal
-        open={modalOpen}
+        open={modalOpen && (editingDesignation ? permissions.update : permissions.create)}
         onClose={() => setModalOpen(false)}
         title={editingDesignation ? "Edit Designation" : "Create Designation"}
         onSubmit={handleSubmit}

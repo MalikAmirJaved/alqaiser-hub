@@ -8,6 +8,7 @@ import {
   Phone, MapPin, Hash, AlertCircle
 } from "lucide-react";
 import { LocationGroup } from "@/components/reuseable/LocationSelectors";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 // Define proper types matching your API
 interface WorkingDayDisplay {
@@ -46,6 +47,7 @@ interface FormData {
 }
 
 export default function CompanyProfile() {
+  const permissions = useFeaturePermissions("SETTINGS", "company");
   const { 
     settings, 
     isReady, 
@@ -434,6 +436,7 @@ export default function CompanyProfile() {
 
         {/* Actions */}
         <div className="flex items-center justify-end gap-3 pt-4">
+          {permissions.update && (
           <button
             type="submit"
             disabled={loading || isUpdating}
@@ -451,6 +454,7 @@ export default function CompanyProfile() {
               </>
             )}
           </button>
+          )}
         </div>
       </form>
     </div>

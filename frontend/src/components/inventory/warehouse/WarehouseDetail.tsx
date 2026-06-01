@@ -9,8 +9,8 @@ import { cn } from "@/lib/utils";
 interface WarehouseDetailProps {
   warehouse: Warehouse | null;
   onClose: () => void;
-  onEdit: (warehouse: Warehouse) => void;
-  onDelete: (warehouse: Warehouse) => void;
+  onEdit?: (warehouse: Warehouse) => void;
+  onDelete?: (warehouse: Warehouse) => void;
   isOpen: boolean;
 }
 
@@ -180,22 +180,28 @@ export function WarehouseDetail({ warehouse, onClose, onEdit, onDelete, isOpen }
         </div>
 
         {/* Footer Actions */}
-        <div className="sticky bottom-0 bg-card border-t border-border p-4 flex gap-3">
-          <button
-            onClick={() => onEdit(warehouse)}
-            className="flex-1 inline-flex items-center justify-center gap-2 px-4 h-9 rounded-md border border-border bg-transparent text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
-          >
-            <Edit className="w-4 h-4" />
-            Edit
-          </button>
-          <button
-            onClick={() => onDelete(warehouse)}
-            className="flex-1 inline-flex items-center justify-center gap-2 px-4 h-9 rounded-md bg-destructive text-destructive-foreground text-sm font-medium hover:opacity-90 transition-opacity"
-          >
-            <Trash2 className="w-4 h-4" />
-            Delete
-          </button>
-        </div>
+        {(onEdit || onDelete) && (
+          <div className="sticky bottom-0 bg-card border-t border-border p-4 flex gap-3">
+            {onEdit && (
+              <button
+                onClick={() => onEdit(warehouse)}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-4 h-9 rounded-md border border-border bg-transparent text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
+              >
+                <Edit className="w-4 h-4" />
+                Edit
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={() => onDelete(warehouse)}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-4 h-9 rounded-md bg-destructive text-destructive-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </>
   );

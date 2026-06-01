@@ -4,8 +4,10 @@ import PageHeader from "@/components/PageHeader";
 import { Search, Plus, Layers, Trash2, Pencil } from "lucide-react";
 import CategoryFormModal from "@/components/inventory/category/CategoryFormModal";
 import { useCategories, useDeleteCategory, Category } from "@/hooks/useCategories";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 export default function CategoriesPage() {
+  const permissions = useFeaturePermissions("INVENTORY", "category");
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
@@ -33,15 +35,17 @@ export default function CategoriesPage() {
         title="Category Management"
         subtitle="Organize products with hierarchical categories"
         actions={
-          <button
-            onClick={() => {
-              setEditing(null);
-              setModalOpen(true);
-            }}
-            className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-colors"
-          >
-            <Plus className="w-4 h-4" /> Add Category
-          </button>
+          permissions.create && (
+            <button
+              onClick={() => {
+                setEditing(null);
+                setModalOpen(true);
+              }}
+              className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Add Category
+            </button>
+          )
         }
       />
       <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
@@ -87,21 +91,25 @@ export default function CategoriesPage() {
                   <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{item.code}</td>
                   <td className="px-4 py-3 text-muted-foreground max-w-xs truncate">{item.description || "—"}</td>
                   <td className="px-4 py-3 text-right whitespace-nowrap flex justify-end gap-2">
-                    <button
-                      onClick={() => {
-                        setEditing(item);
-                        setModalOpen(true);
-                      }}
-                      className="p-2 hover:bg-primary/10 text-primary rounded-lg transition"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(item.id)}
-                      className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {permissions.update && (
+                      <button
+                        onClick={() => {
+                          setEditing(item);
+                          setModalOpen(true);
+                        }}
+                        className="p-2 hover:bg-primary/10 text-primary rounded-lg transition"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    )}
+                    {permissions.delete && (
+                      <button
+                        onClick={() => handleDelete(item.id)}
+                        className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -109,11 +117,13 @@ export default function CategoriesPage() {
           </table>
         </div>
       </div>
-      <CategoryFormModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        initialData={editing}
-      />
+      {(modalOpen && (editing ? permissions.update : permissions.create)) && (
+        <CategoryFormModal
+          isOpen={modalOpen}
+          onClose={() => setModalOpen(false)}
+          initialData={editing}
+        />
+      )}
     </div>
   );
 }

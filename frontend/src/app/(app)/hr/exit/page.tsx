@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { useApi } from "@/hooks/useApi";
 import { formatCurrency } from "@/lib/currency";
 import { StatsCards } from "@/components/reuseable/StatsCards";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 const EXIT_REASONS: SearchableSelectOption[] = [
   { value: "RESIGNATION", label: "👋 Resignation" },
@@ -44,6 +45,7 @@ const CLEARANCE_STATUSES: SearchableSelectOption[] = [
 ];
 
 export default function ExitManagementPage() {
+  const permissions = useFeaturePermissions("HR", "exit");
   const api = useApi();
   const { data: employees = [] } = useEmployees();
   const confirmationModal = useConfirmationModal();
@@ -177,12 +179,14 @@ export default function ExitManagementPage() {
             >
               <RefreshCw className="w-4 h-4" /> Refresh
             </button>
-            <button
-              onClick={() => { setEditingRecord(null); setModalOpen(true); }}
-              className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90"
-            >
-              <Plus className="w-4 h-4" /> Initiate Exit
-            </button>
+            {permissions.create && (
+              <button
+                onClick={() => { setEditingRecord(null); setModalOpen(true); }}
+                className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90"
+              >
+                <Plus className="w-4 h-4" /> Initiate Exit
+              </button>
+            )}
           </div>
         }
       />
@@ -264,12 +268,16 @@ export default function ExitManagementPage() {
               </button>
               {selectedRecords.size > 0 && (
                 <>
-                  <button onClick={() => handleBulkAction("CLOSE")} className="px-3 h-9 rounded-md border border-border text-sm text-success">
-                    Close
-                  </button>
-                  <button onClick={() => handleBulkAction("DELETE")} className="px-3 h-9 rounded-md border border-border text-sm text-destructive">
-                    Delete
-                  </button>
+                  {permissions.update && (
+                    <button onClick={() => handleBulkAction("CLOSE")} className="px-3 h-9 rounded-md border border-border text-sm text-success">
+                      Close
+                    </button>
+                  )}
+                  {permissions.delete && (
+                    <button onClick={() => handleBulkAction("DELETE")} className="px-3 h-9 rounded-md border border-border text-sm text-destructive">
+                      Delete
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -362,12 +370,16 @@ export default function ExitManagementPage() {
                         >
                           <FileText className="w-4 h-4" />
                         </button>
-                        <button onClick={() => { setEditingRecord(r); setModalOpen(true); }} className="p-1.5 rounded-md hover:bg-muted">
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => handleDelete(r.id)} className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {permissions.update && (
+                          <button onClick={() => { setEditingRecord(r); setModalOpen(true); }} className="p-1.5 rounded-md hover:bg-muted">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        )}
+                        {permissions.delete && (
+                          <button onClick={() => handleDelete(r.id)} className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -397,7 +409,7 @@ export default function ExitManagementPage() {
                       <div
                         key={r.id}
                         className="bg-card border border-border rounded-lg p-3 cursor-pointer hover:shadow-md"
-                        onClick={() => { setEditingRecord(r); setModalOpen(true); }}
+                        onClick={() => { if (permissions.update) { setEditingRecord(r); setModalOpen(true); } }}
                       >
                         <div className="font-medium text-sm">{r.employee_name}</div>
                         <div className="text-xs text-muted-foreground">{r.department}</div>
@@ -421,7 +433,7 @@ export default function ExitManagementPage() {
         </div>
       </div>
 
-      {modalOpen && (
+      {(modalOpen && (editingRecord ? permissions.update : permissions.create)) && (
         <ExitFormModal
           formatCurrency={formatCurrency}
           employees={employees}
@@ -435,7 +447,7 @@ export default function ExitManagementPage() {
         <ChecklistModal
           record={activeRecord}
           items={checklistItems}
-          onUpdateItem={handleUpdateChecklistItem}
+          onUpdateItem={permissions.update ? handleUpdateChecklistItem : undefined}
           onClose={() => setChecklistModal(false)}
         />
       )}
@@ -664,7 +676,7 @@ function ChecklistModal({
 }: {
   record: ExitRecord;
   items: ExitChecklistItem[];
-  onUpdateItem: (itemId: string, status: string) => void;
+  onUpdateItem?: (itemId: string, status: string) => void;
   onClose: () => void;
 }) {
   const groupedItems = items.reduce((acc, item) => {
@@ -703,16 +715,20 @@ function ChecklistModal({
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      <select
-                        value={item.status}
-                        onChange={e => onUpdateItem(item.id, e.target.value)}
-                        className="text-xs bg-muted/40 border border-border rounded px-2 py-1"
-                      >
-                        <option value="PENDING">Pending</option>
-                        <option value="COMPLETED">Completed</option>
-                        <option value="WAIVED">Waived</option>
-                        <option value="NOT_APPLICABLE">N/A</option>
-                      </select>
+                      {onUpdateItem ? (
+                        <select
+                          value={item.status}
+                          onChange={e => onUpdateItem(item.id, e.target.value)}
+                          className="text-xs bg-muted/40 border border-border rounded px-2 py-1"
+                        >
+                          <option value="PENDING">Pending</option>
+                          <option value="COMPLETED">Completed</option>
+                          <option value="WAIVED">Waived</option>
+                          <option value="NOT_APPLICABLE">N/A</option>
+                        </select>
+                      ) : (
+                        <span className="text-xs">{item.status}</span>
+                      )}
                       {item.status === "COMPLETED" && (
                         <CheckCircle2 className="w-4 h-4 text-success" />
                       )}

@@ -18,7 +18,7 @@ interface Round {
 interface RoundStatusModalProps {
   rounds: Round[];
   onClose: () => void;
-  onUpdate: (updates: Array<{ round_id: string; status: string; feedback?: string; rating?: number; interview_date?: string }>) => void;
+  onUpdate?: (updates: Array<{ round_id: string; status: string; feedback?: string; rating?: number; interview_date?: string }>) => void;
   candidateName: string;
 }
 
@@ -45,7 +45,7 @@ export function RoundStatusModal({ rounds, onClose, onUpdate, candidateName }: R
 
   const handleSubmit = () => {
     const updates = Object.values(roundUpdates);
-    if (updates.length > 0) {
+    if (updates.length > 0 && onUpdate) {
       onUpdate(updates);
     }
     onClose();
@@ -229,9 +229,11 @@ export function RoundStatusModal({ rounds, onClose, onUpdate, candidateName }: R
           <button onClick={onClose} className="px-4 h-9 rounded-md border border-border hover:bg-muted">
             Cancel
           </button>
-          <button onClick={handleSubmit} className="px-4 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90">
-            Save Changes
-          </button>
+          {onUpdate && (
+            <button onClick={handleSubmit} className="px-4 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90">
+              Save Changes
+            </button>
+          )}
         </div>
       </div>
     </div>

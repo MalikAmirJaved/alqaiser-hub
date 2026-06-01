@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Package } from 'lucide-react';
+import { useFeaturePermissions } from '@/hooks/useFeaturePermissions';
 import {
   usePurchaseOrders,
   useCreatePurchaseOrder,
@@ -98,6 +99,7 @@ export default function PurchaseOrdersPage() {
   const confirmMutation = useConfirmPurchaseOrder();
   const createReceiptMutation = useCreateGoodsReceipt();
   const { confirm, Modal: ConfirmModal } = useConfirmationModal();
+  const permissions = useFeaturePermissions("INVENTORY", "purchase_order");
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<PurchaseOrder | undefined>();
@@ -181,12 +183,14 @@ export default function PurchaseOrdersPage() {
         title="Purchase Orders"
         subtitle="Manage supplier orders and inventory inflows"
         actions={
-          <button
-            onClick={() => { setEditingOrder(undefined); setModalOpen(true); }}
-            className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-colors"
-          >
-            <Plus className="w-4 h-4" /> New Order
-          </button>
+          permissions.create && (
+            <button
+              onClick={() => { setEditingOrder(undefined); setModalOpen(true); }}
+              className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> New Order
+            </button>
+          )
         }
       />
 
@@ -333,41 +337,47 @@ export default function PurchaseOrdersPage() {
                     {/* Draft actions */}
                     {order.status === 'DRAFT' && (
                       <>
-                        <ActionBtn
-                          title="Edit"
-                          onClick={() => handleEdit(order)}
-                          icon={
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                            </svg>
-                          }
-                        />
-                        <ActionBtn
-                          title="Confirm order"
-                          onClick={() => handleConfirm(order)}
-                          variant="success"
-                          icon={
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                              <polyline points="22 4 12 14.01 9 11.01" />
-                            </svg>
-                          }
-                        />
-                        <ActionBtn
-                          title="Cancel order"
-                          onClick={() => handleCancel(order)}
-                          variant="danger"
-                          icon={
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                          }
-                        />
+                        {permissions.update && (
+                          <ActionBtn
+                            title="Edit"
+                            onClick={() => handleEdit(order)}
+                            icon={
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                              </svg>
+                            }
+                          />
+                        )}
+                        {permissions.approve && (
+                          <ActionBtn
+                            title="Confirm order"
+                            onClick={() => handleConfirm(order)}
+                            variant="success"
+                            icon={
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                                <polyline points="22 4 12 14.01 9 11.01" />
+                              </svg>
+                            }
+                          />
+                        )}
+                        {permissions.delete && (
+                          <ActionBtn
+                            title="Cancel order"
+                            onClick={() => handleCancel(order)}
+                            variant="danger"
+                            icon={
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                              </svg>
+                            }
+                          />
+                        )}
                       </>
                     )}
                     {/* Receive */}
-                    {(order.status === 'CONFIRMED' || order.status === 'PARTIALLY_RECEIVED') && (
+                    {(order.status === 'CONFIRMED' || order.status === 'PARTIALLY_RECEIVED') && permissions.update && (
                       <ActionBtn
                         title="Receive goods"
                         onClick={() => setReceiptOrder(order)}
@@ -389,7 +399,7 @@ export default function PurchaseOrdersPage() {
       </div>
 
       {/* Modals */}
-      {modalOpen && (
+      {modalOpen && (editingOrder ? permissions.update : permissions.create) && (
         <PurchaseOrderModal
           isOpen={modalOpen}
           onClose={() => { setModalOpen(false); setEditingOrder(undefined); }}

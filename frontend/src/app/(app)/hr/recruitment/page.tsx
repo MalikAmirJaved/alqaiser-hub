@@ -28,6 +28,7 @@ import {
 } from "@/hooks/useInterviewRound";
 import { ConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import { StatsCards } from "@/components/reuseable/StatsCards";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 // ==========================================
 // TYPES & CONSTANTS
@@ -142,6 +143,7 @@ function Avatar({ name, size = "sm" }: { name: string; size?: "sm" | "md" }) {
 // MAIN PAGE COMPONENT
 // ==========================================
 export default function RecruitmentPage() {
+  const permissions = useFeaturePermissions("HR", "recruitment");
   const [query, setQuery] = useState("");
   const [filterDept, setFilterDept] = useState("");
   const [filterStage, setFilterStage] = useState("");
@@ -271,13 +273,15 @@ export default function RecruitmentPage() {
         title="Recruitment"
         subtitle="Manage candidates and hiring pipeline"
         actions={
-          <button
-            onClick={() => { setEditingRecord(null); setModalOpen(true); }}
-            className="inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
-          >
-            <Plus className="w-4 h-4" />
-            Add Candidate
-          </button>
+          permissions.create && (
+            <button
+              onClick={() => { setEditingRecord(null); setModalOpen(true); }}
+              className="inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+            >
+              <Plus className="w-4 h-4" />
+              Add Candidate
+            </button>
+          )
         }
       />
 
@@ -368,7 +372,7 @@ export default function RecruitmentPage() {
                           {hasActiveFilters ? "Try adjusting your filters" : "Add your first candidate to get started"}
                         </p>
                       </div>
-                      {!hasActiveFilters && (
+                      {!hasActiveFilters && permissions.create && (
                         <button
                           onClick={() => setModalOpen(true)}
                           className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity"
@@ -464,20 +468,24 @@ export default function RecruitmentPage() {
                             <Link2 className="w-4 h-4" />
                           </a>
                         )}
-                        <button
-                          onClick={() => { setEditingRecord(r); setModalOpen(true); }}
-                          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                          title="Edit"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeleteTarget(r)}
-                          className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-muted-foreground hover:text-red-600 transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {permissions.update && (
+                          <button
+                            onClick={() => { setEditingRecord(r); setModalOpen(true); }}
+                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                            title="Edit"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        )}
+                        {permissions.delete && (
+                          <button
+                            onClick={() => setDeleteTarget(r)}
+                            className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-muted-foreground hover:text-red-600 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -517,7 +525,7 @@ export default function RecruitmentPage() {
       </div>
 
       {/* Candidate Form Modal */}
-      {modalOpen && (
+      {(modalOpen && (editingRecord ? permissions.update : permissions.create)) && (
         <CandidateFormModal
           employeeOptions={employees}
           initialData={editingRecord}
@@ -532,7 +540,7 @@ export default function RecruitmentPage() {
           rounds={existingRounds.length > 0 ? existingRounds : (roundsData || [])}
           candidateName={selectedCandidate.name}
           onClose={() => { setRoundsModalOpen(false); setSelectedCandidate(null); setExistingRounds([]); }}
-          onUpdate={handleUpdateRounds}
+          onUpdate={permissions.update ? handleUpdateRounds : undefined}
         />
       )}
 

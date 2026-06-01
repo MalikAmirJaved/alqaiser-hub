@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { StatsCards } from "@/components/reuseable/StatsCards";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 // ==========================================
 // CONSTANTS
@@ -37,6 +38,7 @@ const STATUSES = [
 // MAIN PAGE COMPONENT
 // ==========================================
 export default function HRPolicyPage() {
+  const permissions = useFeaturePermissions("HR", "policy");
   // Filters state
   const [filters, setFilters] = useState<PolicyFilters>({
     sortBy: "-created_at",
@@ -217,12 +219,14 @@ export default function HRPolicyPage() {
         title="HR Policy Management"
         subtitle="Create, publish, and track policy acknowledgments"
         actions={
-          <button 
-            onClick={() => { setEditingRecord(null); setModalOpen(true); }} 
-            className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90"
-          >
-            <Plus className="w-4 h-4" /> Create Policy
-          </button>
+          permissions.create && (
+            <button 
+              onClick={() => { setEditingRecord(null); setModalOpen(true); }} 
+              className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90"
+            >
+              <Plus className="w-4 h-4" /> Create Policy
+            </button>
+          )
         }
       />
 
@@ -255,7 +259,7 @@ export default function HRPolicyPage() {
 />
 
       {/* Bulk Actions Bar */}
-      {selectedIds.size > 0 && (
+      {selectedIds.size > 0 && permissions.update && (
         <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 flex items-center justify-between">
           <span className="text-sm font-medium">
             {selectedIds.size} policies selected
@@ -401,22 +405,26 @@ export default function HRPolicyPage() {
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    <button 
-                      onClick={() => { setEditingRecord(r); setModalOpen(true); }} 
-                      className="p-1.5 rounded-md hover:bg-muted"
-                      title="Edit"
-                      disabled={updatePolicy.isPending}
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(r.id)} 
-                      className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
-                      title="Delete"
-                      disabled={deletePolicy.isPending}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {permissions.update && (
+                      <button 
+                        onClick={() => { setEditingRecord(r); setModalOpen(true); }} 
+                        className="p-1.5 rounded-md hover:bg-muted"
+                        title="Edit"
+                        disabled={updatePolicy.isPending}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    )}
+                    {permissions.delete && (
+                      <button 
+                        onClick={() => handleDelete(r.id)} 
+                        className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
+                        title="Delete"
+                        disabled={deletePolicy.isPending}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -439,7 +447,7 @@ export default function HRPolicyPage() {
       </div>
 
       {/* Modal Form */}
-      {modalOpen && (
+      {(modalOpen && (editingRecord ? permissions.update : permissions.create)) && (
         <PolicyFormModal 
           initialData={editingRecord} 
           onSubmit={handleSave} 
@@ -449,7 +457,7 @@ export default function HRPolicyPage() {
       )}
 
       {/* Bulk Action Modal */}
-      {bulkActionOpen && (
+      {bulkActionOpen && permissions.update && (
         <BulkActionModal
           selectedCount={selectedIds.size}
           onAction={handleBulkAction}

@@ -27,8 +27,10 @@ import {
   Download,
   Barcode as BarcodeIcon,
 } from "lucide-react";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 export default function BarcodesPage() {
+  const permissions = useFeaturePermissions("INVENTORY", "barcode");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] =
     useState("");
@@ -428,24 +430,22 @@ export default function BarcodesPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-2 justify-end">
-                <Button
-                  variant="outline"
-                  onClick={handlePrint}
-                >
-                  <Printer className="h-4 w-4 mr-2" />
-                  Print
-                </Button>
+              {permissions.export && (
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={handlePrint}
+                  >
+                    <Printer className="h-4 w-4 mr-2" />
+                    Print
+                  </Button>
 
-                <Button
-                  onClick={
-                    handleDownloadPDF
-                  }
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download PDF
-                </Button>
-              </div>
+                  <Button onClick={handleDownloadPDF}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Download PDF
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>

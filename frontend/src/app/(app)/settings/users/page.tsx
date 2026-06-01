@@ -5,8 +5,10 @@ import PageHeader from "@/components/PageHeader";
 import { Plus, Pencil, Trash2, Search } from "lucide-react";
 import UserForm from "@/components/Forms/UserForm";
 import { toast } from "sonner";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 export default function UsersPage() {
+  const permissions = useFeaturePermissions("SETTINGS", "user");
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
@@ -60,17 +62,19 @@ export default function UsersPage() {
     <div>
       <PageHeader
         title="Users & Roles"
-        subtitle="Manage system users (permissions will be added separately)"
+        subtitle="Manage system users"
         actions={
-          <button
-            onClick={() => {
-              setEditingUser(null);
-              setModalOpen(true);
-            }}
-            className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm"
-          >
-            <Plus className="w-4 h-4" /> Add User
-          </button>
+          permissions.create && (
+            <button
+              onClick={() => {
+                setEditingUser(null);
+                setModalOpen(true);
+              }}
+              className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm"
+            >
+              <Plus className="w-4 h-4" /> Add User
+            </button>
+          )
         }
       />
 
@@ -126,21 +130,25 @@ export default function UsersPage() {
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    <button
-                      onClick={() => {
-                        setEditingUser(user);
-                        setModalOpen(true);
-                      }}
-                      className="p-1.5 rounded-md hover:bg-muted"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(user)}
-                      className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {permissions.update && (
+                      <button
+                        onClick={() => {
+                          setEditingUser(user);
+                          setModalOpen(true);
+                        }}
+                        className="p-1.5 rounded-md hover:bg-muted"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    )}
+                    {permissions.delete && (
+                      <button
+                        onClick={() => handleDelete(user)}
+                        className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -149,7 +157,7 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {modalOpen && (
+      {(modalOpen && (editingUser ? permissions.update : permissions.create)) && (
         <UserForm
           initialData={editingUser}
           onSubmit={handleSave}

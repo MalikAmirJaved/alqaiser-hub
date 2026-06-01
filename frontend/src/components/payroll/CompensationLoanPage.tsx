@@ -10,6 +10,7 @@ import {
 } from "@/hooks/usePayroll";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HandCoins, TrendingUp, Plus, Search } from "lucide-react";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import CompensationForm from "./CompensationForm";
 import LoanForm from "./LoanForm";
 import CompensationTab from "./CompensationTab";
@@ -21,6 +22,7 @@ interface CompensationLoanPageProps {
 }
 
 export default function CompensationLoanPage({ formatCurrency }: CompensationLoanPageProps) {
+  const permissions = useFeaturePermissions("HR", "compensation");
   const [activeTab, setActiveTab] = useState("compensation");
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -220,13 +222,15 @@ export default function CompensationLoanPage({ formatCurrency }: CompensationLoa
             </TabsTrigger>
           </TabsList>
 
-          <button
-            onClick={() => openAddModal(activeTab === "compensation" ? "compensation" : "loan")}
-            className="inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            Add {activeTab === "compensation" ? "Compensation" : "Loan"}
-          </button>
+          {permissions.create && (
+            <button
+              onClick={() => openAddModal(activeTab === "compensation" ? "compensation" : "loan")}
+              className="inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Add {activeTab === "compensation" ? "Compensation" : "Loan"}
+            </button>
+          )}
         </div>
 
         <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
@@ -261,8 +265,8 @@ export default function CompensationLoanPage({ formatCurrency }: CompensationLoa
             <CompensationTab
               filteredCompensations={filteredCompensations}
               formatCurrency={formatCurrency}
-              onEdit={(item) => openEditModal("compensation", item)}
-              onDelete={(id) => handleDelete("compensation", id)}
+              onEdit={permissions.update ? (item) => openEditModal("compensation", item) : undefined}
+              onDelete={permissions.delete ? (id) => handleDelete("compensation", id) : undefined}
             />
           </TabsContent>
 
@@ -272,16 +276,16 @@ export default function CompensationLoanPage({ formatCurrency }: CompensationLoa
               formatCurrency={formatCurrency}
               statusDropdownId={statusDropdownId}
               setStatusDropdownId={setStatusDropdownId}
-              onEdit={(item) => openEditModal("loan", item)}
-              onDelete={(id) => handleDelete("loan", id)}
-              onStatusChange={handleStatusChange}
+              onEdit={permissions.update ? (item) => openEditModal("loan", item) : undefined}
+              onDelete={permissions.delete ? (id) => handleDelete("loan", id) : undefined}
+              onStatusChange={permissions.update ? handleStatusChange : undefined}
             />
           </TabsContent>
         </div>
       </Tabs>
 
       {/* Modal Form */}
-      {showModal && (
+      {showModal && (editingItem ? permissions.update : permissions.create) && (
         <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4 backdrop-blur-sm">
           <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between p-5 border-b border-border sticky top-0 bg-card z-10">

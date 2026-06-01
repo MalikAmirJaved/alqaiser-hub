@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 // Define Employee type (adjust according to your actual employee data)
 interface Employee {
@@ -46,6 +47,7 @@ interface Employee {
 }
 
 export default function EmployeeAssetsNew() {
+  const permissions = useFeaturePermissions("HR", "asset_assignment");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -240,10 +242,12 @@ export default function EmployeeAssetsNew() {
               </p>
             </div>
             <div className="flex gap-2">
-              <Button onClick={() => setShowAssignModal(true)} size="sm">
-                <Plus className="w-4 h-4 mr-2" />
-                Assign Assets
-              </Button>
+              {permissions.assign && (
+                <Button onClick={() => setShowAssignModal(true)} size="sm">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Assign Assets
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="icon"
@@ -261,7 +265,7 @@ export default function EmployeeAssetsNew() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base">Active Assignments</CardTitle>
-                  {selectedReturnIds.size > 0 && (
+                  {selectedReturnIds.size > 0 && permissions.update && (
                     <Button
                       variant="destructive"
                       size="sm"
@@ -283,15 +287,17 @@ export default function EmployeeAssetsNew() {
                   <div className="text-center py-8">
                     <Package className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
                     <p className="text-sm text-muted-foreground">No assets assigned</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-2"
-                      onClick={() => setShowAssignModal(true)}
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Assign Now
-                    </Button>
+                    {permissions.assign && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => setShowAssignModal(true)}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Assign Now
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <Table>
@@ -426,7 +432,7 @@ export default function EmployeeAssetsNew() {
       )}
 
       {/* Assignment Modal */}
-      <Dialog open={showAssignModal} onOpenChange={setShowAssignModal}>
+      <Dialog open={showAssignModal && permissions.assign} onOpenChange={setShowAssignModal}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Assign Assets to {selectedEmployee?.first_name} {selectedEmployee?.last_name}</DialogTitle>

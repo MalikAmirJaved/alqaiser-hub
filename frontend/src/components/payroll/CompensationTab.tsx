@@ -6,8 +6,8 @@ import { Pencil, Trash2, TrendingUp, DollarSign, Calendar } from "lucide-react";
 interface CompensationTabProps {
   filteredCompensations: any[];
   formatCurrency: (amount: number) => string;
-  onEdit: (compensation: any) => void;
-  onDelete: (id: string) => void;
+  onEdit?: (compensation: any) => void;
+  onDelete?: (id: string) => void;
 }
 
 export default function CompensationTab({ filteredCompensations, formatCurrency, onEdit, onDelete }: CompensationTabProps) {
@@ -60,20 +60,24 @@ export default function CompensationTab({ filteredCompensations, formatCurrency,
               </td>
               <td className="px-4 py-3 text-right whitespace-nowrap">
                 <div className="flex items-center justify-end gap-1">
-                  <button 
-                    onClick={() => onEdit(item)} 
-                    className="p-1.5 rounded-md hover:bg-muted transition-colors"
-                    title="Edit"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  <button 
-                    onClick={() => onDelete(item.id)} 
-                    className="p-1.5 rounded-md hover:bg-red-500/10 text-red-500 transition-colors"
-                    title="Delete"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {onEdit && (
+                    <button 
+                      onClick={() => onEdit(item)} 
+                      className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                      title="Edit"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  )}
+                  {onDelete && (
+                    <button 
+                      onClick={() => onDelete(item.id)} 
+                      className="p-1.5 rounded-md hover:bg-red-500/10 text-red-500 transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </td>
             </tr>

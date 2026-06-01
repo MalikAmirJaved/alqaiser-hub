@@ -35,7 +35,7 @@ export const routePermissions: Record<string, string> = {
   "/inventory/reports": "INVENTORY:report:view",
   "/inventory/alerts": "INVENTORY:alert:view",
   "/inventory/customers": "INVENTORY:customer:view",
-  "/inventory/pos": "INVENTORY:sales_order:create",
+  "/inventory/pos": "INVENTORY:sales_order:view",
   "/inventory/audit": "INVENTORY:audit_log:view",
 
   // Finance routes (add as needed)
@@ -107,7 +107,7 @@ export const menuPermissionMapping: Record<string, string | null> = {
   Reports: "INVENTORY:report:view",
   Alerts: "INVENTORY:alert:view",
   Customers: "INVENTORY:customer:view",
-  "Selling / POS": "INVENTORY:sales_order:create",
+  "Selling / POS": "INVENTORY:sales_order:view",
   "Audit Logs": "INVENTORY:audit_log:view",
 
   // ========== FINANCE ==========

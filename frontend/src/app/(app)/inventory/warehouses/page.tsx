@@ -12,10 +12,12 @@ import { WarehouseDetail } from "@/components/inventory/warehouse/WarehouseDetai
 import { useWarehouses, useWarehouseStats, useCreateWarehouse, useUpdateWarehouse, useDeleteWarehouse, Warehouse } from "@/hooks/useWarehouses";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 type ViewMode = "table" | "grid";
 
 export default function WarehousesPage() {
+  const permissions = useFeaturePermissions("INVENTORY", "warehouse");
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [searchTerm, setSearchTerm] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -207,24 +209,28 @@ export default function WarehousesPage() {
         </div>
 
         <div className="flex justify-end gap-2 pt-2 border-t border-border">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleEdit(warehouse);
-            }}
-            className="px-3 py-1 text-xs rounded-md border border-border hover:bg-muted transition-colors"
-          >
-            Edit
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDelete(warehouse);
-            }}
-            className="px-3 py-1 text-xs rounded-md border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors"
-          >
-            Delete
-          </button>
+          {permissions.update && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleEdit(warehouse);
+              }}
+              className="px-3 py-1 text-xs rounded-md border border-border hover:bg-muted transition-colors"
+            >
+              Edit
+            </button>
+          )}
+          {permissions.delete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDelete(warehouse);
+              }}
+              className="px-3 py-1 text-xs rounded-md border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors"
+            >
+              Delete
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -232,18 +238,22 @@ export default function WarehousesPage() {
 
   const actions = (row: Warehouse) => (
     <>
-      <button
-        onClick={() => handleEdit(row)}
-        className="px-2 py-1 text-xs rounded-md border border-border hover:bg-muted transition-colors"
-      >
-        Edit
-      </button>
-      <button
-        onClick={() => handleDelete(row)}
-        className="px-2 py-1 text-xs rounded-md border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors"
-      >
-        Delete
-      </button>
+      {permissions.update && (
+        <button
+          onClick={() => handleEdit(row)}
+          className="px-2 py-1 text-xs rounded-md border border-border hover:bg-muted transition-colors"
+        >
+          Edit
+        </button>
+      )}
+      {permissions.delete && (
+        <button
+          onClick={() => handleDelete(row)}
+          className="px-2 py-1 text-xs rounded-md border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors"
+        >
+          Delete
+        </button>
+      )}
     </>
   );
 
@@ -254,11 +264,11 @@ export default function WarehousesPage() {
         title="Warehouses"
         subtitle="Manage your warehouse locations and storage facilities"
         actions={
-            <Button
-              onClick={handleCreate}
-            >
+          permissions.create && (
+            <Button onClick={handleCreate}>
               <Plus className="w-4 h-4 mr-2" /> Add Warehouse
             </Button>
+          )
         }
       />
 
@@ -326,7 +336,7 @@ export default function WarehousesPage() {
           renderCard={renderCard as any}
           loading={isLoading}
           emptyMessage="No warehouses found"
-          emptyAction={{ label: "Add Warehouse", onClick: handleCreate }}
+          emptyAction={permissions.create ? { label: "Add Warehouse", onClick: handleCreate } : undefined}
           columns={3}
         />
       )}
@@ -336,12 +346,12 @@ export default function WarehousesPage() {
         warehouse={selectedWarehouse}
         isOpen={!!selectedWarehouse}
         onClose={() => setSelectedWarehouse(null)}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
+        onEdit={permissions.update ? handleEdit : undefined}
+        onDelete={permissions.delete ? handleDelete : undefined}
       />
 
       {/* Warehouse Form Modal */}
-      {isFormOpen && (
+      {isFormOpen && (editingWarehouse ? permissions.update : permissions.create) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card shadow-2xl">
             <div className="sticky top-0 bg-card border-b border-border px-6 py-4">

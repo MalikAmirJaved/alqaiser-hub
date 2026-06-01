@@ -14,8 +14,8 @@ interface DetailPanelProps {
   data: any;
   fields: DetailField[];
   onClose: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
 const FieldIcon = ({ label }: { label: string }) => {
@@ -148,14 +148,20 @@ export function DetailPanel({ data, fields, onClose, onEdit, onDelete }: DetailP
       </div>
 
       {/* Action Buttons - Sticky at bottom */}
-      <div className="sticky bottom-0 bg-background border-t border-border p-4 flex gap-3">
-        <Button variant="outline" size="default" onClick={onEdit} className="flex-1">
-          <Pencil className="mr-2 h-4 w-4" /> Edit
-        </Button>
-        <Button variant="destructive" size="default" onClick={onDelete} className="flex-1">
-          <Trash2 className="mr-2 h-4 w-4" /> Delete
-        </Button>
-      </div>
+      {(onEdit || onDelete) && (
+        <div className="sticky bottom-0 bg-background border-t border-border p-4 flex gap-3">
+          {onEdit && (
+            <Button variant="outline" size="default" onClick={onEdit} className="flex-1">
+              <Pencil className="mr-2 h-4 w-4" /> Edit
+            </Button>
+          )}
+          {onDelete && (
+            <Button variant="destructive" size="default" onClick={onDelete} className="flex-1">
+              <Trash2 className="mr-2 h-4 w-4" /> Delete
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

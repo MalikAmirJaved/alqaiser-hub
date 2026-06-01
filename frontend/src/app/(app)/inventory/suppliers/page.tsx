@@ -14,6 +14,7 @@ import { Edit, Trash2 } from "lucide-react";
 import { useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier, type Supplier } from "@/hooks/useSuppliers";
 import { useVendors, useCreateVendor, useUpdateVendor, useDeleteVendor, type Vendor } from "@/hooks/useVendors";
 import { formatCurrency } from "@/lib/currency";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 // Helper to render status badge
 const StatusBadge = ({ status }: { status: string }) => {
   const variants: Record<string, string> = {
@@ -75,6 +76,7 @@ const formFields = [
 
 
 export default function SuppliersVendorsPage() {
+  const permissions = useFeaturePermissions("INVENTORY", "supplier");
   const [activeTab, setActiveTab] = useState<"suppliers" | "vendors">("suppliers");
   const [selectedItem, setSelectedItem] = useState<Supplier | Vendor | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -222,9 +224,11 @@ const detailFields = [
             title="Suppliers & Vendors"
             subtitle="Manage your business partners"
             actions={
-              <Button onClick={handleAdd} className="shadow-sm">
-                Add {activeTab === "suppliers" ? "Supplier" : "Vendor"}
-              </Button>
+              permissions.create && (
+                <Button onClick={handleAdd} className="shadow-sm">
+                  Add {activeTab === "suppliers" ? "Supplier" : "Vendor"}
+                </Button>
+              )
             }
           />
 
@@ -248,28 +252,32 @@ const detailFields = [
                 onRowClick={(row) => setSelectedItem(row)}
                 actions={(row) => (
                   <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEdit(row);
-                      }}
-                      className="h-8 w-8 p-0"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(row);
-                      }}
-                      className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {permissions.update && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(row);
+                        }}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {permissions.delete && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(row);
+                        }}
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </>
                 )}
               />
@@ -283,28 +291,32 @@ const detailFields = [
                 onRowClick={(row) => setSelectedItem(row)}
                 actions={(row) => (
                   <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEdit(row);
-                      }}
-                      className="h-8 w-8 p-0"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(row);
-                      }}
-                      className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {permissions.update && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(row);
+                        }}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {permissions.delete && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(row);
+                        }}
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </>
                 )}
               />
@@ -319,14 +331,14 @@ const detailFields = [
           data={selectedItem}
           fields={detailFields}
           onClose={() => setSelectedItem(null)}
-          onEdit={() => handleEdit(selectedItem)}
-          onDelete={() => handleDelete(selectedItem)}
+          onEdit={permissions.update ? () => handleEdit(selectedItem) : undefined}
+          onDelete={permissions.delete ? () => handleDelete(selectedItem) : undefined}
         />
       )}
 
       {/* Modals */}
       <FormModal
-        open={modalOpen}
+        open={modalOpen && (editingItem ? permissions.update : permissions.create)}
         onClose={() => {
           setModalOpen(false);
           setEditingItem(null);
