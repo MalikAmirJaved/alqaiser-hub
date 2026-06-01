@@ -6,7 +6,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
 import { useLeaves, useCreateLeaveRequest, useApproveLeave, useLeaveStats, LEAVE_TYPES } from "@/hooks/useLeaves";
 import { useEmployees } from "@/hooks/useEmployees";
-import { useQueryClient } from "@tanstack/react-query";
 import PageHeader from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatsCards } from "@/components/reuseable/StatsCards";
@@ -15,6 +14,9 @@ import { LeaveFormModal } from "@/components/leave/LeaveFormModal";
 import { LeaveDetailDrawer } from "@/components/leave/LeaveDetailDrawer";
 import { LeaveCard } from "@/components/leave/LeaveCard";
 import { ApprovalActions } from "@/components/leave/ApprovalActions";
+import { getPermissions } from "@/lib/permissions";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 import {
   CalendarDays,
   UserCheck,
@@ -44,15 +46,25 @@ interface LeaveFormData {
 type ViewMode = "grid" | "table";
 
 export default function LeaveManagementPage() {
-  const { user, ready } = useAuth();
+  const { user } = useAuth();
   const api = useApi();
-  const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState("my-leaves");
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [isApplyOpen, setIsApplyOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedLeave, setSelectedLeave] = useState<any>(null);
+
+
+    const permissions = useSelector(
+  (state: RootState) => state.permissions.permissions
+);
+
+const leavePermissions = getPermissions(
+  permissions,
+  "HR",
+  "leave"
+);
 
   // Fetch data with React Query
   const { data: leaves = [], refetch: refetchLeaves, isLoading: leavesLoading } = useLeaves();
@@ -62,25 +74,6 @@ export default function LeaveManagementPage() {
   // Mutations
   const createLeave = useCreateLeaveRequest();
   const approveLeave = useApproveLeave();
-
-  const [permissions, setPermissions] = useState({
-    canApprove: false,
-    canCreate: false,
-    canView: true,
-    loading: true,
-  });
-
-  useEffect(() => {
-    const canApprove = user?.role === "COMPANY_ADMIN" || user?.role === "SUPER_ADMIN";
-    const canCreate = true;
-
-    setPermissions({
-      canApprove,
-      canCreate,
-      canView: true,
-      loading: false,
-    });
-  }, [user]);
 
   const refreshData = useCallback(() => {
     refetchLeaves();
@@ -169,15 +162,8 @@ export default function LeaveManagementPage() {
     return found?.label || leaveType;
   };
 
-  if (permissions.loading || !ready) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
 
-  if (!permissions.canView && !(user?.role === "COMPANY_ADMIN")) {
+  if (!leavePermissions.view && !(user?.role === "COMPANY_ADMIN")) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center max-w-md">
@@ -403,7 +389,7 @@ export default function LeaveManagementPage() {
             >
               <RefreshCw className="w-4 h-4" /> Refresh
             </button>
-            {permissions.canCreate && (
+            {leavePermissions.create && (
               <button
                 onClick={() => setIsApplyOpen(true)}
                 className="inline-flex items-center gap-2 px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-opacity shadow-sm"
@@ -424,7 +410,7 @@ export default function LeaveManagementPage() {
           <TabsTrigger value="my-leaves">
             <CalendarDays className="w-4 h-4 mr-2" /> My Leaves
           </TabsTrigger>
-          {permissions.canApprove && (
+          {leavePermissions.approve && (
             <TabsTrigger value="approvals">
               <UserCheck className="w-4 h-4 mr-2" /> Approvals
               {pendingApprovals.length > 0 && (
@@ -434,7 +420,7 @@ export default function LeaveManagementPage() {
               )}
             </TabsTrigger>
           )}
-          {permissions.canApprove && (
+          {leavePermissions.approve && (
             <TabsTrigger value="all-leaves">
               <FileText className="w-4 h-4 mr-2" /> All Leaves
             </TabsTrigger>
@@ -496,7 +482,7 @@ export default function LeaveManagementPage() {
         </TabsContent>
 
         {/* Approvals Tab */}
-        {permissions.canApprove && (
+        {leavePermissions.approve && (
           <TabsContent value="approvals" className="m-0">
             <TableView
               columns={approvalsColumns}
@@ -518,7 +504,7 @@ export default function LeaveManagementPage() {
         )}
 
         {/* All Leaves Tab (Admin only) */}
-        {permissions.canApprove && (
+        {leavePermissions.approve && (
           <TabsContent value="all-leaves" className="m-0">
             <div className="flex justify-end mb-4">
               <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-lg">
@@ -565,13 +551,15 @@ export default function LeaveManagementPage() {
       </Tabs>
 
       {/* Apply Leave Modal */}
-      <LeaveFormModal
-        isOpen={isApplyOpen}
-        onClose={() => setIsApplyOpen(false)}
-        onSubmit={handleApply}
-        employees={employees}
-        isSubmitting={createLeave.isPending}
-      />
+      {leavePermissions.create && (
+        <LeaveFormModal
+          isOpen={isApplyOpen}
+          onClose={() => setIsApplyOpen(false)}
+          onSubmit={handleApply}
+          employees={employees}
+          isSubmitting={createLeave.isPending}
+        />
+      )}
 
       {/* Leave Detail Drawer */}
       <LeaveDetailDrawer
@@ -583,7 +571,7 @@ export default function LeaveManagementPage() {
           const reason = prompt("Rejection reason (optional):");
           selectedLeave && handleApproval(selectedLeave.id, "REJECTED", reason || undefined);
         }}
-        canApprove={permissions.canApprove}
+        canApprove={leavePermissions.approve}
         getStatusBadge={getStatusBadge}
       />
     </div>
