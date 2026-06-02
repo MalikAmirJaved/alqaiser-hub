@@ -87,7 +87,14 @@ export const menu = [
       { title: "Payables", to: "/finance/payables", icon: ArrowUpCircle },
       { title: "Receivables", to: "/finance/receivables", icon: ArrowDownCircle },
       { title: "Journal Entries", to: "/finance/journal-entries", icon: ArrowDownCircle },
-      { title: "Trial Balance", to: "/finance/trial-balance", icon: ArrowDownCircle },
+      {
+        title: "Reports",
+        icon: Clock,
+        children: [
+          { title: "Trial Balance", to: "/finance/reports/trial-balance", icon: ArrowDownCircle },
+          { title: "Profit & Loss", to: "/finance/reports/profit-loss", icon: Layers },
+        ],
+      },
       { title: "Budgets", to: "/finance/budgets", icon: Target },
       { title: "Bank & Cash", to: "/finance/bank-accounts", icon: Landmark },
       { title: "Bank Transactions", to: "/finance/bank-transactions", icon: Landmark },
@@ -95,7 +102,6 @@ export const menu = [
       { title: "Payments", to: "/finance/payments", icon: Landmark },
       { title: "Payroll Finance", to: "/finance/payroll", icon: Wallet },
       { title: "Taxes", to: "/finance/taxes", icon: Calculator },
-      { title: "Reports", to: "/finance/reports", icon: BarChart3 },
       { title: "Forecasting", to: "/finance/forecasting", icon: LineChart },
       { title: "Audit Logs", to: "/finance/audit", icon: History },
       { title: "Settings", to: "/finance/settings", icon: Settings },

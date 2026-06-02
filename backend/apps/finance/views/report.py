@@ -70,3 +70,85 @@ class ReportViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Generi
                 'is_balanced': total_debits == total_credits,
             }
         })
+    
+
+    @action(detail=False, methods=['get'])
+    def profit_loss(self, request):
+        """
+        Generate Profit & Loss statement for a date range.
+        Income accounts (revenue) - Expense accounts = Net Profit/Loss
+        """
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        
+        if not start_date or not end_date:
+            return Response(
+                {"success": False, "error": "start_date and end_date are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Base queryset – only posted journal entries within date range
+        lines = JournalLine.objects.filter(
+            journal_entry__is_posted=True,
+            journal_entry__date__gte=start_date,
+            journal_entry__date__lte=end_date,
+            company_id=request.user.company_id,
+            branch_id=request.user.branch_id
+        ).select_related('account')
+        
+        # Separate income and expense accounts
+        income_total = Decimal('0.00')
+        expense_total = Decimal('0.00')
+        
+        income_accounts = []
+        expense_accounts = []
+        
+        for line in lines:
+            account = line.account
+            balance = line.debit - line.credit
+            if account.account_type == 'INCOME':
+                income_total += balance
+                income_accounts.append({
+                    'code': account.code,
+                    'name': account.name,
+                    'amount': balance,
+                })
+            elif account.account_type == 'EXPENSE':
+                expense_total += balance
+                expense_accounts.append({
+                    'code': account.code,
+                    'name': account.name,
+                    'amount': balance,
+                })
+        
+        # Aggregate by account to avoid duplicates if multiple entries
+        def aggregate_accounts(accounts):
+            agg = {}
+            for acc in accounts:
+                key = f"{acc['code']}_{acc['name']}"
+                if key in agg:
+                    agg[key]['amount'] += acc['amount']
+                else:
+                    agg[key] = acc.copy()
+            return sorted(agg.values(), key=lambda x: x['code'])
+        
+        income_agg = aggregate_accounts(income_accounts)
+        expense_agg = aggregate_accounts(expense_accounts)
+        
+        net_profit = income_total - expense_total
+        is_profit = net_profit >= 0
+        
+        return Response({
+            'success': True,
+            'period': {'start_date': start_date, 'end_date': end_date},
+            'income': {
+                'total': income_total,
+                'accounts': income_agg,
+            },
+            'expenses': {
+                'total': expense_total,
+                'accounts': expense_agg,
+            },
+            'net_profit': net_profit,
+            'is_profit': is_profit,
+        })
