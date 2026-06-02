@@ -86,6 +86,7 @@ export const menu = [
       { title: "Expenses", to: "/finance/expenses", icon: CreditCard },
       { title: "Payables", to: "/finance/payables", icon: ArrowUpCircle },
       { title: "Receivables", to: "/finance/receivables", icon: ArrowDownCircle },
+      { title: "Journal Entries", to: "/finance/journal-entries", icon: ArrowDownCircle },
       { title: "Budgets", to: "/finance/budgets", icon: Target },
       { title: "Bank & Cash", to: "/finance/bank-accounts", icon: Landmark },
       { title: "Bank Transactions", to: "/finance/bank-transactions", icon: Landmark },

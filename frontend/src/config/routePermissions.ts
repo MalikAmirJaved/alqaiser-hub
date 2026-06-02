@@ -42,6 +42,7 @@ export const routePermissions: Record<string, string> = {
   "/finance/dashboard": "FINANCE:dashboard:view",
   "/finance/accounts": "FINANCE:account:view",
   "/finance/customer-invoices": "FINANCE:customer_invoice:view",
+  "/finance/journal-entries": "FINANCE:journal_entrie:view",
   "/finance/expenses": "FINANCE:expense:view",
   "/finance/payables": "FINANCE:payable:view",
   "/finance/receivables": "FINANCE:receivable:view",
@@ -124,11 +125,12 @@ export const menuPermissionMapping: Record<string, string | null> = {
   "Bank & Cash": "FINANCE:bank_account:view",
   "Bank Transaction": "FINANCE:bank_transaction:view",
   "Payables / Supplier Bills": "FINANCE:supplier_bill:view",
+  "Journal Entries": "FINANCE:journal_entrie:view",
   Payments: "FINANCE:payment:view",
   "Payroll Finance": "FINANCE:payroll:view",
   Taxes: "FINANCE:tax:view",
   Forecasting: "FINANCE:forecast:view",
-  Settings: "FINANCE:setting:view",        // Finance → Settings
+  Settings: "FINANCE:setting:view",  
 
   // ========== AI MONITORING ==========
   "Live Dashboard": "AI_MONITORING:live_dashboard:view",
