@@ -1,0 +1,175 @@
+import { useForm } from "react-hook-form";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import { useEffect } from "react";
+
+interface FormField {
+  name: string;
+  label: string;
+  type: string;
+  required?: boolean;
+  step?: string;
+  min?: number;
+  max?: number;
+  placeholder?: string;
+  options?: { value: string; label: string }[];
+}
+
+interface FormModalProps {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  fields: FormField[];
+  initialData: Record<string, any>;
+  onSubmit: (data: any) => Promise<void>;
+  isSubmitting: boolean;
+}
+
+export function FormModal({ open, onClose, title, fields, initialData, onSubmit, isSubmitting }: FormModalProps) {
+  const { register, handleSubmit, setValue, reset, watch, formState: { errors } } = useForm({ 
+    defaultValues: initialData,
+    mode: "onChange"
+  });
+useEffect(() => {
+    if (open) {
+      reset(initialData);
+    }
+  }, [open, initialData, reset]);
+
+  const renderField = (field: FormField) => {
+    const hasError = !!errors[field.name];
+    const errorMessage = errors[field.name]?.message as string;
+
+    if (field.type === "select" && field.options) {
+      return (
+        <div className="space-y-2">
+          <Select onValueChange={(val) => setValue(field.name, val)} defaultValue={initialData[field.name]}>
+            <SelectTrigger className={cn(hasError && "border-destructive")}>
+              <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
+            </SelectTrigger>
+            <SelectContent>
+              {field.options.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {hasError && <p className="text-xs text-destructive">{errorMessage}</p>}
+        </div>
+      );
+    }
+    
+    if (field.type === "textarea") {
+      return (
+        <div className="space-y-2">
+          <Textarea 
+            {...register(field.name, { required: field.required ? `${field.label} is required` : false })}
+            placeholder={field.placeholder}
+            className={cn(hasError && "border-destructive")}
+            rows={3}
+          />
+          {hasError && <p className="text-xs text-destructive">{errorMessage}</p>}
+        </div>
+      );
+    }
+    
+    return (
+      <div className="space-y-2">
+        <Input
+          type={field.type}
+          step={field.step}
+          min={field.min}
+          max={field.max}
+          placeholder={field.placeholder}
+          {...register(field.name, { 
+            required: field.required ? `${field.label} is required` : false,
+            min: field.min ? { value: field.min, message: `Minimum value is ${field.min}` } : undefined,
+            max: field.max ? { value: field.max, message: `Maximum value is ${field.max}` } : undefined,
+          })}
+          className={cn(hasError && "border-destructive")}
+        />
+        {hasError && <p className="text-xs text-destructive">{errorMessage}</p>}
+      </div>
+    );
+  };
+
+  // Group fields for 2-column layout (except textarea which takes full width)
+  const isFullWidthField = (field: FormField) => field.type === "textarea";
+  const regularFields = fields.filter(f => !isFullWidthField(f));
+  const fullWidthFields = fields.filter(f => isFullWidthField(f));
+
+  // Create pairs for 2-column layout
+  const fieldPairs: FormField[][] = [];
+  for (let i = 0; i < regularFields.length; i += 2) {
+    fieldPairs.push(regularFields.slice(i, i + 2));
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="pb-4 border-b border-border">
+          <DialogTitle className="text-2xl">{title}</DialogTitle>
+          <DialogDescription>
+            Fill in the details below. Fields marked with * are required.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 pt-4">
+          {/* 2-column grid for regular fields */}
+          {fieldPairs.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {fieldPairs.map((pair, idx) => (
+                pair.map((field) => (
+                  <div key={field.name} className="space-y-2">
+                    <Label htmlFor={field.name} className="text-sm font-medium">
+                      {field.label}
+                      {field.required && <span className="text-destructive ml-1">*</span>}
+                    </Label>
+                    {renderField(field)}
+                  </div>
+                ))
+              ))}
+            </div>
+          )}
+
+          {/* Full width fields (textarea) */}
+          {fullWidthFields.length > 0 && (
+            <div className="space-y-4">
+              {fullWidthFields.map((field) => (
+                <div key={field.name} className="space-y-2">
+                  <Label htmlFor={field.name} className="text-sm font-medium">
+                    {field.label}
+                    {field.required && <span className="text-destructive ml-1">*</span>}
+                  </Label>
+                  {renderField(field)}
+                </div>
+              ))}
+            </div>
+          )}
+          
+          <div className="flex justify-end gap-3 pt-6 border-t border-border">
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting} className="min-w-[100px]">
+              {isSubmitting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

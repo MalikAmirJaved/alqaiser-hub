@@ -48,7 +48,7 @@ export function StateSelect({ countryCode, value, onChange, required = false, cl
   useEffect(() => {
     if (countryCode) {
       const statesOfCountry = State.getStatesOfCountry(countryCode);
-      setStates(statesOfCountry.map(s => ({ value: s.isoCode || s.name, label: s.name })));
+      setStates(statesOfCountry.map(s => ({ value: s.isoCode, label: s.name })));
     } else {
       setStates([]);
     }
@@ -113,22 +113,27 @@ export function LocationGroup({
   stateLabel = "State/Region",
   cityLabel = "City",
   className = "",
+  cssCol="2"
 }) {
-  const handleCountryChange = (newCountry) => {
+const handleCountryChange = (newCountry) => {
+  if (newCountry !== country) {
     setCountry(newCountry);
     setState("");
     setCity("");
-  };
+  }
+};
 
-  const handleStateChange = (newState) => {
+const handleStateChange = (newState) => {
+  if (newState !== state) {
     setState(newState);
     setCity("");
-  };
+  }
+};
 
   const inputClassName = className || " ";
 
   return (
-    <div className="space-y-3">
+    <div className={`gap-3 grid grid-cols-${cssCol} `}>
       <div>
         <span className="text-muted-foreground text-xs">{countryLabel} {required && <span className="text-destructive">*</span>}</span>
         <CountrySelect 

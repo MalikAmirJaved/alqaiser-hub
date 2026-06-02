@@ -1,0 +1,138 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
+
+// ============================================
+// TYPES
+// ============================================
+
+export interface CustomerInvoice {
+  id: string;
+  invoice_number: string;
+  customer: string;
+  customer_name?: string; // from serializer
+  sales_order: string | null;
+  invoice_date: string;
+  due_date: string;
+  amount: number;
+  paid_amount: number;
+  outstanding: number;
+  status: "DRAFT" | "POSTED" | "PAID" | "PARTIAL" | "CANCELLED";
+  journal_entry: number | null;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface PaginatedResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
+type CreateCustomerInvoiceData = Omit<CustomerInvoice, "id" | "_id" | "created_at" | "updated_at" | "outstanding" | "paid_amount" | "status" | "journal_entry">;
+type UpdateCustomerInvoiceData = Partial<CreateCustomerInvoiceData>;
+
+// ============================================
+// API FUNCTIONS
+// ============================================
+
+const CUSTOMER_INVOICES_KEY = "finance_customer_invoices";
+
+async function getAllCustomerInvoices(params?: { status?: string; customer?: string }) {
+  const searchParams = new URLSearchParams();
+  if (params?.status) searchParams.append("status", params.status);
+  if (params?.customer) searchParams.append("customer", String(params.customer));
+  const url = `/api/finance/customer-invoices/${searchParams.toString() ? `?${searchParams}` : ""}`;
+  return apiFetch<PaginatedResponse<CustomerInvoice>>(url);
+}
+
+async function getCustomerInvoiceById(id: string) {
+  return apiFetch<CustomerInvoice>(`/api/finance/customer-invoices/${id}/`);
+}
+
+async function createCustomerInvoice(data: CreateCustomerInvoiceData) {
+  return apiFetch<CustomerInvoice>("/api/finance/customer-invoices/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+async function updateCustomerInvoice(id: string, data: UpdateCustomerInvoiceData) {
+  return apiFetch<CustomerInvoice>(`/api/finance/customer-invoices/${id}/`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+async function deleteCustomerInvoice(id: string) {
+  return apiFetch<void>(`/api/finance/customer-invoices/${id}/`, { method: "DELETE" });
+}
+
+async function postCustomerInvoice(id: string) {
+  return apiFetch<CustomerInvoice>(`/api/finance/customer-invoices/${id}/post_invoice/`, { method: "POST" });
+}
+
+// ============================================
+// REACT HOOKS
+// ============================================
+
+export function useCustomerInvoices(filters?: { status?: string; customer?: string }) {
+  return useQuery({
+    queryKey: [CUSTOMER_INVOICES_KEY, filters],
+    queryFn: () => getAllCustomerInvoices(filters),
+    select: (data) => data.results,
+    staleTime: 30_000,
+  });
+}
+
+export function useCustomerInvoice(id: string | null) {
+  return useQuery({
+    queryKey: [CUSTOMER_INVOICES_KEY, id],
+    queryFn: () => getCustomerInvoiceById(id!),
+    enabled: !!id,
+  });
+}
+
+export function useCreateCustomerInvoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createCustomerInvoice,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
+    },
+  });
+}
+
+export function useUpdateCustomerInvoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateCustomerInvoiceData }) =>
+      updateCustomerInvoice(id, data),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY, id] });
+    },
+  });
+}
+
+export function useDeleteCustomerInvoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteCustomerInvoice,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
+    },
+  });
+}
+
+export function usePostCustomerInvoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: postCustomerInvoice,
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY, id] });
+    },
+  });
+}

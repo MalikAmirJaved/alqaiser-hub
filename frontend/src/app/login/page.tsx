@@ -1,20 +1,16 @@
-
-
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { Lock, Mail, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-export default LoginPage;
-
-function LoginPage() {
-  const { login, user, ready } = useAuth() as any;
-
+export default function LoginPage() {
+  const { login, user, ready } = useAuth();
+  const [loading, setLoading] = useState(false);
   const navigate = useRouter();
-  const [email, setEmail] = useState("admin@alqaiserit.local");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [err, setErr] = useState("");
   const [forgot, setForgot] = useState(false);
@@ -23,13 +19,17 @@ function LoginPage() {
     if (ready && user) navigate.push("/dashboard");
   }, [ready, user, navigate]);
 
-  const submit = (e) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr("");
-    const res = login(email, password, remember);
-    if (!res.ok) setErr(res.error);
-    else navigate.push("/dashboard");
+    setLoading(true);
+    const res = await login(email, password);
+    setLoading(false);
+    if (!res.ok) {
+      setErr(res.error || "Login failed");
+    }
   };
+
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-background text-foreground">
@@ -62,7 +62,7 @@ function LoginPage() {
             <ShieldCheck className="w-5 h-5" />
             <span className="text-xs uppercase tracking-wide">Secure Sign-in</span>
           </div>
-          <h2 className="text-2xl font-semibold">{forgot ? "Reset password" : "Sign in to BOS"}</h2>
+          <h2 className="text-2xl font-semibold">{forgot ? "Reset password" : "Sign in"}</h2>
           <p className="text-sm text-muted-foreground mt-1">
             {forgot ? "Local-only reset for demo purposes." : "Use your work account to continue."}
           </p>
@@ -107,8 +107,6 @@ function LoginPage() {
                 </button>
               </div>
             )}
-
-            {err && <div className="text-xs text-destructive">{err}</div>}
           </div>
 
           {forgot ? (
@@ -126,13 +124,9 @@ function LoginPage() {
             </div>
           ) : (
             <button type="submit" className="mt-5 w-full h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90">
-              Sign in
+               {loading ? "Signing in..." : "Sign in"}
             </button>
           )}
-
-          <div className="mt-4 text-[11px] text-muted-foreground text-center">
-            Demo admin: <b>admin@alqaiserit.local</b> / <b>admin123</b>
-          </div>
         </form>
       </div>
     </div>

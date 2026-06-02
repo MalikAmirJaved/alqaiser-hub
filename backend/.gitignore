@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# Virtual Environment
+venv
+venv/
+env/
+.venv/
+
+# Django
+*.log
+
+# Django migrations cache
+**/migrations/__pycache__/
+
+# Environment variables
+.env
+
+# IDEs
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Static / media (if you add later)
+media/
+staticfiles/
+
+# Pip
+pip-log.txt
+pip-delete-this-directory.txt

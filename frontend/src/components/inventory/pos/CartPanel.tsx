@@ -1,0 +1,645 @@
+// src/components/inventory/pos/CartPanel.tsx
+"use client";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useCustomers, useCreateCustomer } from "@/hooks/useCustomers";
+import { CartLine, fmt, cartTotal, cartSubtotal, cartTax } from "@/hooks/useSalesOrder";
+import { useBatchStock } from "@/hooks/useBatchStock";
+import { CartLineItem } from "./CartLineItem";
+import { formatCurrency } from "@/lib/currency";
+interface CartPanelProps {
+  cart: CartLine[];
+  onUpdateCart: (newCart: CartLine[]) => void;
+  onClearCart: () => void;
+  selectedCustomer: any;
+  onSelectCustomer: (customer: any) => void;
+  selectedWarehouse: any;
+  onSelectWarehouse: (warehouse: any) => void;
+  warehouses: any[];
+  onSaveDraft: (notes: string, overrideCart?: CartLine[]) => Promise<void>;
+  onCompleteSale: (notes: string, payments: any[], overrideCart?: CartLine[]) => Promise<void>;
+  onCartChange?: (newCart: CartLine[]) => void;
+  isSubmitting?: boolean;
+  activeDraftId?: string | null;
+  canCreate?: boolean;
+  canUpdate?: boolean;
+}
+
+type PaymentMethod = "CASH" | "CARD" | "CREDIT";
+
+export function CartPanel({
+  cart,
+  onUpdateCart,
+  onClearCart,
+  selectedCustomer,
+  onSelectCustomer,
+  selectedWarehouse,
+  onSelectWarehouse,
+  warehouses,
+  onSaveDraft,
+  onCompleteSale,
+  onCartChange,
+  isSubmitting,
+  activeDraftId,
+  canCreate = true,
+  canUpdate = true,
+}: CartPanelProps) {
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [showCustomerDD, setShowCustomerDD] = useState(false);
+  const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState("");
+  const [newCustomerEmail, setNewCustomerEmail] = useState("");
+  const [newCustomerPhone, setNewCustomerPhone] = useState("");
+  const [orderNotes, setOrderNotes] = useState("");
+  const [payments, setPayments] = useState<{ method: PaymentMethod; amount: number }[]>([]);
+  const [newPaymentAmt, setNewPaymentAmt] = useState("");
+  const [newPaymentMethod, setNewPaymentMethod] = useState<PaymentMethod>("CASH");
+  const [globalDiscMode, setGlobalDiscMode] = useState<"pct" | "fixed">("pct");
+  const [globalDisc, setGlobalDisc] = useState(0);
+  const [expandedLine, setExpandedLine] = useState<number | null>(null);
+  const [showPayments, setShowPayments] = useState(false);
+
+  const { data: customers = [] } = useCustomers(customerSearch || undefined);
+  const createCustomer = useCreateCustomer();
+  const customerRef = useRef<HTMLDivElement>(null);
+
+  // Get unique variant IDs from cart for batch stock fetch
+  const uniqueVariantIds = useMemo(
+    () => [...new Map(cart.map(line => [line.variant.id, line.variant.id])).values()],
+    [cart]
+  );
+  
+  // Fetch stock data for all variants in cart
+  const { data: stockMap = {} } = useBatchStock(uniqueVariantIds, selectedWarehouse?.id);
+
+  // Memoized cart calculations
+  const effectiveCart = useMemo(() => {
+    if (globalDisc <= 0) return cart;
+    
+    const cartTotalAmount = cart.reduce((s, x) => s + x.qty * x.unitPrice, 0);
+    
+    return cart.map(l => {
+      if (globalDiscMode === "pct") {
+        return { ...l, discountPct: globalDisc, discountFixed: 0 };
+      }
+      const base = l.qty * l.unitPrice;
+      const share = cartTotalAmount > 0 ? (base / cartTotalAmount) * globalDisc : 0;
+      return { ...l, discountFixed: share, discountPct: 0 };
+    });
+  }, [cart, globalDisc, globalDiscMode]);
+
+  // Function to get cart with global discount applied for submission
+  const getEffectiveCartForSubmission = useCallback(() => {
+    if (globalDisc <= 0) return cart;
+    
+    const totalOriginal = cart.reduce((sum, l) => sum + l.qty * l.unitPrice, 0);
+    
+    return cart.map(line => {
+      const base = line.qty * line.unitPrice;
+      if (globalDiscMode === "pct") {
+        return { ...line, discountPct: globalDisc, discountFixed: 0 };
+      } else {
+        const share = totalOriginal > 0 ? (base / totalOriginal) * globalDisc : 0;
+        return { ...line, discountFixed: share, discountPct: 0 };
+      }
+    });
+  }, [cart, globalDisc, globalDiscMode]);
+
+  const total = useMemo(() => cartTotal(effectiveCart), [effectiveCart]);
+  const subtotal = useMemo(() => cartSubtotal(effectiveCart), [effectiveCart]);
+  const tax = useMemo(() => cartTax(effectiveCart), [effectiveCart]);
+  const paidSoFar = useMemo(() => payments.reduce((s, p) => s + p.amount, 0), [payments]);
+  const remaining = total - paidSoFar;
+  const change = remaining < 0 ? Math.abs(remaining) : 0;
+  const itemCount = useMemo(() => cart.reduce((s, l) => s + l.qty, 0), [cart]);
+  const discountAmount = useMemo(() => {
+    const originalTotal = cart.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+    return originalTotal - subtotal;
+  }, [cart, subtotal]);
+
+  const updateLine = useCallback((idx: number, patch: Partial<CartLine>) => {
+    const newCart = [...cart];
+    const updated = { ...newCart[idx], ...patch };
+    
+    const availableStock = stockMap[updated.variant.id]?.available ?? Infinity;
+    if (patch.qty !== undefined && updated.qty > availableStock) {
+      updated.qty = availableStock;
+    }
+    
+    newCart[idx] = updated;
+    onUpdateCart(newCart);
+    onCartChange?.(newCart);
+  }, [cart, onUpdateCart, stockMap, onCartChange]);
+
+  const removeLine = useCallback((idx: number) => {
+    const newCart = cart.filter((_, i) => i !== idx);
+    onUpdateCart(newCart);
+    onCartChange?.(newCart);
+  }, [cart, onUpdateCart, onCartChange]);
+
+  const addPayment = useCallback(() => {
+    const amt = parseFloat(newPaymentAmt);
+    if (!amt || amt <= 0) return;
+    setPayments(prev => [...prev, { method: newPaymentMethod, amount: amt }]);
+    setNewPaymentAmt("");
+  }, [newPaymentAmt, newPaymentMethod]);
+
+  const removePayment = useCallback((idx: number) => {
+    setPayments(prev => prev.filter((_, i) => i !== idx));
+  }, []);
+
+  const handleCreateCustomer = useCallback(async () => {
+    if (!newCustomerName.trim()) return;
+    try {
+      const newCust = await createCustomer.mutateAsync({
+        name: newCustomerName,
+        email: newCustomerEmail,
+        phone: newCustomerPhone,
+        customer_code: "",
+        contact_person: "",
+        address_line: "",
+        city: "",
+        state: "",
+        postal_code: "",
+        country: "",
+        is_active: true,
+      });
+      onSelectCustomer(newCust);
+      setShowNewCustomerForm(false);
+      setNewCustomerName("");
+      setNewCustomerEmail("");
+      setNewCustomerPhone("");
+      setCustomerSearch("");
+      setShowCustomerDD(false);
+    } catch {
+      // Error handled by hook
+    }
+  }, [newCustomerName, newCustomerEmail, newCustomerPhone, createCustomer, onSelectCustomer]);
+
+  const handleComplete = useCallback(() => {
+    const effectiveCartForSave = getEffectiveCartForSubmission();
+    onCompleteSale(orderNotes, payments, effectiveCartForSave);
+  }, [getEffectiveCartForSubmission, orderNotes, payments, onCompleteSale]);
+
+  const handleSave = useCallback(() => {
+    const effectiveCartForSave = getEffectiveCartForSubmission();
+    onSaveDraft(orderNotes, effectiveCartForSave);
+  }, [getEffectiveCartForSubmission, orderNotes, onSaveDraft]);
+
+  const handleClearCart = useCallback(() => {
+    onClearCart();
+    onCartChange?.([]);
+  }, [onClearCart, onCartChange]);
+
+  // Click outside handler
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (customerRef.current && !customerRef.current.contains(e.target as Node)) {
+        setShowCustomerDD(false);
+        setShowNewCustomerForm(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div className="flex flex-col h-full bg-card border-l border-border">
+      {/* Cart header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="flex items-center gap-2">
+          <CartBagIcon />
+          <span className="text-sm font-semibold">Cart</span>
+          {itemCount > 0 && (
+            <span className="min-w-[20px] h-5 rounded-full bg-primary text-primary-foreground text-xs font-semibold flex items-center justify-center px-1.5">
+              {itemCount}
+            </span>
+          )}
+          {activeDraftId && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-warning/15 text-warning">
+              DRAFT
+            </span>
+          )}
+        </div>
+        {cart.length > 0 && (
+          <button
+            onClick={handleClearCart}
+            className="text-xs text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1"
+          >
+            <XIcon size={12} /> Clear
+          </button>
+        )}
+      </div>
+
+      {/* Customer selector */}
+      <div className="px-3 py-2.5 border-b border-border" ref={customerRef}>
+        <div className="relative">
+          <div
+            className={`flex items-center gap-2 bg-muted/60 rounded-lg px-3 py-2 cursor-text border transition-colors ${showCustomerDD ? "border-primary/40 bg-muted" : "border-transparent hover:border-border"}`}
+            onClick={() => { setShowCustomerDD(true); }}
+          >
+            <UserIcon size={14} className="text-muted-foreground flex-shrink-0" />
+            <input
+              value={selectedCustomer ? selectedCustomer.name : customerSearch}
+              onChange={(e) => {
+                setCustomerSearch(e.target.value);
+                onSelectCustomer(null);
+                setShowCustomerDD(true);
+                setShowNewCustomerForm(false);
+              }}
+              placeholder="Walk-in or search customer…"
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground min-w-0"
+              onFocus={() => setShowCustomerDD(true)}
+            />
+            {selectedCustomer ? (
+              <button
+                onClick={(e) => { e.stopPropagation(); onSelectCustomer(null); setCustomerSearch(""); }}
+                className="text-muted-foreground hover:text-foreground flex-shrink-0"
+              >
+                <XIcon size={13} />
+              </button>
+            ) : (
+              <ChevronIcon open={showCustomerDD} size={13} className="text-muted-foreground flex-shrink-0" />
+            )}
+          </div>
+
+          {showCustomerDD && (
+            <div className="absolute z-50 mt-1 w-full bg-popover border border-border rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
+              {!showNewCustomerForm ? (
+                <>
+                  {customers.slice(0, 8).map((c) => (
+                    <button
+                      key={c.id}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-accent text-left transition-colors"
+                      onClick={() => { onSelectCustomer(c); setCustomerSearch(""); setShowCustomerDD(false); }}
+                    >
+                      <div className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                        {c.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{c.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{c.phone || c.email || "No contact info"}</p>
+                      </div>
+                    </button>
+                  ))}
+                  {(customers.length === 0 || customerSearch) && canCreate && (
+                    <button
+                      onClick={() => setShowNewCustomerForm(true)}
+                      className="w-full text-left px-3 py-2.5 text-sm text-primary hover:bg-accent flex items-center gap-2 transition-colors border-t border-border"
+                    >
+                      <PlusIcon size={14} />
+                      {customerSearch ? `Create "${customerSearch}"` : "Add new customer"}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <div className="p-3 space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">New Customer</p>
+                  <input
+                    type="text"
+                    placeholder="Full name *"
+                    value={newCustomerName}
+                    onChange={(e) => setNewCustomerName(e.target.value)}
+                    className="w-full bg-muted rounded-md px-3 py-2 text-sm outline-none focus:ring-1 ring-primary"
+                    autoFocus
+                  />
+                  <input
+                    type="email"
+                    placeholder="Email (optional)"
+                    value={newCustomerEmail}
+                    onChange={(e) => setNewCustomerEmail(e.target.value)}
+                    className="w-full bg-muted rounded-md px-3 py-2 text-sm outline-none focus:ring-1 ring-primary"
+                  />
+                  <input
+                    type="tel"
+                    placeholder="Phone (optional)"
+                    value={newCustomerPhone}
+                    onChange={(e) => setNewCustomerPhone(e.target.value)}
+                    className="w-full bg-muted rounded-md px-3 py-2 text-sm outline-none focus:ring-1 ring-primary"
+                  />
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => { setShowNewCustomerForm(false); }}
+                      className="flex-1 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleCreateCustomer}
+                      disabled={createCustomer.isPending || !newCustomerName.trim()}
+                      className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
+                    >
+                      {createCustomer.isPending ? "Saving…" : "Create"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Cart items */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+        {cart.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3 p-8">
+            <div className="w-14 h-14 rounded-2xl bg-muted/50 flex items-center justify-center">
+              <CartEmptyIcon />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium">Cart is empty</p>
+              <p className="text-xs text-muted-foreground mt-1">Tap a product to add it here</p>
+            </div>
+          </div>
+        ) : (
+          cart.map((line, idx) => {
+            const availableStock = stockMap[line.variant.id]?.available ?? Infinity;
+            return (
+              <CartLineItem
+                key={`${line.variant.id}-${idx}`}
+                line={line}
+                idx={idx}
+                effectiveLine={effectiveCart[idx]}
+                expanded={expandedLine === idx}
+                onToggleExpand={() => setExpandedLine(expandedLine === idx ? null : idx)}
+                onUpdate={(patch) => updateLine(idx, patch)}
+                onRemove={() => removeLine(idx)}
+                maxQty={availableStock}
+              />
+            );
+          })
+        )}
+      </div>
+
+      {/* Order discount + totals */}
+      {cart.length > 0 && (
+        <div className="border-t border-border">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
+            <TagIcon size={13} className="text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Discount</span>
+            <div className="flex-1" />
+            <div className="flex bg-muted rounded-md overflow-hidden">
+              {(["pct", "fixed"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setGlobalDiscMode(m)}
+                  className={`px-2.5 py-1 text-xs font-medium transition-colors ${globalDiscMode === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  {m === "pct" ? "%" : "₦"}
+                </button>
+              ))}
+            </div>
+            <input
+              type="number"
+              min={0}
+              max={globalDiscMode === "pct" ? 100 : undefined}
+              value={globalDisc || ""}
+              onChange={(e) => {
+                let val = Number(e.target.value);
+                if (globalDiscMode === "pct" && val > 100) val = 100;
+                if (val < 0) val = 0;
+                setGlobalDisc(val);
+              }}
+              placeholder="0"
+              className="w-16 bg-muted rounded-md px-2 py-1 text-xs text-right outline-none focus:ring-1 ring-primary"
+            />
+          </div>
+
+          <div className="px-4 py-2.5 space-y-1.5">
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Subtotal ({itemCount} item{itemCount !== 1 ? "s" : ""})</span>
+              <span>{formatCurrency(subtotal)}</span>
+            </div>
+            {tax > 0 && (
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Tax</span>
+                <span>{fmt(tax)}</span>
+              </div>
+            )}
+            {discountAmount > 0 && (
+              <div className="flex justify-between text-xs text-success">
+                <span>Discount</span>
+                <span>−{fmt(discountAmount)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-base font-bold pt-1.5 border-t border-border">
+              <span>Total</span>
+              <span className="text-primary">{formatCurrency(total)}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment + actions */}
+      {cart.length > 0 && (
+        <div className="px-3 pb-3 pt-2 border-t border-border space-y-2.5">
+          <textarea
+            value={orderNotes}
+            onChange={(e) => setOrderNotes(e.target.value)}
+            placeholder="Order notes (optional)…"
+            rows={1}
+            className="w-full bg-muted/60 rounded-lg px-3 py-2 text-xs outline-none focus:ring-1 ring-primary resize-none placeholder:text-muted-foreground border border-transparent focus:border-primary/20"
+          />
+
+          <button
+            onClick={() => setShowPayments(!showPayments)}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-muted/60 hover:bg-muted transition-colors border border-border/50"
+          >
+            <span className="flex items-center gap-2 text-xs font-medium">
+              <PaymentIcon size={13} />
+              Payment
+              {payments.length > 0 && (
+                <span className="text-xs text-success">({fmt(paidSoFar)} paid)</span>
+              )}
+            </span>
+            <ChevronIcon open={showPayments} size={12} />
+          </button>
+
+          {showPayments && (
+            <div className="space-y-2">
+              <div className="flex gap-1">
+                {(["CASH", "CARD", "CREDIT"] as PaymentMethod[]).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setNewPaymentMethod(m)}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${newPaymentMethod === m ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
+                  >
+                    {m === "CASH" ? "💵 Cash" : m === "CARD" ? "💳 Card" : "📋 Credit"}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-1.5">
+                <input
+                  type="number"
+                  value={newPaymentAmt}
+                  onChange={(e) => setNewPaymentAmt(e.target.value)}
+                  placeholder="Amount"
+                  onKeyDown={(e) => e.key === "Enter" && addPayment()}
+                  className="flex-1 bg-muted rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 ring-primary"
+                />
+                <button
+                  onClick={() => setNewPaymentAmt(String(Math.max(0, remaining)))}
+                  className="px-2.5 py-2 bg-muted rounded-lg text-xs font-medium hover:bg-accent transition-colors"
+                  title="Fill exact amount"
+                >
+                  Exact
+                </button>
+                <button
+                  onClick={addPayment}
+                  className="px-3 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+                >
+                  Add
+                </button>
+              </div>
+
+              {payments.length > 0 && (
+                <div className="bg-muted/40 rounded-lg px-3 py-2 space-y-1.5">
+                  {payments.map((p, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs bg-muted rounded px-1.5 py-0.5 text-muted-foreground font-mono">{p.method}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{fmt(p.amount)}</span>
+                        <button onClick={() => removePayment(i)} className="text-muted-foreground hover:text-destructive transition-colors">
+                          <XIcon size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex justify-between text-sm font-semibold border-t border-border pt-1.5">
+                    {change > 0 ? (
+                      <>
+                        <span className="text-success">Change</span>
+                        <span className="text-success">{fmt(change)}</span>
+                      </>
+                    ) : remaining > 0 ? (
+                      <>
+                        <span className="text-muted-foreground">Remaining</span>
+                        <span className="text-warning">{fmt(remaining)}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-success">Paid in full</span>
+                        <span className="text-success">✓</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-0.5">
+            {canCreate && (
+              <button
+                onClick={handleSave}
+                disabled={isSubmitting}
+                className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 disabled:opacity-50 transition-all"
+              >
+                <SaveIcon size={14} />
+                Hold
+              </button>
+            )}
+            {canCreate && (
+            <button
+              onClick={handleComplete}
+              disabled={isSubmitting}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-success text-success-foreground text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-all shadow-sm"
+            >
+              {isSubmitting ? (
+                <>
+                  <SpinnerIcon />
+                  Processing…
+                </>
+              ) : (
+                <>
+                  <CheckIcon size={15} />
+                  Complete Sale · {fmt(total)}
+                </>
+              )}
+            </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Icons
+function UserIcon({ size = 16, className = "" }: { size?: number; className?: string }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+  </svg>;
+}
+
+function XIcon({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 6 6 18M6 6l12 12" />
+  </svg>;
+}
+
+function CartBagIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+    <line x1="3" y1="6" x2="21" y2="6" />
+    <path d="M16 10a4 4 0 0 1-8 0" />
+  </svg>;
+}
+
+function CartEmptyIcon() {
+  return <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="9" cy="21" r="1" />
+    <circle cx="20" cy="21" r="1" />
+    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+  </svg>;
+}
+
+function TagIcon({ size = 16, className = "" }: { size?: number; className?: string }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
+    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+    <line x1="7" y1="7" x2="7.01" y2="7" />
+  </svg>;
+}
+
+function ChevronIcon({ open, size = 14, className = "" }: { open: boolean; size?: number; className?: string }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>
+    <polyline points="6 9 12 15 18 9" />
+  </svg>;
+}
+
+function PlusIcon({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>;
+}
+
+function PaymentIcon({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+    <line x1="1" y1="10" x2="23" y2="10" />
+  </svg>;
+}
+
+function SaveIcon({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+    <polyline points="17 21 17 13 7 13 7 21" />
+    <polyline points="7 3 7 8 15 8" />
+  </svg>;
+}
+
+function CheckIcon({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>;
+}
+
+function SpinnerIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-spin">
+    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+  </svg>;
+}

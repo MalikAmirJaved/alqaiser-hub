@@ -1,8 +1,7 @@
 // components/hr/AssetsList.tsx
 "use client";
-import { useState, useEffect } from "react";
-import { ls, uid } from "@/services/localStorageService";
-import { companyContext } from "@/services/companyContextService";
+import { useState } from "react";
+import { useAssets, useAssetStats, useCreateAsset, useUpdateAsset, useDeleteAsset } from "@/hooks/useAssets";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,8 +19,6 @@ import {
   DollarSign,
   Building2,
   Hash,
-  Calendar as CalendarIcon,
-  X
 } from "lucide-react";
 
 import {
@@ -55,11 +52,21 @@ import {
 } from "@/components/ui/table";
 import { DatePicker } from "@/components/reuseable/DatePicker";
 import { toast } from "sonner";
+import { formatCurrency } from "@/lib/currency";
+import { StatsCards } from "@/components/reuseable/StatsCards";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 export default function AssetsList() {
-  const [assets, setAssets] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const permissions = useFeaturePermissions("HR", "emp_asset");
   const [searchQuery, setSearchQuery] = useState("");
+  const { data: assets = [], isLoading } = useAssets(
+    searchQuery ? { search: searchQuery } : undefined
+  );
+  const { data: stats } = useAssetStats();
+  const createAsset = useCreateAsset();
+  const updateAsset = useUpdateAsset();
+  const deleteAsset = useDeleteAsset();
+
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   
@@ -67,86 +74,70 @@ export default function AssetsList() {
     name: "", 
     brand: "", 
     model: "", 
-    serial_number: "",
+    serialNumber: "",
     description: "",
-    purchase_date: "",
-    purchase_price: "",
-    warranty_until: "",
+    purchaseDate: "",
+    purchasePrice: 0,
+    warrantyUntil: "",
     vendor: ""
   });
 
-  useEffect(() => {
-    companyContext.init();
-    loadData();
-  }, []);
-
-  const loadData = () => {
-    setAssets(companyContext.filterByContext(ls.get<any[]>("hrAssets", [])));
-    setLoading(false);
-  };
-
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim()) {
       toast.error("Asset name is required");
       return;
     }
 
-    const newAsset = companyContext.addContextToRecord({ 
-      id: editing?.id || uid("hrt_a"), 
-      ...form,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    });
-
-    const updated = editing 
-      ? assets.map(a => a.id === editing.id ? newAsset : a) 
-      : [newAsset, ...assets];
-    
-    setAssets(updated);
-    ls.set("hrAssets", updated);
-    setShowModal(false);
-    setEditing(null);
-    setForm({ 
-      name: "", brand: "", model: "", serial_number: "",
-      description: "", purchase_date: "", purchase_price: "", 
-      warranty_until: "", vendor: "" 
-    });
-    toast.success(editing ? "Asset updated" : "Asset created");
+    try {
+      if (editing) {
+        await updateAsset.mutateAsync({
+          id: editing.id,
+          name: form.name,
+          brand: form.brand || undefined,
+          model: form.model || undefined,
+          serialNumber: form.serialNumber || undefined,
+          description: form.description || undefined,
+          purchaseDate: form.purchaseDate || undefined,
+          purchasePrice: form.purchasePrice || 0,
+          warrantyUntil: form.warrantyUntil || undefined,
+          vendor: form.vendor || undefined,
+        });
+      } else {
+        await createAsset.mutateAsync({
+          name: form.name,
+          brand: form.brand || undefined,
+          model: form.model || undefined,
+          serialNumber: form.serialNumber || undefined,
+          description: form.description || undefined,
+          purchaseDate: form.purchaseDate || undefined,
+          purchasePrice: form.purchasePrice || 0,
+          warrantyUntil: form.warrantyUntil || undefined,
+          vendor: form.vendor || undefined,
+          isActive: true,
+        });
+      }
+      
+      setShowModal(false);
+      setEditing(null);
+      setForm({ 
+        name: "", brand: "", model: "", serialNumber: "",
+        description: "", purchaseDate: "", purchasePrice: 0, 
+        warrantyUntil: "", vendor: "" 
+      });
+    } catch (error: any) {
+      toast.error(error.message || "Failed to save asset");
+    }
   };
 
-  const handleDelete = (id: string) => {
-    const categories = companyContext.filterByContext(ls.get<any[]>("hrAssetCategories", []));
-    const usedInCategories = categories.filter(c => {
-      const assetIds = JSON.parse(c.asset_ids || "[]");
-      return assetIds.includes(id);
-    });
-    
-    if (usedInCategories.length > 0) {
-      toast.error(`Cannot delete: Asset is used in ${usedInCategories.length} kit(s)`);
-      return;
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteAsset.mutateAsync(id);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to delete asset");
     }
-    
-    const assignments = companyContext.filterByContext(ls.get<any[]>("employeeAssetAssignments", []));
-    const isAssigned = assignments.some(a => a.asset_id === id && a.status === "ACTIVE");
-    if (isAssigned) {
-      toast.error("Cannot delete: Asset is currently assigned to an employee");
-      return;
-    }
-    
-    const updated = assets.filter(a => a.id !== id);
-    setAssets(updated);
-    ls.set("hrAssets", updated);
-    toast.success("Asset deleted");
   };
 
-  const filteredAssets = assets.filter(a => 
-    a.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    a.brand?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    a.model?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    a.serial_number?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
@@ -155,83 +146,59 @@ export default function AssetsList() {
   }
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-   <PageHeader 
-  title="Asset Library" 
-  subtitle="Manage your hardware inventory - laptops, monitors, peripherals, and more"
-  actions={
-    <Button onClick={() => { 
-      setEditing(null); 
-      setForm({ 
-        name: "", brand: "", model: "", serial_number: "",
-        description: "", purchase_date: "", purchase_price: "", 
-        warranty_until: "", vendor: "" 
-      }); 
-      setShowModal(true); 
-    }}>
-      <Plus className="w-4 h-4 mr-2" />
-      Add Asset
-    </Button>
-  }
-/>
+    <div className="space-y-6 ">
+      <PageHeader 
+        title="Asset Library" 
+        subtitle="Manage your hardware inventory - laptops, monitors, peripherals, and more"
+        actions={
+          permissions.create && (
+            <Button onClick={() => { 
+              setEditing(null); 
+              setForm({ 
+                name: "", brand: "", model: "", serialNumber: "",
+                description: "", purchaseDate: "", purchasePrice: 0, 
+                warrantyUntil: "", vendor: "" 
+              }); 
+              setShowModal(true); 
+            }}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Asset
+            </Button>
+          )
+        }
+      />
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Total Assets</p>
-                <p className="text-2xl font-bold">{assets.length}</p>
-              </div>
-              <div className="p-2 rounded-lg bg-blue-500/10">
-                <Package className="w-5 h-5 text-blue-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">With Serial Numbers</p>
-                <p className="text-2xl font-bold">{assets.filter(a => a.serial_number).length}</p>
-              </div>
-              <div className="p-2 rounded-lg bg-emerald-500/10">
-                <Hash className="w-5 h-5 text-emerald-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Total Value</p>
-                <p className="text-2xl font-bold">
-                  ${assets.reduce((sum, a) => sum + (parseFloat(a.purchase_price) || 0), 0).toLocaleString()}
-                </p>
-              </div>
-              <div className="p-2 rounded-lg bg-amber-500/10">
-                <DollarSign className="w-5 h-5 text-amber-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Vendors</p>
-                <p className="text-2xl font-bold">{new Set(assets.map(a => a.vendor).filter(Boolean)).size}</p>
-              </div>
-              <div className="p-2 rounded-lg bg-purple-500/10">
-                <Building2 className="w-5 h-5 text-purple-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+<StatsCards
+  stats={[
+    {
+      id: "total-assets",
+      label: "Total Assets",
+      value: stats?.totalAssets || assets.length,
+    },
+    {
+      id: "serials",
+      label: "With Serial Numbers",
+      value:
+        stats?.withSerialNumbers ||
+        assets.filter((a) => a.serialNumber).length,
+    },
+    {
+      id: "total-value",
+      label: "Total Value",
+      value: formatCurrency(stats?.totalValue ?? 0),
+    },
+    {
+      id: "vendors",
+      label: "Vendors",
+      value:
+        stats?.uniqueVendors ||
+        new Set(
+          assets.map((a) => a.vendor).filter(Boolean)
+        ).size,
+    },
+  ]}
+/>
 
       {/* Search and Table */}
       <Card>
@@ -250,7 +217,7 @@ export default function AssetsList() {
           </div>
         </CardHeader>
         <CardContent>
-          {filteredAssets.length === 0 ? (
+          {assets.length === 0 ? (
             <div className="text-center py-12">
               <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium">No assets found</h3>
@@ -272,7 +239,7 @@ export default function AssetsList() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredAssets.map(asset => (
+                  {assets.map(asset => (
                     <TableRow key={asset.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
@@ -286,25 +253,25 @@ export default function AssetsList() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        {asset.serial_number ? (
-                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{asset.serial_number}</code>
+                        {asset.serialNumber ? (
+                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{asset.serialNumber}</code>
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </TableCell>
                       <TableCell>
                         <div className="text-xs space-y-0.5">
-                          {asset.purchase_date && <div>📅 {asset.purchase_date}</div>}
-                          {asset.purchase_price && <div>💰 ${asset.purchase_price}</div>}
+                          {asset.purchaseDate && <div>📅 {asset.purchaseDate}</div>}
+                          {asset.purchasePrice && <div>💰 {formatCurrency(asset.purchasePrice)}</div>}
                           {asset.vendor && <div>🏢 {asset.vendor}</div>}
                         </div>
                       </TableCell>
                       <TableCell>
-                        {asset.warranty_until ? (
-                          <Badge variant={new Date(asset.warranty_until) > new Date() ? "default" : "destructive"} className="text-xs">
-                            {new Date(asset.warranty_until) > new Date() ? "Active" : "Expired"}
+                        {asset.warrantyUntil ? (
+                          <Badge variant={asset.warrantyStatus === true ? "default" : "destructive"} className="text-xs">
+                            {asset.warrantyStatus === true ? "Active" : "Expired"}
                             <br />
-                            <span className="text-[10px]">{asset.warranty_until}</span>
+                            <span className="text-[10px]">{asset.warrantyUntil}</span>
                           </Badge>
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
@@ -318,15 +285,39 @@ export default function AssetsList() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => { setEditing(asset); setForm(asset); setShowModal(true); }}>
-                              <Edit className="w-4 h-4 mr-2" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => handleDelete(asset.id)} className="text-destructive">
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
+                            {permissions.update && (
+                              <DropdownMenuItem onClick={() => { 
+                                setEditing(asset); 
+                                setForm({
+                                  name: asset.name || "",
+                                  brand: asset.brand || "",
+                                  model: asset.model || "",
+                                  serialNumber: asset.serialNumber || "",
+                                  description: asset.description || "",
+                                  purchaseDate: asset.purchaseDate || "",
+                                  purchasePrice: asset.purchasePrice || 0,
+                                  warrantyUntil: asset.warrantyUntil || "",
+                                  vendor: asset.vendor || "",
+                                }); 
+                                setShowModal(true); 
+                              }}>
+                                <Edit className="w-4 h-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                            )}
+                            {permissions.update && permissions.delete && (
+                              <DropdownMenuSeparator />
+                            )}
+                            {permissions.delete && (
+                              <DropdownMenuItem 
+                                onClick={() => handleDelete(asset.id)} 
+                                className="text-destructive"
+                                disabled={asset.isAssigned}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -340,7 +331,10 @@ export default function AssetsList() {
       </Card>
 
       {/* Asset Modal */}
-      <Dialog open={showModal} onOpenChange={setShowModal}>
+      <Dialog
+        open={showModal && (editing ? permissions.update : permissions.create)}
+        onOpenChange={setShowModal}
+      >
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit Asset" : "Add New Asset"}</DialogTitle>
@@ -378,8 +372,8 @@ export default function AssetsList() {
             <div className="grid gap-2">
               <Label>Serial Number</Label>
               <Input
-                value={form.serial_number}
-                onChange={(e) => setForm({ ...form, serial_number: e.target.value })}
+                value={form.serialNumber}
+                onChange={(e) => setForm({ ...form, serialNumber: e.target.value })}
                 placeholder="Unique serial number for tracking"
               />
             </div>
@@ -387,18 +381,18 @@ export default function AssetsList() {
               <div className="grid gap-2">
                 <Label>Purchase Date</Label>
                 <DatePicker
-                  value={form.purchase_date}
-                  onChange={(val) => setForm({ ...form, purchase_date: val || "" })}
+                  value={form.purchaseDate}
+                  onChange={(val) => setForm({ ...form, purchaseDate: val || "" })}
                   placeholder="Select date"
                 />
               </div>
               <div className="grid gap-2">
-                <Label>Purchase Price ($)</Label>
+                <Label>Purchase Price ({formatCurrency()})</Label>
                 <Input
                   type="number"
                   step="0.01"
-                  value={form.purchase_price}
-                  onChange={(e) => setForm({ ...form, purchase_price: e.target.value })}
+                  value={form.purchasePrice}
+                  onChange={(e) => setForm({ ...form, purchasePrice: Number(e.target.value) })}
                   placeholder="0.00"
                 />
               </div>
@@ -407,8 +401,8 @@ export default function AssetsList() {
               <div className="grid gap-2">
                 <Label>Warranty Until</Label>
                 <DatePicker
-                  value={form.warranty_until}
-                  onChange={(val) => setForm({ ...form, warranty_until: val || "" })}
+                  value={form.warrantyUntil}
+                  onChange={(val) => setForm({ ...form, warrantyUntil: val || "" })}
                   placeholder="Warranty expiry date"
                 />
               </div>
@@ -433,9 +427,9 @@ export default function AssetsList() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
-            <Button onClick={handleSave}>
+            <Button onClick={handleSave} disabled={createAsset.isPending || updateAsset.isPending}>
               <Save className="w-4 h-4 mr-2" />
-              {editing ? "Update" : "Save"} Asset
+              {createAsset.isPending || updateAsset.isPending ? "Saving..." : editing ? "Update" : "Save"} Asset
             </Button>
           </DialogFooter>
         </DialogContent>

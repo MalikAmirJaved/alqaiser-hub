@@ -1,170 +1,84 @@
-
-
 "use client";
-
-// ============================================
-// FILE: src/routes/_app.settings.users.jsx (UPDATED)
-// ============================================
-
-import { useState, useEffect } from "react";
-import { ls, uid } from "@/services/localStorageService";
+import { useState } from "react";
+import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from "@/hooks/useUsers";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Pencil, Trash2, Search, Download } from "lucide-react";
-import UserFormWithPermissions from "@/components/Forms/UserForm";
+import { Plus, Pencil, Trash2, Search } from "lucide-react";
+import UserForm from "@/components/Forms/UserForm";
+import { toast } from "sonner";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
-export default UsersPage;
-
-function UsersPage() {
-  const [users, setUsers] = useState<any[]>([]);
-  const [permissions, setPermissions] = useState<any[]>([]);
+export default function UsersPage() {
+  const permissions = useFeaturePermissions("SETTINGS", "user");
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
-  const [departments] = useState(["HR", "INVENTORY", "FINANCE", "SETTINGS"]);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const { data: users = [], isLoading } = useUsers();
+  const createUser = useCreateUser();
+  const updateUser = useUpdateUser();
+  const deleteUser = useDeleteUser();
 
-  const loadData = () => {
-    setUsers(ls.get<any[]>("users", []));
-    setPermissions(ls.get<any[]>("permissions", []));
+  const handleSave = async (userData: any) => {
+    try {
+      if (editingUser) {
+        await updateUser.mutateAsync({ id: editingUser.id, data: userData });
+        toast.success("User updated");
+      } else {
+        await createUser.mutateAsync(userData);
+        toast.success("User created");
+      }
+      setModalOpen(false);
+      setEditingUser(null);
+    } catch (error: any) {
+      toast.error(error.message || "Operation failed");
+    }
   };
 
+  const handleDelete = async (user: any) => {
+    if (!confirm(`Delete user "${user.username}"?`)) return;
+    try {
+      await deleteUser.mutateAsync(user.id);
+      toast.success("User deleted");
+    } catch (error: any) {
+      toast.error(error.message || "Delete failed");
+    }
+  };
   const filteredUsers = users.filter(u =>
     u.username?.toLowerCase().includes(query.toLowerCase()) ||
-    u.full_name?.toLowerCase().includes(query.toLowerCase()) ||
     u.email?.toLowerCase().includes(query.toLowerCase()) ||
-    u.role?.toLowerCase().includes(query.toLowerCase())
+    u.first_name?.toLowerCase().includes(query.toLowerCase()) ||
+    u.last_name?.toLowerCase().includes(query.toLowerCase())
   );
 
-  const handleSaveUser = (userData, userPermissions) => {
-    let updatedUsers;
-    
-    if (editingUser) {
-      // Update existing user
-      updatedUsers = users.map(u => 
-        u.id === editingUser.id ? { ...u, ...userData, id: u.id } : u
-      );
-      
-      // Update permissions
-      const existingPerms = permissions.filter(p => p.user_id !== editingUser.id);
-      const newPermissions = [...existingPerms, ...userPermissions.map(p => ({
-        ...p,
-        id: p.id || uid("perm"),
-        user_id: editingUser.id,
-      }))];
-      ls.set("permissions", newPermissions);
-      setPermissions(newPermissions);
-    } else {
-      // Create new user
-      const newId = uid("u");
-      const newUser = { ...userData, id: newId };
-      updatedUsers = [newUser, ...users];
-      
-      // Save permissions with the new user ID
-      const newPermissions = userPermissions.map(p => ({
-        ...p,
-        id: uid("perm"),
-        user_id: newId,
-      }));
-      const allPermissions = [...permissions, ...newPermissions];
-      ls.set("permissions", allPermissions);
-      setPermissions(allPermissions);
-    }
-    
-    ls.set("users", updatedUsers);
-    setUsers(updatedUsers);
-    setModalOpen(false);
-    setEditingUser(null);
-  };
-
-  const handleDelete = (user) => {
-    if (!confirm(`Delete user "${user.full_name}"? This will also remove their permissions.`)) return;
-    
-    const updatedUsers = users.filter(u => u.id !== user.id);
-    const updatedPerms = permissions.filter(p => p.user_id !== user.id);
-    
-    ls.set("users", updatedUsers);
-    ls.set("permissions", updatedPerms);
-    setUsers(updatedUsers);
-    setPermissions(updatedPerms);
-  };
-
-  const openAddModal = () => {
-    setEditingUser(null);
-    setModalOpen(true);
-  };
-
-  const openEditModal = (user) => {
-    setEditingUser(user);
-    setModalOpen(true);
-  };
-
-  const exportCsv = () => {
-    const headers = ["Username", "Full Name", "Email", "Role", "Department", "Status"];
-    const rows = filteredUsers.map(u => [
-      u.username,
-      u.full_name,
-      u.email,
-      u.role,
-      u.department,
-      u.status,
-    ]);
-    const csv = [headers.join(","), ...rows.map(r => r.map(c => `"${c}"`).join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "users.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div>
       <PageHeader
-        title="Users & Permissions"
-        subtitle="Manage system users and their access rights"
+        title="Users & Roles"
+        subtitle="Manage system users"
         actions={
-          <>
+          permissions.create && (
             <button
-              onClick={exportCsv}
-              className="inline-flex items-center gap-2 px-3 h-9 rounded-md border border-border text-sm hover:bg-muted"
-            >
-              <Download className="w-4 h-4" /> Export
-            </button>
-            <button
-              onClick={openAddModal}
-              className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90"
+              onClick={() => {
+                setEditingUser(null);
+                setModalOpen(true);
+              }}
+              className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm"
             >
               <Plus className="w-4 h-4" /> Add User
             </button>
-          </>
+          )
         }
       />
 
-      {/* Stats Cards */}
-      <div className="grid sm:grid-cols-4 gap-3 mb-4">
-        <div className="bg-card border border-border rounded-xl p-3">
-          <div className="text-xs text-muted-foreground">Total Users</div>
-          <div className="text-xl font-semibold">{users.length}</div>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-3">
-          <div className="text-xs text-muted-foreground">Company Admins</div>
-          <div className="text-xl font-semibold">{users.filter(u => u.role === "COMPANY_ADMIN").length}</div>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-3">
-          <div className="text-xs text-muted-foreground">Branch Admins</div>
-          <div className="text-xl font-semibold">{users.filter(u => u.role === "BRANCH_ADMIN").length}</div>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-3">
-          <div className="text-xs text-muted-foreground">Staff Members</div>
-          <div className="text-xl font-semibold">{users.filter(u => u.role === "STAFF").length}</div>
-        </div>
-      </div>
-
-      {/* Search Bar */}
+      {/* Search */}
       <div className="bg-card border border-border rounded-2xl shadow-sm">
         <div className="p-3 border-b border-border">
           <div className="relative">
@@ -178,7 +92,6 @@ function UsersPage() {
           </div>
         </div>
 
-        {/* Users Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
@@ -186,7 +99,6 @@ function UsersPage() {
                 <th className="text-left px-4 py-2.5">Username</th>
                 <th className="text-left px-4 py-2.5">Full Name</th>
                 <th className="text-left px-4 py-2.5">Email</th>
-                <th className="text-left px-4 py-2.5">Role</th>
                 <th className="text-left px-4 py-2.5">Department</th>
                 <th className="text-left px-4 py-2.5">Status</th>
                 <th className="px-4 py-2.5 text-right">Actions</th>
@@ -203,44 +115,40 @@ function UsersPage() {
               {filteredUsers.map((user) => (
                 <tr key={user.id} className="border-t border-border hover:bg-muted/30">
                   <td className="px-4 py-2.5 font-mono text-xs">{user.username}</td>
-                  <td className="px-4 py-2.5 font-medium">{user.full_name}</td>
-                  <td className="px-4 py-2.5">{user.email}</td>
-                  <td className="px-4 py-2.5">
-                    <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
-                      user.role === "COMPANY_ADMIN" 
-                        ? "bg-primary/15 text-primary border-primary/30"
-                        : user.role === "BRANCH_ADMIN"
-                        ? "bg-info/15 text-info border-info/30"
-                        : "bg-muted text-muted-foreground border-border"
-                    }`}>
-                      {user.role}
-                    </span>
+                  <td className="px-4 py-2.5 font-medium">
+                    {user.first_name} {user.last_name}
                   </td>
+                  <td className="px-4 py-2.5">{user.email}</td>
                   <td className="px-4 py-2.5">{user.department || "—"}</td>
                   <td className="px-4 py-2.5">
                     <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
-                      user.status === "Active"
+                      user.is_active
                         ? "bg-success/15 text-success border-success/30"
                         : "bg-destructive/15 text-destructive border-destructive/30"
                     }`}>
-                      {user.status}
+                      {user.is_active ? "Active" : "Inactive"}
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    <button
-                      onClick={() => openEditModal(user)}
-                      className="p-1.5 rounded-md hover:bg-muted"
-                      aria-label="Edit"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(user)}
-                      className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
-                      aria-label="Delete"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {permissions.update && (
+                      <button
+                        onClick={() => {
+                          setEditingUser(user);
+                          setModalOpen(true);
+                        }}
+                        className="p-1.5 rounded-md hover:bg-muted"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    )}
+                    {permissions.delete && (
+                      <button
+                        onClick={() => handleDelete(user)}
+                        className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -249,16 +157,16 @@ function UsersPage() {
         </div>
       </div>
 
-      {/* User Form Modal with Permissions */}
-      {modalOpen && (
-        <UserFormWithPermissions
+      {(modalOpen && (editingUser ? permissions.update : permissions.create)) && (
+        <UserForm
           initialData={editingUser}
-          onSubmit={handleSaveUser}
+          onSubmit={handleSave}
           onCancel={() => {
             setModalOpen(false);
             setEditingUser(null);
           }}
-          departments={departments}
+          isLoading={createUser.isPending || updateUser.isPending}
+          departments={["HR", "INVENTORY", "FINANCE", "MONITORING", "SETTINGS"]}
         />
       )}
     </div>

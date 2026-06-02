@@ -30,14 +30,12 @@ export function initializeSystem() {
     taxRate: 18,
   workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
   weekends: ["Sunday"],
-  leaveYearType: "CALENDAR", // or FISCAL
   publicHolidays: [
     { date: "2026-03-14", name: "Holi" },
     { date: "2026-05-01", name: "Labour Day" },
     { date: "2026-08-14", name: "Independence Day" }
   ],
     tax_id: "AQT-9087-IT",
-    branch_id: "u_moldv7e5_i7n69",
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   });
@@ -55,7 +53,6 @@ export function initializeSystem() {
     email: "info@alqaiserit.local",
     currency_code: "PKR",
     tax_id: "AQT-9087-IT",
-    branch_id: "BRNCH-0001",
     is_hq: 1,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),

@@ -1,39 +1,39 @@
-
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { ReactQueryProvider } from "./providers";
+import { ThemeInitializer } from "@/components/ThemeInitializer";
 import "@/styles.css";
-import { AuthProvider } from "@/context/AuthContext";
-import { ThemeProvider } from "@/context/ThemeContext";
+import { Inter } from "next/font/google";
+import { Toaster } from "sonner";
+import { ConfirmationProvider } from "@/contexts/ConfirmationModalContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
 
-/**
- * Load Inter via next/font — self-hosted, zero layout shift,
- * replaces the browser-default font fallback in styles.css.
- */
-const inter = Inter({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-inter",
-});
+const inter = Inter({ subsets: ["latin"], display: "swap", variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "Clickmasters BOS — Al Qaiser IT Company",
+  title: "Al Qaiser IT Company",
   description: "Internal Business Operating System for Al Qaiser IT Company.",
-  keywords: ["ERP", "business", "HR", "inventory", "finance"],
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body className={inter.variable}>
-        <ThemeProvider>
-          <AuthProvider>{children}</AuthProvider>
-        </ThemeProvider>
+        <ReactQueryProvider>
+          <ThemeInitializer />
+          <ConfirmationProvider>
+            <NotificationProvider>
+              {children}
+            </NotificationProvider>
+            <Toaster
+              position="bottom-right"
+              richColors
+              closeButton
+              duration={4000}
+              theme="system"        // or "light" / "dark"
+            />
+          </ConfirmationProvider>
+        </ReactQueryProvider>
       </body>
     </html>
   );
 }
-

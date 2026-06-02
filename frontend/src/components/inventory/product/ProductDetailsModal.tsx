@@ -1,262 +1,274 @@
 // src/components/inventory/product/ProductDetailsModal.tsx
 "use client";
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { X, Edit, Package, Layers, Tag, Truck, ClipboardList } from "lucide-react";
-
-export default function ProductDetailsModal({ 
-  product, 
-  variants, 
-  inventory, 
-  attributes, 
-  tags, 
-  warehouses = [],
-  onClose, 
-  onEdit 
-}: {
-  product: any;
-  variants: any[];
-  inventory: any[];
-  attributes: any[];
-  tags: any[];
-  warehouses?: any[];
+import { X, Edit, Package, Layers, Warehouse, User, Calendar, Tag } from "lucide-react";
+import { useProduct } from "@/hooks/useProducts";
+import { Skeleton } from "@/components/ui/skeleton";
+import { formatCurrency, CurrencyCode } from "@/lib/currency";
+interface Props {
+  productId: string; 
   onClose: () => void;
-  onEdit: () => void;
-}) {
+  onEdit?: () => void;
+}
 
-  const [activeTab, setActiveTab] = useState("info");
+function StatPill({ label, value, colorClass }: { label: string; value: number | string; colorClass: string }) {
+  return (
+    <div className={`rounded-2xl px-4 py-3 ${colorClass}`}>
+      <p className="text-xs font-medium opacity-70 mb-0.5">{label}</p>
+      <p className="text-2xl font-bold tabular-nums">{value}</p>
+    </div>
+  );
+}
 
-  // Group attributes
-  const groupedAttributes = attributes.reduce((acc: any, attr: any) => {
-    const group = attr.attribute_group || "General";
-    if (!acc[group]) acc[group] = [];
-    acc[group].push(attr);
-    return acc;
-  }, {} as Record<string, any[]>);
+function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between py-2.5 border-b border-border/50 last:border-0">
+      <span className="text-sm text-muted-foreground shrink-0 mr-4 w-32">{label}</span>
+      <span className="text-sm font-medium text-right break-all">{value || "—"}</span>
+    </div>
+  );
+}
 
+const STATUS_STYLE: Record<string, string> = {
+  active: "bg-success/15 text-success",
+  draft: "bg-warning/15 text-warning",
+  archived: "bg-muted/40 text-muted-foreground",
+  discontinued: "bg-destructive/15 text-destructive",
+};
 
-  // Calculate total stock
-  const totalStock = inventory.reduce((sum, i) => sum + i.stock_quantity, 0);
+export default function ProductDetailsModal({ productId, onClose, onEdit }: Props) {
+  const { data: product, isLoading, error } = useProduct(productId);
+
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="w-full max-w-3xl bg-card rounded-2xl shadow-2xl p-6">
+          <Skeleton className="h-8 w-1/2 mb-4" />
+          <Skeleton className="h-4 w-full mb-2" />
+          <Skeleton className="h-4 w-3/4" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !product) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="w-full max-w-md bg-card rounded-2xl shadow-2xl p-6 text-center">
+          <p className="text-destructive">Failed to load product details.</p>
+          <button onClick={onClose} className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded-lg">
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const totalStock = product.variants.reduce((s, v) => s + v.total_stock, 0);
+  const totalReserved = product.variants.reduce(
+    (s, v) => s + v.stock_by_warehouse.reduce((a, w) => a + w.quantity_reserved, 0), 0
+  );
+  const totalAvailable = totalStock - totalReserved;
+  const minPrice = Math.min(...product.variants.map(v => v.selling_price));
+  const maxPrice = Math.max(...product.variants.map(v => v.selling_price));
+
+  const tabs = [
+    { id: "info", label: "Details", icon: Package },
+    { id: "variants", label: `Variants (${product.variants.length})`, icon: Layers },
+    { id: "stock", label: "Stock", icon: Warehouse },
+  ];
+
+  // Helper to get category/brand names – we don't have them directly, but we can show IDs or add separate fetch.
+  // For simplicity, we show IDs, but you could also fetch category/brand names separately.
+  // Alternatively, backend could include category_name and brand_name in serializer.
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-4xl bg-card rounded-2xl shadow-2xl flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" >
+      <div
+        className="w-full max-w-3xl bg-card rounded-2xl shadow-2xl flex flex-col max-h-[88vh] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-start justify-between p-6 border-b border-border">
-          <div className="flex gap-4">
-            {product.main_image && (
-              <img src={product.main_image} alt={product.name} className="w-20 h-20 rounded-lg object-cover" />
-            )}
-            <div>
-              <h2 className="text-xl font-semibold">{product.name}</h2>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="font-mono text-xs text-muted-foreground">SKU: {product.sku}</span>
-                {product.barcode && <span className="text-xs text-muted-foreground">| EAN: {product.barcode}</span>}
-              </div>
-              <div className="flex items-center gap-2 mt-2">
-                <span className={`inline-flex px-2 py-0.5 text-xs rounded-full ${
-                  product.status === "active" ? "bg-success/15 text-success" :
-                  product.status === "draft" ? "bg-warning/15 text-warning" : "bg-muted/40"
-                }`}>
+        <div className="px-6 pt-6 pb-4 border-b border-border/60">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
+              <Package className="w-6 h-6 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg font-semibold truncate">{product.product_name}</h2>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_STYLE[product.status] || "bg-muted/40"}`}>
                   {product.status}
                 </span>
-                {tags.map(tag => (
-                  <span key={tag.id} className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary">
-                    #{tag.name}
-                  </span>
-                ))}
               </div>
+              <p className="text-xs text-muted-foreground font-mono mt-0.5">ID: {product.id}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {onEdit && (
+                <button
+                  onClick={onEdit}
+                  className="flex items-center gap-1.5 px-3 h-8 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
+                >
+                  <Edit className="w-3.5 h-3.5" /> Edit
+                </button>
+              )}
+              <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground">
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={onEdit}>
-              <Edit className="w-4 h-4 mr-2" /> Edit
-            </Button>
-            <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted transition">
-              <X className="w-5 h-5" />
-            </button>
+
+          {/* Price range */}
+          <div className="mt-4 flex items-baseline gap-1">
+            <span className="text-2xl font-bold text-primary">
+              {CurrencyCode()}{minPrice}{minPrice !== maxPrice && ` – ${CurrencyCode()}${maxPrice}`}
+            </span>
+            <span className="text-sm text-muted-foreground ml-1">selling price</span>
+          </div>
+
+          {/* Stock pills */}
+          <div className="grid grid-cols-3 gap-3 mt-4">
+            <StatPill label="Total Stock" value={totalStock} colorClass="bg-success/10 text-success" />
+            <StatPill label="Reserved" value={totalReserved} colorClass="bg-warning/10 text-warning" />
+            <StatPill label="Available" value={totalAvailable} colorClass="bg-info/10 text-info" />
           </div>
         </div>
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-          <TabsList className="px-6 pt-2 border-b border-border justify-start gap-1 bg-transparent">
-            <TabsTrigger value="info">📝 Product Info</TabsTrigger>
-            <TabsTrigger value="attributes">⚙️ Attributes</TabsTrigger>
-            {variants.length > 0 && <TabsTrigger value="variants">🎨 Variants</TabsTrigger>}
-            <TabsTrigger value="inventory">📦 Inventory</TabsTrigger>
-          </TabsList>
+        <div className="flex border-b border-border/60 px-6 gap-1">
+          {tabs.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => {
+                // simple tab state – you can add useState for active tab
+                const activeTab = document.querySelector(`[data-tab="${id}"]`) as HTMLElement;
+                document.querySelectorAll('[data-tab-content]').forEach(el => el.classList.add('hidden'));
+                document.querySelector(`[data-tab-content="${id}"]`)?.classList.remove('hidden');
+              }}
+              data-tab={id}
+              className={`flex items-center gap-1.5 px-3 py-3 text-sm font-medium border-b-2 transition-colors ${
+                id === "info" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
 
-          <div className="flex-1 overflow-y-auto p-6">
-            {/* Product Info Tab */}
-            <TabsContent value="info" className="m-0 space-y-4">
-              {product.short_description && (
-                <div>
-                  <h4 className="font-medium mb-1">Short Description</h4>
-                  <p className="text-sm text-muted-foreground">{product.short_description}</p>
-                </div>
-              )}
-              {product.description && (
-                <div>
-                  <h4 className="font-medium mb-1">Full Description</h4>
-                  <div className="text-sm whitespace-pre-wrap">{product.description}</div>
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-4 pt-2">
-                <div className="bg-muted/20 rounded-lg p-3">
-                  <div className="text-xs text-muted-foreground">Category</div>
-                  <div className="font-medium">{product.category_name || "—"}</div>
-                </div>
-                <div className="bg-muted/20 rounded-lg p-3">
-                  <div className="text-xs text-muted-foreground">Brand</div>
-                  <div className="font-medium">{product.brand_name || "—"}</div>
-                </div>
-                <div className="bg-muted/20 rounded-lg p-3">
-                  <div className="text-xs text-muted-foreground">Unit of Measure</div>
-                  <div className="font-medium">{product.unit_of_measure || "PCS"}</div>
-                </div>
-                <div className="bg-muted/20 rounded-lg p-3">
-                  <div className="text-xs text-muted-foreground">Product Type</div>
-                  <div className="font-medium capitalize">{product.product_type}</div>
-                </div>
+        {/* Tab Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {/* Info Tab */}
+          <div data-tab-content="info" className="space-y-6">
+            {product.description && (
+              <div>
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Description</h4>
+                <p className="text-sm leading-relaxed text-muted-foreground">{product.description}</p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-success/10 rounded-lg p-3">
-                  <div className="text-xs text-muted-foreground">Selling Price</div>
-                  <div className="text-2xl font-bold text-success">${product.selling_price?.toFixed(2)}</div>
-                </div>
-                <div className="bg-muted/20 rounded-lg p-3">
-                  <div className="text-xs text-muted-foreground">Cost Price</div>
-                  <div className="font-medium">${product.cost_price?.toFixed(2)}</div>
-                </div>
-              </div>
-            </TabsContent>
-
-            {/* Attributes Tab */}
-            <TabsContent value="attributes" className="m-0">
-              {Object.keys(groupedAttributes).length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                  <p>No attributes defined for this product</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {Object.entries(groupedAttributes).map(([groupName, groupAttrs]: [string, any]) => (
-
-                    <div key={groupName}>
-                      <h4 className="font-medium text-sm text-muted-foreground mb-3">{groupName}</h4>
-                      <div className="grid grid-cols-2 gap-3">
-                        {(groupAttrs as any[]).map((attr: any) => (
-
-                          <div key={attr.id} className="flex justify-between py-2 border-b border-border">
-                            <span className="text-sm font-medium">{attr.attribute_name}</span>
-                            <span className="text-sm text-muted-foreground">{attr.attribute_value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-
-            {/* Variants Tab */}
-            {variants.length > 0 && (
-              <TabsContent value="variants" className="m-0">
-                <div className="space-y-3">
-                  {variants.map(variant => {
-                    const variantInventory = inventory.filter(i => i.variant_id === variant.id);
-                    const variantStock = variantInventory.reduce((sum, i) => sum + i.stock_quantity, 0);
-                    
-                    return (
-                      <div key={variant.id} className="p-4 bg-muted/10 rounded-lg border border-border">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <div className="font-medium">
-                              {Object.entries(variant.attribute_combination || {}).map(([k, v]: [string, any]) => `${k}: ${v}`).join(" | ")}
-
-                            </div>
-                            <div className="text-sm text-muted-foreground mt-1">
-                              SKU: {variant.sku}
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-medium text-success">${variant.selling_price?.toFixed(2)}</div>
-                            <div className="text-sm text-muted-foreground">Stock: {variantStock}</div>
-                          </div>
-                        </div>
-                        {variantInventory.length > 0 && (
-                          <div className="mt-3 pt-3 border-t border-border">
-                            <div className="text-xs text-muted-foreground mb-2">Warehouse Distribution:</div>
-                            <div className="flex flex-wrap gap-2">
-                              {variantInventory.map(rec => {
-                                const warehouse = warehouses?.find(w => w.id === rec.warehouse_id);
-                                return (
-                                  <span key={rec.id} className="px-2 py-1 text-xs rounded bg-muted/40">
-                                    {warehouse?.name || rec.warehouse_id}: {rec.stock_quantity}
-                                  </span>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </TabsContent>
             )}
+            <div>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Product Details</h4>
+              <div className="bg-muted/10 rounded-xl px-4 py-1">
+                <InfoRow label="Category" value={product.category_id || "—"} />
+                <InfoRow label="Brand" value={product.brand_id || "—"} />
+                <InfoRow label="Unit" value={product.unit} />
+                <InfoRow label="Storage" value={product.storage_requirement} />
+                <InfoRow label="Tax Rate" value={`${product.tax_rate}%`} />
+                <InfoRow label="Status" value={product.status} />
+                <InfoRow label="Active" value={product.is_active ? "Yes" : "No"} />
+                <InfoRow label="Variants" value={product.variants.length} />
+              </div>
+            </div>
 
-            {/* Inventory Tab */}
-            <TabsContent value="inventory" className="m-0">
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                <div className="bg-muted/20 rounded-lg p-4 text-center">
-                  <div className="text-2xl font-bold text-primary">{totalStock}</div>
-                  <div className="text-xs text-muted-foreground">Total Stock</div>
-                </div>
-                <div className="bg-muted/20 rounded-lg p-4 text-center">
-                  <div className="text-2xl font-bold text-warning">
-                    {inventory.reduce((sum, i) => sum + (i.reserved_quantity || 0), 0)}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Reserved</div>
-                </div>
-                <div className="bg-muted/20 rounded-lg p-4 text-center">
-                  <div className="text-2xl font-bold text-success">
-                    {inventory.reduce((sum, i) => sum + (i.available_quantity || 0), 0)}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Available</div>
-                </div>
-              </div>
-              
-              <div className="space-y-3">
-                <h4 className="font-medium">Warehouse Details</h4>
-                {inventory.map(record => {
-                  const warehouse = warehouses?.find(w => w.id === record.warehouse_id);
-                  return (
-                    <div key={record.id} className="p-3 bg-muted/10 rounded-lg">
-                      <div className="flex justify-between">
-                        <div>
-                          <div className="font-medium">{warehouse?.name || record.warehouse_id}</div>
-                          {record.location_bin && (
-                            <div className="text-xs text-muted-foreground">Bin: {record.location_bin}</div>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          <div>Stock: {record.stock_quantity}</div>
-                          {record.reorder_point && (
-                            <div className="text-xs text-muted-foreground">Reorder at: {record.reorder_point}</div>
-                          )}
-                        </div>
-                      </div>
+            {/* Creator / Updater Info */}
+            <div>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
+                <User className="w-3 h-3" /> Metadata
+              </h4>
+              <div className="bg-muted/10 rounded-xl px-4 py-1">
+                <InfoRow
+                  label="Created by"
+                  value={
+                    <div className="flex flex-col items-end">
+                      <span>{product.created_by_name || "System"}</span>
+                      <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                        <Calendar className="w-3 h-3" /> {new Date(product.created_at).toLocaleString()}
+                      </span>
                     </div>
-                  );
-                })}
+                  }
+                />
+                <InfoRow
+                  label="Updated by"
+                  value={
+                    <div className="flex flex-col items-end">
+                      <span>{product.updated_by_name || "System"}</span>
+                      <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                        <Calendar className="w-3 h-3" /> {new Date(product.updated_at).toLocaleString()}
+                      </span>
+                    </div>
+                  }
+                />
               </div>
-            </TabsContent>
+            </div>
           </div>
-        </Tabs>
+
+          {/* Variants Tab */}
+          <div data-tab-content="variants" className="hidden space-y-3">
+            {product.variants.map((v) => (
+              <div key={v.id} className="border border-border rounded-xl overflow-hidden">
+                <div className="flex items-start justify-between px-4 py-3 bg-muted/10">
+                  <div>
+                    <p className="text-sm font-semibold">
+                      {v.variant_attributes.length > 0
+                        ? v.variant_attributes.map(a => `${a.attribute_key}: ${a.attribute_value}`).join(" · ")
+                        : v.sku}
+                    </p>
+                    <p className="text-xs text-muted-foreground font-mono mt-0.5">SKU: {v.sku}</p>
+                    {v.barcode && <p className="text-xs text-muted-foreground">Barcode: {v.barcode}</p>}
+                  </div>
+                  <div className="text-right shrink-0 ml-4">
+                    <p className="text-sm font-bold text-success">{formatCurrency(v.selling_price)}</p>
+                    <p className="text-xs text-muted-foreground line-through">{formatCurrency(v.buying_price)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{v.total_stock} in stock</p>
+                  </div>
+                </div>
+                {v.variant_images.length > 0 && (
+                  <div className="px-4 py-3 flex gap-2 border-t border-border/40 overflow-x-auto">
+                    {v.variant_images.map((img) => (
+                      <img key={img.id} src={img.image_url} alt="" className="w-12 h-12 object-cover rounded-lg border border-border shrink-0" />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Stock Tab */}
+          <div data-tab-content="stock" className="hidden space-y-3">
+            {product.variants.flatMap((v) =>
+              v.stock_by_warehouse.map((sw, i) => (
+                <div key={`${v.id}-${i}`} className="flex items-center justify-between p-4 border border-border rounded-xl">
+                  <div>
+                    <p className="text-sm font-semibold">{v.sku}</p>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                      <Warehouse className="w-3 h-3" /> {sw.warehouse_name}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold">{sw.quantity_on_hand} on hand</p>
+                    <p className="text-xs text-muted-foreground">{sw.quantity_reserved} reserved</p>
+                  </div>
+                </div>
+              ))
+            )}
+            {product.variants.every((v) => v.stock_by_warehouse.length === 0) && (
+              <div className="text-center py-12 text-muted-foreground">
+                <Warehouse className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">No stock records yet</p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

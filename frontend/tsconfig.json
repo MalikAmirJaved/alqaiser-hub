@@ -9,7 +9,7 @@
     "next.config.mjs",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
-  ],
+, "public/sw.js"  ],
   "compilerOptions": {
     "target": "ES2022",
     "jsx": "react-jsx",

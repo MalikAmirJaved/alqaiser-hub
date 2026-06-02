@@ -1,128 +1,56 @@
 "use client";
-// FILE: app/hr/shifts/list/page.tsx (ENHANCED WITH DATE RANGE & HISTORY)
+// FILE: app/hr/shifts/list/page.tsx (FIXED TYPESCRIPT VERSION)
 
-import { useState, useEffect, useMemo } from "react";
-import { ls, uid } from "@/services/localStorageService";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isToday, parseISO } from "date-fns";
+import { useQueryClient } from "@tanstack/react-query";
 import PageHeader from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { 
   CalendarDays, ListFilter, Search, Settings, UserPlus, X, 
   ChevronLeft, ChevronRight, Clock, Users as UsersIcon, 
-  Calendar, Plus, Eye, FileText, AlertCircle, CheckCircle2,
-  Trash2, Edit, CalendarRange, Filter, RefreshCw, History,
-  Clock as ClockIcon, AlertTriangle, Check, ChevronDown
+  Calendar, Trash2, CalendarRange, RefreshCw, History,
+  Loader2
 } from "lucide-react";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isToday, parseISO, eachDayOfInterval as eachDay } from "date-fns";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
-import { DateRangePickerRac } from "@/components/reuseable/DateRangePickerRac";
+import { toast } from "sonner";
 
-// Types
-interface ShiftTemplate {
-  id: string;
-  name: string;
-  startTime: string;
-  endTime: string;
-  breakMinutes: number;
-  color: string;
-  description: string;
-  is_active: boolean;
-}
-
-interface ShiftAssignment {
-  id: string;
-  templateId: string;
-  employeeIds: string[];
-  date: string;
-  notes: string;
-}
-
-interface EmployeeDefaultShift {
-  id: string;
-  employee_id: string;
-  template_id: string;
-  effective_from: string;
-  effective_to: string | null;
-  created_at?: string;
-  updated_at?: string;
-}
+// Import hooks
+import { useEmployees, type Employee } from "@/hooks/useEmployees";
+import { useShiftTemplates, type ShiftTemplate } from "@/hooks/useShiftTemplates";
+import { 
+  useResolvedShifts, 
+  useShiftOverrides,
+  useCreateShiftOverride,
+  useDeleteShiftOverride,
+  useBulkShiftAssignment,
+  useShiftHistory,
+  useShiftStatistics,
+  useGenerateShiftSchedule,
+  type ResolvedShiftsResponse
+} from "@/hooks/useShiftManagement";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 interface ShiftChangeHistory {
   id: string;
   employee_id: string;
   employee_name: string;
-  change_type: "DEFAULT_CHANGE" | "TEMPORARY_OVERRIDE" | "DATE_RANGE_ASSIGNMENT";
-  from_template_id: string;
+  change_type: string;
   from_template_name: string;
-  to_template_id: string;
   to_template_name: string;
   effective_from: string;
   effective_to: string | null;
   reason: string;
-  changed_by: string;
   changed_by_name: string;
   changed_at: string;
 }
 
-interface Employee {
-  id: string;
-  first_name: string;
-  last_name: string;
-  department: string;
-  employment_status: string;
-  default_shift_id?: string;
-}
-
-function resolveShiftForDate(
-  employeeId: string,
-  dateStr: string,
-  assignments: ShiftAssignment[],
-  defaultShifts: EmployeeDefaultShift[],
-  templates: ShiftTemplate[],
-  employeeDefaultShiftId?: string
-): { template: ShiftTemplate | null; isOverride: boolean } {
-  
-  const override = assignments.find(
-    (a) => a.employeeIds.includes(employeeId) && a.date === dateStr
-  );
-  if (override) {
-    return {
-      template: templates.find((t) => t.id === override.templateId) || null,
-      isOverride: true,
-    };
-  }
-
-  const activeDefaults = defaultShifts.filter(
-    (d) =>
-      d.employee_id === employeeId &&
-      d.effective_from <= dateStr &&
-      (d.effective_to === null || d.effective_to >= dateStr)
-  );
-  
-  if (activeDefaults.length > 0) {
-    activeDefaults.sort((a, b) => b.effective_from.localeCompare(a.effective_from));
-    return {
-      template: templates.find((t) => t.id === activeDefaults[0].template_id) || null,
-      isOverride: false,
-    };
-  }
-
-  if (employeeDefaultShiftId) {
-    const template = templates.find(t => t.id === employeeDefaultShiftId);
-    if (template) {
-      return { template, isOverride: false };
-    }
-  }
-
-  return { template: null, isOverride: false };
-}
-
 export default function ShiftsManagementPage() {
-  const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
-  const [assignments, setAssignments] = useState<ShiftAssignment[]>([]);
-  const [defaultShifts, setDefaultShifts] = useState<EmployeeDefaultShift[]>([]);
-  const [shiftHistory, setShiftHistory] = useState<ShiftChangeHistory[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const permissions = useFeaturePermissions("HR", "shift_override");
+  const queryClient = useQueryClient();
+  
+  // State
   const [activeTab, setActiveTab] = useState("calendar");
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [filters, setFilters] = useState({ 
@@ -133,124 +61,132 @@ export default function ShiftsManagementPage() {
   
   // Modal states
   const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [showDefaultModal, setShowDefaultModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showShiftDetailModal, setShowShiftDetailModal] = useState<{ date: string; template: ShiftTemplate } | null>(null);
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [scheduleFormData, setScheduleFormData] = useState({
     template_id: "",
     date_range: { start: "", end: "" },
     reason: "",
-    change_type: "TEMPORARY_OVERRIDE" as "TEMPORARY_OVERRIDE" | "DATE_RANGE_ASSIGNMENT"
+    assignment_type: "OVERRIDE" as "OVERRIDE" | "DATE_RANGE"
   });
-  const [defaultFormData, setDefaultFormData] = useState({ 
-    template_id: "", 
-    effective_from: "", 
-    effective_to: "" 
-  });
+  const [historyPage, setHistoryPage] = useState(0);
+  const [selectedEmployeeForHistory, setSelectedEmployeeForHistory] = useState<Employee | null>(null);
 
-  const [loading, setLoading] = useState(true);
-  const currentUser = typeof window !== 'undefined' ? JSON.parse(sessionStorage.getItem("clickmasters_session") || localStorage.getItem("clickmasters_bos__session") || "null") : null;
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = () => {
-    setTemplates(ls.get<ShiftTemplate[]>("shifts_templates", []) || []);
-    setAssignments(ls.get<ShiftAssignment[]>("shifts_assignments", []) || []);
-    setDefaultShifts(ls.get<EmployeeDefaultShift[]>("employee_default_shifts", []) || []);
-    setShiftHistory(ls.get<ShiftChangeHistory[]>("shift_change_history", []) || []);
-    const allEmployees = ls.get<any[]>("employees", []) || [];
-    const activeEmployees = allEmployees.filter((e: any) => e.employment_status === "ACTIVE");
-    setEmployees(activeEmployees);
-    setLoading(false);
-  };
-
-  const addToHistory = (
-    employeeId: string,
-    employeeName: string,
-    changeType: ShiftChangeHistory["change_type"],
-    fromTemplateId: string,
-    fromTemplateName: string,
-    toTemplateId: string,
-    toTemplateName: string,
-    effectiveFrom: string,
-    effectiveTo: string | null,
-    reason: string
-  ) => {
-    const historyEntry: ShiftChangeHistory = {
-      id: uid("sch"),
-      employee_id: employeeId,
-      employee_name: employeeName,
-      change_type: changeType,
-      from_template_id: fromTemplateId,
-      from_template_name: fromTemplateName,
-      to_template_id: toTemplateId,
-      to_template_name: toTemplateName,
-      effective_from: effectiveFrom,
-      effective_to: effectiveTo,
-      reason: reason,
-      changed_by: currentUser?.id || "system",
-      changed_by_name: currentUser?.name || "System",
-      changed_at: new Date().toISOString(),
-    };
-    
-    const updatedHistory = [historyEntry, ...shiftHistory];
-    setShiftHistory(updatedHistory);
-    ls.set("shift_change_history", updatedHistory);
-  };
-
-  const monthStart = startOfMonth(currentMonth);
-  const monthEnd = endOfMonth(currentMonth);
-  const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
-
+  // Queries
+  const { data: employees = [], isLoading: employeesLoading } = useEmployees({ employment_status: "ACTIVE" });
+  const { data: templates = [], isLoading: templatesLoading } = useShiftTemplates();
+  
+  // Filtered employees (moved before useMemo that depends on it)
   const filteredEmployees = useMemo(() => {
     return employees.filter(e => {
-      const fullName = `${e.first_name} ${e.last_name}`.toLowerCase();
+      const fullName = `${e.first_name} ${e.last_name || ''}`.toLowerCase();
       const matchesSearch = fullName.includes(filters.search.toLowerCase()) || 
                            e.department?.toLowerCase().includes(filters.search.toLowerCase());
       const matchesDepartment = !filters.department || e.department === filters.department;
       return matchesSearch && matchesDepartment;
     });
   }, [employees, filters.search, filters.department]);
-
+  
+  // Get selected date range for calendar
+  const monthStart = startOfMonth(currentMonth);
+  const monthEnd = endOfMonth(currentMonth);
+  const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  
+  // Get employee IDs for resolved shifts query
+  const employeeIds = useMemo(() => {
+    return filteredEmployees.map(e => e.id);
+  }, [filteredEmployees]);
+  
+  // Query resolved shifts for the month
+  const { 
+    data: resolvedShiftsData, 
+    isLoading: shiftsLoading,
+    refetch: refetchShifts 
+  } = useResolvedShifts(
+    employeeIds,
+    undefined,
+    format(monthStart, "yyyy-MM-dd"),
+    format(monthEnd, "yyyy-MM-dd")
+  );
+  
+  // Query shift overrides
+  const { data: overrides = [], refetch: refetchOverrides } = useShiftOverrides(
+    undefined,
+    format(monthStart, "yyyy-MM-dd"),
+    format(monthEnd, "yyyy-MM-dd")
+  );
+  
+  // Query shift statistics
+  const { data: statistics, refetch: refetchStatistics } = useShiftStatistics(format(new Date(), "yyyy-MM-dd"));
+  
+  // Query shift history
+  const { 
+    data: historyData, 
+    isLoading: historyLoading,
+    refetch: refetchHistory 
+  } = useShiftHistory(
+    selectedEmployeeForHistory?.id,
+    50,
+    historyPage * 50
+  );
+  
+  // Mutations
+  const createOverride = useCreateShiftOverride();
+  const deleteOverride = useDeleteShiftOverride();
+  const bulkAssign = useBulkShiftAssignment();
+  const generateSchedule = useGenerateShiftSchedule();
+  
+  // Departments list
   const departments = useMemo(() => {
     const depts = new Set(employees.map(e => e.department).filter(Boolean));
     return Array.from(depts);
   }, [employees]);
-
+  
+  // Parse resolved shifts data
   const resolvedShifts = useMemo(() => {
     const result: Record<string, Record<string, { template: ShiftTemplate | null; isOverride: boolean }>> = {};
+    
+    if (!resolvedShiftsData) return result;
     
     days.forEach(day => {
       const dateStr = format(day, "yyyy-MM-dd");
       result[dateStr] = {};
       
       filteredEmployees.forEach(emp => {
-        result[dateStr][emp.id] = resolveShiftForDate(
-          emp.id, 
-          dateStr, 
-          assignments, 
-          defaultShifts, 
-          templates,
-          emp.default_shift_id
-        );
+        const empData = resolvedShiftsData[emp.id];
+        
+        if (empData && empData.shifts && empData.shifts[dateStr]) {
+          const shiftData = empData.shifts[dateStr];
+          const template = templates.find(t => t.id === shiftData.template_id);
+          
+          result[dateStr][emp.id] = {
+            template: template || null,
+            isOverride: shiftData.source_type !== 'DEFAULT'
+          };
+        } else {
+          result[dateStr][emp.id] = { template: null, isOverride: false };
+        }
       });
     });
     
     return result;
-  }, [days, filteredEmployees, assignments, defaultShifts, templates]);
-
-  const getEmployeesForShift = (dateStr: string, templateId: string) => {
+  }, [resolvedShiftsData, filteredEmployees, templates, days]);
+  
+  // Get employees for a specific shift on a date
+  const getEmployeesForShift = useCallback((dateStr: string, templateId: string) => {
+    if (!resolvedShifts[dateStr]) return [];
+    
     return filteredEmployees.filter(emp => {
       const resolved = resolvedShifts[dateStr]?.[emp.id]?.template;
       return resolved?.id === templateId;
     });
-  };
-
-  const getShiftsOnDate = (dateStr: string) => {
+  }, [resolvedShifts, filteredEmployees]);
+  
+  // Get shifts on a date
+  const getShiftsOnDate = useCallback((dateStr: string) => {
+    if (!resolvedShifts[dateStr]) return [];
+    
     const shiftsMap = new Map<string, ShiftTemplate>();
     
     filteredEmployees.forEach(emp => {
@@ -261,271 +197,246 @@ export default function ShiftsManagementPage() {
     });
     
     return Array.from(shiftsMap.values());
+  }, [resolvedShifts, filteredEmployees]);
+  
+  // Generate date range array helper
+  const getDateRangeArray = (startDate: string, endDate: string): string[] => {
+    const dates: string[] = [];
+    let current = new Date(startDate);
+    const end = new Date(endDate);
+    
+    while (current <= end) {
+      dates.push(format(current, "yyyy-MM-dd"));
+      current.setDate(current.getDate() + 1);
+    }
+    return dates;
   };
-
-  // Handle date range scheduling
-  const handleDateRangeSchedule = () => {
+  
+  // Handle schedule shift (single or date range)
+  const handleScheduleShift = async () => {
     if (!scheduleFormData.template_id) {
-      alert("Please select a shift template");
+      toast.error("Please select a shift template");
       return;
     }
     if (selectedEmployees.length === 0) {
-      alert("Please select at least one employee");
+      toast.error("Please select at least one employee");
       return;
     }
     if (!scheduleFormData.date_range.start) {
-      alert("Please select a start date");
+      toast.error("Please select a start date");
       return;
     }
-
+    
     const startDate = scheduleFormData.date_range.start;
     const endDate = scheduleFormData.date_range.end || scheduleFormData.date_range.start;
+    const templateId = scheduleFormData.template_id;
+    const template = templates.find(t => t.id === templateId);
     
-    // Generate all dates in range
-    const datesToAssign = eachDay({
-      start: parseISO(startDate),
-      end: parseISO(endDate)
-    }).map(d => format(d, "yyyy-MM-dd"));
-
-    const template = templates.find(t => t.id === scheduleFormData.template_id);
     if (!template) return;
-
-    const newAssignments: ShiftAssignment[] = [];
     
-    for (const date of datesToAssign) {
-      // Remove existing assignments for these employees on this date
-      let updatedAssignments = [...assignments];
-      
-      const existingForDate = assignments.filter(a => 
-        a.date === date && 
-        a.employeeIds.some(id => selectedEmployees.includes(id))
-      );
-      
-      existingForDate.forEach(existing => {
-        const updatedEmployeeIds = existing.employeeIds.filter(
-          id => !selectedEmployees.includes(id)
-        );
+    try {
+      if (scheduleFormData.assignment_type === "OVERRIDE") {
+        const dates = getDateRangeArray(startDate, endDate);
         
-        if (updatedEmployeeIds.length > 0) {
-          const idx = updatedAssignments.findIndex(a => a.id === existing.id);
-          if (idx >= 0) {
-            updatedAssignments[idx] = { ...existing, employeeIds: updatedEmployeeIds };
+        // Create overrides for each selected employee and each date
+        for (const employeeId of selectedEmployees) {
+          for (const dateStr of dates) {
+            await createOverride.mutateAsync({
+              employee_id: employeeId,
+              template_id: templateId,
+              date: dateStr,
+              reason: scheduleFormData.reason
+            });
           }
-        } else {
-          updatedAssignments = updatedAssignments.filter(a => a.id !== existing.id);
         }
-      });
-      
-      // Check if there's an existing assignment with the same template
-      const existingSameTemplate = updatedAssignments.find(a => 
-        a.date === date && a.templateId === scheduleFormData.template_id
-      );
-      
-      if (existingSameTemplate) {
-        const mergedIds = [...new Set([...existingSameTemplate.employeeIds, ...selectedEmployees])];
-        existingSameTemplate.employeeIds = mergedIds;
-      } else {
-        newAssignments.push({
-          id: uid("shift_asgn"),
-          templateId: scheduleFormData.template_id,
-          employeeIds: [...selectedEmployees],
-          date: date,
-          notes: scheduleFormData.reason || `Scheduled for ${datesToAssign.length} day(s)`
-        });
-      }
-    }
-    
-    const allAssignments = [...assignments, ...newAssignments];
-    setAssignments(allAssignments);
-    ls.set("shifts_assignments", allAssignments);
-    
-    // Add to history for each employee
-    for (const employeeId of selectedEmployees) {
-      const employee = employees.find(e => e.id === employeeId);
-      if (employee) {
-        // Get current shift before change
-        const currentShift = resolveShiftForDate(
-          employeeId, 
-          startDate, 
-          assignments, 
-          defaultShifts, 
-          templates,
-          employee.default_shift_id
-        );
         
-        addToHistory(
-          employeeId,
-          `${employee.first_name} ${employee.last_name}`,
-          scheduleFormData.change_type,
-          currentShift.template?.id || "",
-          currentShift.template?.name || "None",
-          template.id,
-          template.name,
-          startDate,
-          endDate !== startDate ? endDate : null,
-          scheduleFormData.reason || `Scheduled for ${datesToAssign.length} day(s)`
-        );
+        toast.success(`Scheduled ${selectedEmployees.length} employee(s) for ${dates.length} day(s)`);
+      } else {
+        // Create date range assignment
+        await bulkAssign.mutateAsync({
+          employee_ids: selectedEmployees,
+          template_id: templateId,
+          start_date: startDate,
+          end_date: endDate,
+          assignment_type: "DATE_RANGE",
+          reason: scheduleFormData.reason
+        });
+        
+        toast.success(`Created date range assignment for ${selectedEmployees.length} employee(s)`);
       }
+      
+      // Refresh data
+      refetchShifts();
+      refetchOverrides();
+      refetchStatistics();
+      
+      setShowScheduleModal(false);
+      setScheduleFormData({ template_id: "", date_range: { start: "", end: "" }, reason: "", assignment_type: "OVERRIDE" });
+      setSelectedEmployees([]);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to schedule shift");
     }
-    
-    setShowScheduleModal(false);
-    setScheduleFormData({ template_id: "", date_range: { start: "", end: "" }, reason: "", change_type: "TEMPORARY_OVERRIDE" });
-    setSelectedEmployees([]);
-    alert(`Successfully scheduled ${selectedEmployees.length} employee(s) for ${datesToAssign.length} day(s)`);
   };
-
-  // Handle save default shift (with history tracking)
-  const handleSaveDefaultShift = () => {
-    if (!selectedEmployee || !defaultFormData.template_id || !defaultFormData.effective_from) {
-      alert("Template & Start Date are required");
+  
+  // Handle delete override
+  const handleDeleteAssignment = async (overrideId: string) => {
+    if (!confirm("Remove this shift assignment?")) return;
+    
+    try {
+      await deleteOverride.mutateAsync(overrideId);
+      toast.success("Shift assignment removed");
+      refetchShifts();
+      refetchOverrides();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to remove assignment");
+    }
+  };
+  
+  // Handle clear all assignments on a date
+  const handleClearDateAssignments = async (dateStr: string, employeeId?: string) => {
+    const overridesToDelete = overrides.filter(o => {
+      if (employeeId) {
+        return o.date === dateStr && o.employee_id === employeeId;
+      }
+      return o.date === dateStr;
+    });
+    
+    if (overridesToDelete.length === 0) {
+      toast.info("No assignments to remove");
       return;
     }
     
-    const template = templates.find(t => t.id === defaultFormData.template_id);
-    if (!template) return;
+    if (!confirm(`Remove ${overridesToDelete.length} assignment(s) on ${dateStr}?`)) return;
     
-    // Get current default shift
-    const currentDefault = defaultShifts.find(d => 
-      d.employee_id === selectedEmployee.id && 
-      d.effective_to === null
-    );
-    const currentTemplate = currentDefault 
-      ? templates.find(t => t.id === currentDefault.template_id)
-      : null;
-    
-    // Close previous open-ended default for this employee
-    const updatedDefaults = defaultShifts.map(d => 
-      d.employee_id === selectedEmployee.id && d.effective_to === null 
-        ? { ...d, effective_to: new Date(new Date(defaultFormData.effective_from).getTime() - 86400000).toISOString().split("T")[0] } 
-        : d
-    );
-    
-    // Check if we're updating an existing default
-    const existingIndex = updatedDefaults.findIndex(d => 
-      d.employee_id === selectedEmployee.id && d.effective_from === defaultFormData.effective_from
-    );
-    
-    if (existingIndex >= 0) {
-      updatedDefaults[existingIndex] = {
-        ...updatedDefaults[existingIndex],
-        template_id: defaultFormData.template_id,
-        effective_to: defaultFormData.effective_to || null
-      };
-    } else {
-      updatedDefaults.push({
-        id: uid("eds"),
-        employee_id: selectedEmployee.id,
-        template_id: defaultFormData.template_id,
-        effective_from: defaultFormData.effective_from,
-        effective_to: defaultFormData.effective_to || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-    }
-    
-    setDefaultShifts(updatedDefaults);
-    ls.set("employee_default_shifts", updatedDefaults);
-    
-    // Add to history
-    addToHistory(
-      selectedEmployee.id,
-      `${selectedEmployee.first_name} ${selectedEmployee.last_name}`,
-      "DEFAULT_CHANGE",
-      currentTemplate?.id || "",
-      currentTemplate?.name || "None",
-      template.id,
-      template.name,
-      defaultFormData.effective_from,
-      defaultFormData.effective_to || null,
-      "Default shift change"
-    );
-    
-    setShowDefaultModal(false);
-    alert("Default shift saved successfully");
-  };
-
-  const handleDeleteAssignment = (assignmentId: string) => {
-    if (confirm("Remove this shift assignment?")) {
-      const updated = assignments.filter(a => a.id !== assignmentId);
-      setAssignments(updated);
-      ls.set("shifts_assignments", updated);
+    try {
+      for (const override of overridesToDelete) {
+        await deleteOverride.mutateAsync(override.id);
+      }
+      toast.success(`${overridesToDelete.length} assignment(s) removed`);
+      refetchShifts();
+      refetchOverrides();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to remove assignments");
     }
   };
-
-  const handleClearDateAssignments = (dateStr: string, employeeId?: string) => {
-    let updated = [...assignments];
+  
+  // Handle bulk generate schedule (for performance optimization)
+  const handleGenerateSchedule = async () => {
+    const startDate = format(monthStart, "yyyy-MM-dd");
+    const endDate = format(monthEnd, "yyyy-MM-dd");
     
-    if (employeeId) {
-      updated = assignments.map(a => {
-        if (a.date === dateStr && a.employeeIds.includes(employeeId)) {
-          return { ...a, employeeIds: a.employeeIds.filter(id => id !== employeeId) };
-        }
-        return a;
-      }).filter(a => a.employeeIds.length > 0);
-    } else {
-      updated = assignments.filter(a => a.date !== dateStr);
+    try {
+      await generateSchedule.mutateAsync({ start_date: startDate, end_date: endDate });
+      toast.success("Shift schedules generated");
+      refetchShifts();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to generate schedules");
     }
-    
-    setAssignments(updated);
-    ls.set("shifts_assignments", updated);
   };
-
-  const getActiveDefault = (employeeId: string) => {
-    const today = format(new Date(), "yyyy-MM-dd");
-    return defaultShifts.find(d => 
-      d.employee_id === employeeId && 
-      d.effective_from <= today && 
-      (d.effective_to === null || d.effective_to >= today)
-    );
-  };
-
-  const getEmployeeHistory = (employeeId: string) => {
-    return shiftHistory.filter(h => h.employee_id === employeeId).sort((a, b) => 
-      new Date(b.changed_at).getTime() - new Date(a.changed_at).getTime()
-    );
-  };
-
-  if (loading) {
+  
+  // Loading state
+  if (employeesLoading || templatesLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
-          <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
           <p className="text-muted-foreground">Loading shift data...</p>
         </div>
       </div>
     );
   }
-
+  
   return (
     <div className="space-y-6">
       <PageHeader 
         title="Shift Management" 
-        subtitle="Manage employee schedules, defaults, date ranges, and track change history"
+        subtitle="Manage employee schedules, overrides, and track change history"
         actions={
           <div className="flex gap-2">
             <Button 
               variant="outline"
-              onClick={() => setShowHistoryModal(true)}
+              onClick={handleGenerateSchedule}
+              disabled={generateSchedule.isPending}
+            >
+              {generateSchedule.isPending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4 mr-2" />
+              )}
+              Generate Schedule
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={() => {
+                setSelectedEmployeeForHistory(null);
+                setHistoryPage(0);
+                setShowHistoryModal(true);
+                refetchHistory();
+              }}
             >
               <History className="w-4 h-4 mr-2" /> Change History
             </Button>
-            <Button onClick={() => {
-              setSelectedEmployees([]);
-              setScheduleFormData({ template_id: "", date_range: { start: "", end: "" }, reason: "", change_type: "TEMPORARY_OVERRIDE" });
-              setShowScheduleModal(true);
-            }}>
-              <CalendarRange className="w-4 h-4 mr-2" /> Schedule Shift
-            </Button>
+            {permissions.create && (
+              <Button onClick={() => {
+                setSelectedEmployees([]);
+                setScheduleFormData({ template_id: "", date_range: { start: format(new Date(), "yyyy-MM-dd"), end: "" }, reason: "", assignment_type: "OVERRIDE" });
+                setShowScheduleModal(true);
+              }}>
+                <CalendarRange className="w-4 h-4 mr-2" /> Schedule Shift
+              </Button>
+            )}
           </div>
         }
       />
+      
+      {/* Statistics Cards */}
+      {statistics && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-card border border-border rounded-xl p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Employees</p>
+                <p className="text-2xl font-bold">{statistics.total_employees}</p>
+              </div>
+              <UsersIcon className="w-8 h-8 text-muted-foreground/30" />
+            </div>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">With Shift Today</p>
+                <p className="text-2xl font-bold">{statistics.employees_with_shift || 0}</p>
+              </div>
+              <Clock className="w-8 h-8 text-muted-foreground/30" />
+            </div>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Overrides Today</p>
+                <p className="text-2xl font-bold">{statistics.overrides_today || 0}</p>
+              </div>
+              <Calendar className="w-8 h-8 text-muted-foreground/30" />
+            </div>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Active Templates</p>
+                <p className="text-2xl font-bold">{templates.filter(t => t.is_active).length}</p>
+              </div>
+              <Settings className="w-8 h-8 text-muted-foreground/30" />
+            </div>
+          </div>
+        </div>
+      )}
       
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="bg-muted/40 mb-4">
           <TabsTrigger value="calendar"><CalendarDays className="w-4 h-4 mr-2"/> Calendar View</TabsTrigger>
           <TabsTrigger value="list"><ListFilter className="w-4 h-4 mr-2"/> Employee List</TabsTrigger>
         </TabsList>
-
+        
         {/* CALENDAR VIEW */}
         <TabsContent value="calendar" className="m-0 space-y-4">
           <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
@@ -555,8 +466,17 @@ export default function ShiftsManagementPage() {
                 placeholder="Filter by Shift"
                 className="min-w-[150px]"
               />
+              
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => refetchShifts()}
+                disabled={shiftsLoading}
+              >
+                <RefreshCw className={`w-4 h-4 ${shiftsLoading ? 'animate-spin' : ''}`} />
+              </Button>
             </div>
-
+            
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <h2 className="font-semibold text-lg capitalize">{format(currentMonth, "MMMM yyyy")}</h2>
@@ -576,84 +496,92 @@ export default function ShiftsManagementPage() {
                 {filteredEmployees.length} employees • {templates.length} shift templates
               </div>
             </div>
-
-            <div className="grid grid-cols-7 bg-muted/20 rounded-t-xl">
-              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (
-                <div key={day} className="py-2 text-center text-xs font-medium uppercase tracking-wider text-muted-foreground border-b border-border">
-                  {day}
-                </div>
-              ))}
-            </div>
             
-            <div className="grid grid-cols-7 divide-x divide-border border-x border-b rounded-b-xl">
-              {days.map((day, i) => {
-                const dayStr = format(day, "yyyy-MM-dd");
-                const isCurrentMonth = day.getMonth() === currentMonth.getMonth();
-                const isTod = isToday(day);
-                const shiftsOnDay = getShiftsOnDate(dayStr);
-                const filteredShifts = filters.templateId 
-                  ? shiftsOnDay.filter(s => s.id === filters.templateId)
-                  : shiftsOnDay;
+            {shiftsLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-7 bg-muted/20 rounded-t-xl">
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (
+                    <div key={day} className="py-2 text-center text-xs font-medium uppercase tracking-wider text-muted-foreground border-b border-border">
+                      {day}
+                    </div>
+                  ))}
+                </div>
                 
-                return (
-                  <div 
-                    key={i} 
-                    className={`min-h-[140px] p-2 hover:bg-muted/10 transition-colors cursor-pointer ${!isCurrentMonth ? "bg-muted/5" : ""} ${isTod ? "bg-primary/5 border-2 border-primary/20" : ""}`}
-                    onClick={() => {
-                      setSelectedEmployees([]);
-                      setScheduleFormData({ 
-                        ...scheduleFormData, 
-                        date_range: { start: dayStr, end: dayStr },
-                        change_type: "TEMPORARY_OVERRIDE"
-                      });
-                      setShowScheduleModal(true);
-                    }}
-                  >
-                    <div className={`text-xs font-medium mb-2 flex items-center justify-between`}>
-                      <span className={isTod ? "bg-primary text-primary-foreground w-6 h-6 rounded-full grid place-items-center" : "text-muted-foreground"}>
-                        {format(day, "d")}
-                      </span>
-                      {shiftsOnDay.length > 0 && (
-                        <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
-                          {shiftsOnDay.length} shift{shiftsOnDay.length > 1 ? 's' : ''}
-                        </span>
-                      )}
-                    </div>
+                <div className="grid grid-cols-7 divide-x divide-border border-x border-b rounded-b-xl">
+                  {days.map((day, i) => {
+                    const dayStr = format(day, "yyyy-MM-dd");
+                    const isCurrentMonth = day.getMonth() === currentMonth.getMonth();
+                    const isTod = isToday(day);
+                    const shiftsOnDay = getShiftsOnDate(dayStr);
+                    const filteredShifts = filters.templateId 
+                      ? shiftsOnDay.filter(s => s.id === filters.templateId)
+                      : shiftsOnDay;
                     
-                    <div className="space-y-1.5">
-                      {filteredShifts.map(tpl => {
-                        const employeesOnShift = getEmployeesForShift(dayStr, tpl.id);
-                        if (employeesOnShift.length === 0) return null;
+                    return (
+                      <div 
+                        key={i} 
+                        className={`min-h-[140px] p-2 hover:bg-muted/10 transition-colors cursor-pointer ${!isCurrentMonth ? "bg-muted/5" : ""} ${isTod ? "bg-primary/5 border-2 border-primary/20" : ""}`}
+                        onClick={() => {
+                          setSelectedEmployees([]);
+                          setScheduleFormData({ 
+                            ...scheduleFormData, 
+                            date_range: { start: dayStr, end: dayStr },
+                            assignment_type: "OVERRIDE"
+                          });
+                          setShowScheduleModal(true);
+                        }}
+                      >
+                        <div className={`text-xs font-medium mb-2 flex items-center justify-between`}>
+                          <span className={isTod ? "bg-primary text-primary-foreground w-6 h-6 rounded-full grid place-items-center" : "text-muted-foreground"}>
+                            {format(day, "d")}
+                          </span>
+                          {shiftsOnDay.length > 0 && (
+                            <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
+                              {shiftsOnDay.length} shift{shiftsOnDay.length > 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
                         
-                        return (
-                          <div 
-                            key={tpl.id} 
-                            className="text-[11px] px-2 py-1 rounded cursor-pointer transition-transform hover:scale-[1.02] shadow-sm"
-                            style={{ backgroundColor: `${tpl.color}20`, borderLeft: `3px solid ${tpl.color}` }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowShiftDetailModal({ date: dayStr, template: tpl });
-                            }}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="font-medium truncate" style={{ color: tpl.color }}>
-                                {tpl.name}
-                              </span>
-                              <span className="text-[10px] text-muted-foreground">
-                                {employeesOnShift.length}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                        <div className="space-y-1.5">
+                          {filteredShifts.map(tpl => {
+                            const employeesOnShift = getEmployeesForShift(dayStr, tpl.id);
+                            if (employeesOnShift.length === 0) return null;
+                            
+                            return (
+                              <div 
+                                key={tpl.id} 
+                                className="text-[11px] px-2 py-1 rounded cursor-pointer transition-transform hover:scale-[1.02] shadow-sm"
+                                style={{ backgroundColor: `#3b82f620`, borderLeft: `3px solid #3b82f6` }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowShiftDetailModal({ date: dayStr, template: tpl });
+                                }}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="font-medium truncate">
+                                    {tpl.name}
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {employeesOnShift.length}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         </TabsContent>
-
+        
         {/* EMPLOYEE LIST VIEW */}
         <TabsContent value="list" className="m-0 space-y-4">
           <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
@@ -673,7 +601,7 @@ export default function ShiftsManagementPage() {
                   <tr>
                     <th className="text-left px-4 py-3">Employee</th>
                     <th className="text-left px-4 py-3">Department</th>
-                    <th className="text-left px-4 py-3">Current Shift</th>
+                    <th className="text-left px-4 py-3">Today's Shift</th>
                     <th className="text-left px-4 py-3">Effective From</th>
                     <th className="text-right px-4 py-3">Actions</th>
                   </tr>
@@ -682,28 +610,26 @@ export default function ShiftsManagementPage() {
                   {filteredEmployees.map(emp => {
                     const today = format(new Date(), "yyyy-MM-dd");
                     const resolved = resolvedShifts[today]?.[emp.id];
-                    const activeDefault = getActiveDefault(emp.id);
-                    const hasOverride = assignments.some(a => 
-                      a.date === today && a.employeeIds.includes(emp.id)
+                    const hasOverride = overrides.some(a => 
+                      a.date === today && a.employee_id === emp.id
                     );
-                    const historyCount = getEmployeeHistory(emp.id).length;
                     
                     return (
                       <tr key={emp.id} className="border-t border-border hover:bg-muted/20">
                         <td className="px-4 py-3 font-medium">
-                          {emp.first_name} {emp.last_name}
+                          {emp.first_name} {emp.last_name || ''}
                           {hasOverride && (
-                            <span className="ml-2 text-[10px] bg-warning/20 text-warning px-1.5 py-0.5 rounded-full">Override Today</span>
+                            <span className="ml-2 text-[10px] bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 px-1.5 py-0.5 rounded-full">Override Today</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">{emp.department || "—"}</td>
                         <td className="px-4 py-3">
                           {resolved?.template ? (
-                            <div className="inline-flex items-center gap-2 px-2 py-1 rounded text-xs" style={{ backgroundColor: `${resolved.template.color}20`, color: resolved.template.color }}>
+                            <div className="inline-flex items-center gap-2 px-2 py-1 rounded text-xs" style={{ backgroundColor: `#3b82f620` }}>
                               <Clock className="w-3 h-3" /> 
                               {resolved.template.name}
                               {resolved.isOverride && (
-                                <span className="bg-warning/20 text-warning px-1.5 rounded ml-1 text-[10px]">Override</span>
+                                <span className="bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 px-1.5 rounded ml-1 text-[10px]">Override</span>
                               )}
                             </div>
                           ) : (
@@ -711,29 +637,9 @@ export default function ShiftsManagementPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-xs">
-                          {activeDefault?.effective_from 
-                            ? format(parseISO(activeDefault.effective_from), "MMM d, yyyy")
-                            : emp.default_shift_id ? "From hire date" : "—"}
+                          {emp.default_shift_name ? "From hire date" : "—"}
                         </td>
                         <td className="px-4 py-3 text-right space-x-2">
-                          {!activeDefault?.effective_from && (
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            onClick={() => { 
-                              setSelectedEmployee(emp); 
-                              setDefaultFormData({ 
-                                template_id: activeDefault?.template_id || emp.default_shift_id || "", 
-                                effective_from: activeDefault?.effective_from || format(new Date(), "yyyy-MM-dd"), 
-                                effective_to: "" 
-                              }); 
-                              setShowDefaultModal(true); 
-                            }}
-                          >
-                            <Settings className="w-3.5 h-3.5 mr-1.5"/> Set Default
-                          </Button>
-                          )}
-                          
                           <Button 
                             size="sm" 
                             variant="outline"
@@ -743,26 +649,26 @@ export default function ShiftsManagementPage() {
                                 template_id: "",
                                 date_range: { start: format(new Date(), "yyyy-MM-dd"), end: "" },
                                 reason: "",
-                                change_type: "TEMPORARY_OVERRIDE"
+                                assignment_type: "OVERRIDE"
                               });
                               setShowScheduleModal(true);
                             }}
                           >
                             <Calendar className="w-3.5 h-3.5 mr-1.5"/> Schedule
                           </Button>
-
-                          {historyCount > 0 && (
-                            <Button 
-                              size="sm" 
-                              variant="ghost"
-                              onClick={() => {
-                                setSelectedEmployee(emp);
-                                setShowHistoryModal(true);
-                              }}
-                            >
-                              <History className="w-3.5 h-3.5" />
-                            </Button>
-                          )}
+                          
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            onClick={() => {
+                              setSelectedEmployeeForHistory(emp);
+                              setHistoryPage(0);
+                              setShowHistoryModal(true);
+                              refetchHistory();
+                            }}
+                          >
+                            <History className="w-3.5 h-3.5" />
+                          </Button>
                         </td>
                       </tr>
                     );
@@ -780,8 +686,8 @@ export default function ShiftsManagementPage() {
           </div>
         </TabsContent>
       </Tabs>
-
-      {/* SCHEDULE MODAL WITH DATE RANGE */}
+      
+      {/* SCHEDULE MODAL */}
       {showScheduleModal && (
         <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4">
           <div className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -812,7 +718,7 @@ export default function ShiftsManagementPage() {
                         }}
                         className="rounded border-border"
                       />
-                      <span className="text-sm">{emp.first_name} {emp.last_name}</span>
+                      <span className="text-sm">{emp.first_name} {emp.last_name || ''}</span>
                       <span className="text-xs text-muted-foreground ml-auto">{emp.department}</span>
                     </label>
                   ))}
@@ -821,7 +727,7 @@ export default function ShiftsManagementPage() {
                   <p className="text-xs text-muted-foreground mt-1">{selectedEmployees.length} employee(s) selected</p>
                 )}
               </div>
-
+              
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground">Shift Template *</span>
                 <SearchableSelect 
@@ -831,7 +737,7 @@ export default function ShiftsManagementPage() {
                   placeholder="Select shift template"
                 />
               </label>
-
+              
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground">Start Date *</span>
@@ -859,15 +765,15 @@ export default function ShiftsManagementPage() {
                   />
                 </label>
               </div>
-
+              
               <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Schedule Type</span>
+                <span className="text-muted-foreground">Assignment Type</span>
                 <div className="flex gap-4">
                   <label className="flex items-center gap-2">
                     <input 
                       type="radio" 
-                      checked={scheduleFormData.change_type === "TEMPORARY_OVERRIDE"}
-                      onChange={() => setScheduleFormData({...scheduleFormData, change_type: "TEMPORARY_OVERRIDE"})}
+                      checked={scheduleFormData.assignment_type === "OVERRIDE"}
+                      onChange={() => setScheduleFormData({...scheduleFormData, assignment_type: "OVERRIDE"})}
                       className="rounded border-border"
                     />
                     <span className="text-sm">Temporary Override</span>
@@ -875,15 +781,15 @@ export default function ShiftsManagementPage() {
                   <label className="flex items-center gap-2">
                     <input 
                       type="radio" 
-                      checked={scheduleFormData.change_type === "DATE_RANGE_ASSIGNMENT"}
-                      onChange={() => setScheduleFormData({...scheduleFormData, change_type: "DATE_RANGE_ASSIGNMENT"})}
+                      checked={scheduleFormData.assignment_type === "DATE_RANGE"}
+                      onChange={() => setScheduleFormData({...scheduleFormData, assignment_type: "DATE_RANGE"})}
                       className="rounded border-border"
                     />
                     <span className="text-sm">Date Range Assignment</span>
                   </label>
                 </div>
               </label>
-
+              
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground">Reason / Notes</span>
                 <textarea 
@@ -898,21 +804,27 @@ export default function ShiftsManagementPage() {
             
             <div className="p-4 border-t border-border flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowScheduleModal(false)}>Cancel</Button>
-              <Button onClick={handleDateRangeSchedule}>
+              <Button 
+                onClick={handleScheduleShift} 
+                disabled={createOverride.isPending || bulkAssign.isPending}
+              >
+                {(createOverride.isPending || bulkAssign.isPending) && (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                )}
                 {scheduleFormData.date_range.end ? "Schedule Range" : "Schedule"}
               </Button>
             </div>
           </div>
         </div>
       )}
-
+      
       {/* SHIFT DETAIL MODAL */}
       {showShiftDetailModal && (
         <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4">
           <div className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-md">
             <div className="p-4 border-b border-border flex justify-between items-center">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: showShiftDetailModal.template.color }} />
+                <div className="w-3 h-3 rounded-full bg-primary" />
                 <h2 className="font-semibold">{showShiftDetailModal.template.name}</h2>
               </div>
               <button onClick={() => setShowShiftDetailModal(null)} className="p-1.5 hover:bg-muted rounded">
@@ -944,48 +856,61 @@ export default function ShiftsManagementPage() {
               <div>
                 <div className="text-xs text-muted-foreground mb-2 flex items-center justify-between">
                   <span>Employees on this shift</span>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-6 text-xs text-destructive hover:text-destructive"
-                    onClick={() => {
-                      if (confirm(`Remove all employees from this shift on ${showShiftDetailModal.date}?`)) {
-                        handleClearDateAssignments(showShiftDetailModal.date);
-                        setShowShiftDetailModal(null);
-                      }
-                    }}
-                  >
-                    <Trash2 className="w-3 h-3 mr-1" /> Clear All
-                  </Button>
+                  {permissions.delete && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-6 text-xs text-destructive hover:text-destructive"
+                      onClick={() => {
+                        if (confirm(`Remove all employees from this shift on ${showShiftDetailModal.date}?`)) {
+                          handleClearDateAssignments(showShiftDetailModal.date);
+                          setShowShiftDetailModal(null);
+                        }
+                      }}
+                    >
+                      <Trash2 className="w-3 h-3 mr-1" /> Clear All
+                    </Button>
+                  )}
                 </div>
                 <div className="space-y-1 max-h-64 overflow-y-auto">
                   {getEmployeesForShift(showShiftDetailModal.date, showShiftDetailModal.template.id).map(emp => {
                     const isOverride = resolvedShifts[showShiftDetailModal.date]?.[emp.id]?.isOverride;
+                    const overrideRecord = overrides.find(o => 
+                      o.date === showShiftDetailModal.date && 
+                      o.employee_id === emp.id
+                    );
+                    
                     return (
                       <div key={emp.id} className="flex items-center justify-between p-2 bg-muted/20 rounded-lg">
                         <div>
                           <div className="font-medium text-sm">
-                            {emp.first_name} {emp.last_name}
+                            {emp.first_name} {emp.last_name || ''}
                           </div>
                           <div className="text-xs text-muted-foreground">{emp.department}</div>
                         </div>
                         <div className="flex gap-1">
                           {isOverride && (
-                            <span className="text-[10px] bg-warning/20 text-warning px-1.5 py-0.5 rounded-full">Override</span>
+                            <span className="text-[10px] bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 px-1.5 py-0.5 rounded-full">Override</span>
                           )}
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                            onClick={() => {
-                              if (confirm(`Remove ${emp.first_name} ${emp.last_name} from this shift?`)) {
-                                handleClearDateAssignments(showShiftDetailModal.date, emp.id);
-                                setShowShiftDetailModal(null);
-                              }
-                            }}
-                          >
-                            <X className="w-3 h-3" />
-                          </Button>
+                          {permissions.delete && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                              onClick={() => {
+                                if (confirm(`Remove ${emp.first_name} ${emp.last_name} from this shift?`)) {
+                                  if (overrideRecord) {
+                                    handleDeleteAssignment(overrideRecord.id);
+                                  } else {
+                                    handleClearDateAssignments(showShiftDetailModal.date, emp.id);
+                                  }
+                                  setShowShiftDetailModal(null);
+                                }
+                              }}
+                            >
+                              <X className="w-3 h-3" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     );
@@ -1001,91 +926,28 @@ export default function ShiftsManagementPage() {
             
             <div className="p-4 border-t border-border flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowShiftDetailModal(null)}>Close</Button>
-              <Button 
-                onClick={() => {
-                  setShowShiftDetailModal(null);
-                  setSelectedEmployees([]);
-                  setScheduleFormData({
-                    template_id: showShiftDetailModal.template.id,
-                    date_range: { start: showShiftDetailModal.date, end: "" },
-                    reason: "",
-                    change_type: "TEMPORARY_OVERRIDE"
-                  });
-                  setShowScheduleModal(true);
-                }}
-              >
-                <UserPlus className="w-3.5 h-3.5 mr-1.5" /> Add Employees
-              </Button>
+              {permissions.create && (
+                <Button 
+                  onClick={() => {
+                    setShowShiftDetailModal(null);
+                    setSelectedEmployees([]);
+                    setScheduleFormData({
+                      template_id: showShiftDetailModal.template.id,
+                      date_range: { start: showShiftDetailModal.date, end: "" },
+                      reason: "",
+                      assignment_type: "OVERRIDE"
+                    });
+                    setShowScheduleModal(true);
+                  }}
+                >
+                  <UserPlus className="w-3.5 h-3.5 mr-1.5" /> Add Employees
+                </Button>
+              )}
             </div>
           </div>
         </div>
       )}
-
-      {/* DEFAULT SHIFT MODAL */}
-      {showDefaultModal && selectedEmployee && (
-        <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4">
-          <div className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-md">
-            <div className="p-4 border-b border-border flex justify-between items-center">
-              <h2 className="font-semibold flex items-center gap-2">
-                <Settings className="w-4 h-4 text-primary"/> Change Default Shift
-              </h2>
-              <button onClick={() => setShowDefaultModal(false)} className="p-1.5 hover:bg-muted rounded">
-                <X className="w-4 h-4"/>
-              </button>
-            </div>
-            
-            <div className="p-4 space-y-3">
-              <div className="bg-muted/40 rounded-lg p-3 text-sm">
-                <div className="text-xs text-muted-foreground">Employee</div>
-                <div className="font-medium">{selectedEmployee.first_name} {selectedEmployee.last_name}</div>
-                <div className="text-xs text-muted-foreground mt-1">{selectedEmployee.department}</div>
-              </div>
-              
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">New Shift Template *</span>
-                <SearchableSelect 
-                  value={defaultFormData.template_id} 
-                  onChange={(v) => setDefaultFormData({...defaultFormData, template_id: v})} 
-                  options={templates.filter(t=>t.is_active).map(t => ({value: t.id, label: `${t.name} (${t.startTime}-${t.endTime})`}))} 
-                  placeholder="Select shift template"
-                />
-              </label>
-              
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Effective From *</span>
-                <input 
-                  type="date" 
-                  value={defaultFormData.effective_from} 
-                  onChange={(e) => setDefaultFormData({...defaultFormData, effective_from: e.target.value})} 
-                  className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring" 
-                />
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  This shift will start from this date
-                </p>
-              </label>
-              
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Effective To (Optional)</span>
-                <input 
-                  type="date" 
-                  value={defaultFormData.effective_to} 
-                  onChange={(e) => setDefaultFormData({...defaultFormData, effective_to: e.target.value || ""})} 
-                  className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring" 
-                />
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Leave empty for ongoing assignment
-                </p>
-              </label>
-            </div>
-            
-            <div className="p-4 border-t border-border flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowDefaultModal(false)}>Cancel</Button>
-              <Button onClick={handleSaveDefaultShift}>Save Default Shift</Button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      
       {/* HISTORY MODAL */}
       {showHistoryModal && (
         <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4">
@@ -1093,9 +955,9 @@ export default function ShiftsManagementPage() {
             <div className="p-4 border-b border-border flex justify-between items-center sticky top-0 bg-card">
               <h2 className="font-semibold flex items-center gap-2">
                 <History className="w-4 h-4 text-primary"/> Shift Change History
-                {selectedEmployee && (
+                {selectedEmployeeForHistory && (
                   <span className="text-sm font-normal text-muted-foreground ml-2">
-                    {selectedEmployee.first_name} {selectedEmployee.last_name}
+                    {selectedEmployeeForHistory.first_name} {selectedEmployeeForHistory.last_name || ''}
                   </span>
                 )}
               </h2>
@@ -1105,18 +967,29 @@ export default function ShiftsManagementPage() {
             </div>
             
             <div className="p-4">
-              {shiftHistory.length === 0 ? (
+              {historyLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                </div>
+              ) : !historyData?.data?.length ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <History className="w-12 h-12 mx-auto mb-3 opacity-30" />
                   <p>No shift change history found</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {(selectedEmployee 
-                    ? getEmployeeHistory(selectedEmployee.id)
-                    : shiftHistory
-                  ).map(history => (
-                    <div key={history.id} className="bg-muted/20 rounded-lg p-3 border-l-4" style={{ borderLeftColor: history.change_type === "DEFAULT_CHANGE" ? "#3b82f6" : history.change_type === "TEMPORARY_OVERRIDE" ? "#f59e0b" : "#10b981" }}>
+                  {historyData.data.map((history: ShiftChangeHistory) => (
+                    <div 
+                      key={history.id} 
+                      className="bg-muted/20 rounded-lg p-3 border-l-4" 
+                      style={{ 
+                        borderLeftColor: history.change_type === "DEFAULT_CHANGE" 
+                          ? "#3b82f6" 
+                          : history.change_type === "TEMPORARY_OVERRIDE" 
+                            ? "#f59e0b" 
+                            : "#10b981" 
+                      }}
+                    >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <span className={`text-xs px-2 py-0.5 rounded-full ${
@@ -1155,6 +1028,21 @@ export default function ShiftsManagementPage() {
                       )}
                     </div>
                   ))}
+                </div>
+              )}
+              
+              {historyData?.pagination && historyData.pagination.has_more && (
+                <div className="flex justify-center mt-4">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setHistoryPage(historyPage + 1);
+                      refetchHistory();
+                    }}
+                    disabled={historyLoading}
+                  >
+                    Load More
+                  </Button>
                 </div>
               )}
             </div>
