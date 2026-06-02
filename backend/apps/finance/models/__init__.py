@@ -5,6 +5,7 @@ from .customer_invoice import CustomerInvoice
 from .payment import Payment
 from .bank import BankAccount, BankTransaction
 from .expense import Expense
+from .budget import Budget
 
 
 __all__ = [
@@ -17,4 +18,5 @@ __all__ = [
     'BankAccount',
     'BankTransaction',
     'Expense',
+    'Budget',
 ]

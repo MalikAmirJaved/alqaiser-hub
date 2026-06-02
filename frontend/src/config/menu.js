@@ -84,8 +84,6 @@ export const menu = [
       { title: "Accounts", to: "/finance/accounts", icon: BookOpen },
       { title: "Customer Invoice", to: "/finance/customer-invoices", icon: Receipt },
       { title: "Expenses", to: "/finance/expenses", icon: CreditCard },
-      { title: "Payables", to: "/finance/payables", icon: ArrowUpCircle },
-      { title: "Receivables", to: "/finance/receivables", icon: ArrowDownCircle },
       { title: "Journal Entries", to: "/finance/journal-entries", icon: ArrowDownCircle },
       {
         title: "Reports",
@@ -101,11 +99,8 @@ export const menu = [
       { title: "Bank Transactions", to: "/finance/bank-transactions", icon: Landmark },
       { title: "Payables / Supplier Bills", to: "/finance/supplier-bills", icon: Landmark },
       { title: "Payments", to: "/finance/payments", icon: Landmark },
-      { title: "Payroll Finance", to: "/finance/payroll", icon: Wallet },
       { title: "Taxes", to: "/finance/taxes", icon: Calculator },
-      { title: "Forecasting", to: "/finance/forecasting", icon: LineChart },
       { title: "Audit Logs", to: "/finance/audit", icon: History },
-      { title: "Settings", to: "/finance/settings", icon: Settings },
     ],
   },
 

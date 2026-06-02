@@ -5,6 +5,8 @@ from .customer_invoice import CustomerInvoiceSerializer
 from .payment import PaymentSerializer
 from .bank import BankAccountSerializer, BankTransactionSerializer
 from .expense import ExpenseSerializer
+from .budget import  BudgetSerializer
+
 __all__ = [
     'AccountSerializer',
     'JournalEntrySerializer',
@@ -15,4 +17,5 @@ __all__ = [
     'BankAccountSerializer',
     'BankTransactionSerializer',
     'ExpenseSerializer',
+    'BudgetSerializer',
 ]

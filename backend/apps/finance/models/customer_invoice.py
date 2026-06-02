@@ -5,7 +5,8 @@ from apps.common.basemodel import BaseModel
 
 class CustomerInvoice(BaseModel):
     invoice_number = models.CharField(max_length=50, unique=True)
-    customer = models.ForeignKey('inventory.Customer', on_delete=models.PROTECT, related_name='invoices')
+    customer = models.ForeignKey('inventory.Customer', on_delete=models.PROTECT, related_name='invoices', null=True,
+    blank=True)
     sales_order = models.ForeignKey('inventory.SalesOrder', on_delete=models.CASCADE, null=True, blank=True)
     invoice_date = models.DateField()
     due_date = models.DateField()

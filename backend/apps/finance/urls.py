@@ -10,6 +10,7 @@ from .views import (
     BankTransactionViewSet,
     ReportViewSet,
     ExpenseViewSet,
+    BudgetViewSet,
 )
 
 router = DefaultRouter()
@@ -22,6 +23,8 @@ router.register(r'bank-accounts', BankAccountViewSet)
 router.register(r'bank-transactions', BankTransactionViewSet)
 router.register(r'reports', ReportViewSet, basename='finance-reports')  
 router.register(r'expenses', ExpenseViewSet)  
+router.register(r'budgets', BudgetViewSet)
+
 urlpatterns = [
     path('', include(router.urls)),
 ]

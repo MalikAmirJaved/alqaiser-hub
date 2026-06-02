@@ -47,17 +47,12 @@ export const routePermissions: Record<string, string> = {
   "/finance/reports/profit-loss": "FINANCE:profit_loss:view",
   "/finance/reports/balance-sheet": "FINANCE:balance_sheet:view",
   "/finance/expenses": "FINANCE:expense:view",
-  "/finance/payables": "FINANCE:payable:view",
-  "/finance/receivables": "FINANCE:receivable:view",
   "/finance/budgets": "FINANCE:budget:view",
   "/finance/bank-accounts": "FINANCE:bank_account:view",
   "/finance/bank-transactions": "FINANCE:bank_transaction:view",
   "/finance/supplier-bills": "FINANCE:supplier_bill:view",
   "/finance/payments": "FINANCE:payment:view",
-  "/finance/payroll": "FINANCE:payroll:view",
   "/finance/taxes": "FINANCE:tax:view",
-  "/finance/forecasting": "FINANCE:forecast:view",
-  "/finance/settings": "FINANCE:setting:view",
 
   // AI Monitoring routes
   "/monitoring/dashboard": "AI_MONITORING:live_dashboard:view",
@@ -122,8 +117,6 @@ export const menuPermissionMapping: Record<string, string | null> = {
   Accounts: "FINANCE:account:view",
   "Customer Invoice": "FINANCE:customer_invoice:view",
   Expenses: "FINANCE:expense:view",
-  Payables: "FINANCE:payable:view",
-  Receivables: "FINANCE:receivable:view",
   Budgets: "FINANCE:budget:view",
   "Bank & Cash": "FINANCE:bank_account:view",
   "Bank Transaction": "FINANCE:bank_transaction:view",
@@ -133,10 +126,7 @@ export const menuPermissionMapping: Record<string, string | null> = {
   "Profit & Loss": "FINANCE:profit_loss:view",
   "Balance Sheet": "FINANCE:balance_sheet:view",
   Payments: "FINANCE:payment:view",
-  "Payroll Finance": "FINANCE:payroll:view",
   Taxes: "FINANCE:tax:view",
-  Forecasting: "FINANCE:forecast:view",
-  Settings: "FINANCE:setting:view",  
 
   // ========== AI MONITORING ==========
   "Live Dashboard": "AI_MONITORING:live_dashboard:view",
