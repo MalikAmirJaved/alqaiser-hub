@@ -80,7 +80,7 @@ export const menu = [
     title: "Finance",
     icon: Wallet,
     children: [
-      { title: "Finance Dashboard", to: "/finance", icon: LayoutDashboard },
+      { title: "Finance Dashboard", to: "/finance/dashboard", icon: LayoutDashboard },
       { title: "Accounts", to: "/finance/accounts", icon: BookOpen },
       { title: "Invoices", to: "/finance/invoices", icon: Receipt },
       { title: "Expenses", to: "/finance/expenses", icon: CreditCard },

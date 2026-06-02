@@ -39,7 +39,7 @@ export const routePermissions: Record<string, string> = {
   "/inventory/audit": "INVENTORY:audit_log:view",
 
   // Finance routes (add as needed)
-  "/finance": "FINANCE:dashboard:view",
+  "/finance/dashboard": "FINANCE:dashboard:view",
   "/finance/accounts": "FINANCE:account:view",
   "/finance/invoices": "FINANCE:invoice:view",
   "/finance/expenses": "FINANCE:expense:view",
