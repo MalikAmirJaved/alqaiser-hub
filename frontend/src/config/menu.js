@@ -93,6 +93,7 @@ export const menu = [
         children: [
           { title: "Trial Balance", to: "/finance/reports/trial-balance", icon: ArrowDownCircle },
           { title: "Profit & Loss", to: "/finance/reports/profit-loss", icon: Layers },
+          { title: "Balance Sheet", to: "/finance/reports/balance-sheet", icon: Layers },
         ],
       },
       { title: "Budgets", to: "/finance/budgets", icon: Target },

@@ -4,6 +4,8 @@ from .supplier_bill import SupplierBill
 from .customer_invoice import CustomerInvoice
 from .payment import Payment
 from .bank import BankAccount, BankTransaction
+from .expense import Expense
+
 
 __all__ = [
     'Account',
@@ -14,4 +16,5 @@ __all__ = [
     'Payment',
     'BankAccount',
     'BankTransaction',
+    'Expense',
 ]

@@ -152,3 +152,91 @@ class ReportViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Generi
             'net_profit': net_profit,
             'is_profit': is_profit,
         })
+
+    
+    
+    
+    @action(detail=False, methods=['get'])
+    def balance_sheet(self, request):
+        """
+        Generate Balance Sheet as of a specific date.
+        Assets = Liabilities + Equity
+        """
+        as_of_date = request.query_params.get('as_of_date')
+        
+        if not as_of_date:
+            return Response(
+                {"success": False, "error": "as_of_date is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get all journal lines up to the as_of_date
+        lines = JournalLine.objects.filter(
+            journal_entry__is_posted=True,
+            journal_entry__date__lte=as_of_date,
+            company_id=request.user.company_id,
+            branch_id=request.user.branch_id
+        ).select_related('account')
+        
+        # Calculate balance for each account
+        balances = {}
+        for line in lines:
+            account = line.account
+            if account.account_type not in ['ASSET', 'LIABILITY', 'EQUITY']:
+                continue  # Only include balance sheet accounts
+            
+            balance = line.debit - line.credit
+            if account.id not in balances:
+                balances[account.id] = {
+                    'code': account.code,
+                    'name': account.name,
+                    'account_type': account.account_type,
+                    'balance': Decimal('0.00')
+                }
+            balances[account.id]['balance'] += balance
+        
+        # Separate into sections
+        assets = []
+        liabilities = []
+        equity = []
+        
+        for acc in balances.values():
+            item = {
+                'code': acc['code'],
+                'name': acc['name'],
+                'balance': acc['balance']
+            }
+            if acc['account_type'] == 'ASSET':
+                assets.append(item)
+            elif acc['account_type'] == 'LIABILITY':
+                liabilities.append(item)
+            elif acc['account_type'] == 'EQUITY':
+                equity.append(item)
+        
+        # Sort by code
+        assets.sort(key=lambda x: x['code'])
+        liabilities.sort(key=lambda x: x['code'])
+        equity.sort(key=lambda x: x['code'])
+        
+        # Calculate totals
+        total_assets = sum(a['balance'] for a in assets)
+        total_liabilities = sum(l['balance'] for l in liabilities)
+        total_equity = sum(e['balance'] for e in equity)
+        
+        return Response({
+            'success': True,
+            'as_of_date': as_of_date,
+            'assets': {
+                'accounts': assets,
+                'total': total_assets
+            },
+            'liabilities': {
+                'accounts': liabilities,
+                'total': total_liabilities
+            },
+            'equity': {
+                'accounts': equity,
+                'total': total_equity
+            },
+            'is_balanced': total_assets == (total_liabilities + total_equity)
+        })

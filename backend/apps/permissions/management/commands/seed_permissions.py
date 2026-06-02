@@ -26,7 +26,7 @@ RESOURCES = {
     ],
     'FINANCE': [
          'dashboard', 'account', 'customer_invoice', 'expense', 'payable', 'receivable', 'budget',
-        'bank_account', 'bank_transaction', 'supplier_bill', 'journal_entrie', 'trial_balance', 'payment', 'payroll', 'profit_loss', 'tax', 'forecast','setting','audit_log',
+        'bank_account', 'bank_transaction', 'supplier_bill', 'journal_entrie', 'trial_balance', 'payment', 'payroll', 'profit_loss', 'balance_sheet', 'tax', 'forecast','setting','audit_log',
     ],
     'AI_MONITORING': [
         'live_dashboard', 'workforce', 'inventory', 'alert', 'report', 'activity', 

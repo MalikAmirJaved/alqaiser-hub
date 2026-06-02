@@ -5,7 +5,7 @@ from .customer_invoice import CustomerInvoiceViewSet
 from .payment import PaymentViewSet
 from .bank import BankAccountViewSet, BankTransactionViewSet
 from .report import ReportViewSet
-
+from .expense import ExpenseViewSet
 __all__ = [
     'AccountViewSet',
     'JournalEntryViewSet',
@@ -15,4 +15,6 @@ __all__ = [
     'BankAccountViewSet',
     'BankTransactionViewSet',
     'ReportViewSet',
+    'ExpenseViewSet',
+
 ]

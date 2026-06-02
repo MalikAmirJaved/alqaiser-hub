@@ -4,7 +4,7 @@ from .supplier_bill import SupplierBillSerializer
 from .customer_invoice import CustomerInvoiceSerializer
 from .payment import PaymentSerializer
 from .bank import BankAccountSerializer, BankTransactionSerializer
-
+from .expense import ExpenseSerializer
 __all__ = [
     'AccountSerializer',
     'JournalEntrySerializer',
@@ -14,4 +14,5 @@ __all__ = [
     'PaymentSerializer',
     'BankAccountSerializer',
     'BankTransactionSerializer',
+    'ExpenseSerializer',
 ]
