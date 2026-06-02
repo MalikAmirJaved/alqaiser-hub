@@ -10,7 +10,7 @@ class JournalEntryViewSet(CompanyBranchUserMixin, CompanyBranchMixin, Permission
     serializer_class = JournalEntrySerializer
     permission_module = 'FINANCE'
     permission_resource = 'journal'
-
+    lookup_field = '_id'
     def perform_create(self, serializer):
         serializer.save(company_id=self.request.user.company_id,
                         branch_id=self.request.user.branch_id,

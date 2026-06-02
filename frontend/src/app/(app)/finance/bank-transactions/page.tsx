@@ -63,7 +63,7 @@ const columns: Column[] = [
 export default function BankTransactionsPage() {
   const permissions = useFeaturePermissions("FINANCE", "banktransaction");
   const { data: bankAccounts } = useBankAccounts({ is_active: true });
-  const [selectedAccount, setSelectedAccount] = useState<number | undefined>(undefined);
+  const [selectedAccount, setSelectedAccount] = useState<string | undefined>(undefined);
   const [showUnreconciledOnly, setShowUnreconciledOnly] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -125,17 +125,16 @@ export default function BankTransactionsPage() {
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">
         <select
-          value={selectedAccount || ""}
-          onChange={(e) => setSelectedAccount(e.target.value ? Number(e.target.value) : undefined)}
-          className="px-3 py-1.5 text-sm border border-border rounded-md bg-background"
-        >
-          <option value="">All Bank Accounts</option>
-          {bankAccounts?.map((acc) => (
-            <option key={acc.id} value={acc.id}>
-              {acc.bank_name} - {acc.account_name}
-            </option>
-          ))}
-        </select>
+  value={selectedAccount || ""}
+  onChange={(e) => setSelectedAccount(e.target.value || undefined)}
+  className="px-3 py-1.5 text-sm border border-border rounded-md bg-background"
+>
+  {bankAccounts?.map((acc) => (
+    <option key={acc.id} value={acc.id}>
+      {acc.bank_name} - {acc.account_name}
+    </option>
+  ))}
+</select>
         <input
           type="date"
           value={startDate}

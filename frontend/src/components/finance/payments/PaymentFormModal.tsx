@@ -21,9 +21,9 @@ interface PaymentFormData {
   amount: number;
   payment_date: string;
   reference_number: string;
-  supplier_bill: number | null;
-  customer_invoice: number | null;
-  bank_account: number | null;
+  supplier_bill: string | null;      // UUID or null
+  customer_invoice: string | null;   // UUID or null
+  bank_account: string | null;       // UUID or null
   notes: string;
 }
 
@@ -111,8 +111,8 @@ export default function PaymentFormModal({ open, onClose, initialData }: Props) 
           <div>
             <label className="block text-sm font-medium mb-1">Type *</label>
             <select
-              {...register("payment_type", { required: "Type is required" })}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              {...register("payment_type")}
+              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
             >
               {paymentTypeOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -125,8 +125,8 @@ export default function PaymentFormModal({ open, onClose, initialData }: Props) 
           <div>
             <label className="block text-sm font-medium mb-1">Method *</label>
             <select
-              {...register("payment_method", { required: "Method is required" })}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              {...register("payment_method", { required: true })}
+              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
             >
               {paymentMethodOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -140,8 +140,8 @@ export default function PaymentFormModal({ open, onClose, initialData }: Props) 
             <label className="block text-sm font-medium mb-1">Date *</label>
             <input
               type="date"
-              {...register("payment_date", { required: "Date is required" })}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              {...register("payment_date", { required: true })}
+              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
             />
           </div>
 
@@ -150,8 +150,8 @@ export default function PaymentFormModal({ open, onClose, initialData }: Props) 
             <input
               type="number"
               step="0.01"
-              {...register("amount", { required: "Amount is required", valueAsNumber: true })}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              {...register("amount", { required: true, valueAsNumber: true })}
+              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
               placeholder="0.00"
             />
           </div>
@@ -160,7 +160,7 @@ export default function PaymentFormModal({ open, onClose, initialData }: Props) 
             <label className="block text-sm font-medium mb-1">Reference Number</label>
             <input
               {...register("reference_number")}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
               placeholder="e.g., CHQ-001, TRF-123, RCP-001"
             />
             <p className="text-xs text-muted-foreground mt-1">
@@ -168,13 +168,12 @@ export default function PaymentFormModal({ open, onClose, initialData }: Props) 
             </p>
           </div>
 
-          {/* Conditional linking: show supplier bills for PAYMENT */}
           {paymentType === "PAYMENT" && (
             <div>
               <label className="block text-sm font-medium mb-1">Supplier Bill (optional)</label>
               <select
-                {...register("supplier_bill", { valueAsNumber: true })}
-                className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                {...register("supplier_bill")}
+                className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
               >
                 <option value="">-- Select bill to pay --</option>
                 {supplierBills?.map((bill) => (
@@ -191,13 +190,12 @@ export default function PaymentFormModal({ open, onClose, initialData }: Props) 
             </div>
           )}
 
-          {/* Conditional linking: show customer invoices for RECEIPT */}
           {paymentType === "RECEIPT" && (
             <div>
               <label className="block text-sm font-medium mb-1">Customer Invoice (optional)</label>
               <select
-                {...register("customer_invoice", { valueAsNumber: true })}
-                className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                {...register("customer_invoice")}
+                className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
               >
                 <option value="">-- Select invoice to receive payment --</option>
                 {customerInvoices?.map((inv) => (
@@ -217,8 +215,8 @@ export default function PaymentFormModal({ open, onClose, initialData }: Props) 
           <div>
             <label className="block text-sm font-medium mb-1">Bank Account (optional)</label>
             <select
-              {...register("bank_account", { valueAsNumber: true })}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              {...register("bank_account")}
+              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
             >
               <option value="">-- Select bank account --</option>
               {bankAccounts?.map((acc) => (
@@ -234,7 +232,7 @@ export default function PaymentFormModal({ open, onClose, initialData }: Props) 
             <textarea
               {...register("notes")}
               rows={3}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
               placeholder="Additional information about this payment..."
             />
           </div>
@@ -243,14 +241,14 @@ export default function PaymentFormModal({ open, onClose, initialData }: Props) 
             <button
               type="button"
               onClick={onClose}
-              className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted transition-colors"
+              className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={createPayment.isPending || updatePayment.isPending}
-              className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 disabled:opacity-50 transition-colors"
+              className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 disabled:opacity-50"
             >
               {createPayment.isPending || updatePayment.isPending ? "Saving..." : "Save"}
             </button>

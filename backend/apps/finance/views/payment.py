@@ -21,7 +21,7 @@ class PaymentViewSet(
     serializer_class = PaymentSerializer
     permission_module = 'FINANCE'
     permission_resource = 'payment'
-
+    lookup_field = '_id'
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)

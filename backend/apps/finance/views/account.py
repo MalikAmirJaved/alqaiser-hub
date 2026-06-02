@@ -18,7 +18,7 @@ class AccountViewSet(
     serializer_class = AccountSerializer
     permission_module = 'FINANCE'
     permission_resource = 'account'
-
+    lookup_field = '_id'
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { X } from "lucide-react";
 import { usePayments } from "@/hooks/finance/usePayments";
 import { formatCurrency } from "@/lib/currency";
@@ -10,16 +10,13 @@ interface Props {
   open: boolean;
   onClose: () => void;
   transaction: BankTransaction | null;
-  onReconcile: (paymentId: number) => Promise<void>;
+  onReconcile: (paymentId: string) => Promise<void>;   // string UUID
 }
 
 export default function ReconcileModal({ open, onClose, transaction, onReconcile }: Props) {
-  const [selectedPaymentId, setSelectedPaymentId] = useState<number | null>(null);
+  const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Fetch payments of the opposite type that roughly match amount
-  // If transaction is a DEPOSIT, it likely reconciles with a RECEIPT (customer payment)
-  // If transaction is a WITHDRAWAL, it reconciles with a PAYMENT (to supplier)
   const paymentType = transaction?.transaction_type === "DEPOSIT" ? "RECEIPT" : "PAYMENT";
   const { data: payments, isLoading } = usePayments({
     payment_type: paymentType,
@@ -27,7 +24,6 @@ export default function ReconcileModal({ open, onClose, transaction, onReconcile
     end_date: transaction?.transaction_date,
   });
 
-  // Filter payments with amount matching the transaction amount (allow small tolerance)
   const matchingPayments = payments?.filter(
     (p) => Math.abs(p.amount - (transaction?.amount || 0)) < 0.01
   );
@@ -55,9 +51,7 @@ export default function ReconcileModal({ open, onClose, transaction, onReconcile
         <div className="p-4 space-y-4">
           <div className="text-sm">
             <p className="text-muted-foreground">Transaction details:</p>
-            <p>
-              {transaction.description} – {formatCurrency(transaction.amount)}
-            </p>
+            <p>{transaction.description} – {formatCurrency(transaction.amount)}</p>
           </div>
 
           <div>
@@ -75,7 +69,7 @@ export default function ReconcileModal({ open, onClose, transaction, onReconcile
             ) : (
               <select
                 value={selectedPaymentId || ""}
-                onChange={(e) => setSelectedPaymentId(e.target.value ? Number(e.target.value) : null)}
+                onChange={(e) => setSelectedPaymentId(e.target.value || null)}
                 className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
               >
                 <option value="">-- Select --</option>

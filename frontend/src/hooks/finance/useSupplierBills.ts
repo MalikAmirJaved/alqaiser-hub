@@ -6,19 +6,18 @@ import { apiFetch } from "@/lib/api";
 // ============================================
 
 export interface SupplierBill {
-  id: number;
-  _id: string;
+  id: string;
   bill_number: string;
-  supplier: number;
-  supplier_name?: string; // from serializer
-  purchase_order: number | null;
+  supplier: string;
+  supplier_name?: string;
+  purchase_order: string | null;
   bill_date: string;
   due_date: string;
   amount: number;
   paid_amount: number;
-  outstanding: number;
+  outstanding: number;               // changed to number
   status: "DRAFT" | "POSTED" | "PAID" | "PARTIAL" | "CANCELLED";
-  journal_entry: number | null;
+  journal_entry: string | null;
   notes: string;
   created_at: string;
   updated_at: string;
@@ -31,7 +30,7 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-type CreateSupplierBillData = Omit<SupplierBill, "id" | "_id" | "created_at" | "updated_at" | "outstanding" | "paid_amount" | "status" | "journal_entry">;
+type CreateSupplierBillData = Omit<SupplierBill, "id" | "created_at" | "updated_at" | "outstanding" | "paid_amount" | "status" | "journal_entry">;
 type UpdateSupplierBillData = Partial<CreateSupplierBillData>;
 
 // ============================================
@@ -40,7 +39,7 @@ type UpdateSupplierBillData = Partial<CreateSupplierBillData>;
 
 const SUPPLIER_BILLS_KEY = "finance_supplier_bills";
 
-async function getAllSupplierBills(params?: { status?: string; supplier?: number }) {
+async function getAllSupplierBills(params?: { status?: string; supplier?: string }) {
   const searchParams = new URLSearchParams();
   if (params?.status) searchParams.append("status", params.status);
   if (params?.supplier) searchParams.append("supplier", String(params.supplier));
@@ -48,7 +47,7 @@ async function getAllSupplierBills(params?: { status?: string; supplier?: number
   return apiFetch<PaginatedResponse<SupplierBill>>(url);
 }
 
-async function getSupplierBillById(id: number) {
+async function getSupplierBillById(id: string) {
   return apiFetch<SupplierBill>(`/api/finance/supplier-bills/${id}/`);
 }
 
@@ -59,18 +58,18 @@ async function createSupplierBill(data: CreateSupplierBillData) {
   });
 }
 
-async function updateSupplierBill(id: number, data: UpdateSupplierBillData) {
+async function updateSupplierBill(id: string, data: UpdateSupplierBillData) {
   return apiFetch<SupplierBill>(`/api/finance/supplier-bills/${id}/`, {
     method: "PUT",
     body: JSON.stringify(data),
   });
 }
 
-async function deleteSupplierBill(id: number) {
+async function deleteSupplierBill(id: string) {
   return apiFetch<void>(`/api/finance/supplier-bills/${id}/`, { method: "DELETE" });
 }
 
-async function postSupplierBill(id: number) {
+async function postSupplierBill(id: string) {
   return apiFetch<SupplierBill>(`/api/finance/supplier-bills/${id}/post_bill/`, { method: "POST" });
 }
 
@@ -78,7 +77,7 @@ async function postSupplierBill(id: number) {
 // REACT HOOKS
 // ============================================
 
-export function useSupplierBills(filters?: { status?: string; supplier?: number }) {
+export function useSupplierBills(filters?: { status?: string; supplier?: string }) {
   return useQuery({
     queryKey: [SUPPLIER_BILLS_KEY, filters],
     queryFn: () => getAllSupplierBills(filters),
@@ -87,7 +86,7 @@ export function useSupplierBills(filters?: { status?: string; supplier?: number 
   });
 }
 
-export function useSupplierBill(id: number | null) {
+export function useSupplierBill(id: string | null) {
   return useQuery({
     queryKey: [SUPPLIER_BILLS_KEY, id],
     queryFn: () => getSupplierBillById(id!),
@@ -108,7 +107,7 @@ export function useCreateSupplierBill() {
 export function useUpdateSupplierBill() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: UpdateSupplierBillData }) =>
+    mutationFn: ({ id, data }: { id: string; data: UpdateSupplierBillData }) =>
       updateSupplierBill(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: [SUPPLIER_BILLS_KEY] });

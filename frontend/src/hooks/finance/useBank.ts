@@ -10,8 +10,7 @@ export type PaymentType = "RECEIPT" | "PAYMENT";
 export type PaymentMethod = "CASH" | "BANK_TRANSFER" | "CHEQUE" | "CREDIT_CARD" | "OTHER";
 
 export interface BankAccount {
-  id: number;
-  _id: string;
+  id: string;
   account_name: string;
   account_number: string;
   bank_name: string;
@@ -24,9 +23,8 @@ export interface BankAccount {
 }
 
 export interface BankTransaction {
-  id: number;
-  _id: string;
-  bank_account: number;
+  id: string;
+  bank_account: string;
   transaction_date: string;
   amount: number;
   transaction_type: TransactionType;
@@ -46,7 +44,7 @@ interface PaginatedResponse<T> {
 }
 
 export interface CreateBankTransactionData {
-  bank_account: number;
+  bank_account: string;
   transaction_date: string;
   amount: number;
   transaction_type: TransactionType;
@@ -83,7 +81,7 @@ async function getAllBankAccounts(params?: { search?: string; is_active?: boolea
   return apiFetch<PaginatedResponse<BankAccount>>(url);
 }
 
-async function getBankAccountById(id: number) {
+async function getBankAccountById(id: string) {
   return apiFetch<BankAccount>(`/api/finance/bank-accounts/${id}/`);
 }
 
@@ -94,20 +92,20 @@ async function createBankAccount(data: CreateBankAccountData) {
   });
 }
 
-async function updateBankAccount(id: number, data: UpdateBankAccountData) {
+async function updateBankAccount(id: string, data: UpdateBankAccountData) {
   return apiFetch<BankAccount>(`/api/finance/bank-accounts/${id}/`, {
     method: "PUT",
     body: JSON.stringify(data),
   });
 }
 
-async function deleteBankAccount(id: number) {
+async function deleteBankAccount(id: string) {
   return apiFetch<void>(`/api/finance/bank-accounts/${id}/`, { method: "DELETE" });
 }
 
 // Bank Transactions
 async function getAllBankTransactions(params?: {
-  bank_account?: number;
+  bank_account?: string;
   reconciled?: boolean;
   start_date?: string;
   end_date?: string;
@@ -121,7 +119,7 @@ async function getAllBankTransactions(params?: {
   return apiFetch<PaginatedResponse<BankTransaction>>(url);
 }
 
-async function getBankTransactionById(id: number) {
+async function getBankTransactionById(id: string) {
   return apiFetch<BankTransaction>(`/api/finance/bank-transactions/${id}/`);
 }
 
@@ -132,18 +130,18 @@ async function createBankTransaction(data: CreateBankTransactionData) {
   });
 }
 
-async function updateBankTransaction(id: number, data: UpdateBankTransactionData) {
+async function updateBankTransaction(id: string, data: UpdateBankTransactionData) {
   return apiFetch<BankTransaction>(`/api/finance/bank-transactions/${id}/`, {
     method: "PUT",
     body: JSON.stringify(data),
   });
 }
 
-async function deleteBankTransaction(id: number) {
+async function deleteBankTransaction(id: string) {
   return apiFetch<void>(`/api/finance/bank-transactions/${id}/`, { method: "DELETE" });
 }
 
-async function reconcileBankTransaction(id: number, paymentId: number) {
+async function reconcileBankTransaction(id: string, paymentId: string) {
   return apiFetch<{ status: string }>(`/api/finance/bank-transactions/${id}/reconcile/`, {
     method: "POST",
     body: JSON.stringify({ payment_id: paymentId }),
@@ -163,7 +161,7 @@ export function useBankAccounts(filters?: { search?: string; is_active?: boolean
   });
 }
 
-export function useBankAccount(id: number | null) {
+export function useBankAccount(id: string | null) {
   return useQuery({
     queryKey: [BANK_ACCOUNTS_KEY, id],
     queryFn: () => getBankAccountById(id!),
@@ -184,7 +182,7 @@ export function useCreateBankAccount() {
 export function useUpdateBankAccount() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: UpdateBankAccountData }) =>
+    mutationFn: ({ id, data }: { id: string; data: UpdateBankAccountData }) =>
       updateBankAccount(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: [BANK_ACCOUNTS_KEY] });
@@ -208,7 +206,7 @@ export function useDeleteBankAccount() {
 // ============================================
 
 export function useBankTransactions(filters?: {
-  bank_account?: number;
+  bank_account?: string;
   reconciled?: boolean;
   start_date?: string;
   end_date?: string;
@@ -221,7 +219,7 @@ export function useBankTransactions(filters?: {
   });
 }
 
-export function useBankTransaction(id: number | null) {
+export function useBankTransaction(id: string | null) {
   return useQuery({
     queryKey: [BANK_TRANSACTIONS_KEY, id],
     queryFn: () => getBankTransactionById(id!),
@@ -242,7 +240,7 @@ export function useCreateBankTransaction() {
 export function useUpdateBankTransaction() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: UpdateBankTransactionData }) =>
+    mutationFn: ({ id, data }: { id: string; data: UpdateBankTransactionData }) =>
       updateBankTransaction(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: [BANK_TRANSACTIONS_KEY] });
@@ -264,7 +262,7 @@ export function useDeleteBankTransaction() {
 export function useReconcileBankTransaction() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, paymentId }: { id: number; paymentId: number }) =>
+    mutationFn: ({ id, paymentId }: { id: string; paymentId: string }) =>
       reconcileBankTransaction(id, paymentId),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: [BANK_TRANSACTIONS_KEY] });

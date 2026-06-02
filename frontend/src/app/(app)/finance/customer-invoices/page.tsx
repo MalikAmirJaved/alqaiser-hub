@@ -73,7 +73,7 @@ export default function CustomerInvoicesPage() {
   const [customerFilter, setCustomerFilter] = useState<string>("");
   const { data: invoices, isLoading } = useCustomerInvoices({
     status: statusFilter || undefined,
-    customer: customerFilter ? Number(customerFilter) : undefined,
+    customer: customerFilter || undefined,
   });
   const { data: customers } = useCustomers();
   const deleteInvoice = useDeleteCustomerInvoice();
@@ -147,7 +147,7 @@ export default function CustomerInvoicesPage() {
         >
           <option value="">All Customers</option>
           {customers?.map((cust) => (
-            <option key={cust.id} value={Number(cust.id)}>
+            <option key={cust.id} value={cust.id}>
               {cust.name}
             </option>
           ))}

@@ -9,12 +9,11 @@ import {
   type SupplierBill,
 } from "@/hooks/finance/useSupplierBills";
 import { useSuppliers } from "@/hooks/useSuppliers";
-import { formatCurrency } from "@/lib/currency";
 
 interface SupplierBillFormData {
   bill_number: string;
-  supplier: number;
-  purchase_order: number | null;
+  supplier: string;
+  purchase_order: string | null;
   bill_date: string;
   due_date: string;
   amount: number;
@@ -31,7 +30,7 @@ export default function SupplierBillFormModal({ open, onClose, initialData }: Pr
   const { register, handleSubmit, reset, setValue } = useForm<SupplierBillFormData>({
     defaultValues: {
       bill_number: "",
-      supplier: 0,
+      supplier: "",
       purchase_order: null,
       bill_date: new Date().toISOString().split("T")[0],
       due_date: "",
@@ -55,7 +54,7 @@ export default function SupplierBillFormModal({ open, onClose, initialData }: Pr
     } else {
       reset({
         bill_number: "",
-        supplier: 0,
+        supplier: "",
         purchase_order: null,
         bill_date: new Date().toISOString().split("T")[0],
         due_date: "",
@@ -66,6 +65,7 @@ export default function SupplierBillFormModal({ open, onClose, initialData }: Pr
   }, [initialData, setValue, reset]);
 
   const onSubmit = async (data: SupplierBillFormData) => {
+    // Remove null from purchase_order? Keep as null – backend will accept null.
     if (initialData) {
       await updateBill.mutateAsync({ id: initialData.id, data });
     } else {
@@ -94,19 +94,19 @@ export default function SupplierBillFormModal({ open, onClose, initialData }: Pr
             <input
               {...register("bill_number", { required: true })}
               className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-              placeholder="e.g., INV-2024-001"
+              placeholder="e.g., BILL-2024-001"
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-1">Supplier *</label>
             <select
-              {...register("supplier", { required: true, valueAsNumber: true })}
+              {...register("supplier", { required: true })}
               className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
             >
               <option value="">Select supplier</option>
               {suppliers?.map((sup) => (
-                <option key={sup.id} value={Number(sup.id)}>
+                <option key={sup.id} value={sup.id}>
                   {sup.name} ({sup.code})
                 </option>
               ))}

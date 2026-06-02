@@ -6,8 +6,7 @@ import { apiFetch } from "@/lib/api";
 // ============================================
 
 export interface Account {
-  id: number;
-  _id: string;
+  id: string;
   code: string;
   name: string;
   account_type: "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE";
@@ -25,8 +24,8 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-type CreateAccountData = Omit<Account, "id" | "_id" | "created_at" | "updated_at" | "company_id" | "branch_id" | "created_by" | "updated_by">;
-type UpdateAccountData = Partial<Omit<Account, "id" | "_id" | "created_at" | "updated_at">>;
+type CreateAccountData = Omit<Account, "id" | "created_at" | "updated_at" | "company_id" | "branch_id" | "created_by" | "updated_by">;
+type UpdateAccountData = Partial<Omit<Account, "id"  | "created_at" | "updated_at">>;
 
 // ============================================
 // API FUNCTIONS (encapsulated in this hook file)
@@ -42,7 +41,7 @@ async function getAllAccounts(params?: { search?: string; account_type?: string 
   return apiFetch<PaginatedResponse<Account>>(url);
 }
 
-async function getAccountById(id: number) {
+async function getAccountById(id: string) {
   return apiFetch<Account>(`/api/finance/accounts/${id}/`);
 }
 
@@ -53,14 +52,14 @@ async function createAccount(data: CreateAccountData) {
   });
 }
 
-async function updateAccount(id: number, data: UpdateAccountData) {
+async function updateAccount(id: string, data: UpdateAccountData) {
   return apiFetch<Account>(`/api/finance/accounts/${id}/`, {
     method: "PUT",
     body: JSON.stringify(data),
   });
 }
 
-async function deleteAccount(id: number) {
+async function deleteAccount(id: string) {
   return apiFetch<void>(`/api/finance/accounts/${id}/`, { method: "DELETE" });
 }
 
@@ -83,7 +82,7 @@ export function useAccounts(filters?: { search?: string; account_type?: string }
 /**
  * Get single account by ID
  */
-export function useAccount(id: number | null) {
+export function useAccount(id: string | null) {
   return useQuery({
     queryKey: [ACCOUNTS_QUERY_KEY, id],
     queryFn: () => getAccountById(id!),
@@ -110,7 +109,7 @@ export function useCreateAccount() {
 export function useUpdateAccount() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: UpdateAccountData }) =>
+    mutationFn: ({ id, data }: { id: string; data: UpdateAccountData }) =>
       updateAccount(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: [ACCOUNTS_QUERY_KEY] });

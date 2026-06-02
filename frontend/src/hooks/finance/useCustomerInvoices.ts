@@ -6,12 +6,11 @@ import { apiFetch } from "@/lib/api";
 // ============================================
 
 export interface CustomerInvoice {
-  id: number;
-  _id: string;
+  id: string;
   invoice_number: string;
-  customer: number;
+  customer: string;
   customer_name?: string; // from serializer
-  sales_order: number | null;
+  sales_order: string | null;
   invoice_date: string;
   due_date: string;
   amount: number;
@@ -40,7 +39,7 @@ type UpdateCustomerInvoiceData = Partial<CreateCustomerInvoiceData>;
 
 const CUSTOMER_INVOICES_KEY = "finance_customer_invoices";
 
-async function getAllCustomerInvoices(params?: { status?: string; customer?: number }) {
+async function getAllCustomerInvoices(params?: { status?: string; customer?: string }) {
   const searchParams = new URLSearchParams();
   if (params?.status) searchParams.append("status", params.status);
   if (params?.customer) searchParams.append("customer", String(params.customer));
@@ -48,7 +47,7 @@ async function getAllCustomerInvoices(params?: { status?: string; customer?: num
   return apiFetch<PaginatedResponse<CustomerInvoice>>(url);
 }
 
-async function getCustomerInvoiceById(id: number) {
+async function getCustomerInvoiceById(id: string) {
   return apiFetch<CustomerInvoice>(`/api/finance/customer-invoices/${id}/`);
 }
 
@@ -59,18 +58,18 @@ async function createCustomerInvoice(data: CreateCustomerInvoiceData) {
   });
 }
 
-async function updateCustomerInvoice(id: number, data: UpdateCustomerInvoiceData) {
+async function updateCustomerInvoice(id: string, data: UpdateCustomerInvoiceData) {
   return apiFetch<CustomerInvoice>(`/api/finance/customer-invoices/${id}/`, {
     method: "PUT",
     body: JSON.stringify(data),
   });
 }
 
-async function deleteCustomerInvoice(id: number) {
+async function deleteCustomerInvoice(id: string) {
   return apiFetch<void>(`/api/finance/customer-invoices/${id}/`, { method: "DELETE" });
 }
 
-async function postCustomerInvoice(id: number) {
+async function postCustomerInvoice(id: string) {
   return apiFetch<CustomerInvoice>(`/api/finance/customer-invoices/${id}/post_invoice/`, { method: "POST" });
 }
 
@@ -78,7 +77,7 @@ async function postCustomerInvoice(id: number) {
 // REACT HOOKS
 // ============================================
 
-export function useCustomerInvoices(filters?: { status?: string; customer?: number }) {
+export function useCustomerInvoices(filters?: { status?: string; customer?: string }) {
   return useQuery({
     queryKey: [CUSTOMER_INVOICES_KEY, filters],
     queryFn: () => getAllCustomerInvoices(filters),
@@ -87,7 +86,7 @@ export function useCustomerInvoices(filters?: { status?: string; customer?: numb
   });
 }
 
-export function useCustomerInvoice(id: number | null) {
+export function useCustomerInvoice(id: string | null) {
   return useQuery({
     queryKey: [CUSTOMER_INVOICES_KEY, id],
     queryFn: () => getCustomerInvoiceById(id!),
@@ -108,7 +107,7 @@ export function useCreateCustomerInvoice() {
 export function useUpdateCustomerInvoice() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: UpdateCustomerInvoiceData }) =>
+    mutationFn: ({ id, data }: { id: string; data: UpdateCustomerInvoiceData }) =>
       updateCustomerInvoice(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });

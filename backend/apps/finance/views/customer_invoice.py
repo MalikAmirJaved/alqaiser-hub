@@ -22,7 +22,8 @@ class CustomerInvoiceViewSet(
     serializer_class = CustomerInvoiceSerializer
     permission_module = 'FINANCE'
     permission_resource = 'customerinvoice'
-
+    lookup_field = '_id'
+    lookup_url_kwarg = '_id'   
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -37,7 +38,7 @@ class CustomerInvoiceViewSet(
         )
 
     @action(detail=True, methods=['post'])
-    def post_invoice(self, request, pk=None):
+    def post_invoice(self, request, _id=None):
         invoice = self.get_object()
         
         if invoice.status != 'DRAFT':

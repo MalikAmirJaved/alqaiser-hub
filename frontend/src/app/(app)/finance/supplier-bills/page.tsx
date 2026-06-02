@@ -73,7 +73,7 @@ export default function SupplierBillsPage() {
   const [supplierFilter, setSupplierFilter] = useState<string>("");
   const { data: bills, isLoading } = useSupplierBills({
     status: statusFilter || undefined,
-    supplier: supplierFilter ? Number(supplierFilter) : undefined,
+    supplier: supplierFilter || undefined,
   });
   const { data: suppliers } = useSuppliers();
   const deleteBill = useDeleteSupplierBill();

@@ -12,8 +12,8 @@ import { useCustomers } from "@/hooks/useCustomers";
 
 interface CustomerInvoiceFormData {
   invoice_number: string;
-  customer: number;
-  sales_order: number | null;
+  customer: string;                   // UUID
+  sales_order: string | null;        // UUID or null
   invoice_date: string;
   due_date: string;
   amount: number;
@@ -30,7 +30,7 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData }:
   const { register, handleSubmit, reset, setValue } = useForm<CustomerInvoiceFormData>({
     defaultValues: {
       invoice_number: "",
-      customer: 0,
+      customer: "",
       sales_order: null,
       invoice_date: new Date().toISOString().split("T")[0],
       due_date: "",
@@ -54,7 +54,7 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData }:
     } else {
       reset({
         invoice_number: "",
-        customer: 0,
+        customer: "",
         sales_order: null,
         invoice_date: new Date().toISOString().split("T")[0],
         due_date: "",
@@ -100,12 +100,12 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData }:
           <div>
             <label className="block text-sm font-medium mb-1">Customer *</label>
             <select
-              {...register("customer", { required: true, valueAsNumber: true })}
+              {...register("customer", { required: true })}
               className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
             >
               <option value="">Select customer</option>
               {customers?.map((cust) => (
-                <option key={cust.id} value={Number(cust.id)}>
+                <option key={cust.id} value={cust.id}>
                   {cust.name} ({cust.customer_code})
                 </option>
               ))}

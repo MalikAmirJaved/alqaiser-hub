@@ -6,21 +6,19 @@ import { apiFetch } from "@/lib/api";
 // ============================================
 
 export interface Payment {
-  id: number;
-  _id: string;
+  id: string;
   payment_type: "RECEIPT" | "PAYMENT";
   payment_method: "CASH" | "BANK_TRANSFER" | "CHEQUE" | "CREDIT_CARD" | "OTHER";
   amount: number;
   payment_date: string;
   reference_number: string;
-  supplier_bill: number | null;
-  customer_invoice: number | null;
-  bank_account: number | null;
-  journal_entry: number | null;
+  supplier_bill: string | null;
+  customer_invoice: string | null;
+  bank_account: string | null;
+  journal_entry: string | null;
   notes: string;
   created_at: string;
   updated_at: string;
-  // Extended fields (from serializer or joined data)
   supplier_name?: string;
   customer_name?: string;
   bank_account_name?: string;
@@ -34,8 +32,8 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-type CreatePaymentData = Omit<Payment, "id" | "_id" | "created_at" | "updated_at" | "journal_entry">;
-type UpdatePaymentData = Partial<Omit<Payment, "id" | "_id" | "created_at" | "updated_at" | "journal_entry">>;
+type CreatePaymentData = Omit<Payment, "id" | "created_at" | "updated_at" | "journal_entry">;
+type UpdatePaymentData = Partial<CreatePaymentData>;
 
 // ============================================
 // API FUNCTIONS
@@ -45,8 +43,8 @@ const PAYMENTS_KEY = "finance_payments";
 
 async function getAllPayments(params?: {
   payment_type?: "RECEIPT" | "PAYMENT";
-  supplier_bill?: number;
-  customer_invoice?: number;
+  supplier_bill?: string;
+  customer_invoice?: string;
   start_date?: string;
   end_date?: string;
 }) {
@@ -60,7 +58,7 @@ async function getAllPayments(params?: {
   return apiFetch<PaginatedResponse<Payment>>(url);
 }
 
-async function getPaymentById(id: number) {
+async function getPaymentById(id: string) {
   return apiFetch<Payment>(`/api/finance/payments/${id}/`);
 }
 
@@ -71,14 +69,14 @@ async function createPayment(data: CreatePaymentData) {
   });
 }
 
-async function updatePayment(id: number, data: UpdatePaymentData) {
+async function updatePayment(id: string, data: UpdatePaymentData) {
   return apiFetch<Payment>(`/api/finance/payments/${id}/`, {
     method: "PUT",
     body: JSON.stringify(data),
   });
 }
 
-async function deletePayment(id: number) {
+async function deletePayment(id: string) {
   return apiFetch<void>(`/api/finance/payments/${id}/`, { method: "DELETE" });
 }
 
@@ -88,8 +86,8 @@ async function deletePayment(id: number) {
 
 export function usePayments(filters?: {
   payment_type?: "RECEIPT" | "PAYMENT";
-  supplier_bill?: number;
-  customer_invoice?: number;
+  supplier_bill?: string;
+  customer_invoice?: string;
   start_date?: string;
   end_date?: string;
 }) {
@@ -101,7 +99,7 @@ export function usePayments(filters?: {
   });
 }
 
-export function usePayment(id: number | null) {
+export function usePayment(id: string | null) {
   return useQuery({
     queryKey: [PAYMENTS_KEY, id],
     queryFn: () => getPaymentById(id!),
@@ -115,7 +113,6 @@ export function useCreatePayment() {
     mutationFn: createPayment,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [PAYMENTS_KEY] });
-      // Also invalidate supplier bills and customer invoices because their paid_amount changes
       queryClient.invalidateQueries({ queryKey: ["finance_supplier_bills"] });
       queryClient.invalidateQueries({ queryKey: ["finance_customer_invoices"] });
     },
@@ -125,7 +122,7 @@ export function useCreatePayment() {
 export function useUpdatePayment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: UpdatePaymentData }) =>
+    mutationFn: ({ id, data }: { id: string; data: UpdatePaymentData }) =>
       updatePayment(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: [PAYMENTS_KEY] });

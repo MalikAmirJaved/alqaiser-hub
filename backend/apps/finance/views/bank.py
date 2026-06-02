@@ -20,7 +20,8 @@ class BankAccountViewSet(
     serializer_class = BankAccountSerializer
     permission_module = 'FINANCE'
     permission_resource = 'bankaccount'
-
+    lookup_field = '_id'
+    lookup_url_kwarg = '_id'
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -46,12 +47,14 @@ class BankTransactionViewSet(
     serializer_class = BankTransactionSerializer
     permission_module = 'FINANCE'
     permission_resource = 'banktransaction'
-
+    lookup_field = '_id'
+    lookup_url_kwarg = '_id'
+    
     @action(detail=True, methods=['post'])
-    def reconcile(self, request, pk=None):
+    def reconcile(self, request, _id=None):
         bank_txn = self.get_object()
         payment_id = request.data.get('payment_id')
-        
+
         if not payment_id:
             return Response(
                 {
@@ -61,10 +64,10 @@ class BankTransactionViewSet(
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         try:
             payment = Payment.objects.get(
-                id=payment_id,
+                _id=payment_id,   # use _id (UUID) instead of id
                 company_id=bank_txn.company_id,
                 branch_id=bank_txn.branch_id,
                 is_deleted=False
@@ -78,7 +81,7 @@ class BankTransactionViewSet(
                 },
                 status=status.HTTP_404_NOT_FOUND
             )
-        
+
         if bank_txn.reconciled:
             return Response(
                 {
@@ -88,11 +91,11 @@ class BankTransactionViewSet(
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         bank_txn.reconciled = True
         bank_txn.reconciled_with_payment = payment
         bank_txn.save()
-        
+
         return Response(
             {
                 "success": True,

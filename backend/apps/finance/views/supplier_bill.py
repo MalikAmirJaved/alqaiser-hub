@@ -22,7 +22,8 @@ class SupplierBillViewSet(
     serializer_class = SupplierBillSerializer
     permission_module = 'FINANCE'
     permission_resource = 'supplierbill'
-
+    lookup_field = '_id'
+    lookup_url_kwarg = '_id'
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -61,7 +62,7 @@ class SupplierBillViewSet(
         )
 
     @action(detail=True, methods=['post'])
-    def post_bill(self, request, pk=None):
+    def post_bill(self, request, _id=None):
         bill = self.get_object()
         
         if bill.status != 'DRAFT':

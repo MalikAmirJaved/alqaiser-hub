@@ -14,7 +14,7 @@ import {
 import { useBankAccounts } from "@/hooks/finance/useBank";
 
 interface BankTransactionFormData {
-  bank_account: number;
+  bank_account: string;          // UUID string
   transaction_date: string;
   amount: number;
   transaction_type: TransactionType;
@@ -31,7 +31,7 @@ interface Props {
 export default function BankTransactionFormModal({ open, onClose, initialData }: Props) {
   const { register, handleSubmit, reset, setValue } = useForm<BankTransactionFormData>({
     defaultValues: {
-      bank_account: 0,
+      bank_account: "",
       transaction_date: new Date().toISOString().split("T")[0],
       amount: 0,
       transaction_type: "DEPOSIT",
@@ -52,7 +52,6 @@ export default function BankTransactionFormModal({ open, onClose, initialData }:
       setValue("description", initialData.description);
       setValue("reference", initialData.reference);
     } else if (bankAccounts && bankAccounts.length > 0) {
-      // Set default bank account if available
       setValue("bank_account", bankAccounts[0].id);
     }
   }, [initialData, setValue, bankAccounts]);
@@ -62,7 +61,7 @@ export default function BankTransactionFormModal({ open, onClose, initialData }:
       await updateTransaction.mutateAsync({ id: initialData.id, data });
     } else {
       const submitData: CreateBankTransactionData = {
-        bank_account: data.bank_account,
+        bank_account: data.bank_account,   // string UUID
         transaction_date: data.transaction_date,
         amount: data.amount,
         transaction_type: data.transaction_type,
@@ -92,7 +91,7 @@ export default function BankTransactionFormModal({ open, onClose, initialData }:
           <div>
             <label className="block text-sm font-medium mb-1">Bank Account *</label>
             <select
-              {...register("bank_account", { required: true, valueAsNumber: true })}
+              {...register("bank_account", { required: true })}
               className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
             >
               <option value="">Select bank account</option>

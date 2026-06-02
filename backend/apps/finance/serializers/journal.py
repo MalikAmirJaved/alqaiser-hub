@@ -3,10 +3,11 @@ from decimal import Decimal
 from apps.finance.models import JournalEntry, JournalLine
 
 class JournalLineSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='_id', read_only=True)
     class Meta:
         model = JournalLine
         fields = '__all__'
-        read_only_fields = ('id', '_id', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'created_at', 'updated_at')
 
     def validate(self, data):
         debit = data.get('debit', Decimal('0.00'))
@@ -19,11 +20,11 @@ class JournalLineSerializer(serializers.ModelSerializer):
 
 class JournalEntrySerializer(serializers.ModelSerializer):
     lines = JournalLineSerializer(many=True, required=False)
-
+    id = serializers.UUIDField(source='_id', read_only=True)
     class Meta:
         model = JournalEntry
         fields = '__all__'
-        read_only_fields = ('id', '_id', 'created_at', 'updated_at', 'company_id', 'branch_id')
+        read_only_fields = ('id','created_at', 'updated_at', 'company_id', 'branch_id')
 
     def create(self, validated_data):
         lines_data = validated_data.pop('lines', [])
