@@ -26,7 +26,7 @@ RESOURCES = {
     ],
     'FINANCE': [
          'dashboard', 'account', 'invoice', 'expense', 'payable', 'receivable', 'budget',
-        'bank_account',  'payroll', 'report', 'tax', 'forecast','setting','audit_log',
+        'bank_account', 'bank-transaction', 'payment', 'payroll', 'report', 'tax', 'forecast','setting','audit_log',
     ],
     'AI_MONITORING': [
         'live_dashboard', 'workforce', 'inventory', 'alert', 'report', 'activity', 
