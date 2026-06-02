@@ -25,8 +25,8 @@ RESOURCES = {
         'stock_transfer', 'barcode','report', 'alert', 'customer', 'sales_order',  'audit_log',
     ],
     'FINANCE': [
-         'dashboard', 'account', 'invoice', 'expense', 'payable', 'receivable', 'budget',
-        'bank_account', 'bank-transaction', 'payment', 'payroll', 'report', 'tax', 'forecast','setting','audit_log',
+         'dashboard', 'account', 'customer_invoice', 'expense', 'payable', 'receivable', 'budget',
+        'bank_account', 'bank_transaction', 'supplier_bill', 'payment', 'payroll', 'report', 'tax', 'forecast','setting','audit_log',
     ],
     'AI_MONITORING': [
         'live_dashboard', 'workforce', 'inventory', 'alert', 'report', 'activity', 
