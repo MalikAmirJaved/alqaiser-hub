@@ -8,6 +8,7 @@ from .views import (
     PaymentViewSet,
     BankAccountViewSet,
     BankTransactionViewSet,
+    ReportViewSet,
 )
 
 router = DefaultRouter()
@@ -18,7 +19,7 @@ router.register(r'customer-invoices', CustomerInvoiceViewSet)
 router.register(r'payments', PaymentViewSet)
 router.register(r'bank-accounts', BankAccountViewSet)
 router.register(r'bank-transactions', BankTransactionViewSet)
-
+router.register(r'reports', ReportViewSet, basename='finance-reports')  
 urlpatterns = [
     path('', include(router.urls)),
 ]

@@ -4,6 +4,7 @@ from .supplier_bill import SupplierBillViewSet
 from .customer_invoice import CustomerInvoiceViewSet
 from .payment import PaymentViewSet
 from .bank import BankAccountViewSet, BankTransactionViewSet
+from .report import ReportViewSet
 
 __all__ = [
     'AccountViewSet',
@@ -13,4 +14,5 @@ __all__ = [
     'PaymentViewSet',
     'BankAccountViewSet',
     'BankTransactionViewSet',
+    'ReportViewSet',
 ]
