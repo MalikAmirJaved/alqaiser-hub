@@ -10,7 +10,8 @@ interface AccountFormData {
   code: string;
   name: string;
   account_type: Account["account_type"];
-  parent?: number | null;
+  parent: string | null;  // This is the parent UUID
+  parent_uuid: string | null;
   is_active: boolean;
   description: string;
 }
@@ -19,6 +20,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   initialData?: Account | null;
+  onSuccess?: () => void;
 }
 
 const accountTypeOptions = [
@@ -29,8 +31,8 @@ const accountTypeOptions = [
   { value: "EXPENSE", label: "Expense" },
 ];
 
-export default function AccountFormModal({ open, onClose, initialData }: Props) {
-  const { register, handleSubmit, reset, setValue, watch } = useForm<AccountFormData>({
+export default function AccountFormModal({ open, onClose, initialData, onSuccess }: Props) {
+  const { register, handleSubmit, reset, setValue } = useForm<AccountFormData>({
     defaultValues: {
       code: "",
       name: "",
@@ -64,10 +66,14 @@ export default function AccountFormModal({ open, onClose, initialData }: Props) 
   }, [initialData, setValue, reset]);
 
   const onSubmit = async (data: AccountFormData) => {
-    // Ensure parent is either number or null (not undefined)
+    // The backend expects 'parent' field (UUID), not 'parent_uuid'
     const submitData = {
-      ...data,
-      parent: data.parent === undefined ? null : data.parent,
+      code: data.code,
+      name: data.name,
+      account_type: data.account_type,
+      parent: data.parent,  // This is the UUID of the parent account
+      is_active: data.is_active,
+      description: data.description,
     };
     
     if (initialData) {
@@ -75,6 +81,7 @@ export default function AccountFormModal({ open, onClose, initialData }: Props) 
     } else {
       await createAccount.mutateAsync(submitData);
     }
+    onSuccess?.();
     onClose();
   };
 
@@ -123,6 +130,16 @@ export default function AccountFormModal({ open, onClose, initialData }: Props) 
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Parent Account</label>
+            <input
+              {...register("parent")}
+              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
+              placeholder="Parent account UUID (optional)"
+            />
+            <p className="text-xs text-muted-foreground mt-1">Enter parent account UUID to create hierarchy</p>
           </div>
 
           <div>
