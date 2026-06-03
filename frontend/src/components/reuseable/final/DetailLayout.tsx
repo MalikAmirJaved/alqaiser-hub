@@ -416,22 +416,8 @@ export function StandardSidebar({
   riskIndicators?: { label: string; value: string; tone?: "success" | "warning" | "destructive" | "info" }[];
   metadata?: [string, string][];
 }) {
-  const defaultRisk = [
-    { label: "Duplicate check", value: "Clear", tone: "success" as const },
-    { label: "Threshold breach", value: "Within limit", tone: "success" as const },
-    { label: "FX exposure", value: "Medium", tone: "warning" as const },
-    { label: "Segregation of duties", value: "Compliant", tone: "success" as const },
-  ];
-  const defaultMeta = [
-    ["Created", "2026-06-02 14:22"],
-    ["Created by", "Sara Romero"],
-    ["Modified", "2026-06-02 16:08"],
-    ["Modified by", "M. Hughes"],
-    ["Source", "Manual"],
-    ["Version", "v3"],
-  ];
-  const riskItems = riskIndicators || defaultRisk;
-  const metaItems = metadata || defaultMeta;
+  const riskItems = riskIndicators || [];
+  const metaItems = metadata || [];
 
   return (
     <>
