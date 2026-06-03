@@ -56,6 +56,7 @@ interface DynamicModulePageProps<T> {
   onExport?: () => void;
   onRowSelect?: (selectedIds: string[]) => void;
   batchActions?: ReactNode;
+  onRowClick?: (item: T) => void;
 }
 
 export function DynamicModulePage<T>({
@@ -76,6 +77,7 @@ export function DynamicModulePage<T>({
   onExport,
   onRowSelect,
   batchActions,
+  onRowClick,
 }: DynamicModulePageProps<T>) {
   const { confirm, Modal: ConfirmModal } = useConfirmationModal();
 
@@ -274,7 +276,7 @@ export function DynamicModulePage<T>({
                     const rowId = getRowId(item);
                     const isSelected = selectedIds.has(rowId);
                     return (
-                      <tr key={rowId} className={`border-b border-border/60 hover:bg-surface-2/50 ${isSelected ? "bg-primary/5" : ""}`}>
+                      <tr key={rowId} onClick={() => onRowClick?.(item)} className={`border-b border-border/60 hover:bg-surface-2/50 ${isSelected ? "bg-primary/5" : ""}`}>
                         {showCheckboxColumn && (
                           <td className="px-4 py-2.5">
                             <input

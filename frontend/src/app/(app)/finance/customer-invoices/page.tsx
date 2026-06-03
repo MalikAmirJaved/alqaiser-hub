@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
 import { useCustomerInvoices, useDeleteCustomerInvoice, usePostCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
@@ -10,6 +11,7 @@ import { StatusBadge } from "@/components/finance/ui";
 import { Trash2, Send } from "lucide-react";
 
 export default function CustomerInvoicesPage() {
+  const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -26,6 +28,11 @@ export default function CustomerInvoicesPage() {
     delete: permissions.delete,
     view: permissions.view,
     export: true,
+  };
+
+  const handleRowClick = (invoice: any) => {
+    // Navigate to detail page using the invoice UUID
+    router.push(`/finance/customer-invoices/${invoice.id}`);
   };
 
   const handleEdit = (invoice: any) => {
@@ -49,7 +56,7 @@ export default function CustomerInvoicesPage() {
   };
 
   const computeKPIs = (data: any[]) => {
-        const totalOutstanding = data.reduce((sum, inv) => sum + Number(inv.outstanding || 0), 0);
+    const totalOutstanding = data.reduce((sum, inv) => sum + Number(inv.outstanding || 0), 0);
     const totalPaid = data.reduce((sum, inv) => sum + Number(inv.paid_amount || 0), 0);
     const overdueCount = data.filter((inv) => inv.status !== "PAID" && new Date(inv.due_date) < new Date()).length;
     const draftCount = data.filter((inv) => inv.status === "DRAFT").length;
@@ -126,6 +133,7 @@ export default function CustomerInvoicesPage() {
           onDelete: handleDelete,
           onPost: handlePost,
         }}
+        onRowClick={handleRowClick}
         exportEnabled={true}
         onRowSelect={setSelectedIds}
         batchActions={
