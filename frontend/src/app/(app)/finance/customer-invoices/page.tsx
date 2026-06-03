@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/DynamicModulePage";
+import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
 import { useCustomerInvoices, useDeleteCustomerInvoice, usePostCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import CustomerInvoiceFormModal from "@/components/finance/customer-invoices/CustomerInvoiceFormModal";
