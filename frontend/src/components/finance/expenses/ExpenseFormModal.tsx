@@ -12,9 +12,10 @@ interface ExpenseFormData {
   amount: number;
   description: string;
   notes: string;
+  journal_entry: string | null;  
 }
 
-export default function ExpenseFormModal({ open, onClose, initialData }: { open: boolean; onClose: () => void; initialData?: any }) {
+export default function ExpenseFormModal({ open, onClose, initialData, onSuccess }: { open: boolean; onClose: () => void; initialData?: any; onSuccess?: () => void; }) {
   const { register, handleSubmit, reset, setValue } = useForm<ExpenseFormData>({
     defaultValues: {
       expense_number: "",
@@ -47,6 +48,7 @@ export default function ExpenseFormModal({ open, onClose, initialData }: { open:
     } else {
       await createExpense.mutateAsync(data);
     }
+    onSuccess?.();
     onClose();
   };
 

@@ -15,6 +15,9 @@ export interface Expense {
   notes: string;
   created_at: string;
   updated_at: string;
+  created_by?: number | string | null;
+  updated_by?: number | string | null;
+  journal_entry: string | null;  
 }
 
 interface PaginatedResponse<T> {
@@ -29,6 +32,10 @@ type UpdateExpenseData = Partial<CreateExpenseData>;
 
 const EXPENSES_KEY = "finance_expenses";
 
+// ============================================
+// API FUNCTIONS
+// ============================================
+
 async function getAllExpenses(params?: { category?: string; paid?: boolean; start_date?: string; end_date?: string }) {
   const searchParams = new URLSearchParams();
   if (params?.category) searchParams.append("category", params.category);
@@ -37,6 +44,10 @@ async function getAllExpenses(params?: { category?: string; paid?: boolean; star
   if (params?.end_date) searchParams.append("end_date", params.end_date);
   const url = `/api/finance/expenses/${searchParams.toString() ? `?${searchParams}` : ""}`;
   return apiFetch<PaginatedResponse<Expense>>(url);
+}
+
+async function getExpenseById(id: string) {
+  return apiFetch<Expense>(`/api/finance/expenses/${id}/`);
 }
 
 async function createExpense(data: CreateExpenseData) {
@@ -55,12 +66,24 @@ async function recordExpensePayment(id: string, paymentData: { payment_date: str
   return apiFetch<Expense>(`/api/finance/expenses/${id}/record_payment/`, { method: "POST", body: JSON.stringify(paymentData) });
 }
 
+// ============================================
+// REACT HOOKS
+// ============================================
+
 export function useExpenses(filters?: { category?: string; paid?: boolean; start_date?: string; end_date?: string }) {
   return useQuery({
     queryKey: [EXPENSES_KEY, filters],
     queryFn: () => getAllExpenses(filters),
     select: (data) => data.results,
     staleTime: 30_000,
+  });
+}
+
+export function useExpense(id: string | null) {
+  return useQuery({
+    queryKey: [EXPENSES_KEY, id],
+    queryFn: () => getExpenseById(id!),
+    enabled: !!id,
   });
 }
 
@@ -102,6 +125,10 @@ export function useRecordExpensePayment() {
     },
   });
 }
+
+// ============================================
+// UTILITIES
+// ============================================
 
 export const expenseCategoryLabels: Record<string, string> = {
   RENT: "Rent",

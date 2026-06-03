@@ -1,116 +1,189 @@
 "use client";
 
 import { useState } from "react";
-import PageHeader from "@/components/PageHeader";
-import { TableView, type Column } from "@/components/reuseable/TableGridView";
-import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { useRouter } from "next/navigation";
+import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
 import { useExpenses, useDeleteExpense, useRecordExpensePayment, expenseCategoryLabels } from "@/hooks/finance/useExpenses";
-import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
-import { Plus, Pencil, Trash2, CreditCard } from "lucide-react";
-import ExpenseFormModal from "@/components/finance/expenses/ExpenseFormModal";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { formatCurrency } from "@/lib/currency";
-
-const columns: Column[] = [
-  { key: "expense_date", label: "Date", sortable: true },
-  { key: "expense_number", label: "Expense #", sortable: true },
-  { key: "category", label: "Category", render: (val) => expenseCategoryLabels[String(val)] ?? String(val), },
-  { key: "description", label: "Description" },
-  { key: "amount", label: "Amount", sortable: true, render: (val) => formatCurrency(Number(val)) },
-  { key: "paid", label: "Paid", render: (val) => (val ? "Yes" : "No") },
-];
+import { Trash2, Send } from "lucide-react";
+import ExpenseFormModal from "@/components/finance/expenses/ExpenseFormModal";
 
 export default function ExpensesPage() {
-  const permissions = useFeaturePermissions("FINANCE", "expense");
-  const [categoryFilter, setCategoryFilter] = useState("");
-  const [paidFilter, setPaidFilter] = useState<string>("");
-  const { data: expenses, isLoading } = useExpenses({
-    category: categoryFilter || undefined,
-    paid: paidFilter === "" ? undefined : paidFilter === "paid",
-  });
-  const deleteExpense = useDeleteExpense();
-  const recordPayment = useRecordExpensePayment();
-  const { confirm, Modal: ConfirmModal } = useConfirmationModal();
-
+  const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<any>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const { data: expenses, isLoading } = useExpenses();
+  const deleteExpense = useDeleteExpense();
+  const recordPayment = useRecordExpensePayment();
+  const permissions = useFeaturePermissions("FINANCE", "expense");
+
+  const modulePermissions: ModulePermissions = {
+    create: permissions.create,
+    update: permissions.update,
+    delete: permissions.delete,
+    view: permissions.view,
+    export: true,
+  };
+
+  const handleRowClick = (expense: any) => {
+    router.push(`/finance/expenses/${expense.id}`);
+  };
+
+  const handleEdit = (expense: any) => {
+    setEditingExpense(expense);
+    setModalOpen(true);
+  };
 
   const handleDelete = (expense: any) => {
-    confirm({
-      title: "Delete Expense",
-      message: `Are you sure you want to delete expense "${expense.expense_number}"?`,
-      onConfirm: () => deleteExpense.mutate(expense.id),
-    });
+    deleteExpense.mutate(expense.id);
   };
 
   const handleRecordPayment = (expense: any) => {
-    confirm({
-      title: "Record Payment",
-      message: `Record payment for expense "${expense.expense_number}" of ${formatCurrency(expense.amount)}?`,
-      onConfirm: () => recordPayment.mutate({ id: expense.id, data: { payment_date: new Date().toISOString().split("T")[0], payment_method: "BANK_TRANSFER" } }),
-      type: "info",
-      confirmText: "Yes, Record",
+    recordPayment.mutate({
+      id: expense.id,
+      data: { payment_date: new Date().toISOString().split("T")[0], payment_method: "BANK_TRANSFER" },
     });
   };
 
-  const tableData = (expenses || []).map(e => ({ ...e })) as Record<string, unknown>[];
+  const handleBulkDelete = () => {
+    selectedIds.forEach((id) => deleteExpense.mutate(id));
+    setSelectedIds([]);
+  };
+
+  const handleBulkRecordPayment = () => {
+    selectedIds.forEach((id) =>
+      recordPayment.mutate({
+        id,
+        data: { payment_date: new Date().toISOString().split("T")[0], payment_method: "BANK_TRANSFER" },
+      })
+    );
+    setSelectedIds([]);
+  };
+
+const computeKPIs = (data: any[]) => {
+  // Convert string amounts to numbers safely
+  const parseAmount = (val: any): number => {
+    return typeof val === "string" ? parseFloat(val) : (val as number);
+  };
+
+  const totalUnpaid = data
+    .filter((e) => !e.paid)
+    .reduce((sum, e) => sum + parseAmount(e.amount), 0);
+  
+  const totalPaid = data
+    .filter((e) => e.paid)
+    .reduce((sum, e) => sum + parseAmount(e.amount), 0);
+  
+  const thisMonth = new Date().getMonth();
+  const thisYear = new Date().getFullYear();
+  
+  const monthlyTotal = data
+    .filter(
+      (e) =>
+        new Date(e.expense_date).getMonth() === thisMonth &&
+        new Date(e.expense_date).getFullYear() === thisYear
+    )
+    .reduce((sum, e) => sum + parseAmount(e.amount), 0);
+  
+  const totalAll = data.reduce((sum, e) => sum + parseAmount(e.amount), 0);
+
+  return [
+    {
+      label: "Unpaid",
+      value: totalUnpaid,
+      sub: `${data.filter((e) => !e.paid).length} open`,
+      tone: "destructive" as const,
+      isCurrency: true,
+    },
+    {
+      label: "Paid (MTD)",
+      value: totalPaid,
+      sub: `${data.filter((e) => e.paid).length} settled`,
+      tone: "success" as const,
+      isCurrency: true,
+    },
+    {
+      label: "This Month",
+      value: monthlyTotal,
+      sub: "current period",
+      tone: "info" as const,
+      isCurrency: true,
+    },
+    {
+      label: "Total Expenses",
+      value: totalAll,
+      sub: `${data.length} records`,
+      isCurrency: true,
+    },
+  ];
+};
+  const columns = [
+    { key: "expense_date", label: "Date", sortable: true },
+    { key: "expense_number", label: "Expense #", mono: true, sortable: true },
+    { key: "category", label: "Category", sortable: true, render: (val: string) => expenseCategoryLabels[val] || val },
+    { key: "description", label: "Description" },
+    { key: "amount", label: "Amount", align: "right" as const, sortable: true, render: (val: number) => formatCurrency(val) },
+    { key: "paid", label: "Paid", sortable: true, render: (val: boolean) => (val ? "Yes" : "No") },
+  ];
 
   return (
-    <div className="p-4 md:p-6">
-      <PageHeader
+    <>
+      <DynamicModulePage
+        breadcrumbs={["Operations", "Expenses"]}
         title="Expenses"
-        subtitle="Record and track company expenses"
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => { setEditingExpense(null); setModalOpen(true); }} className="inline-flex items-center gap-2 px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm">
-              <Plus className="w-4 h-4" /> New Expense
+        description="Record and track company expenses"
+        data={expenses || []}
+        isLoading={isLoading}
+        columns={columns}
+        kpis={computeKPIs}
+        getRowId={(expense) => expense.id}
+        permissions={modulePermissions}
+        primaryActionLabel="New Expense"
+        onCreate={() => {
+          setEditingExpense(null);
+          setModalOpen(true);
+        }}
+        actions={{
+          onEdit: handleEdit,
+          onDelete: handleDelete,
+          onPost: (expense) => {
+            if (!expense.paid) handleRecordPayment(expense);
+          },
+          canPost: (expense) => !expense.paid,
+        }}
+        onRowClick={handleRowClick}
+        exportEnabled
+        onRowSelect={setSelectedIds}
+        batchActions={
+          <>
+            <button
+              onClick={handleBulkDelete}
+              className="inline-flex items-center gap-1.5 text-sm text-destructive hover:text-destructive/80"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Selected
             </button>
-          </div>
+            <button
+              onClick={handleBulkRecordPayment}
+              className="inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary/80"
+            >
+              <Send className="w-4 h-4" />
+              Pay Selected
+            </button>
+          </>
         }
       />
-
-      <div className="flex flex-wrap gap-3 mb-4">
-        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="px-3 py-1.5 text-sm border border-border rounded-md">
-          <option value="">All Categories</option>
-          {Object.entries(expenseCategoryLabels).map(([val, label]) => <option key={val} value={val}>{label}</option>)}
-        </select>
-        <select value={paidFilter} onChange={(e) => setPaidFilter(e.target.value)} className="px-3 py-1.5 text-sm border border-border rounded-md">
-          <option value="">All</option>
-          <option value="paid">Paid</option>
-          <option value="unpaid">Unpaid</option>
-        </select>
-      </div>
-
-      <TableView
-        columns={columns}
-        data={tableData}
-        loading={isLoading}
-        actions={(row) => {
-          const expense = expenses?.find(e => e.id === row.id);
-          if (!expense) return null;
-          return (
-            <div className="flex gap-1">
-              {!expense.paid && permissions.update && (
-                <button onClick={() => handleRecordPayment(expense)} className="p-1.5 rounded-md hover:bg-muted" title="Record Payment">
-                  <CreditCard className="w-4 h-4" />
-                </button>
-              )}
-              {permissions.update && (
-                <button onClick={() => { setEditingExpense(expense); setModalOpen(true); }} className="p-1.5 rounded-md hover:bg-muted">
-                  <Pencil className="w-4 h-4" />
-                </button>
-              )}
-              {permissions.delete && (
-                <button onClick={() => handleDelete(expense)} className="p-1.5 rounded-md hover:bg-destructive/10 text-destructive">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          );
+      <ExpenseFormModal
+        open={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          setEditingExpense(null);
         }}
+        initialData={editingExpense}
       />
-
-      <ExpenseFormModal open={modalOpen} onClose={() => { setModalOpen(false); setEditingExpense(null); }} initialData={editingExpense} />
-      <ConfirmModal />
-    </div>
+    </>
   );
 }
