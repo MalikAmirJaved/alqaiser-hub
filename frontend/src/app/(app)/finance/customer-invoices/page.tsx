@@ -15,57 +15,84 @@ import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import { Plus, Pencil, Trash2, Send } from "lucide-react";
 import CustomerInvoiceFormModal from "@/components/finance/customer-invoices/CustomerInvoiceFormModal";
 import { formatCurrency } from "@/lib/currency";
-import type { ReactNode } from "react";
 
-const statusColors: Record<CustomerInvoice["status"], string> = {
-  DRAFT: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-  POSTED: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
-  PARTIAL: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
-  PAID: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-  CANCELLED: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+// Status badge component (matches lovable styling)
+const StatusBadge = ({ status }: { status: CustomerInvoice["status"] }) => {
+  const styles = {
+    DRAFT: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+    POSTED: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+    PARTIAL: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+    PAID: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+    CANCELLED: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  };
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${styles[status]}`}>
+      {status}
+    </span>
+  );
 };
 
 const columns: Column[] = [
-  { key: "invoice_number", label: "Invoice #", sortable: true },
+  { key: "invoice_number", label: "Invoice #", sortable: true, mono: true },
   { key: "customer_name", label: "Customer", sortable: true },
-  { key: "invoice_date", label: "Invoice Date", sortable: true },
-  { key: "due_date", label: "Due Date", sortable: true },
+  { key: "invoice_date", label: "Issued", sortable: true },
+  { key: "due_date", label: "Due", sortable: true },
   {
     key: "amount",
     label: "Amount",
     sortable: true,
-    render: (val: unknown) => formatCurrency(Number(val)),
-  },
-  {
-    key: "paid_amount",
-    label: "Paid",
-    render: (val: unknown) => formatCurrency(Number(val)),
+    align: "right",
+    render: (val) => formatCurrency(Number(val)),
   },
   {
     key: "outstanding",
-    label: "Outstanding",
-    render: (val: unknown) => {
+    label: "Balance",
+    align: "right",
+    render: (val, row) => {
       const outstanding = Number(val);
-      return (
-        <span className={outstanding > 0 ? "font-semibold text-destructive" : "text-success"}>
-          {formatCurrency(outstanding)}
-        </span>
-      );
+      return outstanding ? formatCurrency(outstanding) : "—";
     },
   },
+  { key: "currency", label: "Curr", render: () => "USD" }, // hardcoded or get from company settings
   {
     key: "status",
     label: "Status",
-    render: (val: unknown) => {
-      const status = val as CustomerInvoice["status"];
-      return (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[status]}`}>
-          {status}
-        </span>
-      );
-    },
+    render: (val) => <StatusBadge status={val as CustomerInvoice["status"]} />,
   },
 ];
+
+// KPI cards (derived from real data)
+function InvoiceKPIs({ invoices }: { invoices?: CustomerInvoice[] }) {
+  const totalOutstanding = invoices?.reduce((sum, inv) => sum + inv.outstanding, 0) || 0;
+  const totalPaid = invoices?.reduce((sum, inv) => sum + inv.paid_amount, 0) || 0;
+  const overdueCount = invoices?.filter(inv => inv.status !== "PAID" && new Date(inv.due_date) < new Date()).length || 0;
+  const draftCount = invoices?.filter(inv => inv.status === "DRAFT").length || 0;
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="rounded-xl border border-border bg-card p-4">
+        <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Outstanding</div>
+        <div className="text-2xl font-semibold tracking-tight mt-1 text-info">{formatCurrency(totalOutstanding)}</div>
+        <div className="text-xs text-muted-foreground mt-1">{invoices?.length || 0} open invoices</div>
+      </div>
+      <div className="rounded-xl border border-border bg-card p-4">
+        <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Overdue</div>
+        <div className="text-2xl font-semibold tracking-tight mt-1 text-destructive">{formatCurrency(overdueCount)}</div>
+        <div className="text-xs text-muted-foreground mt-1">{overdueCount} invoices past due</div>
+      </div>
+      <div className="rounded-xl border border-border bg-card p-4">
+        <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Paid (MTD)</div>
+        <div className="text-2xl font-semibold tracking-tight mt-1 text-success">{formatCurrency(totalPaid)}</div>
+        <div className="text-xs text-muted-foreground mt-1">YTD</div>
+      </div>
+      <div className="rounded-xl border border-border bg-card p-4">
+        <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Draft</div>
+        <div className="text-2xl font-semibold tracking-tight mt-1">{draftCount}</div>
+        <div className="text-xs text-muted-foreground mt-1">Awaiting issue</div>
+      </div>
+    </div>
+  );
+}
 
 export default function CustomerInvoicesPage() {
   const permissions = useFeaturePermissions("FINANCE", "customerinvoice");
@@ -104,12 +131,15 @@ export default function CustomerInvoicesPage() {
   const tableData = (invoices || []).map((inv) => ({ ...inv })) as Record<string, unknown>[];
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="p-4 md:p-6 space-y-6">
       <PageHeader
         title="Customer Invoices"
-        subtitle="Manage invoices issued to customers (accounts receivable)"
+        subtitle="Issue, track, and reconcile customer invoices across companies and currencies."
         actions={
           <div className="flex flex-wrap gap-2">
+            <button className="inline-flex items-center gap-2 px-4 h-9 rounded-md border border-border text-sm hover:bg-muted">
+              Export
+            </button>
             {permissions.create && (
               <button
                 onClick={() => {
@@ -126,8 +156,10 @@ export default function CustomerInvoicesPage() {
         }
       />
 
+      <InvoiceKPIs invoices={invoices} />
+
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-4">
+      <div className="flex flex-wrap gap-3">
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
@@ -136,7 +168,7 @@ export default function CustomerInvoicesPage() {
           <option value="">All Statuses</option>
           <option value="DRAFT">Draft</option>
           <option value="POSTED">Posted</option>
-          <option value="PARTIAL">Partially Paid</option>
+          <option value="PARTIAL">Partial</option>
           <option value="PAID">Paid</option>
           <option value="CANCELLED">Cancelled</option>
         </select>
@@ -154,6 +186,7 @@ export default function CustomerInvoicesPage() {
         </select>
       </div>
 
+      {/* Table */}
       <TableView
         columns={columns}
         data={tableData}
