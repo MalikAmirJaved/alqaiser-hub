@@ -22,6 +22,7 @@ export interface Kpi {
   value: string | number;
   sub?: string;
   tone?: "success" | "warning" | "destructive" | "info";
+  isCurrency?: boolean
 }
 
 export interface ModulePermissions {
@@ -193,13 +194,16 @@ export function DynamicModulePage<T>({
                 k.tone === "success"
                   ? "text-success"
                   : k.tone === "warning"
-                  ? "text-warning"
-                  : k.tone === "destructive"
-                  ? "text-destructive"
-                  : k.tone === "info"
-                  ? "text-info"
-                  : "text-foreground";
-              const formattedValue = typeof k.value === "number" ? formatCurrency(k.value) : k.value;
+                    ? "text-warning"
+                    : k.tone === "destructive"
+                      ? "text-destructive"
+                      : k.tone === "info"
+                        ? "text-info"
+                        : "text-foreground";
+              const formattedValue = k.isCurrency !== false && typeof k.value === "number" 
+  ? formatCurrency(k.value) 
+  : String(k.value);
+
               return (
                 <Card key={k.label} className="px-5 py-4">
                   <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">{k.label}</div>
@@ -242,9 +246,8 @@ export function DynamicModulePage<T>({
                   {columns.map((col) => (
                     <th
                       key={col.key}
-                      className={`px-4 py-2.5 font-medium ${col.align === "right" ? "text-right" : "text-left"} ${
-                        col.sortable ? "cursor-pointer select-none hover:text-foreground" : ""
-                      }`}
+                      className={`px-4 py-2.5 font-medium ${col.align === "right" ? "text-right" : "text-left"} ${col.sortable ? "cursor-pointer select-none hover:text-foreground" : ""
+                        }`}
                       onClick={() => col.sortable && handleSort(col.key)}
                     >
                       <span className="flex items-center gap-1">
@@ -290,9 +293,8 @@ export function DynamicModulePage<T>({
                         {columns.map((col) => (
                           <td
                             key={col.key}
-                            className={`px-4 py-2.5 ${col.align === "right" ? "text-right num" : ""} ${
-                              col.mono ? "font-mono text-xs text-primary" : ""
-                            }`}
+                            className={`px-4 py-2.5 ${col.align === "right" ? "text-right num" : ""} ${col.mono ? "font-mono text-xs text-primary" : ""
+                              }`}
                           >
                             {col.render ? col.render((item as any)[col.key], item) : String((item as any)[col.key] ?? "")}
                           </td>
@@ -302,7 +304,10 @@ export function DynamicModulePage<T>({
                             <div className="flex items-center justify-end gap-1">
                               {actions?.onPost && permissions.update && (
                                 <button
-                                  onClick={() => actions.onPost!(item)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    actions.onPost!(item);
+                                  }}
                                   className="p-1 rounded-md hover:bg-muted"
                                   title="Post"
                                 >
@@ -311,7 +316,10 @@ export function DynamicModulePage<T>({
                               )}
                               {actions?.onEdit && permissions.update && (
                                 <button
-                                  onClick={() => actions.onEdit!(item)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    actions.onEdit!(item);
+                                  }}
                                   className="p-1 rounded-md hover:bg-muted"
                                   title="Edit"
                                 >
@@ -320,7 +328,10 @@ export function DynamicModulePage<T>({
                               )}
                               {actions?.onDelete && permissions.delete && (
                                 <button
-                                  onClick={() => handleDelete(item)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDelete(item);
+                                  }}
                                   className="p-1 rounded-md hover:bg-destructive/10 text-destructive"
                                   title="Delete"
                                 >

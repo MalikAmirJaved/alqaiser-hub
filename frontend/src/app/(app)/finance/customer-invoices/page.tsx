@@ -55,33 +55,41 @@ export default function CustomerInvoicesPage() {
     setSelectedIds([]);
   };
 
-  const computeKPIs = (data: any[]) => {
-    const totalOutstanding = data.reduce((sum, inv) => sum + Number(inv.outstanding || 0), 0);
-    const totalPaid = data.reduce((sum, inv) => sum + Number(inv.paid_amount || 0), 0);
-    const overdueCount = data.filter((inv) => inv.status !== "PAID" && new Date(inv.due_date) < new Date()).length;
-    const draftCount = data.filter((inv) => inv.status === "DRAFT").length;
-    return [
-      {
-        label: "Outstanding",
-        value: totalOutstanding,
-        sub: `${data.length} open invoices`,
-        tone: "info" as const,
-      },
-      {
-        label: "Overdue",
-        value: overdueCount,
-        sub: `${overdueCount} invoices past due`,
-        tone: "destructive" as const,
-      },
-      {
-        label: "Paid (MTD)",
-        value: totalPaid,
-        sub: "YTD",
-        tone: "success" as const,
-      },
-      { label: "Draft", value: draftCount, sub: "Awaiting issue" },
-    ];
-  };
+const computeKPIs = (data: any[]) => {
+  const totalOutstanding = data.reduce((sum, inv) => sum + Number(inv.outstanding || 0), 0);
+  const totalPaid = data.reduce((sum, inv) => sum + Number(inv.paid_amount || 0), 0);
+  const overdueCount = data.filter((inv) => inv.status !== "PAID" && new Date(inv.due_date) < new Date()).length;
+  const draftCount = data.filter((inv) => inv.status === "DRAFT").length;
+  return [
+    {
+      label: "Outstanding",
+      value: totalOutstanding,
+      sub: `${data.length} open invoices`,
+      tone: "info" as const,
+      isCurrency: true,  // Add this
+    },
+    {
+      label: "Overdue",
+      value: overdueCount,
+      sub: `${overdueCount} invoices past due`,
+      tone: "destructive" as const,
+      isCurrency: false, // Add this – NOT currency
+    },
+    {
+      label: "Paid (MTD)",
+      value: totalPaid,
+      sub: "YTD",
+      tone: "success" as const,
+      isCurrency: true,  // Add this
+    },
+    { 
+      label: "Draft", 
+      value: draftCount,
+      sub: "Awaiting issue",
+      isCurrency: false, // Add this – NOT currency
+    },
+  ];
+};
 
   const columns = [
     { key: "invoice_number", label: "Invoice #", mono: true, sortable: true },
