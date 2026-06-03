@@ -1,6 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
+import { useState } from "react";
 import { DetailLayout, StandardSidebar, RelatedRecords } from "@/components/reuseable/final/DetailLayout";
 import { useAccount } from "@/hooks/finance/useAccounts";
 import { useJournalEntries } from "@/hooks/finance/useJournalEntries";
@@ -8,29 +9,65 @@ import { useTrialBalance } from "@/hooks/finance/useTrialBalance";
 import { formatCurrency } from "@/lib/currency";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import AccountFormModal from "@/components/finance/accounts/AccountFormModal";
-import { useState } from "react";
 
 export default function AccountDetailPage() {
   const { id } = useParams();
   const { data: account, isLoading: accountLoading } = useAccount(id as string);
   const { data: trialBalance } = useTrialBalance();
-  const { data: journalEntries, isLoading: entriesLoading } = useJournalEntries({ reference_id: id as string, ordering: "-date" });
+  const { data: journalEntries, isLoading: entriesLoading } = useJournalEntries({
+    ordering: "-date",
+  });
   const permissions = useFeaturePermissions("FINANCE", "account");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<any>(null);
 
-  if (accountLoading || !account) return <div className="p-8 text-center">Loading...</div>;
+  if (accountLoading || !account) {
+    return <div className="p-8 text-center">Loading...</div>;
+  }
 
-  // Find balance from trial balance
-  const balanceEntry = trialBalance?.data.find(b => b.account_id === Number(account.id));
+  const balanceEntry = trialBalance?.data.find((b) => b.account_id === Number(account.id));
   const balance = balanceEntry ? Number(balanceEntry.balance) : 0;
+
+  // Calculate monthly trend for this account from real journal entries
+  const monthlyData =
+    journalEntries?.reduce((acc, entry) => {
+      const month = entry.date.slice(0, 7);
+      const line = entry.lines.find((l) => l.account.id === account.id);
+      const amount = (line?.debit || 0) - (line?.credit || 0);
+      if (!acc[month]) acc[month] = 0;
+      acc[month] += amount;
+      return acc;
+    }, {} as Record<string, number>) || {};
+
+  const chartData = Object.entries(monthlyData)
+    .map(([month, amount]) => ({ month, amount: Math.abs(amount) }))
+    .slice(-6);
+
+  // Only show chart if there is real data
+  const charts =
+    chartData.length > 0
+      ? [
+          {
+            id: "monthly-trend",
+            title: "Monthly Activity",
+            subtitle: "Last 6 months",
+            type: "area" as const,
+            data: chartData,
+            dataKeys: { x: "month", y: "amount" },
+            height: 260,
+            tooltipFormatter: (value: number) => formatCurrency(value),
+          },
+        ]
+      : [];
 
   const handleEdit = () => {
     setEditingAccount(account);
     setModalOpen(true);
   };
 
-  const ledgerEntries = journalEntries?.slice(0, 10) || [];
+  // Get ledger entries for this account only
+  const ledgerEntries =
+    journalEntries?.filter((entry) => entry.lines.some((line) => line.account.id === account.id)).slice(0, 10) || [];
 
   return (
     <>
@@ -41,6 +78,7 @@ export default function AccountDetailPage() {
         status={account.is_active ? "Active" : "Inactive"}
         subtitle={`${account.account_type} · USD · System account`}
         data={account}
+        charts={charts}
         meta={[
           { label: "Type", value: account.account_type },
           { label: "Parent", value: account.parent || "-" },
@@ -48,10 +86,19 @@ export default function AccountDetailPage() {
           { label: "Reconcilable", value: "Yes" },
         ]}
         summary={[
-          { label: "Closing Balance", value: balance, tone: balance >= 0 ? "success" : "destructive", isCurrency: true },
+          {
+            label: "Closing Balance",
+            value: balance,
+            tone: balance >= 0 ? "success" : "destructive",
+            isCurrency: true,
+          },
           { label: "MTD Movement", value: 0, sub: "vs. last month +0%", isCurrency: true },
           { label: "Open Items", value: "0", sub: "Pending reconciliation" },
-          { label: "Last Posted", value: ledgerEntries[0]?.date || "—", sub: ledgerEntries[0]?.entry_number || "" },
+          {
+            label: "Last Posted",
+            value: ledgerEntries[0]?.date || "—",
+            sub: ledgerEntries[0]?.entry_number || "",
+          },
         ]}
         primaryActionLabel="New Journal"
         onEdit={handleEdit}
@@ -80,7 +127,7 @@ export default function AccountDetailPage() {
           {
             id: "ledger",
             label: "Ledger",
-            count: journalEntries?.length || 0,
+            count: ledgerEntries.length,
             render: () => (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -96,23 +143,33 @@ export default function AccountDetailPage() {
                   </thead>
                   <tbody>
                     {entriesLoading ? (
-                      <tr><td colSpan={6} className="py-4 text-center">Loading...</td></tr>
+                      <tr>
+                        <td colSpan={6} className="py-4 text-center">
+                          Loading...
+                        </td>
+                      </tr>
                     ) : ledgerEntries.length === 0 ? (
-                      <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">No transactions</td></tr>
+                      <tr>
+                        <td colSpan={6} className="py-4 text-center text-muted-foreground">
+                          No transactions
+                        </td>
+                      </tr>
                     ) : (
-                      ledgerEntries.map((entry, idx) => {
-                        const line = entry.lines.find(l => l.account.id === account.id);
+                      ledgerEntries.map((entry) => {
+                        const line = entry.lines.find((l) => l.account.id === account.id);
                         const debit = line?.debit || 0;
                         const credit = line?.credit || 0;
-                        let runningBalance = 0;
-                        // Compute running balance (simplified)
                         return (
                           <tr key={entry.id} className="border-b border-border/60">
                             <td className="py-2 num text-muted-foreground">{entry.date}</td>
                             <td className="font-mono text-xs text-primary">{entry.entry_number}</td>
                             <td>{entry.description}</td>
-                            <td className="text-right num text-success">{debit ? formatCurrency(debit) : "—"}</td>
-                            <td className="text-right num text-destructive">{credit ? formatCurrency(credit) : "—"}</td>
+                            <td className="text-right num text-success">
+                              {debit ? formatCurrency(debit) : "—"}
+                            </td>
+                            <td className="text-right num text-destructive">
+                              {credit ? formatCurrency(credit) : "—"}
+                            </td>
                             <td className="text-right num font-medium">{formatCurrency(balance)}</td>
                           </tr>
                         );

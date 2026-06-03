@@ -4,14 +4,13 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { X } from "lucide-react";
-import { useCreateAccount, useUpdateAccount, type Account } from "@/hooks/finance/useAccounts";
+import { useCreateAccount, useUpdateAccount,accountTypeLabels, type Account, useAccounts } from "@/hooks/finance/useAccounts";
 
 interface AccountFormData {
   code: string;
   name: string;
   account_type: Account["account_type"];
-  parent: string | null;  // This is the parent UUID
-  parent_uuid: string | null;
+  parent: string | null;
   is_active: boolean;
   description: string;
 }
@@ -32,7 +31,7 @@ const accountTypeOptions = [
 ];
 
 export default function AccountFormModal({ open, onClose, initialData, onSuccess }: Props) {
-  const { register, handleSubmit, reset, setValue } = useForm<AccountFormData>({
+  const { register, handleSubmit, reset, setValue, watch } = useForm<AccountFormData>({
     defaultValues: {
       code: "",
       name: "",
@@ -44,13 +43,23 @@ export default function AccountFormModal({ open, onClose, initialData, onSuccess
   });
   const createAccount = useCreateAccount();
   const updateAccount = useUpdateAccount();
+  const { data: accounts } = useAccounts();
+  const selectedType = watch("account_type");
+
+  // Filter parent accounts: only show accounts that can be parents (exclude current account in edit mode)
+  const parentOptions = accounts?.filter(acc => {
+    // In edit mode, exclude the current account itself (can't be parent of itself)
+    if (initialData && acc.id === initialData.id) return false;
+    // Typically parent should have same or higher level account type, but we'll show all
+    return true;
+  });
 
   useEffect(() => {
     if (initialData) {
       setValue("code", initialData.code);
       setValue("name", initialData.name);
       setValue("account_type", initialData.account_type);
-      setValue("parent", initialData.parent ?? null);
+      setValue("parent", initialData.parent);
       setValue("is_active", initialData.is_active);
       setValue("description", initialData.description);
     } else {
@@ -66,12 +75,11 @@ export default function AccountFormModal({ open, onClose, initialData, onSuccess
   }, [initialData, setValue, reset]);
 
   const onSubmit = async (data: AccountFormData) => {
-    // The backend expects 'parent' field (UUID), not 'parent_uuid'
     const submitData = {
       code: data.code,
       name: data.name,
       account_type: data.account_type,
-      parent: data.parent,  // This is the UUID of the parent account
+      parent: data.parent,  // Send UUID, backend resolves via SlugRelatedField
       is_active: data.is_active,
       description: data.description,
     };
@@ -134,12 +142,18 @@ export default function AccountFormModal({ open, onClose, initialData, onSuccess
 
           <div>
             <label className="block text-sm font-medium mb-1">Parent Account</label>
-            <input
+            <select
               {...register("parent")}
               className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-              placeholder="Parent account UUID (optional)"
-            />
-            <p className="text-xs text-muted-foreground mt-1">Enter parent account UUID to create hierarchy</p>
+            >
+              <option value="">None (Root Account)</option>
+              {parentOptions?.map((acc) => (
+                <option key={acc.id} value={acc.id}>
+                  {acc.code} - {acc.name} ({accountTypeLabels[acc.account_type]})
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">Select a parent account to create hierarchy</p>
           </div>
 
           <div>

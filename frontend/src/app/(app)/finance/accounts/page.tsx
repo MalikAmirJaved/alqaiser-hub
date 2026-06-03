@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useAccounts } from "@/hooks/finance/useAccounts";
 import { useTrialBalance } from "@/hooks/finance/useTrialBalance";
 import { formatCurrency } from "@/lib/currency";
-import { PageHeader, Card, ToolbarButton, StatusBadge } from "@/components/finance/ui";
+import { PageHeader, Card, ToolbarButton } from "@/components/finance/ui";
 import { Plus, Download, Upload, ChevronRight, ChevronDown } from "lucide-react";
 import AccountFormModal from "@/components/finance/accounts/AccountFormModal";
 
@@ -42,7 +42,6 @@ function buildTree(accounts: any[], balances: Record<string, number>): AccountNo
   const map = new Map<string, AccountNode>();
   const roots: AccountNode[] = [];
 
-  // First pass: create nodes with balance
   accounts.forEach(acc => {
     const node: AccountNode = {
       id: acc.id,
@@ -58,7 +57,6 @@ function buildTree(accounts: any[], balances: Record<string, number>): AccountNo
     map.set(acc.id, node);
   });
 
-  // Second pass: build hierarchy
   accounts.forEach(acc => {
     const node = map.get(acc.id)!;
     if (acc.parent && map.has(acc.parent)) {
@@ -68,14 +66,19 @@ function buildTree(accounts: any[], balances: Record<string, number>): AccountNo
     }
   });
 
-  // Sort roots and children by code
   const sortByCode = (nodes: AccountNode[]) => nodes.sort((a, b) => a.code.localeCompare(b.code));
   sortByCode(roots);
   roots.forEach(root => sortByCode(root.children));
   return roots;
 }
 
-function AccountRow({ node, depth = 0, filterType, searchTerm }: { node: AccountNode; depth: number; filterType: string; searchTerm: string }) {
+function AccountRow({ node, depth = 0, filterType, searchTerm, onRowClick }: { 
+  node: AccountNode; 
+  depth: number; 
+  filterType: string; 
+  searchTerm: string;
+  onRowClick: (account: AccountNode) => void;
+}) {
   const [open, setOpen] = useState(depth < 1);
   const hasChildren = node.children.length > 0;
   const matchesFilter = filterType === "All" || node.account_type === filterType;
@@ -85,11 +88,17 @@ function AccountRow({ node, depth = 0, filterType, searchTerm }: { node: Account
 
   return (
     <>
-      <tr className="border-b border-border/60 hover:bg-surface-2/50">
+      <tr 
+        className="border-b border-border/60 hover:bg-surface-2/50 cursor-pointer"
+        onClick={() => onRowClick(node)}
+      >
         <td className="px-4 py-2.5">
           <div className="flex items-center" style={{ paddingLeft: depth * 20 }}>
             {hasChildren ? (
-              <button onClick={() => setOpen(!open)} className="mr-1 text-muted-foreground hover:text-foreground">
+              <button 
+                onClick={(e) => { e.stopPropagation(); setOpen(!open); }} 
+                className="mr-1 text-muted-foreground hover:text-foreground"
+              >
                 {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
               </button>
             ) : <span className="w-4 mr-1" />}
@@ -107,7 +116,14 @@ function AccountRow({ node, depth = 0, filterType, searchTerm }: { node: Account
         <td className="px-4 py-2.5 text-xs text-muted-foreground">USD</td>
       </tr>
       {open && hasChildren && node.children.map(child => (
-        <AccountRow key={child.id} node={child} depth={depth + 1} filterType={filterType} searchTerm={searchTerm} />
+        <AccountRow 
+          key={child.id} 
+          node={child} 
+          depth={depth + 1} 
+          filterType={filterType} 
+          searchTerm={searchTerm}
+          onRowClick={onRowClick}
+        />
       ))}
     </>
   );
@@ -124,7 +140,6 @@ export default function ChartOfAccountsPage() {
   const { data: accounts, isLoading: accountsLoading } = useAccounts();
   const { data: trialBalance, isLoading: balanceLoading } = useTrialBalance();
 
-  // Build balance map: account_id -> balance
   const balanceMap = useMemo(() => {
     if (!trialBalance?.data) return {};
     return trialBalance.data.reduce((acc, item) => {
@@ -133,13 +148,11 @@ export default function ChartOfAccountsPage() {
     }, {} as Record<number, number>);
   }, [trialBalance]);
 
-  // Build hierarchical tree
   const tree = useMemo(() => {
     if (!accounts) return [];
     return buildTree(accounts, balanceMap);
   }, [accounts, balanceMap]);
 
-  // Compute summary cards: total balance per account type (from trialBalance)
   const summary = useMemo(() => {
     if (!trialBalance?.data) return [];
     const totals: Record<string, number> = {};
@@ -156,7 +169,7 @@ export default function ChartOfAccountsPage() {
     ];
   }, [trialBalance]);
 
-  const handleRowClick = (account: any) => {
+  const handleRowClick = (account: AccountNode) => {
     router.push(`/finance/accounts/${account.id}`);
   };
 
@@ -179,7 +192,6 @@ export default function ChartOfAccountsPage() {
         }
       />
       <div className="p-6 space-y-4">
-        {/* Summary cards */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {summary.map(s => (
             <Card key={s.type} className="px-4 py-3">
@@ -234,6 +246,7 @@ export default function ChartOfAccountsPage() {
                       depth={0}
                       filterType={filterType}
                       searchTerm={searchTerm}
+                      onRowClick={handleRowClick}
                     />
                   ))
                 )}

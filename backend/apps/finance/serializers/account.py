@@ -5,6 +5,14 @@ class AccountSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)
     parent_uuid = serializers.UUIDField(source='parent._id', read_only=True, allow_null=True)
     
+    # Make parent accept UUID from frontend
+    parent = serializers.SlugRelatedField(
+        slug_field='_id',
+        queryset=Account.objects.all(),
+        allow_null=True,
+        required=False
+    )
+    
     class Meta:
         model = Account
         fields = '__all__'
