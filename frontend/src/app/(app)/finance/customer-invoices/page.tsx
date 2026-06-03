@@ -139,7 +139,12 @@ const computeKPIs = (data: any[]) => {
         actions={{
           onEdit: handleEdit,
           onDelete: handleDelete,
-          onPost: handlePost,
+          onPost: (invoice) => {
+            if (invoice.status === "DRAFT") {
+              handlePost(invoice);
+            }
+          },
+          canPost: (invoice) => invoice.status === "DRAFT",
         }}
         onRowClick={handleRowClick}
         exportEnabled={true}

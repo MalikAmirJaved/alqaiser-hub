@@ -5,10 +5,8 @@ import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
 import { useSupplierBills, useDeleteSupplierBill, usePostSupplierBill } from "@/hooks/finance/useSupplierBills";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { useSuppliers } from "@/hooks/useSuppliers";
 import SupplierBillFormModal from "@/components/finance/supplier-bills/SupplierBillFormModal";
 import { formatCurrency } from "@/lib/currency";
-import { StatusBadge } from "@/components/finance/ui";
 import { Trash2, Send } from "lucide-react";
 
 const statusColors: Record<string, string> = {
@@ -28,9 +26,7 @@ export default function SupplierBillsPage() {
   const { data: bills, isLoading } = useSupplierBills();
   const deleteBill = useDeleteSupplierBill();
   const postBill = usePostSupplierBill();
-  const { data: suppliers } = useSuppliers();
   const permissions = useFeaturePermissions("FINANCE", "supplierbill");
-
   const modulePermissions: ModulePermissions = {
     create: permissions.create,
     update: permissions.update,
@@ -126,7 +122,13 @@ export default function SupplierBillsPage() {
         actions={{
           onEdit: handleEdit,
           onDelete: handleDelete,
-          onPost: handlePost,
+          onPost: (bill) => {
+            if (bill.status === "DRAFT") {
+              handlePost(bill);
+            }
+          },
+          canPost: (bill) => bill.status === "DRAFT",
+
         }}
         onRowClick={handleRowClick}
         exportEnabled={true}
