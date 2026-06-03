@@ -251,13 +251,13 @@ export function CommentsThread({ messages, onAddComment }: { messages?: { who: s
 // ============================================
 // RelatedRecords
 // ============================================
-export function RelatedRecords({ items }: { items: { id: string; type: string; title: string; amount?: string; status?: string }[] }) {
+export function RelatedRecords({ items }: { items: { id: string | number; type: string; title: string; amount?: string; status?: string }[] }) {
   return (
     <div className="divide-y divide-border rounded-lg border border-border">
       {items.map((it) => (
-        <div key={it.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-2/40 cursor-pointer">
+        <div key={String(it.id)} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-2/40 cursor-pointer">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground w-20 font-medium">{it.type}</div>
-          <span className="font-mono text-xs text-primary w-24">{it.id}</span>
+          <span className="font-mono text-xs text-primary w-24">{String(it.id)}</span>
           <span className="text-sm flex-1 truncate">{it.title}</span>
           {it.amount && <span className="num text-sm font-medium">{it.amount}</span>}
           {it.status && <span className="text-xs text-muted-foreground">{it.status}</span>}
@@ -267,6 +267,7 @@ export function RelatedRecords({ items }: { items: { id: string; type: string; t
     </div>
   );
 }
+
 
 // ============================================
 // RiskBanner

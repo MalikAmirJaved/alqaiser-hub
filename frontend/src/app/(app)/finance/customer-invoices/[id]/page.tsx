@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { DetailLayout, StandardSidebar, ApprovalTimeline, RelatedRecords, RiskBanner } from "@/components/reuseable/final/DetailLayout";
+import { DetailLayout, StandardSidebar, ApprovalTimeline, RelatedRecords } from "@/components/reuseable/final/DetailLayout";
 import { useCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { formatCurrency } from "@/lib/currency";
@@ -13,6 +13,11 @@ export default function CustomerInvoiceDetailPage() {
 
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!invoice) return <div className="p-8 text-center">Invoice not found</div>;
+
+  // Convert string amounts to numbers
+  const amount = typeof invoice.amount === "string" ? parseFloat(invoice.amount) : invoice.amount;
+  const paidAmount = typeof invoice.paid_amount === "string" ? parseFloat(invoice.paid_amount) : invoice.paid_amount;
+  const outstanding = typeof invoice.outstanding === "string" ? parseFloat(invoice.outstanding) : invoice.outstanding;
 
   return (
     <DetailLayout
@@ -29,10 +34,10 @@ export default function CustomerInvoiceDetailPage() {
         { label: "Project", value: invoice.sales_order || "-" },
       ]}
       summary={[
-        { label: "Invoice Total", value: invoice.amount, tone: "info" },
-        { label: "Paid", value: invoice.paid_amount, tone: "success", sub: "Receipt pending" },
-        { label: "Outstanding", value: invoice.outstanding, tone: invoice.outstanding > 0 ? "warning" : "success" },
-        { label: "Due Date", value: invoice.due_date, sub: "Days remaining: 12" },
+        { label: "Invoice Total", value: amount, tone: "info", isCurrency: true },
+        { label: "Paid", value: paidAmount, tone: "success", sub: "Receipt pending", isCurrency: true },
+        { label: "Outstanding", value: outstanding, tone: outstanding > 0 ? "warning" : "success", isCurrency: true },
+        { label: "Due Date", value: invoice.due_date, sub: "Days remaining: 12", isCurrency: false },  // NOT currency
       ]}
       tabs={[
         {
@@ -42,11 +47,11 @@ export default function CustomerInvoiceDetailPage() {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="flex justify-between border-b pb-2">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span>{formatCurrency(inv.amount)}</span>
+                <span>{formatCurrency(amount)}</span>
               </div>
               <div className="flex justify-between border-b pb-2">
                 <span className="text-muted-foreground">Tax (8%)</span>
-                <span>{formatCurrency(inv.amount * 0.08)}</span>
+                <span>{formatCurrency(amount * 0.08)}</span>
               </div>
               <div className="flex justify-between border-b pb-2">
                 <span className="text-muted-foreground">Discount</span>
@@ -54,7 +59,7 @@ export default function CustomerInvoiceDetailPage() {
               </div>
               <div className="flex justify-between font-semibold">
                 <span>Total</span>
-                <span>{formatCurrency(inv.amount)}</span>
+                <span>{formatCurrency(amount)}</span>
               </div>
             </div>
           ),
@@ -82,11 +87,11 @@ export default function CustomerInvoiceDetailPage() {
                   id: invoice.sales_order || "-",
                   type: "Sales Order",
                   title: "Sales order reference",
-                  amount: formatCurrency(invoice.amount),
+                  amount: formatCurrency(amount),
                   status: "Active",
                 },
                 {
-                  id: invoice.journal_entry || "-",
+                  id: invoice.journal_entry ? String(invoice.journal_entry) : "-",
                   type: "Journal",
                   title: "Journal entry",
                   status: "Posted",
@@ -113,14 +118,14 @@ export default function CustomerInvoiceDetailPage() {
           ]}
           metadata={[
             ["Created", new Date(invoice.created_at).toLocaleString()],
-            ["Created by", invoice.created_by?.toString() || "-"],
+            ["Created by", String(invoice.created_by || "-")],
             ["Modified", new Date(invoice.updated_at).toLocaleString()],
             ["Source", "Manual"],
           ]}
         />
       }
       onPrimaryAction={() => (window.location.href = `/finance/payments/new?invoice=${invoice.id}`)}
-      onEdit={() => {}}
+      onEdit={() => { }}
       permissions={{ edit: permissions.update, submit: permissions.create }}
       currencyFormatter={formatCurrency}
     />

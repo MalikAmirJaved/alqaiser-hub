@@ -36,9 +36,10 @@ export interface DetailMeta {
 
 export interface DetailSummary {
   label: string;
-  value: number;
+  value: number | string;  // Allow string values (for dates, text)
   sub?: string;
   tone?: "success" | "warning" | "destructive" | "info";
+  isCurrency?: boolean;    // Flag to indicate if this should be formatted as currency
 }
 
 export interface DetailLayoutProps<T = any> {
@@ -92,16 +93,14 @@ export function DetailLayout<T>({
 }: DetailLayoutProps<T>) {
   const [active, setActive] = useState(tabs[0]?.id);
 
-  const formatValue = (val: any): string => {
-    if (typeof val === "number") return currencyFormatter(val);
-    if (typeof val === "string") return val;
+  const formatValue = (val: any, isCurrency: boolean = false): string => {
+    if (isCurrency) {
+      const num = typeof val === "string" ? parseFloat(val) : val;
+      if (isNaN(num)) return String(val);
+      return currencyFormatter(num);
+    }
     return String(val ?? "");
   };
-
-  const renderedSummary = summary?.map((s) => ({
-    ...s,
-    value: formatValue(s.value),
-  }));
 
   return (
     <>
@@ -142,7 +141,7 @@ export function DetailLayout<T>({
           </>
         }
       />
-      <div className="p-6 space-y-6">
+      <div className="pt-6 space-y-6">
         {/* Hero */}
         <Card className="px-6 py-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -168,9 +167,9 @@ export function DetailLayout<T>({
         </Card>
 
         {/* Summary cards */}
-        {renderedSummary && renderedSummary.length > 0 && (
+        {summary && summary.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {renderedSummary.map((s) => {
+            {summary.map((s) => {
               const toneColor =
                 s.tone === "success"
                   ? "text-success"
@@ -181,10 +180,16 @@ export function DetailLayout<T>({
                   : s.tone === "info"
                   ? "text-info"
                   : "text-foreground";
+              // Format the value – as currency only if flagged
+              const formattedValue = s.isCurrency 
+                ? formatValue(s.value, true)
+                : formatValue(s.value);
               return (
                 <Card key={s.label} className="px-5 py-4">
                   <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">{s.label}</div>
-                  <div className={`text-2xl font-semibold num tracking-tight mt-1 ${toneColor}`}>{s.value}</div>
+                  <div className={`text-2xl font-semibold num tracking-tight mt-1 ${toneColor}`}>
+                    {formattedValue}
+                  </div>
                   {s.sub && <div className="text-xs text-muted-foreground mt-1">{s.sub}</div>}
                 </Card>
               );
