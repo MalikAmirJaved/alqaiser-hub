@@ -6,6 +6,24 @@ import { useCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { formatCurrency } from "@/lib/currency";
 
+// Example chart data – you would fetch this from your API
+const revenueData = [
+  { month: "Jan", amount: 48200 },
+  { month: "Feb", amount: 51900 },
+  { month: "Mar", amount: 54800 },
+  { month: "Apr", amount: 59200 },
+  { month: "May", amount: 63100 },
+  { month: "Jun", amount: 67800 },
+];
+
+const expenseData = [
+  { category: "Payroll", amount: 31200 },
+  { category: "Rent", amount: 8500 },
+  { category: "Software", amount: 4200 },
+  { category: "Marketing", amount: 3800 },
+  { category: "Travel", amount: 2100 },
+];
+
 export default function CustomerInvoiceDetailPage() {
   const { id } = useParams();
   const { data: invoice, isLoading } = useCustomerInvoice(id as string);
@@ -14,10 +32,31 @@ export default function CustomerInvoiceDetailPage() {
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!invoice) return <div className="p-8 text-center">Invoice not found</div>;
 
-  // Convert string amounts to numbers
   const amount = typeof invoice.amount === "string" ? parseFloat(invoice.amount) : invoice.amount;
   const paidAmount = typeof invoice.paid_amount === "string" ? parseFloat(invoice.paid_amount) : invoice.paid_amount;
   const outstanding = typeof invoice.outstanding === "string" ? parseFloat(invoice.outstanding) : invoice.outstanding;
+
+  const charts = [
+    {
+      id: "revenue-trend",
+      title: "Revenue Trend",
+      subtitle: "Last 6 months",
+      type: "area" as const,
+      data: revenueData,
+      dataKeys: { x: "month", y: "amount" },
+      height: 260,
+      tooltipFormatter: (value: number) => formatCurrency(value),
+    },
+    {
+      id: "expense-breakdown",
+      title: "Expense Breakdown",
+      type: "pie" as const,
+      data: expenseData,
+      dataKeys: { name: "category", value: "amount" },
+      height: 260,
+      tooltipFormatter: (value: number) => formatCurrency(value),
+    },
+  ];
 
   return (
     <DetailLayout
@@ -37,8 +76,9 @@ export default function CustomerInvoiceDetailPage() {
         { label: "Invoice Total", value: amount, tone: "info", isCurrency: true },
         { label: "Paid", value: paidAmount, tone: "success", sub: "Receipt pending", isCurrency: true },
         { label: "Outstanding", value: outstanding, tone: outstanding > 0 ? "warning" : "success", isCurrency: true },
-        { label: "Due Date", value: invoice.due_date, sub: "Days remaining: 12", isCurrency: false },  // NOT currency
+        { label: "Due Date", value: invoice.due_date, sub: "Days remaining: 12", isCurrency: false },
       ]}
+      charts={charts}
       tabs={[
         {
           id: "overview",
@@ -125,7 +165,7 @@ export default function CustomerInvoiceDetailPage() {
         />
       }
       onPrimaryAction={() => (window.location.href = `/finance/payments/new?invoice=${invoice.id}`)}
-      onEdit={() => { }}
+      onEdit={() => {}}
       permissions={{ edit: permissions.update, submit: permissions.create }}
       currencyFormatter={formatCurrency}
     />

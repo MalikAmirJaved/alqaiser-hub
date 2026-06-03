@@ -4,6 +4,10 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { PageHeader, Card, CardHeader, StatusBadge, ToolbarButton } from "@/components/finance/ui";
 import { Printer, Download, Share2, MoreHorizontal, Pencil, Send } from "lucide-react";
+import {
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
+  BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
+} from "recharts";
 
 // Import workflow components
 import {
@@ -36,10 +40,27 @@ export interface DetailMeta {
 
 export interface DetailSummary {
   label: string;
-  value: number | string;  // Allow string values (for dates, text)
+  value: number | string;
   sub?: string;
   tone?: "success" | "warning" | "destructive" | "info";
-  isCurrency?: boolean;    // Flag to indicate if this should be formatted as currency
+  isCurrency?: boolean;
+}
+
+export interface ChartConfig {
+  id: string;
+  title: string;
+  subtitle?: string;
+  type: "area" | "bar" | "pie" | "line";
+  data: any[];
+  dataKeys: {
+    x?: string;
+    y?: string | string[];
+    name?: string;
+    value?: string;
+  };
+  colors?: string[];
+  height?: number;
+  tooltipFormatter?: (value: number, name: string) => string;
 }
 
 export interface DetailLayoutProps<T = any> {
@@ -53,6 +74,7 @@ export interface DetailLayoutProps<T = any> {
   summary?: DetailSummary[];
   tabs: DetailTab[];
   sidebar?: ReactNode;
+  charts?: ChartConfig[];  // Charts will be displayed in the left column (above tabs)
   primaryActionLabel?: string;
   onPrimaryAction?: () => void;
   onEdit?: () => void;
@@ -66,6 +88,30 @@ export interface DetailLayoutProps<T = any> {
     submit?: boolean;
   };
   currencyFormatter?: (value: number) => string;
+}
+
+// Default chart colors
+const CHART_COLORS = [
+  "var(--color-chart-1)",
+  "var(--color-chart-2)",
+  "var(--color-chart-3)",
+  "var(--color-chart-4)",
+  "var(--color-chart-5)",
+  "var(--color-info)",
+];
+
+function tooltipStyle(formatter?: (value: number, name: string) => string) {
+  return {
+    contentStyle: {
+      background: "var(--color-popover)",
+      border: "1px solid var(--color-border)",
+      borderRadius: 8,
+      fontSize: 12,
+      color: "var(--color-popover-foreground)",
+    } as React.CSSProperties,
+    labelStyle: { color: "var(--color-muted-foreground)" } as React.CSSProperties,
+    formatter: formatter,
+  };
 }
 
 // ============================================
@@ -82,6 +128,7 @@ export function DetailLayout<T>({
   summary,
   tabs,
   sidebar,
+  charts,
   primaryActionLabel = "Submit",
   onPrimaryAction,
   onEdit,
@@ -100,6 +147,116 @@ export function DetailLayout<T>({
       return currencyFormatter(num);
     }
     return String(val ?? "");
+  };
+
+  const renderChart = (chart: ChartConfig) => {
+    const { type, data: chartData, dataKeys, colors, height = 260, tooltipFormatter: ttFormatter } = chart;
+    const t = tooltipStyle(ttFormatter);
+    const chartColors = colors || CHART_COLORS;
+
+    switch (type) {
+      case "area": {
+        const yKeys = Array.isArray(dataKeys.y) ? dataKeys.y : [dataKeys.y];
+        return (
+          <ResponsiveContainer width="100%" height={height}>
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+              <defs>
+                {yKeys.filter((k): k is string => k !== undefined).map((key, idx) => (
+                  <linearGradient key={key} id={`grad-${key}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={chartColors[idx % chartColors.length]} stopOpacity={0.5} />
+                    <stop offset="100%" stopColor={chartColors[idx % chartColors.length]} stopOpacity={0} />
+                  </linearGradient>
+                ))}
+              </defs>
+              <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey={dataKeys.x} stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+              <YAxis stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+              <Tooltip {...t} />
+              {yKeys.filter((k): k is string => k !== undefined).map((key, idx) => (
+                <Area
+                  key={key}
+                  type="monotone"
+                  dataKey={key}
+                  name={key}
+                  stroke={chartColors[idx % chartColors.length]}
+                  fill={`url(#grad-${key})`}
+                  strokeWidth={2}
+                />
+              ))}
+            </AreaChart>
+          </ResponsiveContainer>
+        );
+      }
+
+      case "bar": {
+        const yKeys = Array.isArray(dataKeys.y) ? dataKeys.y : [dataKeys.y];
+        return (
+          <ResponsiveContainer width="100%" height={height}>
+            <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+              <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey={dataKeys.x} stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+              <YAxis stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+              <Tooltip {...t} />
+              {yKeys.filter((k): k is string => k !== undefined).map((key, idx) => (
+                <Bar key={key} dataKey={key} name={key} fill={chartColors[idx % chartColors.length]} radius={[4, 4, 0, 0]} />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        );
+      }
+
+      case "pie": {
+        const nameKey = dataKeys.name || "name";
+        const valueKey = dataKeys.value || "value";
+        return (
+          <ResponsiveContainer width="100%" height={height}>
+            <PieChart>
+              <Pie
+                data={chartData}
+                dataKey={valueKey}
+                nameKey={nameKey}
+                innerRadius={55}
+                outerRadius={90}
+                paddingAngle={2}
+              >
+                {chartData.map((_: any, idx: number) => (
+                  <Cell key={idx} fill={chartColors[idx % chartColors.length]} stroke="var(--color-background)" strokeWidth={2} />
+                ))}
+              </Pie>
+              <Tooltip {...t} />
+            </PieChart>
+          </ResponsiveContainer>
+        );
+      }
+
+      case "line": {
+        const yKeys = Array.isArray(dataKeys.y) ? dataKeys.y : [dataKeys.y];
+        return (
+          <ResponsiveContainer width="100%" height={height}>
+            <LineChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+              <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey={dataKeys.x} stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+              <YAxis stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+              <Tooltip {...t} />
+              {yKeys.filter((k): k is string => k !== undefined).map((key, idx) => (
+                <Line
+                  key={key}
+                  type="monotone"
+                  dataKey={key}
+                  name={key}
+                  stroke={chartColors[idx % chartColors.length]}
+                  strokeWidth={2}
+                  dot={false}
+                />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        );
+      }
+
+      default:
+        return <div className="text-center text-muted-foreground">Unsupported chart type</div>;
+    }
   };
 
   return (
@@ -180,10 +337,7 @@ export function DetailLayout<T>({
                   : s.tone === "info"
                   ? "text-info"
                   : "text-foreground";
-              // Format the value – as currency only if flagged
-              const formattedValue = s.isCurrency 
-                ? formatValue(s.value, true)
-                : formatValue(s.value);
+              const formattedValue = s.isCurrency ? formatValue(s.value, true) : formatValue(s.value);
               return (
                 <Card key={s.label} className="px-5 py-4">
                   <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">{s.label}</div>
@@ -197,9 +351,11 @@ export function DetailLayout<T>({
           </div>
         )}
 
-        {/* Main Content */}
+        {/* Main Content - Left (Tabs + Charts) + Right (Sidebar) */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          {/* LEFT COLUMN (2/3) - Charts + Tabs */}
           <div className="xl:col-span-2 space-y-4">
+            {/* Tabs section */}
             <Card>
               <div className="flex items-center gap-1 px-3 pt-3 border-b border-border overflow-x-auto">
                 {tabs.map((t) => (
@@ -221,7 +377,24 @@ export function DetailLayout<T>({
               </div>
               <div className="p-5">{tabs.find((t) => t.id === active)?.render(data)}</div>
             </Card>
+            {/* Charts section (inside left column) */}
+            {charts && charts.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {charts.map((chart) => (
+                  <Card key={chart.id}>
+                    <CardHeader title={chart.title} subtitle={chart.subtitle} />
+                    <div className="p-4" style={{ height: `${chart.height || 260}px` }}>
+                      {renderChart(chart)}
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            
           </div>
+
+          {/* RIGHT COLUMN (1/3) - Sidebar */}
           <div className="space-y-4">{sidebar}</div>
         </div>
       </div>
