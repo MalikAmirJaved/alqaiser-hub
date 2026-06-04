@@ -1,67 +1,77 @@
 services:
   db:
     image: postgres:15-alpine
-    container_name: alqaiser_db_prod
+    container_name: alqaiser_db_dev
+    ports:
+      - "5433:5432"  # Host:5433 -> Container:5432
     volumes:
-      - postgres_data_prod:/var/lib/postgresql/data
+      - postgres_data_dev:/var/lib/postgresql/data
     environment:
-      - POSTGRES_DB=${DB_NAME}
-      - POSTGRES_USER=${DB_USER}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-    restart: always
+      - POSTGRES_DB=alqaiser_hub
+      - POSTGRES_USER=alqaiser_user
+      - POSTGRES_PASSWORD=123456
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
-      interval: 30s
-      timeout: 10s
+      test: [ "CMD-SHELL", "pg_isready -U alqaiser_user -d alqaiser_hub" ]
+      interval: 10s
+      timeout: 5s
       retries: 5
+    networks:
+      - dev_network
 
   redis:
     image: redis:7-alpine
-    container_name: alqaiser_redis_prod
-    restart: always
+    container_name: alqaiser_redis_dev
+    ports:
+      - "6379:6379"
+    networks:
+      - dev_network
 
   backend:
     build:
       context: ./backend
       target: production
-    container_name: alqaiser_backend_prod
+    container_name: alqaiser_backend_dev
     ports:
-      - "8000:8000"
-    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4 --threads 2
+      - "${APP_HOST}:8000:8000"
+    volumes:
+      - ./backend:/app
+    command: sh /app/entrypoint.sh
     environment:
       - DEBUG=0
-      - DJANGO_SETTINGS_MODULE=config.settings.prod
+      - DB_HOST=db
+      - DB_NAME=alqaiser_hub
+      - DB_USER=alqaiser_user
+      - DB_PASSWORD=123456
+      - DB_PORT=5432  # Container port, not host port
+      - APP_HOST=${APP_HOST}
     env_file:
-      - .env.prod
+      - ./backend/.env
     depends_on:
       db:
         condition: service_healthy
-    restart: always
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    networks:
+      - dev_network
 
   frontend:
     build:
       context: ./frontend
       target: production
-    container_name: alqaiser_frontend_prod
+    container_name: alqaiser_frontend_dev
     ports:
-      - "3000:3000"
-    command: npm run start
+      - "${APP_HOST}:3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     environment:
       - NODE_ENV=production
-    restart: always
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      - HOSTNAME=0.0.0.0
+      - NEXT_PUBLIC_API_URL=http://${APP_HOST}:8000
+    networks:
+      - dev_network
 
+networks:
+  dev_network:
+    driver: bridge
 
 volumes:
-  postgres_data_prod:
-  static_volume:
-  media_volume:
+  postgres_data_dev:
