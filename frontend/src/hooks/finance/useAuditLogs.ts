@@ -8,7 +8,7 @@ export interface AuditFieldChange {
 }
 
 export interface AuditLog {
-  id: number;
+  id: string;
   action: string;
   entity_type: string;
   entity_id: string;

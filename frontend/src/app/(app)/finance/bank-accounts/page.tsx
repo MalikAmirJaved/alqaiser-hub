@@ -27,7 +27,7 @@ export default function BankAccountsPage() {
     update: permissions.update,
     delete: permissions.delete,
     view: permissions.view,
-    export: true,
+    export: permissions.export,
   };
 
   const computeKPIs = (data: any[]): Kpi[] => {
