@@ -1,3 +1,4 @@
+# apps/finance/models/bank.py
 from decimal import Decimal
 from django.db import models
 from apps.common.basemodel import BaseModel
@@ -7,7 +8,17 @@ class BankAccount(BaseModel):
     account_number = models.CharField(max_length=50)
     bank_name = models.CharField(max_length=100)
     opening_balance = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
-    current_balance = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+
+    # Dual balance tracking
+    book_balance = models.DecimalField(
+        max_digits=15, decimal_places=2, default=Decimal('0.00'),
+        help_text="Internal ledger balance (all recorded transactions)"
+    )
+    cleared_balance = models.DecimalField(
+        max_digits=15, decimal_places=2, default=Decimal('0.00'),
+        help_text="Actual bank statement balance (reconciled transactions only)"
+    )
+
     currency = models.CharField(max_length=3, default='USD')
     is_active = models.BooleanField(default=True)
 
@@ -22,6 +33,18 @@ class BankAccount(BaseModel):
 
     def __str__(self):
         return f"{self.bank_name} - {self.account_name}"
+
+    def save(self, *args, **kwargs):
+        # Initialize both balances with opening_balance for new accounts
+        if not self.pk:
+            self.book_balance = self.opening_balance
+            self.cleared_balance = self.opening_balance
+        super().save(*args, **kwargs)
+
+    @property
+    def pending_balance(self):
+        """Difference between book and cleared balances (pending transactions)"""
+        return self.book_balance - self.cleared_balance
 
 
 class BankTransaction(BaseModel):
@@ -47,3 +70,10 @@ class BankTransaction(BaseModel):
             models.Index(fields=['bank_account', 'reconciled']),
             models.Index(fields=['transaction_date']),
         ]
+
+    def apply_to_balance(self, balance):
+        """Helper to compute effect on balance"""
+        if self.transaction_type in ['DEPOSIT', 'INTEREST']:
+            return balance + self.amount
+        else:  # WITHDRAWAL, FEE
+            return balance - self.amount

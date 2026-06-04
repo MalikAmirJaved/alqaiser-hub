@@ -211,7 +211,7 @@ class UserListView(generics.ListCreateAPIView):
         return User.objects.filter(
             company=self.request.user.company,
             is_deleted=False
-        ).exclude(id=self.request.user.id)  # Exclude current user from list
+        )#.exclude(id=self.request.user.id)  # Exclude current user from list
 
     def perform_create(self, serializer):
         # Set company, branch, and other required fields

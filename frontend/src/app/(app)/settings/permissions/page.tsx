@@ -14,8 +14,6 @@ import {
   CheckSquare, Square, Minus, Crown, Zap
 } from "lucide-react";
 import { toast } from "sonner";
-import { useSelector } from "react-redux";
-import { RootState } from "@/store";
 
 import {
   usePermissionUsers,

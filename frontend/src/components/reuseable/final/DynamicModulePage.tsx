@@ -203,9 +203,9 @@ export function DynamicModulePage<T>({
                       : k.tone === "info"
                         ? "text-info"
                         : "text-foreground";
-              const formattedValue = k.isCurrency !== false && typeof k.value === "number" 
-  ? formatCurrency(k.value) 
-  : String(k.value);
+              const formattedValue = k.isCurrency !== false && typeof k.value === "number"
+                ? formatCurrency(k.value)
+                : String(k.value);
 
               return (
                 <Card key={k.label} className="px-5 py-4">
@@ -305,20 +305,21 @@ export function DynamicModulePage<T>({
                         {showActionsColumn && (
                           <td className="px-4 py-2.5 text-right">
                             <div className="flex items-center justify-end gap-1">
+                            
                               {actions?.onPost &&
-        permissions.update &&
-        (actions.canPost?.(item) ?? true) && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              actions.onPost!(item);
-            }}
-            className="p-1 rounded-md hover:bg-muted"
-            title="Post"
-          >
-            <Send className="w-4 h-4" />
-          </button>
-      )}
+                                permissions.update &&
+                                (actions.canPost?.(item) ?? true) && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      actions.onPost!(item);
+                                    }}
+                                    className="p-1 rounded-md hover:bg-muted"
+                                    title="Post"
+                                  >
+                                    <Send className="w-4 h-4" />
+                                  </button>
+                                )}
                               {actions?.onEdit && permissions.update && (
                                 <button
                                   onClick={(e) => {
