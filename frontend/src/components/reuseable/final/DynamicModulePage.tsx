@@ -41,6 +41,7 @@ interface Actions<T> {
   canPost?: (item: T) => boolean;
 }
 
+
 interface DynamicModulePageProps<T> {
   breadcrumbs: string[];
   title: string;

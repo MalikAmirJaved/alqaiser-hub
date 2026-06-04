@@ -9,7 +9,7 @@ export interface Payment {
   id: string;
   payment_type: "RECEIPT" | "PAYMENT";
   payment_method: "CASH" | "BANK_TRANSFER" | "CHEQUE" | "CREDIT_CARD" | "OTHER";
-  amount: number;
+  amount: number | string;
   payment_date: string;
   reference_number: string;
   supplier_bill: string | null;
