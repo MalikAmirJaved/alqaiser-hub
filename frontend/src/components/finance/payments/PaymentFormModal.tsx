@@ -200,7 +200,7 @@ export default function PaymentFormModal({ open, onClose, initialData }: Props) 
                 <option value="">-- Select invoice to receive payment --</option>
                 {customerInvoices?.map((inv) => (
                   <option key={inv.id} value={inv.id}>
-                    {inv.invoice_number} - {inv.customer_name || `Customer #${inv.customer}`} - {formatCurrency(inv.amount)} (Outstanding: {formatCurrency(inv.outstanding)})
+                    {inv.invoice_number} - {inv.customer_name || `Customer #${inv.customer}`} - {formatCurrency(Number(inv.amount))} (Outstanding: {formatCurrency(Number(inv.outstanding))})
                   </option>
                 ))}
               </select>
