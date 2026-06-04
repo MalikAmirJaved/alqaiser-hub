@@ -87,7 +87,7 @@ export const menu = [
       { title: "Journal Entries", to: "/finance/journal-entries", icon: ArrowDownCircle },
       { title: "Finance Reports", to: "/finance/reports", icon: ArrowDownCircle },
       { title: "Budgets", to: "/finance/budgets", icon: Target },
-      { title: "Bank & Cash", to: "/finance/bank-accounts", icon: Landmark },
+      { title: "Bank Accounts", to: "/finance/bank-accounts", icon: Landmark },
       { title: "Bank Transactions", to: "/finance/bank-transactions", icon: Landmark },
       { title: "Payables / Supplier Bills", to: "/finance/supplier-bills", icon: Landmark },
       { title: "Payments", to: "/finance/payments", icon: Landmark },

@@ -116,7 +116,7 @@ export const menuPermissionMapping: Record<string, string | null> = {
   "Customer Invoice": "FINANCE:customer_invoice:view",
   Expenses: "FINANCE:expense:view",
   Budgets: "FINANCE:budget:view",
-  "Bank & Cash": "FINANCE:bank_account:view",
+  "Bank Accounts": "FINANCE:bank_account:view",
   "Bank Transaction": "FINANCE:bank_transaction:view",
   "Payables / Supplier Bills": "FINANCE:supplier_bill:view",
   "Journal Entries": "FINANCE:journal_entrie:view",
