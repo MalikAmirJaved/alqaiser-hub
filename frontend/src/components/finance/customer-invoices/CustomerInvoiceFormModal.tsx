@@ -24,9 +24,16 @@ interface Props {
   open: boolean;
   onClose: () => void;
   initialData?: CustomerInvoice | null;
+  onSuccess?: () => void;
 }
 
-export default function CustomerInvoiceFormModal({ open, onClose, initialData }: Props) {
+// Helper to convert string | number to number
+const toNumber = (value: number | string | undefined): number => {
+  if (value === undefined || value === null) return 0;
+  return typeof value === "string" ? parseFloat(value) : value;
+};
+
+export default function CustomerInvoiceFormModal({ open, onClose, initialData, onSuccess }: Props) {
   const { register, handleSubmit, reset, setValue } = useForm<CustomerInvoiceFormData>({
     defaultValues: {
       invoice_number: "",
@@ -49,7 +56,8 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData }:
       setValue("sales_order", initialData.sales_order);
       setValue("invoice_date", initialData.invoice_date);
       setValue("due_date", initialData.due_date);
-      setValue("amount", initialData.amount);
+      // Convert amount to number safely
+      setValue("amount", toNumber(initialData.amount));
       setValue("notes", initialData.notes);
     } else {
       reset({
@@ -70,6 +78,7 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData }:
     } else {
       await createInvoice.mutateAsync(data);
     }
+    onSuccess?.();
     onClose();
   };
 

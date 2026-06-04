@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, ButtonHTMLAttributes } from "react";
 import { ChevronRight, Download, Plus, Filter, MoreHorizontal } from "lucide-react";
 
 export function PageHeader({
@@ -13,7 +13,7 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="border-b border-border bg-surface/60">
+    <div className="border-b border-border ">
       <div className="pb-5">
         <nav className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
           {breadcrumbs.map((b, i) => (
@@ -39,19 +39,32 @@ export function ToolbarButton({
   children,
   variant = "default",
   icon: Icon,
+  onClick,
+  disabled,
+  className = "",
+  ...props
 }: {
   children: ReactNode;
   variant?: "default" | "primary" | "ghost";
   icon?: React.ComponentType<{ className?: string }>;
-}) {
-  const cls =
+  onClick?: () => void;
+  disabled?: boolean;
+  className?: string;
+} & ButtonHTMLAttributes<HTMLButtonElement>) {
+  const baseClass =
     variant === "primary"
       ? "bg-primary text-primary-foreground hover:bg-primary/90 border-primary"
       : variant === "ghost"
         ? "bg-transparent text-foreground hover:bg-surface-2 border-transparent"
         : "bg-surface text-foreground hover:bg-surface-2 border-border";
+  const disabledClass = disabled ? "opacity-50 cursor-not-allowed" : "";
   return (
-    <button className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${cls}`}>
+    <button
+      className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${baseClass} ${disabledClass} ${className}`}
+      onClick={onClick}
+      disabled={disabled}
+      {...props}
+    >
       {Icon && <Icon className="h-4 w-4" />}
       {children}
     </button>
@@ -68,13 +81,18 @@ export function StatusBadge({ status }: { status: string }) {
     Sent: "bg-info/15 text-info border-info/30",
     Pending: "bg-warning/15 text-warning border-warning/30",
     Partial: "bg-warning/15 text-warning border-warning/30",
-    Draft: "bg-muted text-muted-foreground border-border",
+    DRAFT: "bg-muted text-muted-foreground border-border",
+    POSTED: "bg-success/15 text-success border-success/30",
+    PARTIAL: "bg-warning/15 text-warning border-warning/30",
+    PAID: "bg-success/15 text-success border-success/30",
+    CANCELLED: "bg-destructive/15 text-destructive border-destructive/30",
     Overdue: "bg-destructive/15 text-destructive border-destructive/30",
     Closed: "bg-muted text-muted-foreground border-border",
     Rejected: "bg-destructive/15 text-destructive border-destructive/30",
   };
+  const styles = map[status] ?? "bg-muted text-muted-foreground border-border";
   return (
-    <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${map[status] ?? "bg-muted text-muted-foreground border-border"}`}>
+    <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${styles}`}>
       <span className="h-1.5 w-1.5 rounded-full bg-current" />
       {status}
     </span>
@@ -90,7 +108,6 @@ export function TableToolbar({ children }: { children?: ReactNode }) {
           className="w-64 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary/60"
         />
         <ToolbarButton icon={Filter} variant="ghost">Filters</ToolbarButton>
-        <span className="hidden md:inline text-xs text-muted-foreground">Showing all periods · USD</span>
       </div>
       <div className="flex items-center gap-2">
         {children}

@@ -24,9 +24,15 @@ interface Props {
   open: boolean;
   onClose: () => void;
   initialData?: SupplierBill | null;
+  onSuccess?: () => void;
 }
 
-export default function SupplierBillFormModal({ open, onClose, initialData }: Props) {
+const toNumber = (value: number | string | undefined): number => {
+  if (value === undefined || value === null) return 0;
+  return typeof value === "string" ? parseFloat(value) : value;
+};
+
+export default function SupplierBillFormModal({ open, onClose, initialData, onSuccess }: Props) {
   const { register, handleSubmit, reset, setValue } = useForm<SupplierBillFormData>({
     defaultValues: {
       bill_number: "",
@@ -49,7 +55,7 @@ export default function SupplierBillFormModal({ open, onClose, initialData }: Pr
       setValue("purchase_order", initialData.purchase_order);
       setValue("bill_date", initialData.bill_date);
       setValue("due_date", initialData.due_date);
-      setValue("amount", initialData.amount);
+      setValue("amount", toNumber(initialData.amount));
       setValue("notes", initialData.notes);
     } else {
       reset({
@@ -65,12 +71,12 @@ export default function SupplierBillFormModal({ open, onClose, initialData }: Pr
   }, [initialData, setValue, reset]);
 
   const onSubmit = async (data: SupplierBillFormData) => {
-    // Remove null from purchase_order? Keep as null – backend will accept null.
     if (initialData) {
       await updateBill.mutateAsync({ id: initialData.id, data });
     } else {
       await createBill.mutateAsync(data);
     }
+    onSuccess?.();
     onClose();
   };
 
@@ -89,6 +95,7 @@ export default function SupplierBillFormModal({ open, onClose, initialData }: Pr
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="p-4 space-y-4">
+          {/* ... existing form fields ... */}
           <div>
             <label className="block text-sm font-medium mb-1">Bill Number *</label>
             <input
@@ -152,11 +159,7 @@ export default function SupplierBillFormModal({ open, onClose, initialData }: Pr
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted"
-            >
+            <button type="button" onClick={onClose} className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted">
               Cancel
             </button>
             <button

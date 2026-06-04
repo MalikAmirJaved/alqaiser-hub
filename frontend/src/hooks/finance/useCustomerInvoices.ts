@@ -9,18 +9,20 @@ export interface CustomerInvoice {
   id: string;
   invoice_number: string;
   customer: string;
-  customer_name?: string; // from serializer
+  customer_name?: string;
   sales_order: string | null;
   invoice_date: string;
   due_date: string;
-  amount: number;
-  paid_amount: number;
-  outstanding: number;
+  amount: number | string;
+  paid_amount: number | string;
+  outstanding: number | string;
   status: "DRAFT" | "POSTED" | "PAID" | "PARTIAL" | "CANCELLED";
-  journal_entry: number | null;
+  journal_entry: number | string | null;
   notes: string;
   created_at: string;
   updated_at: string;
+  created_by?: number | string | null;
+  updated_by?: number | string | null;
 }
 
 interface PaginatedResponse<T> {

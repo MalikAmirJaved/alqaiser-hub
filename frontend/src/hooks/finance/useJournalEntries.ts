@@ -1,3 +1,4 @@
+// src/hooks/finance/useJournalEntries.ts
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 
@@ -22,6 +23,9 @@ export interface JournalEntry {
   reference_id: string;
   lines: JournalLine[];
   created_at: string;
+  updated_at: string;
+  created_by?: number | string | null;
+  updated_by?: number | string | null;
 }
 
 interface PaginatedResponse<T> {
@@ -55,6 +59,16 @@ export function useJournalEntries(filters?: {
     queryKey: ['finance_journal_entries', filters],
     queryFn: () => apiFetch<PaginatedResponse<JournalEntry>>(url),
     select: (data) => data.results,
+    staleTime: 30_000,
+  });
+}
+
+// Add this function to fetch single journal entry
+export function useJournalEntry(id: string | null) {
+  return useQuery({
+    queryKey: ['finance_journal_entry', id],
+    queryFn: () => apiFetch<JournalEntry>(`/api/finance/journal-entries/${id}/`),
+    enabled: !!id,
     staleTime: 30_000,
   });
 }

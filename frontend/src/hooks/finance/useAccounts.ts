@@ -10,7 +10,8 @@ export interface Account {
   code: string;
   name: string;
   account_type: "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE";
-  parent: number | null;
+  parent: string | null;      // UUID of parent account (for creation/update)
+  parent_uuid: string | null; // read-only, for display only
   is_active: boolean;
   description: string;
   created_at: string;
@@ -24,11 +25,12 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-type CreateAccountData = Omit<Account, "id" | "created_at" | "updated_at" | "company_id" | "branch_id" | "created_by" | "updated_by">;
-type UpdateAccountData = Partial<Omit<Account, "id"  | "created_at" | "updated_at">>;
+// Omit parent_uuid from creation because it's not sent to backend
+type CreateAccountData = Omit<Account, "id" | "created_at" | "updated_at" | "company_id" | "branch_id" | "created_by" | "updated_by" | "parent_uuid">;
+type UpdateAccountData = Partial<Omit<Account, "id" | "created_at" | "updated_at" | "parent_uuid">>;
 
 // ============================================
-// API FUNCTIONS (encapsulated in this hook file)
+// API FUNCTIONS
 // ============================================
 
 const ACCOUNTS_QUERY_KEY = "finance_accounts";
@@ -67,9 +69,6 @@ async function deleteAccount(id: string) {
 // REACT HOOKS
 // ============================================
 
-/**
- * Get all accounts with optional filters
- */
 export function useAccounts(filters?: { search?: string; account_type?: string }) {
   return useQuery({
     queryKey: [ACCOUNTS_QUERY_KEY, filters],
@@ -79,9 +78,6 @@ export function useAccounts(filters?: { search?: string; account_type?: string }
   });
 }
 
-/**
- * Get single account by ID
- */
 export function useAccount(id: string | null) {
   return useQuery({
     queryKey: [ACCOUNTS_QUERY_KEY, id],
@@ -90,9 +86,6 @@ export function useAccount(id: string | null) {
   });
 }
 
-/**
- * Create a new account
- */
 export function useCreateAccount() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -103,9 +96,6 @@ export function useCreateAccount() {
   });
 }
 
-/**
- * Update an existing account
- */
 export function useUpdateAccount() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -118,9 +108,6 @@ export function useUpdateAccount() {
   });
 }
 
-/**
- * Delete an account
- */
 export function useDeleteAccount() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -132,7 +119,7 @@ export function useDeleteAccount() {
 }
 
 // ============================================
-// UTILITY EXPORTS (optional)
+// UTILITIES
 // ============================================
 
 export const accountTypeLabels: Record<Account["account_type"], string> = {

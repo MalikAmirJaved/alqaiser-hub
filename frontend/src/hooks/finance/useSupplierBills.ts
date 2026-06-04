@@ -15,12 +15,14 @@ export interface SupplierBill {
   due_date: string;
   amount: number;
   paid_amount: number;
-  outstanding: number;               // changed to number
+  outstanding: number;
   status: "DRAFT" | "POSTED" | "PAID" | "PARTIAL" | "CANCELLED";
   journal_entry: string | null;
   notes: string;
   created_at: string;
   updated_at: string;
+  created_by?: number | string | null;   // Add this
+  updated_by?: number | string | null;   // Add this
 }
 
 interface PaginatedResponse<T> {

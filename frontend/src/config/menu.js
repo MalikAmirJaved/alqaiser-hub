@@ -85,15 +85,7 @@ export const menu = [
       { title: "Customer Invoice", to: "/finance/customer-invoices", icon: Receipt },
       { title: "Expenses", to: "/finance/expenses", icon: CreditCard },
       { title: "Journal Entries", to: "/finance/journal-entries", icon: ArrowDownCircle },
-      {
-        title: "Reports",
-        icon: Clock,
-        children: [
-          { title: "Trial Balance", to: "/finance/reports/trial-balance", icon: ArrowDownCircle },
-          { title: "Profit & Loss", to: "/finance/reports/profit-loss", icon: Layers },
-          { title: "Balance Sheet", to: "/finance/reports/balance-sheet", icon: Layers },
-        ],
-      },
+      { title: "Finance Reports", to: "/finance/reports", icon: ArrowDownCircle },
       { title: "Budgets", to: "/finance/budgets", icon: Target },
       { title: "Bank & Cash", to: "/finance/bank-accounts", icon: Landmark },
       { title: "Bank Transactions", to: "/finance/bank-transactions", icon: Landmark },

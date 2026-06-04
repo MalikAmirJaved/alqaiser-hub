@@ -240,3 +240,104 @@ class ReportViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Generi
             },
             'is_balanced': total_assets == (total_liabilities + total_equity)
         })
+    
+
+    @action(detail=False, methods=['get'])
+    def ar_aging(self, request):
+        """Accounts Receivable aging report"""
+        from apps.finance.models import CustomerInvoice
+        today = timezone.now().date()
+        invoices = CustomerInvoice.objects.filter(
+            company_id=request.user.company_id,
+            branch_id=request.user.branch_id,
+            status__in=['POSTED', 'PARTIAL']
+        ).select_related('customer')
+        aging = {'current': 0, '1_30': 0, '31_60': 0, '61_90': 0, '90_plus': 0}
+        details = []
+        for inv in invoices:
+            outstanding = inv.outstanding
+            if outstanding <= 0:
+                continue
+            days = (today - inv.due_date).days
+            if days <= 0:
+                aging['current'] += outstanding
+                bucket = 'current'
+            elif days <= 30:
+                aging['1_30'] += outstanding
+                bucket = '1-30 days'
+            elif days <= 60:
+                aging['31_60'] += outstanding
+                bucket = '31-60 days'
+            elif days <= 90:
+                aging['61_90'] += outstanding
+                bucket = '61-90 days'
+            else:
+                aging['90_plus'] += outstanding
+                bucket = '90+ days'
+            details.append({
+                'invoice_number': inv.invoice_number,
+                'customer': inv.customer.name,
+                'due_date': inv.due_date,
+                'outstanding': outstanding,
+                'bucket': bucket,
+            })
+        return Response({'aging': aging, 'details': details})
+
+    @action(detail=False, methods=['get'])
+    def ap_aging(self, request):
+        """Accounts Payable aging report"""
+        from apps.finance.models import SupplierBill
+        today = timezone.now().date()
+        bills = SupplierBill.objects.filter(
+            company_id=request.user.company_id,
+            branch_id=request.user.branch_id,
+            status__in=['POSTED', 'PARTIAL']
+        ).select_related('supplier')
+        aging = {'current': 0, '1_30': 0, '31_60': 0, '61_90': 0, '90_plus': 0}
+        details = []
+        for bill in bills:
+            outstanding = bill.outstanding
+            if outstanding <= 0:
+                continue
+            days = (today - bill.due_date).days
+            if days <= 0:
+                aging['current'] += outstanding
+                bucket = 'current'
+            elif days <= 30:
+                aging['1_30'] += outstanding
+                bucket = '1-30 days'
+            elif days <= 60:
+                aging['31_60'] += outstanding
+                bucket = '31-60 days'
+            elif days <= 90:
+                aging['61_90'] += outstanding
+                bucket = '61-90 days'
+            else:
+                aging['90_plus'] += outstanding
+                bucket = '90+ days'
+            details.append({
+                'bill_number': bill.bill_number,
+                'supplier': bill.supplier.name,
+                'due_date': bill.due_date,
+                'outstanding': outstanding,
+                'bucket': bucket,
+            })
+        return Response({'aging': aging, 'details': details})
+
+    @action(detail=False, methods=['get'])
+    def expense_report(self, request):
+        """Expense breakdown by category and department"""
+        from apps.finance.models import Expense
+        from django.db.models import Sum
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        qs = Expense.objects.filter(
+            company_id=request.user.company_id,
+            branch_id=request.user.branch_id
+        )
+        if start_date:
+            qs = qs.filter(expense_date__gte=start_date)
+        if end_date:
+            qs = qs.filter(expense_date__lte=end_date)
+        by_category = qs.values('category').annotate(total=Sum('amount')).order_by('-total')
+        return Response({'by_category': list(by_category)})
