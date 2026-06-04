@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { PageHeader, Card, ToolbarButton } from "@/components/finance/ui";
-import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useTrialBalance } from "@/hooks/finance/useTrialBalance";
 import { useProfitLoss } from "@/hooks/finance/useProfitLoss";
 import { useBalanceSheet } from "@/hooks/finance/useBalanceSheet";
@@ -412,7 +411,6 @@ const reportsList = [
 ];
 
 export default function FinancialReportsPage() {
-  const permissions = useFeaturePermissions("FINANCE", "report");
   const { settings } = useCompanySettings();
   const [activeReport, setActiveReport] = useState("profit_loss");
   const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0]);
