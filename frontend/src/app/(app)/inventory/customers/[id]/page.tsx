@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 import { Customer } from "@/hooks/useCustomers";
 import PageHeader from "@/components/PageHeader";
-import { ArrowLeft, Edit, Trash2, Package, ShoppingCart, FileText, Layers } from "lucide-react";
+import { ArrowLeft, Edit, Trash2 } from "lucide-react";
 import { useDeleteCustomer } from "@/hooks/useCustomers";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import { useState, useMemo } from "react";
@@ -18,13 +18,13 @@ import { formatCurrency } from "@/lib/currency";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 
-// Types for aggregated product purchases
 interface PurchasedProduct {
   variantId: string;
   variantSku: string;
   variantName: string;
   totalQuantity: number;
   totalValue: number;
+  [key: string]: unknown;
 }
 
 export default function CustomerDetailPage() {
@@ -35,25 +35,21 @@ export default function CustomerDetailPage() {
   const updateCustomer = useUpdateCustomer();
   const { confirm, Modal: ConfirmModal } = useConfirmationModal();
   const [isEditing, setIsEditing] = useState(false);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState("products");
 
-  // Fetch customer
   const { data: customer, refetch, isLoading: customerLoading } = useQuery<Customer>({
     queryKey: ["customer", id],
     queryFn: () => api(`/api/inventory/customers/${id}/`),
   });
 
-  // Fetch sales orders for this customer
   const { data: allOrders = [], isLoading: ordersLoading } = useSalesOrders({
     customer: id as string,
   });
 
-  // Fetch invoices for this customer
   const { data: invoices = [], isLoading: invoicesLoading } = useCustomerInvoices({
     customer: id as string,
   });
 
-  // Separate orders by status
   const holdOrders = useMemo(() => {
     return allOrders.filter(order => order.status === "DRAFT" || order.status === "PENDING");
   }, [allOrders]);
@@ -62,7 +58,6 @@ export default function CustomerDetailPage() {
     return allOrders.filter(order => order.status === "COMPLETE");
   }, [allOrders]);
 
-  // Aggregate purchased products from completed orders
   const purchasedProducts = useMemo(() => {
     const productMap = new Map<string, PurchasedProduct>();
 
@@ -71,7 +66,7 @@ export default function CustomerDetailPage() {
         const key = line.variant;
         const existing = productMap.get(key);
         const quantity = line.quantity_ordered;
-        const lineTotal = line.unit_price * quantity - (line.discount_amount || 0);
+        const lineTotal = (line.unit_price * quantity) - (line.discount_amount || 0);
         
         if (existing) {
           existing.totalQuantity += quantity;
@@ -125,66 +120,94 @@ export default function CustomerDetailPage() {
     );
   }
 
-  // Table columns for purchased products
   const productColumns: Column<PurchasedProduct>[] = [
     { key: "variantSku", label: "SKU", sortable: true },
     { key: "variantName", label: "Product", sortable: true },
-    { key: "totalQuantity", label: "Total Qty", sortable: true, align: "right" },
-    { key: "totalValue", label: "Total Value", sortable: true, align: "right", render: (val) => formatCurrency(val as number) },
+    { 
+      key: "totalQuantity", 
+      label: "Total Qty", 
+      sortable: true,
+      render: (val) => <div className="text-right">{val as number}</div>
+    },
+    { 
+      key: "totalValue", 
+      label: "Total Value", 
+      sortable: true,
+      render: (val) => <div className="text-right font-mono">{formatCurrency(val as number)}</div>
+    },
   ];
 
-  // Table columns for hold orders
   const holdOrderColumns: Column<SalesOrderResponse>[] = [
-    { key: "order_number", label: "Order #", mono: true },
+    { key: "order_number", label: "Order #", sortable: true },
     { key: "order_date", label: "Date", sortable: true },
-    { key: "total_amount", label: "Amount", align: "right", render: (val) => formatCurrency(val as number) },
+    { 
+      key: "total_amount", 
+      label: "Amount", 
+      sortable: true,
+      render: (val) => <div className="text-right font-mono">{formatCurrency(val as number)}</div>
+    },
     {
       key: "status",
       label: "Status",
-      render: (val) => (
-        <Badge variant={val === "DRAFT" ? "secondary" : "outline"}>{val}</Badge>
-      ),
+      render: (val) => <Badge variant={val === "DRAFT" ? "secondary" : "outline"}>{val as string}</Badge>,
     },
   ];
 
-  // Table columns for completed orders
   const completedOrderColumns: Column<SalesOrderResponse>[] = [
-    { key: "order_number", label: "Order #", mono: true },
+    { key: "order_number", label: "Order #", sortable: true },
     { key: "order_date", label: "Date", sortable: true },
-    { key: "total_amount", label: "Amount", align: "right", render: (val) => formatCurrency(val as number) },
+    { 
+      key: "total_amount", 
+      label: "Amount", 
+      sortable: true,
+      render: (val) => <div className="text-right font-mono">{formatCurrency(val as number)}</div>
+    },
     {
       key: "status",
       label: "Status",
-      render: () => <Badge variant="success">COMPLETE</Badge>,
+      render: () => <Badge className="bg-success/20 text-success border-success/30">COMPLETE</Badge>,
     },
   ];
 
-  // Table columns for invoices
   const invoiceColumns: Column<CustomerInvoice>[] = [
-    { key: "invoice_number", label: "Invoice #", mono: true },
+    { key: "invoice_number", label: "Invoice #", sortable: true },
     { key: "invoice_date", label: "Date", sortable: true },
     { key: "due_date", label: "Due Date", sortable: true },
-    { key: "amount", label: "Amount", align: "right", render: (val) => formatCurrency(val as number) },
-    { key: "paid_amount", label: "Paid", align: "right", render: (val) => formatCurrency(val as number) },
-    { key: "outstanding", label: "Outstanding", align: "right", render: (val) => formatCurrency(val as number) },
+    { 
+      key: "amount", 
+      label: "Amount", 
+      sortable: true,
+      render: (val) => <div className="text-right font-mono">{formatCurrency(val as number)}</div>
+    },
+    { 
+      key: "paid_amount", 
+      label: "Paid", 
+      sortable: true,
+      render: (val) => <div className="text-right font-mono">{formatCurrency(val as number)}</div>
+    },
+    { 
+      key: "outstanding", 
+      label: "Outstanding", 
+      sortable: true,
+      render: (val) => <div className="text-right font-mono">{formatCurrency(val as number)}</div>
+    },
     {
       key: "status",
       label: "Status",
       render: (val) => {
-        const statusMap: Record<string, { label: string; variant: "default" | "success" | "warning" | "destructive" }> = {
-          DRAFT: { label: "Draft", variant: "default" },
-          POSTED: { label: "Posted", variant: "warning" },
-          PAID: { label: "Paid", variant: "success" },
-          PARTIAL: { label: "Partial", variant: "warning" },
-          CANCELLED: { label: "Cancelled", variant: "destructive" },
+        const statusMap: Record<string, { label: string; className: string }> = {
+          DRAFT: { label: "Draft", className: "bg-muted text-muted-foreground" },
+          POSTED: { label: "Posted", className: "bg-warning/20 text-warning border-warning/30" },
+          PAID: { label: "Paid", className: "bg-success/20 text-success border-success/30" },
+          PARTIAL: { label: "Partial", className: "bg-warning/20 text-warning border-warning/30" },
+          CANCELLED: { label: "Cancelled", className: "bg-destructive/20 text-destructive border-destructive/30" },
         };
-        const s = statusMap[val as string] || { label: val, variant: "default" };
-        return <Badge variant={s.variant}>{s.label}</Badge>;
+        const s = statusMap[val as string] || { label: val as string, className: "bg-muted text-muted-foreground" };
+        return <Badge className={s.className}>{s.label}</Badge>;
       },
     },
   ];
 
-  // Actions for orders – navigate to detail page
   const orderActions = (row: SalesOrderResponse) => (
     <Link href={`/inventory/sales-orders/${row.id}`}>
       <button className="text-xs text-primary hover:underline">View</button>
@@ -197,9 +220,13 @@ export default function CustomerDetailPage() {
     </Link>
   );
 
+  const purchasedData = purchasedProducts as any[];
+  const holdData = holdOrders as any[];
+  const completedData = completedOrders as any[];
+  const invoiceData = invoices as any[];
+
   return (
     <div className="space-y-6 p-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button onClick={() => router.back()} className="p-2 rounded-full hover:bg-muted">
@@ -217,7 +244,6 @@ export default function CustomerDetailPage() {
         </div>
       </div>
 
-      {/* Info Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-card border border-border rounded-xl p-5 space-y-3">
           <h3 className="text-lg font-semibold">Contact Information</h3>
@@ -245,7 +271,6 @@ export default function CustomerDetailPage() {
         </div>
       </div>
 
-      {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="bg-muted/40 grid grid-cols-4 w-full max-w-2xl">
           <TabsTrigger value="products">Products Purchased</TabsTrigger>
@@ -254,46 +279,42 @@ export default function CustomerDetailPage() {
           <TabsTrigger value="invoices">Invoices</TabsTrigger>
         </TabsList>
 
-        {/* Products Purchased Tab */}
         <TabsContent value="products" className="mt-4">
           <TableView
-            columns={productColumns}
-            data={purchasedProducts}
+            columns={productColumns as unknown as Column<Record<string, unknown>>[]}
+            data={purchasedData}
             loading={ordersLoading}
             emptyMessage="No products purchased yet."
           />
         </TabsContent>
 
-        {/* Hold Orders Tab */}
         <TabsContent value="hold" className="mt-4">
           <TableView
-            columns={holdOrderColumns}
-            data={holdOrders}
+            columns={holdOrderColumns as unknown as Column<Record<string, unknown>>[]}
+            data={holdData}
             loading={ordersLoading}
             emptyMessage="No hold orders."
-            actions={orderActions}
+            actions={orderActions as any}
           />
         </TabsContent>
 
-        {/* Completed Orders Tab */}
         <TabsContent value="completed" className="mt-4">
           <TableView
-            columns={completedOrderColumns}
-            data={completedOrders}
+            columns={completedOrderColumns as unknown as Column<Record<string, unknown>>[]}
+            data={completedData}
             loading={ordersLoading}
             emptyMessage="No completed orders."
-            actions={orderActions}
+            actions={orderActions as any}
           />
         </TabsContent>
 
-        {/* Invoices Tab */}
         <TabsContent value="invoices" className="mt-4">
           <TableView
-            columns={invoiceColumns}
-            data={invoices}
+            columns={invoiceColumns as unknown as Column<Record<string, unknown>>[]}
+            data={invoiceData}
             loading={invoicesLoading}
             emptyMessage="No invoices found."
-            actions={invoiceActions}
+            actions={invoiceActions as any}
           />
         </TabsContent>
       </Tabs>

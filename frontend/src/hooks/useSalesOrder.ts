@@ -59,6 +59,9 @@ export interface SalesOrderResponse {
     variant: string;
     variant_sku: string;
     variant_name: string;
+    discount_amount: number;
+    discount_pct: number;
+    discount_fixed: number;
     quantity_ordered: number;
     unit_price: number;
     tax_rate: number;
