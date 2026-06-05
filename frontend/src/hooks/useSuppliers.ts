@@ -96,3 +96,12 @@ export function useDeleteSupplier() {
     },
   });
 }
+
+export function useSupplier(id: string | null) {
+  const api = useApi();
+  return useQuery<Supplier>({
+    queryKey: ["supplier", id],
+    queryFn: () => api(`/api/inventory/suppliers/${id}/`),
+    enabled: !!id,
+  });
+}

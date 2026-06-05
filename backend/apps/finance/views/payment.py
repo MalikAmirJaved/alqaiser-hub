@@ -9,6 +9,7 @@ from apps.permissions.mixins import PermissionRequiredMixin
 from apps.finance.models import Payment, JournalEntry, JournalLine, Account, BankTransaction
 from apps.finance.serializers import PaymentSerializer
 from apps.finance.mixins import CompanyBranchUserMixin, SoftDeleteMixin
+from django_filters.rest_framework import DjangoFilterBackend
 
 
 def confirm_payment_logic(payment, user):
@@ -167,7 +168,7 @@ class PaymentViewSet(
     CompanyBranchMixin,
     PermissionRequiredMixin,
     SoftDeleteMixin,
-    viewsets.GenericViewSet   # not ModelViewSet
+    viewsets.ReadOnlyModelViewSet
 ):
     queryset = Payment.objects.all()
     serializer_class = PaymentSerializer
@@ -175,17 +176,18 @@ class PaymentViewSet(
     permission_resource = 'payment'
     lookup_field = '_id'
 
-    # Only allow list and retrieve
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['payment_type', 'supplier_bill', 'customer_invoice']
+
     def get_queryset(self):
-        return super().get_queryset().filter(is_deleted=False)
+        qs = super().get_queryset()
+        supplier_uuid = self.request.query_params.get('supplier')
+        if supplier_uuid:
+            # Filter by the supplier's UUID field (_id)
+            qs = qs.filter(supplier_bill__supplier___id=supplier_uuid)
+        return qs
 
-    def list(self, request, *args, **kwargs):
-        return super().list(request, *args, **kwargs)
-
-    def retrieve(self, request, *args, **kwargs):
-        return super().retrieve(request, *args, **kwargs)
-
-    # Disable create, update, delete
+    # Disable write operations (optional)
     def create(self, request, *args, **kwargs):
         return Response({"detail": "Method not allowed"}, status=405)
 

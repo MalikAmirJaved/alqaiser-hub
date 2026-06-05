@@ -15,6 +15,8 @@ import { useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier, 
 import { useVendors, useCreateVendor, useUpdateVendor, useDeleteVendor, type Vendor } from "@/hooks/useVendors";
 import { formatCurrency } from "@/lib/currency";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { useRouter } from 'next/navigation';
+
 // Helper to render status badge
 const StatusBadge = ({ status }: { status: string }) => {
   const variants: Record<string, string> = {
@@ -82,6 +84,7 @@ export default function SuppliersVendorsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Supplier | Vendor | null>(null);
   const { confirm, Modal: ConfirmationModal } = useConfirmationModal();
+  const router = useRouter();
 
   // Suppliers hooks
   const { data: suppliers, isLoading: suppliersLoading } = useSuppliers();
@@ -99,6 +102,7 @@ export default function SuppliersVendorsPage() {
   const createMutation = activeTab === "suppliers" ? createSupplier : createVendor;
   const updateMutation = activeTab === "suppliers" ? updateSupplier : updateVendor;
   const deleteMutation = activeTab === "suppliers" ? deleteSupplier : deleteVendor;
+const handleView = (supplier: Supplier | Vendor) =>router.push(`suppliers/${supplier.id}`);
 
   // Calculate stats from current data
   const stats = useMemo(() => {

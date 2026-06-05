@@ -23,6 +23,7 @@ export interface Payment {
   customer_name?: string;
   bank_account_name?: string;
   outstanding?: number;
+  status?: "DRAFT" | "CONFIRMED" | "CANCELLED";
 }
 
 interface PaginatedResponse<T> {
@@ -31,6 +32,7 @@ interface PaginatedResponse<T> {
   previous: string | null;
   results: T[];
 }
+
 
 type CreatePaymentData = Omit<Payment, "id" | "created_at" | "updated_at" | "journal_entry">;
 type UpdatePaymentData = Partial<CreatePaymentData>;
@@ -46,12 +48,14 @@ async function getAllPayments(params?: {
   supplier_bill?: string;
   customer_invoice?: string;
   start_date?: string;
+  supplier?: string;
   end_date?: string;
 }) {
   const searchParams = new URLSearchParams();
   if (params?.payment_type) searchParams.append("payment_type", params.payment_type);
   if (params?.supplier_bill) searchParams.append("supplier_bill", String(params.supplier_bill));
   if (params?.customer_invoice) searchParams.append("customer_invoice", String(params.customer_invoice));
+  if (params?.supplier) searchParams.append("supplier", params.supplier);
   if (params?.start_date) searchParams.append("start_date", params.start_date);
   if (params?.end_date) searchParams.append("end_date", params.end_date);
   const url = `/api/finance/payments/${searchParams.toString() ? `?${searchParams}` : ""}`;
@@ -90,6 +94,7 @@ export function usePayments(filters?: {
   customer_invoice?: string;
   start_date?: string;
   end_date?: string;
+  supplier?: string;
 }) {
   return useQuery({
     queryKey: [PAYMENTS_KEY, filters],
