@@ -75,6 +75,8 @@ export const menu = [
     ],
   },
 
+
+
   {
     type: "group",
     title: "Finance",
@@ -95,7 +97,6 @@ export const menu = [
       { title: "Audit Logs", to: "/finance/audit", icon: History },
     ],
   },
-
     {
     type: "group",
     title: "AI Monitoring",

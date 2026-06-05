@@ -56,7 +56,7 @@ export function KPIStats({
     },
     {
       title: "Stock Turnover Rate",
-      value: `${turnoverRate.toFixed(2)}x`,
+      value: `${turnoverRate}x`,
       description: "Yearly inventory cycles",
       icon: TrendingUp,
       colorClass: "text-orange-500 bg-orange-50/50 dark:bg-orange-950/20",

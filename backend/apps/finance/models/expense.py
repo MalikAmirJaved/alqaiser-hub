@@ -28,6 +28,7 @@ class Expense(BaseModel):
     payment_method = models.CharField(max_length=20, blank=True)
     reference_number = models.CharField(max_length=100, blank=True)
     journal_entry = models.OneToOneField('JournalEntry', on_delete=models.SET_NULL, null=True, blank=True)
+    bank_account = models.ForeignKey('BankAccount', on_delete=models.SET_NULL, null=True, blank=True, related_name='expenses')
     notes = models.TextField(blank=True)
 
     class Meta:

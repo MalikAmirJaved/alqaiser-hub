@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'apps.monitoring',
     'apps.notifications',
     'apps.permissions',
+    'apps.sales',
 ]
 
 AUTH_USER_MODEL = 'organization.User'

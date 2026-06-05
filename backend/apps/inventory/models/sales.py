@@ -31,6 +31,15 @@ class SalesOrder(BaseModel):
         default='PENDING', db_index=True
     )
     order_date = models.DateField(null=True, blank=True)
+    payment_method = models.CharField(max_length=20, choices=[
+        ('CASH', 'Cash'),
+        ('BANK_TRANSFER', 'Bank Transfer'),
+        ('CHEQUE', 'Cheque'),
+        ('CREDIT_CARD', 'Credit Card'),
+        ('CREDIT', 'Credit/On Account'),
+        ('OTHER', 'Other'),
+    ], default='CREDIT')
+    bank_account = models.ForeignKey('finance.BankAccount', on_delete=models.SET_NULL, null=True, blank=True, related_name='sales_orders')
     total_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     notes = models.TextField(blank=True)
 

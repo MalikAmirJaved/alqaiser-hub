@@ -9,6 +9,7 @@ from rest_framework.decorators import action
 from django.db import transaction
 from django.db.models import F
 import uuid
+from decimal import Decimal
 
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
@@ -115,11 +116,14 @@ class GoodsReceiptViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
         """
         Atomic update of stock, PO lines, and inventory transactions.
         """
+        total_bill_amount = Decimal('0.00')
         for line in goods_receipt.lines.filter(accepted=True):
             po_line = line.purchase_order_line
             variant = po_line.variant
             warehouse = goods_receipt.purchase_order.warehouse
             qty = line.quantity_received
+            
+            total_bill_amount += Decimal(str(qty)) * Decimal(str(line.unit_cost))
 
             # Lock and update stock item
             stock_item, _ = StockItem.objects.select_for_update().get_or_create(
@@ -175,3 +179,19 @@ class GoodsReceiptViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
         elif any(l.status in ['FULLY_RECEIVED', 'PARTIALLY_RECEIVED'] for l in all_lines):
             po.status = 'PARTIALLY_RECEIVED'
         po.save(update_fields=['status'])
+
+        # Auto-create draft SupplierBill in finance app
+        from apps.finance.models import SupplierBill
+        SupplierBill.objects.create(
+            bill_number=f"BILL-{goods_receipt.receipt_number}",
+            supplier=po.supplier,
+            purchase_order=po,
+            bill_date=goods_receipt.received_date.date(),
+            due_date=po.expected_delivery_date or goods_receipt.received_date.date(),
+            amount=total_bill_amount,
+            status='DRAFT',
+            company_id=po.company_id,
+            branch_id=po.branch_id,
+            created_by=user,
+            updated_by=user
+        )

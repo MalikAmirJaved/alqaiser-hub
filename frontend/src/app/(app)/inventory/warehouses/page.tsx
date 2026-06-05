@@ -53,7 +53,7 @@ export default function WarehousesPage() {
         { id: "total", label: "Total Warehouses", value: stats.total_warehouses },
         { id: "active", label: "Active", value: stats.active_warehouses, valueClassName: "text-success" },
         { id: "inactive", label: "Inactive", value: stats.inactive_warehouses, valueClassName: "text-warning" },
-        { id: "occupancy", label: "Overall Occupancy", value: `${(stats.overall_occupancy_percentage).toFixed(2)}%`, valueClassName: "text-primary" },
+        { id: "occupancy", label: "Overall Occupancy", value: `${(stats.overall_occupancy_percentage)}%`, valueClassName: "text-primary" },
       ]
     : [];
 

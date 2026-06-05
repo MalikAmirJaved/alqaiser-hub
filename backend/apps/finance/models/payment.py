@@ -23,6 +23,11 @@ class Payment(BaseModel):
     supplier_bill = models.ForeignKey('SupplierBill', on_delete=models.CASCADE, null=True, blank=True, related_name='payments')
     customer_invoice = models.ForeignKey('CustomerInvoice', on_delete=models.CASCADE, null=True, blank=True, related_name='payments')
     bank_account = models.ForeignKey('BankAccount', on_delete=models.PROTECT, null=True, blank=True)
+    status = models.CharField(max_length=20, choices=[
+        ('DRAFT', 'Draft'),
+        ('CONFIRMED', 'Confirmed'),
+        ('CANCELLED', 'Cancelled'),
+    ], default='DRAFT')
     journal_entry = models.OneToOneField('JournalEntry', on_delete=models.SET_NULL, null=True, blank=True)
     notes = models.TextField(blank=True)
 

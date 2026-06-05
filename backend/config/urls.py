@@ -33,4 +33,5 @@ urlpatterns = [
     path('api/company/', include('apps.compsetting.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
     path('api/permissions/', include('apps.permissions.urls')),
+    path('api/sales/', include('apps.sales.urls')),
 ]

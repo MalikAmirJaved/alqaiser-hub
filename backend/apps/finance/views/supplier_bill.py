@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db import transaction
@@ -136,6 +136,33 @@ class SupplierBillViewSet(
                 bill.status = 'POSTED'
                 bill.journal_entry = entry
                 bill.save()
+                
+                # Get bank account (either passed or default first active)
+                bank_account = None
+                bank_account_uuid = request.data.get('bank_account_id')
+                from apps.finance.models import BankAccount, Payment
+                if bank_account_uuid:
+                    try:
+                        bank_account = BankAccount.objects.get(_id=bank_account_uuid, company_id=bill.company_id)
+                    except BankAccount.DoesNotExist:
+                        raise serializers.ValidationError("Provided bank_account_id does not exist.")
+                else:
+                    bank_account = BankAccount.objects.filter(company_id=bill.company_id, is_active=True).first()
+
+                # Create draft payment automatically
+                Payment.objects.create(
+                    company_id=bill.company_id,
+                    branch_id=bill.branch_id,
+                    payment_type='PAYMENT',
+                    payment_method='BANK_TRANSFER',
+                    amount=bill.amount,
+                    payment_date=bill.bill_date,
+                    supplier_bill=bill,
+                    bank_account=bank_account,
+                    status='DRAFT',
+                    created_by=request.user,
+                    updated_by=request.user
+                )
                 
                 return Response(
                     {

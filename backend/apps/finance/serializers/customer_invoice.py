@@ -1,10 +1,31 @@
 from rest_framework import serializers
-from apps.finance.models import CustomerInvoice
-from apps.inventory.models import Customer, SalesOrder
+from apps.finance.models import CustomerInvoice, CustomerInvoiceLine, BankAccount
+from apps.inventory.models import Customer, SalesOrder, ProductVariant
+
+class CustomerInvoiceLineSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='_id', read_only=True)
+    variant = serializers.SlugRelatedField(
+        slug_field='_id',
+        queryset=ProductVariant.objects.all()
+    )
+    variant_sku = serializers.CharField(source='variant.sku', read_only=True)
+    variant_name = serializers.CharField(source='variant.product.product_name', read_only=True)
+    subtotal = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    line_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = CustomerInvoiceLine
+        fields = [
+            'id', 'variant', 'variant_sku', 'variant_name',
+            'quantity', 'unit_price', 'tax_rate', 'discount_amount',
+            'subtotal', 'line_total'
+        ]
+
 
 class CustomerInvoiceSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)
     outstanding = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    lines = CustomerInvoiceLineSerializer(many=True, required=False)
     
     customer = serializers.SlugRelatedField(
         slug_field='_id',
@@ -16,8 +37,48 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
         allow_null=True,
         required=False
     )
+    bank_account = serializers.SlugRelatedField(
+        slug_field='_id',
+        queryset=BankAccount.objects.all(),
+        allow_null=True,
+        required=False
+    )
     
     class Meta:
         model = CustomerInvoice
         fields = '__all__'
         read_only_fields = ('id', 'created_at', 'updated_at', 'company_id', 'branch_id', 'paid_amount', 'status', 'journal_entry')
+
+    def create(self, validated_data):
+        lines_data = validated_data.pop('lines', [])
+        invoice = CustomerInvoice.objects.create(**validated_data)
+        
+        for line_item in lines_data:
+            CustomerInvoiceLine.objects.create(
+                customer_invoice=invoice,
+                company_id=invoice.company_id,
+                branch_id=invoice.branch_id,
+                created_by=invoice.created_by,
+                updated_by=invoice.updated_by,
+                **line_item
+            )
+        return invoice
+
+    def update(self, instance, validated_data):
+        lines_data = validated_data.pop('lines', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if lines_data is not None:
+            instance.lines.all().delete()
+            for line_item in lines_data:
+                CustomerInvoiceLine.objects.create(
+                    customer_invoice=instance,
+                    company_id=instance.company_id,
+                    branch_id=instance.branch_id,
+                    created_by=instance.updated_by or instance.created_by,
+                    updated_by=instance.updated_by or instance.created_by,
+                    **line_item
+                )
+        return instance
