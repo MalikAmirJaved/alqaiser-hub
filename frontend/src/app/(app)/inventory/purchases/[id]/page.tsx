@@ -213,6 +213,11 @@ export default function PurchaseOrderDetailPage() {
               label="Order total"
               value={<span className="font-medium text-base">{formatCurrency(order.total_amount)}</span>}
             />
+            <InfoRow label="Payment Status" value={
+              order.payment_status === 'PAID' ? 'Paid' :
+                order.payment_status === 'PARTIAL' ? 'Partially Paid' : 'Unpaid'
+            } />
+            <InfoRow label="Total Paid" value={formatCurrency(order.total_paid)} />
             {order.notes && <InfoRow label="Notes" value={order.notes} />}
           </dl>
         </div>
@@ -278,8 +283,8 @@ export default function PurchaseOrderDetailPage() {
                 line.quantity_received >= line.quantity_ordered
                   ? 'FULLY_RECEIVED'
                   : line.quantity_received > 0
-                  ? 'PARTIALLY_RECEIVED'
-                  : 'PENDING';
+                    ? 'PARTIALLY_RECEIVED'
+                    : 'PENDING';
 
               return (
                 <tr key={line.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">

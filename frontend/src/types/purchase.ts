@@ -24,6 +24,8 @@ export interface PurchaseOrder {
   status: 'DRAFT' | 'CONFIRMED' | 'PARTIALLY_RECEIVED' | 'FULLY_RECEIVED' | 'CANCELLED';
   order_date: string | null;
   expected_delivery_date: string | null;
+  payment_status: string | null;
+  total_paid: number | 0;
   total_amount: number;
   notes: string;
   lines: PurchaseOrderLine[];

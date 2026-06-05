@@ -273,7 +273,7 @@ export default function PurchaseOrdersPage() {
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-muted/50 border-b border-border">
-              {['Order #', 'Supplier', 'Warehouse', 'Order Date', 'Expected', 'Total', 'Status', ''].map(
+              {['Order #', 'Supplier', 'Warehouse', 'Order Date', 'Expected', 'Total', 'Status', 'Payment Status', 'Paid', 'Action'].map(
                 (h) => (
                   <th
                     key={h}
@@ -317,6 +317,18 @@ export default function PurchaseOrdersPage() {
                 <td className="px-4 py-3 tabular-nums font-medium">{formatCurrency(order.total_amount)}</td>
                 <td className="px-4 py-3">
                   <StatusBadge status={order.status} />
+                </td>
+                <td className="px-4 py-3">
+                  {order.payment_status === 'PAID' ? (
+                    <span className="text-success">Paid</span>
+                  ) : order.payment_status === 'PARTIAL' ? (
+                    <span className="text-warning">Partial</span>
+                  ) : (
+                    <span className="text-muted-foreground">Unpaid</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  {formatCurrency(order.total_paid)}
                 </td>
                 <td className="px-4 py-3">
                   <div
