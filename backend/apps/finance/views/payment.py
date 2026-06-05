@@ -167,7 +167,7 @@ class PaymentViewSet(
     CompanyBranchMixin,
     PermissionRequiredMixin,
     SoftDeleteMixin,
-    viewsets.ModelViewSet
+    viewsets.GenericViewSet   # not ModelViewSet
 ):
     queryset = Payment.objects.all()
     serializer_class = PaymentSerializer
@@ -175,64 +175,25 @@ class PaymentViewSet(
     permission_resource = 'payment'
     lookup_field = '_id'
 
-    @transaction.atomic
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        status_val = request.data.get('status', 'DRAFT')
-        
-        with transaction.atomic():
-            payment = serializer.save(
-                company_id=self.request.user.company_id,
-                branch_id=self.request.user.branch_id,
-                created_by=self.request.user
-            )
-            
-            if status_val == 'CONFIRMED':
-                success, msg = confirm_payment_logic(payment, request.user)
-                if not success:
-                    # Fail the creation transaction
-                    raise serializers.ValidationError(msg)
-                    
-        return Response(
-            {
-                "success": True,
-                "message": "Payment recorded successfully",
-                "data": self.get_serializer(payment).data
-            },
-            status=status.HTTP_201_CREATED
-        )
+    # Only allow list and retrieve
+    def get_queryset(self):
+        return super().get_queryset().filter(is_deleted=False)
 
-    @action(detail=True, methods=['post'])
-    def confirm(self, request, _id=None):
-        payment = self.get_object()
-        if payment.status != 'DRAFT':
-            return Response(
-                {
-                    "success": False,
-                    "error": "Payment already processed",
-                    "detail": f"Cannot confirm payment with status '{payment.status}'."
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        success, msg = confirm_payment_logic(payment, request.user)
-        if not success:
-            return Response(
-                {
-                    "success": False,
-                    "error": "Failed to confirm payment",
-                    "detail": msg
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        return Response(
-            {
-                "success": True,
-                "message": "Payment confirmed successfully",
-                "data": self.get_serializer(payment).data
-            },
-            status=status.HTTP_200_OK
-        )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+    # Disable create, update, delete
+    def create(self, request, *args, **kwargs):
+        return Response({"detail": "Method not allowed"}, status=405)
+
+    def update(self, request, *args, **kwargs):
+        return Response({"detail": "Method not allowed"}, status=405)
+
+    def partial_update(self, request, *args, **kwargs):
+        return Response({"detail": "Method not allowed"}, status=405)
+
+    def destroy(self, request, *args, **kwargs):
+        return Response({"detail": "Method not allowed"}, status=405)

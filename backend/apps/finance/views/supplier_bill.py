@@ -1,3 +1,6 @@
+# ============================================================
+# File: backend/apps/finance/views/supplier_bill.py
+# ============================================================
 from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -6,9 +9,10 @@ from django.core.exceptions import ObjectDoesNotExist
 from decimal import Decimal
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
-from apps.finance.models import SupplierBill, JournalEntry, JournalLine, Account
+from apps.finance.models import SupplierBill, JournalEntry, JournalLine, Account, Payment
 from apps.finance.serializers import SupplierBillSerializer
 from apps.finance.mixins import CompanyBranchUserMixin, SoftDeleteMixin
+from apps.finance.views.payment import confirm_payment_logic
 
 
 class SupplierBillViewSet(
@@ -63,121 +67,130 @@ class SupplierBillViewSet(
 
     @action(detail=True, methods=['post'])
     def post_bill(self, request, _id=None):
-        bill = self.get_object()
-        
-        if bill.status != 'DRAFT':
-            return Response(
-                {
-                    "success": False,
-                    "error": "Bill already processed",
-                    "detail": f"Cannot post bill with status '{bill.status}'. Only DRAFT bills can be posted."
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        try:
-            with transaction.atomic():
-                # Get accounts
-                try:
-                    inventory_asset = Account.objects.get(
-                        code='INVENTORY',
-                        company_id=bill.company_id,
-                        branch_id=bill.branch_id,
-                        is_deleted=False
-                    )
-                    accounts_payable = Account.objects.get(
-                        code='AP',
-                        company_id=bill.company_id,
-                        branch_id=bill.branch_id,
-                        is_deleted=False
-                    )
-                except ObjectDoesNotExist as e:
-                    return Response(
-                        {
-                            "success": False,
-                            "error": "Required accounts not found",
-                            "detail": f"Missing account: {str(e)}. Please ensure INVENTORY and AP accounts exist."
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-                # Create journal entry
-                entry = JournalEntry.objects.create(
-                    entry_number=f"JE-BILL-{bill.bill_number}",
-                    date=bill.bill_date,
-                    description=f"Supplier bill {bill.bill_number} from {bill.supplier.name}",
-                    reference_type='SupplierBill',
-                    reference_id=bill._id,
-                    company_id=bill.company_id,
-                    branch_id=bill.branch_id,
-                    created_by=request.user,
-                    is_posted=True
-                )
-                
-                # Create journal lines
-                JournalLine.objects.create(
-                    journal_entry=entry,
-                    account=inventory_asset,
-                    debit=bill.amount,
-                    credit=Decimal('0.00'),
-                    company_id=bill.company_id,
-                    branch_id=bill.branch_id
-                )
-                JournalLine.objects.create(
-                    journal_entry=entry,
-                    account=accounts_payable,
-                    debit=Decimal('0.00'),
-                    credit=bill.amount,
-                    company_id=bill.company_id,
-                    branch_id=bill.branch_id
-                )
-                
-                # Update bill
-                bill.status = 'POSTED'
-                bill.journal_entry = entry
-                bill.save()
-                
-                # Get bank account (either passed or default first active)
-                bank_account = None
-                bank_account_uuid = request.data.get('bank_account_id')
-                from apps.finance.models import BankAccount, Payment
-                if bank_account_uuid:
-                    try:
-                        bank_account = BankAccount.objects.get(_id=bank_account_uuid, company_id=bill.company_id)
-                    except BankAccount.DoesNotExist:
-                        raise serializers.ValidationError("Provided bank_account_id does not exist.")
-                else:
-                    bank_account = BankAccount.objects.filter(company_id=bill.company_id, is_active=True).first()
-
-                # Create draft payment automatically
-                Payment.objects.create(
-                    company_id=bill.company_id,
-                    branch_id=bill.branch_id,
-                    payment_type='PAYMENT',
-                    payment_method='BANK_TRANSFER',
-                    amount=bill.amount,
-                    payment_date=bill.bill_date,
-                    supplier_bill=bill,
-                    bank_account=bank_account,
-                    status='DRAFT',
-                    created_by=request.user,
-                    updated_by=request.user
-                )
-                
+            bill = self.get_object()
+            
+            if bill.status != 'DRAFT':
                 return Response(
                     {
-                        "success": True,
-                        "message": f"Supplier bill '{bill.bill_number}' posted successfully",
-                        "data": self.get_serializer(bill).data
+                        "success": False,
+                        "error": "Bill already processed",
+                        "detail": f"Cannot post bill with status '{bill.status}'. Only DRAFT bills can be posted."
                     },
-                    status=status.HTTP_200_OK
+                    status=status.HTTP_400_BAD_REQUEST
                 )
-        except Exception as e:
-            return Response(
-                {
-                    "success": False,
-                    "error": "Failed to post bill",
-                    "detail": str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            
+            try:
+                with transaction.atomic():
+                    # Get accounts
+                    try:
+                        inventory_asset = Account.objects.get(
+                            code='INVENTORY',
+                            company_id=bill.company_id,
+                            branch_id=bill.branch_id,
+                            is_deleted=False
+                        )
+                        accounts_payable = Account.objects.get(
+                            code='AP',
+                            company_id=bill.company_id,
+                            branch_id=bill.branch_id,
+                            is_deleted=False
+                        )
+                    except ObjectDoesNotExist as e:
+                        return Response(
+                            {
+                                "success": False,
+                                "error": "Required accounts not found",
+                                "detail": f"Missing account: {str(e)}. Please ensure INVENTORY and AP accounts exist."
+                            },
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+
+                    # Create journal entry
+                    entry = JournalEntry.objects.create(
+                        entry_number=f"JE-BILL-{bill.bill_number}",
+                        date=bill.bill_date,
+                        description=f"Supplier bill {bill.bill_number} from {bill.supplier.name}",
+                        reference_type='SupplierBill',
+                        reference_id=bill._id,
+                        company_id=bill.company_id,
+                        branch_id=bill.branch_id,
+                        created_by=request.user,
+                        is_posted=True
+                    )
+                    
+                    # Create journal lines
+                    JournalLine.objects.create(
+                        journal_entry=entry,
+                        account=inventory_asset,
+                        debit=bill.amount,
+                        credit=Decimal('0.00'),
+                        company_id=bill.company_id,
+                        branch_id=bill.branch_id
+                    )
+                    JournalLine.objects.create(
+                        journal_entry=entry,
+                        account=accounts_payable,
+                        debit=Decimal('0.00'),
+                        credit=bill.amount,
+                        company_id=bill.company_id,
+                        branch_id=bill.branch_id
+                    )
+                    
+                    # Update bill: status = PAID, link journal entry
+                    bill.status = 'PAID'
+                    bill.journal_entry = entry
+                    bill.save()
+                    
+                    # Create a payment for the full bill amount
+                    # Use the same bank account as default or allow frontend to pass
+                    bank_account = None
+                    bank_account_uuid = request.data.get('bank_account_id')
+                    from apps.finance.models import BankAccount
+                    if bank_account_uuid:
+                        try:
+                            bank_account = BankAccount.objects.get(_id=bank_account_uuid, company_id=bill.company_id)
+                        except BankAccount.DoesNotExist:
+                            pass
+                    if not bank_account:
+                        # Get first active bank account
+                        bank_account = BankAccount.objects.filter(company_id=bill.company_id, is_active=True).first()
+                    
+                    payment = Payment.objects.create(
+                        company_id=bill.company_id,
+                        branch_id=bill.branch_id,
+                        payment_type='PAYMENT',
+                        payment_method='BANK_TRANSFER',
+                        amount=bill.amount,
+                        payment_date=bill.bill_date,
+                        supplier_bill=bill,
+                        bank_account=bank_account,
+                        status='DRAFT',
+                        created_by=request.user,
+                        updated_by=request.user
+                    )
+                    
+                    # Confirm the payment immediately – this will:
+                    # - Update bill.paid_amount (now equals bill.amount, but bill.status is already PAID)
+                    # - Create bank transaction and update bank book balance
+                    # - Also (indirectly) update purchase order payment status via the payment total
+                    success, msg = confirm_payment_logic(payment, request.user)
+                    if not success:
+                        raise Exception(f"Payment confirmation failed: {msg}")
+                    
+                    return Response(
+                        {
+                            "success": True,
+                            "message": f"Supplier bill '{bill.bill_number}' posted and paid successfully",
+                            "data": self.get_serializer(bill).data
+                        },
+                        status=status.HTTP_200_OK
+                    )
+            except Exception as e:
+                return Response(
+                    {
+                        "success": False,
+                        "error": "Failed to post bill",
+                        "detail": str(e)
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )

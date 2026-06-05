@@ -1,9 +1,16 @@
+# ============================================================
+# File: backend/apps/inventory/serializers/purchase.py
+# ============================================================
 from rest_framework import serializers
+from decimal import Decimal
+from django.db.models import Sum, Value, DecimalField
+from django.db.models.functions import Coalesce
 from apps.inventory.models import (
     PurchaseOrder, PurchaseOrderLine, GoodsReceipt, GoodsReceiptLine,
     ProductVariant, Warehouse, Supplier
 )
 from apps.common.serializer_fields import UUIDForeignRelatedField
+from apps.finance.models import Payment
 
 
 class PurchaseOrderLineSerializer(serializers.ModelSerializer):
@@ -46,7 +53,6 @@ class PurchaseOrderLineSerializer(serializers.ModelSerializer):
         return None
 
 
-
 class PurchaseOrderSerializer(serializers.ModelSerializer):
     supplier = UUIDForeignRelatedField(queryset=Supplier.objects.all())
     warehouse = UUIDForeignRelatedField(queryset=Warehouse.objects.all())
@@ -65,6 +71,10 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
     created_by_info = serializers.SerializerMethodField()
     updated_by_info = serializers.SerializerMethodField()
 
+    # New computed fields
+    payment_status = serializers.SerializerMethodField()
+    total_paid = serializers.SerializerMethodField()
+
     class Meta:
         model = PurchaseOrder
         fields = [
@@ -73,8 +83,28 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             'order_date', 'expected_delivery_date', 'total_amount',
             'notes', 'lines', 'line_items',
             'created_at', 'updated_at', 'created_by_info', 'updated_by_info',
+            'payment_status', 'total_paid',
         ]
         read_only_fields = ['order_number', 'created_at', 'updated_at']
+
+    def get_total_paid(self, obj):
+        """Calculate total confirmed payments against this purchase order"""
+        total = Payment.objects.filter(
+            supplier_bill__purchase_order=obj,
+            status='CONFIRMED'
+        ).aggregate(
+            total=Coalesce(Sum('amount'), Value(0, output_field=DecimalField()))
+        )['total']
+        return total if total is not None else Decimal('0.00')
+
+    def get_payment_status(self, obj):
+        """Determine payment status based on total paid vs total amount"""
+        total_paid = self.get_total_paid(obj)
+        if total_paid >= obj.total_amount:
+            return 'PAID'
+        elif total_paid > 0:
+            return 'PARTIAL'
+        return 'UNPAID'
 
     def get_created_by_info(self, obj):
         if obj.created_by:
@@ -139,6 +169,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
 class GoodsReceiptLineSerializer(serializers.ModelSerializer):
     variant_name = serializers.CharField(source='purchase_order_line.variant.product.product_name', read_only=True)
     id = serializers.UUIDField(source='_id', read_only=True)
+    
     class Meta:
         model = GoodsReceiptLine
         fields = [
