@@ -48,11 +48,18 @@ export function useCreateCustomer() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Omit<Customer, "id" | "created_at" | "updated_at">) =>
-      api("/api/inventory/customers/", { method: "POST", body: JSON.stringify(data) }),
+    mutationFn: async (data: Omit<Customer, "id" | "created_at" | "updated_at">) => {
+      const response = await api<{ status: string; message: string; data: Customer }>(
+        "/api/inventory/customers/",
+        { method: "POST", body: JSON.stringify(data) }
+      );
+      // Return the actual customer data from the nested response
+      return response.data;
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["customers"] }),
   });
 }
+
 
 // Update customer
 export function useUpdateCustomer() {

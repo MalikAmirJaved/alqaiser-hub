@@ -99,12 +99,11 @@ export default function SalesPage() {
     if (!selectedWarehouse && warehouses.length > 0) setSelectedWarehouse(warehouses[0]);
   }, [warehouses, selectedWarehouse]);
 
-  const clearCart = useCallback(() => {
-    setCart([]);
-    setSelectedCustomer(null);
-    setActiveDraftId(null);
-    setOrderNotes("");
-  }, []);
+const clearCart = useCallback(() => {
+  setCart([]);
+  setActiveDraftId(null);
+  setOrderNotes("");
+}, []);
 
   const loadDraftOrder = useCallback((order: any) => {
     const loadedCart: CartLine[] = (order.lines || []).map((line: any) => ({
@@ -129,33 +128,38 @@ export default function SalesPage() {
     setActivePanel("search");
   }, []);
 
-  const handleCompleteSale = useCallback(async (notes: string, payments: any[], overrideCart?: CartLine[]) => {
-    const finalCart = overrideCart || cart;
-    if (finalCart.length === 0) return;
-    const notesWithPayments = notes + (payments.length ? ` | Payments: ${payments.map(p => `${p.method}:${p.amount}`).join(", ")}` : "");
-    try {
-      if (activeDraftId) {
-        const updatedLineItems = cartToLineItems(finalCart);
-        await completeOrder({ orderId: activeDraftId, line_items: updatedLineItems });
-      } else {
-        await createSalesOrder({
-          customer: selectedCustomer?.id ?? null,
-          warehouse: selectedWarehouse.id,
-          order_date: new Date().toISOString().split("T")[0],
-          notes: notesWithPayments,
-          line_items: cartToLineItems(finalCart),
-          status: "COMPLETE",
-        });
-      }
-      clearCart();
-      refetchDrafts();
-      await queryClient.refetchQueries({ queryKey: ["inventory_variant"] });
-      await queryClient.refetchQueries({ queryKey: ["batchStock"] });
-      queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
-    } catch (err: any) {
-      console.error(err);
+const handleCompleteSale = useCallback(async (notes: string, payments: any[], overrideCart?: CartLine[]) => {
+  const finalCart = overrideCart || cart;
+  if (finalCart.length === 0) return;
+  
+  // Capture customer ID before any state changes
+  const customerId = selectedCustomer?.id ?? null;
+  const warehouseId = selectedWarehouse?.id;
+  
+  const notesWithPayments = notes + (payments.length ? ` | Payments: ${payments.map(p => `${p.method}:${p.amount}`).join(", ")}` : "");
+  try {
+    if (activeDraftId) {
+      const updatedLineItems = cartToLineItems(finalCart);
+      await completeOrder({ orderId: activeDraftId, line_items: updatedLineItems });
+    } else {
+      await createSalesOrder({
+        customer: customerId,  // Use captured ID
+        warehouse: warehouseId,
+        order_date: new Date().toISOString().split("T")[0],
+        notes: notesWithPayments,
+        line_items: cartToLineItems(finalCart),
+        status: "COMPLETE",
+      });
     }
-  }, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, completeOrder, clearCart, refetchDrafts, queryClient]);
+    clearCart();
+    refetchDrafts();
+    await queryClient.refetchQueries({ queryKey: ["inventory_variant"] });
+    await queryClient.refetchQueries({ queryKey: ["batchStock"] });
+    queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
+  } catch (err: any) {
+    console.error(err);
+  }
+}, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, completeOrder, clearCart, refetchDrafts, queryClient]);
 
   const handleSaveDraft = useCallback(async (notes: string, overrideCart?: CartLine[]) => {
     const finalCart = overrideCart || cart;
