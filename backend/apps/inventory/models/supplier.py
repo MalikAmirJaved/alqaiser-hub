@@ -4,7 +4,7 @@ from apps.common.basemodel import BaseModel
 class Supplier(BaseModel):
     PARTNER_TYPES = [
         ('supplier', 'Supplier'),
-        ('vendor', 'Vendor'),
+        # ('vendor', 'Vendor'),
     ]
     STATUS_CHOICES = [
         ('active', 'Active'),

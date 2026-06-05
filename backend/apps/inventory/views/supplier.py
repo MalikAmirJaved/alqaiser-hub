@@ -48,7 +48,7 @@ class BaseSupplierViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
         serializer.save(
             company_id=user.company_id,
             branch_id=user.branch_id,
-            partner_type=self.partner_type,
+            # partner_type=self.partner_type,
             created_by=user,
             updated_by=user,
         )
