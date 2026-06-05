@@ -25,6 +25,12 @@ interface LineItem {
   tax_rate: number;
 }
 
+interface VariantOption {
+  id: string;
+  label: string;
+  buying_price: number;
+}
+
 let _lineId = 1;
 const nextLineId = () => _lineId++;
 
@@ -46,6 +52,7 @@ export function PurchaseOrderModal({
   const { data: suppliers = [] } = useSuppliers();
   const { data: warehouses = [] } = useWarehouses();
   const { data: products = [] } = useProducts();
+  const { CurrencyCode } = useCompanySettings();
 
   const [supplierId, setSupplierId] = useState('');
   const [warehouseId, setWarehouseId] = useState('');
@@ -74,16 +81,15 @@ export function PurchaseOrderModal({
     }
   }, [initialData]);
 
-  const allVariants = useMemo(
-    () =>
-      products.flatMap((p) =>
-        p.variants.map((v) => ({
-          id: v.id,
-          label: `${v.sku} — ${p.product_name}`,
-        }))
-      ),
-    [products]
-  );
+  const variantOptions = useMemo<VariantOption[]>(() => {
+    return products.flatMap((p) =>
+      p.variants.map((v) => ({
+        id: v.id,
+        label: `${v.sku} — ${p.product_name}`,
+        buying_price: v.buying_price || 0,
+      }))
+    );
+  }, [products]);
 
   const { subtotal, totalTax, grandTotal } = useMemo(() => {
     let sub = 0;
@@ -98,6 +104,14 @@ export function PurchaseOrderModal({
 
   const updateLine = <K extends keyof LineItem>(id: number, field: K, value: LineItem[K]) => {
     setLineItems((prev) => prev.map((l) => (l.id === id ? { ...l, [field]: value } : l)));
+  };
+
+  const updateLineVariant = (id: number, variantId: string) => {
+    const selected = variantOptions.find(v => v.id === variantId);
+    updateLine(id, 'variant', variantId as any);
+    if (selected && selected.buying_price > 0) {
+      updateLine(id, 'unit_cost', selected.buying_price as any);
+    }
   };
 
   const addLine = () => setLineItems((prev) => [...prev, emptyLine()]);
@@ -116,9 +130,9 @@ export function PurchaseOrderModal({
         .filter((l) => l.variant)
         .map(({ variant, quantity_ordered, unit_cost, tax_rate }) => ({
           variant,
-          quantity_ordered,
-          unit_cost,
-          tax_rate,
+          quantity_ordered: Number(quantity_ordered),
+      unit_cost: Number(unit_cost),
+      tax_rate: Number(tax_rate),
         })),
     };
     await onSubmit(payload);
@@ -128,7 +142,7 @@ export function PurchaseOrderModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-card w-full max-w-3xl max-h-[90vh] flex flex-col rounded-xl border border-border shadow-2xl">
+      <div className="bg-card w-full max-w-4xl max-h-[90vh] flex flex-col rounded-xl border border-border shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
           <div>
@@ -247,10 +261,12 @@ export function PurchaseOrderModal({
                     <LineRow
                       key={line.id}
                       line={line}
-                      variants={allVariants}
+                      variants={variantOptions}
+                      onVariantChange={updateLineVariant}
                       onChange={updateLine}
                       onRemove={() => removeLine(line.id)}
                       canRemove={lineItems.length > 1}
+                      currencySymbol={CurrencyCode()}
                     />
                   ))}
                 </div>
@@ -390,18 +406,20 @@ function EmptyLines() {
 function LineRow({
   line,
   variants,
+  onVariantChange,
   onChange,
   onRemove,
   canRemove,
+  currencySymbol,
 }: {
   line: LineItem;
-  variants: { id: string; label: string }[];
+  variants: VariantOption[];
+  onVariantChange: (id: number, variantId: string) => void;
   onChange: <K extends keyof LineItem>(id: number, field: K, value: LineItem[K]) => void;
   onRemove: () => void;
   canRemove: boolean;
+  currencySymbol: string;
 }) {
-  const { CurrencyCode } = useCompanySettings();
-
   return (
     <div
       className="grid gap-2 items-center bg-muted/30 border border-border rounded-lg px-3 py-2.5"
@@ -409,7 +427,7 @@ function LineRow({
     >
       <select
         value={line.variant}
-        onChange={(e) => onChange(line.id, 'variant', e.target.value)}
+        onChange={(e) => onVariantChange(line.id, e.target.value)}
         required
         className="field-input text-xs"
       >
@@ -428,14 +446,14 @@ function LineRow({
       />
 
       <div className="relative">
-        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">{CurrencyCode()}</span>
+        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">{currencySymbol}</span>
         <input
           type="number"
           step="0.01"
           min="0"
           value={line.unit_cost}
           onChange={(e) => onChange(line.id, 'unit_cost', parseFloat(e.target.value) || 0)}
-          className="field-input text-xs text-right tabular-nums pl-5 "
+          className="field-input text-xs text-right tabular-nums pl-5"
         />
       </div>
 
