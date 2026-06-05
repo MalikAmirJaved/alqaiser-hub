@@ -3,6 +3,7 @@
 import { VariantDetail } from "@/hooks/useAllVariants";
 import { memo } from "react";
 import { formatCurrency } from "@/lib/currency";
+
 interface StockData {
   available: number;
   reserved: number;
@@ -10,7 +11,7 @@ interface StockData {
 }
 
 interface ProductCardProps {
-  variant: VariantDetail & { stock?: StockData };
+  variant: VariantDetail & { stock?: StockData; incoming?: number };
   onAdd: () => void;
   stockData?: StockData;
 }
@@ -20,15 +21,31 @@ export const ProductCard = memo(function ProductCard({
   onAdd, 
   stockData 
 }: ProductCardProps) {
-  const availableStock = stockData?.available ?? 0;
-  const reservedStock = stockData?.reserved ?? 0;
+  const availableStock = stockData?.available ?? variant.stock?.available ?? 0;
+  const reservedStock = stockData?.reserved ?? variant.stock?.reserved ?? 0;
+  const incoming = variant.incoming ?? 0;
   const isLowStock = availableStock > 0 && availableStock <= (variant.min_stock_level || 5);
   const isOutOfStock = availableStock === 0;
+
+  // Build tooltip title
+  const getTooltipTitle = () => {
+    if (isOutOfStock) {
+      if (incoming > 0) {
+        return `Out of stock · ${incoming} units incoming from purchase orders`;
+      }
+      return "Out of stock";
+    }
+    if (incoming > 0) {
+      return `${availableStock} available · ${incoming} incoming from PO`;
+    }
+    return `${availableStock} units available`;
+  };
 
   return (
     <button
       onClick={onAdd}
       disabled={isOutOfStock}
+      title={getTooltipTitle()}
       className={`group bg-card border border-border rounded-xl p-3 text-left transition-all active:scale-[0.98] flex flex-col gap-2 ${
         isOutOfStock 
           ? 'opacity-50 cursor-not-allowed' 
@@ -78,6 +95,12 @@ export const ProductCard = memo(function ProductCard({
             <span className="font-mono text-muted-foreground">{reservedStock}</span>
           </div>
         )}
+        {incoming > 0 && (
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-muted-foreground">Incoming (PO):</span>
+            <span className="font-mono text-info">{incoming}</span>
+          </div>
+        )}
       </div>
 
       {/* Price and Add Button */}
@@ -86,7 +109,7 @@ export const ProductCard = memo(function ProductCard({
           <span className="text-base font-semibold text-primary">
             {formatCurrency(variant.selling_price)}
           </span>
-          {variant.buying_price > 0 && (
+          {variant.buying_price > 0 && variant.buying_price !== variant.selling_price && (
             <span className="text-xs text-muted-foreground line-through">
               {formatCurrency(variant.buying_price)}
             </span>
