@@ -5,6 +5,17 @@ import { apiFetch } from "@/lib/api";
 // TYPES
 // ============================================
 
+export interface CustomerInvoiceLine {
+  id: string;
+  variant: string;
+  variant_sku?: string;
+  variant_name?: string;
+  quantity: number;
+  unit_price: number;
+  tax_rate: number;
+  discount_amount: number;
+}
+
 export interface CustomerInvoice {
   id: string;
   invoice_number: string;
@@ -19,10 +30,15 @@ export interface CustomerInvoice {
   status: "DRAFT" | "POSTED" | "PAID" | "PARTIAL" | "CANCELLED";
   journal_entry: number | string | null;
   notes: string;
+  source?: string;
+  payment_method?: string;
+  lines?: CustomerInvoiceLine[];
   created_at: string;
   updated_at: string;
   created_by?: number | string | null;
+  created_by_name?: string;
   updated_by?: number | string | null;
+  updated_by_name?: string;
 }
 
 interface PaginatedResponse<T> {
