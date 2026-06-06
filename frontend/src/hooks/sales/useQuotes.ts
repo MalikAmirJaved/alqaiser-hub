@@ -30,6 +30,8 @@ export interface Quote {
   lines: QuoteLine[];
   created_at?: string;
   updated_at?: string;
+  created_by_name?: string;
+  updated_by_name?: string;
 }
 
 interface PaginatedResponse<T> {

@@ -1,0 +1,356 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { X, UserPlus, Plus, Trash2, Search } from "lucide-react";
+import { useCustomers } from "@/hooks/useCustomers";
+import { useAllVariantsSimple } from "@/hooks/useAllVariants";
+import CustomerForm from "@/components/inventory/customers/CustomerForm";
+import { useCreateQuote, useUpdateQuote, Quote } from "@/hooks/sales/useQuotes";
+import { formatCurrency } from "@/lib/currency";
+
+interface QuoteLine {
+  variant: string;
+  quantity: number;
+  unit_price: number;
+  discount_amount: number;
+  tax_rate: number;
+  variant_name?: string;
+  variant_sku?: string;
+}
+
+interface QuoteFormModalProps {
+  open: boolean;
+  onClose: () => void;
+  initialData?: Quote | null;
+  onSuccess?: () => void;
+}
+
+export default function QuoteFormModal({ open, onClose, initialData, onSuccess }: QuoteFormModalProps) {
+  const [showCustomerForm, setShowCustomerForm] = useState(false);
+  const [newCustomerData, setNewCustomerData] = useState<any>(null);
+  const { data: customers = [] } = useCustomers("");
+  const { data: variants = [] } = useAllVariantsSimple({ active_only: true });
+  const createQuote = useCreateQuote();
+  const updateQuote = useUpdateQuote();
+
+  const [formData, setFormData] = useState({
+    customer: "",
+    date: new Date().toISOString().split("T")[0],
+    expiration_date: "",
+    notes: "",
+    lines: [] as QuoteLine[],
+  });
+
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        customer: initialData.customer || "",
+        date: initialData.date || new Date().toISOString().split("T")[0],
+        expiration_date: initialData.expiration_date || "",
+        notes: initialData.notes || "",
+        lines: (initialData.lines || []).map(line => ({
+          variant: line.variant,
+          quantity: line.quantity,
+          unit_price: line.unit_price,
+          discount_amount: line.discount_amount || 0,
+          tax_rate: line.tax_rate || 0,
+          variant_name: line.variant_name,
+          variant_sku: line.variant_sku,
+        })),
+      });
+    } else {
+      resetForm();
+    }
+  }, [initialData, open]);
+
+  const resetForm = () => {
+    setFormData({
+      customer: "",
+      date: new Date().toISOString().split("T")[0],
+      expiration_date: "",
+      notes: "",
+      lines: [],
+    });
+    setNewCustomerData(null);
+  };
+
+  const addLine = () => {
+    setFormData(prev => ({
+      ...prev,
+      lines: [...prev.lines, { variant: "", quantity: 1, unit_price: 0, discount_amount: 0, tax_rate: 0 }],
+    }));
+  };
+
+  const removeLine = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      lines: prev.lines.filter((_, i) => i !== index),
+    }));
+  };
+
+  const updateLine = (index: number, field: keyof QuoteLine, value: any) => {
+  const newLines = [...formData.lines];
+  if (field === "variant") {
+    const variant = variants.find(v => v.id === value);
+    if (variant) {
+      newLines[index] = {
+        ...newLines[index],
+        variant: value,
+        variant_name: variant.product_name,
+        variant_sku: variant.sku,
+        unit_price: variant.selling_price,
+      };
+    } else {
+      newLines[index] = { ...newLines[index], variant: value };
+    }
+  } else {
+    newLines[index] = { ...newLines[index], [field]: value };
+  }
+  setFormData(prev => ({ ...prev, lines: newLines }));
+};
+
+  const calculateTotal = () => {
+    return formData.lines.reduce((sum, line) => {
+      const subtotal = line.quantity * line.unit_price;
+      const discount = line.discount_amount || 0;
+      const tax = subtotal * (line.tax_rate / 100);
+      return sum + (subtotal - discount + tax);
+    }, 0);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const payload: any = { ...formData };
+    if (newCustomerData) {
+      delete payload.customer;
+      payload.new_customer = newCustomerData;
+    } else if (!payload.customer) {
+      delete payload.customer;
+    }
+    if (!payload.expiration_date) delete payload.expiration_date;
+    payload.lines = payload.lines.map((line: any) => ({
+      ...line,
+      discount_amount: line.discount_amount || 0,
+      tax_rate: line.tax_rate || 0,
+    }));
+
+    if (initialData) {
+      await updateQuote.mutateAsync({ id: initialData.id, data: payload });
+    } else {
+      await createQuote.mutateAsync(payload);
+    }
+    onSuccess?.();
+    onClose();
+  };
+
+  if (!open) return null;
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="relative w-full max-w-4xl rounded-2xl border border-border bg-card shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center justify-between border-b border-border p-4 sticky top-0 bg-card z-10">
+            <h2 className="text-lg font-semibold">{initialData ? "Edit Quote" : "New Quote"}</h2>
+            <button onClick={onClose} className="p-1 rounded-md hover:bg-muted">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-5 space-y-6">
+            {/* Header fields */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Customer</label>
+                <div className="flex gap-2">
+                  <select
+                    value={formData.customer}
+                    onChange={e => setFormData(prev => ({ ...prev, customer: e.target.value }))}
+                    disabled={!!newCustomerData}
+                    className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="">Select Customer</option>
+                    {customers.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomerForm(true)}
+                    className="p-2 rounded-lg border border-border hover:bg-muted text-primary"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                  </button>
+                </div>
+                {newCustomerData && (
+                  <div className="mt-1 text-xs text-success flex items-center gap-1">
+                    New: {newCustomerData.name}
+                    <button type="button" onClick={() => setNewCustomerData(null)} className="text-destructive hover:underline ml-2">
+                      Clear
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Quote Date</label>
+                <input
+                  type="date"
+                  value={formData.date}
+                  onChange={e => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Expiration Date</label>
+                <input
+                  type="date"
+                  value={formData.expiration_date}
+                  onChange={e => setFormData(prev => ({ ...prev, expiration_date: e.target.value }))}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Line Items Table */}
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <label className="block text-sm font-medium">Quote Items</label>
+                <button type="button" onClick={addLine} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-primary/10 text-primary hover:bg-primary/20">
+                  <Plus className="w-3.5 h-3.5" /> Add Item
+                </button>
+              </div>
+              <div className="overflow-x-auto border border-border rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Product</th>
+                      <th className="px-3 py-2 text-right w-20">Qty</th>
+                      <th className="px-3 py-2 text-right w-28">Unit Price</th>
+                      <th className="px-3 py-2 text-right w-28">Discount</th>
+                      <th className="px-3 py-2 text-right w-28">Total</th>
+                      <th className="w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {formData.lines.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="text-center py-8 text-muted-foreground">
+                          <Search className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                          No items added
+                        </td>
+                      </tr>
+                    ) : (
+                      formData.lines.map((line, idx) => {
+                        const lineTotal = (line.quantity * line.unit_price) - (line.discount_amount || 0);
+                        return (
+                          <tr key={idx} className="border-t border-border">
+                            <td className="px-3 py-2">
+                              <select
+                                value={line.variant}
+                                onChange={e => updateLine(idx, "variant", e.target.value)}
+                                className="w-full bg-transparent focus:outline-none"
+                                required
+                              >
+                                <option value="">Select variant</option>
+                                {variants.map(v => (
+                                  <option key={v.id} value={v.id}>{v.product_name} ({v.sku})</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="number"
+                                min="1"
+                                value={line.quantity}
+                                onChange={e => updateLine(idx, "quantity", parseInt(e.target.value) || 1)}
+                                className="w-full text-right bg-transparent focus:outline-none"
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={line.unit_price}
+                                onChange={e => updateLine(idx, "unit_price", parseFloat(e.target.value) || 0)}
+                                className="w-full text-right bg-transparent focus:outline-none"
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={line.discount_amount}
+                                onChange={e => updateLine(idx, "discount_amount", parseFloat(e.target.value) || 0)}
+                                className="w-full text-right bg-transparent focus:outline-none"
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-right font-medium">{formatCurrency(lineTotal)}</td>
+                            <td className="px-3 py-2 text-center">
+                              <button type="button" onClick={() => removeLine(idx)} className="text-destructive hover:bg-destructive/10 p-1 rounded">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Notes and Total */}
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium mb-1">Notes</label>
+                <textarea
+                  rows={3}
+                  value={formData.notes}
+                  onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="w-48 space-y-2 text-right">
+                <div className="flex justify-between text-sm">
+                  <span>Subtotal</span>
+                  <span>{formatCurrency(formData.lines.reduce((s, l) => s + l.quantity * l.unit_price, 0))}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>Discount</span>
+                  <span className="text-destructive">-{formatCurrency(formData.lines.reduce((s, l) => s + (l.discount_amount || 0), 0))}</span>
+                </div>
+                <div className="flex justify-between text-lg font-bold pt-2 border-t">
+                  <span>Total</span>
+                  <span>{formatCurrency(calculateTotal())}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={onClose} className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted">
+                Cancel
+              </button>
+              <button type="submit" disabled={createQuote.isPending || updateQuote.isPending} className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 disabled:opacity-50">
+                {createQuote.isPending || updateQuote.isPending ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {showCustomerForm && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-card rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+            <h2 className="text-xl font-semibold mb-4">New Customer</h2>
+            <CustomerForm
+              onSubmit={async (data) => {
+                setNewCustomerData(data);
+                setShowCustomerForm(false);
+              }}
+              onCancel={() => setShowCustomerForm(false)}
+            />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
