@@ -253,7 +253,7 @@ const detailFields = [
                 columns={tableColumns}
                 data={suppliers || []}
                 loading={suppliersLoading}
-                onRowClick={(row) => setSelectedItem(row)}
+                onRowClick={(row) => handleView(row)}
                 actions={(row) => (
                   <>
                     {permissions.update && (

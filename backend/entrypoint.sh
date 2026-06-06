@@ -45,4 +45,4 @@ exec daphne -b 0.0.0.0 -p 8000 config.asgi:application
 # daphne -b 0.0.0.0 -p 8000 config.asgi:application
 
 # create new module 
-# python manage.py startapp 
+# python manage.py startapp ...
