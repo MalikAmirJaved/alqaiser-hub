@@ -80,6 +80,7 @@ export const menu = [
     title: "Sales",
     icon: ShoppingCart,
     children: [
+      { title: "Sales Dashboard", to: "/sales/dashboard", icon: LayoutDashboard },
       { title: "Leads", to: "/sales/leads", icon: Target },
       { title: "Quotes", to: "/sales/quotes", icon: FileText },
       { title: "Sales Customers", to: "/sales/customers", icon: Users },
@@ -103,6 +104,7 @@ export const menu = [
       // { title: "Bank Transactions", to: "/finance/bank-transactions", icon: Landmark },
       { title: "Payables / Supplier Bills", to: "/finance/supplier-bills", icon: Landmark },
       { title: "Payments", to: "/finance/payments", icon: Landmark },
+      { title: "Finance Payroll", to: "/finance/payroll", icon: Wallet },
       { title: "Taxes", to: "/finance/taxes", icon: Calculator },
       { title: "Audit Logs", to: "/finance/audit", icon: History },
     ],

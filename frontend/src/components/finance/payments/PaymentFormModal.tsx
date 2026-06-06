@@ -32,8 +32,10 @@ export default function PaymentFormModal({ open, onClose, initialData, onSuccess
 
   const createPayment = useCreatePayment();
   const updatePayment = useUpdatePayment();
-  const { data: supplierBills } = useSupplierBills({ status: "POSTED,PARTIAL" });
-  const { data: customerInvoices } = useCustomerInvoices({ status: "POSTED,PARTIAL" });
+  const { data: supplierBillsRaw } = useSupplierBills();
+  const { data: customerInvoicesRaw } = useCustomerInvoices();
+  const supplierBills = (supplierBillsRaw ?? []).filter((b) => b.payment_status !== "PAID");
+  const customerInvoices = (customerInvoicesRaw ?? []).filter((i) => i.payment_status !== "PAID");
   const { data: bankAccounts } = useBankAccounts();
 
   useEffect(() => {

@@ -26,7 +26,7 @@ RESOURCES = {
         'stock_transfer', 'barcode','report', 'alert', 'customer', 'sales_order',  'audit_log',
     ],
     'FINANCE': [
-         'dashboard', 'account', 'customer_invoice', 'expense', 'budget',
+         'dashboard', 'account', 'customer_invoice', 'expense', 'budget', 'payroll',
         'bank_account', 'bank_transaction', 'supplier_bill', 'journal_entrie', 'finance_reports', 'payment',  'tax','audit_log',
     ],
     'SALES': [

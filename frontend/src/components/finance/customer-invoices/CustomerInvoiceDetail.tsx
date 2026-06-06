@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DetailLayout, StandardSidebar, RelatedRecords, type DetailTab } from "@/components/reuseable/final/DetailLayout";
-import { useCustomerInvoice, useUpdateCustomerInvoice, usePostCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
+import { useCustomerInvoice, useUpdateCustomerInvoice, usePayCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { formatCurrency } from "@/lib/currency";
 import { StatusBadge } from "@/components/finance/ui";
@@ -25,7 +25,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const router = useRouter();
   const { data: invoice, isLoading, refetch } = useCustomerInvoice(id);
   const updateInvoice = useUpdateCustomerInvoice();
-  const postInvoice = usePostCustomerInvoice();
+  const payInvoice = usePayCustomerInvoice();
   const permissions = useFeaturePermissions(moduleCode, "customerinvoice");
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -38,10 +38,10 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const amount = toNumber(invoice.amount);
   const paidAmount = toNumber(invoice.paid_amount);
   const outstanding = toNumber(invoice.outstanding);
-  const canPost = invoice.status === "DRAFT";
+  const canPay = invoice.payment_status !== "PAID" && invoice.status !== "CANCELLED";
   const canEdit = invoice.status === "DRAFT" && permissions.update;
   const canDelete = invoice.status === "DRAFT" && permissions.delete;
-  const canRecordPayment = invoice.status === "POSTED" || invoice.status === "PARTIAL";
+  const canRecordPayment = canPay;
 
   const handleEdit = () => {
     setEditingInvoice(invoice);
@@ -54,10 +54,10 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
     setEditingInvoice(null);
   };
 
-  const handlePost = async () => {
+  const handlePay = async () => {
     setPosting(true);
     try {
-      await postInvoice.mutateAsync(invoice.id);
+      await payInvoice.mutateAsync({ id: invoice.id });
       refetch();
     } finally {
       setPosting(false);
@@ -224,7 +224,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const getStatusColor = (status: string): "success" | "warning" | "destructive" | "info" => {
     switch (status) {
       case "PAID": return "success";
-      case "POSTED": return "info";
+      case "UNPAID": return "warning";
       case "PARTIAL": return "warning";
       case "DRAFT": return "warning";
       case "CANCELLED": return "destructive";
@@ -242,7 +242,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
         }
         entityId={invoice.invoice_number}
         title={`${invoice.customer_name || "Customer"} — ${invoice.invoice_number}`}
-        status={invoice.status}
+        status={invoice.payment_status || "UNPAID"}
         subtitle={`Issued ${invoice.invoice_date} · Due ${invoice.due_date} · USD`}
         data={invoice}
         meta={[
@@ -256,11 +256,11 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
           { label: "Outstanding", value: formatCurrency(outstanding), tone: outstanding > 0 ? "warning" : "success", isCurrency: true },
           { label: "Due Date", value: invoice.due_date, isCurrency: false },
         ]}
-        primaryActionLabel={canPost ? "Post Invoice" : canRecordPayment ? "Record Payment" : undefined}
-        onPrimaryAction={canPost ? handlePost : canRecordPayment ? () => router.push(`/finance/payments/new?invoice=${invoice.id}`) : undefined}
+        primaryActionLabel={canPay ? "Pay Invoice" : undefined}
+        onPrimaryAction={canPay ? handlePay : undefined}
         onEdit={canEdit ? handleEdit : undefined}
         onPrint={handlePrint}
-        permissions={{ edit: canEdit, submit: canPost }}
+        permissions={{ edit: canEdit, submit: canPay }}
         tabs={tabs}
         sidebar={
           <StandardSidebar

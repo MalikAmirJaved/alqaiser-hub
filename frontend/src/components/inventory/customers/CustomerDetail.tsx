@@ -230,7 +230,7 @@ export default function CustomerDetail({ id, moduleCode, onBack }: CustomerDetai
         const status = String(val);
         const statusMap: Record<string, { label: string; className: string }> = {
           DRAFT: { label: "Draft", className: "bg-muted text-muted-foreground" },
-          POSTED: { label: "Posted", className: "bg-info/20 text-info border-info/30" },
+          UNPAID: { label: "Unpaid", className: "bg-warning/20 text-warning border-warning/30" },
           PAID: { label: "Paid", className: "bg-success/20 text-success border-success/30" },
           PARTIAL: { label: "Partial", className: "bg-warning/20 text-warning border-warning/30" },
           CANCELLED: { label: "Cancelled", className: "bg-destructive/20 text-destructive border-destructive/30" },

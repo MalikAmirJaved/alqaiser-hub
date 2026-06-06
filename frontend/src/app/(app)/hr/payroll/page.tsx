@@ -13,7 +13,21 @@ import { StatsCards } from "@/components/reuseable/StatsCards";
 import { getPermissions } from "@/lib/permissions";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
-export default function PayrollPage() {
+type PayrollApiModule = "hr" | "finance";
+
+export default function HrPayrollPage() {
+  return <PayrollPage module="hr" title="Payroll Management" permissionModule="HR" />;
+}
+
+export function PayrollPage({
+  module = "hr",
+  title = "Payroll Management",
+  permissionModule = "HR",
+}: {
+  module?: PayrollApiModule;
+  title?: string;
+  permissionModule?: "HR" | "FINANCE";
+}) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
@@ -28,11 +42,11 @@ export default function PayrollPage() {
   const { data: payrollRecords = [], isLoading: payrollLoading } = usePayroll({
     month: String(selectedMonth),
     year: String(selectedYear),
-  });
+  }, module);
   const { data: stats, isLoading: statsLoading } = usePayrollStats({
     month: String(selectedMonth),
     year: String(selectedYear),
-  });
+  }, module);
 
   const permissions = useSelector(
   (state: RootState) => state.permissions.permissions
@@ -40,7 +54,7 @@ export default function PayrollPage() {
 
 const payrollPermissions = getPermissions(
   permissions,
-  "HR",
+  permissionModule,
   "payroll"
 );
 
@@ -49,7 +63,7 @@ const payrollPermissions = getPermissions(
     const record = payrollRecords.find(
       r => r.employee_id === employeeId && r.month === selectedMonth && r.year === selectedYear
     );
-    return record?.status || "PENDING";
+    return record?.payment_status || record?.status || "PENDING";
   };
 
   // Get payroll record for employee
@@ -84,12 +98,12 @@ const payrollPermissions = getPermissions(
 const payrollQuery = usePayroll({
   month: String(selectedMonth),
   year: String(selectedYear),
-});
+}, module);
 
 const statsQuery = usePayrollStats({
   month: String(selectedMonth),
   year: String(selectedYear),
-});
+}, module);
 
 const handleRefresh = () => {
   payrollQuery.refetch();
@@ -115,8 +129,8 @@ const handleRefresh = () => {
   return (
     <div>
       <PageHeader
-        title="Payroll Management"
-        subtitle="Process salaries and manage payslips"
+        title={title}
+        subtitle="Process salaries and manage payslips via centralized payments"
         actions={
           <div className="flex gap-2">
             <button
@@ -317,6 +331,7 @@ const handleRefresh = () => {
           onSuccess={handleRefresh}
           selectedMonth={selectedMonth}
           selectedYear={selectedYear}
+          apiModule={module}
         />
       )}
       {payslipModalOpen && selectedEmployee && (

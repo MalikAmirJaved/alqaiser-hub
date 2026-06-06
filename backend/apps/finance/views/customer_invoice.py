@@ -7,10 +7,10 @@ from decimal import Decimal
 
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
-from apps.finance.models import CustomerInvoice, CustomerInvoiceLine, JournalEntry, JournalLine, Account
+from apps.finance.models import CustomerInvoice, CustomerInvoiceLine
 from apps.finance.serializers import CustomerInvoiceSerializer
 from apps.finance.mixins import CompanyBranchUserMixin, SoftDeleteMixin
-from apps.finance.services.payable import create_payment_for
+from apps.finance.services.invoice_payment import pay_customer_invoice
 
 
 class CustomerInvoiceViewSet(
@@ -76,139 +76,27 @@ class CustomerInvoiceViewSet(
         instance.save(update_fields=['is_deleted', 'deleted_by'])
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    @action(detail=True, methods=['post'])
-    def post_invoice(self, request, _id=None):
-        """
-        Post a draft invoice: creates journal entries (AR → Sales Revenue).
-        """
-        invoice = self.get_object()
-        if invoice.status != 'DRAFT':
-            return Response(
-                {'error': f"Cannot post invoice with status '{invoice.status}'"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        with transaction.atomic():
-            try:
-                accounts_receivable = Account.objects.get(
-                    code='AR',
-                    company_id=invoice.company_id,
-                    branch_id=invoice.branch_id,
-                    is_deleted=False
-                )
-                sales_revenue = Account.objects.get(
-                    code='SALES',
-                    company_id=invoice.company_id,
-                    branch_id=invoice.branch_id,
-                    is_deleted=False
-                )
-            except ObjectDoesNotExist as e:
-                return Response(
-                    {'error': f'Missing account: {str(e)}. Ensure AR and SALES accounts exist.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            entry = JournalEntry.objects.create(
-                entry_number=f"JE-INV-{invoice.invoice_number}",
-                date=invoice.invoice_date,
-                description=f"Customer invoice {invoice.invoice_number} for {invoice.customer.name if invoice.customer else 'Customer'}",
-                reference_type='CustomerInvoice',
-                reference_id=invoice._id,
-                company_id=invoice.company_id,
-                branch_id=invoice.branch_id,
-                created_by=request.user,
-                is_posted=True
-            )
-            JournalLine.objects.create(
-                journal_entry=entry,
-                account=accounts_receivable,
-                debit=invoice.amount,
-                credit=Decimal('0.00'),
-                company_id=invoice.company_id,
-                branch_id=invoice.branch_id
-            )
-            JournalLine.objects.create(
-                journal_entry=entry,
-                account=sales_revenue,
-                debit=Decimal('0.00'),
-                credit=invoice.amount,
-                company_id=invoice.company_id,
-                branch_id=invoice.branch_id
-            )
-
-            invoice.status = 'POSTED'
-            invoice.journal_entry = entry
-            invoice.save(update_fields=['status', 'journal_entry'])
-
+    def _pay_invoice(self, invoice, request, amount=None):
+        try:
+            success, message = pay_customer_invoice(invoice, request, amount=amount)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        if not success:
+            return Response({'error': message}, status=status.HTTP_400_BAD_REQUEST)
         return Response({
             'status': 'success',
-            'message': f"Invoice '{invoice.invoice_number}' posted",
-            'data': self.get_serializer(invoice).data
+            'message': message,
+            'data': self.get_serializer(invoice).data,
         })
+
+    @action(detail=True, methods=['post'])
+    def post_invoice(self, request, _id=None):
+        """Pay invoice in full (legacy alias — books JE + confirms payment)."""
+        invoice = self.get_object()
+        return self._pay_invoice(invoice, request, amount=invoice.outstanding)
 
     @action(detail=True, methods=['post'])
     def record_payment(self, request, _id=None):
-        """
-        Record a payment against a posted invoice (creates Payment and confirms it).
-        """
+        """Record a payment against an invoice (books JE on first payment)."""
         invoice = self.get_object()
-        if invoice.status != 'POSTED':
-            return Response(
-                {'error': f"Cannot record payment for invoice with status '{invoice.status}'"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        if invoice.payment_status == 'PAID':
-            return Response(
-                {'error': 'Invoice is already fully paid'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        amount = Decimal(str(request.data.get('amount', invoice.outstanding)))
-        bank_account_uuid = request.data.get('bank_account_id')
-        payment_method = request.data.get('payment_method', 'CASH')
-
-        if amount <= 0:
-            return Response(
-                {'error': 'Payment amount must be positive'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        if amount > invoice.outstanding:
-            return Response(
-                {'error': f'Amount {amount} exceeds outstanding {invoice.outstanding}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        with transaction.atomic():
-            bank_account = None
-            if bank_account_uuid:
-                from apps.finance.models import BankAccount
-                try:
-                    bank_account = BankAccount.objects.get(
-                        _id=bank_account_uuid,
-                        company_id=invoice.company_id
-                    )
-                except BankAccount.DoesNotExist:
-                    return Response(
-                        {'error': 'Bank account not found'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-            from django.utils import timezone
-            try:
-                create_payment_for(
-                    invoice,
-                    amount=amount,
-                    payment_date=timezone.now().date(),
-                    payment_method=payment_method,
-                    bank_account=bank_account,
-                    user=request.user,
-                    auto_confirm=True,
-                )
-            except ValueError as exc:
-                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response({
-            'status': 'success',
-            'message': 'Payment recorded and confirmed',
-            'data': self.get_serializer(invoice).data
-        })
+        return self._pay_invoice(invoice, request)

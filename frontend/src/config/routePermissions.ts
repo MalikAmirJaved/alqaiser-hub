@@ -39,6 +39,7 @@ export const routePermissions: Record<string, string> = {
   "/inventory/audit": "INVENTORY:audit_log:view",
 
   // Sales routes
+  "/sales/dashboard": "SALES:dashboard:view",
   "/sales/leads": "SALES:lead:view",
   "/sales/quotes": "SALES:quote:view",
   "/sales/customers": "SALES:sales_customer:view",
@@ -56,6 +57,7 @@ export const routePermissions: Record<string, string> = {
   "/finance/bank-transactions": "FINANCE:bank_transaction:view",
   "/finance/supplier-bills": "FINANCE:supplier_bill:view",
   "/finance/payments": "FINANCE:payment:view",
+  "/finance/payroll": "FINANCE:payroll:view",
   "/finance/taxes": "FINANCE:tax:view",
 
   // AI Monitoring routes
@@ -117,6 +119,7 @@ export const menuPermissionMapping: Record<string, string | null> = {
   "Audit Logs": "INVENTORY:audit_log:view",
 
   // ========== SALES ==========
+  "Sales Dashboard": "SALES:dashboard:view",
   "Leads": "SALES:lead:view",
   "Quotes": "SALES:quote:view",
   "Sales Customers": "SALES:sales_customer:view",
@@ -134,6 +137,7 @@ export const menuPermissionMapping: Record<string, string | null> = {
   "Journal Entries": "FINANCE:journal_entrie:view",
   "Finance Reports": "FINANCE:finance_reports:view",
   Payments: "FINANCE:payment:view",
+  "Finance Payroll": "FINANCE:payroll:view",
   Taxes: "FINANCE:tax:view",
 
   // ========== AI MONITORING ==========

@@ -90,57 +90,13 @@ def sync_sales_order_to_invoice(order, user):
 
     # 2. If SalesOrder is COMPLETE, post/confirm invoice and handle auto-payment
     if order.status == 'COMPLETE':
-        if invoice.status == 'DRAFT':
-            # Create JE for invoice
-            from apps.finance.models import Account, JournalEntry, JournalLine
+        if not invoice.journal_entry_id:
+            from apps.finance.services.document import ensure_customer_invoice_journal
             from django.core.exceptions import ObjectDoesNotExist
-            
             try:
-                accounts_receivable = Account.objects.get(
-                    code='AR',
-                    company_id=invoice.company_id,
-                    branch_id=invoice.branch_id,
-                    is_deleted=False
-                )
-                sales_revenue = Account.objects.get(
-                    code='SALES',
-                    company_id=invoice.company_id,
-                    branch_id=invoice.branch_id,
-                    is_deleted=False
-                )
+                ensure_customer_invoice_journal(invoice, user)
             except ObjectDoesNotExist:
-                raise Exception("AR or SALES account not found in Chart of Accounts. Cannot complete order.")
-                
-            entry = JournalEntry.objects.create(
-                entry_number=f"JE-INV-{invoice.invoice_number}",
-                date=invoice.invoice_date,
-                description=f"Customer invoice {invoice.invoice_number} for {invoice.customer.name if invoice.customer else 'Customer'}",
-                reference_type='CustomerInvoice',
-                reference_id=invoice._id,
-                company_id=invoice.company_id,
-                branch_id=invoice.branch_id,
-                created_by=user,
-                is_posted=True
-            )
-            JournalLine.objects.create(
-                journal_entry=entry,
-                account=accounts_receivable,
-                debit=invoice.amount,
-                credit=Decimal('0.00'),
-                company_id=invoice.company_id,
-                branch_id=invoice.branch_id
-            )
-            JournalLine.objects.create(
-                journal_entry=entry,
-                account=sales_revenue,
-                debit=Decimal('0.00'),
-                credit=invoice.amount,
-                company_id=invoice.company_id,
-                branch_id=invoice.branch_id
-            )
-            invoice.status = 'POSTED'
-            invoice.journal_entry = entry
-            invoice.save(update_fields=['status', 'journal_entry'])
+                raise Exception('AR or SALES account not found in Chart of Accounts. Cannot complete order.')
             
         # 3. Auto-payment when bank account is set (immediate POS settlement)
         if order.bank_account and not get_payments_queryset(invoice).exists():

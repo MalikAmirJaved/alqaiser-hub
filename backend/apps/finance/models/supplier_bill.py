@@ -18,7 +18,6 @@ class SupplierBill(PayableModelMixin, BaseModel):
         max_length=20,
         choices=[
             ('DRAFT', 'Draft'),
-            ('POSTED', 'Posted'),
             ('CANCELLED', 'Cancelled'),
         ],
         default='DRAFT',

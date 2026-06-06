@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
-import { useCustomerInvoices, useDeleteCustomerInvoice, usePostCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
+import { useCustomerInvoices, useDeleteCustomerInvoice, usePayCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import CustomerInvoiceFormModal from "@/components/finance/customer-invoices/CustomerInvoiceFormModal";
 import { formatCurrency } from "@/lib/currency";
@@ -22,7 +22,7 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
 
   const { data: invoices, isLoading } = useCustomerInvoices();
   const deleteInvoice = useDeleteCustomerInvoice();
-  const postInvoice = usePostCustomerInvoice();
+  const payInvoice = usePayCustomerInvoice();
 
   const permissions = useFeaturePermissions(moduleCode, "customerinvoice");
 
@@ -49,9 +49,9 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
     deleteInvoice.mutate(invoice.id);
   };
 
-  const handlePost = (invoice: any) => {
-    if (invoice.status === "DRAFT") {
-      postInvoice.mutate(invoice.id);
+  const handlePay = (invoice: any) => {
+    if (invoice.payment_status !== "PAID" && invoice.status !== "CANCELLED") {
+      payInvoice.mutate({ id: invoice.id });
     }
   };
 
@@ -63,7 +63,7 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
   const computeKPIs = (data: any[]) => {
     const totalOutstanding = data.reduce((sum, inv) => sum + Number(inv.outstanding || 0), 0);
     const totalPaid = data.reduce((sum, inv) => sum + Number(inv.paid_amount || 0), 0);
-    const overdueCount = data.filter((inv) => inv.status !== "PAID" && new Date(inv.due_date) < new Date()).length;
+    const overdueCount = data.filter((inv) => inv.payment_status !== "PAID" && new Date(inv.due_date) < new Date()).length;
     const draftCount = data.filter((inv) => inv.status === "DRAFT").length;
     return [
       {
@@ -117,10 +117,10 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
     },
     { key: "currency", label: "Curr", render: () => "USD" },
     {
-      key: "status",
-      label: "Status",
+      key: "payment_status",
+      label: "Payment",
       sortable: true,
-      render: (val: string) => <StatusBadge status={val} />,
+      render: (val: string) => <StatusBadge status={val || "UNPAID"} />,
     },
   ];
 
@@ -144,12 +144,9 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
         actions={{
           onEdit: handleEdit,
           onDelete: handleDelete,
-          onPost: (invoice) => {
-            if (invoice.status === "DRAFT") {
-              handlePost(invoice);
-            }
-          },
-          canPost: (invoice) => invoice.status === "DRAFT",
+          onPost: handlePay,
+          canPost: (invoice) => invoice.payment_status !== "PAID" && invoice.status !== "CANCELLED",
+          postLabel: "Pay",
         }}
         onRowClick={handleRowClick}
         exportEnabled={true}
@@ -165,13 +162,13 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
             </button>
             <button
               onClick={() => {
-                selectedIds.forEach((id) => postInvoice.mutate(id));
+                selectedIds.forEach((id) => payInvoice.mutate({ id }));
                 setSelectedIds([]);
               }}
               className="inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary/80"
             >
               <Send className="w-4 h-4" />
-              Post Selected
+              Pay Selected
             </button>
           </>
         }

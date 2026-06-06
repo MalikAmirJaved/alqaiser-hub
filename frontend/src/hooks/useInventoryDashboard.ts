@@ -175,7 +175,7 @@ export function useLowStockItems() {
   const api = useApi();
   return useQuery<StockItemReport[]>({
     queryKey: ["dashboard_low_stock"],
-    queryFn: () => api("/api/inventory/stock/current-stock/?low_stock=true&page_size=10"),
+    queryFn: () => api("/api/inventory/stock/current_stock/?low_stock=true&page_size=10"),
     staleTime: 30 * 1000,
     select: (data: any) => data.results,
   });

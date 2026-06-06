@@ -37,8 +37,8 @@ interface Actions<T> {
   onEdit?: (item: T) => void;
   onDelete?: (item: T) => void;
   onPost?: (item: T) => void;
-
   canPost?: (item: T) => boolean;
+  postLabel?: string;
 }
 
 
@@ -315,7 +315,7 @@ export function DynamicModulePage<T>({
                                       actions.onPost!(item);
                                     }}
                                     className="p-1 rounded-md hover:bg-muted"
-                                    title="Post"
+                                    title={actions.postLabel ?? "Post"}
                                   >
                                     <Send className="w-4 h-4" />
                                   </button>

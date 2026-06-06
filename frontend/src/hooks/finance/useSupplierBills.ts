@@ -16,7 +16,8 @@ export interface SupplierBill {
   amount: number;
   paid_amount: number;
   outstanding: number;
-  status: "DRAFT" | "POSTED" | "PAID" | "PARTIAL" | "CANCELLED";
+  status: "DRAFT" | "CANCELLED";
+  payment_status?: "UNPAID" | "PARTIAL" | "PAID";
   journal_entry: string | null;
   notes: string;
   created_at: string;
@@ -69,6 +70,13 @@ async function updateSupplierBill(id: string, data: UpdateSupplierBillData) {
 
 async function deleteSupplierBill(id: string) {
   return apiFetch<void>(`/api/finance/supplier-bills/${id}/`, { method: "DELETE" });
+}
+
+async function paySupplierBill(id: string, body?: Record<string, unknown>) {
+  return apiFetch<SupplierBill>(`/api/finance/supplier-bills/${id}/record_payment/`, {
+    method: "POST",
+    body: JSON.stringify(body ?? {}),
+  });
 }
 
 async function postSupplierBill(id: string) {
@@ -124,6 +132,18 @@ export function useDeleteSupplierBill() {
     mutationFn: deleteSupplierBill,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [SUPPLIER_BILLS_KEY] });
+    },
+  });
+}
+
+export function usePaySupplierBill() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body?: Record<string, unknown> }) =>
+      paySupplierBill(id, body),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: [SUPPLIER_BILLS_KEY] });
+      queryClient.invalidateQueries({ queryKey: [SUPPLIER_BILLS_KEY, id] });
     },
   });
 }

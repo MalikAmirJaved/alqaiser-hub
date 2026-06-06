@@ -7,6 +7,7 @@ from .bank import BankAccountViewSet, BankTransactionViewSet
 from .report import ReportViewSet
 from .expense import ExpenseViewSet
 from .budget import BudgetViewSet
+from .dashboard import FinanceDashboardViewSet
 
 __all__ = [
     'AccountViewSet',
@@ -19,4 +20,5 @@ __all__ = [
     'ReportViewSet',
     'ExpenseViewSet',
     'BudgetViewSet',
+    'FinanceDashboardViewSet',
 ]
