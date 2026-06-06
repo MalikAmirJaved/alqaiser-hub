@@ -443,7 +443,7 @@ export default function FinanceDashboardPage() {
                     <div className="text-sm font-medium">{b.name}</div>
                     <div className="text-xs text-muted-foreground">{b.currency}</div>
                   </div>
-                  <div className="text-sm font-semibold num">{formatCurrency(Number(b.balance), b.currency)}</div>
+                  <div className="text-sm font-semibold num">{formatCurrency(Number(b.balance), Number(b.currency))}</div>
                 </div>
               ))}
               {(bankBalances?.data ?? []).length === 0 && (

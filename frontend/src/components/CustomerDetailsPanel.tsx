@@ -22,13 +22,74 @@ interface CustomerDetailsPanelProps {
   moduleCode: "INVENTORY" | "SALES";
 }
 
-interface PurchasedProduct {
+interface PurchasedProduct extends Record<string, unknown> {
   variantId: string;
   variantSku: string;
   variantName: string;
   totalQuantity: number;
   totalValue: number;
-  [key: string]: unknown;
+}
+
+// Extend SalesOrderResponse to satisfy Record<string, unknown> constraint
+interface ExtendedSalesOrderResponse extends SalesOrderResponse, Record<string, unknown> {
+  id: string;
+  order_number: string;
+  total_amount: number;
+  customer_name?: string;
+  customer?: { id: string; name: string };
+  warehouse?: { id: string; warehouse_name: string };
+  order_date: string;
+  status: string;
+  notes?: string;
+  lines?: Array<{
+    id: string;
+    variant: string;
+    variant_sku: string;
+    variant_name: string;
+    discount_amount: number;
+    discount_pct: number;
+    discount_fixed: number;
+    quantity_ordered: number;
+    unit_price: number;
+    tax_rate: number;
+    status: string;
+  }>;
+}
+
+// Extend CustomerInvoice to satisfy Record<string, unknown> constraint
+interface ExtendedCustomerInvoice extends CustomerInvoice, Record<string, unknown> {
+  id: string;
+  invoice_number: string;
+  customer: string;
+  customer_name?: string;
+  sales_order: string | null;
+  invoice_date: string;
+  due_date: string;
+  amount: number | string;
+  paid_amount: number | string;
+  outstanding: number | string;
+  status: "DRAFT" | "CANCELLED";
+  payment_status?: "UNPAID" | "PARTIAL" | "PAID";
+  journal_entry: number | string | null;
+  notes: string;
+  source?: string;
+  payment_method?: string;
+  lines?: Array<{
+    id: string;
+    variant: string;
+    variant_sku?: string;
+    variant_name?: string;
+    quantity: number;
+    unit_price: number;
+    tax_rate: number;
+    discount_amount: number;
+  }>;
+  created_at: string;
+  updated_at: string;
+  created_by?: number | string | null;
+  created_by_name?: string;
+  updated_by?: number | string | null;
+  updated_by_name?: string;
 }
 
 export default function CustomerDetailsPanel({ moduleCode }: CustomerDetailsPanelProps) {
@@ -56,13 +117,49 @@ export default function CustomerDetailsPanel({ moduleCode }: CustomerDetailsPane
     customer: id as string,
   });
 
-  const holdOrders = useMemo(() => {
-    return allOrders.filter(order => order.status === "DRAFT" || order.status === "PENDING");
+  // Convert orders to extended type for table compatibility
+  const extendedOrders = useMemo(() => {
+    return allOrders.map(order => ({
+      ...order,
+      // Ensure all required fields are present
+      id: order.id,
+      order_number: order.order_number,
+      total_amount: order.total_amount,
+      order_date: order.order_date,
+      status: order.status,
+      notes: order.notes,
+      lines: order.lines,
+    } as ExtendedSalesOrderResponse));
   }, [allOrders]);
 
+  // Convert invoices to extended type for table compatibility
+  const extendedInvoices = useMemo(() => {
+    return invoices.map(invoice => ({
+      ...invoice,
+      // Ensure all required fields are present
+      id: invoice.id,
+      invoice_number: invoice.invoice_number,
+      customer: invoice.customer,
+      invoice_date: invoice.invoice_date,
+      due_date: invoice.due_date,
+      amount: invoice.amount,
+      paid_amount: invoice.paid_amount,
+      outstanding: invoice.outstanding,
+      status: invoice.status as "DRAFT" | "CANCELLED",
+      payment_status: invoice.payment_status,
+      notes: invoice.notes,
+      created_at: invoice.created_at,
+      updated_at: invoice.updated_at,
+    } as ExtendedCustomerInvoice));
+  }, [invoices]);
+
+  const holdOrders = useMemo(() => {
+    return extendedOrders.filter(order => order.status === "DRAFT" || order.status === "PENDING");
+  }, [extendedOrders]);
+
   const completedOrders = useMemo(() => {
-    return allOrders.filter(order => order.status === "COMPLETE");
-  }, [allOrders]);
+    return extendedOrders.filter(order => order.status === "COMPLETE");
+  }, [extendedOrders]);
 
   const purchasedProducts = useMemo(() => {
     const productMap = new Map<string, PurchasedProduct>();
@@ -103,7 +200,7 @@ export default function CustomerDetailsPanel({ moduleCode }: CustomerDetailsPane
     });
   };
 
-  const handleUpdate = async (data: any) => {
+  const handleUpdate = async (data: Partial<Customer>) => {
     await updateCustomer.mutateAsync({ id: String(id), data });
     setIsEditing(false);
     refetch();
@@ -133,40 +230,71 @@ export default function CustomerDetailsPanel({ moduleCode }: CustomerDetailsPane
       key: "totalQuantity", 
       label: "Total Qty", 
       sortable: true,
-      render: (val) => <div className="text-right">{val as number}</div>
+      render: (val: unknown) => {
+        const numVal = typeof val === 'number' ? val : Number(val);
+        return <div className="text-right">{numVal}</div>;
+      }
     },
     { 
       key: "totalValue", 
       label: "Total Value", 
       sortable: true,
-      render: (val) => <div className="text-right font-mono">{formatCurrency(val as number)}</div>
+      render: (val: unknown) => {
+        const numVal = typeof val === 'number' ? val : Number(val);
+        return <div className="text-right font-mono">{formatCurrency(numVal)}</div>;
+      }
     },
   ];
 
-  const holdOrderColumns: Column<SalesOrderResponse>[] = [
+  const holdOrderColumns: Column<ExtendedSalesOrderResponse>[] = [
     { key: "order_number", label: "Order #", sortable: true },
-    { key: "order_date", label: "Date", sortable: true },
+    { 
+      key: "order_date", 
+      label: "Date", 
+      sortable: true,
+      render: (val: unknown) => {
+        const dateVal = typeof val === 'string' ? val : String(val);
+        return <div>{dateVal}</div>;
+      }
+    },
     { 
       key: "total_amount", 
       label: "Amount", 
       sortable: true,
-      render: (val) => <div className="text-right font-mono">{formatCurrency(val as number)}</div>
+      render: (val: unknown) => {
+        const numVal = typeof val === 'number' ? val : Number(val);
+        return <div className="text-right font-mono">{formatCurrency(numVal)}</div>;
+      }
     },
     {
       key: "status",
       label: "Status",
-      render: (val) => <Badge variant={val === "DRAFT" ? "secondary" : "outline"}>{val as string}</Badge>,
+      render: (val: unknown) => {
+        const status = typeof val === 'string' ? val : String(val);
+        return <Badge variant={status === "DRAFT" ? "secondary" : "outline"}>{status}</Badge>;
+      },
     },
   ];
 
-  const completedOrderColumns: Column<SalesOrderResponse>[] = [
+  const completedOrderColumns: Column<ExtendedSalesOrderResponse>[] = [
     { key: "order_number", label: "Order #", sortable: true },
-    { key: "order_date", label: "Date", sortable: true },
+    { 
+      key: "order_date", 
+      label: "Date", 
+      sortable: true,
+      render: (val: unknown) => {
+        const dateVal = typeof val === 'string' ? val : String(val);
+        return <div>{dateVal}</div>;
+      }
+    },
     { 
       key: "total_amount", 
       label: "Amount", 
       sortable: true,
-      render: (val) => <div className="text-right font-mono">{formatCurrency(val as number)}</div>
+      render: (val: unknown) => {
+        const numVal = typeof val === 'number' ? val : Number(val);
+        return <div className="text-right font-mono">{formatCurrency(numVal)}</div>;
+      }
     },
     {
       key: "status",
@@ -175,32 +303,58 @@ export default function CustomerDetailsPanel({ moduleCode }: CustomerDetailsPane
     },
   ];
 
-  const invoiceColumns: Column<CustomerInvoice>[] = [
+  const invoiceColumns: Column<ExtendedCustomerInvoice>[] = [
     { key: "invoice_number", label: "Invoice #", sortable: true },
-    { key: "invoice_date", label: "Date", sortable: true },
-    { key: "due_date", label: "Due Date", sortable: true },
+    { 
+      key: "invoice_date", 
+      label: "Date", 
+      sortable: true,
+      render: (val: unknown) => {
+        const dateVal = typeof val === 'string' ? val : String(val);
+        return <div>{dateVal}</div>;
+      }
+    },
+    { 
+      key: "due_date", 
+      label: "Due Date", 
+      sortable: true,
+      render: (val: unknown) => {
+        const dateVal = typeof val === 'string' ? val : String(val);
+        return <div>{dateVal}</div>;
+      }
+    },
     { 
       key: "amount", 
       label: "Amount", 
       sortable: true,
-      render: (val) => <div className="text-right font-mono">{formatCurrency(val as number)}</div>
+      render: (val: unknown) => {
+        const numVal = typeof val === 'number' ? val : Number(val);
+        return <div className="text-right font-mono">{formatCurrency(numVal)}</div>;
+      }
     },
     { 
       key: "paid_amount", 
       label: "Paid", 
       sortable: true,
-      render: (val) => <div className="text-right font-mono">{formatCurrency(val as number)}</div>
+      render: (val: unknown) => {
+        const numVal = typeof val === 'number' ? val : Number(val);
+        return <div className="text-right font-mono">{formatCurrency(numVal)}</div>;
+      }
     },
     { 
       key: "outstanding", 
       label: "Outstanding", 
       sortable: true,
-      render: (val) => <div className="text-right font-mono">{formatCurrency(val as number)}</div>
+      render: (val: unknown) => {
+        const numVal = typeof val === 'number' ? val : Number(val);
+        return <div className="text-right font-mono">{formatCurrency(numVal)}</div>;
+      }
     },
     {
       key: "status",
       label: "Status",
-      render: (val) => {
+      render: (val: unknown) => {
+        const status = typeof val === 'string' ? val : String(val);
         const statusMap: Record<string, { label: string; className: string }> = {
           DRAFT: { label: "Draft", className: "bg-muted text-muted-foreground" },
           UNPAID: { label: "Unpaid", className: "bg-warning/20 text-warning border-warning/30" },
@@ -208,7 +362,7 @@ export default function CustomerDetailsPanel({ moduleCode }: CustomerDetailsPane
           PARTIAL: { label: "Partial", className: "bg-info/20 text-info border-info/30" },
           CANCELLED: { label: "Cancelled", className: "bg-destructive/20 text-destructive border-destructive/30" },
         };
-        const current = statusMap[val] || { label: val, className: "bg-muted text-muted-foreground" };
+        const current = statusMap[status] || { label: status, className: "bg-muted text-muted-foreground" };
         return <Badge className={current.className}>{current.label}</Badge>;
       },
     },
@@ -283,7 +437,7 @@ export default function CustomerDetailsPanel({ moduleCode }: CustomerDetailsPane
               <TabsTrigger value="products">Purchased Products</TabsTrigger>
               <TabsTrigger value="active-orders">Active Orders ({holdOrders.length})</TabsTrigger>
               <TabsTrigger value="order-history">Order History ({completedOrders.length})</TabsTrigger>
-              <TabsTrigger value="invoices">Invoices ({invoices.length})</TabsTrigger>
+              <TabsTrigger value="invoices">Invoices ({extendedInvoices.length})</TabsTrigger>
             </TabsList>
 
             <TabsContent value="products">
@@ -295,16 +449,16 @@ export default function CustomerDetailsPanel({ moduleCode }: CustomerDetailsPane
             </TabsContent>
 
             <TabsContent value="active-orders">
-              <TableView<SalesOrderResponse>
+              <TableView<ExtendedSalesOrderResponse>
                 columns={holdOrderColumns}
                 data={holdOrders}
                 loading={ordersLoading}
-                onRowClick={(row) => router.push(`/inventory/pos/${row.id}`)} // Redirect to POS details
+                onRowClick={(row) => router.push(`/inventory/pos/${row.id}`)}
               />
             </TabsContent>
 
             <TabsContent value="order-history">
-              <TableView<SalesOrderResponse>
+              <TableView<ExtendedSalesOrderResponse>
                 columns={completedOrderColumns}
                 data={completedOrders}
                 loading={ordersLoading}
@@ -313,11 +467,11 @@ export default function CustomerDetailsPanel({ moduleCode }: CustomerDetailsPane
             </TabsContent>
 
             <TabsContent value="invoices">
-              <TableView<CustomerInvoice>
+              <TableView<ExtendedCustomerInvoice>
                 columns={invoiceColumns}
-                data={invoices}
+                data={extendedInvoices}
                 loading={invoicesLoading}
-                onRowClick={(row) => router.push(`/finance/customer-invoices/${row.id}`)} // Redirect to finance invoices
+                onRowClick={(row) => router.push(`/finance/customer-invoices/${row.id}`)}
               />
             </TabsContent>
           </Tabs>
