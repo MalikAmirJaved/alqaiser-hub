@@ -30,7 +30,7 @@ RESOURCES = {
         'bank_account', 'bank_transaction', 'supplier_bill', 'journal_entrie', 'finance_reports', 'payment',  'tax','audit_log',
     ],
     'SALES': [
-        'dashboard', 'lead', 'quote', 'customer', 'invoice',
+        'dashboard', 'lead', 'quote', 'sales_customers_invoice', 'sales_customer',
     ],
     'AI_MONITORING': [
         'live_dashboard', 'workforce', 'inventory', 'alert', 'report', 'activity', 
