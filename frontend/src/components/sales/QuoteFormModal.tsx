@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, UserPlus, Plus, Trash2, Search } from "lucide-react";
+import { X, Plus, Trash2, Search } from "lucide-react";
 import { useCustomers } from "@/hooks/useCustomers";
 import { useAllVariantsSimple } from "@/hooks/useAllVariants";
-import CustomerForm from "@/components/inventory/customers/CustomerForm";
+import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
 import { useCreateQuote, useUpdateQuote, Quote } from "@/hooks/sales/useQuotes";
 import { formatCurrency } from "@/lib/currency";
 
@@ -26,9 +26,9 @@ interface QuoteFormModalProps {
 }
 
 export default function QuoteFormModal({ open, onClose, initialData, onSuccess }: QuoteFormModalProps) {
-  const [showCustomerForm, setShowCustomerForm] = useState(false);
-  const [newCustomerData, setNewCustomerData] = useState<any>(null);
-  const { data: customers = [] } = useCustomers("");
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [newCustomerInfo, setNewCustomerInfo] = useState<any>(null);
+  const { data: customers = [], refetch: refetchCustomers } = useCustomers("");
   const { data: variants = [] } = useAllVariantsSimple({ active_only: true });
   const createQuote = useCreateQuote();
   const updateQuote = useUpdateQuote();
@@ -71,7 +71,23 @@ export default function QuoteFormModal({ open, onClose, initialData, onSuccess }
       notes: "",
       lines: [],
     });
-    setNewCustomerData(null);
+    setNewCustomerInfo(null);
+  };
+
+  const handleCustomerCreated = async (customerId: string, customerName: string, customerData: any) => {
+    await refetchCustomers();
+    setNewCustomerInfo(customerData);
+    setFormData(prev => ({
+      ...prev,
+      customer: customerId,
+    }));
+  };
+
+  const handleCustomerSelect = (customerId: string) => {
+    setFormData(prev => ({ ...prev, customer: customerId }));
+    if (customerId) {
+      setNewCustomerInfo(null);
+    }
   };
 
   const addLine = () => {
@@ -89,31 +105,31 @@ export default function QuoteFormModal({ open, onClose, initialData, onSuccess }
   };
 
   const updateLine = (index: number, field: keyof QuoteLine, value: any) => {
-  const newLines = [...formData.lines];
-  if (field === "variant") {
-    const variant = variants.find(v => v.id === value);
-    if (variant) {
-      newLines[index] = {
-        ...newLines[index],
-        variant: value,
-        variant_name: variant.product_name,
-        variant_sku: variant.sku,
-        unit_price: variant.selling_price,
-      };
+    const newLines = [...formData.lines];
+    if (field === "variant") {
+      const variant = variants.find(v => v.id === value);
+      if (variant) {
+        newLines[index] = {
+          ...newLines[index],
+          variant: value,
+          variant_name: variant.product_name,
+          variant_sku: variant.sku,
+          unit_price: variant.selling_price,
+        };
+      } else {
+        newLines[index] = { ...newLines[index], variant: value };
+      }
     } else {
-      newLines[index] = { ...newLines[index], variant: value };
+      newLines[index] = { ...newLines[index], [field]: value };
     }
-  } else {
-    newLines[index] = { ...newLines[index], [field]: value };
-  }
-  setFormData(prev => ({ ...prev, lines: newLines }));
-};
+    setFormData(prev => ({ ...prev, lines: newLines }));
+  };
 
   const calculateTotal = () => {
     return formData.lines.reduce((sum, line) => {
       const subtotal = line.quantity * line.unit_price;
       const discount = line.discount_amount || 0;
-      const tax = subtotal * (line.tax_rate / 100);
+      const tax = (subtotal - discount) * (line.tax_rate / 100);
       return sum + (subtotal - discount + tax);
     }, 0);
   };
@@ -121,12 +137,14 @@ export default function QuoteFormModal({ open, onClose, initialData, onSuccess }
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const payload: any = { ...formData };
-    if (newCustomerData) {
+    
+    if (newCustomerInfo) {
+      payload.new_customer = newCustomerInfo;
       delete payload.customer;
-      payload.new_customer = newCustomerData;
     } else if (!payload.customer) {
       delete payload.customer;
     }
+    
     if (!payload.expiration_date) delete payload.expiration_date;
     payload.lines = payload.lines.map((line: any) => ({
       ...line,
@@ -160,33 +178,31 @@ export default function QuoteFormModal({ open, onClose, initialData, onSuccess }
             {/* Header fields */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Customer</label>
+                <label className="block text-sm font-medium mb-1">Customer *</label>
                 <div className="flex gap-2">
                   <select
                     value={formData.customer}
-                    onChange={e => setFormData(prev => ({ ...prev, customer: e.target.value }))}
-                    disabled={!!newCustomerData}
+                    onChange={e => handleCustomerSelect(e.target.value)}
+                    required
                     className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
                   >
-                    <option value="">Select Customer</option>
+                    <option value="">Select customer</option>
                     {customers.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
                   <button
                     type="button"
-                    onClick={() => setShowCustomerForm(true)}
-                    className="p-2 rounded-lg border border-border hover:bg-muted text-primary"
+                    onClick={() => setShowCustomerModal(true)}
+                    className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-border hover:bg-muted text-primary text-sm whitespace-nowrap"
                   >
-                    <UserPlus className="w-4 h-4" />
+                    <Plus className="w-4 h-4" />
+                    New
                   </button>
                 </div>
-                {newCustomerData && (
-                  <div className="mt-1 text-xs text-success flex items-center gap-1">
-                    New: {newCustomerData.name}
-                    <button type="button" onClick={() => setNewCustomerData(null)} className="text-destructive hover:underline ml-2">
-                      Clear
-                    </button>
+                {newCustomerInfo && (
+                  <div className="mt-2 p-2 rounded-lg bg-success/10 border border-success/20 text-sm">
+                    <p className="text-success-foreground font-medium">✓ New customer created: {newCustomerInfo.name}</p>
                   </div>
                 )}
               </div>
@@ -226,6 +242,7 @@ export default function QuoteFormModal({ open, onClose, initialData, onSuccess }
                       <th className="px-3 py-2 text-right w-20">Qty</th>
                       <th className="px-3 py-2 text-right w-28">Unit Price</th>
                       <th className="px-3 py-2 text-right w-28">Discount</th>
+                      <th className="px-3 py-2 text-right w-28">Tax Rate</th>
                       <th className="px-3 py-2 text-right w-28">Total</th>
                       <th className="w-10"></th>
                     </tr>
@@ -233,14 +250,17 @@ export default function QuoteFormModal({ open, onClose, initialData, onSuccess }
                   <tbody>
                     {formData.lines.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="text-center py-8 text-muted-foreground">
+                        <td colSpan={7} className="text-center py-8 text-muted-foreground">
                           <Search className="w-8 h-8 mx-auto mb-2 opacity-30" />
                           No items added
                         </td>
                       </tr>
                     ) : (
                       formData.lines.map((line, idx) => {
-                        const lineTotal = (line.quantity * line.unit_price) - (line.discount_amount || 0);
+                        const subtotal = line.quantity * line.unit_price;
+                        const discount = line.discount_amount || 0;
+                        const tax = (subtotal - discount) * (line.tax_rate / 100);
+                        const lineTotal = subtotal - discount + tax;
                         return (
                           <tr key={idx} className="border-t border-border">
                             <td className="px-3 py-2">
@@ -281,6 +301,17 @@ export default function QuoteFormModal({ open, onClose, initialData, onSuccess }
                                 value={line.discount_amount}
                                 onChange={e => updateLine(idx, "discount_amount", parseFloat(e.target.value) || 0)}
                                 className="w-full text-right bg-transparent focus:outline-none"
+                                placeholder="0.00"
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={line.tax_rate}
+                                onChange={e => updateLine(idx, "tax_rate", parseFloat(e.target.value) || 0)}
+                                className="w-full text-right bg-transparent focus:outline-none"
+                                placeholder="0"
                               />
                             </td>
                             <td className="px-3 py-2 text-right font-medium">{formatCurrency(lineTotal)}</td>
@@ -307,9 +338,10 @@ export default function QuoteFormModal({ open, onClose, initialData, onSuccess }
                   value={formData.notes}
                   onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
                   className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  placeholder="Additional notes for this quote..."
                 />
               </div>
-              <div className="w-48 space-y-2 text-right">
+              <div className="w-64 space-y-2 text-right">
                 <div className="flex justify-between text-sm">
                   <span>Subtotal</span>
                   <span>{formatCurrency(formData.lines.reduce((s, l) => s + l.quantity * l.unit_price, 0))}</span>
@@ -317,6 +349,14 @@ export default function QuoteFormModal({ open, onClose, initialData, onSuccess }
                 <div className="flex justify-between text-sm">
                   <span>Discount</span>
                   <span className="text-destructive">-{formatCurrency(formData.lines.reduce((s, l) => s + (l.discount_amount || 0), 0))}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>Tax</span>
+                  <span>{formatCurrency(formData.lines.reduce((s, l) => {
+                    const subtotal = l.quantity * l.unit_price;
+                    const discount = l.discount_amount || 0;
+                    return s + ((subtotal - discount) * (l.tax_rate / 100));
+                  }, 0))}</span>
                 </div>
                 <div className="flex justify-between text-lg font-bold pt-2 border-t">
                   <span>Total</span>
@@ -337,20 +377,11 @@ export default function QuoteFormModal({ open, onClose, initialData, onSuccess }
         </div>
       </div>
 
-      {showCustomerForm && (
-        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-card rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
-            <h2 className="text-xl font-semibold mb-4">New Customer</h2>
-            <CustomerForm
-              onSubmit={async (data) => {
-                setNewCustomerData(data);
-                setShowCustomerForm(false);
-              }}
-              onCancel={() => setShowCustomerForm(false)}
-            />
-          </div>
-        </div>
-      )}
+      <CustomerCreationModal
+        open={showCustomerModal}
+        onClose={() => setShowCustomerModal(false)}
+        onCustomerCreated={handleCustomerCreated}
+      />
     </>
   );
 }
