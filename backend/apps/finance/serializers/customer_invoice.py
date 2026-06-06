@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from apps.finance.models import CustomerInvoice, CustomerInvoiceLine, BankAccount
 from apps.inventory.models import Customer, SalesOrder, ProductVariant
+from apps.inventory.serializers.customer import CustomerSerializer
 
 class CustomerInvoiceLineSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)
@@ -29,8 +30,11 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
     
     customer = serializers.SlugRelatedField(
         slug_field='_id',
-        queryset=Customer.objects.all()
+        queryset=Customer.objects.all(),
+        required=False,
+        allow_null=True
     )
+    new_customer = CustomerSerializer(required=False, write_only=True)
     sales_order = serializers.SlugRelatedField(
         slug_field='_id',
         queryset=SalesOrder.objects.all(),
@@ -51,6 +55,23 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         lines_data = validated_data.pop('lines', [])
+        new_customer_data = validated_data.pop('new_customer', None)
+        user = self.context['request'].user
+        
+        if new_customer_data:
+            new_customer_data['company_id'] = user.company_id
+            new_customer_data['branch_id'] = user.branch_id
+            new_customer_data['created_by'] = user
+            new_customer_data['updated_by'] = user
+            customer = Customer.objects.create(**new_customer_data)
+            validated_data['customer'] = customer
+
+        # Ensure tenant fields are set even if not provided in validated_data
+        validated_data.setdefault('company_id', user.company_id)
+        validated_data.setdefault('branch_id', user.branch_id)
+        validated_data.setdefault('created_by', user)
+        validated_data.setdefault('updated_by', user)
+
         invoice = CustomerInvoice.objects.create(**validated_data)
         
         for line_item in lines_data:

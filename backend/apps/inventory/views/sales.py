@@ -42,6 +42,7 @@ def sync_sales_order_to_invoice(order, user):
             'due_date': order.order_date or timezone.now().date(),
             'amount': order.total_amount,
             'status': 'DRAFT',
+            'source': 'SALES_POS',
             'created_by': user,
             'updated_by': user,
             'payment_method': order.payment_method,

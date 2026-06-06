@@ -21,7 +21,7 @@ class BankAccountViewSet(
     queryset = BankAccount.objects.all()
     serializer_class = BankAccountSerializer
     permission_module = 'FINANCE'
-    permission_resource = 'bankaccount'
+    permission_resource = 'bank_account'
     lookup_field = '_id'
     lookup_url_kwarg = '_id'
 
@@ -49,7 +49,7 @@ class BankTransactionViewSet(
     queryset = BankTransaction.objects.all()
     serializer_class = BankTransactionSerializer
     permission_module = 'FINANCE'
-    permission_resource = 'banktransaction'
+    permission_resource = 'bank_transaction'
     lookup_field = '_id'
     lookup_url_kwarg = '_id'
 

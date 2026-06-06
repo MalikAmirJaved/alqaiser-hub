@@ -29,6 +29,12 @@ class CustomerInvoice(BaseModel):
     ], default='CREDIT')
     bank_account = models.ForeignKey('BankAccount', on_delete=models.SET_NULL, null=True, blank=True, related_name='customer_invoices')
     journal_entry = models.OneToOneField('JournalEntry', on_delete=models.SET_NULL, null=True, blank=True)
+    source = models.CharField(max_length=20, choices=[
+        ('FINANCE', 'Finance'),
+        ('SALES_POS', 'Sales POS'),
+        ('SALES_AGENT', 'Sales Agent'),
+        ('SALES_QUOTE', 'Sales Quote'),
+    ], default='FINANCE', db_index=True)
     notes = models.TextField(blank=True)
 
     class Meta:

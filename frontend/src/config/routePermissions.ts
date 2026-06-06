@@ -38,6 +38,12 @@ export const routePermissions: Record<string, string> = {
   "/inventory/pos": "INVENTORY:sales_order:view",
   "/inventory/audit": "INVENTORY:audit_log:view",
 
+  // Sales routes
+  "/sales/leads": "SALES:lead:view",
+  "/sales/quotes": "SALES:quote:view",
+  "/sales/customers": "SALES:customer:view",
+  "/sales/customer-invoices": "SALES:customerinvoice:view",
+
   // Finance routes (add as needed)
   "/finance/dashboard": "FINANCE:dashboard:view",
   "/finance/accounts": "FINANCE:account:view",
@@ -109,6 +115,12 @@ export const menuPermissionMapping: Record<string, string | null> = {
   Customers: "INVENTORY:customer:view",
   "Selling / POS": "INVENTORY:sales_order:view",
   "Audit Logs": "INVENTORY:audit_log:view",
+
+  // ========== SALES ==========
+  "Leads": "SALES:lead:view",
+  "Quotes": "SALES:quote:view",
+  "Sales Customers": "SALES:customer:view",
+  "Sales Invoices": "SALES:customerinvoice:view",
 
   // ========== FINANCE ==========
   "Finance Dashboard": "FINANCE:dashboard:view",

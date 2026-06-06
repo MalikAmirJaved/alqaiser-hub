@@ -35,6 +35,7 @@ export default function Sidebar({ open, onClose }) {
     const map: Record<string, string> = {
       "Human Resources": "HR",
       "Inventory": "INVENTORY",
+      "Sales": "SALES",
       "Finance": "FINANCE",
       "AI Monitoring": "AI_MONITORING",
       "Settings": "SETTINGS",

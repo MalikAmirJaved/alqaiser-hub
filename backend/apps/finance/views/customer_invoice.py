@@ -15,6 +15,6 @@ class CustomerInvoiceViewSet(
     queryset = CustomerInvoice.objects.all()
     serializer_class = CustomerInvoiceSerializer
     permission_module = 'FINANCE'
-    permission_resource = 'customerinvoice'
+    permission_resource = 'customer_invoice'
     lookup_field = '_id'
     lookup_url_kwarg = '_id'

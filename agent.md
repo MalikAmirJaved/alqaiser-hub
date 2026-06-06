@@ -144,8 +144,11 @@ backend/
 │   ├── monitoring/                # AI logging & workforce dashboard metrics
 │   ├── notifications/             # WebSockets middleware & notification consumers
 │   ├── organization/              # Company, Branch, and Custom User model schemas
-│   └── permissions/               # Custom RBAC database models, views, and helpers
+│   ├── permissions/               # Custom RBAC database models, views, and helpers
+└───sales/                     # Leads (title/source), Quotes, and Sales workflows
+
 ├── config/                        # Django project main config
+
 │   ├── asgi.py                    # Daphne ASGI routing (HTTP + WebSockets)
 │   ├── settings.py                # Main settings (SimpleJWT, CACHES, CHANNEL_LAYERS, CORS)
 │   └── urls.py                    # Root URL router mapping to sub-apps
@@ -168,6 +171,8 @@ frontend/src/
 │   └── routePermissions.ts        # Maps absolute routes to permission strings
 ├── contexts/                      # Shared context classes
 ├── hooks/                         # Global React Hooks
+│   ├── sales/                     # Sales hooks (useLeads, useQuotes)
+│   ├── finance/                   # Finance hooks
 │   ├── useAuth.ts                 # Accesses auth actions (login, logout)
 │   ├── useApi.ts                  # Axios/fetch hook wrapper
 │   └── usePermissions.ts          # React query hooks + permissions WebSocket hook

@@ -5,6 +5,7 @@ from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
 from decimal import Decimal
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.finance.models import (
     CustomerInvoice, CustomerInvoiceLine,
     JournalEntry, JournalLine, Account, Payment
@@ -13,11 +14,13 @@ from apps.sales.serializers.invoice import SalesInvoiceSerializer
 from apps.finance.views.payment import confirm_payment_logic
 
 
-class SalesInvoiceViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
+class SalesInvoiceViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     """
     Full CRUD for Customer Invoices exposed under the Sales module.
     Finance module only has read-only access.
     """
+    permission_module = 'SALES'
+    permission_resource = 'invoice'
     queryset = CustomerInvoice.objects.all()
     serializer_class = SalesInvoiceSerializer
     lookup_field = '_id'
@@ -46,6 +49,7 @@ class SalesInvoiceViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         import time, random
         serializer.save(
             invoice_number=f"INV-{int(time.time())}-{random.randint(1000, 9999)}",
+            source='SALES_AGENT',
             company_id=self.request.user.company_id,
             branch_id=self.request.user.branch_id,
             created_by=self.request.user,

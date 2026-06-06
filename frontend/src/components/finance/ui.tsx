@@ -89,6 +89,16 @@ export function StatusBadge({ status }: { status: string }) {
     Overdue: "bg-destructive/15 text-destructive border-destructive/30",
     Closed: "bg-muted text-muted-foreground border-border",
     Rejected: "bg-destructive/15 text-destructive border-destructive/30",
+    NEW: "bg-info/15 text-info border-info/30",
+    CONTACTED: "bg-warning/15 text-warning border-warning/30",
+    QUALIFIED: "bg-primary/15 text-primary border-primary/30",
+    WON: "bg-success/15 text-success border-success/30",
+    LOST: "bg-destructive/15 text-destructive border-destructive/30",
+    ACCEPTED: "bg-success/15 text-success border-success/30",
+    DECLINED: "bg-destructive/15 text-destructive border-destructive/30",
+    EXPIRED: "bg-muted text-muted-foreground border-border",
+    REJECTED: "bg-destructive/15 text-destructive border-destructive/30",
+    SENT: "bg-info/15 text-info border-info/30",
   };
   const styles = map[status] ?? "bg-muted text-muted-foreground border-border";
   return (

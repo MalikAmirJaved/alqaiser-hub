@@ -41,6 +41,12 @@ class SalesOrder(BaseModel):
     ], default='CREDIT')
     bank_account = models.ForeignKey('finance.BankAccount', on_delete=models.SET_NULL, null=True, blank=True, related_name='sales_orders')
     total_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    source = models.CharField(max_length=20, choices=[
+        ('INVENTORY', 'Inventory'),
+        ('SALES_POS', 'Sales POS'),
+        ('SALES_AGENT', 'Sales Agent'),
+        ('SALES_QUOTE', 'Sales Quote'),
+    ], default='INVENTORY', db_index=True)
     notes = models.TextField(blank=True)
 
     class Meta:

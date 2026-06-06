@@ -32,7 +32,9 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-type CreateCustomerInvoiceData = Omit<CustomerInvoice, "id" | "_id" | "created_at" | "updated_at" | "outstanding" | "paid_amount" | "status" | "journal_entry">;
+type CreateCustomerInvoiceData = Omit<CustomerInvoice, "id" | "_id" | "created_at" | "updated_at" | "outstanding" | "paid_amount" | "status" | "journal_entry"> & {
+  new_customer?: any;
+};
 type UpdateCustomerInvoiceData = Partial<CreateCustomerInvoiceData>;
 
 // ============================================

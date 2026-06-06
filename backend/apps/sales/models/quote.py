@@ -30,6 +30,11 @@ class Quote(BaseModel):
     expiration_date = models.DateField(null=True, blank=True)
     total_amount = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT')
+    source = models.CharField(max_length=20, choices=[
+        ('SALES_DESKTOP', 'Sales Desktop'),
+        ('SALES_POS', 'Sales POS'),
+        ('SALES_AGENT', 'Sales Agent'),
+    ], default='SALES_DESKTOP', db_index=True)
     notes = models.TextField(blank=True)
 
     class Meta:

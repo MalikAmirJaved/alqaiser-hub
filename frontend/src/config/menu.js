@@ -75,7 +75,17 @@ export const menu = [
     ],
   },
 
-
+  {
+    type: "group",
+    title: "Sales",
+    icon: ShoppingCart,
+    children: [
+      { title: "Leads", to: "/sales/leads", icon: Target },
+      { title: "Quotes", to: "/sales/quotes", icon: FileText },
+      { title: "Sales Customers", to: "/sales/customers", icon: Users },
+      { title: "Sales Invoices", to: "/sales/customer-invoices", icon: Receipt },
+    ],
+  },
 
   {
     type: "group",

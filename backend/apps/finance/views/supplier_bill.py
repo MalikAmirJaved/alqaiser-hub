@@ -25,7 +25,7 @@ class SupplierBillViewSet(
     queryset = SupplierBill.objects.all()
     serializer_class = SupplierBillSerializer
     permission_module = 'FINANCE'
-    permission_resource = 'supplierbill'
+    permission_resource = 'supplier_bill'
     lookup_field = '_id'
     lookup_url_kwarg = '_id'
     def create(self, request, *args, **kwargs):

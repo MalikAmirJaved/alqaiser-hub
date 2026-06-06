@@ -3,11 +3,14 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.db import transaction
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.sales.models.quote import Quote
 from apps.sales.serializers.quote import QuoteSerializer
 
 
-class QuoteViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
+class QuoteViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+    permission_module = 'SALES'
+    permission_resource = 'quote'
     queryset = Quote.objects.all()
     serializer_class = QuoteSerializer
     lookup_field = '_id'
@@ -49,6 +52,7 @@ class QuoteViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
                 due_date=timezone.now().date(),
                 amount=quote.total_amount,
                 status='DRAFT',
+                source='SALES_QUOTE',
                 company_id=quote.company_id,
                 branch_id=quote.branch_id,
                 created_by=request.user,

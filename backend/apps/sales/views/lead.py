@@ -3,11 +3,14 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.db import transaction
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from apps.sales.models.lead import Lead
 from apps.sales.serializers.lead import LeadSerializer
 
 
-class LeadViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
+class LeadViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+    permission_module = 'SALES'
+    permission_resource = 'lead'
     queryset = Lead.objects.all()
     serializer_class = LeadSerializer
     lookup_field = '_id'
@@ -17,18 +20,13 @@ class LeadViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         status_param = self.request.query_params.get('status')
         if status_param:
             qs = qs.filter(status=status_param)
-        source = self.request.query_params.get('source')
-        if source:
-            qs = qs.filter(source=source)
+        source_param = self.request.query_params.get('source')
+        if source_param:
+            qs = qs.filter(source=source_param)
         return qs.order_by('-created_at')
 
     def perform_create(self, serializer):
-        serializer.save(
-            company_id=self.request.user.company_id,
-            branch_id=self.request.user.branch_id,
-            created_by=self.request.user,
-            updated_by=self.request.user,
-        )
+        serializer.save() # Fields are handled in Serializer.create
 
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
@@ -52,13 +50,15 @@ class LeadViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
             if create_quote:
                 from apps.sales.models.quote import Quote
                 import time, random
+                from django.utils import timezone
                 quote = Quote.objects.create(
                     quote_number=f"QT-{int(time.time())}-{random.randint(1000, 9999)}",
                     lead=lead,
                     customer=lead.customer,
                     status='DRAFT',
                     total_amount=0,
-                    valid_until=None,
+                    date=timezone.now().date(),
+                    expiration_date=None,
                     company_id=lead.company_id,
                     branch_id=lead.branch_id,
                     created_by=request.user,

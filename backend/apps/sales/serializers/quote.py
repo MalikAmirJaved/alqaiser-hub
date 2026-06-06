@@ -2,6 +2,7 @@ from rest_framework import serializers
 from apps.sales.models.quote import Quote, QuoteLine
 from apps.sales.models.lead import Lead
 from apps.inventory.models import Customer, ProductVariant
+from apps.inventory.serializers.customer import CustomerSerializer
 
 class QuoteLineSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)
@@ -38,22 +39,42 @@ class QuoteSerializer(serializers.ModelSerializer):
         allow_null=True,
         required=False
     )
+    new_customer = CustomerSerializer(required=False, write_only=True)
 
     class Meta:
         model = Quote
-        fields = '__all__'
-        read_only_fields = ('id', 'quote_number', 'created_at', 'updated_at', 'company_id', 'branch_id')
+        fields = [
+            'id', 'quote_number', 'lead', 'customer', 'new_customer',
+            'date', 'expiration_date', 'total_amount', 'status', 'source',
+            'notes', 'lines', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ('id', 'quote_number', 'created_at', 'updated_at', 'company_id', 'branch_id', 'total_amount')
 
     def create(self, validated_data):
         import time, random
         lines_data = validated_data.pop('lines', [])
+        new_customer_data = validated_data.pop('new_customer', None)
         
         user = self.context['request'].user
+
+        if new_customer_data:
+            new_customer_data['company_id'] = user.company_id
+            new_customer_data['branch_id'] = user.branch_id
+            new_customer_data['created_by'] = user
+            new_customer_data['updated_by'] = user
+            customer = Customer.objects.create(**new_customer_data)
+            validated_data['customer'] = customer
+
         validated_data['quote_number'] = f"QT-{int(time.time())}-{random.randint(1000, 9999)}"
         validated_data['company_id'] = user.company_id
         validated_data['branch_id'] = user.branch_id
         validated_data['created_by'] = user
         validated_data['updated_by'] = user
+        
+        # Ensure date is present
+        if 'date' not in validated_data:
+            from django.utils import timezone
+            validated_data['date'] = timezone.now().date()
 
         quote = Quote.objects.create(**validated_data)
         
