@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 
 
 def sync_sales_order_to_invoice(order, user):
-    from apps.finance.models import CustomerInvoice, CustomerInvoiceLine, BankAccount, Payment
-    from apps.finance.views.payment import confirm_payment_logic
+    from apps.finance.models import CustomerInvoice, CustomerInvoiceLine
+    from apps.finance.services.payable import create_payment_for, get_payments_queryset
     from django.utils import timezone
     from decimal import Decimal
     
@@ -142,25 +142,17 @@ def sync_sales_order_to_invoice(order, user):
             invoice.journal_entry = entry
             invoice.save(update_fields=['status', 'journal_entry'])
             
-        # 3. Handle Auto-Payment if bank_account or CASH is selected
-        if order.bank_account:
-            # Check if payment already exists
-            if not Payment.objects.filter(customer_invoice=invoice, company_id=order.company_id).exists():
-                payment = Payment.objects.create(
-                    company_id=order.company_id,
-                    branch_id=order.branch_id,
-                    payment_type='RECEIPT',
-                    payment_method=order.payment_method or 'CASH',
-                    amount=order.total_amount,
-                    payment_date=timezone.now().date(),
-                    customer_invoice=invoice,
-                    bank_account=order.bank_account,
-                    status='DRAFT',
-                    created_by=user,
-                    updated_by=user
-                )
-                # Confirm the payment immediately
-                confirm_payment_logic(payment, user)
+        # 3. Auto-payment when bank account is set (immediate POS settlement)
+        if order.bank_account and not get_payments_queryset(invoice).exists():
+            create_payment_for(
+                invoice,
+                amount=order.total_amount,
+                payment_date=timezone.now().date(),
+                payment_method=order.payment_method or 'CASH',
+                bank_account=order.bank_account,
+                user=user,
+                auto_confirm=True,
+            )
 
 
 class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):

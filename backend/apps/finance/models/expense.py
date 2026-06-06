@@ -1,9 +1,13 @@
 from decimal import Decimal
-from django.db import models
-from django.core.validators import MinValueValidator
-from apps.common.basemodel import BaseModel
 
-class Expense(BaseModel):
+from django.core.validators import MinValueValidator
+from django.db import models
+
+from apps.common.basemodel import BaseModel
+from apps.finance.services.payable import PayableModelMixin
+
+
+class Expense(PayableModelMixin, BaseModel):
     EXPENSE_CATEGORIES = [
         ('RENT', 'Rent'),
         ('UTILITIES', 'Utilities'),
@@ -17,18 +21,12 @@ class Expense(BaseModel):
         ('TAXES', 'Taxes'),
         ('OTHER', 'Other'),
     ]
-    
+
     expense_number = models.CharField(max_length=50, unique=True)
     category = models.CharField(max_length=50, choices=EXPENSE_CATEGORIES)
     expense_date = models.DateField()
     amount = models.DecimalField(max_digits=15, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     description = models.TextField()
-    paid = models.BooleanField(default=False)
-    payment_date = models.DateField(null=True, blank=True)
-    payment_method = models.CharField(max_length=20, blank=True)
-    reference_number = models.CharField(max_length=100, blank=True)
-    journal_entry = models.OneToOneField('JournalEntry', on_delete=models.SET_NULL, null=True, blank=True)
-    bank_account = models.ForeignKey('BankAccount', on_delete=models.SET_NULL, null=True, blank=True, related_name='expenses')
     notes = models.TextField(blank=True)
 
     class Meta:
@@ -41,4 +39,8 @@ class Expense(BaseModel):
         ]
 
     def __str__(self):
-        return f"{self.expense_number} - {self.category}: {self.amount}"
+        return f'{self.expense_number} - {self.category}: {self.amount}'
+
+    @property
+    def paid(self):
+        return self.payment_status == 'PAID'

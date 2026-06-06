@@ -10,7 +10,8 @@ from apps.inventory.models import (
     ProductVariant, Warehouse, Supplier
 )
 from apps.common.serializer_fields import UUIDForeignRelatedField
-from apps.finance.models import Payment
+from django.contrib.contenttypes.models import ContentType
+from apps.finance.models import Payment, SupplierBill
 
 
 class PurchaseOrderLineSerializer(serializers.ModelSerializer):
@@ -88,10 +89,15 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         read_only_fields = ['order_number', 'created_at', 'updated_at']
 
     def get_total_paid(self, obj):
-        """Calculate total confirmed payments against this purchase order"""
+        """Calculate total confirmed payments against this purchase order via supplier bills."""
+        bill_ids = SupplierBill.objects.filter(purchase_order=obj).values_list('pk', flat=True)
+        if not bill_ids:
+            return Decimal('0.00')
+        ct = ContentType.objects.get_for_model(SupplierBill)
         total = Payment.objects.filter(
-            supplier_bill__purchase_order=obj,
-            status='CONFIRMED'
+            content_type=ct,
+            object_id__in=bill_ids,
+            status='CONFIRMED',
         ).aggregate(
             total=Coalesce(Sum('amount'), Value(0, output_field=DecimalField()))
         )['total']

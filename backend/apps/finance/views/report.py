@@ -250,7 +250,7 @@ class ReportViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Generi
         invoices = CustomerInvoice.objects.filter(
             company_id=request.user.company_id,
             branch_id=request.user.branch_id,
-            status__in=['POSTED', 'PARTIAL']
+            status='POSTED',
         ).select_related('customer')
         aging = {'current': 0, '1_30': 0, '31_60': 0, '61_90': 0, '90_plus': 0}
         details = []
@@ -291,7 +291,7 @@ class ReportViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Generi
         bills = SupplierBill.objects.filter(
             company_id=request.user.company_id,
             branch_id=request.user.branch_id,
-            status__in=['POSTED', 'PARTIAL']
+            status='POSTED',
         ).select_related('supplier')
         aging = {'current': 0, '1_30': 0, '31_60': 0, '61_90': 0, '90_plus': 0}
         details = []

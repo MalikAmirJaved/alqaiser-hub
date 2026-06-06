@@ -8,10 +8,10 @@ from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.finance.models import (
     CustomerInvoice, CustomerInvoiceLine,
-    JournalEntry, JournalLine, Account, Payment
+    JournalEntry, JournalLine, Account,
 )
 from apps.sales.serializers.invoice import SalesInvoiceSerializer
-from apps.finance.views.payment import confirm_payment_logic
+from apps.finance.services.payable import create_payment_for
 
 
 class SalesInvoiceViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
@@ -147,9 +147,14 @@ class SalesInvoiceViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
     def record_payment(self, request, _id=None):
         """Record a payment against a posted invoice."""
         invoice = self.get_object()
-        if invoice.status not in ['POSTED', 'PARTIAL']:
+        if invoice.status != 'POSTED':
             return Response(
                 {'error': f"Cannot record payment for invoice with status '{invoice.status}'"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if invoice.payment_status == 'PAID':
+            return Response(
+                {'error': 'Invoice is already fully paid'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -184,26 +189,18 @@ class SalesInvoiceViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
                     )
 
             from django.utils import timezone
-            payment = Payment.objects.create(
-                company_id=invoice.company_id,
-                branch_id=invoice.branch_id,
-                payment_type='RECEIPT',
-                payment_method=payment_method,
-                amount=amount,
-                payment_date=timezone.now().date(),
-                customer_invoice=invoice,
-                bank_account=bank_account,
-                status='DRAFT',
-                created_by=request.user,
-                updated_by=request.user,
-            )
-
-            success, msg = confirm_payment_logic(payment, request.user)
-            if not success:
-                return Response(
-                    {'error': msg},
-                    status=status.HTTP_400_BAD_REQUEST
+            try:
+                create_payment_for(
+                    invoice,
+                    amount=amount,
+                    payment_date=timezone.now().date(),
+                    payment_method=payment_method,
+                    bank_account=bank_account,
+                    user=request.user,
+                    auto_confirm=True,
                 )
+            except ValueError as exc:
+                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response({
             'status': 'success',

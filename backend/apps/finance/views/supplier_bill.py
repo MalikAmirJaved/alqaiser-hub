@@ -9,10 +9,10 @@ from django.core.exceptions import ObjectDoesNotExist
 from decimal import Decimal
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
-from apps.finance.models import SupplierBill, JournalEntry, JournalLine, Account, Payment
+from apps.finance.models import SupplierBill, JournalEntry, JournalLine, Account
 from apps.finance.serializers import SupplierBillSerializer
 from apps.finance.mixins import CompanyBranchUserMixin, SoftDeleteMixin
-from apps.finance.views.payment import confirm_payment_logic
+from apps.finance.services.payable import create_payment_for
 
 
 class SupplierBillViewSet(
@@ -47,7 +47,7 @@ class SupplierBillViewSet(
             return Response(
                 {
                     "success": False,
-                    "error": "Cannot update bill that is already posted, paid, or cancelled",
+                    "error": "Cannot update bill that is already posted or cancelled",
                     "detail": f"Bill status is '{instance.status}'. Only DRAFT bills can be updated."
                 },
                 status=status.HTTP_400_BAD_REQUEST
@@ -136,46 +136,39 @@ class SupplierBillViewSet(
                         branch_id=bill.branch_id
                     )
                     
-                    # Update bill: status = PAID, link journal entry
-                    bill.status = 'PAID'
+                    bill.status = 'POSTED'
                     bill.journal_entry = entry
-                    bill.save()
-                    
-                    # Create a payment for the full bill amount
-                    # Use the same bank account as default or allow frontend to pass
+                    bill.save(update_fields=['status', 'journal_entry'])
+
                     bank_account = None
                     bank_account_uuid = request.data.get('bank_account_id')
+                    payment_method = request.data.get('payment_method', 'BANK_TRANSFER')
+                    pay_amount = Decimal(str(request.data.get('amount', bill.amount)))
                     from apps.finance.models import BankAccount
                     if bank_account_uuid:
                         try:
-                            bank_account = BankAccount.objects.get(_id=bank_account_uuid, company_id=bill.company_id)
+                            bank_account = BankAccount.objects.get(
+                                _id=bank_account_uuid,
+                                company_id=bill.company_id,
+                            )
                         except BankAccount.DoesNotExist:
                             pass
                     if not bank_account:
-                        # Get first active bank account
-                        bank_account = BankAccount.objects.filter(company_id=bill.company_id, is_active=True).first()
-                    
-                    payment = Payment.objects.create(
-                        company_id=bill.company_id,
-                        branch_id=bill.branch_id,
-                        payment_type='PAYMENT',
-                        payment_method='BANK_TRANSFER',
-                        amount=bill.amount,
-                        payment_date=bill.bill_date,
-                        supplier_bill=bill,
-                        bank_account=bank_account,
-                        status='DRAFT',
-                        created_by=request.user,
-                        updated_by=request.user
-                    )
-                    
-                    # Confirm the payment immediately – this will:
-                    # - Update bill.paid_amount (now equals bill.amount, but bill.status is already PAID)
-                    # - Create bank transaction and update bank book balance
-                    # - Also (indirectly) update purchase order payment status via the payment total
-                    success, msg = confirm_payment_logic(payment, request.user)
-                    if not success:
-                        raise Exception(f"Payment confirmation failed: {msg}")
+                        bank_account = BankAccount.objects.filter(
+                            company_id=bill.company_id,
+                            is_active=True,
+                        ).first()
+
+                    if pay_amount > 0:
+                        create_payment_for(
+                            bill,
+                            amount=pay_amount,
+                            payment_date=bill.bill_date,
+                            payment_method=payment_method,
+                            bank_account=bank_account,
+                            user=request.user,
+                            auto_confirm=True,
+                        )
                     
                     return Response(
                         {
@@ -194,3 +187,76 @@ class SupplierBillViewSet(
                     },
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
+
+    @action(detail=True, methods=['post'])
+    def record_payment(self, request, _id=None):
+        bill = self.get_object()
+        if bill.status != 'POSTED':
+            return Response(
+                {
+                    'success': False,
+                    'error': f"Cannot record payment for bill with status '{bill.status}'",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if bill.payment_status == 'PAID':
+            return Response(
+                {'success': False, 'error': 'Bill is already fully paid'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        amount = Decimal(str(request.data.get('amount', bill.outstanding)))
+        if amount <= 0:
+            return Response(
+                {'success': False, 'error': 'Payment amount must be positive'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if amount > bill.outstanding:
+            return Response(
+                {
+                    'success': False,
+                    'error': f'Amount {amount} exceeds outstanding {bill.outstanding}',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        bank_account = None
+        bank_account_uuid = request.data.get('bank_account_id')
+        payment_method = request.data.get('payment_method', 'BANK_TRANSFER')
+        from apps.finance.models import BankAccount
+        if bank_account_uuid:
+            try:
+                bank_account = BankAccount.objects.get(
+                    _id=bank_account_uuid,
+                    company_id=bill.company_id,
+                )
+            except BankAccount.DoesNotExist:
+                return Response(
+                    {'success': False, 'error': 'Bank account not found'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        try:
+            create_payment_for(
+                bill,
+                amount=amount,
+                payment_date=bill.bill_date,
+                payment_method=payment_method,
+                bank_account=bank_account,
+                user=request.user,
+                auto_confirm=True,
+            )
+        except ValueError as exc:
+            return Response(
+                {'success': False, 'error': str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                'success': True,
+                'message': 'Payment recorded and confirmed',
+                'data': self.get_serializer(bill).data,
+            },
+            status=status.HTTP_200_OK,
+        )
