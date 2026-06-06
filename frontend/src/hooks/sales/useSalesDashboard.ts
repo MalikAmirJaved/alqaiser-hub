@@ -41,7 +41,7 @@ export function useSalesRecentActivity() {
   const api = useApi();
   return useQuery<{
     leads: { id: string; name: string; status: string; source: string; created_at: string }[];
-    quotes: { id: string; quote_number: string; status: string; total_amount: string; created_at: string }[];
+    quotes: { id: string; quote_number: string; status: string; total_amount: string; customer_name:string; created_at: string }[];
   }>({
     queryKey: ["sales_dashboard_recent_activity"],
     queryFn: () => api("/api/sales/dashboard/recent_activity/"),
