@@ -20,7 +20,6 @@ export default function ExpensesPage() {
   const deleteExpense = useDeleteExpense();
   const permissions = useFeaturePermissions("FINANCE", "expense");
   
-  console.log("expense, ", expenses)
   const modulePermissions: ModulePermissions = {
     create: permissions.create,
     update: permissions.update,

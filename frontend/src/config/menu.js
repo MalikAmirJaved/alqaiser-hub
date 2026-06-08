@@ -107,6 +107,7 @@ export const menu = [
       { title: "Finance Payroll", to: "/finance/payroll", icon: Wallet },
       { title: "Taxes", to: "/finance/taxes", icon: Calculator },
       { title: "Audit Logs", to: "/finance/audit", icon: History },
+      { title: "Forecast", to: "/finance/forecast", icon: History },
     ],
   },
     {
