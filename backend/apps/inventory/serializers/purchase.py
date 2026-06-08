@@ -1,6 +1,3 @@
-# ============================================================
-# File: backend/apps/inventory/serializers/purchase.py
-# ============================================================
 from rest_framework import serializers
 from decimal import Decimal
 from django.db.models import Sum, Value, DecimalField
@@ -12,31 +9,32 @@ from apps.inventory.models import (
 from apps.common.serializer_fields import UUIDForeignRelatedField
 from django.contrib.contenttypes.models import ContentType
 from apps.finance.models import Payment, SupplierBill
+from apps.hr.models import Asset
 
 
 class PurchaseOrderLineSerializer(serializers.ModelSerializer):
-    # Replace the default PrimaryKeyRelatedField with our UUID field
-    variant = UUIDForeignRelatedField(queryset=ProductVariant.objects.all())
+    variant = UUIDForeignRelatedField(queryset=ProductVariant.objects.all(), required=False, allow_null=True)
+    asset = UUIDForeignRelatedField(queryset=Asset.objects.all(), required=False, allow_null=True)
     id = serializers.UUIDField(source='_id', read_only=True)
-    # Read-only fields for product info
+    
+    # Read-only fields for display
     variant_sku = serializers.CharField(source='variant.sku', read_only=True)
     variant_name = serializers.CharField(source='variant.product.product_name', read_only=True)
+    asset_name = serializers.CharField(source='asset.name', read_only=True)
+    asset_serial = serializers.CharField(source='asset.serial_number', read_only=True)
+    
     line_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     quantity_pending = serializers.SerializerMethodField()
-
-    # Creator/updater info
     created_by_info = serializers.SerializerMethodField()
     updated_by_info = serializers.SerializerMethodField()
 
     class Meta:
         model = PurchaseOrderLine
         fields = [
-            'id',                       # UUID exposed for frontend
-            'variant', 'variant_sku', 'variant_name',
+            'id', 'variant', 'asset', 'variant_sku', 'variant_name', 'asset_name', 'asset_serial',
             'quantity_ordered', 'quantity_received', 'quantity_pending',
             'unit_cost', 'tax_rate', 'line_total', 'status', 'notes',
-            'created_at', 'updated_at',
-            'created_by_info', 'updated_by_info',
+            'created_at', 'updated_at', 'created_by_info', 'updated_by_info',
         ]
         read_only_fields = ['quantity_received', 'created_at', 'updated_at']
 
@@ -53,26 +51,31 @@ class PurchaseOrderLineSerializer(serializers.ModelSerializer):
             return {'id': obj.updated_by._id, 'username': obj.updated_by.username}
         return None
 
+    def validate(self, data):
+        request = self.context.get('request')
+        if request and hasattr(request, 'data'):
+            # Determine inventory type from the parent purchase order
+            # We'll rely on the parent serializer to pass context, but we can also check via the purchase_order if exists
+            po = data.get('purchase_order') or (self.instance.purchase_order if self.instance else None)
+            if po and po.inventory_type == 'FOR_SALE' and not data.get('variant'):
+                raise serializers.ValidationError("For sale orders require a variant")
+            if po and po.inventory_type == 'OFFICE_INVENTORY' and not data.get('asset'):
+                raise serializers.ValidationError("Office inventory orders require an asset")
+        return data
+
 
 class PurchaseOrderSerializer(serializers.ModelSerializer):
     supplier = UUIDForeignRelatedField(queryset=Supplier.objects.all())
     warehouse = UUIDForeignRelatedField(queryset=Warehouse.objects.all())
-
-    # Read-only nested fields for display
     supplier_name = serializers.CharField(source='supplier.name', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.warehouse_name', read_only=True)
     lines = PurchaseOrderLineSerializer(many=True, read_only=True)
-
-    # Write-only line items (as before, but each line's 'variant' will be a UUID)
-    line_items = serializers.ListField(
-        child=serializers.DictField(), write_only=True, required=False
-    )
-
-    # Creator/updater info
+    
+    # Write-only field: line_items can contain either 'variant' or 'asset'
+    line_items = serializers.ListField(child=serializers.DictField(), write_only=True, required=False)
+    
     created_by_info = serializers.SerializerMethodField()
     updated_by_info = serializers.SerializerMethodField()
-
-    # New computed fields
     payment_status = serializers.SerializerMethodField()
     total_paid = serializers.SerializerMethodField()
 
@@ -80,16 +83,15 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         model = PurchaseOrder
         fields = [
             '_id', 'order_number', 'supplier', 'supplier_name',
-            'warehouse', 'warehouse_name', 'status',
+            'warehouse', 'warehouse_name', 'status', 'inventory_type',
             'order_date', 'expected_delivery_date', 'total_amount',
             'notes', 'lines', 'line_items',
             'created_at', 'updated_at', 'created_by_info', 'updated_by_info',
-            'payment_status', 'total_paid', 'inventory_type',
+            'payment_status', 'total_paid',
         ]
         read_only_fields = ['order_number', 'created_at', 'updated_at']
 
     def get_total_paid(self, obj):
-        """Calculate total confirmed payments against this purchase order via supplier bills."""
         bill_ids = SupplierBill.objects.filter(purchase_order=obj).values_list('pk', flat=True)
         if not bill_ids:
             return Decimal('0.00')
@@ -98,13 +100,10 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             content_type=ct,
             object_id__in=bill_ids,
             status='CONFIRMED',
-        ).aggregate(
-            total=Coalesce(Sum('amount'), Value(0, output_field=DecimalField()))
-        )['total']
+        ).aggregate(total=Coalesce(Sum('amount'), Value(0, output_field=DecimalField())))['total']
         return total if total is not None else Decimal('0.00')
 
     def get_payment_status(self, obj):
-        """Determine payment status based on total paid vs total amount"""
         total_paid = self.get_total_paid(obj)
         if total_paid >= obj.total_amount:
             return 'PAID'
@@ -123,8 +122,6 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         return None
 
     def create(self, validated_data):
-        # No changes needed here – the UUIDForeignRelatedField already converted
-        # `supplier` and `warehouse` to model instances (with integer PK).
         line_items_data = validated_data.pop('line_items', [])
         user = self.context['request'].user
         company_id = user.company_id
@@ -137,25 +134,32 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         validated_data['updated_by'] = user
 
         po = PurchaseOrder.objects.create(**validated_data)
+        total_amount = Decimal('0.00')
 
-        total_amount = 0
         for line_data in line_items_data:
-            # line_data['variant'] is now a UUID string; we need to convert to variant instance.
-            # But the frontend will send the UUID. We can use the same UUIDForeignRelatedField
-            # to resolve it. Since we are inside the serializer, we can manually resolve.
             variant_uuid = line_data.get('variant')
-            variant = ProductVariant.objects.get(_id=variant_uuid, company_id=company_id)
+            asset_uuid = line_data.get('asset')
             qty = line_data['quantity_ordered']
             unit_cost = line_data['unit_cost']
-            line_total = qty * unit_cost
+            tax_rate = line_data.get('tax_rate', 0)
+            line_total = Decimal(qty) * Decimal(unit_cost)
             total_amount += line_total
+
+            # Resolve either variant or asset
+            variant = None
+            asset = None
+            if variant_uuid:
+                variant = ProductVariant.objects.get(_id=variant_uuid, company_id=company_id)
+            elif asset_uuid:
+                asset = Asset.objects.get(_id=asset_uuid, company_id=company_id)
 
             PurchaseOrderLine.objects.create(
                 purchase_order=po,
                 variant=variant,
+                asset=asset,
                 quantity_ordered=qty,
                 unit_cost=unit_cost,
-                tax_rate=line_data.get('tax_rate', 0),
+                tax_rate=tax_rate,
                 company_id=company_id,
                 branch_id=branch_id,
                 created_by=user,
@@ -167,33 +171,28 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         return po
 
     def _generate_order_number(self):
-        import time
-        import random
+        import time, random
         return f"PO-{int(time.time())}-{random.randint(1000, 9999)}"
 
 
 class GoodsReceiptLineSerializer(serializers.ModelSerializer):
     variant_name = serializers.CharField(source='purchase_order_line.variant.product.product_name', read_only=True)
+    asset_name = serializers.CharField(source='purchase_order_line.asset.name', read_only=True)
     id = serializers.UUIDField(source='_id', read_only=True)
     
     class Meta:
         model = GoodsReceiptLine
         fields = [
             'id', 'purchase_order_line', 'quantity_received',
-            'unit_cost', 'accepted', 'variant_name'
+            'unit_cost', 'accepted', 'variant_name', 'asset_name'
         ]
 
 
 class GoodsReceiptSerializer(serializers.ModelSerializer):
-    purchase_order = UUIDForeignRelatedField(
-        queryset=PurchaseOrder.objects.all(),
-        help_text="UUID of the purchase order"
-    )
+    purchase_order = UUIDForeignRelatedField(queryset=PurchaseOrder.objects.all())
     purchase_order_number = serializers.CharField(source='purchase_order.order_number', read_only=True)
     lines = GoodsReceiptLineSerializer(many=True, read_only=True)
-    receipt_lines = serializers.ListField(
-        child=serializers.DictField(), write_only=True
-    )
+    receipt_lines = serializers.ListField(child=serializers.DictField(), write_only=True)
     id = serializers.UUIDField(source='_id', read_only=True)
 
     class Meta:
@@ -207,7 +206,6 @@ class GoodsReceiptSerializer(serializers.ModelSerializer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Dynamically filter purchase_order queryset to the current company
         request = self.context.get('request')
         if request and hasattr(request.user, 'company_id'):
             self.fields['purchase_order'].queryset = PurchaseOrder.objects.filter(
@@ -230,11 +228,11 @@ class GoodsReceiptSerializer(serializers.ModelSerializer):
         gr = GoodsReceipt.objects.create(**validated_data)
 
         for line_data in receipt_lines_data:
-            po_line_uuid = line_data['purchase_order_line_id']   # frontend sends UUID
+            po_line_uuid = line_data['purchase_order_line_id']
             po_line = PurchaseOrderLine.objects.get(_id=po_line_uuid, company_id=company_id)
             GoodsReceiptLine.objects.create(
                 goods_receipt=gr,
-                purchase_order_line=po_line,    # now an instance, not an ID
+                purchase_order_line=po_line,
                 quantity_received=line_data['quantity_received'],
                 unit_cost=line_data.get('unit_cost', 0),
                 accepted=line_data.get('accepted', True),
@@ -243,10 +241,8 @@ class GoodsReceiptSerializer(serializers.ModelSerializer):
                 created_by=user,
                 updated_by=user,
             )
-
         return gr
 
     def _generate_receipt_number(self):
-        import time
-        import random
+        import time, random
         return f"GR-{int(time.time())}-{random.randint(1000, 9999)}"

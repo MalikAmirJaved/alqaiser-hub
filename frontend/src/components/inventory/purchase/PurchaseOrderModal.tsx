@@ -1,23 +1,13 @@
-// PurchaseOrderModal.tsx
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { X, Plus, Trash2, Info, Package, Building2 } from 'lucide-react';
+import { X, Plus, Trash2, Info, Package, Building2, Monitor } from 'lucide-react';
 import { useSuppliers } from '@/hooks/useSuppliers';
 import { useWarehouses } from '@/hooks/useWarehouses';
 import { useProducts } from '@/hooks/useProducts';
+import { useAssets } from '@/hooks/useAssets';          // new import
 import type { PurchaseOrder, PurchaseOrderPayload } from '@/types/purchase';
 import { useCompanySettings } from "@/hooks/useCompanySettings";
-
-// Radio group components (simplified – you can use shadcn if available)
-const RadioGroup = ({ value, onValueChange, children }: any) => (
-  <div className="flex gap-4" onChange={(e: any) => onValueChange(e.target.value)}>
-    {children}
-  </div>
-);
-const RadioGroupItem = ({ value, id }: { value: string; id: string }) => (
-  <input type="radio" name="inventoryType" value={value} id={id} className="mr-1" />
-);
 
 interface PurchaseOrderModalProps {
   isOpen: boolean;
@@ -29,13 +19,13 @@ interface PurchaseOrderModalProps {
 
 interface LineItem {
   id: number;
-  variant: string;
+  selectedId: string;      // generic: variant UUID or asset UUID
   quantity_ordered: number;
   unit_cost: number;
   tax_rate: number;
 }
 
-interface VariantOption {
+interface SelectOption {
   id: string;
   label: string;
   buying_price: number;
@@ -45,7 +35,7 @@ let _lineId = 1;
 const nextLineId = () => _lineId++;
 
 function emptyLine(): LineItem {
-  return { id: nextLineId(), variant: '', quantity_ordered: 1, unit_cost: 0, tax_rate: 0 };
+  return { id: nextLineId(), selectedId: '', quantity_ordered: 1, unit_cost: 0, tax_rate: 0 };
 }
 
 function fmtCurrency(n: number, currencySymbol = '$') {
@@ -62,6 +52,7 @@ export function PurchaseOrderModal({
   const { data: suppliers = [] } = useSuppliers();
   const { data: warehouses = [] } = useWarehouses();
   const { data: products = [] } = useProducts();
+  const { data: assets = [] } = useAssets();     // fetch assets
   const { CurrencyCode } = useCompanySettings();
 
   const [supplierId, setSupplierId] = useState('');
@@ -71,6 +62,26 @@ export function PurchaseOrderModal({
   const [notes, setNotes] = useState('');
   const [inventoryType, setInventoryType] = useState<'FOR_SALE' | 'OFFICE_INVENTORY'>('FOR_SALE');
   const [lineItems, setLineItems] = useState<LineItem[]>([emptyLine()]);
+
+  // Build options based on inventory type
+  const variantOptions = useMemo<SelectOption[]>(() => {
+    if (inventoryType === 'FOR_SALE') {
+      return products.flatMap((p) =>
+        p.variants.map((v) => ({
+          id: v.id,
+          label: `${v.sku} — ${p.product_name}`,
+          buying_price: v.buying_price || 0,
+        }))
+      );
+    } else {
+      // Office Inventory: use assets
+      return assets.map((a) => ({
+        id: a.id,
+        label: `${a.name} ${a.brand ? `(${a.brand})` : ''} ${a.serial_number ? `- SN: ${a.serial_number}` : ''}`,
+        buying_price: a.purchase_price || 0,
+      }));
+    }
+  }, [inventoryType, products, assets]);
 
   // Populate when editing
   useEffect(() => {
@@ -84,7 +95,7 @@ export function PurchaseOrderModal({
       setLineItems(
         initialData.lines?.map((l) => ({
           id: nextLineId(),
-          variant: l.variant,
+          selectedId: l.variant || l.asset || '',  // use whichever exists
           quantity_ordered: l.quantity_ordered,
           unit_cost: l.unit_cost,
           tax_rate: l.tax_rate,
@@ -92,16 +103,6 @@ export function PurchaseOrderModal({
       );
     }
   }, [initialData]);
-
-  const variantOptions = useMemo<VariantOption[]>(() => {
-    return products.flatMap((p) =>
-      p.variants.map((v) => ({
-        id: v.id,
-        label: `${v.sku} — ${p.product_name}`,
-        buying_price: v.buying_price || 0,
-      }))
-    );
-  }, [products]);
 
   const { subtotal, totalTax, grandTotal } = useMemo(() => {
     let sub = 0;
@@ -118,9 +119,9 @@ export function PurchaseOrderModal({
     setLineItems((prev) => prev.map((l) => (l.id === id ? { ...l, [field]: value } : l)));
   };
 
-  const updateLineVariant = (id: number, variantId: string) => {
-    const selected = variantOptions.find(v => v.id === variantId);
-    updateLine(id, 'variant', variantId as any);
+  const handleSelectChange = (id: number, selectedId: string) => {
+    const selected = variantOptions.find(opt => opt.id === selectedId);
+    updateLine(id, 'selectedId', selectedId as any);
     if (selected && selected.buying_price > 0) {
       updateLine(id, 'unit_cost', selected.buying_price as any);
     }
@@ -140,9 +141,9 @@ export function PurchaseOrderModal({
       expected_delivery_date: expectedDate || undefined,
       notes: notes || undefined,
       line_items: lineItems
-        .filter((l) => l.variant)
-        .map(({ variant, quantity_ordered, unit_cost, tax_rate }) => ({
-          variant,
+        .filter((l) => l.selectedId)
+        .map(({ selectedId, quantity_ordered, unit_cost, tax_rate }) => ({
+          ...(inventoryType === 'FOR_SALE' ? { variant: selectedId } : { asset: selectedId }),
           quantity_ordered: Number(quantity_ordered),
           unit_cost: Number(unit_cost),
           tax_rate: Number(tax_rate),
@@ -298,7 +299,7 @@ export function PurchaseOrderModal({
                   <div className="grid gap-2 px-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
                     style={{ gridTemplateColumns: '1fr 72px 100px 80px 28px' }}
                   >
-                    <span>Variant / SKU</span>
+                    <span>{inventoryType === 'FOR_SALE' ? 'Variant / SKU' : 'Asset'}</span>
                     <span>Qty</span>
                     <span>Unit cost</span>
                     <span>Tax %</span>
@@ -309,19 +310,20 @@ export function PurchaseOrderModal({
                     <LineRow
                       key={line.id}
                       line={line}
-                      variants={variantOptions}
-                      onVariantChange={updateLineVariant}
+                      options={variantOptions}
+                      onSelectChange={handleSelectChange}
                       onChange={updateLine}
                       onRemove={() => removeLine(line.id)}
                       canRemove={lineItems.length > 1}
                       currencySymbol={CurrencyCode()}
+                      placeholder={inventoryType === 'FOR_SALE' ? "Select variant…" : "Select asset…"}
                     />
                   ))}
                 </div>
               )}
 
               {/* Order summary */}
-              {lineItems.some((l) => l.variant && l.quantity_ordered > 0) && (
+              {lineItems.some((l) => l.selectedId && l.quantity_ordered > 0) && (
                 <div className="mt-4 bg-muted/40 rounded-lg px-4 py-3 space-y-1.5 text-sm">
                   <div className="flex justify-between text-muted-foreground">
                     <span>Subtotal</span>
@@ -407,29 +409,16 @@ export function PurchaseOrderModal({
   );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
+// Sub-components (unchanged except LineRow accepts dynamic options)
 function SectionLabel({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <p
-      className={`text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-3 pb-2 border-b border-border ${className}`}
-    >
+    <p className={`text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-3 pb-2 border-b border-border ${className}`}>
       {children}
     </p>
   );
 }
 
-function Field({
-  label,
-  required,
-  children,
-  className = '',
-}: {
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
-  className?: string;
-}) {
+function Field({ label, required, children, className = '' }: { label: string; required?: boolean; children: React.ReactNode; className?: string }) {
   return (
     <div className={`flex flex-col gap-1 ${className}`}>
       <label className="text-xs font-medium text-muted-foreground">
@@ -452,20 +441,22 @@ function EmptyLines() {
 
 function LineRow({
   line,
-  variants,
-  onVariantChange,
+  options,
+  onSelectChange,
   onChange,
   onRemove,
   canRemove,
   currencySymbol,
+  placeholder,
 }: {
   line: LineItem;
-  variants: VariantOption[];
-  onVariantChange: (id: number, variantId: string) => void;
+  options: SelectOption[];
+  onSelectChange: (id: number, selectedId: string) => void;
   onChange: <K extends keyof LineItem>(id: number, field: K, value: LineItem[K]) => void;
   onRemove: () => void;
   canRemove: boolean;
   currencySymbol: string;
+  placeholder: string;
 }) {
   return (
     <div
@@ -473,14 +464,14 @@ function LineRow({
       style={{ gridTemplateColumns: '1fr 72px 100px 80px 28px' }}
     >
       <select
-        value={line.variant}
-        onChange={(e) => onVariantChange(line.id, e.target.value)}
+        value={line.selectedId}
+        onChange={(e) => onSelectChange(line.id, e.target.value)}
         required
         className="field-input text-xs"
       >
-        <option value="">Select variant…</option>
-        {variants.map((v) => (
-          <option key={v.id} value={v.id}>{v.label}</option>
+        <option value="">{placeholder}</option>
+        {options.map((opt) => (
+          <option key={opt.id} value={opt.id}>{opt.label}</option>
         ))}
       </select>
 

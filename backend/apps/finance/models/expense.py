@@ -1,11 +1,10 @@
-from decimal import Decimal
+# apps/finance/models/expense.py
 
+from decimal import Decimal
 from django.core.validators import MinValueValidator
 from django.db import models
-
 from apps.common.basemodel import BaseModel
 from apps.finance.services.payable import PayableModelMixin
-
 
 class Expense(PayableModelMixin, BaseModel):
     EXPENSE_CATEGORIES = [
@@ -29,6 +28,15 @@ class Expense(PayableModelMixin, BaseModel):
     description = models.TextField()
     notes = models.TextField(blank=True)
 
+    # ⬇️ This is the crucial FK
+    supplier_bill = models.ForeignKey(
+        'SupplierBill',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='expenses'
+    )
+
     class Meta:
         db_table = 'finance_expenses'
         ordering = ['-expense_date']
@@ -44,3 +52,10 @@ class Expense(PayableModelMixin, BaseModel):
     @property
     def paid(self):
         return self.payment_status == 'PAID'
+
+    @property
+    def payment_status(self):
+        """Delegate to linked supplier bill if present, else use base logic."""
+        if self.supplier_bill:
+            return self.supplier_bill.payment_status
+        return super().payment_status

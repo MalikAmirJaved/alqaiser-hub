@@ -72,15 +72,15 @@ export default function EmployeeAssetsNew() {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showDetailPanel, setShowDetailPanel] = useState(false);
 
-  // Separate selections: kits (whole) and standalone assets (with quantity)
+  // Selection state: direct asset selections (any asset, including those that belong to kits) and selected kits
+  const [selectedAssetQuantities, setSelectedAssetQuantities] = useState<Record<string, number>>({});
   const [selectedKitIds, setSelectedKitIds] = useState<Set<string>>(new Set());
   const [expandedKits, setExpandedKits] = useState<Set<string>>(new Set());
-  const [selectedStandaloneQuantities, setSelectedStandaloneQuantities] = useState<Record<string, number>>({});
   const [assignmentNotes, setAssignmentNotes] = useState("");
   const [assignmentCondition, setAssignmentCondition] = useState("GOOD");
   const [selectedReturnIds, setSelectedReturnIds] = useState<Set<string>>(new Set());
 
-  // Category filter for standalone assets
+  // Category filter for assets
   const [assetCategoryFilter, setAssetCategoryFilter] = useState<string>("all");
 
   const { data: employees = [], isLoading: employeesLoading } = useEmployees(
@@ -98,41 +98,38 @@ export default function EmployeeAssetsNew() {
   const assignMutation = useAssignAssets();
   const returnMutation = useReturnAssets();
 
-  // Build a set of all asset IDs that belong to any kit
-  const assetIdsInKits = useMemo(() => {
-    const ids = new Set<string>();
+  // Helper: map asset ID to its kit (if any)
+  const getKitForAsset = useMemo(() => {
+    const map = new Map<string, AvailableKit>();
     availableData?.kits?.forEach(kit => {
-      kit.assets.forEach(asset => ids.add(asset.id));
+      kit.assets.forEach(asset => map.set(asset.id, kit));
     });
-    return ids;
+    return (assetId: string) => map.get(assetId);
   }, [availableData]);
 
-  // Standalone assets = assets not in any kit
-  const standaloneAssets = useMemo(() => {
-    if (!availableData?.assets) return [];
-    return availableData.assets.filter(asset => !assetIdsInKits.has(asset.id));
-  }, [availableData, assetIdsInKits]);
+  // All assets (including those in kits)
+  const allAssets = availableData?.assets || [];
 
-  // Unique categories from standalone assets
+  // Unique categories from all assets
   const availableCategories = useMemo(() => {
     const cats = new Set<string>();
-    standaloneAssets.forEach(asset => {
+    allAssets.forEach(asset => {
       if (asset.category) cats.add(asset.category);
     });
     return Array.from(cats).sort();
-  }, [standaloneAssets]);
+  }, [allAssets]);
 
-  // Filtered standalone assets by category
+  // Filtered assets by category
   const filteredAssets = useMemo(() => {
-    if (assetCategoryFilter === "all") return standaloneAssets;
-    return standaloneAssets.filter(asset => asset.category === assetCategoryFilter);
-  }, [standaloneAssets, assetCategoryFilter]);
+    if (assetCategoryFilter === "all") return allAssets;
+    return allAssets.filter(asset => asset.category === assetCategoryFilter);
+  }, [allAssets, assetCategoryFilter]);
 
   // Reset all selection when modal opens
   useEffect(() => {
     if (showAssignModal) {
       setSelectedKitIds(new Set());
-      setSelectedStandaloneQuantities({});
+      setSelectedAssetQuantities({});
       setExpandedKits(new Set());
       setAssignmentNotes("");
       setAssignmentCondition("GOOD");
@@ -140,50 +137,63 @@ export default function EmployeeAssetsNew() {
     }
   }, [showAssignModal]);
 
-  // Toggle kit selection – atomic: whole kit selected/unselected
-  const handleKitToggle = (kitId: string) => {
+  // Toggle kit selection – when selected, remove its assets from direct selections to avoid duplication
+  const handleKitToggle = (kitId: string, kit: AvailableKit) => {
     const newKitIds = new Set(selectedKitIds);
     if (newKitIds.has(kitId)) {
+      // Deselect kit – nothing else needed; assets may remain selected individually (they were removed when kit was selected)
       newKitIds.delete(kitId);
     } else {
+      // Select kit – remove its assets from direct selections (to prevent double assignment)
+      const newQuantities = { ...selectedAssetQuantities };
+      kit.assets.forEach(asset => {
+        delete newQuantities[asset.id];
+      });
+      setSelectedAssetQuantities(newQuantities);
       newKitIds.add(kitId);
     }
     setSelectedKitIds(newKitIds);
   };
 
-  // Toggle standalone asset selection (with default quantity = 1)
-  const handleStandaloneAssetToggle = (asset: AvailableAsset) => {
+  // Toggle individual asset selection – disallowed if asset belongs to a selected kit
+  const handleAssetToggle = (asset: AvailableAsset) => {
     const alreadyAssigned = asset.already_assigned_to_employee;
     const availableQty = asset.available_quantity || 0;
     if (alreadyAssigned || availableQty <= 0) return;
 
-    const currentQty = selectedStandaloneQuantities[asset.id] || 0;
+    const kit = getKitForAsset(asset.id);
+    if (kit && selectedKitIds.has(kit.id)) {
+      toast.warning(`This asset belongs to the kit "${kit.name}". Unselect the kit first to assign individually.`);
+      return;
+    }
+
+    const currentQty = selectedAssetQuantities[asset.id] || 0;
     if (currentQty > 0) {
-      const newQuantities = { ...selectedStandaloneQuantities };
+      const newQuantities = { ...selectedAssetQuantities };
       delete newQuantities[asset.id];
-      setSelectedStandaloneQuantities(newQuantities);
+      setSelectedAssetQuantities(newQuantities);
     } else {
-      setSelectedStandaloneQuantities(prev => ({ ...prev, [asset.id]: 1 }));
+      setSelectedAssetQuantities(prev => ({ ...prev, [asset.id]: 1 }));
     }
   };
 
-  // Change quantity for a standalone asset
-  const updateStandaloneQuantity = (assetId: string, quantity: number) => {
+  // Change quantity for an asset
+  const updateAssetQuantity = (assetId: string, quantity: number) => {
     if (quantity <= 0) {
-      const newQuantities = { ...selectedStandaloneQuantities };
+      const newQuantities = { ...selectedAssetQuantities };
       delete newQuantities[assetId];
-      setSelectedStandaloneQuantities(newQuantities);
+      setSelectedAssetQuantities(newQuantities);
     } else {
-      setSelectedStandaloneQuantities(prev => ({ ...prev, [assetId]: quantity }));
+      setSelectedAssetQuantities(prev => ({ ...prev, [assetId]: quantity }));
     }
   };
 
-  // Build final payload: standalone assets (asset_id + quantity) and kit_ids
+  // Build final payload: direct assets (asset_id + quantity) and kit_ids
   const assetsPayload = useMemo(() => {
-    return Object.entries(selectedStandaloneQuantities)
+    return Object.entries(selectedAssetQuantities)
       .filter(([_, qty]) => qty > 0)
       .map(([assetId, qty]) => ({ asset_id: assetId, quantity: qty }));
-  }, [selectedStandaloneQuantities]);
+  }, [selectedAssetQuantities]);
 
   const totalUnits = assetsPayload.reduce((sum, a) => sum + a.quantity, 0);
 
@@ -231,7 +241,7 @@ export default function EmployeeAssetsNew() {
 
   return (
     <div className="flex h-[calc(100vh-120px)] gap-4">
-      {/* Left Panel - Employee List (unchanged) */}
+      {/* Left Panel - Employee List */}
       <div
         className={cn(
           "flex flex-col bg-card rounded-xl border border-border overflow-hidden transition-all",
@@ -489,7 +499,7 @@ export default function EmployeeAssetsNew() {
         </div>
       )}
 
-      {/* Assignment Modal – atomic kits + standalone assets */}
+      {/* Assignment Modal */}
       <Dialog open={showAssignModal && permissions.assign} onOpenChange={setShowAssignModal}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -497,12 +507,12 @@ export default function EmployeeAssetsNew() {
               Assign Assets to {selectedEmployee?.first_name} {selectedEmployee?.last_name}
             </DialogTitle>
             <DialogDescription>
-              Select whole kits (all assets inside) and/or standalone assets. Quantities can be adjusted for standalone items.
+              Select whole kits (expand to view contents) or individual assets. Assets belonging to a selected kit are disabled.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6 py-4">
-            {/* Kits Section – atomic */}
+            {/* Kits Section */}
             <div>
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                 <Layers className="w-4 h-4 text-primary" />
@@ -531,7 +541,7 @@ export default function EmployeeAssetsNew() {
                         </button>
                         <Checkbox
                           checked={selectedKitIds.has(kit.id)}
-                          onChange={() => handleKitToggle(kit.id)}
+                          onChange={() => handleKitToggle(kit.id, kit)}
                         />
                         <div>
                           <p className="font-medium text-sm">{kit.name}</p>
@@ -558,14 +568,14 @@ export default function EmployeeAssetsNew() {
               </div>
             </div>
 
-            {/* Standalone Assets Section */}
+            {/* Individual Assets Section – includes all assets (kit assets too, but disabled if kit selected) */}
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
                   <Package className="w-4 h-4 text-primary" />
                   Individual Assets
                   <Badge variant="secondary" className="text-xs">
-                    {Object.keys(selectedStandaloneQuantities).length} selected
+                    {Object.keys(selectedAssetQuantities).length} selected
                   </Badge>
                 </h3>
                 {availableCategories.length > 0 && (
@@ -585,25 +595,28 @@ export default function EmployeeAssetsNew() {
               <div className="max-h-48 overflow-y-auto border border-border rounded-lg divide-y divide-border">
                 {filteredAssets.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground text-sm">
-                    No standalone assets available.
+                    No assets found.
                   </div>
                 ) : (
                   filteredAssets.map((asset) => {
-                    const qty = selectedStandaloneQuantities[asset.id] || 0;
+                    const qty = selectedAssetQuantities[asset.id] || 0;
                     const maxQty = asset.available_quantity || 0;
                     const alreadyAssigned = asset.already_assigned_to_employee;
-                    const isSelectable = !alreadyAssigned && maxQty > 0;
+                    const kit = getKitForAsset(asset.id);
+                    const isKitSelected = kit ? selectedKitIds.has(kit.id) : false;
+                    const isSelectable = !alreadyAssigned && maxQty > 0 && !isKitSelected;
+
                     return (
                       <div
                         key={asset.id}
                         className={cn(
                           "px-3 py-2.5 flex items-center gap-3",
-                          !isSelectable && "opacity-50"
+                          (!isSelectable || isKitSelected) && "opacity-50"
                         )}
                       >
                         <Checkbox
                           checked={qty > 0}
-                          onChange={() => handleStandaloneAssetToggle(asset)}
+                          onChange={() => handleAssetToggle(asset)}
                           disabled={!isSelectable}
                         />
                         <Package className="w-4 h-4 text-muted-foreground flex-shrink-0" />
@@ -623,7 +636,7 @@ export default function EmployeeAssetsNew() {
                               min="1"
                               max={maxQty}
                               value={qty}
-                              onChange={(e) => updateStandaloneQuantity(asset.id, parseInt(e.target.value) || 0)}
+                              onChange={(e) => updateAssetQuantity(asset.id, parseInt(e.target.value) || 0)}
                               className="w-16 text-center text-sm border border-border rounded-md bg-background px-2 py-1"
                             />
                             <span className="text-xs text-muted-foreground">/ {maxQty}</span>
@@ -634,7 +647,10 @@ export default function EmployeeAssetsNew() {
                             {asset.serial_number}
                           </code>
                         )}
-                        {!isSelectable && (
+                        {isKitSelected && (
+                          <span className="text-xs text-primary whitespace-nowrap">In kit</span>
+                        )}
+                        {!isSelectable && !isKitSelected && (
                           <span className="text-xs text-destructive whitespace-nowrap">
                             {alreadyAssigned ? "Already assigned" : "Out of stock"}
                           </span>
@@ -684,7 +700,7 @@ export default function EmployeeAssetsNew() {
               <CheckCircle className="w-4 h-4 mr-2" />
               {assignMutation.isPending
                 ? "Assigning..."
-                : `Assign ${totalUnits + selectedKitIds.size * 1} Unit${(totalUnits + selectedKitIds.size) !== 1 ? "s" : ""}`}
+                : `Assign ${totalUnits + selectedKitIds.size} Unit${totalUnits + selectedKitIds.size !== 1 ? "s" : ""}`}
             </Button>
           </DialogFooter>
         </DialogContent>

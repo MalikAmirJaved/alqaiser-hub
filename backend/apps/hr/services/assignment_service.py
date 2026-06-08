@@ -5,8 +5,11 @@ from django.core.exceptions import ValidationError
 from apps.hr.models import (
     Employee, Asset, AssetCategory, EmployeeAssetAssignment
 )
+from apps.inventory.models import (GoodsReceipt, GoodsReceiptLine)
 import logging
-from apps.finance.models import Expense
+import time
+import random
+from django.db import transaction
 logger = logging.getLogger(__name__)
 
 class AssetAssignmentService:
@@ -246,71 +249,129 @@ class AssetAssignmentService:
         }
 
 
-def create_or_update_asset_from_receipt_line(line, receipt, user):
+def create_or_update_asset_from_receipt_line(
+    line: GoodsReceiptLine, 
+    goods_receipt: GoodsReceipt, 
+    user
+) -> Asset:
     """
-    line: GoodsReceiptLine instance
-    receipt: GoodsReceipt instance
-    user: User
-    Returns Asset instance
+    Create or update an HR Asset based on a goods receipt line.
+    Handles both cases: when the purchase order line already has an asset,
+    or when it has a product variant (legacy).
     """
-    variant = line.purchase_order_line.variant
+    from apps.hr.models import Asset
+    
+    po_line = line.purchase_order_line
+    po = goods_receipt.purchase_order
+    supplier = po.supplier
+    
+    # If the PO line already has an asset reference, update it directly
+    if po_line.asset:
+        asset = po_line.asset
+        # Update quantity and purchase info
+        asset.total_quantity = (asset.total_quantity or 0) + line.quantity_received
+        asset.available_quantity = (asset.available_quantity or 0) + line.quantity_received
+        asset.purchase_date = goods_receipt.received_date.date()
+        asset.purchase_price = line.unit_cost
+        asset.vendor = supplier.name
+        asset.save(update_fields=[
+            'total_quantity', 'available_quantity', 
+            'purchase_date', 'purchase_price', 'vendor'
+        ])
+        return asset
+    
+    # Otherwise, create asset from variant (existing logic)
+    variant = po_line.variant
+    if not variant:
+        raise ValueError("Purchase order line has neither asset nor variant")
+    
     product = variant.product
-    supplier = receipt.purchase_order.supplier
-    qty = line.quantity_received
-    unit_cost = line.unit_cost
-
-    # Find existing asset with same name/brand/model/vendor
-    asset, created = Asset.objects.select_for_update().get_or_create(
-        company_id=receipt.company_id,
-        branch_id=receipt.branch_id,
+    
+    # Determine category based on product category or variant type
+    category = product.category or "Office Equipment"
+    
+    # Use variant SKU as serial number if not provided
+    serial_number = variant.sku
+    
+    asset, created = Asset.objects.get_or_create(
+        company_id=po.company_id,
+        branch_id=po.branch_id,
         name=product.product_name,
-        brand=product.brand.name if product.brand else '',
+        brand=product.brand or "",
         model=variant.sku,
-        vendor=supplier.name,
         defaults={
-            'description': product.description,
-            'purchase_date': receipt.received_date.date(),
-            'purchase_price': unit_cost,
-            'total_quantity': qty,
-            'available_quantity': qty,
-            'is_assigned': False,
+            'serial_number': serial_number,
+            'description': product.description or "",
+            'category': category,
+            'purchase_date': goods_receipt.received_date.date(),
+            'purchase_price': line.unit_cost,
+            'vendor': supplier.name,
+            'total_quantity': line.quantity_received,
+            'available_quantity': line.quantity_received,
             'is_active': True,
+            'is_assigned': False,
             'created_by': user,
             'updated_by': user,
         }
     )
+    
     if not created:
-        # Update quantity and purchase price if needed (average cost optional)
-        asset.total_quantity += qty
-        asset.available_quantity += qty
-        # Optionally recalculate average purchase price
-        total_cost = (asset.total_quantity - qty) * asset.purchase_price + qty * unit_cost
-        asset.purchase_price = total_cost / asset.total_quantity
-        asset.updated_by = user
-        asset.save(update_fields=['total_quantity', 'available_quantity', 'purchase_price', 'updated_by'])
-
+        # Update existing asset
+        asset.total_quantity = (asset.total_quantity or 0) + line.quantity_received
+        asset.available_quantity = (asset.available_quantity or 0) + line.quantity_received
+        asset.purchase_date = goods_receipt.received_date.date()
+        asset.purchase_price = line.unit_cost
+        asset.vendor = supplier.name
+        asset.save(update_fields=[
+            'total_quantity', 'available_quantity', 
+            'purchase_date', 'purchase_price', 'vendor'
+        ])
+    
     return asset
 
 
-def create_expense_from_receipt_line(line, receipt, user):
+def create_expense_from_receipt_line(
+    line: "GoodsReceiptLine",
+    goods_receipt: "GoodsReceipt",
+    user,
+    supplier_bill=None       # <-- critical parameter
+) -> None:
     """
-    Creates an Expense record for office inventory items.
+    Create an expense record for an office inventory receipt.
+    If supplier_bill is provided, the expense will be linked to it.
     """
-    variant = line.purchase_order_line.variant
-    product = variant.product
-    qty = line.quantity_received
-    unit_cost = line.unit_cost
-    total_amount = qty * unit_cost
+    from apps.finance.models import Expense
+
+    po_line = line.purchase_order_line
+    po = goods_receipt.purchase_order
+    supplier = po.supplier
+
+    if po_line.asset:
+        asset = po_line.asset
+        description = f"Purchase of asset: {asset.name} (SN: {asset.serial_number or 'N/A'}) from {supplier.name}"
+        category = "OFFICE_SUPPLIES"
+    elif po_line.variant:
+        variant = po_line.variant
+        product = variant.product
+        description = f"Purchase of {product.product_name} (SKU: {variant.sku}) from {supplier.name}"
+        category = "OFFICE_SUPPLIES"
+    else:
+        raise ValueError("Purchase order line has no asset or variant")
+
+    total_amount = line.quantity_received * line.unit_cost
+    expense_number = f"EXP-{int(time.time())}-{random.randint(1000, 9999)}"
+    notes = f"Goods Receipt: {goods_receipt.receipt_number}\nVendor: {supplier.name}"
 
     expense = Expense.objects.create(
-        company_id=receipt.company_id,
-        branch_id=receipt.branch_id,
-        expense_number=f"EXP-{receipt.receipt_number}-{variant.sku[:6]}",
-        category='OFFICE_SUPPLIES',  # or a new category 'OFFICE_INVENTORY'
-        expense_date=receipt.received_date.date(),
+        expense_number=expense_number,
+        company_id=po.company_id,
+        branch_id=po.branch_id,
+        expense_date=goods_receipt.received_date.date(),
         amount=total_amount,
-        description=f"Purchase of {product.product_name} (Qty: {qty}) from {receipt.purchase_order.supplier.name}",
-        notes=f"Goods Receipt: {receipt.receipt_number}, PO: {receipt.purchase_order.order_number}",
+        category=category,
+        description=description,
+        notes=notes,
+        supplier_bill=supplier_bill,    # ✅ FK is set here
         created_by=user,
         updated_by=user,
     )

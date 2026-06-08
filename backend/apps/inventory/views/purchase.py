@@ -17,13 +17,15 @@ from apps.inventory.models import (
     PurchaseOrder, PurchaseOrderLine, GoodsReceipt, GoodsReceiptLine,
     StockItem, InventoryTransaction, ProductVariant
 )
+
 from apps.inventory.serializers.purchase import (
     PurchaseOrderSerializer,
     GoodsReceiptSerializer,
 )
+from apps.finance.models import SupplierBill
 from apps.hr.services.assignment_service import create_or_update_asset_from_receipt_line, create_expense_from_receipt_line
-
-
+import logging
+logger = logging.getLogger(__name__)
 
 class PurchaseOrderViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'INVENTORY'
@@ -117,20 +119,30 @@ class GoodsReceiptViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
     
     @transaction.atomic
     def _process_receipt(self, goods_receipt, user):
+        """
+        Process a goods receipt:
+        - Update stock (for FOR_SALE) or HR assets (for OFFICE_INVENTORY)
+        - Create a supplier bill for the total received amount
+        - Create expenses for OFFICE_INVENTORY lines linked to that bill
+        """
         po = goods_receipt.purchase_order
         inventory_type = po.inventory_type
 
+        # Stores receipt lines for OFFICE_INVENTORY (to create expenses after the bill is created)
+        office_lines = []
         total_bill_amount = Decimal('0.00')
+
+        # ============ FIRST PASS: Process all lines and accumulate bill amount ============
         for line in goods_receipt.lines.filter(accepted=True):
             po_line = line.purchase_order_line
-            variant = po_line.variant
-            warehouse = po.warehouse
             qty = line.quantity_received
             unit_cost = line.unit_cost
-            total_line = qty * unit_cost
+            total_line = Decimal(qty) * Decimal(unit_cost)
 
             if inventory_type == 'FOR_SALE':
-                # Existing stock logic
+                # --- Stock update for FOR_SALE items ---
+                variant = po_line.variant
+                warehouse = po.warehouse
                 stock_item, _ = StockItem.objects.select_for_update().get_or_create(
                     variant=variant,
                     warehouse=warehouse,
@@ -144,18 +156,15 @@ class GoodsReceiptViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
                 stock_item.version += 1
                 stock_item.save(update_fields=['quantity_on_hand', 'version'])
 
-                # Update PO line received quantity
                 po_line.quantity_received += qty
                 po_line.save(update_fields=['quantity_received'])
 
-                # Update PO line status
                 if po_line.quantity_received >= po_line.quantity_ordered:
                     po_line.status = 'FULLY_RECEIVED'
                 elif po_line.quantity_received > 0:
                     po_line.status = 'PARTIALLY_RECEIVED'
                 po_line.save(update_fields=['status'])
 
-                # Create inventory transaction
                 InventoryTransaction.objects.create(
                     transaction_id=uuid.uuid4(),
                     variant=variant,
@@ -174,19 +183,41 @@ class GoodsReceiptViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
                     created_by=user,
                     updated_by=user,
                 )
+
                 total_bill_amount += total_line
 
             else:  # OFFICE_INVENTORY
-                # Create/update HR Asset
-                asset = create_or_update_asset_from_receipt_line(line, goods_receipt, user)
-                # Create Finance Expense
-                expense = create_expense_from_receipt_line(line, goods_receipt, user)
-                # Do not update stock items, do not record inventory transactions
-                # No need to accumulate bill amount for FOR_SALE bill
-                # Optionally still accumulate for supplier bill if we decide to create one
-                # But we skip supplier bill for OFFICE_INVENTORY.
+                # --- HR Asset update (create or update) ---
+                if po_line.asset:
+                    asset = po_line.asset
+                    asset.total_quantity = (asset.total_quantity or 0) + qty
+                    asset.available_quantity = (asset.available_quantity or 0) + qty
+                    asset.purchase_date = goods_receipt.received_date.date()
+                    asset.purchase_price = unit_cost
+                    asset.vendor = po.supplier.name
+                    asset.save(update_fields=[
+                        'total_quantity', 'available_quantity',
+                        'purchase_date', 'purchase_price', 'vendor'
+                    ])
+                else:
+                    # Legacy fallback: create from variant
+                    asset = create_or_update_asset_from_receipt_line(line, goods_receipt, user)
 
-        # Update PO status after all lines processed
+                # --- Update purchase order line quantities and status ---
+                po_line.quantity_received += qty
+                po_line.save(update_fields=['quantity_received'])
+
+                if po_line.quantity_received >= po_line.quantity_ordered:
+                    po_line.status = 'FULLY_RECEIVED'
+                elif po_line.quantity_received > 0:
+                    po_line.status = 'PARTIALLY_RECEIVED'
+                po_line.save(update_fields=['status'])
+
+                # --- Store the line for expense creation after the bill is created ---
+                office_lines.append(line)
+                total_bill_amount += total_line
+
+        # ============ UPDATE PURCHASE ORDER STATUS ============
         po.refresh_from_db()
         all_lines = po.lines.all()
         if all(l.status == 'FULLY_RECEIVED' for l in all_lines):
@@ -195,10 +226,10 @@ class GoodsReceiptViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
             po.status = 'PARTIALLY_RECEIVED'
         po.save(update_fields=['status'])
 
-        # Auto-create SupplierBill only for FOR_SALE
-        if inventory_type == 'FOR_SALE' and total_bill_amount > 0:
-            from apps.finance.models import SupplierBill
-            SupplierBill.objects.create(
+        # ============ CREATE THE SUPPLIER BILL (for the total amount) ============
+        supplier_bill = None
+        if total_bill_amount > 0:
+            supplier_bill = SupplierBill.objects.create(
                 bill_number=f"BILL-{goods_receipt.receipt_number}",
                 supplier=po.supplier,
                 purchase_order=po,
@@ -211,3 +242,17 @@ class GoodsReceiptViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
                 created_by=user,
                 updated_by=user
             )
+            logger.info(f"Created supplier bill {supplier_bill.bill_number} (ID: {supplier_bill._id}) for amount {total_bill_amount}")
+
+        # ============ SECOND PASS: Create expenses for OFFICE_INVENTORY lines (linked to the bill) ============
+        for line in office_lines:
+            if not supplier_bill:
+                # This should never happen because total_bill_amount > 0 implies supplier_bill exists
+                logger.error(f"No supplier bill available for goods receipt {goods_receipt.receipt_number} despite total amount > 0")
+                continue
+
+            expense = create_expense_from_receipt_line(
+                line, goods_receipt, user,
+                supplier_bill=supplier_bill   # Link the expense to the bill
+            )
+            logger.info(f"Created expense {expense.expense_number} linked to bill {supplier_bill.bill_number}")

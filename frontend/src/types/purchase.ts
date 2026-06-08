@@ -39,19 +39,22 @@ export interface PurchaseOrder {
   updated_at: string;
 }
 
+export interface PurchaseOrderLinePayload {
+  variant?: string;          // UUID for FOR_SALE
+  asset?: string;            // UUID for OFFICE_INVENTORY
+  quantity_ordered: number;
+  unit_cost: number;
+  tax_rate: number;
+}
+
 export interface PurchaseOrderPayload {
   supplier: string;
   warehouse: string;
-  inventory_type?: "FOR_SALE" | "OFFICE_INVENTORY";  // ← ADDED
+  inventory_type: 'FOR_SALE' | 'OFFICE_INVENTORY';
   order_date?: string;
   expected_delivery_date?: string;
   notes?: string;
-  line_items: Array<{
-    variant: string;
-    quantity_ordered: number;
-    unit_cost: number;
-    tax_rate?: number;
-  }>;
+  line_items: PurchaseOrderLinePayload[];
 }
 
 export interface GoodsReceiptLinePayload {

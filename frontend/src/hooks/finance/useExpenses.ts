@@ -18,6 +18,9 @@ export interface Expense {
   created_by?: number | string | null;
   updated_by?: number | string | null;
   journal_entry: string | null;  
+  supplier_bill_id?: string | null;
+  supplier_bill_number?: string | null;
+
 }
 
 interface PaginatedResponse<T> {
