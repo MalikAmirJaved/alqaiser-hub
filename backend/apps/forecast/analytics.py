@@ -43,24 +43,28 @@ def build_sales_analytics(queryset, granularity="daily", top_n=8):
         - confidence: list[{ bucket, count }] (confidence histogram)
         - totals:     dict with aggregate numbers
     """
-    qs = queryset.order_by("forecast_date")
-    rows = list(qs.values(
-        "forecast_date",
-        "predicted_quantity",
-        "lower_bound",
-        "upper_bound",
-        "confidence",
-        "method_used",
-        "variant_sku",
-    ).annotate(sku=F("variant__sku")))
+    # Annotate SKU from the related variant, then fetch required fields
+    rows = list(
+        queryset.annotate(sku=F("variant__sku")).values(
+            "forecast_date",
+            "predicted_quantity",
+            "lower_bound",
+            "upper_bound",
+            "confidence",
+            "method_used",
+            "sku",
+        )
+    )
 
     # --- timeline ---------------------------------------------------------
-    tl_acc = defaultdict(lambda: {
-        "predicted": Decimal("0"),
-        "lower": Decimal("0"),
-        "upper": Decimal("0"),
-        "count": 0,
-    })
+    tl_acc = defaultdict(
+        lambda: {
+            "predicted": Decimal("0"),
+            "lower": Decimal("0"),
+            "upper": Decimal("0"),
+            "count": 0,
+        }
+    )
     for r in rows:
         bucket = _date_bucket(r["forecast_date"], granularity)
         agg = tl_acc[bucket]
@@ -83,13 +87,11 @@ def build_sales_analytics(queryset, granularity="daily", top_n=8):
     ]
 
     # --- top SKUs ---------------------------------------------------------
-    sku_acc = defaultdict(lambda: {
-        "predicted": Decimal("0"),
-        "confidence_sum": 0.0,
-        "count": 0,
-    })
+    sku_acc = defaultdict(
+        lambda: {"predicted": Decimal("0"), "confidence_sum": 0.0, "count": 0}
+    )
     for r in rows:
-        sku = r["variant__sku"] or r["variant_sku"] or "UNKNOWN"
+        sku = r["sku"] or "UNKNOWN"
         agg = sku_acc[sku]
         agg["predicted"] += r["predicted_quantity"] or Decimal("0")
         agg["confidence_sum"] += float(r["confidence"] or 0.0)
@@ -97,30 +99,30 @@ def build_sales_analytics(queryset, granularity="daily", top_n=8):
 
     total_predicted = sum((a["predicted"] for a in sku_acc.values()), Decimal("0"))
     sku_sorted = sorted(
-        sku_acc.items(),
-        key=lambda kv: kv[1]["predicted"],
-        reverse=True,
+        sku_acc.items(), key=lambda kv: kv[1]["predicted"], reverse=True
     )[:top_n]
     top_skus = []
     for sku, agg in sku_sorted:
         share = (
-            float(agg["predicted"] / total_predicted) * 100.0
-            if total_predicted
-            else 0.0
+            float(agg["predicted"] / total_predicted) * 100.0 if total_predicted else 0.0
         )
-        top_skus.append({
-            "sku": sku,
-            "predicted": _quantize(agg["predicted"]),
-            "confidence_avg": round(
-                agg["confidence_sum"] / agg["count"], 3
-            ) if agg["count"] else 0.0,
-            "share": round(share, 2),
-        })
+        top_skus.append(
+            {
+                "sku": sku,
+                "predicted": _quantize(agg["predicted"]),
+                "confidence_avg": round(agg["confidence_sum"] / agg["count"], 3)
+                if agg["count"]
+                else 0.0,
+                "share": round(share, 2),
+            }
+        )
 
     # --- method mix -------------------------------------------------------
     method_acc = defaultdict(lambda: Decimal("0"))
     for r in rows:
-        method_acc[r["method_used"] or "UNKNOWN"] += r["predicted_quantity"] or Decimal("0")
+        method_acc[r["method_used"] or "UNKNOWN"] += r["predicted_quantity"] or Decimal(
+            "0"
+        )
     method_mix = [
         {"name": k, "value": _quantize(v)}
         for k, v in sorted(method_acc.items(), key=lambda kv: kv[1], reverse=True)
@@ -142,8 +144,7 @@ def build_sales_analytics(queryset, granularity="daily", top_n=8):
                 conf_counts[i] += 1
                 break
     confidence = [
-        {"bucket": b[0], "count": conf_counts[i]}
-        for i, b in enumerate(conf_buckets)
+        {"bucket": b[0], "count": conf_counts[i]} for i, b in enumerate(conf_buckets)
     ]
 
     # --- totals -----------------------------------------------------------
@@ -155,7 +156,6 @@ def build_sales_analytics(queryset, granularity="daily", top_n=8):
         n=Count("id"),
     )
     distinct_skus = queryset.values("variant").distinct().count()
-    horizon = (queryset.aggregate(lo=Sum("forecast_date"), hi=Sum("forecast_date")) or {})
     forecast_dates = list(
         queryset.values_list("forecast_date", flat=True).order_by("forecast_date")
     )
@@ -197,19 +197,19 @@ def build_stock_summary(queryset):
         - top_reorder: list[{ sku, warehouse, required, projected }]
         - totals: dict
     """
-    rows = list(queryset.values(
-        "projected_closing_stock",
-        "required_purchase_qty",
-        "forecast_date",
-    ).annotate(
-        sku=F("variant__sku"),
-        warehouse_name=F("warehouse__warehouse_name"),
-    ))
+    rows = list(
+        queryset.annotate(
+            sku=F("variant__sku"), warehouse_name=F("warehouse__warehouse_name")
+        ).values(
+            "projected_closing_stock",
+            "required_purchase_qty",
+            "forecast_date",
+            "sku",
+            "warehouse_name",
+        )
+    )
 
-    wh_acc = defaultdict(lambda: {
-        "projected": Decimal("0"),
-        "reorder": Decimal("0"),
-    })
+    wh_acc = defaultdict(lambda: {"projected": Decimal("0"), "reorder": Decimal("0")})
     for r in rows:
         wh = r["warehouse_name"] or "Unknown"
         wh_acc[wh]["projected"] += r["projected_closing_stock"] or Decimal("0")
@@ -221,11 +221,7 @@ def build_stock_summary(queryset):
             "projected": _quantize(v["projected"]),
             "reorder": _quantize(v["reorder"]),
         }
-        for k, v in sorted(
-            wh_acc.items(),
-            key=lambda kv: kv[1]["reorder"],
-            reverse=True,
-        )
+        for k, v in sorted(wh_acc.items(), key=lambda kv: kv[1]["reorder"], reverse=True)
     ]
 
     # Top reorder items
