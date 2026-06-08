@@ -20,7 +20,9 @@ export interface Expense {
   journal_entry: string | null;  
   supplier_bill_id?: string | null;
   supplier_bill_number?: string | null;
-
+  supplier?: string;           
+  supplier_name?: string;     
+  pay_immediately?: boolean;   
 }
 
 interface PaginatedResponse<T> {

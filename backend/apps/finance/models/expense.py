@@ -5,6 +5,7 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from apps.common.basemodel import BaseModel
 from apps.finance.services.payable import PayableModelMixin
+from apps.inventory.models import Supplier
 
 class Expense(PayableModelMixin, BaseModel):
     EXPENSE_CATEGORIES = [
@@ -28,7 +29,13 @@ class Expense(PayableModelMixin, BaseModel):
     description = models.TextField()
     notes = models.TextField(blank=True)
 
-    # ⬇️ This is the crucial FK
+    supplier = models.ForeignKey(
+        Supplier,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='expenses'
+    )
     supplier_bill = models.ForeignKey(
         'SupplierBill',
         on_delete=models.SET_NULL,
