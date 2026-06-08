@@ -207,6 +207,11 @@ export default function PurchaseOrderDetailPage() {
           <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
             <InfoRow label="Supplier" value={order.supplier_name} />
             <InfoRow label="Warehouse" value={order.warehouse_name} />
+            <InfoRow label="Inventory Type" value={
+  order.inventory_type === 'OFFICE_INVENTORY' 
+    ? 'Office Inventory (Asset) – will create HR assets & Finance expenses on receipt' 
+    : 'For Sale (Stock) – tracked in inventory'
+} />
             <InfoRow label="Order date" value={fmt(order.order_date)} />
             <InfoRow label="Expected delivery" value={fmt(order.expected_delivery_date)} />
             <InfoRow

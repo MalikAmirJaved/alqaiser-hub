@@ -2,12 +2,22 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { X, Plus, Trash2, Info } from 'lucide-react';
+import { X, Plus, Trash2, Info, Package, Building2 } from 'lucide-react';
 import { useSuppliers } from '@/hooks/useSuppliers';
 import { useWarehouses } from '@/hooks/useWarehouses';
 import { useProducts } from '@/hooks/useProducts';
 import type { PurchaseOrder, PurchaseOrderPayload } from '@/types/purchase';
 import { useCompanySettings } from "@/hooks/useCompanySettings";
+
+// Radio group components (simplified – you can use shadcn if available)
+const RadioGroup = ({ value, onValueChange, children }: any) => (
+  <div className="flex gap-4" onChange={(e: any) => onValueChange(e.target.value)}>
+    {children}
+  </div>
+);
+const RadioGroupItem = ({ value, id }: { value: string; id: string }) => (
+  <input type="radio" name="inventoryType" value={value} id={id} className="mr-1" />
+);
 
 interface PurchaseOrderModalProps {
   isOpen: boolean;
@@ -38,8 +48,8 @@ function emptyLine(): LineItem {
   return { id: nextLineId(), variant: '', quantity_ordered: 1, unit_cost: 0, tax_rate: 0 };
 }
 
-function fmtCurrency(n: number) {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+function fmtCurrency(n: number, currencySymbol = '$') {
+  return `${currencySymbol}${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function PurchaseOrderModal({
@@ -59,6 +69,7 @@ export function PurchaseOrderModal({
   const [orderDate, setOrderDate] = useState(new Date().toISOString().slice(0, 10));
   const [expectedDate, setExpectedDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [inventoryType, setInventoryType] = useState<'FOR_SALE' | 'OFFICE_INVENTORY'>('FOR_SALE');
   const [lineItems, setLineItems] = useState<LineItem[]>([emptyLine()]);
 
   // Populate when editing
@@ -69,6 +80,7 @@ export function PurchaseOrderModal({
       setOrderDate(initialData.order_date?.slice(0, 10) ?? '');
       setExpectedDate(initialData.expected_delivery_date?.slice(0, 10) ?? '');
       setNotes(initialData.notes ?? '');
+      setInventoryType(initialData.inventory_type ?? 'FOR_SALE');
       setLineItems(
         initialData.lines?.map((l) => ({
           id: nextLineId(),
@@ -123,6 +135,7 @@ export function PurchaseOrderModal({
     const payload: PurchaseOrderPayload = {
       supplier: supplierId,
       warehouse: warehouseId,
+      inventory_type: inventoryType,
       order_date: orderDate || undefined,
       expected_delivery_date: expectedDate || undefined,
       notes: notes || undefined,
@@ -131,8 +144,8 @@ export function PurchaseOrderModal({
         .map(({ variant, quantity_ordered, unit_cost, tax_rate }) => ({
           variant,
           quantity_ordered: Number(quantity_ordered),
-      unit_cost: Number(unit_cost),
-      tax_rate: Number(tax_rate),
+          unit_cost: Number(unit_cost),
+          tax_rate: Number(tax_rate),
         })),
     };
     await onSubmit(payload);
@@ -166,8 +179,7 @@ export function PurchaseOrderModal({
         {/* Scrollable body */}
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
           <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
-
-            {/* ── Order details section ── */}
+            {/* Order details section */}
             <section>
               <SectionLabel>Order details</SectionLabel>
               <div className="grid grid-cols-2 gap-3">
@@ -216,6 +228,42 @@ export function PurchaseOrderModal({
                     className="field-input"
                   />
                 </Field>
+
+                {/* Inventory Type field */}
+                <Field label="Inventory Type" required className="col-span-2">
+                  <div className="flex gap-4 mt-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="inventoryType"
+                        value="FOR_SALE"
+                        checked={inventoryType === 'FOR_SALE'}
+                        onChange={() => setInventoryType('FOR_SALE')}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-sm">For Sale (Stock)</span>
+                      <Package className="w-4 h-4 text-muted-foreground" />
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="inventoryType"
+                        value="OFFICE_INVENTORY"
+                        checked={inventoryType === 'OFFICE_INVENTORY'}
+                        onChange={() => setInventoryType('OFFICE_INVENTORY')}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-sm">Office Inventory (Asset)</span>
+                      <Building2 className="w-4 h-4 text-muted-foreground" />
+                    </label>
+                  </div>
+                  {inventoryType === 'OFFICE_INVENTORY' && (
+                    <p className="text-xs text-info mt-2">
+                      Office inventory will be added to HR Assets and Finance Expenses automatically upon receipt.
+                      No stock quantity will be tracked in inventory.
+                    </p>
+                  )}
+                </Field>
               </div>
 
               <Field label="Notes" className="mt-3">
@@ -229,7 +277,7 @@ export function PurchaseOrderModal({
               </Field>
             </section>
 
-            {/* ── Line items section ── */}
+            {/* Line items section */}
             <section>
               <div className="flex items-center justify-between mb-3">
                 <SectionLabel className="mb-0">Line items</SectionLabel>
@@ -318,7 +366,6 @@ export function PurchaseOrderModal({
         </form>
       </div>
 
-      {/* Shared field styles injected once */}
       <style>{`
         .field-input {
           width: 100%;

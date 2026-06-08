@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Package } from 'lucide-react';
+import { Plus, Package, Building2 } from 'lucide-react';
 import { useFeaturePermissions } from '@/hooks/useFeaturePermissions';
 import {
   usePurchaseOrders,
@@ -273,7 +273,7 @@ export default function PurchaseOrdersPage() {
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-muted/50 border-b border-border">
-              {['Order #', 'Supplier', 'Warehouse', 'Order Date', 'Expected', 'Total', 'Status', 'Payment Status', 'Paid', 'Action'].map(
+              {['Order #', 'Supplier', 'Warehouse', 'Type', 'Order Date', 'Expected', 'Total', 'Status', 'Payment Status', 'Paid', 'Action'].map(
                 (h) => (
                   <th
                     key={h}
@@ -312,6 +312,17 @@ export default function PurchaseOrdersPage() {
                 </td>
                 <td className="px-4 py-3">{order.supplier_name}</td>
                 <td className="px-4 py-3 text-muted-foreground">{order.warehouse_name}</td>
+                <td className="px-4 py-3 text-muted-foreground"> {order.inventory_type === 'OFFICE_INVENTORY' ? (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-500/10 text-purple-600 border border-purple-200">
+      <Building2 className="w-3 h-3" />
+      Office Asset
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-500/10 text-blue-600 border border-blue-200">
+      <Package className="w-3 h-3" />
+      For Sale
+    </span>
+  )}</td>
                 <td className="px-4 py-3 tabular-nums text-muted-foreground">{fmt(order.order_date)}</td>
                 <td className="px-4 py-3 tabular-nums text-muted-foreground">{fmt(order.expected_delivery_date)}</td>
                 <td className="px-4 py-3 tabular-nums font-medium">{formatCurrency(order.total_amount)}</td>

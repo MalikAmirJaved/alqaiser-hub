@@ -16,6 +16,17 @@ class PurchaseOrder(BaseModel):
         ('FULLY_RECEIVED', 'Fully Received'),
         ('CANCELLED', 'Cancelled'),
     ]
+    INVENTORY_TYPES = [
+        ('FOR_SALE', 'For Sale (Inventory)'),
+        ('OFFICE_INVENTORY', 'Office Inventory (Asset)'),
+    ]
+
+    inventory_type = models.CharField(
+        max_length=20,
+        choices=INVENTORY_TYPES,
+        default='FOR_SALE',
+        help_text="Type of inventory: for resale or office assets"
+    )
 
     order_number = models.CharField(max_length=50, unique=True)
     supplier = models.ForeignKey(

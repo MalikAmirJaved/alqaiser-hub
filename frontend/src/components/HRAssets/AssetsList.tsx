@@ -1,4 +1,4 @@
-// components/hr/AssetsList.tsx
+// components/HRAssets/AssetsList.tsx
 "use client";
 import { useState } from "react";
 import { useAssets, useAssetStats, useCreateAsset, useUpdateAsset, useDeleteAsset } from "@/hooks/useAssets";
@@ -16,9 +16,6 @@ import {
   Trash2,
   Save,
   MoreVertical,
-  DollarSign,
-  Building2,
-  Hash,
 } from "lucide-react";
 
 import {
@@ -50,11 +47,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { DatePicker } from "@/components/reuseable/DatePicker";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/currency";
-import { StatsCards } from "@/components/reuseable/StatsCards";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+
+// Helper to format date
+const formatDate = (dateStr?: string) => {
+  if (!dateStr) return "—";
+  return new Date(dateStr).toLocaleDateString();
+};
 
 export default function AssetsList() {
   const permissions = useFeaturePermissions("HR", "emp_asset");
@@ -69,17 +70,15 @@ export default function AssetsList() {
 
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<any>(null);
-  
-  const [form, setForm] = useState({ 
-    name: "", 
-    brand: "", 
-    model: "", 
-    serialNumber: "",
+
+  // Simplified form state (no warranty field)
+  const [form, setForm] = useState({
+    name: "",
+    brand: "",
+    category: "",
+    sku: "",
+    initialStock: 1,
     description: "",
-    purchaseDate: "",
-    purchasePrice: 0,
-    warrantyUntil: "",
-    vendor: ""
   });
 
   const handleSave = async () => {
@@ -88,42 +87,48 @@ export default function AssetsList() {
       return;
     }
 
+    // Store category in description (prepend with "Category: ...")
+    const finalDescription = form.category
+      ? `Category: ${form.category}\n${form.description || ""}`
+      : form.description || "";
+
     try {
       if (editing) {
         await updateAsset.mutateAsync({
           id: editing.id,
           name: form.name,
           brand: form.brand || undefined,
-          model: form.model || undefined,
-          serialNumber: form.serialNumber || undefined,
-          description: form.description || undefined,
-          purchaseDate: form.purchaseDate || undefined,
-          purchasePrice: form.purchasePrice || 0,
-          warrantyUntil: form.warrantyUntil || undefined,
-          vendor: form.vendor || undefined,
+          serial_number: form.sku || undefined,
+          total_quantity: form.initialStock,
+          available_quantity: form.initialStock,
+          description: finalDescription,
+          is_active: true,
         });
       } else {
         await createAsset.mutateAsync({
           name: form.name,
           brand: form.brand || undefined,
-          model: form.model || undefined,
-          serialNumber: form.serialNumber || undefined,
-          description: form.description || undefined,
-          purchaseDate: form.purchaseDate || undefined,
-          purchasePrice: form.purchasePrice || 0,
-          warrantyUntil: form.warrantyUntil || undefined,
-          vendor: form.vendor || undefined,
-          isActive: true,
+          serial_number: form.sku || undefined,
+          total_quantity: form.initialStock,
+          available_quantity: form.initialStock,
+          description: finalDescription,
+          is_active: true,
+          purchase_date: new Date().toISOString().split("T")[0],
+          purchase_price: 0,
         });
       }
-      
+
       setShowModal(false);
       setEditing(null);
-      setForm({ 
-        name: "", brand: "", model: "", serialNumber: "",
-        description: "", purchaseDate: "", purchasePrice: 0, 
-        warrantyUntil: "", vendor: "" 
+      setForm({
+        name: "",
+        brand: "",
+        category: "",
+        sku: "",
+        initialStock: 1,
+        description: "",
       });
+      toast.success(editing ? "Asset updated" : "Asset created");
     } catch (error: any) {
       toast.error(error.message || "Failed to save asset");
     }
@@ -132,35 +137,71 @@ export default function AssetsList() {
   const handleDelete = async (id: string) => {
     try {
       await deleteAsset.mutateAsync(id);
+      toast.success("Asset deleted");
     } catch (error: any) {
       toast.error(error.message || "Failed to delete asset");
     }
   };
 
+  const openEditModal = (asset: any) => {
+    // Parse category from description if stored as "Category: ..."
+    let category = "";
+    let description = asset.description || "";
+    if (description.startsWith("Category: ")) {
+      const lines = description.split("\n");
+      category = lines[0].replace("Category: ", "");
+      description = lines.slice(1).join("\n");
+    }
+
+    setEditing(asset);
+    setForm({
+      name: asset.name || "",
+      brand: asset.brand || "",
+      category: category,
+      sku: asset.serial_number || "",
+      initialStock: asset.total_quantity || 1,
+      description: description,
+    });
+    setShowModal(true);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
       </div>
     );
   }
 
+  // Stats cards data
+  const statsCards = [
+    { label: "Total Assets", value: stats?.totalAssets || assets.length },
+    { label: "With Serial Numbers", value: stats?.withSerialNumbers || assets.filter(a => a.serial_number).length },
+    { label: "Total Value", value: formatCurrency(stats?.totalValue ?? 0) },
+    { label: "Active Warranty", value: stats?.activeWarranty || 0 },
+  ];
+
   return (
-    <div className="space-y-6 ">
-      <PageHeader 
-        title="Asset Library" 
-        subtitle="Manage your hardware inventory - laptops, monitors, peripherals, and more"
+    <div className="space-y-6">
+      <PageHeader
+        title="Asset Library"
+        subtitle="Manage hardware inventory – laptops, monitors, peripherals, and more"
         actions={
           permissions.create && (
-            <Button onClick={() => { 
-              setEditing(null); 
-              setForm({ 
-                name: "", brand: "", model: "", serialNumber: "",
-                description: "", purchaseDate: "", purchasePrice: 0, 
-                warrantyUntil: "", vendor: "" 
-              }); 
-              setShowModal(true); 
-            }}>
+            <Button
+              onClick={() => {
+                setEditing(null);
+                setForm({
+                  name: "",
+                  brand: "",
+                  category: "",
+                  sku: "",
+                  initialStock: 1,
+                  description: "",
+                });
+                setShowModal(true);
+              }}
+            >
               <Plus className="w-4 h-4 mr-2" />
               Add Asset
             </Button>
@@ -169,42 +210,22 @@ export default function AssetsList() {
       />
 
       {/* Stats Cards */}
-<StatsCards
-  stats={[
-    {
-      id: "total-assets",
-      label: "Total Assets",
-      value: stats?.totalAssets || assets.length,
-    },
-    {
-      id: "serials",
-      label: "With Serial Numbers",
-      value:
-        stats?.withSerialNumbers ||
-        assets.filter((a) => a.serialNumber).length,
-    },
-    {
-      id: "total-value",
-      label: "Total Value",
-      value: formatCurrency(stats?.totalValue ?? 0),
-    },
-    {
-      id: "vendors",
-      label: "Vendors",
-      value:
-        stats?.uniqueVendors ||
-        new Set(
-          assets.map((a) => a.vendor).filter(Boolean)
-        ).size,
-    },
-  ]}
-/>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {statsCards.map((stat) => (
+          <Card key={stat.label}>
+            <CardContent className="p-4">
+              <div className="text-xs text-muted-foreground">{stat.label}</div>
+              <div className="text-2xl font-bold">{stat.value}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
       {/* Search and Table */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <CardTitle className="text-lg">Asset Inventory</CardTitle>
+            <CardTitle className="text-lg">Assets Inventory</CardTitle>
             <div className="relative w-full sm:w-80">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -231,98 +252,85 @@ export default function AssetsList() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Brand / Model</TableHead>
-                    <TableHead>Serial Number</TableHead>
-                    <TableHead>Purchase Info</TableHead>
-                    <TableHead>Warranty</TableHead>
+                    <TableHead>Brand</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>SKU</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Available</TableHead>
                     <TableHead className="w-[80px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {assets.map(asset => (
-                    <TableRow key={asset.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          <Package className="w-4 h-4 text-muted-foreground" />
-                          {asset.name}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm">
-                          {asset.brand || "-"} {asset.model ? `/ ${asset.model}` : ""}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        {asset.serialNumber ? (
-                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{asset.serialNumber}</code>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-xs space-y-0.5">
-                          {asset.purchaseDate && <div>📅 {asset.purchaseDate}</div>}
-                          {asset.purchasePrice && <div>💰 {formatCurrency(asset.purchasePrice)}</div>}
-                          {asset.vendor && <div>🏢 {asset.vendor}</div>}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {asset.warrantyUntil ? (
-                          <Badge variant={asset.warrantyStatus === true ? "default" : "destructive"} className="text-xs">
-                            {asset.warrantyStatus === true ? "Active" : "Expired"}
-                            <br />
-                            <span className="text-[10px]">{asset.warrantyUntil}</span>
-                          </Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreVertical className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {permissions.update && (
-                              <DropdownMenuItem onClick={() => { 
-                                setEditing(asset); 
-                                setForm({
-                                  name: asset.name || "",
-                                  brand: asset.brand || "",
-                                  model: asset.model || "",
-                                  serialNumber: asset.serialNumber || "",
-                                  description: asset.description || "",
-                                  purchaseDate: asset.purchaseDate || "",
-                                  purchasePrice: asset.purchasePrice || 0,
-                                  warrantyUntil: asset.warrantyUntil || "",
-                                  vendor: asset.vendor || "",
-                                }); 
-                                setShowModal(true); 
-                              }}>
-                                <Edit className="w-4 h-4 mr-2" />
-                                Edit
-                              </DropdownMenuItem>
-                            )}
-                            {permissions.update && permissions.delete && (
-                              <DropdownMenuSeparator />
-                            )}
-                            {permissions.delete && (
-                              <DropdownMenuItem 
-                                onClick={() => handleDelete(asset.id)} 
-                                className="text-destructive"
-                                disabled={asset.isAssigned}
-                              >
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {assets.map((asset) => {
+                    // Extract category from description if stored
+                    let category = "";
+                    let description = asset.description || "";
+                    if (description.startsWith("Category: ")) {
+                      const lines = description.split("\n");
+                      category = lines[0].replace("Category: ", "");
+                    }
+                    const totalQty = asset.total_quantity ?? 0;
+                    const availableQty = asset.available_quantity ?? 0;
+                    const assignedQty = totalQty - availableQty;
+
+                    return (
+                      <TableRow key={asset.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <Package className="w-4 h-4 text-muted-foreground" />
+                            {asset.name}
+                          </div>
+                        </TableCell>
+                        <TableCell>{asset.brand || "—"}</TableCell>
+                        <TableCell>{category || "—"}</TableCell>
+                        <TableCell>
+                          {asset.serial_number ? (
+                            <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{asset.serial_number}</code>
+                          ) : (
+                            "—"
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">{totalQty}</TableCell>
+                        <TableCell className="text-right">
+                          <span className={availableQty > 0 ? "text-success font-medium" : "text-destructive"}>
+                            {availableQty}
+                          </span>
+                          {assignedQty > 0 && (
+                            <span className="text-xs text-muted-foreground ml-1">
+                              ({assignedQty} assigned)
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {permissions.update && (
+                                <DropdownMenuItem onClick={() => openEditModal(asset)}>
+                                  <Edit className="w-4 h-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                              )}
+                              {permissions.update && permissions.delete && <DropdownMenuSeparator />}
+                              {permissions.delete && (
+                                <DropdownMenuItem
+                                  onClick={() => handleDelete(asset.id)}
+                                  className="text-destructive"
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -330,97 +338,72 @@ export default function AssetsList() {
         </CardContent>
       </Card>
 
-      {/* Asset Modal */}
-      <Dialog
-        open={showModal && (editing ? permissions.update : permissions.create)}
-        onOpenChange={setShowModal}
-      >
+      {/* Asset Form Modal */}
+      <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit Asset" : "Add New Asset"}</DialogTitle>
             <DialogDescription>
-              {editing ? "Update asset details below" : "Enter the asset information below"}
+              {editing ? "Update asset details" : "Enter basic asset information"}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid gap-2">
-              <Label>Asset Name *</Label>
+              <Label htmlFor="name">Asset Name *</Label>
               <Input
+                id="name"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="e.g., Dell XPS 15, Logitech MX Master"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Brand</Label>
-                <Input
-                  value={form.brand}
-                  onChange={(e) => setForm({ ...form, brand: e.target.value })}
-                  placeholder="e.g., Dell, Apple, Logitech"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Model</Label>
-                <Input
-                  value={form.model}
-                  onChange={(e) => setForm({ ...form, model: e.target.value })}
-                  placeholder="e.g., XPS 15, MacBook Pro"
-                />
-              </div>
-            </div>
             <div className="grid gap-2">
-              <Label>Serial Number</Label>
+              <Label htmlFor="brand">Brand</Label>
               <Input
-                value={form.serialNumber}
-                onChange={(e) => setForm({ ...form, serialNumber: e.target.value })}
-                placeholder="Unique serial number for tracking"
+                id="brand"
+                value={form.brand}
+                onChange={(e) => setForm({ ...form, brand: e.target.value })}
+                placeholder="e.g., Dell, Logitech"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Purchase Date</Label>
-                <DatePicker
-                  value={form.purchaseDate}
-                  onChange={(val) => setForm({ ...form, purchaseDate: val || "" })}
-                  placeholder="Select date"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Purchase Price ({formatCurrency()})</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={form.purchasePrice}
-                  onChange={(e) => setForm({ ...form, purchasePrice: Number(e.target.value) })}
-                  placeholder="0.00"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Warranty Until</Label>
-                <DatePicker
-                  value={form.warrantyUntil}
-                  onChange={(val) => setForm({ ...form, warrantyUntil: val || "" })}
-                  placeholder="Warranty expiry date"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Vendor</Label>
-                <Input
-                  value={form.vendor}
-                  onChange={(e) => setForm({ ...form, vendor: e.target.value })}
-                  placeholder="Supplier name"
-                />
-              </div>
+            <div className="grid gap-2">
+              <Label htmlFor="category">Category</Label>
+              <Input
+                id="category"
+                value={form.category}
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
+                placeholder="e.g., Laptop, Monitor, Peripherals"
+              />
+              <p className="text-xs text-muted-foreground">Used for grouping (e.g., Electronics, Furniture)</p>
             </div>
             <div className="grid gap-2">
-              <Label>Description</Label>
+              <Label htmlFor="sku">SKU / Serial Number</Label>
+              <Input
+                id="sku"
+                value={form.sku}
+                onChange={(e) => setForm({ ...form, sku: e.target.value })}
+                placeholder="Unique identifier"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="initialStock">Initial Stock</Label>
+              <Input
+                id="initialStock"
+                type="number"
+                min="1"
+                value={form.initialStock}
+                onChange={(e) => setForm({ ...form, initialStock: parseInt(e.target.value) || 1 })}
+                placeholder="Quantity"
+              />
+              <p className="text-xs text-muted-foreground">Number of identical units (e.g., 5 monitors)</p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="description">Description</Label>
               <Textarea
+                id="description"
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="Additional notes about this asset"
+                placeholder="Additional notes, specifications, etc."
                 rows={3}
               />
             </div>

@@ -12,6 +12,7 @@ import logging
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import Asset
+from apps.hr.serializers.asset_serializers import AssetSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +20,8 @@ logger = logging.getLogger(__name__)
 class AssetView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'emp_asset'
-    """CRUD for HR Assets with UUID support"""
     permission_classes = [IsAuthenticated]
-    
+
     def get(self, request):
         """Get all assets for user's company"""
         company_id = request.user.company_id
@@ -35,54 +35,37 @@ class AssetView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         
         query = Asset.objects.filter(company_id=company_id, is_deleted=False)
         
-        # Non-admin users only see their branch assets
         if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
             query = query.filter(models.Q(branch_id=branch_id) | models.Q(branch_id__isnull=True))
         
-        # Filters
         vendor = request.query_params.get('vendor')
         is_assigned = request.query_params.get('is_assigned')
+        category = request.query_params.get('category')
         search = request.query_params.get('search')
         
         if vendor:
             query = query.filter(vendor__iexact=vendor)
         if is_assigned is not None:
             query = query.filter(is_assigned=is_assigned.lower() == 'true')
+        if category:
+            query = query.filter(category__iexact=category)
         if search:
             query = query.filter(
                 models.Q(name__icontains=search) |
                 models.Q(brand__icontains=search) |
                 models.Q(model__icontains=search) |
                 models.Q(serial_number__icontains=search) |
-                models.Q(vendor__icontains=search)
+                models.Q(vendor__icontains=search) |
+                models.Q(category__icontains=search)
             )
         
         assets = query.order_by('-created_at')
-        
-        return Response([
-            {
-                "id": str(a._id),
-                "name": a.name,
-                "brand": a.brand,
-                "model": a.model,
-                "serialNumber": a.serial_number,
-                "description": a.description,
-                "purchaseDate": a.purchase_date.isoformat() if a.purchase_date else None,
-                "purchasePrice": str(a.purchase_price) if a.purchase_price else None,
-                "warrantyUntil": a.warranty_until.isoformat() if a.warranty_until else None,
-                "vendor": a.vendor,
-                "isActive": a.is_active,
-                "isAssigned": a.is_assigned,
-                "warrantyStatus": a.warranty_status,
-                "createdAt": a.created_at.isoformat() if a.created_at else None,
-                "updatedAt": a.updated_at.isoformat() if a.updated_at else None,
-            }
-            for a in assets
-        ])
+        serializer = AssetSerializer(assets, many=True)
+        return Response(serializer.data)
     
     @transaction.atomic
     def post(self, request):
-        """Create new asset"""
+        """Create new asset (simplified)"""
         company_id = request.user.company_id
         branch_id = request.user.branch_id
         
@@ -92,13 +75,15 @@ class AssetView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Only validate required fields: name
         if not request.data.get('name'):
             return Response(
                 {'error': 'Asset name is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        serial_number = request.data.get('serialNumber')
+        # Optional: check serial number uniqueness if provided
+        serial_number = request.data.get('serialNumber') or request.data.get('serial_number')
         if serial_number:
             if Asset.objects.filter(serial_number=serial_number, is_deleted=False).exists():
                 return Response(
@@ -106,59 +91,38 @@ class AssetView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
-        # Parse dates
-        purchase_date = None
-        warranty_until = None
+        # Prepare data for serializer
+        data = {
+            'name': request.data['name'],
+            'brand': request.data.get('brand'),
+            'model': request.data.get('model'),
+            'serial_number': serial_number,
+            'description': request.data.get('description'),
+            'category': request.data.get('category'),
+            'total_quantity': int(request.data.get('totalQuantity', request.data.get('total_quantity', 1))),
+            'is_active': request.data.get('isActive', True),
+            # Purchase fields are optional; if not provided, they become null
+            'purchase_date': request.data.get('purchaseDate') or None,
+            'purchase_price': request.data.get('purchasePrice') or None,
+            'warranty_until': request.data.get('warrantyUntil') or None,
+            'vendor': request.data.get('vendor'),
+        }
         
-        if request.data.get('purchaseDate'):
-            try:
-                purchase_date = datetime.strptime(request.data['purchaseDate'], '%Y-%m-%d').date()
-            except ValueError:
-                return Response(
-                    {'error': 'Invalid purchase date format. Use YYYY-MM-DD'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+        # Ensure available_quantity equals total_quantity (serializer will handle)
+        data['available_quantity'] = data['total_quantity']
         
-        if request.data.get('warrantyUntil'):
-            try:
-                warranty_until = datetime.strptime(request.data['warrantyUntil'], '%Y-%m-%d').date()
-            except ValueError:
-                return Response(
-                    {'error': 'Invalid warranty date format. Use YYYY-MM-DD'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        
-        asset = Asset.objects.create(
+        serializer = AssetSerializer(data=data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        asset = serializer.save(
             company_id=company_id,
             branch_id=branch_id,
-            name=request.data['name'],
-            brand=request.data.get('brand'),
-            model=request.data.get('model'),
-            serial_number=serial_number,
-            description=request.data.get('description'),
-            purchase_date=purchase_date,
-            purchase_price=request.data.get('purchasePrice'),
-            warranty_until=warranty_until,
-            vendor=request.data.get('vendor'),
-            is_active=request.data.get('isActive', True),
             created_by=request.user,
             updated_by=request.user,
         )
         
         return Response({
             "message": "Asset created successfully",
-            "id": str(asset._id),
-            "name": asset.name,
-            "brand": asset.brand,
-            "model": asset.model,
-            "serialNumber": asset.serial_number,
-            "purchaseDate": asset.purchase_date.isoformat() if asset.purchase_date else None,
-            "purchasePrice": str(asset.purchase_price) if asset.purchase_price else None,
-            "warrantyUntil": asset.warranty_until.isoformat() if asset.warranty_until else None,
-            "vendor": asset.vendor,
-            "isActive": asset.is_active,
-            "isAssigned": asset.is_assigned,
-            "warrantyStatus": asset.warranty_status,
+            "data": AssetSerializer(asset).data
         }, status=status.HTTP_201_CREATED)
     
     @transaction.atomic
@@ -186,13 +150,14 @@ class AssetView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             is_deleted=False
         )
         
-        # Update basic fields
+        # Build update data
+        update_data = {}
         if 'name' in request.data:
-            asset.name = request.data['name']
+            update_data['name'] = request.data['name']
         if 'brand' in request.data:
-            asset.brand = request.data.get('brand')
+            update_data['brand'] = request.data.get('brand')
         if 'model' in request.data:
-            asset.model = request.data.get('model')
+            update_data['model'] = request.data.get('model')
         if 'serialNumber' in request.data:
             new_serial = request.data['serialNumber']
             if new_serial and new_serial != asset.serial_number:
@@ -201,59 +166,33 @@ class AssetView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                         {'error': 'Asset with this serial number already exists'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
-            asset.serial_number = new_serial or None
+            update_data['serial_number'] = new_serial or None
         if 'description' in request.data:
-            asset.description = request.data.get('description')
-        if 'vendor' in request.data:
-            asset.vendor = request.data.get('vendor')
+            update_data['description'] = request.data.get('description')
+        if 'category' in request.data:
+            update_data['category'] = request.data.get('category')
+        if 'totalQuantity' in request.data:
+            update_data['total_quantity'] = int(request.data['totalQuantity'])
+        if 'availableQuantity' in request.data:
+            update_data['available_quantity'] = int(request.data['availableQuantity'])
         if 'isActive' in request.data:
-            asset.is_active = request.data['isActive']
-        if 'isAssigned' in request.data:
-            asset.is_assigned = request.data['isAssigned']
-        
-        # Parse dates
+            update_data['is_active'] = request.data['isActive']
         if 'purchaseDate' in request.data:
-            try:
-                asset.purchase_date = datetime.strptime(
-                    request.data['purchaseDate'], '%Y-%m-%d'
-                ).date() if request.data['purchaseDate'] else None
-            except ValueError:
-                return Response(
-                    {'error': 'Invalid purchase date format'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        
+            update_data['purchase_date'] = request.data.get('purchaseDate') or None
         if 'purchasePrice' in request.data:
-            asset.purchase_price = request.data.get('purchasePrice') or None
-        
+            update_data['purchase_price'] = request.data.get('purchasePrice') or None
         if 'warrantyUntil' in request.data:
-            try:
-                asset.warranty_until = datetime.strptime(
-                    request.data['warrantyUntil'], '%Y-%m-%d'
-                ).date() if request.data['warrantyUntil'] else None
-            except ValueError:
-                return Response(
-                    {'error': 'Invalid warranty date format'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            update_data['warranty_until'] = request.data.get('warrantyUntil') or None
+        if 'vendor' in request.data:
+            update_data['vendor'] = request.data.get('vendor')
         
-        asset.updated_by = request.user
-        asset.save()
+        serializer = AssetSerializer(asset, data=update_data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(updated_by=request.user)
         
         return Response({
             "message": "Asset updated successfully",
-            "id": str(asset._id),
-            "name": asset.name,
-            "brand": asset.brand,
-            "model": asset.model,
-            "serialNumber": asset.serial_number,
-            "purchaseDate": asset.purchase_date.isoformat() if asset.purchase_date else None,
-            "purchasePrice": str(asset.purchase_price) if asset.purchase_price else None,
-            "warrantyUntil": asset.warranty_until.isoformat() if asset.warranty_until else None,
-            "vendor": asset.vendor,
-            "isActive": asset.is_active,
-            "isAssigned": asset.is_assigned,
-            "warrantyStatus": asset.warranty_status,
+            "data": serializer.data
         })
     
     @transaction.atomic
@@ -298,7 +237,6 @@ class AssetView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
 class AssetStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'emp_asset'
-    """Get asset statistics"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
@@ -327,4 +265,5 @@ class AssetStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             ).values('vendor').distinct().count(),
             "activeWarranty": sum(1 for a in assets if a.warranty_status is True),
             "expiredWarranty": sum(1 for a in assets if a.warranty_status is False),
+            "categories": list(assets.exclude(category__isnull=True).exclude(category='').values_list('category', flat=True).distinct()),
         })

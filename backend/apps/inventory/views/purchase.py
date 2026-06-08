@@ -21,6 +21,8 @@ from apps.inventory.serializers.purchase import (
     PurchaseOrderSerializer,
     GoodsReceiptSerializer,
 )
+from apps.hr.services.assignment_service import create_or_update_asset_from_receipt_line, create_expense_from_receipt_line
+
 
 
 class PurchaseOrderViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
@@ -111,68 +113,81 @@ class GoodsReceiptViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
             'message': f'Goods receipt {gr.receipt_number} processed.',
             'data': read_serializer.data
         }, status=status.HTTP_201_CREATED)
-
+    
+    
+    @transaction.atomic
     def _process_receipt(self, goods_receipt, user):
-        """
-        Atomic update of stock, PO lines, and inventory transactions.
-        """
+        po = goods_receipt.purchase_order
+        inventory_type = po.inventory_type
+
         total_bill_amount = Decimal('0.00')
         for line in goods_receipt.lines.filter(accepted=True):
             po_line = line.purchase_order_line
             variant = po_line.variant
-            warehouse = goods_receipt.purchase_order.warehouse
+            warehouse = po.warehouse
             qty = line.quantity_received
-            
-            total_bill_amount += Decimal(str(qty)) * Decimal(str(line.unit_cost))
+            unit_cost = line.unit_cost
+            total_line = qty * unit_cost
 
-            # Lock and update stock item
-            stock_item, _ = StockItem.objects.select_for_update().get_or_create(
-                variant=variant,
-                warehouse=warehouse,
-                company_id=user.company_id,
-                branch_id=user.branch_id,
-                defaults={'quantity_on_hand': 0, 'quantity_reserved': 0}
-            )
-            before = stock_item.quantity_on_hand
-            after = before + qty
-            stock_item.quantity_on_hand = after
-            stock_item.version = F('version') + 1
-            stock_item.save(update_fields=['quantity_on_hand', 'version'])
+            if inventory_type == 'FOR_SALE':
+                # Existing stock logic
+                stock_item, _ = StockItem.objects.select_for_update().get_or_create(
+                    variant=variant,
+                    warehouse=warehouse,
+                    company_id=user.company_id,
+                    branch_id=user.branch_id,
+                    defaults={'quantity_on_hand': 0, 'quantity_reserved': 0}
+                )
+                before = stock_item.quantity_on_hand
+                after = before + qty
+                stock_item.quantity_on_hand = after
+                stock_item.version += 1
+                stock_item.save(update_fields=['quantity_on_hand', 'version'])
 
-            # Update PO line received quantity
-            po_line.quantity_received = F('quantity_received') + qty
-            po_line.save(update_fields=['quantity_received'])
+                # Update PO line received quantity
+                po_line.quantity_received += qty
+                po_line.save(update_fields=['quantity_received'])
 
-            # Update PO line status
-            po_line.refresh_from_db()
-            if po_line.quantity_received >= po_line.quantity_ordered:
-                po_line.status = 'FULLY_RECEIVED'
-            elif po_line.quantity_received > 0:
-                po_line.status = 'PARTIALLY_RECEIVED'
-            po_line.save(update_fields=['status'])
+                # Update PO line status
+                if po_line.quantity_received >= po_line.quantity_ordered:
+                    po_line.status = 'FULLY_RECEIVED'
+                elif po_line.quantity_received > 0:
+                    po_line.status = 'PARTIALLY_RECEIVED'
+                po_line.save(update_fields=['status'])
 
-            # Create inventory transaction
-            InventoryTransaction.objects.create(
-                transaction_id=uuid.uuid4(),
-                variant=variant,
-                warehouse=warehouse,
-                company_id=user.company_id,
-                branch_id=user.branch_id,
-                quantity_change=qty,
-                quantity_before=before,
-                quantity_after=after,
-                unit_cost=line.unit_cost,
-                transaction_type='PURCHASE_RECEIPT',
-                source_document_type='PURCHASE_ORDER',
-                source_document_id=goods_receipt.purchase_order._id,
-                source_line_id=po_line._id,
-                reason_text=f'Goods receipt {goods_receipt.receipt_number}',
-                created_by=user,
-                updated_by=user,
-            )
+                # Create inventory transaction
+                InventoryTransaction.objects.create(
+                    transaction_id=uuid.uuid4(),
+                    variant=variant,
+                    warehouse=warehouse,
+                    company_id=user.company_id,
+                    branch_id=user.branch_id,
+                    quantity_change=qty,
+                    quantity_before=before,
+                    quantity_after=after,
+                    unit_cost=unit_cost,
+                    transaction_type='PURCHASE_RECEIPT',
+                    source_document_type='PURCHASE_ORDER',
+                    source_document_id=po._id,
+                    source_line_id=po_line._id,
+                    reason_text=f'Goods receipt {goods_receipt.receipt_number}',
+                    created_by=user,
+                    updated_by=user,
+                )
+                total_bill_amount += total_line
+
+            else:  # OFFICE_INVENTORY
+                # Create/update HR Asset
+                asset = create_or_update_asset_from_receipt_line(line, goods_receipt, user)
+                # Create Finance Expense
+                expense = create_expense_from_receipt_line(line, goods_receipt, user)
+                # Do not update stock items, do not record inventory transactions
+                # No need to accumulate bill amount for FOR_SALE bill
+                # Optionally still accumulate for supplier bill if we decide to create one
+                # But we skip supplier bill for OFFICE_INVENTORY.
 
         # Update PO status after all lines processed
-        po = goods_receipt.purchase_order
+        po.refresh_from_db()
         all_lines = po.lines.all()
         if all(l.status == 'FULLY_RECEIVED' for l in all_lines):
             po.status = 'FULLY_RECEIVED'
@@ -180,18 +195,19 @@ class GoodsReceiptViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
             po.status = 'PARTIALLY_RECEIVED'
         po.save(update_fields=['status'])
 
-        # Auto-create draft SupplierBill in finance app
-        from apps.finance.models import SupplierBill
-        SupplierBill.objects.create(
-            bill_number=f"BILL-{goods_receipt.receipt_number}",
-            supplier=po.supplier,
-            purchase_order=po,
-            bill_date=goods_receipt.received_date.date(),
-            due_date=po.expected_delivery_date or goods_receipt.received_date.date(),
-            amount=total_bill_amount,
-            status='DRAFT',
-            company_id=po.company_id,
-            branch_id=po.branch_id,
-            created_by=user,
-            updated_by=user
-        )
+        # Auto-create SupplierBill only for FOR_SALE
+        if inventory_type == 'FOR_SALE' and total_bill_amount > 0:
+            from apps.finance.models import SupplierBill
+            SupplierBill.objects.create(
+                bill_number=f"BILL-{goods_receipt.receipt_number}",
+                supplier=po.supplier,
+                purchase_order=po,
+                bill_date=goods_receipt.received_date.date(),
+                due_date=po.expected_delivery_date or goods_receipt.received_date.date(),
+                amount=total_bill_amount,
+                status='DRAFT',
+                company_id=po.company_id,
+                branch_id=po.branch_id,
+                created_by=user,
+                updated_by=user
+            )

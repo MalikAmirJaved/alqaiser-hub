@@ -84,7 +84,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             'order_date', 'expected_delivery_date', 'total_amount',
             'notes', 'lines', 'line_items',
             'created_at', 'updated_at', 'created_by_info', 'updated_by_info',
-            'payment_status', 'total_paid',
+            'payment_status', 'total_paid', 'inventory_type',
         ]
         read_only_fields = ['order_number', 'created_at', 'updated_at']
 

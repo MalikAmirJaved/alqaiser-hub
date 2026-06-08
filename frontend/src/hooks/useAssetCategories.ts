@@ -42,6 +42,16 @@ export function useAssetCategories(params?: Record<string, string>) {
   });
 }
 
+export function useAssetCategory(id: string | null) {
+  const api = useApi();
+  return useQuery({
+    queryKey: ["assetCategory", id],
+    queryFn: () => api(`/api/hr/asset-categories/${id}/`),
+    enabled: !!id,
+  });
+}
+
+
 // Fetch asset category stats
 export function useAssetCategoryStats() {
   const api = useApi();

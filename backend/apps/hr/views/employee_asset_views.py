@@ -39,45 +39,50 @@ class EmployeeAssetAssignmentView(CompanyBranchMixin, PermissionRequiredMixin, A
         return Response(data)
     
     def post(self, request):
-        """Assign assets/kits to employee"""
         company_id = request.user.company_id
         branch_id = request.user.branch_id
-        
+
         employee_uuid = request.data.get('employee_id')
-        asset_uuids = request.data.get('asset_ids', [])
+        assets_data = request.data.get('assets', [])          
         kit_uuids = request.data.get('kit_ids', [])
-        
+
         if not employee_uuid:
             return Response({'error': 'employee_id required'}, status=400)
-        if not asset_uuids and not kit_uuids:
-            return Response({'error': 'Must provide asset_ids or kit_ids'}, status=400)
-        
+        if not assets_data and not kit_uuids:
+            return Response({'error': 'Must provide assets or kit_ids'}, status=400)
+
         try:
-            # Convert UUIDs to integer IDs for service
             employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
-            
-            asset_ids = []
-            if asset_uuids:
-                assets = Asset.objects.filter(_id__in=asset_uuids, company_id=company_id, is_deleted=False)
-                asset_ids = list(assets.values_list('id', flat=True))
-            
+
+            # Convert assets_data to format expected by service
+            assets_payload = []
+            for item in assets_data:
+                asset_uuid = item.get('asset_id')
+                qty = item.get('quantity', 1)
+                if not asset_uuid or qty <= 0:
+                    continue
+                asset = get_object_or_404(Asset, _id=asset_uuid, company_id=company_id, is_deleted=False)
+                assets_payload.append({'asset_id': asset.id, 'quantity': qty})
+
+            # Convert kit UUIDs to internal IDs
             kit_ids = []
             if kit_uuids:
                 kits = AssetCategory.objects.filter(_id__in=kit_uuids, company_id=company_id, is_deleted=False)
                 kit_ids = list(kits.values_list('id', flat=True))
-            
+
             result = AssetAssignmentService.assign_assets_to_employee(
                 employee_id=employee.id,
                 company_id=company_id,
                 branch_id=branch_id,
-                asset_ids=asset_ids if asset_ids else None,
-                kit_ids=kit_ids if kit_ids else None,
+                assets=assets_payload,
+                kit_ids=kit_ids,
                 assigned_date=request.data.get('assigned_date'),
                 condition=request.data.get('condition', 'GOOD'),
                 notes=request.data.get('notes', ''),
                 created_by=request.user
             )
             return Response(result, status=status.HTTP_201_CREATED)
+
         except Exception as e:
             logger.error(f"Assignment failed: {str(e)}")
             return Response({'error': str(e)}, status=400)
@@ -169,27 +174,24 @@ class EmployeeAssetAssignmentView(CompanyBranchMixin, PermissionRequiredMixin, A
 
 
 class AvailableAssetsView(CompanyBranchMixin, APIView):
-    """Get available assets and kits for assignment with UUIDs"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
         company_id = request.user.company_id
         employee_uuid = request.query_params.get('employee_id')
         
-        assigned_to_employee_ids = []
+        assigned_to_employee_ids = set()
         if employee_uuid:
             employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
-            assigned_to_employee_ids = EmployeeAssetAssignment.objects.filter(
+            assigned_to_employee_ids = set(EmployeeAssetAssignment.objects.filter(
                 employee=employee,
                 status='ACTIVE'
-            ).values_list('asset_id', flat=True)
+            ).values_list('asset_id', flat=True))
         
         assets = Asset.objects.filter(
             company_id=company_id,
             is_deleted=False,
             is_active=True
-        ).exclude(
-            id__in=assigned_to_employee_ids
         ).order_by('name')
         
         kits = AssetCategory.objects.filter(
@@ -207,6 +209,9 @@ class AvailableAssetsView(CompanyBranchMixin, APIView):
                     'model': a.model,
                     'serial_number': a.serial_number,
                     'is_assigned': a.is_assigned,
+                    'available_quantity': a.available_quantity,
+                    'total_quantity': a.total_quantity,
+                    'already_assigned_to_employee': a.id in assigned_to_employee_ids,
                 }
                 for a in assets
             ],
@@ -224,6 +229,8 @@ class AvailableAssetsView(CompanyBranchMixin, APIView):
                             'model': asset.model,
                             'serial_number': asset.serial_number,
                             'is_assigned': asset.is_assigned,
+                            'available_quantity': asset.available_quantity,
+                            'total_quantity': asset.total_quantity,
                             'already_assigned_to_employee': asset.id in assigned_to_employee_ids,
                         }
                         for asset in k.assets.filter(is_deleted=False)
@@ -232,7 +239,6 @@ class AvailableAssetsView(CompanyBranchMixin, APIView):
                 for k in kits
             ]
         })
-
 
 class BulkAssignmentView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     permission_module = 'HR'
