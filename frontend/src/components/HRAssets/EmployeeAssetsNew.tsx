@@ -1,6 +1,6 @@
 // components/HRAssets/EmployeeAssetsNew.tsx
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useEmployees } from "@/hooks/useEmployees";
 import {
   useEmployeeAssignments,
@@ -72,15 +72,15 @@ export default function EmployeeAssetsNew() {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showDetailPanel, setShowDetailPanel] = useState(false);
 
-  // Selection state
+  // Separate selections: kits (whole) and standalone assets (with quantity)
   const [selectedKitIds, setSelectedKitIds] = useState<Set<string>>(new Set());
   const [expandedKits, setExpandedKits] = useState<Set<string>>(new Set());
-  const [selectedAssetQuantities, setSelectedAssetQuantities] = useState<Record<string, number>>({});
+  const [selectedStandaloneQuantities, setSelectedStandaloneQuantities] = useState<Record<string, number>>({});
   const [assignmentNotes, setAssignmentNotes] = useState("");
   const [assignmentCondition, setAssignmentCondition] = useState("GOOD");
   const [selectedReturnIds, setSelectedReturnIds] = useState<Set<string>>(new Set());
 
-  // Category filter
+  // Category filter for standalone assets
   const [assetCategoryFilter, setAssetCategoryFilter] = useState<string>("all");
 
   const { data: employees = [], isLoading: employeesLoading } = useEmployees(
@@ -98,98 +98,98 @@ export default function EmployeeAssetsNew() {
   const assignMutation = useAssignAssets();
   const returnMutation = useReturnAssets();
 
-  // Unique categories for filter
-  const availableCategories = useMemo(() => {
+  // Build a set of all asset IDs that belong to any kit
+  const assetIdsInKits = useMemo(() => {
+    const ids = new Set<string>();
+    availableData?.kits?.forEach(kit => {
+      kit.assets.forEach(asset => ids.add(asset.id));
+    });
+    return ids;
+  }, [availableData]);
+
+  // Standalone assets = assets not in any kit
+  const standaloneAssets = useMemo(() => {
     if (!availableData?.assets) return [];
+    return availableData.assets.filter(asset => !assetIdsInKits.has(asset.id));
+  }, [availableData, assetIdsInKits]);
+
+  // Unique categories from standalone assets
+  const availableCategories = useMemo(() => {
     const cats = new Set<string>();
-    availableData.assets.forEach(asset => {
+    standaloneAssets.forEach(asset => {
       if (asset.category) cats.add(asset.category);
     });
     return Array.from(cats).sort();
-  }, [availableData]);
+  }, [standaloneAssets]);
 
-  // Filtered assets by category
+  // Filtered standalone assets by category
   const filteredAssets = useMemo(() => {
-    if (!availableData?.assets) return [];
-    if (assetCategoryFilter === "all") return availableData.assets;
-    return availableData.assets.filter(asset => asset.category === assetCategoryFilter);
-  }, [availableData, assetCategoryFilter]);
+    if (assetCategoryFilter === "all") return standaloneAssets;
+    return standaloneAssets.filter(asset => asset.category === assetCategoryFilter);
+  }, [standaloneAssets, assetCategoryFilter]);
 
-  // Toggle kit selection – when selected, all its assets become selected (quantity = 1 each)
-  const handleKitToggle = (kitId: string, kit: AvailableKit) => {
+  // Reset all selection when modal opens
+  useEffect(() => {
+    if (showAssignModal) {
+      setSelectedKitIds(new Set());
+      setSelectedStandaloneQuantities({});
+      setExpandedKits(new Set());
+      setAssignmentNotes("");
+      setAssignmentCondition("GOOD");
+      setAssetCategoryFilter("all");
+    }
+  }, [showAssignModal]);
+
+  // Toggle kit selection – atomic: whole kit selected/unselected
+  const handleKitToggle = (kitId: string) => {
     const newKitIds = new Set(selectedKitIds);
     if (newKitIds.has(kitId)) {
-      // Remove kit: remove all its assets from selectedAssetQuantities
       newKitIds.delete(kitId);
-      const newQuantities = { ...selectedAssetQuantities };
-      kit.assets.forEach(asset => {
-        delete newQuantities[asset.id];
-      });
-      setSelectedAssetQuantities(newQuantities);
     } else {
-      // Add kit: add all its assets with quantity = 1 (if available and not already assigned)
       newKitIds.add(kitId);
-      const newQuantities = { ...selectedAssetQuantities };
-      kit.assets.forEach(asset => {
-        if (!asset.already_assigned_to_employee && !asset.is_assigned && asset.available_quantity > 0) {
-          newQuantities[asset.id] = 1;
-        }
-      });
-      setSelectedAssetQuantities(newQuantities);
     }
     setSelectedKitIds(newKitIds);
   };
 
-  // Toggle individual asset selection (for direct assets, not within a kit)
-  const handleAssetToggle = (asset: AvailableAsset) => {
+  // Toggle standalone asset selection (with default quantity = 1)
+  const handleStandaloneAssetToggle = (asset: AvailableAsset) => {
     const alreadyAssigned = asset.already_assigned_to_employee;
     const availableQty = asset.available_quantity || 0;
     if (alreadyAssigned || availableQty <= 0) return;
 
-    const currentQty = selectedAssetQuantities[asset.id] || 0;
+    const currentQty = selectedStandaloneQuantities[asset.id] || 0;
     if (currentQty > 0) {
-      // Deselect
-      const newQuantities = { ...selectedAssetQuantities };
+      const newQuantities = { ...selectedStandaloneQuantities };
       delete newQuantities[asset.id];
-      setSelectedAssetQuantities(newQuantities);
+      setSelectedStandaloneQuantities(newQuantities);
     } else {
-      // Select with quantity = 1
-      setSelectedAssetQuantities(prev => ({ ...prev, [asset.id]: 1 }));
+      setSelectedStandaloneQuantities(prev => ({ ...prev, [asset.id]: 1 }));
     }
   };
 
-  // Change quantity for an asset
-  const updateAssetQuantity = (assetId: string, quantity: number) => {
+  // Change quantity for a standalone asset
+  const updateStandaloneQuantity = (assetId: string, quantity: number) => {
     if (quantity <= 0) {
-      const newQuantities = { ...selectedAssetQuantities };
+      const newQuantities = { ...selectedStandaloneQuantities };
       delete newQuantities[assetId];
-      setSelectedAssetQuantities(newQuantities);
+      setSelectedStandaloneQuantities(newQuantities);
     } else {
-      setSelectedAssetQuantities(prev => ({ ...prev, [assetId]: quantity }));
+      setSelectedStandaloneQuantities(prev => ({ ...prev, [assetId]: quantity }));
     }
   };
 
-  // Build final assets payload (list of {asset_id, quantity}) from selectedAssetQuantities
+  // Build final payload: standalone assets (asset_id + quantity) and kit_ids
   const assetsPayload = useMemo(() => {
-    return Object.entries(selectedAssetQuantities)
+    return Object.entries(selectedStandaloneQuantities)
       .filter(([_, qty]) => qty > 0)
       .map(([assetId, qty]) => ({ asset_id: assetId, quantity: qty }));
-  }, [selectedAssetQuantities]);
+  }, [selectedStandaloneQuantities]);
 
-  // Helper to check if an asset is part of any selected kit (for UI only)
-  const isAssetInSelectedKit = (assetId: string) => {
-    if (!availableData?.kits) return false;
-    for (const kit of availableData.kits) {
-      if (selectedKitIds.has(kit.id) && kit.assets.some(a => a.id === assetId)) {
-        return true;
-      }
-    }
-    return false;
-  };
+  const totalUnits = assetsPayload.reduce((sum, a) => sum + a.quantity, 0);
 
   const handleAssign = async () => {
     if (!selectedEmployee) return;
-    if (assetsPayload.length === 0) {
+    if (assetsPayload.length === 0 && selectedKitIds.size === 0) {
       toast.error("Please select at least one asset or kit");
       return;
     }
@@ -203,7 +203,6 @@ export default function EmployeeAssetsNew() {
       });
       toast.success("Assets assigned successfully");
       setShowAssignModal(false);
-      resetSelection();
     } catch (error: any) {
       toast.error(error.message || "Failed to assign assets");
     }
@@ -223,15 +222,6 @@ export default function EmployeeAssetsNew() {
     }
   };
 
-  const resetSelection = () => {
-    setSelectedKitIds(new Set());
-    setSelectedAssetQuantities({});
-    setExpandedKits(new Set());
-    setAssignmentNotes("");
-    setAssignmentCondition("GOOD");
-    setAssetCategoryFilter("all");
-  };
-
   const toggleKitExpand = (kitId: string) => {
     const newExpanded = new Set(expandedKits);
     if (newExpanded.has(kitId)) newExpanded.delete(kitId);
@@ -239,15 +229,9 @@ export default function EmployeeAssetsNew() {
     setExpandedKits(newExpanded);
   };
 
-  // Total quantity to be assigned
-  const totalUnits = assetsPayload.reduce((sum, a) => sum + a.quantity, 0);
-
-  // Left panel and right panel (active assignments, history) remain mostly same
-  // We'll keep them as before, but I'll include the full component for completeness.
-
   return (
     <div className="flex h-[calc(100vh-120px)] gap-4">
-      {/* Left Panel - Employee List */}
+      {/* Left Panel - Employee List (unchanged) */}
       <div
         className={cn(
           "flex flex-col bg-card rounded-xl border border-border overflow-hidden transition-all",
@@ -305,7 +289,7 @@ export default function EmployeeAssetsNew() {
         </div>
       </div>
 
-      {/* Right Panel - Employee Details & Assignments */}
+      {/* Right Panel - Employee Details & Assignments (unchanged) */}
       {showDetailPanel && selectedEmployee && (
         <div className="flex-1 bg-card rounded-xl border border-border overflow-hidden flex flex-col">
           <div className="p-4 border-b border-border flex items-center justify-between">
@@ -505,7 +489,7 @@ export default function EmployeeAssetsNew() {
         </div>
       )}
 
-      {/* Assignment Modal – Improved UI with kit expansion */}
+      {/* Assignment Modal – atomic kits + standalone assets */}
       <Dialog open={showAssignModal && permissions.assign} onOpenChange={setShowAssignModal}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -513,12 +497,12 @@ export default function EmployeeAssetsNew() {
               Assign Assets to {selectedEmployee?.first_name} {selectedEmployee?.last_name}
             </DialogTitle>
             <DialogDescription>
-              Select kits (expand to see individual assets) and/or individual assets. You can adjust quantities.
+              Select whole kits (all assets inside) and/or standalone assets. Quantities can be adjusted for standalone items.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6 py-4">
-            {/* Kits Section */}
+            {/* Kits Section – atomic */}
             <div>
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                 <Layers className="w-4 h-4 text-primary" />
@@ -531,112 +515,57 @@ export default function EmployeeAssetsNew() {
                 <p className="text-sm text-muted-foreground text-center py-4">No kits available</p>
               )}
               <div className="grid grid-cols-1 gap-3">
-                {availableData?.kits?.map((kit) => {
-                  const isSelected = selectedKitIds.has(kit.id);
-                  const allKitAssetsSelected = kit.assets.every(a => selectedAssetQuantities[a.id] > 0);
-                  const someKitAssetsSelected = kit.assets.some(a => selectedAssetQuantities[a.id] > 0);
-                  return (
-                    <div key={kit.id} className="border border-border rounded-lg overflow-hidden">
-                      <div className="flex items-center justify-between p-3 bg-muted/20 hover:bg-muted/30">
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => toggleKitExpand(kit.id)}
-                            className="p-1 hover:bg-muted rounded"
-                          >
-                            {expandedKits.has(kit.id) ? (
-                              <ChevronDown className="w-4 h-4" />
-                            ) : (
-                              <ChevronRight className="w-4 h-4" />
-                            )}
-                          </button>
-                          <Checkbox
-                            checked={isSelected}
-                            onChange={() => handleKitToggle(kit.id, kit)}
-                          />
-                          <div>
-                            <p className="font-medium text-sm">{kit.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {kit.asset_count} asset{kit.asset_count !== 1 ? "s" : ""}
-                              {someKitAssetsSelected && !isSelected && (
-                                <span className="ml-2 text-primary"> (partially selected)</span>
-                              )}
-                            </p>
-                          </div>
+                {availableData?.kits?.map((kit) => (
+                  <div key={kit.id} className="border border-border rounded-lg overflow-hidden">
+                    <div className="flex items-center justify-between p-3 bg-muted/20 hover:bg-muted/30">
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => toggleKitExpand(kit.id)}
+                          className="p-1 hover:bg-muted rounded"
+                        >
+                          {expandedKits.has(kit.id) ? (
+                            <ChevronDown className="w-4 h-4" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4" />
+                          )}
+                        </button>
+                        <Checkbox
+                          checked={selectedKitIds.has(kit.id)}
+                          onChange={() => handleKitToggle(kit.id)}
+                        />
+                        <div>
+                          <p className="font-medium text-sm">{kit.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {kit.asset_count} asset{kit.asset_count !== 1 ? "s" : ""}
+                          </p>
                         </div>
-                        {someKitAssetsSelected && (
-                          <Badge variant="secondary" className="text-xs">
-                            {kit.assets.filter(a => selectedAssetQuantities[a.id] > 0).length} selected
-                          </Badge>
-                        )}
                       </div>
-                      {expandedKits.has(kit.id) && (
-                        <div className="divide-y divide-border bg-card">
-                          {kit.assets.map((asset) => {
-                            const qty = selectedAssetQuantities[asset.id] || 0;
-                            const maxQty = asset.available_quantity || 0;
-                            const alreadyAssigned = asset.already_assigned_to_employee;
-                            const isSelectable = !alreadyAssigned && maxQty > 0;
-                            return (
-                              <div key={asset.id} className="flex items-center justify-between p-3 pl-8">
-                                <div className="flex items-center gap-3 flex-1">
-                                  <Checkbox
-                                    checked={qty > 0}
-                                    onChange={() => {
-                                      if (!isSelectable) return;
-                                      if (qty > 0) {
-                                        const newQuantities = { ...selectedAssetQuantities };
-                                        delete newQuantities[asset.id];
-                                        setSelectedAssetQuantities(newQuantities);
-                                      } else {
-                                        setSelectedAssetQuantities(prev => ({ ...prev, [asset.id]: 1 }));
-                                      }
-                                    }}
-                                    disabled={!isSelectable}
-                                  />
-                                  <div className="flex-1">
-                                    <p className="text-sm">{asset.name}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {asset.brand} {asset.model}
-                                    </p>
-                                  </div>
-                                </div>
-                                {isSelectable && qty > 0 && (
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="number"
-                                      min="1"
-                                      max={maxQty}
-                                      value={qty}
-                                      onChange={(e) => updateAssetQuantity(asset.id, parseInt(e.target.value) || 0)}
-                                      className="w-16 text-center text-sm border border-border rounded-md bg-background px-2 py-1"
-                                    />
-                                    <span className="text-xs text-muted-foreground">/ {maxQty}</span>
-                                  </div>
-                                )}
-                                {!isSelectable && (
-                                  <span className="text-xs text-destructive">
-                                    {alreadyAssigned ? "Already assigned" : "Out of stock"}
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
                     </div>
-                  );
-                })}
+                    {expandedKits.has(kit.id) && (
+                      <div className="divide-y divide-border bg-card">
+                        {kit.assets.map((asset) => (
+                          <div key={asset.id} className="p-3 pl-8 text-sm text-muted-foreground">
+                            • {asset.name} {asset.brand ? `(${asset.brand})` : ""}
+                            {asset.available_quantity !== undefined && (
+                              <span className="ml-2 text-xs">({asset.available_quantity} avail)</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* Individual Assets Section */}
+            {/* Standalone Assets Section */}
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
                   <Package className="w-4 h-4 text-primary" />
                   Individual Assets
                   <Badge variant="secondary" className="text-xs">
-                    {Object.keys(selectedAssetQuantities).filter(id => !isAssetInSelectedKit(id)).length} selected
+                    {Object.keys(selectedStandaloneQuantities).length} selected
                   </Badge>
                 </h3>
                 {availableCategories.length > 0 && (
@@ -656,17 +585,14 @@ export default function EmployeeAssetsNew() {
               <div className="max-h-48 overflow-y-auto border border-border rounded-lg divide-y divide-border">
                 {filteredAssets.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground text-sm">
-                    No assets found.
+                    No standalone assets available.
                   </div>
                 ) : (
                   filteredAssets.map((asset) => {
-                    const qty = selectedAssetQuantities[asset.id] || 0;
+                    const qty = selectedStandaloneQuantities[asset.id] || 0;
                     const maxQty = asset.available_quantity || 0;
                     const alreadyAssigned = asset.already_assigned_to_employee;
                     const isSelectable = !alreadyAssigned && maxQty > 0;
-                    const inSelectedKit = isAssetInSelectedKit(asset.id);
-                    // If asset belongs to a selected kit, it's already included – we can gray it out or still allow override?
-                    // Let's allow override but show a badge.
                     return (
                       <div
                         key={asset.id}
@@ -677,16 +603,7 @@ export default function EmployeeAssetsNew() {
                       >
                         <Checkbox
                           checked={qty > 0}
-                          onChange={() => {
-                            if (!isSelectable) return;
-                            if (qty > 0) {
-                              const newQuantities = { ...selectedAssetQuantities };
-                              delete newQuantities[asset.id];
-                              setSelectedAssetQuantities(newQuantities);
-                            } else {
-                              setSelectedAssetQuantities(prev => ({ ...prev, [asset.id]: 1 }));
-                            }
-                          }}
+                          onChange={() => handleStandaloneAssetToggle(asset)}
                           disabled={!isSelectable}
                         />
                         <Package className="w-4 h-4 text-muted-foreground flex-shrink-0" />
@@ -706,7 +623,7 @@ export default function EmployeeAssetsNew() {
                               min="1"
                               max={maxQty}
                               value={qty}
-                              onChange={(e) => updateAssetQuantity(asset.id, parseInt(e.target.value) || 0)}
+                              onChange={(e) => updateStandaloneQuantity(asset.id, parseInt(e.target.value) || 0)}
                               className="w-16 text-center text-sm border border-border rounded-md bg-background px-2 py-1"
                             />
                             <span className="text-xs text-muted-foreground">/ {maxQty}</span>
@@ -716,9 +633,6 @@ export default function EmployeeAssetsNew() {
                           <code className="text-xs bg-muted px-1.5 py-0.5 rounded flex-shrink-0">
                             {asset.serial_number}
                           </code>
-                        )}
-                        {inSelectedKit && (
-                          <Badge variant="outline" className="text-xs">In kit</Badge>
                         )}
                         {!isSelectable && (
                           <span className="text-xs text-destructive whitespace-nowrap">
@@ -732,7 +646,7 @@ export default function EmployeeAssetsNew() {
               </div>
             </div>
 
-            {/* Assignment Details */}
+            {/* Assignment Details (unchanged) */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-xs text-muted-foreground">Condition</label>
@@ -760,15 +674,17 @@ export default function EmployeeAssetsNew() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAssignModal(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setShowAssignModal(false)}>
+              Cancel
+            </Button>
             <Button
               onClick={handleAssign}
-              disabled={assignMutation.isPending || assetsPayload.length === 0}
+              disabled={assignMutation.isPending || (assetsPayload.length === 0 && selectedKitIds.size === 0)}
             >
               <CheckCircle className="w-4 h-4 mr-2" />
               {assignMutation.isPending
                 ? "Assigning..."
-                : `Assign ${totalUnits} Unit${totalUnits !== 1 ? "s" : ""}`}
+                : `Assign ${totalUnits + selectedKitIds.size * 1} Unit${(totalUnits + selectedKitIds.size) !== 1 ? "s" : ""}`}
             </Button>
           </DialogFooter>
         </DialogContent>
