@@ -44,6 +44,10 @@ exec daphne -b 0.0.0.0 -p 8000 config.asgi:application
 # for localy start backend server
 # daphne -b 0.0.0.0 -p 8000 config.asgi:application
 
+# start calary for for3cast
+# celery -A config worker --loglevel=info
+# celery -A config beat --loglevel=info
+
 # for localy install package
 # pip install pandas numpy
 
