@@ -2,6 +2,7 @@ import environ
 import logging.config
 from pathlib import Path
 from datetime import timedelta
+from celery.schedules import crontab
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -47,6 +48,7 @@ INSTALLED_APPS = [
     'apps.notifications',
     'apps.permissions',
     'apps.sales',
+    'apps.forecast',
 ]
 
 AUTH_USER_MODEL = 'organization.User'

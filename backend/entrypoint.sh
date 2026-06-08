@@ -44,5 +44,8 @@ exec daphne -b 0.0.0.0 -p 8000 config.asgi:application
 # for localy start backend server
 # daphne -b 0.0.0.0 -p 8000 config.asgi:application
 
+# for localy install package
+# pip install pandas numpy
+
 # create new module 
 # python manage.py startapp ...
