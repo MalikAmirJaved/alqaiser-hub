@@ -571,7 +571,6 @@ class Compensation(TimeStampedModel):
     
     # Salary Structure
     grade = models.CharField(max_length=50, blank=True, null=True)
-    basic_salary = models.DecimalField(max_digits=12, decimal_places=2)
     house_rent_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     medical_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     transport_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -645,11 +644,11 @@ class Compensation(TimeStampedModel):
     
     @property
     def total_ctc(self):
-        return self.basic_salary + self.total_allowances + self.employer_pf + self.employer_eobi
+        return self.total_allowances + self.employer_pf + self.employer_eobi
     
     @property
     def total_monthly(self):
-        return self.basic_salary + self.total_allowances
+        return self.total_allowances
 
 
 class EmployeeLoan(TimeStampedModel):

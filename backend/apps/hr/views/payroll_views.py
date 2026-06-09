@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+from django.db.models import Q
 import logging
 from apps.hr.models import (
     Employee, PayrollRecord, EmployeeLoan, Compensation,
@@ -51,10 +52,10 @@ class PayrollView(APIView):
             query = query.filter(status=status_filter)
         if search:
             query = query.filter(
-                models.Q(employee__first_name__icontains=search) |
-                models.Q(employee__last_name__icontains=search) |
-                models.Q(employee__employee_id__icontains=search) |
-                models.Q(transaction_number__icontains=search)
+                Q(employee__first_name__icontains=search) |
+                Q(employee__last_name__icontains=search) |
+                Q(employee__employee_id__icontains=search) |
+                Q(transaction_number__icontains=search)
             )
         
         records = query.order_by('-year', '-month', '-created_at')
@@ -87,7 +88,7 @@ class PayrollView(APIView):
     
     @transaction.atomic
     def post(self, request):
-        """Process payroll for an employee"""
+        """Process payroll for an employee with compensation and overtime"""
         company_id = request.user.company_id
         branch_id = request.user.branch_id
         
@@ -126,23 +127,40 @@ class PayrollView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Get employee compensation or use salary field
+        # Get employee base salary from employee table
+        base_salary = float(employee.salary)
+        
+        # Get active compensation
         compensation = Compensation.objects.filter(
             employee=employee,
             is_active=True,
             is_deleted=False
         ).first()
         
-        base_salary = request.data.get('base_salary', float(employee.salary))
-        bonus = float(request.data.get('bonus', 0))
-        deductions = float(request.data.get('deductions', 0))
+        # Calculate compensation allowances
+        total_compensation = 0
+        if compensation:
+            total_compensation = float(compensation.total_allowances)
         
-        # Process loan deductions
+        # Calculate overtime
+        overtime_hours = float(request.data.get('overtime_hours', 0))
+        overtime_amount = 0
+        if compensation and overtime_hours > 0:
+            overtime_rate = float(compensation.overtime_rate or 0)
+            overtime_amount = overtime_hours * overtime_rate
+        
+        bonus = float(request.data.get('bonus', 0))
+        custom_deductions = float(request.data.get('deductions', 0))
+        
+        # Process loan deductions - calculate (monthly_deduction + interest)
         loan_deductions = 0
         deduction_breakdown = {
-            'custom_deductions': deductions,
+            'custom_deductions': custom_deductions,
             'custom_reason': request.data.get('deduction_reason', ''),
-            'loan_deductions': []
+            'loan_deductions': [],
+            'compensation_allowances': float(total_compensation),
+            'overtime_hours': overtime_hours,
+            'overtime_amount': float(overtime_amount),
         }
         
         selected_loan_ids = request.data.get('selected_loans', [])
@@ -155,23 +173,33 @@ class PayrollView(APIView):
             )
             
             for loan in active_loans:
-                loan_deductions += float(loan.monthly_deduction)
+                # Calculate monthly deduction with interest
+                monthly_deduction_with_interest = float(loan.monthly_deduction)
+                if float(loan.interest_rate) > 0:
+                    interest_amount = (float(loan.remaining_amount) * float(loan.interest_rate) / 100) / loan.remaining_months
+                    monthly_deduction_with_interest += interest_amount
+                
+                loan_deductions += monthly_deduction_with_interest
                 deduction_breakdown['loan_deductions'].append({
                     'loan_id': loan.id,
                     'loan_type': loan.loan_type,
-                    'amount': str(loan.monthly_deduction)
+                    'principal_deduction': str(loan.monthly_deduction),
+                    'interest_amount': str(monthly_deduction_with_interest - float(loan.monthly_deduction)),
+                    'total_deduction': str(monthly_deduction_with_interest)
                 })
                 
                 # Update loan repayment
-                loan.remaining_amount -= loan.monthly_deduction
+                loan.remaining_amount = max(0, float(loan.remaining_amount) - float(loan.monthly_deduction))
                 loan.paid_months += 1
                 if loan.remaining_amount <= 0:
                     loan.status = 'PAID'
                     loan.remaining_amount = 0
                 loan.save()
         
-        total_deductions = deductions + loan_deductions
-        net_salary = base_salary + bonus - total_deductions
+        total_deductions = custom_deductions + loan_deductions
+        
+        # Calculate net salary: base salary + total compensation + overtime + bonus - deductions
+        net_salary = base_salary + total_compensation + overtime_amount + bonus - total_deductions
         
         # Generate transaction number
         transaction_number = request.data.get('transaction_number') or \
@@ -202,6 +230,11 @@ class PayrollView(APIView):
             "message": "Payment processed successfully",
             "id": payroll.id,
             "transaction_number": payroll.transaction_number,
+            "base_salary": str(payroll.base_salary),
+            "compensation": str(total_compensation),
+            "overtime": str(overtime_amount),
+            "bonus": str(bonus),
+            "deductions": str(total_deductions),
             "net_salary": str(payroll.net_salary),
             "status": payroll.status,
         }, status=status.HTTP_201_CREATED)
@@ -284,10 +317,10 @@ class EmployeeLoanView(APIView):
             query = query.filter(status=status_filter)
         if search:
             query = query.filter(
-                models.Q(employee__first_name__icontains=search) |
-                models.Q(employee__last_name__icontains=search) |
-                models.Q(loan_type__icontains=search) |
-                models.Q(purpose__icontains=search)
+                Q(employee__first_name__icontains=search) |
+                Q(employee__last_name__icontains=search) |
+                Q(loan_type__icontains=search) |
+                Q(purpose__icontains=search)
             )
         
         loans = query.order_by('-created_at')
@@ -299,6 +332,7 @@ class EmployeeLoanView(APIView):
                 "employee_name": l.employee.full_name,
                 "employee_code": l.employee.employee_id,
                 "department": l.employee.department,
+                "monthly_salary": str(l.employee.salary),  # Include employee salary
                 "loan_type": l.loan_type,
                 "loan_type_display": l.get_loan_type_display(),
                 "principal_amount": str(l.principal_amount),
@@ -309,7 +343,7 @@ class EmployeeLoanView(APIView):
                 "remaining_months": l.remaining_months,
                 "interest_rate": str(l.interest_rate),
                 "total_payable": str(l.total_payable),
-                "start_date": l.start_date.isoformat(),
+                "start_date": l.start_date.isoformat() if l.start_date else None,
                 "end_date": l.end_date.isoformat() if l.end_date else None,
                 "status": l.status,
                 "purpose": l.purpose,
@@ -347,11 +381,21 @@ class EmployeeLoanView(APIView):
             is_deleted=False
         )
         
+        # Get employee monthly salary
+        monthly_salary = float(employee.salary)
+        
         # Calculate loan details
         principal_amount = float(request.data.get('principal_amount', 0))
         interest_rate = float(request.data.get('interest_rate', 0))
-        total_months = int(request.data.get('total_months', 12))
+        total_months = int(request.data.get('total_months', 0))
         monthly_deduction = float(request.data.get('monthly_deduction', 0))
+        
+        # Validate monthly deduction doesn't exceed monthly salary
+        if monthly_deduction > 0 and monthly_deduction > monthly_salary:
+            return Response(
+                {'error': f'Monthly deduction ({monthly_deduction}) cannot exceed monthly salary ({monthly_salary})'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         # Calculate total payable with interest
         if interest_rate > 0:
@@ -359,13 +403,34 @@ class EmployeeLoanView(APIView):
         else:
             total_payable = principal_amount
         
-        # Auto-calculate monthly deduction if not provided
-        if monthly_deduction == 0 and total_months > 0:
+        # Auto-calculate total_months or monthly_deduction
+        if total_months > 0 and monthly_deduction > 0:
+            # Both provided, validate they match
+            calculated_total = monthly_deduction * total_months
+            if abs(calculated_total - total_payable) > 0.01:
+                return Response(
+                    {'error': f'Monthly deduction ({monthly_deduction}) × Total months ({total_months}) = {calculated_total} does not match total payable ({total_payable})'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        elif total_months > 0 and monthly_deduction == 0:
+            # Auto-calculate monthly deduction
             monthly_deduction = total_payable / total_months
+        elif monthly_deduction > 0 and total_months == 0:
+            # Auto-calculate total months
+            total_months = int(total_payable / monthly_deduction)
+            if total_payable % monthly_deduction > 0.01:
+                # Handle remainder in last month
+                pass
+        else:
+            return Response(
+                {'error': 'Please provide either total_months or monthly_deduction'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         # Generate transaction number
         transaction_number = f"LN-{datetime.now().strftime('%Y%m%d')}-{employee.employee_id}"
         
+        # Always set status as PENDING initially
         loan = EmployeeLoan.objects.create(
             company_id=company_id,
             branch_id=branch_id,
@@ -380,12 +445,10 @@ class EmployeeLoanView(APIView):
             total_payable=total_payable,
             start_date=request.data.get('start_date', date.today()),
             end_date=request.data.get('end_date'),
-            status=request.data.get('status', 'PENDING'),
+            status='PENDING',  # Always start as PENDING
             purpose=request.data.get('purpose'),
             notes=request.data.get('notes'),
             transaction_number=transaction_number,
-            approved_by=request.user if request.data.get('status') == 'ACTIVE' else None,
-            approved_at=datetime.now() if request.data.get('status') == 'ACTIVE' else None,
             created_by=request.user,
             updated_by=request.user,
         )
@@ -396,7 +459,9 @@ class EmployeeLoanView(APIView):
             "loan_type": loan.loan_type,
             "principal_amount": str(loan.principal_amount),
             "monthly_deduction": str(loan.monthly_deduction),
+            "total_months": loan.total_months,
             "total_payable": str(loan.total_payable),
+            "status": loan.status,
             "transaction_number": loan.transaction_number,
         }, status=status.HTTP_201_CREATED)
     
@@ -425,26 +490,38 @@ class EmployeeLoanView(APIView):
             is_deleted=False
         )
         
+        # Don't allow changing status through this endpoint
         updatable_fields = [
-            'loan_type', 'principal_amount', 'monthly_deduction',
-            'total_months', 'interest_rate', 'start_date', 'end_date',
-            'status', 'purpose', 'notes'
+            'loan_type', 'principal_amount', 'total_months',
+            'interest_rate', 'start_date', 'end_date',
+            'purpose', 'notes'
         ]
         
         for field in updatable_fields:
             if field in request.data:
                 setattr(loan, field, request.data[field])
         
-        if 'status' in request.data and request.data['status'] in ['PAID', 'CANCELLED']:
-            if request.data['status'] == 'CANCELLED':
-                loan.remaining_amount = 0
+        # Recalculate if needed
+        if 'principal_amount' in request.data or 'interest_rate' in request.data:
+            principal = float(request.data.get('principal_amount', loan.principal_amount))
+            interest = float(request.data.get('interest_rate', loan.interest_rate))
+            if interest > 0:
+                loan.total_payable = principal + (principal * interest / 100)
+            else:
+                loan.total_payable = principal
+            
+            if loan.total_months > 0:
+                loan.monthly_deduction = float(loan.total_payable) / loan.total_months
+                loan.remaining_amount = float(loan.total_payable) - (float(loan.monthly_deduction) * loan.paid_months)
         
         loan.updated_by = request.user
         loan.save()
         
         return Response({
             "message": "Loan updated successfully",
-            "id": loan.id
+            "id": loan.id,
+            "monthly_deduction": str(loan.monthly_deduction),
+            "total_payable": str(loan.total_payable),
         })
     
     @transaction.atomic
@@ -486,6 +563,64 @@ class EmployeeLoanView(APIView):
         return Response({'message': 'Loan deleted successfully'})
 
 
+class LoanStatusUpdateView(APIView):
+    """Toggle loan status"""
+    permission_classes = [IsAuthenticated]
+    
+    @transaction.atomic
+    def post(self, request):
+        company_id = request.user.company_id
+        
+        if not company_id:
+            return Response(
+                {'error': 'User is not associated with any company'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        loan_id = request.data.get('id')
+        new_status = request.data.get('status')
+        
+        if not loan_id or not new_status:
+            return Response(
+                {'error': 'id and status are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if new_status not in ['PENDING', 'ACTIVE', 'PAID', 'CANCELLED']:
+            return Response(
+                {'error': 'Invalid status'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        loan = get_object_or_404(
+            EmployeeLoan,
+            id=loan_id,
+            company_id=company_id,
+            is_deleted=False
+        )
+        
+        old_status = loan.status
+        loan.status = new_status
+        
+        if new_status == 'ACTIVE':
+            loan.approved_by = request.user
+            loan.approved_at = datetime.now()
+        elif new_status == 'CANCELLED':
+            loan.remaining_amount = 0
+        elif new_status == 'PAID':
+            loan.remaining_amount = 0
+            loan.paid_months = loan.total_months
+        
+        loan.updated_by = request.user
+        loan.save()
+        
+        return Response({
+            "message": f"Loan status changed from {old_status} to {new_status}",
+            "id": loan.id,
+            "status": loan.status,
+        })
+
+
 class CompensationView(APIView):
     """Employee compensation management"""
     permission_classes = [IsAuthenticated]
@@ -515,9 +650,9 @@ class CompensationView(APIView):
             query = query.filter(status=status_filter)
         if search:
             query = query.filter(
-                models.Q(employee__first_name__icontains=search) |
-                models.Q(employee__last_name__icontains=search) |
-                models.Q(grade__icontains=search)
+                Q(employee__first_name__icontains=search) |
+                Q(employee__last_name__icontains=search) |
+                Q(grade__icontains=search)
             )
         
         compensations = query.order_by('-effective_date')
@@ -530,8 +665,8 @@ class CompensationView(APIView):
                 "employee_code": c.employee.employee_id,
                 "department": c.employee.department,
                 "designation": c.employee.designation,
+                "basic_salary": str(c.employee.salary),  # Get from employee table
                 "grade": c.grade,
-                "basic_salary": str(c.basic_salary),
                 "house_rent_allowance": str(c.house_rent_allowance),
                 "medical_allowance": str(c.medical_allowance),
                 "transport_allowance": str(c.transport_allowance),
@@ -549,7 +684,7 @@ class CompensationView(APIView):
                 "total_monthly": str(c.total_monthly),
                 "is_active": c.is_active,
                 "status": c.status,
-                "effective_date": c.effective_date.isoformat(),
+                "effective_date": c.effective_date.isoformat() if c.effective_date else None,
                 "review_date": c.review_date.isoformat() if c.review_date else None,
                 "notes": c.notes,
                 "created_at": c.created_at.isoformat() if c.created_at else None,
@@ -559,7 +694,7 @@ class CompensationView(APIView):
     
     @transaction.atomic
     def post(self, request):
-        """Create compensation"""
+        """Create compensation - don't allow duplicate employees"""
         company_id = request.user.company_id
         branch_id = request.user.branch_id
         
@@ -576,6 +711,19 @@ class CompensationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Check if employee already has active compensation
+        existing_compensation = Compensation.objects.filter(
+            employee_id=employee_id,
+            is_active=True,
+            is_deleted=False
+        ).first()
+        
+        if existing_compensation:
+            return Response(
+                {'error': 'Employee already has an active compensation. Please deactivate it first.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         employee = get_object_or_404(
             Employee,
             id=employee_id,
@@ -583,19 +731,11 @@ class CompensationView(APIView):
             is_deleted=False
         )
         
-        # Deactivate existing active compensations
-        Compensation.objects.filter(
-            employee=employee,
-            status='ACTIVE',
-            is_deleted=False
-        ).update(status='INACTIVE', is_active=False)
-        
         compensation = Compensation.objects.create(
             company_id=company_id,
             branch_id=branch_id,
             employee=employee,
             grade=request.data.get('grade'),
-            basic_salary=request.data.get('basic_salary', 0),
             house_rent_allowance=request.data.get('house_rent_allowance', 0),
             medical_allowance=request.data.get('medical_allowance', 0),
             transport_allowance=request.data.get('transport_allowance', 0),
@@ -616,10 +756,6 @@ class CompensationView(APIView):
             created_by=request.user,
             updated_by=request.user,
         )
-        
-        # Update employee salary with total monthly
-        employee.salary = compensation.total_monthly
-        employee.save()
         
         return Response({
             "message": "Compensation created successfully",
@@ -654,7 +790,7 @@ class CompensationView(APIView):
         )
         
         updatable_fields = [
-            'grade', 'basic_salary', 'house_rent_allowance', 'medical_allowance',
+            'grade', 'house_rent_allowance', 'medical_allowance',
             'transport_allowance', 'fuel_allowance', 'phone_allowance',
             'utilities_allowance', 'education_allowance', 'other_allowances',
             'employer_pf', 'employer_eobi', 'overtime_rate', 'bonus_percentage',
@@ -667,12 +803,6 @@ class CompensationView(APIView):
         
         compensation.updated_by = request.user
         compensation.save()
-        
-        # Update employee salary if status changed to ACTIVE
-        if compensation.status == 'ACTIVE':
-            employee = compensation.employee
-            employee.salary = compensation.total_monthly
-            employee.save()
         
         return Response({
             "message": "Compensation updated successfully",

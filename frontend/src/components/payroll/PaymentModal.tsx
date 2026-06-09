@@ -1,8 +1,9 @@
+// src/components/payroll/PaymentModal.tsx
 "use client";
 
 import { useState, useEffect } from "react";
-import { useEmployeeLoans, useProcessPayroll } from "@/hooks/usePayroll";
-import { CreditCard, Plus, Minus, X, CheckCircle } from "lucide-react";
+import { useEmployeeLoans, useProcessPayroll, useCompensations } from "@/hooks/usePayroll";
+import { CreditCard, Plus, Minus, X, CheckCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 
 export default function PaymentModal({
@@ -26,9 +27,16 @@ export default function PaymentModal({
   const [transactionReference, setTransactionReference] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("BANK_TRANSFER");
   const [selectedLoanDeductions, setSelectedLoanDeductions] = useState<{ [key: string]: boolean }>({});
+  const [overtimeHours, setOvertimeHours] = useState(0);
 
   const { data: allLoans = [] } = useEmployeeLoans();
+  const { data: compensations = [] } = useCompensations();
   const processPayroll = useProcessPayroll();
+
+  // Get active compensation for this employee
+  const activeCompensation = compensations.find(
+    c => c.employee_id === employee?.id && c.status === "ACTIVE"
+  );
 
   // Filter active loans for this employee
   const activeLoans = allLoans.filter(
@@ -37,22 +45,52 @@ export default function PaymentModal({
 
   useEffect(() => {
     if (isOpen && employee) {
-      // Auto-select all active loans for deduction
       const initialSelections: { [key: string]: boolean } = {};
       activeLoans.forEach((loan) => {
         initialSelections[loan.id] = true;
       });
       setSelectedLoanDeductions(initialSelections);
+      setOvertimeHours(0);
+      setBonus(0);
+      setDeductions(0);
     }
   }, [isOpen, employee, activeLoans.length]);
 
   const baseSalary = parseFloat(employee?.salary || "0");
+  
+  // Calculate compensation total
+  const compensationTotal = activeCompensation 
+    ? parseFloat(activeCompensation.total_allowances || "0") 
+    : 0;
+  
+  // Calculate overtime
+  const overtimeRate = activeCompensation 
+    ? parseFloat(activeCompensation.overtime_rate || "0") 
+    : 0;
+  const overtimeAmount = overtimeHours * overtimeRate;
+
+  // Calculate loan deductions with interest
   const loanDeductionsTotal = activeLoans
     .filter(loan => selectedLoanDeductions[loan.id])
-    .reduce((sum, loan) => sum + parseFloat(loan.monthly_deduction), 0);
+    .reduce((sum, loan) => {
+      const monthlyDeduction = parseFloat(loan.monthly_deduction);
+      const interestRate = parseFloat(loan.interest_rate || "0");
+      let totalDeduction = monthlyDeduction;
+      
+      if (interestRate > 0) {
+        const remainingAmount = parseFloat(loan.remaining_amount);
+        const remainingMonths = loan.remaining_months || 1;
+        const interestAmount = (remainingAmount * interestRate / 100) / remainingMonths;
+        totalDeduction += interestAmount;
+      }
+      
+      return sum + totalDeduction;
+    }, 0);
 
   const totalDeductions = deductions + loanDeductionsTotal;
-  const netSalary = baseSalary + bonus - totalDeductions;
+  
+  // Net salary calculation: base + compensation + overtime + bonus - deductions
+  const netSalary = baseSalary + compensationTotal + overtimeAmount + bonus - totalDeductions;
 
   const autoReference = `PAY-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${employee?.employee_id || 'EMP'}`;
 
@@ -70,6 +108,7 @@ export default function PaymentModal({
         transaction_number: transactionReference || autoReference,
         payment_method: paymentMethod,
         custom_note: customNote,
+        overtime_hours: overtimeHours,
         selected_loans: Object.keys(selectedLoanDeductions).filter(
           id => selectedLoanDeductions[id]
         ).map(Number),
@@ -98,6 +137,52 @@ export default function PaymentModal({
         </div>
 
         <div className="p-4 space-y-4">
+          {/* Salary Breakdown */}
+          <div className="bg-muted/40 rounded-xl p-3 space-y-2">
+            <div className="text-xs font-medium text-primary mb-2">Salary Breakdown</div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Base Salary</span>
+              <span className="font-medium">{formatCurrency(baseSalary)}</span>
+            </div>
+            {activeCompensation && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Compensation Allowances</span>
+                <span className="font-medium text-success">{formatCurrency(compensationTotal)}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Overtime Section */}
+          {activeCompensation && (
+            <div className="border border-border rounded-xl p-3">
+              <div className="text-xs font-medium mb-2 flex items-center gap-2">
+                <Clock className="w-3 h-3 text-info" />
+                Overtime
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="text-sm flex flex-col gap-1 flex-1">
+                  <span className="text-muted-foreground text-xs">Hours</span>
+                  <input
+                    type="number"
+                    value={overtimeHours}
+                    onChange={(e) => setOvertimeHours(Number(e.target.value) || 0)}
+                    className="bg-card border border-border rounded-md h-9 px-2"
+                    min="0"
+                    step="0.5"
+                  />
+                </label>
+                <div className="text-sm text-center">
+                  <div className="text-xs text-muted-foreground">Rate/hr</div>
+                  <div className="font-medium">{formatCurrency(overtimeRate)}</div>
+                </div>
+                <div className="text-sm text-center">
+                  <div className="text-xs text-muted-foreground">Total</div>
+                  <div className="font-medium text-info">{formatCurrency(overtimeAmount)}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Transaction Information */}
           <div className="bg-muted/40 rounded-xl p-3">
             <div className="text-xs font-medium text-primary mb-2">Transaction Information</div>
@@ -128,12 +213,6 @@ export default function PaymentModal({
             </div>
           </div>
 
-          {/* Base Salary Display */}
-          <div className="bg-primary/10 rounded-xl p-3">
-            <div className="text-xs text-muted-foreground">Base Salary</div>
-            <div className="text-xl font-bold text-primary">{formatCurrency(baseSalary)}</div>
-          </div>
-
           {/* Bonus */}
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground flex items-center gap-1">
@@ -151,31 +230,53 @@ export default function PaymentModal({
           {/* Active Loans Section */}
           {activeLoans.length > 0 && (
             <div className="border border-border rounded-xl p-3">
-              <div className="text-xs font-medium text-warning mb-2">Active Loans Deductions</div>
-              {activeLoans.map((loan) => (
-                <label key={loan.id} className="flex items-center justify-between py-2">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedLoanDeductions[loan.id] || false}
-                      onChange={(e) => setSelectedLoanDeductions(prev => ({
-                        ...prev,
-                        [loan.id]: e.target.checked
-                      }))}
-                      className="rounded border-border"
-                    />
-                    <div>
-                      <div className="text-sm">{loan.loan_type_display || loan.loan_type}</div>
-                      <div className="text-xs text-muted-foreground">
-                        Remaining: {formatCurrency(parseFloat(loan.remaining_amount))} ({loan.paid_months}/{loan.total_months} months)
+              <div className="text-xs font-medium text-warning mb-2">Active Loans Deductions (Principal + Interest)</div>
+              {activeLoans.map((loan) => {
+                const monthlyDeduction = parseFloat(loan.monthly_deduction);
+                const interestRate = parseFloat(loan.interest_rate || "0");
+                let interestAmount = 0;
+                
+                if (interestRate > 0) {
+                  const remainingAmount = parseFloat(loan.remaining_amount);
+                  const remainingMonths = loan.remaining_months || 1;
+                  interestAmount = (remainingAmount * interestRate / 100) / remainingMonths;
+                }
+                
+                const totalDeduction = monthlyDeduction + interestAmount;
+                
+                return (
+                  <label key={loan.id} className="flex items-center justify-between py-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedLoanDeductions[loan.id] || false}
+                        onChange={(e) => setSelectedLoanDeductions(prev => ({
+                          ...prev,
+                          [loan.id]: e.target.checked
+                        }))}
+                        className="rounded border-border"
+                      />
+                      <div>
+                        <div className="text-sm">{loan.loan_type_display || loan.loan_type}</div>
+                        <div className="text-xs text-muted-foreground">
+                          Remaining: {formatCurrency(parseFloat(loan.remaining_amount))} ({loan.paid_months}/{loan.total_months} months)
+                          {interestRate > 0 && <span className="text-destructive ml-2">+{interestRate}% interest</span>}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="text-sm font-medium text-warning">
-                    -{formatCurrency(parseFloat(loan.monthly_deduction))}
-                  </div>
-                </label>
-              ))}
+                    <div className="text-right">
+                      <div className="text-sm font-medium text-warning">
+                        -{formatCurrency(totalDeduction)}
+                      </div>
+                      {interestRate > 0 && (
+                        <div className="text-xs text-muted-foreground">
+                          Principal: {formatCurrency(monthlyDeduction)} + Interest: {formatCurrency(interestAmount)}
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                );
+              })}
             </div>
           )}
 
@@ -216,15 +317,43 @@ export default function PaymentModal({
           </label>
 
           {/* Net Salary Preview */}
-          <div className="pt-4 border-t border-border">
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium">Net Payable (This Month)</span>
+          <div className="pt-4 border-t border-border space-y-2">
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>Base Salary</span>
+              <span>{formatCurrency(baseSalary)}</span>
+            </div>
+            {compensationTotal > 0 && (
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>Compensation</span>
+                <span className="text-success">+{formatCurrency(compensationTotal)}</span>
+              </div>
+            )}
+            {overtimeAmount > 0 && (
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>Overtime ({overtimeHours}h)</span>
+                <span className="text-info">+{formatCurrency(overtimeAmount)}</span>
+              </div>
+            )}
+            {bonus > 0 && (
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>Bonus</span>
+                <span className="text-success">+{formatCurrency(bonus)}</span>
+              </div>
+            )}
+            {totalDeductions > 0 && (
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>Total Deductions</span>
+                <span className="text-destructive">-{formatCurrency(totalDeductions)}</span>
+              </div>
+            )}
+            <div className="flex justify-between items-center pt-2 border-t border-border">
+              <span className="text-sm font-medium">Net Payable</span>
               <span className="text-2xl font-bold text-success">
-                {formatCurrency(netSalary)}
+                {formatCurrency(Math.max(0, netSalary))}
               </span>
             </div>
             {loanDeductionsTotal > 0 && (
-              <div className="text-xs text-muted-foreground mt-1">
+              <div className="text-xs text-muted-foreground">
                 Includes loan deduction of {formatCurrency(loanDeductionsTotal)}
               </div>
             )}

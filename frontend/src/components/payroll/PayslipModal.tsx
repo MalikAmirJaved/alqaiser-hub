@@ -75,10 +75,6 @@ export default function PayslipModal({
               <div className="bg-card border border-border rounded-xl p-3">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
                   <div>
-                    <div className="text-xs text-muted-foreground">Basic Salary</div>
-                    <div>{formatCurrency(parseFloat(activeCompensation.basic_salary))}</div>
-                  </div>
-                  <div>
                     <div className="text-xs text-muted-foreground">HRA</div>
                     <div>{formatCurrency(parseFloat(activeCompensation.house_rent_allowance))}</div>
                   </div>

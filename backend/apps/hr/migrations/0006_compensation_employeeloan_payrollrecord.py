@@ -25,7 +25,6 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(primary_key=True, serialize=False)),
                 ('_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
                 ('grade', models.CharField(blank=True, max_length=50, null=True)),
-                ('basic_salary', models.DecimalField(decimal_places=2, max_digits=12)),
                 ('house_rent_allowance', models.DecimalField(decimal_places=2, default=0, max_digits=12)),
                 ('medical_allowance', models.DecimalField(decimal_places=2, default=0, max_digits=12)),
                 ('transport_allowance', models.DecimalField(decimal_places=2, default=0, max_digits=12)),

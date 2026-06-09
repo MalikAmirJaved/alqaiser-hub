@@ -42,6 +42,7 @@ export interface EmployeeLoan {
   employee_name: string;
   employee_code: string;
   department: string;
+  monthly_salary: string;
   loan_type: string;
   loan_type_display: string;
   principal_amount: string;
@@ -223,6 +224,18 @@ export function useDeleteCompensation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["compensations"] });
       queryClient.invalidateQueries({ queryKey: ["employees"] });
+    },
+  });
+}
+
+export function useUpdateLoanStatus() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: number; status: string }) => 
+      api("/api/hr/loans/status/", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["employeeLoans"] });
     },
   });
 }
