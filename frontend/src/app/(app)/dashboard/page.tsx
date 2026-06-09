@@ -1,141 +1,387 @@
-
-
 "use client";
 
-import { ls } from "@/services/localStorageService";
-import StatCard from "@/components/cards/StatCard";
-import PageHeader from "@/components/PageHeader";
-import { Boxes, Users, Wallet, ShoppingCart, AlertTriangle, TrendingUp } from "lucide-react";
+import { Loader2, RefreshCw, ArrowUpRight, ArrowDownRight, MoreHorizontal, AlertTriangle, CheckCircle2, TrendingUp, DollarSign, Package, Users, ShoppingCart, CreditCard, Warehouse, Truck } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  BarChart, Bar, PieChart, Pie, Cell, Legend,
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
+  BarChart, Bar, LineChart, Line, Legend,
 } from "recharts";
+import { PageHeader, Card, CardHeader, StatusBadge, ToolbarButton } from "@/components/finance/ui";
 import { formatCurrency } from "@/lib/currency";
+import {
+  useOverallSummary,
+  useOverallTrends,
+  useOverallRecentActivity,
+  useOverallAlerts,
+} from "@/hooks/overall/useOverallDashboard";
 
-export default Dashboard;
+// Chart colors (same as other dashboards)
+const CHART_COLORS = [
+  "var(--color-chart-1)",
+  "var(--color-chart-2)",
+  "var(--color-chart-3)",
+  "var(--color-chart-4)",
+  "var(--color-chart-5)",
+  "var(--color-info)",
+];
 
-function Dashboard() {
-  const products = ls.get<any[]>("products") || [];
-  const employees = ls.get<any[]>("employees") || [];
-  const invoices = ls.get<any[]>("invoices") || [];
-  const expenses = ls.get<any[]>("expenses") || [];
-  const alerts = ls.get<any[]>("alerts") || [];
-  const sales = ls.get<any[]>("salesOrders") || [];
+function tooltipStyle() {
+  return {
+    contentStyle: {
+      background: "var(--color-popover)",
+      border: "1px solid var(--color-border)",
+      borderRadius: 8,
+      fontSize: 12,
+      color: "var(--color-popover-foreground)",
+    } as React.CSSProperties,
+    labelStyle: { color: "var(--color-muted-foreground)" } as React.CSSProperties,
+  };
+}
 
-  const revenue = invoices.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const expenseTotal = expenses.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const stockValue = products.reduce((s, p) => s + (Number(p.cost || 0) * Number(p.stock || 0)), 0);
-
-  const series = [
-    { m: "Jan", revenue: 6.2, expense: 3.1 },
-    { m: "Feb", revenue: 7.4, expense: 3.6 },
-    { m: "Mar", revenue: 8.1, expense: 4.0 },
-    { m: "Apr", revenue: revenue / 1_000_000, expense: expenseTotal / 1_000_000 },
-    { m: "May", revenue: 9.2, expense: 4.5 },
-    { m: "Jun", revenue: 10.1, expense: 4.8 },
-  ];
-  const byCat = Object.entries(
-    products.reduce((acc, p) => ((acc[p.category] = (acc[p.category] || 0) + Number(p.stock || 0)), acc), {})
-  ).map(([name, value]) => ({ name, value }));
-  const colors = ["var(--color-chart-1)", "var(--color-chart-2)", "var(--color-chart-3)", "var(--color-chart-4)", "var(--color-chart-5)"];
-
-
+function Kpi({
+  label,
+  value,
+  delta,
+  accent = "primary",
+}: {
+  label: string;
+  value: string;
+  delta?: number;
+  accent?: "primary" | "info" | "warning" | "destructive" | "success";
+}) {
+  const up = delta !== undefined ? delta >= 0 : false;
+  const accentBg: Record<string, string> = {
+    primary: "from-primary/20 to-transparent",
+    info: "from-info/20 to-transparent",
+    warning: "from-warning/20 to-transparent",
+    destructive: "from-destructive/20 to-transparent",
+    success: "from-success/20 to-transparent",
+  };
   return (
-    <div>
-      <PageHeader
-        title="Executive Dashboard"
-        subtitle="Overview of operations across Inventory, HR & Finance"
-      />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label="Revenue" value={formatCurrency(revenue)} hint={`${invoices.length} invoices`} icon={TrendingUp} accent="success" />
-        <StatCard label="Expenses" value={formatCurrency(expenseTotal)} hint={`${expenses.length} entries`} icon={Wallet} accent="warning" />
-        <StatCard label="Stock Value" value={formatCurrency(stockValue)} hint={`${products.length} products`} icon={Boxes} accent="info" />
-        <StatCard label="Employees" value={employees.length} hint="Active workforce" icon={Users} accent="primary" />
-        <StatCard label="Sales Orders" value={sales.length} icon={ShoppingCart} accent="info" />
-        <StatCard label="Alerts" value={alerts.length} hint="Requires attention" icon={AlertTriangle} accent="destructive" />
-        <StatCard label="Profit (est.)" value={formatCurrency(revenue - expenseTotal)} accent="success" icon={TrendingUp} />
-        <StatCard label="Avg Salary" value={formatCurrency(employees.reduce((s, e) => s + Number(e.salary || 0), 0) / Math.max(1, employees.length))} icon={Users} />
-      </div>
-
-      <div className="grid lg:grid-cols-3 gap-4 mt-5">
-        <div className="bg-card border border-border rounded-2xl p-4 lg:col-span-2">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold">Revenue vs Expenses</h3>
-          </div>
-          <div className="h-72">
-            <ResponsiveContainer>
-              <AreaChart data={series}>
-                <defs>
-                  <linearGradient id="r" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--color-chart-1)" stopOpacity={0.6} />
-                    <stop offset="95%" stopColor="var(--color-chart-1)" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="e" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--color-chart-4)" stopOpacity={0.6} />
-                    <stop offset="95%" stopColor="var(--color-chart-4)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                <XAxis dataKey="m" stroke="var(--color-muted-foreground)" fontSize={12} />
-                <YAxis stroke="var(--color-muted-foreground)" fontSize={12} />
-                <Tooltip contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)" }} />
-                <Area type="monotone" dataKey="revenue" stroke="var(--color-chart-1)" fill="url(#r)" />
-                <Area type="monotone" dataKey="expense" stroke="var(--color-chart-4)" fill="url(#e)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+    <Card className="relative overflow-hidden">
+      <div className={`absolute inset-0 bg-gradient-to-br ${accentBg[accent]} opacity-60 pointer-events-none`} />
+      <div className="relative px-5 py-4">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</span>
+          <MoreHorizontal className="h-4 w-4 text-muted-foreground/60" />
         </div>
-
-        <div className="bg-card border border-border rounded-2xl p-4">
-          <h3 className="font-semibold mb-3">Stock by Category</h3>
-          <div className="h-72">
-            <ResponsiveContainer>
-              <PieChart>
-                <Pie data={byCat} dataKey="value" nameKey="name" outerRadius={90} innerRadius={50}>
-                  {byCat.map((_, i) => <Cell key={i} fill={colors[i % colors.length]} />)}
-                </Pie>
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Tooltip contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)" }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+        <div className="mt-2 flex items-end justify-between">
+          <div className="text-2xl font-semibold num tracking-tight">{value}</div>
+          {delta !== undefined && (
+            <span className={`inline-flex items-center gap-0.5 text-xs font-medium num ${up ? "text-success" : "text-destructive"}`}>
+              {up ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
+              {Math.abs(delta).toFixed(1)}%
+            </span>
+          )}
+        </div>
+        <div className="mt-3 h-1 rounded-full bg-border overflow-hidden">
+          <div className={`h-full ${up ? "bg-success" : "bg-destructive"}`} style={{ width: `${Math.min(100, 40 + (delta ? Math.abs(delta) * 3 : 0))}%` }} />
         </div>
       </div>
-
-      <div className="grid lg:grid-cols-2 gap-4 mt-5">
-        <div className="bg-card border border-border rounded-2xl p-4">
-          <h3 className="font-semibold mb-3">Top Products by Stock</h3>
-          <div className="h-64">
-            <ResponsiveContainer>
-              <BarChart data={products.slice(0, 6).map(p => ({ name: p.name, stock: p.stock }))}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                <XAxis dataKey="name" stroke="var(--color-muted-foreground)" fontSize={11} />
-                <YAxis stroke="var(--color-muted-foreground)" fontSize={11} />
-                <Tooltip contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)" }} />
-                <Bar dataKey="stock" fill="var(--color-chart-2)" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="bg-card border border-border rounded-2xl p-4">
-          <h3 className="font-semibold mb-3">Recent Alerts</h3>
-          <ul className="divide-y divide-border">
-            {alerts.length === 0 && <li className="py-6 text-sm text-muted-foreground">No alerts.</li>}
-            {alerts.map((a) => (
-              <li key={a.id} className="py-3 flex items-start gap-3">
-                <div className="w-2 h-2 mt-2 rounded-full bg-destructive" />
-                <div className="flex-1">
-                  <div className="text-sm font-medium">{a.type}</div>
-                  <div className="text-xs text-muted-foreground">{a.message}</div>
-                </div>
-                <span className="text-[11px] text-muted-foreground">{a.date}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-    </div>
+    </Card>
   );
 }
 
+export default function OverallDashboardPage() {
+  const queryClient = useQueryClient();
+  const t = tooltipStyle();
+
+  const { data: summary, isLoading: summaryLoading } = useOverallSummary();
+  const { data: trends, isLoading: trendsLoading } = useOverallTrends();
+  const { data: recentActivity, isLoading: recentLoading } = useOverallRecentActivity();
+  const { data: alerts, isLoading: alertsLoading } = useOverallAlerts();
+
+  const isLoading = summaryLoading || trendsLoading || recentLoading || alertsLoading;
+
+  const refreshAll = () => {
+    queryClient.invalidateQueries({ queryKey: ["overall_dashboard_summary"] });
+    queryClient.invalidateQueries({ queryKey: ["overall_dashboard_trends"] });
+    queryClient.invalidateQueries({ queryKey: ["overall_dashboard_recent_activity"] });
+    queryClient.invalidateQueries({ queryKey: ["overall_dashboard_alerts"] });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[70vh]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const finance = summary?.finance;
+  const inventory = summary?.inventory;
+  const sales = summary?.sales;
+
+  // Prepare chart data
+  const revenueExpenseData = trends?.revenue_expense ?? [];
+  const salesPurchasesData = trends?.sales_purchases ?? [];
+  const stockMovementData = trends?.stock_movement ?? [];
+
+  return (
+    <>
+      <PageHeader
+        breadcrumbs={["Dashboard", "Overview"]}
+        title="Business Dashboard"
+        description="Unified view of finance, inventory, and sales metrics."
+        actions={
+          <>
+            <ToolbarButton icon={RefreshCw} variant="ghost" onClick={refreshAll}>Refresh</ToolbarButton>
+          </>
+        }
+      />
+
+      <div className="pt-6 space-y-6">
+        {/* Section: Finance KPIs */}
+        <div>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+            <DollarSign className="w-4 h-4" /> Finance
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Kpi label="Revenue (MTD)" value={formatCurrency(Number(finance?.revenue_mtd ?? 0))} accent="primary" />
+            <Kpi label="Expenses (MTD)" value={formatCurrency(Number(finance?.expenses_mtd ?? 0))} accent="warning" />
+            <Kpi label="Net Profit (MTD)" value={formatCurrency(Number(finance?.net_profit_mtd ?? 0))} accent="success" />
+            <Kpi label="Cash Position" value={formatCurrency(Number(finance?.cash_position ?? 0))} accent="info" />
+          </div>
+          <div className="grid grid-cols-2 gap-4 mt-4">
+            <Kpi label="Receivables" value={formatCurrency(Number(finance?.receivables ?? 0))} accent="info" />
+            <Kpi label="Payables" value={formatCurrency(Number(finance?.payables ?? 0))} accent="warning" />
+          </div>
+        </div>
+
+        {/* Section: Inventory KPIs */}
+        <div>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+            <Package className="w-4 h-4" /> Inventory
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Kpi label="Total Variants" value={String(inventory?.total_variants ?? 0)} accent="primary" />
+            <Kpi label="Stock Value" value={formatCurrency(Number(inventory?.total_stock_value ?? 0))} accent="success" />
+            <Kpi label="Low Stock Items" value={String(inventory?.low_stock_count ?? 0)} accent="warning" />
+            <Kpi label="Sales YTD" value={formatCurrency(Number(inventory?.total_sales_amount_ytd ?? 0))} accent="primary" />
+          </div>
+          <div className="mt-4">
+            <Kpi label="Purchases YTD" value={formatCurrency(Number(inventory?.total_purchase_amount_ytd ?? 0))} accent="info" />
+          </div>
+        </div>
+
+        {/* Section: Sales KPIs */}
+        <div>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+            <Users className="w-4 h-4" /> Sales
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Kpi label="Total Leads" value={String(sales?.total_leads ?? 0)} accent="primary" />
+            <Kpi label="New Leads (MTD)" value={String(sales?.new_leads_mtd ?? 0)} accent="success" />
+            <Kpi label="Total Quotes" value={String(sales?.total_quotes ?? 0)} accent="info" />
+            <Kpi label="Quote Value" value={formatCurrency(Number(sales?.quote_value ?? 0))} accent="primary" />
+          </div>
+          <div className="mt-4">
+            <Kpi label="Conversion Rate" value={`${sales?.conversion_rate ?? 0}%`} accent="warning" />
+          </div>
+        </div>
+
+        {/* Charts Row 1 - Revenue vs Expense & Sales vs Purchases */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader title="Revenue vs Expense" subtitle="Trailing 12 months" />
+            <div className="p-4 h-[300px]">
+              <ResponsiveContainer>
+                <AreaChart data={revenueExpenseData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gRev" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--color-chart-1)" stopOpacity={0.5} />
+                      <stop offset="100%" stopColor="var(--color-chart-1)" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="gExp" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--color-chart-3)" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="var(--color-chart-3)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="month" stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+                  <Tooltip {...t} formatter={(v: any) => formatCurrency(v)} />
+                  <Area type="monotone" dataKey="revenue" name="Revenue" stroke="var(--color-chart-1)" fill="url(#gRev)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="expense" name="Expense" stroke="var(--color-chart-3)" fill="url(#gExp)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader title="Sales vs Purchases" subtitle="Monthly comparison" />
+            <div className="p-4 h-[300px]">
+              <ResponsiveContainer>
+                <BarChart data={salesPurchasesData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="month" stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+                  <Tooltip {...t} formatter={(v: any) => formatCurrency(v)} />
+                  <Bar dataKey="sales" name="Sales" fill="var(--color-chart-1)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="purchases" name="Purchases" fill="var(--color-chart-5)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+        </div>
+
+        {/* Charts Row 2 - Stock Movement */}
+        <Card>
+          <CardHeader title="Stock Movement" subtitle="Incoming vs Outgoing quantity (last 6 months)" />
+          <div className="p-4 h-[300px]">
+            <ResponsiveContainer>
+              <AreaChart data={stockMovementData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gIn" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--color-chart-1)" stopOpacity={0.5} />
+                    <stop offset="100%" stopColor="var(--color-chart-1)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gOut" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--color-chart-3)" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="var(--color-chart-3)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="month" stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+                <Tooltip {...t} />
+                <Area type="monotone" dataKey="incoming" name="Incoming" stroke="var(--color-chart-1)" fill="url(#gIn)" strokeWidth={2} />
+                <Area type="monotone" dataKey="outgoing" name="Outgoing" stroke="var(--color-chart-3)" fill="url(#gOut)" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        {/* Recent Activity Tables */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader title="Recent Payments" subtitle="Latest confirmed transactions" />
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-xs text-muted-foreground border-b border-border">
+                  <tr>
+                    <th className="px-4 py-2 text-left">Ref</th>
+                    <th className="px-4 py-2 text-left">Date</th>
+                    <th className="px-4 py-2 text-right">Amount</th>
+                    <th className="px-4 py-2 text-left">Type</th>
+                   </tr>
+                </thead>
+                <tbody>
+                  {(recentActivity?.payments ?? []).map((p) => (
+                    <tr key={p.id} className="border-b border-border/60">
+                      <td className="px-4 py-2 font-mono text-xs">{p.reference || p.id.slice(-6)}</td>
+                      <td className="px-4 py-2">{p.date}</td>
+                      <td className="px-4 py-2 text-right font-semibold">{formatCurrency(Number(p.amount))}</td>
+                      <td className="px-4 py-2"><StatusBadge status={p.type.toLowerCase()} /></td>
+                     </tr>
+                  ))}
+                  {(recentActivity?.payments ?? []).length === 0 && (
+                    <tr><td colSpan={4} className="text-center py-4 text-muted-foreground">No recent payments</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader title="Recent Sales Orders" subtitle="Completed orders" />
+            <div className="divide-y divide-border">
+              {(recentActivity?.sales_orders ?? []).map((order) => (
+                <div key={order.id} className="px-5 py-3 flex justify-between items-center">
+                  <div>
+                    <div className="font-mono text-sm">{order.number}</div>
+                    <div className="text-xs text-muted-foreground">{order.customer || "Walk-in"}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-semibold">{formatCurrency(Number(order.total))}</div>
+                    <div className="text-xs text-muted-foreground">{order.date}</div>
+                  </div>
+                </div>
+              ))}
+              {(recentActivity?.sales_orders ?? []).length === 0 && (
+                <div className="px-5 py-4 text-center text-muted-foreground">No recent sales orders</div>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader title="Recent Stock Movements" />
+            <div className="divide-y divide-border">
+              {(recentActivity?.stock_transactions ?? []).map((tx) => (
+                <div key={tx.id} className="px-5 py-3 flex justify-between items-center">
+                  <div>
+                    <div className="font-mono text-sm">{tx.variant}</div>
+                    <div className="text-xs text-muted-foreground">{tx.type}</div>
+                  </div>
+                  <div className={`text-right font-semibold ${tx.change > 0 ? "text-success" : "text-destructive"}`}>
+                    {tx.change > 0 ? `+${tx.change}` : tx.change}
+                    <div className="text-xs text-muted-foreground font-normal">{tx.date}</div>
+                  </div>
+                </div>
+              ))}
+              {(recentActivity?.stock_transactions ?? []).length === 0 && (
+                <div className="px-5 py-4 text-center text-muted-foreground">No recent stock movements</div>
+              )}
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader title="Recent Leads & Quotes" />
+            <div className="space-y-4">
+              <div>
+                <div className="text-xs font-medium text-muted-foreground px-5 pt-2">Leads</div>
+                {recentActivity?.leads?.slice(0, 3).map((lead) => (
+                  <div key={lead.id} className="px-5 py-2 flex justify-between items-center">
+                    <span>{lead.name}</span>
+                    <StatusBadge status={lead.status} />
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div className="text-xs font-medium text-muted-foreground px-5">Quotes</div>
+                {recentActivity?.quotes?.slice(0, 3).map((quote) => (
+                  <div key={quote.id} className="px-5 py-2 flex justify-between items-center">
+                    <span className="font-mono text-sm">{quote.number}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold">{formatCurrency(Number(quote.total))}</span>
+                      <StatusBadge status={quote.status} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {(!recentActivity?.leads?.length && !recentActivity?.quotes?.length) && (
+                <div className="px-5 py-4 text-center text-muted-foreground">No recent leads or quotes</div>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        {/* Alerts Panel */}
+        {alerts && alerts.length > 0 && (
+          <Card>
+            <CardHeader title="System Alerts" subtitle="Priority notifications" />
+            <div className="divide-y divide-border">
+              {alerts.map((alert, idx) => (
+                <div key={idx} className="px-5 py-3 flex items-start gap-3">
+                  <div className={`mt-0.5 w-2 h-2 rounded-full ${
+                    alert.severity === "critical" ? "bg-destructive" :
+                    alert.severity === "warning" ? "bg-warning" : "bg-info"
+                  }`} />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">{alert.title}</span>
+                      <StatusBadge status={alert.severity} />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">{alert.message}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+      </div>
+    </>
+  );
+}

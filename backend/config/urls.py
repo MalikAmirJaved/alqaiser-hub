@@ -35,4 +35,5 @@ urlpatterns = [
     path('api/permissions/', include('apps.permissions.urls')),
     path('api/sales/', include('apps.sales.urls')),
     path('api/forecast/', include('apps.forecast.urls')),
+    path('api/overall/', include('apps.overall_dashboard.urls')),
 ]
