@@ -9,8 +9,8 @@ export default function LoginPage() {
   const { login, user, ready } = useAuth();
   const [loading, setLoading] = useState(false);
   const navigate = useRouter();
-  const [email, setEmail] = useState("admin@gmail.com");
-  const [password, setPassword] = useState("123456");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [err, setErr] = useState("");
   const [forgot, setForgot] = useState(false);
@@ -129,10 +129,6 @@ export default function LoginPage() {
                {loading ? "Signing in..." : "Sign in"}
             </button>
           )}
-
-          <div className="mt-4 text-[11px] text-muted-foreground text-center">
-            Demo admin: <b>admin@alqaiserit.local</b> / <b>admin123</b>
-          </div>
         </form>
       </div>
     </div>

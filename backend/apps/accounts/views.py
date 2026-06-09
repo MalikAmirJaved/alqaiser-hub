@@ -10,7 +10,6 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.exceptions import TokenError
 
-logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
@@ -70,16 +69,18 @@ class LoginView(APIView):
         # EmailOrUsernameBackend handles both username and email lookup
         user = authenticate(request, username=identifier, password=password)
         if not user:
-            logger.warning("Failed login attempt for identifier: %s", identifier)
             return Response({"error": "Invalid credentials"}, status=400)
 
         if not user.is_active:
             return Response({"error": "Account is disabled"}, status=403)
 
         refresh = RefreshToken.for_user(user)
-        response = Response({"user": _user_payload(user)})
+        response = Response({
+            "detail": "Login successfully",
+            "user": _user_payload(user)
+        })
+
         _set_jwt_cookies(response, refresh)
-        logger.info("User %s logged in successfully", user.username)
         return response
 
 
@@ -97,7 +98,6 @@ class LogoutView(APIView):
         response = Response({"detail": "Logged out successfully"})
         response.delete_cookie('access_token', path='/')
         response.delete_cookie('refresh_token', path='/')
-        logger.info("User %s logged out", request.user.username)
         return response
 
 
