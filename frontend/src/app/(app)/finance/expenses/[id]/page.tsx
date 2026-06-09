@@ -46,6 +46,7 @@ export default function ExpenseDetailPage() {
   };
 
   const handlePayBill = () => {
+    if (!expense.supplier_bill_id) return;
     if (isLinkedToBill) {
       paySupplierBill.mutate({ id: expense.supplier_bill_id });
     }

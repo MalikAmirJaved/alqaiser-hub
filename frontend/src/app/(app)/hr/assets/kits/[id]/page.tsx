@@ -1,17 +1,24 @@
 "use client";
+
 import { useParams } from "next/navigation";
 import { useAssetCategory } from "@/hooks/useAssetCategories";
 import { DetailLayout } from "@/components/reuseable/final/DetailLayout";
 
 export default function AssetCategoryDetailPage() {
-  const { id } = useParams();
-  const { data: category, isLoading } = useAssetCategory(id as string);
+  const params = useParams();
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
+
+  const { data: category, isLoading } = useAssetCategory(id ?? null);
 
   if (isLoading) return <div>Loading...</div>;
   if (!category) return <div>Category not found</div>;
 
-  const totalAssets = category.assets?.length || 0;
-  const assignedAssets = category.assets?.filter(a => a.isAssigned).length || 0;
+  const totalAssets = category.assets?.length ?? 0;
+
+  const assignedAssets =
+    category.assets?.filter((a) => a.isAssigned).length ?? 0;
+
+  const availableAssets = totalAssets - assignedAssets;
 
   const tabs = [
     {
@@ -28,13 +35,26 @@ export default function AssetCategoryDetailPage() {
               <th className="px-4 py-2 text-right">Assigned</th>
             </tr>
           </thead>
+
           <tbody>
-            {category.assets?.map(asset => (
+            {category.assets?.map((asset) => (
               <tr key={asset.id} className="border-b">
                 <td className="px-4 py-2">{asset.name}</td>
                 <td className="px-4 py-2">{asset.brand || "—"}</td>
-                <td className="px-4 py-2 text-right">{asset.availableQuantity ?? 0}</td>
-                <td className="px-4 py-2 text-right">{asset.isAssigned ? "Yes" : "No"}</td>
+
+                <td className="px-4 py-2 text-right">
+                  {"availableQuantity" in asset
+                    ? (asset as any).availableQuantity
+                    : 0}
+                </td>
+
+                <td className="px-4 py-2 text-right">
+                  {"isAssigned" in asset
+                    ? (asset as any).isAssigned
+                      ? "Yes"
+                      : "No"
+                    : "No"}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -45,6 +65,8 @@ export default function AssetCategoryDetailPage() {
 
   return (
     <DetailLayout
+      entityId={category.id}
+      data={category}
       breadcrumbs={["HR", "Asset Kits", category.name]}
       title={category.name}
       status={category.isActive ? "Active" : "Inactive"}
@@ -54,9 +76,21 @@ export default function AssetCategoryDetailPage() {
         { label: "Assigned", value: String(assignedAssets) },
       ]}
       summary={[
-        { label: "Assets in Kit", value: totalAssets, isCurrency: false },
-        { label: "Assigned", value: assignedAssets, isCurrency: false },
-        { label: "Available", value: totalAssets - assignedAssets, isCurrency: false },
+        {
+          label: "Assets in Kit",
+          value: totalAssets,
+          isCurrency: false,
+        },
+        {
+          label: "Assigned",
+          value: assignedAssets,
+          isCurrency: false,
+        },
+        {
+          label: "Available",
+          value: availableAssets,
+          isCurrency: false,
+        },
       ]}
     />
   );

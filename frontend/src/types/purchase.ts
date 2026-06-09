@@ -6,6 +6,7 @@ export interface PurchaseOrderLine {
   id: string;
   _id: string;
   variant: string;
+  asset: string;
   variant_sku: string;
   variant_name: string;
   quantity_ordered: number;

@@ -15,15 +15,21 @@ export interface Expense {
   notes: string;
   created_at: string;
   updated_at: string;
+
   created_by?: number | string | null;
   updated_by?: number | string | null;
-  journal_entry: string | null;  
+
+  journal_entry?: string | null;
+
   supplier_bill_id?: string | null;
   supplier_bill_number?: string | null;
-  supplier?: string;           
-  supplier_name?: string;     
-  pay_immediately?: boolean;   
+
+  supplier?: string;
+  supplier_name?: string;
+
+  pay_immediately?: boolean;
 }
+
 
 interface PaginatedResponse<T> {
   count: number;
@@ -32,9 +38,20 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-type CreateExpenseData = Omit<Expense, "id" | "created_at" | "updated_at" | "paid" | "payment_date" | "payment_method" | "reference_number">;
-type UpdateExpenseData = Partial<CreateExpenseData>;
+export interface CreateExpenseData {
+  expense_number: string;
+  category: string;
+  expense_date: string;
+  amount: number;
+  description?: string;
+  notes?: string;
 
+  supplier?: string;
+  pay_immediately?: boolean;
+}
+
+export interface UpdateExpenseData
+  extends Partial<CreateExpenseData> {}
 const EXPENSES_KEY = "finance_expenses";
 
 // ============================================
@@ -56,11 +73,26 @@ async function getExpenseById(id: string) {
 }
 
 async function createExpense(data: CreateExpenseData) {
-  return apiFetch<Expense>("/api/finance/expenses/", { method: "POST", body: JSON.stringify(data) });
+  return apiFetch<Expense>(
+    "/api/finance/expenses/",
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    }
+  );
 }
 
-async function updateExpense(id: string, data: UpdateExpenseData) {
-  return apiFetch<Expense>(`/api/finance/expenses/${id}/`, { method: "PUT", body: JSON.stringify(data) });
+async function updateExpense(
+  id: string,
+  data: UpdateExpenseData
+) {
+  return apiFetch<Expense>(
+    `/api/finance/expenses/${id}/`,
+    {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }
+  );
 }
 
 async function deleteExpense(id: string) {
@@ -94,19 +126,39 @@ export function useExpense(id: string | null) {
 
 export function useCreateExpense() {
   const queryClient = useQueryClient();
+
   return useMutation({
-    mutationFn: createExpense,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: [EXPENSES_KEY] }),
+    mutationFn: (data: CreateExpenseData) =>
+      createExpense(data),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [EXPENSES_KEY],
+      });
+    },
   });
 }
 
 export function useUpdateExpense() {
   const queryClient = useQueryClient();
+
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateExpenseData }) => updateExpense(id, data),
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: UpdateExpenseData;
+    }) => updateExpense(id, data),
+
     onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries({ queryKey: [EXPENSES_KEY] });
-      queryClient.invalidateQueries({ queryKey: [EXPENSES_KEY, id] });
+      queryClient.invalidateQueries({
+        queryKey: [EXPENSES_KEY],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: [EXPENSES_KEY, id],
+      });
     },
   });
 }
