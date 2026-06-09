@@ -62,7 +62,7 @@ export default function LoginPage() {
             <ShieldCheck className="w-5 h-5" />
             <span className="text-xs uppercase tracking-wide">Secure Sign-in</span>
           </div>
-          <h2 className="text-2xl font-semibold">{forgot ? "Reset password" : "Sign in to BOS"}</h2>
+          <h2 className="text-2xl font-semibold">{forgot ? "Reset password" : "Sign in"}</h2>
           <p className="text-sm text-muted-foreground mt-1">
             {forgot ? "Local-only reset for demo purposes." : "Use your work account to continue."}
           </p>
@@ -107,8 +107,6 @@ export default function LoginPage() {
                 </button>
               </div>
             )}
-
-            {err && <div className="text-xs text-destructive">{err}</div>}
           </div>
 
           {forgot ? (

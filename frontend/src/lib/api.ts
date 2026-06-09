@@ -2,7 +2,7 @@
 
 import { toast } from "sonner";
 
-export const BASE_URL = process.env.NEXT_PUBLIC_API_URL
+export const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 interface ErrorResponse {
   detail?: string;
@@ -16,6 +16,11 @@ export async function apiFetch<T>(
 ): Promise<T> {
   const method = options.method?.toUpperCase() || "GET";
 
+  // APIs where toast should be disabled
+  const disableToastEndpoints = ["/api/accounts/token/refresh/"];
+
+  const shouldShowToast = !disableToastEndpoints.includes(endpoint);
+
   try {
     const res = await fetch(`${BASE_URL}${endpoint}`, {
       ...options,
@@ -28,9 +33,10 @@ export async function apiFetch<T>(
 
     if (!res.ok) {
       let errorBody: ErrorResponse = {};
+
       try {
         errorBody = await res.json();
-      } catch {}
+      } catch { }
 
       const errorMessage =
         errorBody.detail ||
@@ -42,8 +48,11 @@ export async function apiFetch<T>(
       error.status = res.status;
       error.response = errorBody;
 
-      // Show error toast only for mutations
-      if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+      // Error toast
+      if (
+        shouldShowToast &&
+        ["POST", "PUT", "PATCH", "DELETE"].includes(method)
+      ) {
         toast.error(errorMessage, {
           description: res.status ? `Status: ${res.status}` : undefined,
         });
@@ -54,16 +63,19 @@ export async function apiFetch<T>(
 
     const data = await res.json();
 
-    // Success toast for POST, PUT, PATCH, DELETE only
-    if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+    // Success toast
+    if (
+      shouldShowToast &&
+      ["POST", "PUT", "PATCH", "DELETE"].includes(method)
+    ) {
       const successMessage =
         data?.message ||
         data?.detail ||
         (method === "DELETE"
           ? "Deleted successfully"
           : method === "POST"
-          ? "Created successfully"
-          : "Updated successfully");
+            ? "Created successfully"
+            : "Updated successfully");
 
       toast.success(successMessage, {
         description: data?.detail || "",
@@ -73,16 +85,20 @@ export async function apiFetch<T>(
 
     return data;
   } catch (error: any) {
-    // Handle network errors or other unexpected errors
+    // Network errors
     if (error.name === "TypeError" && !error.status) {
       const networkError = "Network error. Please check your connection.";
-      if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+
+      if (
+        shouldShowToast &&
+        ["POST", "PUT", "PATCH", "DELETE"].includes(method)
+      ) {
         toast.error(networkError);
       }
+
       throw new Error(networkError);
     }
 
-    // Re-throw the error so your components can still catch it if needed
     throw error;
   }
 }
