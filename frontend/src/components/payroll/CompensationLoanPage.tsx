@@ -38,10 +38,10 @@ export default function CompensationLoanPage({ formatCurrency }: CompensationLoa
   const updateLoan = useUpdateEmployeeLoan();
   const deleteLoan = useDeleteEmployeeLoan();
 
-  const employeeOptions = employees.map(e => ({
-    value: e.id,
-    label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""}`
-  }));
+  const employeeOptions = employees.map((e) => ({
+  value: String(e.id),
+  label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""}`,
+}));
 
   const handleSave = async () => {
     try {
