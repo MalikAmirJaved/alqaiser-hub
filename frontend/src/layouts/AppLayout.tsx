@@ -1,18 +1,19 @@
+// components/AppLayout.tsx
 "use client";
+
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useRouter, usePathname } from "next/navigation";
 import Sidebar from "@/components/sidebar/Sidebar";
 import Topbar from "@/components/navbar/Topbar";
 import { useAuth } from "@/hooks/useAuth";
-import CompanySetupModal from "@/components/CompanySetupModal";
 import { loadPermissions } from "@/store/slices/permissionSlice";
 import { loadCompanySettings } from "@/store/slices/companySettingsSlice";
 import type { AppDispatch, RootState } from "@/store";
 import { publicRoutes, getRequiredPermission } from "@/config/routePermissions";
 import { usePermissionSocket } from "@/hooks/usePermissions";
 
-export default function AppLayout({ children }) {
+export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, ready } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -22,9 +23,7 @@ export default function AppLayout({ children }) {
   const { initialized: permissionsInitialized, permissions } = useSelector((state: RootState) => state.permissions);
   const { initialized: settingsInitialized, data: settings } = useSelector((state: RootState) => state.companySettings);
 
-
   usePermissionSocket(user?.id);
-
 
   // Load permissions and company settings after user is ready
   useEffect(() => {
@@ -37,6 +36,15 @@ export default function AppLayout({ children }) {
       }
     }
   }, [ready, user, permissionsInitialized, settingsInitialized, dispatch]);
+
+  // Redirect to welcome page if user is COMPANY_ADMIN and setup not completed
+  useEffect(() => {
+    if (ready && user && settingsInitialized && settings && pathname !== "/welcome") {
+      if (user.role === "COMPANY_ADMIN" && !settings.isSetupCompleted) {
+        router.replace("/welcome");
+      }
+    }
+  }, [ready, user, settingsInitialized, settings, router, pathname]);
 
   // Route protection based on permissions
   useEffect(() => {
@@ -54,12 +62,14 @@ export default function AppLayout({ children }) {
     }
   }, [ready, user, permissionsInitialized, pathname, permissions, router]);
 
+  // Redirect to login if not authenticated
   useEffect(() => {
     if (ready && !user && !publicRoutes.includes(pathname)) {
       router.push("/login");
     }
   }, [ready, user, pathname, router]);
 
+  // Loading state
   if (!ready || !permissionsInitialized || !settingsInitialized) {
     return (
       <div className="min-h-screen grid place-items-center text-muted-foreground">
@@ -74,23 +84,20 @@ export default function AppLayout({ children }) {
   // If user is not authenticated and route is not public, redirect already happened
   if (!user) return null;
 
-  const showSetupModal =
-    user.role === "COMPANY_ADMIN" &&
-    settings &&
-    !settings.isSetupCompleted;
+  // Don't render sidebar and topbar on welcome page
+  if (pathname === "/welcome") {
+    return <>{children}</>;
+  }
 
   return (
-    <>
-      {showSetupModal && <CompanySetupModal />}
-      <div className="h-screen overflow-y-hidden flex bg-background text-foreground">
-        <Sidebar open={open} onClose={() => setOpen(false)} />
-        <div className="flex-1 flex flex-col min-w-0">
-          <Topbar onToggleSidebar={() => setOpen((s) => !s)} />
-          <main className="flex-1 p-4 sm:p-6 w-full overflow-auto">
-            {children}
-          </main>
-        </div>
+    <div className="h-screen overflow-y-hidden flex bg-background text-foreground">
+      <Sidebar open={open} onClose={() => setOpen(false)} />
+      <div className="flex-1 flex flex-col min-w-0">
+        <Topbar onToggleSidebar={() => setOpen((s) => !s)} />
+        <main className="flex-1 p-4 sm:p-6 w-full overflow-auto">
+          {children}
+        </main>
       </div>
-    </>
+    </div>
   );
 }

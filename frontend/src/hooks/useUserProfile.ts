@@ -6,6 +6,8 @@ import { useApi } from "@/hooks/useApi";
 export interface UserProfile {
   id: number;
   username: string;
+  first_name: string;
+  last_name: string;
   email: string;
   full_name: string;
   branch_id?: string;      
