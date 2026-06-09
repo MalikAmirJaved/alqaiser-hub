@@ -1,13 +1,10 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
-import { ls, uid } from "@/services/localStorageService";
-import { permissionService } from "@/services/permissionService";
-import {  CreditCard, Plus, Minus, X,  CheckCircle } from "lucide-react";
-// ============================================
-// PAYMENT MODAL (Enhanced with transaction fields)
-// ============================================
+import { useEmployeeLoans, useProcessPayroll } from "@/hooks/usePayroll";
+import { CreditCard, Plus, Minus, X, CheckCircle } from "lucide-react";
+import { toast } from "sonner";
+
 export default function PaymentModal({
   formatCurrency,
   employee,
@@ -28,136 +25,60 @@ export default function PaymentModal({
   const [transactionType, setTransactionType] = useState("SALARY");
   const [transactionReference, setTransactionReference] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("BANK_TRANSFER");
-  const [processing, setProcessing] = useState(false);
-  const [activeLoans, setActiveLoans] = useState<any[]>([]);
   const [selectedLoanDeductions, setSelectedLoanDeductions] = useState<{ [key: string]: boolean }>({});
+
+  const { data: allLoans = [] } = useEmployeeLoans();
+  const processPayroll = useProcessPayroll();
+
+  // Filter active loans for this employee
+  const activeLoans = allLoans.filter(
+    l => l.employee_id === employee?.id && l.status === "ACTIVE"
+  );
 
   useEffect(() => {
     if (isOpen && employee) {
-      const loans = ls.get<any[]>("employeeLoans", []) || [];
-      const active = loans.filter((l: any) => l.employee_id === employee.id && l.status === "ACTIVE");
-      setActiveLoans(active);
-
       // Auto-select all active loans for deduction
       const initialSelections: { [key: string]: boolean } = {};
-      active.forEach((loan: any) => {
+      activeLoans.forEach((loan) => {
         initialSelections[loan.id] = true;
       });
       setSelectedLoanDeductions(initialSelections);
     }
-  }, [isOpen, employee]);
+  }, [isOpen, employee, activeLoans.length]);
 
-  const baseSalary = employee?.salary || 0;
+  const baseSalary = parseFloat(employee?.salary || "0");
   const loanDeductionsTotal = activeLoans
     .filter(loan => selectedLoanDeductions[loan.id])
-    .reduce((sum, loan) => sum + (loan.monthly_deduction || 0), 0);
+    .reduce((sum, loan) => sum + parseFloat(loan.monthly_deduction), 0);
 
   const totalDeductions = deductions + loanDeductionsTotal;
   const netSalary = baseSalary + bonus - totalDeductions;
 
-  // Auto-generate transaction reference
   const autoReference = `PAY-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${employee?.employee_id || 'EMP'}`;
 
   const handleProcessPayment = async () => {
-    setProcessing(true);
-
     try {
-      const payrollRecords = ls.get<any[]>("payroll", []) || [];
-      const currentMonth = new Date().getMonth() + 1;
-      const currentYear = new Date().getFullYear();
-
-      // Check if already processed
-      const alreadyProcessed = payrollRecords.some(
-        (r: any) => r.employee_id === employee.id && r.month === currentMonth && r.year === currentYear
-      );
-
-      if (alreadyProcessed) {
-        alert("Payroll for this employee has already been processed this month.");
-        setProcessing(false);
-        return;
-      }
-
-      // Create payroll record with transaction details
-      const payrollRecord = {
-        id: uid("pay"),
+      await processPayroll.mutateAsync({
         employee_id: employee.id,
-        employee_name: `${employee.first_name} ${employee.last_name || ""}`,
-        employee_code: employee.employee_id,
-        department: employee.department,
-        designation: employee.designation,
-        month: currentMonth,
-        year: currentYear,
+        month: new Date().getMonth() + 1,
+        year: new Date().getFullYear(),
         base_salary: baseSalary,
         bonus: bonus,
-        deductions: totalDeductions,
-        deduction_breakdown: {
-          custom_deductions: deductions,
-          custom_reason: deductionReason,
-          loan_deductions: activeLoans
-            .filter(loan => selectedLoanDeductions[loan.id])
-            .map(loan => ({
-              loan_id: loan.id,
-              loan_type: loan.loan_type,
-              amount: loan.monthly_deduction
-            }))
-        },
-        net_salary: netSalary,
-        custom_note: customNote,
+        deductions: deductions,
+        deduction_reason: deductionReason,
         transaction_type: transactionType,
         transaction_number: transactionReference || autoReference,
         payment_method: paymentMethod,
-        status: "PAID",
-        processed_at: new Date().toISOString(),
-        company_id: employee.company_id,
-        branch_id: employee.branch_id,
-        created_by: permissionService.getCurrentUser()?.id,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      ls.set("payroll", [payrollRecord, ...payrollRecords]);
-
-      // Update loan remaining amounts
-      const allLoans = ls.get<any[]>("employeeLoans", []) || [];
-      const updatedLoans = allLoans.map((loan: any) => {
-        if (selectedLoanDeductions[loan.id] && loan.status === "ACTIVE") {
-          const newRemaining = loan.remaining_amount - loan.monthly_deduction;
-          const newPaidMonths = (loan.paid_months || 0) + 1;
-          return {
-            ...loan,
-            remaining_amount: newRemaining,
-            paid_months: newPaidMonths,
-            status: newRemaining <= 0 ? "PAID" : "ACTIVE",
-            updated_at: new Date().toISOString()
-          };
-        }
-        return loan;
+        custom_note: customNote,
+        selected_loans: Object.keys(selectedLoanDeductions).filter(
+          id => selectedLoanDeductions[id]
+        ).map(Number),
       });
-      ls.set("employeeLoans", updatedLoans);
-
-      // Update payment status
-      const paymentStatuses = ls.get<any[]>("paymentStatuses", []) || [];
-      const paymentRecord = {
-        id: uid("pstat"),
-        employee_id: employee.id,
-        month: currentMonth,
-        year: currentYear,
-        transaction_number: transactionReference || autoReference,
-        transaction_type: transactionType,
-        status: "PAID",
-        paid_at: new Date().toISOString(),
-      };
-      ls.set("paymentStatuses", [paymentRecord, ...paymentStatuses.filter((s: any) =>
-        !(s.employee_id === employee.id && s.month === currentMonth && s.year === currentYear)
-      )]);
-
+      toast.success("Payment processed successfully");
       onSuccess();
       onClose();
-    } catch (error) {
-      console.error("Error processing payment:", error);
-      alert("Error processing payment. Please try again.");
-    } finally {
-      setProcessing(false);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to process payment");
     }
   };
 
@@ -181,7 +102,6 @@ export default function PaymentModal({
           <div className="bg-muted/40 rounded-xl p-3">
             <div className="text-xs font-medium text-primary mb-2">Transaction Information</div>
             <div className="grid grid-cols-2 gap-2">
-
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs">Payment Method</span>
                 <select
@@ -195,7 +115,6 @@ export default function PaymentModal({
                   <option value="WALLET">Digital Wallet</option>
                 </select>
               </label>
-
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs">Transaction Reference</span>
                 <input
@@ -203,7 +122,7 @@ export default function PaymentModal({
                   value={transactionReference}
                   onChange={(e) => setTransactionReference(e.target.value)}
                   placeholder={autoReference}
-                  className="bg-card border border-border rounded-md h-8 px-2 text-sm"
+                  className="bg-card border border-border rounded-md h-8 px-2 text-sm font-mono"
                 />
               </label>
             </div>
@@ -246,14 +165,14 @@ export default function PaymentModal({
                       className="rounded border-border"
                     />
                     <div>
-                      <div className="text-sm">{loan.loan_type?.replace(/_/g, " ")}</div>
+                      <div className="text-sm">{loan.loan_type_display || loan.loan_type}</div>
                       <div className="text-xs text-muted-foreground">
-                        Remaining: {formatCurrency(loan.remaining_amount)} ({loan.paid_months || 0}/{loan.total_months} months)
+                        Remaining: {formatCurrency(parseFloat(loan.remaining_amount))} ({loan.paid_months}/{loan.total_months} months)
                       </div>
                     </div>
                   </div>
                   <div className="text-sm font-medium text-warning">
-                    -{formatCurrency(loan.monthly_deduction)}
+                    -{formatCurrency(parseFloat(loan.monthly_deduction))}
                   </div>
                 </label>
               ))}
@@ -321,10 +240,10 @@ export default function PaymentModal({
             </button>
             <button
               onClick={handleProcessPayment}
-              disabled={processing}
+              disabled={processPayroll.isPending}
               className="flex-1 h-10 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {processing ? (
+              {processPayroll.isPending ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   Processing...

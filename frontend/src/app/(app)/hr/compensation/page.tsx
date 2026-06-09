@@ -10,8 +10,8 @@ export default function CompensationLoanModule() {
   return (
     <div>
       <PageHeader 
-        title="Compensation & Loan" 
-        subtitle="Manage salary structures, employee loans" 
+        title="Compensation & Loans" 
+        subtitle="Manage salary structures and employee loans" 
       />
       <CompensationLoanPage formatCurrency={formatCurrency} />
     </div>

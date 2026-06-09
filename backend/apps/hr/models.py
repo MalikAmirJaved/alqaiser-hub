@@ -543,3 +543,326 @@ class EmployeeDefaultShift(TimeStampedModel):
         indexes = [
             models.Index(fields=['employee', 'effective_from']),
         ]
+
+
+class Compensation(TimeStampedModel):
+    """Employee compensation/benefits structure"""
+    id = models.BigAutoField(primary_key=True)
+    _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='compensations'
+    )
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='compensations'
+    )
+    
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name='compensations'
+    )
+    
+    # Salary Structure
+    grade = models.CharField(max_length=50, blank=True, null=True)
+    basic_salary = models.DecimalField(max_digits=12, decimal_places=2)
+    house_rent_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    medical_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    transport_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    fuel_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    phone_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    utilities_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    education_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    other_allowances = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    # Employer Contributions
+    employer_pf = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    employer_eobi = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    # Additional
+    overtime_rate = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    bonus_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    
+    # Status & Dates
+    is_active = models.BooleanField(default=True)
+    status = models.CharField(
+        max_length=20,
+        choices=[('ACTIVE', 'Active'), ('INACTIVE', 'Inactive')],
+        default='ACTIVE'
+    )
+    effective_date = models.DateField()
+    review_date = models.DateField(null=True, blank=True)
+    
+    # Notes
+    notes = models.TextField(blank=True, null=True)
+    
+    # Audit
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_compensations'
+    )
+    updated_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_compensations'
+    )
+    
+    class Meta:
+        verbose_name = "Compensation"
+        verbose_name_plural = "Compensations"
+        ordering = ['-effective_date']
+        indexes = [
+            models.Index(fields=['employee', 'is_active']),
+            models.Index(fields=['company', 'is_active']),
+        ]
+    
+    def __str__(self):
+        return f"{self.employee.employee_id} - Compensation ({self.grade or 'N/A'})"
+    
+    @property
+    def total_allowances(self):
+        return (
+            self.house_rent_allowance +
+            self.medical_allowance +
+            self.transport_allowance +
+            self.fuel_allowance +
+            self.phone_allowance +
+            self.utilities_allowance +
+            self.education_allowance +
+            self.other_allowances
+        )
+    
+    @property
+    def total_ctc(self):
+        return self.basic_salary + self.total_allowances + self.employer_pf + self.employer_eobi
+    
+    @property
+    def total_monthly(self):
+        return self.basic_salary + self.total_allowances
+
+
+class EmployeeLoan(TimeStampedModel):
+    """Employee loans/advances"""
+    id = models.BigAutoField(primary_key=True)
+    _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='employee_loans'
+    )
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='employee_loans'
+    )
+    
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name='loans'
+    )
+    
+    # Loan Details
+    loan_type = models.CharField(
+        max_length=50,
+        choices=[
+            ('PERSONAL_LOAN', 'Personal Loan'),
+            ('SALARY_ADVANCE', 'Salary Advance'),
+            ('CAR_LOAN', 'Car Loan'),
+            ('HOUSE_LOAN', 'House Loan'),
+            ('EDUCATION_LOAN', 'Education Loan'),
+            ('MEDICAL_LOAN', 'Medical Loan'),
+            ('EMERGENCY_LOAN', 'Emergency Loan'),
+            ('OTHER', 'Other'),
+        ],
+        default='PERSONAL_LOAN'
+    )
+    principal_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    monthly_deduction = models.DecimalField(max_digits=12, decimal_places=2)
+    remaining_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    total_months = models.PositiveIntegerField()
+    paid_months = models.PositiveIntegerField(default=0)
+    
+    # Interest
+    interest_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    total_payable = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    # Dates
+    start_date = models.DateField()
+    end_date = models.DateField(null=True, blank=True)
+    
+    # Status
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('PENDING', 'Pending'),
+            ('ACTIVE', 'Active'),
+            ('PAID', 'Paid'),
+            ('DEFAULTED', 'Defaulted'),
+            ('CANCELLED', 'Cancelled'),
+        ],
+        default='PENDING'
+    )
+    
+    # Additional Info
+    purpose = models.TextField(blank=True, null=True)
+    approved_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_loans'
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True, null=True)
+    transaction_number = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Audit
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_loans'
+    )
+    updated_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_loans'
+    )
+    
+    class Meta:
+        verbose_name = "Employee Loan"
+        verbose_name_plural = "Employee Loans"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['employee', 'status']),
+            models.Index(fields=['company', 'status']),
+        ]
+    
+    def __str__(self):
+        return f"{self.employee.employee_id} - {self.get_loan_type_display()} - {self.status}"
+    
+    @property
+    def remaining_months(self):
+        return max(0, self.total_months - self.paid_months)
+
+
+class PayrollRecord(TimeStampedModel):
+    """Payroll/payment records for employees"""
+    id = models.BigAutoField(primary_key=True)
+    _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='payroll_records'
+    )
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='payroll_records'
+    )
+    
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name='payroll_records'
+    )
+    
+    # Period
+    month = models.PositiveSmallIntegerField()
+    year = models.PositiveSmallIntegerField()
+    
+    # Salary Details
+    base_salary = models.DecimalField(max_digits=12, decimal_places=2)
+    bonus = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    deductions = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    net_salary = models.DecimalField(max_digits=12, decimal_places=2)
+    
+    # Transaction Details
+    transaction_type = models.CharField(
+        max_length=50,
+        choices=[
+            ('SALARY', 'Salary'),
+            ('BONUS', 'Bonus'),
+            ('ADVANCE', 'Advance'),
+            ('REIMBURSEMENT', 'Reimbursement'),
+        ],
+        default='SALARY'
+    )
+    transaction_number = models.CharField(max_length=100, blank=True, null=True)
+    payment_method = models.CharField(
+        max_length=50,
+        choices=[
+            ('BANK_TRANSFER', 'Bank Transfer'),
+            ('CASH', 'Cash'),
+            ('CHEQUE', 'Cheque'),
+            ('WALLET', 'Digital Wallet'),
+        ],
+        default='BANK_TRANSFER'
+    )
+    
+    # Status
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('PENDING', 'Pending'),
+            ('PAID', 'Paid'),
+            ('CANCELLED', 'Cancelled'),
+        ],
+        default='PAID'
+    )
+    
+    # Additional Info
+    custom_note = models.TextField(blank=True, null=True)
+    deduction_breakdown = models.JSONField(default=dict, blank=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    
+    # Audit
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_payroll_records'
+    )
+    updated_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_payroll_records'
+    )
+    
+    class Meta:
+        verbose_name = "Payroll Record"
+        verbose_name_plural = "Payroll Records"
+        ordering = ['-year', '-month', '-created_at']
+        unique_together = [('employee', 'month', 'year')]
+        indexes = [
+            models.Index(fields=['company', 'month', 'year']),
+            models.Index(fields=['employee', 'status']),
+            models.Index(fields=['transaction_number']),
+        ]
+    
+    def __str__(self):
+        return f"{self.employee.employee_id} - {self.month}/{self.year} - {self.status}"

@@ -4,6 +4,10 @@ from apps.hr.views.shift_template_views import ShiftTemplateView
 from apps.hr.views.asset_views import AssetView, AssetStatsView
 from apps.hr.views.asset_category_views import AssetCategoryView, AssetCategoryStatsView
 from apps.hr.views.employee_views import EmployeeView, EmployeeStatsView
+from apps.hr.views.payroll_views import (
+    PayrollView, PayrollStatsView, 
+    EmployeeLoanView, CompensationView
+)
 
 urlpatterns = [
     # Shift Templates
@@ -20,4 +24,14 @@ urlpatterns = [
     # Employees
     path('employees/', EmployeeView.as_view(), name='employees'),
     path('employees/stats/', EmployeeStatsView.as_view(), name='employee-stats'),
+    
+    # Payroll
+    path('payroll/', PayrollView.as_view(), name='payroll'),
+    path('payroll/stats/', PayrollStatsView.as_view(), name='payroll-stats'),
+    
+    # Loans (with individual update/delete support)
+    path('loans/', EmployeeLoanView.as_view(), name='employee-loans'),
+    
+    # Compensations
+    path('compensations/', CompensationView.as_view(), name='compensations'),
 ]

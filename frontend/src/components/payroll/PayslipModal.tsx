@@ -1,35 +1,34 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
-import { ls } from "@/services/localStorageService";
-import {  X,  Receipt, } from "lucide-react";
+import { usePayroll } from "@/hooks/usePayroll";
+import { useEmployeeLoans } from "@/hooks/usePayroll";
+import { useCompensations } from "@/hooks/usePayroll";
+import { X, Receipt } from "lucide-react";
 
-// ============================================
-// PAYSLIP MODAL (Enhanced)
-// ============================================
-export default function PayslipModal({ employee, isOpen, formatCurrency, onClose,  }: { employee: any; isOpen: boolean; formatCurrency: (amount: number) => string; onClose: () => void }) {
-  const [payrollRecords, setPayrollRecords] = useState<any[]>([]);
-  const [loans, setLoans] = useState<any[]>([]);
-  const [compensation, setCompensation] = useState<any>(null);
+export default function PayslipModal({ 
+  employee, 
+  isOpen, 
+  formatCurrency, 
+  onClose 
+}: { 
+  employee: any; 
+  isOpen: boolean; 
+  formatCurrency: (amount: number) => string; 
+  onClose: () => void 
+}) {
+  const { data: payrollRecords = [] } = usePayroll(
+    isOpen && employee ? { employee_id: String(employee.id) } : undefined
+  );
+  const { data: loans = [] } = useEmployeeLoans(
+    isOpen && employee ? { employee_id: String(employee.id) } : undefined
+  );
+  const { data: compensations = [] } = useCompensations(
+    isOpen && employee ? { employee_id: String(employee.id) } : undefined
+  );
 
-  useEffect(() => {
-    if (isOpen && employee) {
-      const records = ls.get<any[]>("payroll", []) || [];
-      const employeeRecords = records.filter((r: any) => r.employee_id === employee.id);
-      setPayrollRecords(employeeRecords);
-
-      const allLoans = ls.get<any[]>("employeeLoans", []) || [];
-      const employeeLoans = allLoans.filter((l: any) => l.employee_id === employee.id);
-      setLoans(employeeLoans);
-
-      const compensations = ls.get<any[]>("compensation", []) || [];
-      const activeComp = compensations.find((c: any) => c.employee_id === employee.id && c.status === "ACTIVE");
-      setCompensation(activeComp);
-    }
-  }, [isOpen, employee]);
-
-  const currentMonthPayroll = payrollRecords[0];
+  const activeCompensation = compensations.find(c => c.status === "ACTIVE");
+  const activeLoans = loans.filter(l => l.status === "ACTIVE");
 
   if (!isOpen) return null;
 
@@ -70,54 +69,54 @@ export default function PayslipModal({ employee, isOpen, formatCurrency, onClose
           </div>
 
           {/* Compensation Breakdown */}
-          {compensation && (
+          {activeCompensation && (
             <div className="mb-4">
               <h3 className="text-sm font-semibold mb-2">Compensation Structure</h3>
               <div className="bg-card border border-border rounded-xl p-3">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
                   <div>
                     <div className="text-xs text-muted-foreground">Basic Salary</div>
-                    <div>{formatCurrency(compensation.basic_salary)}</div>
+                    <div>{formatCurrency(parseFloat(activeCompensation.basic_salary))}</div>
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground">HRA</div>
-                    <div>{formatCurrency(compensation.house_rent_allowance)}</div>
+                    <div>{formatCurrency(parseFloat(activeCompensation.house_rent_allowance))}</div>
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground">Medical</div>
-                    <div>{formatCurrency(compensation.medical_allowance)}</div>
+                    <div>{formatCurrency(parseFloat(activeCompensation.medical_allowance))}</div>
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground">Transport</div>
-                    <div>{formatCurrency(compensation.transport_allowance)}</div>
+                    <div>{formatCurrency(parseFloat(activeCompensation.transport_allowance))}</div>
                   </div>
                 </div>
                 <div className="mt-2 pt-2 border-t border-border flex justify-between">
                   <span className="text-sm font-medium">Total Monthly</span>
-                  <span className="font-bold text-primary">{formatCurrency(compensation.total_compensation)}</span>
+                  <span className="font-bold text-primary">{formatCurrency(parseFloat(activeCompensation.total_monthly))}</span>
                 </div>
               </div>
             </div>
           )}
 
           {/* Active Loans */}
-          {loans.filter(l => l.status === "ACTIVE").length > 0 && (
+          {activeLoans.length > 0 && (
             <div className="mb-4">
               <h3 className="text-sm font-semibold mb-2 text-warning">Active Loans</h3>
               <div className="space-y-2">
-                {loans.filter(l => l.status === "ACTIVE").map((loan) => (
+                {activeLoans.map((loan) => (
                   <div key={loan.id} className="bg-warning/10 rounded-xl p-3">
                     <div className="flex justify-between text-sm">
-                      <span>{loan.loan_type?.replace(/_/g, " ")}</span>
-                      <span className="font-medium">{formatCurrency(loan.monthly_deduction)}/month</span>
+                      <span>{loan.loan_type_display || loan.loan_type}</span>
+                      <span className="font-medium">{formatCurrency(parseFloat(loan.monthly_deduction))}/month</span>
                     </div>
                     <div className="flex justify-between text-sm mt-1">
                       <span className="text-muted-foreground">Remaining</span>
-                      <span>{formatCurrency(loan.remaining_amount)}</span>
+                      <span>{formatCurrency(parseFloat(loan.remaining_amount))}</span>
                     </div>
                     <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                      <span>Started: {new Date(loan.start_date).toLocaleDateString()}</span>
-                      <span>Progress: {loan.paid_months || 0}/{loan.total_months} months</span>
+                      <span>Started: {loan.start_date}</span>
+                      <span>Progress: {loan.paid_months}/{loan.total_months} months</span>
                     </div>
                   </div>
                 ))}
@@ -156,21 +155,21 @@ export default function PayslipModal({ employee, isOpen, formatCurrency, onClose
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div>
                         <div className="text-xs text-muted-foreground">Base Salary</div>
-                        <div>{formatCurrency(record.base_salary)}</div>
+                        <div>{formatCurrency(parseFloat(record.base_salary))}</div>
                       </div>
-                      {record.bonus > 0 && (
+                      {parseFloat(record.bonus) > 0 && (
                         <div>
                           <div className="text-xs text-muted-foreground">Bonus</div>
-                          <div className="text-success">+{formatCurrency(record.bonus)}</div>
+                          <div className="text-success">+{formatCurrency(parseFloat(record.bonus))}</div>
                         </div>
                       )}
                       <div>
                         <div className="text-xs text-muted-foreground">Deductions</div>
-                        <div className="text-destructive">-{formatCurrency(record.deductions)}</div>
+                        <div className="text-destructive">-{formatCurrency(parseFloat(record.deductions))}</div>
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">Net Pay</div>
-                        <div className="font-bold text-primary">{formatCurrency(record.net_salary)}</div>
+                        <div className="font-bold text-primary">{formatCurrency(parseFloat(record.net_salary))}</div>
                       </div>
                     </div>
 

@@ -1,182 +1,87 @@
-
 // src/components/payroll/CompensationLoanPage.tsx
 "use client";
 
-import { useState, useEffect } from "react";
-import { ls } from "@/services/localStorageService";
-import { companyContext } from "@/services/companyContextService";
+import { useState } from "react";
+import { useEmployees } from "@/hooks/useEmployees";
+import {
+  useCompensations, useCreateCompensation, useUpdateCompensation, useDeleteCompensation,
+  useEmployeeLoans, useCreateEmployeeLoan, useUpdateEmployeeLoan, useDeleteEmployeeLoan
+} from "@/hooks/usePayroll";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { HandCoins, Receipt, FileText, TrendingUp, Shield, Plus, Pencil, Trash2, Search, Download } from "lucide-react";
+import { HandCoins, TrendingUp, Plus, Pencil, Trash2, Search } from "lucide-react";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { DatePicker } from "@/components/reuseable/DatePicker";
+import { toast } from "sonner";
 
 interface CompensationLoanPageProps {
-  onRefresh?: () => void;
   formatCurrency: (amount: number) => string;
 }
 
-type Loan = {
-  id: string;
-  employee_id: string;
-  employee_name?: string;
-  loan_type: string;
-  principal_amount: number;
-  monthly_deduction: number;
-  total_months: number;
-  paid_months: number;
-  remaining_amount: number;
-  remaining_months: number;
-  start_date: string;
-  end_date?: string;
-  interest_rate?: number;
-  interest_amount?: number;
-  total_payable?: number;
-  purpose?: string;
-  status: string;
-  approved_by?: string;
-  approval_date?: string;
-  notes?: string;
-};
-
-type Compensation = {
-  id: string;
-  employee_id: string;
-  employee_name?: string;
-  grade: string;
-  basic: number;
-  house_rent_allowance: number;
-  medical_allowance: number;
-  transport_allowance: number;
-  fuel_allowance: number;
-  phone_allowance: number;
-  other_allowances: number;
-  total_allowances: number;
-  employer_pf: number;
-  employer_eobi: number;
-  total_ctc: number;
-  effective_date: string;
-  review_date?: string;
-  notes?: string;
-};
-
-export default function CompensationLoanPage({ onRefresh, formatCurrency }: CompensationLoanPageProps) {
+export default function CompensationLoanPage({ formatCurrency }: CompensationLoanPageProps) {
   const [activeTab, setActiveTab] = useState("compensation");
-  const [employees, setEmployees] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [modalType, setModalType] = useState<"compensation" | "loan">("compensation");
-
-  // Data states
-  const [compensations, setCompensations] = useState<Compensation[]>([]);
-  const [loans, setLoans] = useState<Loan[]>([]);
-
-  // Form states
-  const [formData, setFormData] = useState<any>({});
-
-  // Search states
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [formData, setFormData] = useState<any>({});
 
-  useEffect(() => {
-    loadEmployees();
-    loadCompensations();
-    loadLoans();
-  }, []);
+  // Fetch data from backend
+  const { data: employees = [] } = useEmployees();
+  const { data: compensations = [], isLoading: compLoading } = useCompensations();
+  const { data: loans = [], isLoading: loansLoading } = useEmployeeLoans();
+  
+  const createCompensation = useCreateCompensation();
+  const updateCompensation = useUpdateCompensation();
+  const deleteCompensation = useDeleteCompensation();
+  const createLoan = useCreateEmployeeLoan();
+  const updateLoan = useUpdateEmployeeLoan();
+  const deleteLoan = useDeleteEmployeeLoan();
 
-  const loadEmployees = () => {
-    const allEmployees = ls.get<any[]>("employees", []) || [];
-    const filtered = companyContext.filterByContext(allEmployees);
-    setEmployees(filtered);
-  };
+  const employeeOptions = employees.map(e => ({
+    value: e.id,
+    label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""}`
+  }));
 
-  const loadCompensations = () => {
-    const allCompensations = ls.get<any[]>("compensation", []) || [];
-    const allEmployees = ls.get<any[]>("employees", []) || [];
-    const filtered = companyContext.filterByContext(allCompensations);
-
-    const enriched = filtered.map((c: any) => {
-      const emp = allEmployees.find(e => e.id === c.employee_id);
-      return { ...c, employee_name: emp ? `${emp.first_name} ${emp.last_name || ""}` : "Unknown" };
-    });
-    setCompensations(enriched);
-  };
-
-  // Apply the same change to loadLoans()
-  const loadLoans = () => {
-    const allLoans = ls.get<any[]>("employeeLoans", []) || [];
-    const filtered = companyContext.filterByContext(allLoans);
-    const allEmployees = ls.get<any[]>("employees", []) || [];
-
-    const enriched = filtered.map((l: any) => {
-      const emp = allEmployees.find(e => e.id === l.employee_id);
-      const remainingAmt = l.principal_amount - (l.monthly_deduction * (l.paid_months || 0));
-      const remainingMonths = l.total_months - (l.paid_months || 0);
-      return {
-        ...l,
-        employee_name: emp ? `${emp.first_name} ${emp.last_name || ""}` : "Unknown",
-        remaining_amount: remainingAmt,
-        remaining_months: remainingMonths
-      };
-    });
-    setLoans(enriched);
-  };
-
-
-  const handleSave = () => {
-    let updated: any[] = [];
-
-    if (modalType === "compensation") {
-      if (editingItem) {
-        updated = compensations.map(c => c.id === editingItem.id ? { ...formData, id: c.id } : c);
-        ls.set("compensation", updated);
+  const handleSave = async () => {
+    try {
+      if (modalType === "compensation") {
+        if (editingItem) {
+          await updateCompensation.mutateAsync({ id: editingItem.id, ...formData });
+          toast.success("Compensation updated");
+        } else {
+          await createCompensation.mutateAsync(formData);
+          toast.success("Compensation created");
+        }
       } else {
-        // ✅ FIX: Attach multi-tenant context to new compensation
-        const newItem = companyContext.addContextToRecord({
-          ...formData,
-          id: `cp_${Date.now()}`
-        });
-        updated = [newItem, ...compensations];
-        ls.set("compensation", updated);
+        if (editingItem) {
+          await updateLoan.mutateAsync({ id: editingItem.id, ...formData });
+          toast.success("Loan updated");
+        } else {
+          await createLoan.mutateAsync(formData);
+          toast.success("Loan created");
+        }
       }
-      setCompensations(updated);
-
-    } else if (modalType === "loan") {
-      if (editingItem) {
-        updated = loans.map(l => l.id === editingItem.id ? { ...formData, id: l.id } : l);
-        ls.set("employeeLoans", updated);
-      } else {
-        // ✅ FIX: Attach multi-tenant context to new loan
-        const newItem = companyContext.addContextToRecord({
-          ...formData,
-          id: `loan_${Date.now()}`,
-          paid_months: 0,
-          status: "PENDING"
-        });
-        updated = [newItem, ...loans];
-        ls.set("employeeLoans", updated);
-      }
-      setLoans(updated);
+      setShowModal(false);
+      setEditingItem(null);
+      setFormData({});
+    } catch (error: any) {
+      toast.error(error.message || "Failed to save");
     }
-
-    setShowModal(false);
-    setEditingItem(null);
-    setFormData({});
-    if (onRefresh) onRefresh();
   };
 
-  const handleDelete = (type: string, id: string) => {
+  const handleDelete = async (type: string, id: number) => {
     if (!confirm("Are you sure you want to delete this record?")) return;
-
-    if (type === "compensation") {
-      const updated = compensations.filter(c => c.id !== id);
-      ls.set("compensation", updated);
-      setCompensations(updated);
-    } else if (type === "loan") {
-      const updated = loans.filter(l => l.id !== id);
-      ls.set("employeeLoans", updated);
-      setLoans(updated);
+    try {
+      if (type === "compensation") {
+        await deleteCompensation.mutateAsync(id);
+      } else {
+        await deleteLoan.mutateAsync(id);
+      }
+      toast.success("Deleted successfully");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to delete");
     }
-    if (onRefresh) onRefresh();
   };
 
   const openAddModal = (type: "compensation" | "loan") => {
@@ -193,14 +98,22 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
     setShowModal(true);
   };
 
-  // Form field renderer
-  const renderFormFields = () => {
-    const employeeOptions = employees.map(e => ({ value: e.id, label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""}` }));
+  // Filter data
+  const filteredCompensations = compensations.filter(c =>
+    c.employee_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    c.grade?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
+  const filteredLoans = loans.filter(l =>
+    l.employee_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    l.loan_type?.toLowerCase().includes(searchQuery.toLowerCase())
+  ).filter(l => statusFilter === "all" || l.status === statusFilter);
+
+  const renderFormFields = () => {
     if (modalType === "compensation") {
       return (
         <div className="grid grid-cols-2 gap-3">
-          <label className="text-sm flex flex-col gap-1">
+          <label className="text-sm flex flex-col gap-1 col-span-2">
             <span className="text-muted-foreground text-xs">Employee *</span>
             <SearchableSelect
               value={formData.employee_id || ""}
@@ -216,7 +129,7 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
           </label>
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground text-xs">Basic Salary *</span>
-            <input type="number" value={formData.basic || ""} onChange={(e) => setFormData({ ...formData, basic: Number(e.target.value) })} required className="bg-muted/40 border border-border rounded-md h-9 px-2" />
+            <input type="number" value={formData.basic_salary || ""} onChange={(e) => setFormData({ ...formData, basic_salary: Number(e.target.value) })} required className="bg-muted/40 border border-border rounded-md h-9 px-2" />
           </label>
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground text-xs">House Rent Allowance</span>
@@ -239,14 +152,18 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
             <input type="number" value={formData.phone_allowance || ""} onChange={(e) => setFormData({ ...formData, phone_allowance: Number(e.target.value) })} className="bg-muted/40 border border-border rounded-md h-9 px-2" />
           </label>
           <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">Effective Date *</span>
-            <DatePicker
-              value={formData.effective_date}
-              onChange={(val) => setFormData({ ...formData, effective_date: val || "" })}
-            />
-
+            <span className="text-muted-foreground text-xs">Other Allowances</span>
+            <input type="number" value={formData.other_allowances || ""} onChange={(e) => setFormData({ ...formData, other_allowances: Number(e.target.value) })} className="bg-muted/40 border border-border rounded-md h-9 px-2" />
           </label>
           <label className="text-sm flex flex-col gap-1">
+            <span className="text-muted-foreground text-xs">Effective Date *</span>
+            <DatePicker value={formData.effective_date} onChange={(val) => setFormData({ ...formData, effective_date: val || "" })} />
+          </label>
+          <label className="text-sm flex flex-col gap-1">
+            <span className="text-muted-foreground text-xs">Overtime Rate (per hour)</span>
+            <input type="number" value={formData.overtime_rate || ""} onChange={(e) => setFormData({ ...formData, overtime_rate: Number(e.target.value) })} className="bg-muted/40 border border-border rounded-md h-9 px-2" />
+          </label>
+          <label className="text-sm flex flex-col gap-1 col-span-2">
             <span className="text-muted-foreground text-xs">Notes</span>
             <textarea rows={2} value={formData.notes || ""} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} className="bg-muted/40 border border-border rounded-md p-2" />
           </label>
@@ -254,97 +171,69 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
       );
     }
 
-    if (modalType === "loan") {
-      return (
-        <div className="grid grid-cols-2 gap-3">
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">Employee *</span>
-            <SearchableSelect
-              value={formData.employee_id || ""}
-              onChange={(val) => setFormData({ ...formData, employee_id: val })}
-              options={employeeOptions}
-              placeholder="Select Employee"
-              required
-            />
-          </label>
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">Loan Type *</span>
-            <SearchableSelect
-              value={formData.loan_type || ""}
-              onChange={(val) => setFormData({ ...formData, loan_type: val })}
-              options={[
-                { value: "Salary Advance", label: "Salary Advance" },
-                { value: "Personal Loan", label: "Personal Loan" },
-                { value: "Car Loan", label: "Car Loan" },
-                { value: "House Loan", label: "House Loan" },
-                { value: "Education Loan", label: "Education Loan" },
-                { value: "Emergency Loan", label: "Emergency Loan" },
-                { value: "Other", label: "Other" }
-              ]}
-              placeholder="Select Type"
-              required
-            />
-          </label>
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">Principal Amount *</span>
-            <input type="number" value={formData.principal_amount || ""} onChange={(e) => setFormData({ ...formData, principal_amount: Number(e.target.value) })} required className="bg-muted/40 border border-border rounded-md h-9 px-2" />
-          </label>
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">Monthly Deduction *</span>
-            <input type="number" value={formData.monthly_deduction || ""} onChange={(e) => setFormData({ ...formData, monthly_deduction: Number(e.target.value) })} required className="bg-muted/40 border border-border rounded-md h-9 px-2" />
-          </label>
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">Total Months *</span>
-            <input type="number" value={formData.total_months || ""} onChange={(e) => setFormData({ ...formData, total_months: Number(e.target.value) })} required className="bg-muted/40 border border-border rounded-md h-9 px-2" />
-          </label>
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">Start Date *</span>
-            <DatePicker
-              value={formData.effective_date}
-              onChange={(value) => setFormData({ ...formData, effective_date: value || "" })}
-            />
-          </label>
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">Interest Rate (%)</span>
-            <input type="number" value={formData.interest_rate || ""} onChange={(e) => setFormData({ ...formData, interest_rate: Number(e.target.value) })} className="bg-muted/40 border border-border rounded-md h-9 px-2" />
-          </label>
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">Status</span>
-            <select
-              value={formData.status || "PENDING"}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-              className="bg-muted/40 border border-border rounded-md h-9 px-2"
-            >
-              <option value="PENDING">Pending</option>
-              <option value="ACTIVE">Active</option>
-              <option value="PAID">Paid</option>
-              <option value="DEFAULTED">Defaulted</option>
-              <option value="CANCELLED">Cancelled</option>
-            </select>
-          </label>
-          <label className="text-sm flex flex-col gap-1 sm:col-span-2">
-            <span className="text-muted-foreground text-xs">Purpose</span>
-            <textarea rows={2} value={formData.purpose || ""} onChange={(e) => setFormData({ ...formData, purpose: e.target.value })} className="bg-muted/40 border border-border rounded-md p-2" />
-          </label>
-        </div>
-      );
-    }
+    return (
+      <div className="grid grid-cols-2 gap-3">
+        <label className="text-sm flex flex-col gap-1 col-span-2">
+          <span className="text-muted-foreground text-xs">Employee *</span>
+          <SearchableSelect
+            value={formData.employee_id || ""}
+            onChange={(val) => setFormData({ ...formData, employee_id: val })}
+            options={employeeOptions}
+            placeholder="Select Employee"
+            required
+          />
+        </label>
+        <label className="text-sm flex flex-col gap-1">
+          <span className="text-muted-foreground text-xs">Loan Type *</span>
+          <select value={formData.loan_type || "PERSONAL_LOAN"} onChange={(e) => setFormData({ ...formData, loan_type: e.target.value })} className="bg-muted/40 border border-border rounded-md h-9 px-2">
+            <option value="PERSONAL_LOAN">Personal Loan</option>
+            <option value="SALARY_ADVANCE">Salary Advance</option>
+            <option value="CAR_LOAN">Car Loan</option>
+            <option value="HOUSE_LOAN">House Loan</option>
+            <option value="EDUCATION_LOAN">Education Loan</option>
+            <option value="MEDICAL_LOAN">Medical Loan</option>
+            <option value="EMERGENCY_LOAN">Emergency Loan</option>
+          </select>
+        </label>
+        <label className="text-sm flex flex-col gap-1">
+          <span className="text-muted-foreground text-xs">Principal Amount *</span>
+          <input type="number" value={formData.principal_amount || ""} onChange={(e) => setFormData({ ...formData, principal_amount: Number(e.target.value) })} required className="bg-muted/40 border border-border rounded-md h-9 px-2" />
+        </label>
+        <label className="text-sm flex flex-col gap-1">
+          <span className="text-muted-foreground text-xs">Monthly Deduction</span>
+          <input type="number" value={formData.monthly_deduction || ""} onChange={(e) => setFormData({ ...formData, monthly_deduction: Number(e.target.value) })} className="bg-muted/40 border border-border rounded-md h-9 px-2" />
+        </label>
+        <label className="text-sm flex flex-col gap-1">
+          <span className="text-muted-foreground text-xs">Total Months *</span>
+          <input type="number" value={formData.total_months || ""} onChange={(e) => setFormData({ ...formData, total_months: Number(e.target.value) })} required className="bg-muted/40 border border-border rounded-md h-9 px-2" />
+        </label>
+        <label className="text-sm flex flex-col gap-1">
+          <span className="text-muted-foreground text-xs">Start Date</span>
+          <DatePicker value={formData.start_date} onChange={(val) => setFormData({ ...formData, start_date: val || "" })} />
+        </label>
+        <label className="text-sm flex flex-col gap-1">
+          <span className="text-muted-foreground text-xs">Interest Rate (%)</span>
+          <input type="number" value={formData.interest_rate || ""} onChange={(e) => setFormData({ ...formData, interest_rate: Number(e.target.value) })} className="bg-muted/40 border border-border rounded-md h-9 px-2" />
+        </label>
+        <label className="text-sm flex flex-col gap-1">
+          <span className="text-muted-foreground text-xs">Status</span>
+          <select value={formData.status || "PENDING"} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className="bg-muted/40 border border-border rounded-md h-9 px-2">
+            <option value="PENDING">Pending</option>
+            <option value="ACTIVE">Active</option>
+            <option value="PAID">Paid</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
+        </label>
+        <label className="text-sm flex flex-col gap-1 col-span-2">
+          <span className="text-muted-foreground text-xs">Purpose</span>
+          <textarea rows={2} value={formData.purpose || ""} onChange={(e) => setFormData({ ...formData, purpose: e.target.value })} className="bg-muted/40 border border-border rounded-md p-2" />
+        </label>
+      </div>
+    );
   };
-
-  // Filter functions
-  const filteredCompensations = compensations.filter(c =>
-    c.employee_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.grade?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const filteredLoans = loans.filter(l =>
-    l.employee_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    l.loan_type?.toLowerCase().includes(searchQuery.toLowerCase())
-  ).filter(l => statusFilter === "all" || l.status === statusFilter);
 
   return (
     <div className="mt-5">
-      {/* Tabs Menu for Salary vs Compensation/Loan */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="flex items-center justify-between mb-3">
           <TabsList className="bg-muted/40">
@@ -367,7 +256,6 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
           </button>
         </div>
 
-        {/* Search Bar */}
         <div className="bg-card border border-border rounded-2xl shadow-sm">
           <div className="p-3 border-b border-border">
             <div className="flex flex-col sm:flex-row gap-2">
@@ -380,11 +268,11 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
                   className="w-full bg-muted/40 pl-9 pr-3 h-9 rounded-md text-sm outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
-              <div className="relative w-40">
+              {activeTab === "loans" && (
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full pl-3 pr-8 h-9 rounded-md border border-border bg-muted/40 text-sm outline-none"
+                  className="w-40 h-9 rounded-md border border-border bg-muted/40 text-sm px-3"
                 >
                   <option value="all">All Status</option>
                   <option value="ACTIVE">Active</option>
@@ -392,7 +280,7 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
                   <option value="PAID">Paid</option>
                   <option value="CANCELLED">Cancelled</option>
                 </select>
-              </div>
+              )}
             </div>
           </div>
 
@@ -423,10 +311,10 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
                     <tr key={item.id} className="border-t border-border hover:bg-muted/30">
                       <td className="px-4 py-3 font-medium">{item.employee_name}</td>
                       <td className="px-4 py-3">{item.grade || "—"}</td>
-                      <td className="px-4 py-3">{formatCurrency(item.basic || 0)}</td>
-                      <td className="px-4 py-3">{formatCurrency(item.total_allowances || 0)}</td>
-                      <td className="px-4 py-3 font-semibold">{formatCurrency(item.total_ctc || 0)}</td>
-                      <td className="px-4 py-3">{item.effective_date || "—"}</td>
+                      <td className="px-4 py-3">{formatCurrency(parseFloat(item.basic_salary))}</td>
+                      <td className="px-4 py-3">{formatCurrency(parseFloat(item.total_allowances))}</td>
+                      <td className="px-4 py-3 font-semibold">{formatCurrency(parseFloat(item.total_ctc))}</td>
+                      <td className="px-4 py-3">{item.effective_date}</td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         <button onClick={() => openEditModal("compensation", item)} className="p-1.5 rounded-md hover:bg-muted">
                           <Pencil className="w-4 h-4" />
@@ -468,16 +356,17 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
                   {filteredLoans.map((item) => (
                     <tr key={item.id} className="border-t border-border hover:bg-muted/30">
                       <td className="px-4 py-3 font-medium">{item.employee_name}</td>
-                      <td className="px-4 py-3">{item.loan_type}</td>
-                      <td className="px-4 py-3">{formatCurrency(item.principal_amount)}</td>
-                      <td className="px-4 py-3">{formatCurrency(item.monthly_deduction)}</td>
-                      <td className="px-4 py-3">{formatCurrency(item.remaining_amount)}</td>
+                      <td className="px-4 py-3">{item.loan_type_display || item.loan_type}</td>
+                      <td className="px-4 py-3">{formatCurrency(parseFloat(item.principal_amount))}</td>
+                      <td className="px-4 py-3">{formatCurrency(parseFloat(item.monthly_deduction))}</td>
+                      <td className="px-4 py-3">{formatCurrency(parseFloat(item.remaining_amount))}</td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${item.status === "ACTIVE" ? "bg-success/15 text-success border-success/30" :
-                            item.status === "PAID" ? "bg-info/15 text-info border-info/30" :
-                              item.status === "PENDING" ? "bg-warning/15 text-warning border-warning/30" :
-                                "bg-destructive/15 text-destructive border-destructive/30"
-                          }`}>
+                        <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
+                          item.status === "ACTIVE" ? "bg-success/15 text-success border-success/30" :
+                          item.status === "PAID" ? "bg-info/15 text-info border-info/30" :
+                          item.status === "PENDING" ? "bg-warning/15 text-warning border-warning/30" :
+                          "bg-destructive/15 text-destructive border-destructive/30"
+                        }`}>
                           {item.status}
                         </span>
                       </td>
@@ -518,7 +407,7 @@ export default function CompensationLoanPage({ onRefresh, formatCurrency }: Comp
                 Cancel
               </button>
               <button onClick={handleSave} className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90">
-                Save
+                {editingItem ? "Update" : "Save"}
               </button>
             </div>
           </div>

@@ -1,7 +1,7 @@
 "use client";
 
 // ============================================
-// FILE: src/components/Forms/EmployeeForm.jsx (BACKEND INTEGRATED)
+// FILE: src/components/Forms/EmployeeForm.jsx 
 // ============================================
 
 import { useEffect, useState } from "react";
