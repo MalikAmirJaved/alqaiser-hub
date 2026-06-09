@@ -2,22 +2,36 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { DetailLayout, StandardSidebar, RelatedRecords, type DetailTab } from "@/components/reuseable/final/DetailLayout";
-import { useLead, useUpdateLead, useConvertLead } from "@/hooks/sales/useLeads";
+import {
+  DetailLayout,
+  StandardSidebar,
+  RelatedRecords,
+  type DetailTab,
+} from "@/components/reuseable/final/DetailLayout";
+import {
+  useLead,
+  useUpdateLead,
+  useCreateCustomerFromLead,
+} from "@/hooks/sales/useLeads";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { formatCurrency } from "@/lib/currency";
 import LeadFormModal from "@/components/sales/LeadFormModal";
+import QuoteFormModal from "@/components/sales/QuoteFormModal";
+import { Quote } from "@/hooks/sales/useQuotes";
 
 export default function LeadDetailPage() {
   const { id } = useParams();
   const router = useRouter();
   const { data: lead, isLoading, refetch } = useLead(id as string);
   const updateLead = useUpdateLead();
-  const convertLead = useConvertLead();
+  const createCustomerFromLead = useCreateCustomerFromLead();
   const permissions = useFeaturePermissions("SALES", "lead");
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<any>(null);
+  const [quoteModalOpen, setQuoteModalOpen] = useState(false);
+  const [quotePrefillCustomerId, setQuotePrefillCustomerId] = useState<string | null>(null);
+  const [isConverting, setIsConverting] = useState(false);
 
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!lead) return <div className="p-8 text-center">Lead not found</div>;
@@ -33,15 +47,30 @@ export default function LeadDetailPage() {
     setEditingLead(null);
   };
 
-  const handleConvert = async () => {
+  const handleConvertToQuote = async () => {
+    setIsConverting(true);
     try {
-      const res = await convertLead.mutateAsync({ id: lead.id, createQuote: true });
-      if (res.quote_id) {
-        router.push(`/sales/quotes/${res.quote_id}`);
+      let customerId = lead.customer;
+      if (!customerId) {
+        const result = await createCustomerFromLead.mutateAsync(lead.id);
+        customerId = result.customer_id;
+        await refetch();
       }
-      refetch();
+      setQuotePrefillCustomerId(customerId);
+      setQuoteModalOpen(true);
     } catch (error) {
-      console.error("Conversion failed", error);
+      console.error("Failed to prepare customer for quote:", error);
+    } finally {
+      setIsConverting(false);
+    }
+  };
+
+  const handleQuoteModalSuccess = (quote?: Quote) => {
+    setQuoteModalOpen(false);
+    setQuotePrefillCustomerId(null);
+    refetch();
+    if (quote?.id) {
+      router.push(`/sales/quotes/${quote.id}`);
     }
   };
 
@@ -63,7 +92,10 @@ export default function LeadDetailPage() {
             ["Last Updated", new Date(String(lead.updated_at)).toLocaleDateString()],
             ["Notes", lead.notes || "—"],
           ].map(([label, value]) => (
-            <div key={label as string} className="flex justify-between border-b border-border/60 pb-2">
+            <div
+              key={label as string}
+              className="flex justify-between border-b border-border/60 pb-2"
+            >
               <span className="text-muted-foreground">{label}</span>
               <span className="font-medium">{value}</span>
             </div>
@@ -73,8 +105,13 @@ export default function LeadDetailPage() {
     },
   ];
 
-  // Build related records
-  const relatedItems: { id: string; type: string; title: string; amount?: string; status?: string }[] = [];
+  const relatedItems: {
+    id: string;
+    type: string;
+    title: string;
+    amount?: string;
+    status?: string;
+  }[] = [];
   if (lead.customer) {
     relatedItems.push({
       id: lead.customer,
@@ -83,8 +120,6 @@ export default function LeadDetailPage() {
       status: "Active",
     });
   }
-  // Add quotes if they exist (not directly on lead, but we can fetch via quotes hook later)
-  // For now, optional.
 
   if (relatedItems.length > 0) {
     tabs.push({
@@ -95,6 +130,8 @@ export default function LeadDetailPage() {
     });
   }
 
+  const canConvert = lead.status !== "WON" && lead.status !== "ACCEPTED";
+
   return (
     <>
       <DetailLayout
@@ -102,7 +139,9 @@ export default function LeadDetailPage() {
         entityId={lead.id.slice(0, 8)}
         title={lead.title}
         status={lead.status}
-        subtitle={`${lead.first_name} ${lead.last_name} · ${lead.company_name || "Individual"}`}
+        subtitle={`${lead.first_name} ${lead.last_name} · ${
+          lead.company_name || "Individual"
+        }`}
         data={lead}
         meta={[
           { label: "Source", value: lead.source },
@@ -110,14 +149,33 @@ export default function LeadDetailPage() {
           { label: "Phone", value: lead.phone || "—" },
         ]}
         summary={[
-          { label: "Created", value: new Date(String(lead.created_at)).toLocaleDateString(), isCurrency: false },
-          { label: "Status", value: lead.status, tone: lead.status === "WON" ? "success" : lead.status === "LOST" ? "destructive" : "info" },
-          { label: "Converted", value: lead.status === "WON" ? "Yes" : "No", isCurrency: false },
+          {
+            label: "Created",
+            value: new Date(String(lead.created_at)).toLocaleDateString(),
+            isCurrency: false,
+          },
+          {
+            label: "Status",
+            value: lead.status,
+            tone:
+              lead.status === "WON"
+                ? "success"
+                : lead.status === "LOST"
+                ? "destructive"
+                : lead.status === "ACCEPTED"
+                ? "info"
+                : "warning",
+          },
+          {
+            label: "Converted",
+            value: lead.status === "WON" ? "Yes" : "No",
+            isCurrency: false,
+          },
         ]}
-        primaryActionLabel={lead.status === "WON" ? "Already Converted" : "Convert to Quote"}
-        onPrimaryAction={lead.status !== "WON" ? handleConvert : undefined}
+        primaryActionLabel={canConvert ? "Convert to Quote" : "Already Converted"}
+        onPrimaryAction={canConvert ? handleConvertToQuote : undefined}
         onEdit={permissions.update ? handleEdit : undefined}
-        permissions={{ edit: permissions.update, submit: permissions.create }}
+        permissions={{ edit: permissions.update, submit: canConvert }}
         tabs={tabs}
         sidebar={
           <StandardSidebar
@@ -139,6 +197,15 @@ export default function LeadDetailPage() {
         }}
         initialData={editingLead}
         onSuccess={handleUpdateSuccess}
+      />
+      <QuoteFormModal
+        open={quoteModalOpen}
+        onClose={() => {
+          setQuoteModalOpen(false);
+          setQuotePrefillCustomerId(null);
+        }}
+        initialCustomerId={quotePrefillCustomerId}
+        onSuccess={handleQuoteModalSuccess}
       />
     </>
   );

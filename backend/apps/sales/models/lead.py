@@ -12,6 +12,7 @@ class Lead(BaseModel):
         ('NEW', 'New'),
         ('CONTACTED', 'Contacted'),
         ('QUALIFIED', 'Qualified'),
+        ('ACCEPTED', 'Accepted'),
         ('WON', 'Won'),
         ('LOST', 'Lost'),
     ]

@@ -26,10 +26,41 @@ class LeadViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelVie
         return qs.order_by('-created_at')
 
     def perform_create(self, serializer):
-        serializer.save() # Fields are handled in Serializer.create
+        serializer.save()
 
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def accept(self, request, _id=None):
+        """Accept lead - update status to ACCEPTED"""
+        lead = self.get_object()
+        if lead.status == 'WON':
+            return Response(
+                {'error': 'Cannot accept a won lead'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        lead.status = 'ACCEPTED'
+        lead.save(update_fields=['status'])
+        return Response({'status': 'success', 'message': 'Lead accepted'})
+
+    @action(detail=True, methods=['post'])
+    def create_customer(self, request, _id=None):
+        """Create a customer from lead data without changing lead status"""
+        lead = self.get_object()
+        if lead.customer:
+            return Response({
+                'status': 'success',
+                'message': 'Customer already exists',
+                'customer_id': str(lead.customer._id)
+            })
+        
+        customer = lead.create_customer_from_lead(created_by=request.user)
+        return Response({
+            'status': 'success',
+            'message': 'Customer created',
+            'customer_id': str(customer._id)
+        })
 
     @action(detail=True, methods=['post'])
     def convert(self, request, _id=None):
@@ -45,7 +76,6 @@ class LeadViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelVie
             lead.status = 'WON'
             lead.save(update_fields=['status'])
 
-            # Optionally auto-create a quote from this lead
             create_quote = request.data.get('create_quote', False)
             if create_quote:
                 from apps.sales.models.quote import Quote

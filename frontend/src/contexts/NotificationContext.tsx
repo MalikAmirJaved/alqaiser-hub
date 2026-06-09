@@ -19,9 +19,11 @@ import {
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
 
+// ----------------------------------------------------------------------
 // Map backend entity names to React Query keys for cache invalidation
+// ----------------------------------------------------------------------
 const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
-  // HR
+  // ---------- HR ----------
   assets: ["assets", "assetStats"],
   assetCategories: ["assetCategories", "assetCategoryStats"],
   employees: ["employees", "employeeStats"],
@@ -36,30 +38,50 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   compensations: ["compensations"],
   loans: ["loans"],
 
-  // Inventory – exact matches (sent from backend)
+  // ---------- Inventory ----------
   inventory_category: ["inventory_category"],
   inventory_brand: ["inventory_brand"],
   inventory_warehouse: ["inventory_warehouse"],
   inventory_product: ["inventory_product"],
   inventory_supplier: ["inventory_supplier"],
-  inventory_variant: ["inventory_variant"],
-  inventory_stock: ["inventory_stock"],
+  inventory_variant: ["inventory_variant", "batchStock"],
+  inventory_stock: ["inventory_stock", "batchStock"],
   inventory_sales_order: ["inventory_sales_order"],
   inventory_stock_transfer: ["inventory_stock_transfer"],
+  inventory_purchase_order: ["inventory_purchase_order"],
 
-  // Inventory – alias keys for convenience (optional)
+  // Inventory aliases (optional)
   product: ["inventory_product"],
   inventory: ["inventory_product"],
   supplier: ["inventory_supplier"],
   vendor: ["inventory_supplier"],
-  variant: ["inventory_variant","batchStock"],
+  variant: ["inventory_variant", "batchStock"],
   stock: ["inventory_stock", "batchStock"],
   sales_order: ["inventory_sales_order"],
   sales_return: ["inventory_sales_order"],
   stock_transfer: ["inventory_stock_transfer"],
-  inventory_purchase_order: ["inventory_purchase_order"],
 
-  // Company & settings
+  // ---------- Sales ----------
+  sales_lead: ["sales_leads", "sales_lead"],
+  sales_quote: ["sales_quotes", "sales_quote"],
+  lead: ["sales_leads"],
+  quote: ["sales_quotes"],
+
+  // ---------- Finance ----------
+  finance_account: ["finance_accounts"],
+  finance_journal_entry: ["finance_journal_entries", "finance_journal_entry"],
+  finance_supplier_bill: ["finance_supplier_bills"],
+  finance_customer_invoice: ["finance_customer_invoices"],
+  finance_payment: ["finance_payments"],
+  finance_bank_transaction: ["finance_bank_transactions"],
+  finance_budget: ["finance_budgets"],
+  finance_expense: ["finance_expenses"],
+  // Additional finance aliases
+  supplier_bill: ["finance_supplier_bills"],
+  customer_invoice: ["finance_customer_invoices"],
+  bank_transaction: ["finance_bank_transactions"],
+
+  // ---------- Company & Settings ----------
   company: ["company_settings"],
   branch: ["branch"],
   user: ["users", "user"],
@@ -67,6 +89,9 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   designation: ["designation", "companySettings"],
 };
 
+// ----------------------------------------------------------------------
+// Types
+// ----------------------------------------------------------------------
 interface Notification {
   id: string;
   title: string;
@@ -93,6 +118,9 @@ interface NotificationContextProps {
   toggleFavourite: (id: string) => Promise<void>;
 }
 
+// ----------------------------------------------------------------------
+// Context
+// ----------------------------------------------------------------------
 const NotificationContext = createContext<NotificationContextProps>({
   notifications: [],
   isConnected: false,
@@ -103,6 +131,9 @@ const NotificationContext = createContext<NotificationContextProps>({
 
 export const useNotifications = () => useContext(NotificationContext);
 
+// ----------------------------------------------------------------------
+// Provider
+// ----------------------------------------------------------------------
 export const NotificationProvider = ({ children }: { children: React.ReactNode }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isConnected, setIsConnected] = useState(false);

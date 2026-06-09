@@ -11,7 +11,7 @@ export interface Lead {
   company_name: string;
   email: string;
   phone: string;
-  status: "NEW" | "CONTACTED" | "QUALIFIED" | "LOST" | "WON";
+  status: "NEW" | "CONTACTED" | "QUALIFIED" | "ACCEPTED" | "LOST" | "WON";
   source: string;
   notes: string;
   customer?: string;
@@ -92,6 +92,38 @@ export function useDeleteLead() {
       api<void>(`/api/sales/leads/${id}/`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales_leads"] });
+    },
+  });
+}
+
+export function useAcceptLead() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<{ status: string; message: string }>(`/api/sales/leads/${id}/accept/`, {
+        method: "POST",
+      }),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ["sales_leads"] });
+      queryClient.invalidateQueries({ queryKey: ["sales_lead", id] });
+    },
+  });
+}
+
+export function useCreateCustomerFromLead() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<{ status: string; message: string; customer_id: string }>(
+        `/api/sales/leads/${id}/create_customer/`,
+        { method: "POST" }
+      ),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ["sales_leads"] });
+      queryClient.invalidateQueries({ queryKey: ["sales_lead", id] });
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
     },
   });
 }
