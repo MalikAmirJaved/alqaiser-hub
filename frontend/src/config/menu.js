@@ -77,6 +77,19 @@ export const menu = [
 
   {
     type: "group",
+    title: "Sales",
+    icon: ShoppingCart,
+    children: [
+      { title: "Sales Dashboard", to: "/sales/dashboard", icon: LayoutDashboard },
+      { title: "Leads", to: "/sales/leads", icon: Target },
+      { title: "Quotes", to: "/sales/quotes", icon: FileText },
+      { title: "Sales Customers", to: "/sales/customers", icon: Users },
+      { title: "Sales Invoices", to: "/sales/customer-invoices", icon: Receipt },
+    ],
+  },
+
+  {
+    type: "group",
     title: "Finance",
     icon: Wallet,
     children: [
@@ -87,15 +100,16 @@ export const menu = [
       { title: "Journal Entries", to: "/finance/journal-entries", icon: ArrowDownCircle },
       { title: "Finance Reports", to: "/finance/reports", icon: ArrowDownCircle },
       { title: "Budgets", to: "/finance/budgets", icon: Target },
-      { title: "Bank & Cash", to: "/finance/bank-accounts", icon: Landmark },
-      { title: "Bank Transactions", to: "/finance/bank-transactions", icon: Landmark },
+      { title: "Bank Accounts", to: "/finance/bank-accounts", icon: Landmark },
+      // { title: "Bank Transactions", to: "/finance/bank-transactions", icon: Landmark },
       { title: "Payables / Supplier Bills", to: "/finance/supplier-bills", icon: Landmark },
       { title: "Payments", to: "/finance/payments", icon: Landmark },
+      { title: "Finance Payroll", to: "/finance/payroll", icon: Wallet },
       { title: "Taxes", to: "/finance/taxes", icon: Calculator },
       { title: "Audit Logs", to: "/finance/audit", icon: History },
+      { title: "Forecast", to: "/finance/forecast", icon: History },
     ],
   },
-
     {
     type: "group",
     title: "AI Monitoring",

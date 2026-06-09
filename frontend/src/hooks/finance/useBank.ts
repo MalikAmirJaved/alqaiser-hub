@@ -25,6 +25,7 @@ export interface BankAccount {
 export interface BankTransaction {
   id: string;
   bank_account: string;
+  bank_account_name?: string;
   transaction_date: string;
   amount: number;
   transaction_type: TransactionType;

@@ -1,187 +1,140 @@
+// frontend/src/app/(app)/finance/payments/page.tsx
+
 "use client";
 
 import { useState } from "react";
-import PageHeader from "@/components/PageHeader";
-import { TableView, type Column } from "@/components/reuseable/TableGridView";
+import { useRouter } from "next/navigation";
+import { DynamicModulePage, type ModulePermissions, type Kpi } from "@/components/reuseable/final/DynamicModulePage";
+import { usePayments, useDeletePayment, type Payment } from "@/hooks/finance/usePayments";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import {
-  usePayments,
-  useDeletePayment,
-  paymentTypeLabels,
-  paymentMethodLabels,
-  type Payment,
-} from "@/hooks/finance/usePayments";
-import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
-import { Plus, Pencil, Trash2 } from "lucide-react";
-import PaymentFormModal from "@/components/finance/payments/PaymentFormModal";
 import { formatCurrency } from "@/lib/currency";
-import type { ReactNode } from "react";
+import { StatusBadge } from "@/components/finance/ui";
+import PaymentFormModal from "@/components/finance/payments/PaymentFormModal";
 
-const columns: Column[] = [
-  { key: "payment_date", label: "Date", sortable: true },
-
-  {
-    key: "payment_type",
-    label: "Type",
-    render: (val: unknown): ReactNode =>
-      paymentTypeLabels[val as keyof typeof paymentTypeLabels] ?? String(val),
-  },
-
-  {
-    key: "payment_method",
-    label: "Method",
-    render: (val: unknown): ReactNode =>
-      paymentMethodLabels[val as keyof typeof paymentMethodLabels] ?? String(val),
-  },
-
-  {
-    key: "amount",
-    label: "Amount",
-    sortable: true,
-    render: (val: unknown): ReactNode =>
-      formatCurrency(Number(val)),
-  },
-
-  { key: "reference_number", label: "Reference" },
-
-  {
-    key: "supplier_bill",
-    label: "Supplier Bill",
-    render: (val: unknown, row: Record<string, unknown>): ReactNode =>
-      (row.supplier_name as string) ||
-      (val ? `Bill #${String(val)}` : ""),
-  },
-
-  {
-    key: "customer_invoice",
-    label: "Customer Invoice",
-    render: (val: unknown, row: Record<string, unknown>): ReactNode =>
-      (row.customer_name as string) ||
-      (val ? `Invoice #${String(val)}` : ""),
-  },
-];
+// Helper function to safely convert amount to number
+const toNumber = (amount: number | string): number => {
+  return typeof amount === "string" ? parseFloat(amount) : amount;
+};
 
 export default function PaymentsPage() {
-  const permissions = useFeaturePermissions("FINANCE", "payment");
-
-  const [typeFilter, setTypeFilter] =
-    useState<"RECEIPT" | "PAYMENT" | "">("");
-
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-
-  const { data: payments, isLoading } = usePayments({
-    payment_type: typeFilter || undefined,
-    start_date: startDate || undefined,
-    end_date: endDate || undefined,
-  });
-
-  const deletePayment = useDeletePayment();
-  const { confirm, Modal: ConfirmModal } = useConfirmationModal();
-
+  const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const handleDelete = (payment: Payment) => {
-    confirm({
-      title: "Delete Payment",
-      message: `Are you sure you want to delete this ${
-        payment.payment_type === "RECEIPT" ? "receipt" : "payment"
-      }? This action cannot be undone.`,
-      onConfirm: () => deletePayment.mutate(payment.id),
-    });
+  const { data: payments, isLoading } = usePayments();
+  const deletePayment = useDeletePayment();
+  const permissions = useFeaturePermissions("FINANCE", "payment");
+
+  const modulePermissions: ModulePermissions = {
+    create: permissions.create,
+    update: permissions.update,
+    delete: permissions.delete,
+    view: permissions.view,
+    export: true,
   };
 
-  const tableData =
-    (payments || []).map((p) => ({ ...p })) as Record<string, unknown>[];
+  const handleRowClick = (payment: Payment) => {
+    router.push(`/finance/payments/${payment.id}`);
+  };
+
+  const handleEdit = (payment: Payment) => {
+    setEditingPayment(payment);
+    setModalOpen(true);
+  };
+
+  const handleDelete = (payment: Payment) => {
+    deletePayment.mutate(payment.id);
+  };
+
+  const computeKPIs = (data: Payment[]): Kpi[] => {
+    
+    // Convert amounts to numbers safely
+    const totalReceipts = data
+      .filter((p) => p.payment_type === "RECEIPT")
+      .reduce((sum, p) => sum + toNumber(p.amount), 0);
+    
+    const totalPayments = data
+      .filter((p) => p.payment_type === "PAYMENT")
+      .reduce((sum, p) => sum + toNumber(p.amount), 0);
+    
+    const netCashFlow = totalReceipts - totalPayments;
+    
+    return [
+      { 
+        label: "Receipts", 
+        value: totalReceipts, 
+        tone: "success" as const, 
+        isCurrency: true 
+      },
+      { 
+        label: "Payments", 
+        value: totalPayments, 
+        tone: "destructive" as const, 
+        isCurrency: true 
+      },
+      { 
+        label: "Net Cash Flow", 
+        value: Math.abs(netCashFlow), 
+        tone: netCashFlow >= 0 ? "success" as const : "destructive" as const, 
+        isCurrency: true,
+        sub: netCashFlow >= 0 ? "Positive" : "Negative"
+      },
+      { 
+        label: "Transactions", 
+        value: data.length, 
+        isCurrency: false,
+        tone: "info" as const
+      },
+    ];
+  };
+
+  const columns = [
+    { key: "payment_date", label: "Date", sortable: true },
+    { key: "payment_type", label: "Type", render: (val: string) => (val === "RECEIPT" ? "Receipt" : "Payment"), sortable: true },
+    { key: "amount", label: "Amount", align: "right" as const, sortable: true, render: (val: number | string) => formatCurrency(toNumber(val)) },
+    { key: "supplier_name", label: "Supplier/Customer", render: (val: any, row: Payment) => row.supplier_name || row.customer_name || "-" },
+    { key: "payment_method", label: "Method" },
+    { key: "reference_number", label: "Reference" },
+    { key: "status", label: "Status", render: (val: any, row: Payment) => <StatusBadge status={row.journal_entry ? "Posted" : "Draft"} /> },
+  ];
 
   return (
-    <div className="p-4 md:p-6">
-      <PageHeader
+    <>
+      <DynamicModulePage
+        breadcrumbs={["Banking & Cash", "Payments"]}
         title="Payments"
-        subtitle="Record receipts from customers and payments to suppliers"
-        actions={
-          <div className="flex flex-wrap gap-2">
-            {permissions.create && (
-              <button
-                onClick={() => {
-                  setEditingPayment(null);
-                  setModalOpen(true);
-                }}
-                className="inline-flex items-center gap-2 px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90"
-              >
-                <Plus className="w-4 h-4" />
-                New Payment
-              </button>
-            )}
-          </div>
+        description="Record customer receipts and supplier payments"
+        data={payments || []}
+        isLoading={isLoading}
+        columns={columns}
+        kpis={computeKPIs}
+        getRowId={(p) => p.id}
+        permissions={modulePermissions}
+        primaryActionLabel="New Payment"
+        onCreate={() => {
+          setEditingPayment(null);
+          setModalOpen(true);
+        }}
+        actions={{
+          onEdit: handleEdit,
+          onDelete: handleDelete,
+        }}
+        onRowClick={handleRowClick}
+        exportEnabled
+        onRowSelect={setSelectedIds}
+        batchActions={
+          <button
+            onClick={() => {
+              selectedIds.forEach((id) => deletePayment.mutate(id));
+              setSelectedIds([]);
+            }}
+            className="text-sm text-destructive hover:text-destructive/80"
+          >
+            Delete Selected
+          </button>
         }
       />
-
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-4">
-        <select
-          value={typeFilter}
-          onChange={(e) =>
-            setTypeFilter(e.target.value as "RECEIPT" | "PAYMENT" | "")
-          }
-          className="px-3 py-1.5 text-sm border border-border rounded-md bg-background"
-        >
-          <option value="">All Types</option>
-          <option value="RECEIPT">Receipts (Customer)</option>
-          <option value="PAYMENT">Payments (Supplier)</option>
-        </select>
-
-        <input
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-          className="px-3 py-1.5 text-sm border border-border rounded-md bg-background"
-        />
-
-        <input
-          type="date"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-          className="px-3 py-1.5 text-sm border border-border rounded-md bg-background"
-        />
-      </div>
-
-      <TableView
-        columns={columns}
-        data={tableData}
-        loading={isLoading}
-        actions={(row: Record<string, unknown>) => {
-          const payment = payments?.find((p) => p.id === row.id);
-          if (!payment) return null;
-
-          return (
-            <div className="flex items-center justify-end gap-1">
-              {permissions.update && (
-                <button
-                  onClick={() => {
-                    setEditingPayment(payment);
-                    setModalOpen(true);
-                  }}
-                  className="p-1.5 rounded-md hover:bg-muted"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-              )}
-
-              {permissions.delete && (
-                <button
-                  onClick={() => handleDelete(payment)}
-                  className="p-1.5 rounded-md hover:bg-destructive/10 text-destructive"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          );
-        }}
-      />
-
       <PaymentFormModal
         open={modalOpen}
         onClose={() => {
@@ -190,8 +143,6 @@ export default function PaymentsPage() {
         }}
         initialData={editingPayment}
       />
-
-      <ConfirmModal />
-    </div>
+    </>
   );
 }

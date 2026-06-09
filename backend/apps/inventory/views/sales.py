@@ -22,6 +22,95 @@ from apps.inventory.serializers.sales import (
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+def sync_sales_order_to_invoice(order, user):
+    from apps.finance.models import CustomerInvoice, CustomerInvoiceLine
+    from apps.finance.services.payable import create_payment_for, get_payments_queryset
+    from django.utils import timezone
+    from decimal import Decimal
+    
+    # 1. Get or create CustomerInvoice
+    invoice, created = CustomerInvoice.objects.get_or_create(
+        sales_order=order,
+        company_id=order.company_id,
+        branch_id=order.branch_id,
+        defaults={
+            'invoice_number': f"INV-{order.order_number}",
+            'customer': order.customer,
+            'invoice_date': order.order_date or timezone.now().date(),
+            'due_date': order.order_date or timezone.now().date(),
+            'amount': order.total_amount,
+            'status': 'DRAFT',
+            'source': 'SALES_POS',
+            'created_by': user,
+            'updated_by': user,
+            'payment_method': order.payment_method,
+            'bank_account': order.bank_account,
+        }
+    )
+    
+    # Sync invoice lines if created
+    if created:
+        for line in order.lines.all():
+            CustomerInvoiceLine.objects.create(
+                customer_invoice=invoice,
+                variant=line.variant,
+                quantity=line.quantity_ordered,
+                unit_price=line.unit_price,
+                tax_rate=line.tax_rate,
+                discount_amount=line.discount_amount,
+                company_id=order.company_id,
+                branch_id=order.branch_id,
+                created_by=user,
+                updated_by=user,
+            )
+            
+    # Update amount to match order total_amount just in case it changed
+    if not created and invoice.status == 'DRAFT':
+        invoice.amount = order.total_amount
+        invoice.payment_method = order.payment_method
+        invoice.bank_account = order.bank_account
+        invoice.save(update_fields=['amount', 'payment_method', 'bank_account'])
+        # recreate lines to keep them in sync
+        invoice.lines.all().delete()
+        for line in order.lines.all():
+            CustomerInvoiceLine.objects.create(
+                customer_invoice=invoice,
+                variant=line.variant,
+                quantity=line.quantity_ordered,
+                unit_price=line.unit_price,
+                tax_rate=line.tax_rate,
+                discount_amount=line.discount_amount,
+                company_id=order.company_id,
+                branch_id=order.branch_id,
+                created_by=user,
+                updated_by=user,
+            )
+
+    # 2. If SalesOrder is COMPLETE, post/confirm invoice and handle auto-payment
+    if order.status == 'COMPLETE':
+        if not invoice.journal_entry_id:
+            from apps.finance.services.document import ensure_customer_invoice_journal
+            from django.core.exceptions import ObjectDoesNotExist
+            try:
+                ensure_customer_invoice_journal(invoice, user)
+            except ObjectDoesNotExist:
+                raise Exception('AR or SALES account not found in Chart of Accounts. Cannot complete order.')
+            
+        # 3. Auto-payment when bank account is set (immediate POS settlement)
+        if order.bank_account and not get_payments_queryset(invoice).exists():
+            create_payment_for(
+                invoice,
+                amount=order.total_amount,
+                payment_date=timezone.now().date(),
+                payment_method=order.payment_method or 'CASH',
+                bank_account=order.bank_account,
+                user=user,
+                auto_confirm=True,
+            )
+
+
 class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
     queryset = SalesOrder.objects.all()
     serializer_class = SalesOrderSerializer
@@ -52,6 +141,7 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
         status_val = serializer.validated_data.get('status', 'PENDING')
         if status_val == 'COMPLETE':
             order = self._create_complete_order(serializer, request.user)
+            sync_sales_order_to_invoice(order, request.user)
         elif status_val == 'DRAFT':
             order = serializer.save()
             self._create_reservations(order, request.user)
@@ -371,6 +461,7 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
             order.status = 'COMPLETE'
             order.save(update_fields=['total_amount', 'status'])
 
+        sync_sales_order_to_invoice(order, request.user)
         return Response({'status': 'success', 'message': 'Order completed with modifications'})
 
     def _complete_without_changes(self, order, user):
@@ -431,6 +522,7 @@ class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
             order.status = 'COMPLETE'
             order.save(update_fields=['status'])
 
+        sync_sales_order_to_invoice(order, user)
         return Response({'status': 'success', 'message': 'Order completed, stock deducted'})
 
     @action(detail=True, methods=['post'])

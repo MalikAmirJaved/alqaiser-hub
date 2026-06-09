@@ -8,17 +8,21 @@ export interface Asset {
   name: string;
   brand?: string;
   model?: string;
-  serialNumber?: string;
+  serial_number?: string;           // ← snake_case
   description?: string;
-  purchaseDate?: string;
-  purchasePrice?: number;
-  warrantyUntil?: string;
+  category?: string;
+  purchase_date?: string;           // ← snake_case
+  purchase_price?: number;          // ← snake_case
+  warranty_until?: string;          // ← snake_case
+  available_quantity?: number;      // ← snake_case
+  total_quantity?: number;          // ← snake_case
+  assigned_to?: string;             // ← snake_case if needed
   vendor?: string;
-  isActive: boolean;
-  isAssigned: boolean;
-  warrantyStatus?: boolean | null;
-  createdAt?: string;
-  updatedAt?: string;
+  is_active: boolean;
+  is_assigned: boolean;
+  warranty_status?: boolean | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface AssetStats {
@@ -46,6 +50,15 @@ export function useAssets(params?: Record<string, string>) {
   });
 }
 
+export function useAsset(id: string | null) {
+  const api = useApi();
+  return useQuery<Asset>({
+    queryKey: ["asset", id],
+    queryFn: () => api(`/api/hr/assets/${id}/`),
+    enabled: !!id,
+  });
+}
+
 // Fetch asset stats
 export function useAssetStats() {
   const api = useApi();
@@ -64,7 +77,7 @@ export function useCreateAsset() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (asset: Omit<Asset, "id" | "_id" | "createdAt" | "updatedAt" | "warrantyStatus" | "isAssigned">) =>
+    mutationFn: (asset: Omit<Asset, "id" | "created_at" | "updated_at" | "warranty_status" | "is_assigned">) =>
       api("/api/hr/assets/", {
         method: "POST",
         body: JSON.stringify(asset),

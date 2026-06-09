@@ -38,6 +38,13 @@ export const routePermissions: Record<string, string> = {
   "/inventory/pos": "INVENTORY:sales_order:view",
   "/inventory/audit": "INVENTORY:audit_log:view",
 
+  // Sales routes
+  "/sales/dashboard": "SALES:dashboard:view",
+  "/sales/leads": "SALES:lead:view",
+  "/sales/quotes": "SALES:quote:view",
+  "/sales/customers": "SALES:sales_customer:view",
+  "/sales/customer-invoices": "SALES:sales_customers_invoice:view",
+
   // Finance routes (add as needed)
   "/finance/dashboard": "FINANCE:dashboard:view",
   "/finance/accounts": "FINANCE:account:view",
@@ -50,6 +57,7 @@ export const routePermissions: Record<string, string> = {
   "/finance/bank-transactions": "FINANCE:bank_transaction:view",
   "/finance/supplier-bills": "FINANCE:supplier_bill:view",
   "/finance/payments": "FINANCE:payment:view",
+  "/finance/payroll": "FINANCE:payroll:view",
   "/finance/taxes": "FINANCE:tax:view",
 
   // AI Monitoring routes
@@ -110,18 +118,26 @@ export const menuPermissionMapping: Record<string, string | null> = {
   "Selling / POS": "INVENTORY:sales_order:view",
   "Audit Logs": "INVENTORY:audit_log:view",
 
+  // ========== SALES ==========
+  "Sales Dashboard": "SALES:dashboard:view",
+  "Leads": "SALES:lead:view",
+  "Quotes": "SALES:quote:view",
+  "Sales Customers": "SALES:sales_customer:view",
+  "Sales Invoices": "SALES:sales_customers_invoice:view",
+
   // ========== FINANCE ==========
   "Finance Dashboard": "FINANCE:dashboard:view",
   Accounts: "FINANCE:account:view",
   "Customer Invoice": "FINANCE:customer_invoice:view",
   Expenses: "FINANCE:expense:view",
   Budgets: "FINANCE:budget:view",
-  "Bank & Cash": "FINANCE:bank_account:view",
+  "Bank Accounts": "FINANCE:bank_account:view",
   "Bank Transaction": "FINANCE:bank_transaction:view",
   "Payables / Supplier Bills": "FINANCE:supplier_bill:view",
   "Journal Entries": "FINANCE:journal_entrie:view",
   "Finance Reports": "FINANCE:finance_reports:view",
   Payments: "FINANCE:payment:view",
+  "Finance Payroll": "FINANCE:payroll:view",
   Taxes: "FINANCE:tax:view",
 
   // ========== AI MONITORING ==========

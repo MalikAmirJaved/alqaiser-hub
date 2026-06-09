@@ -9,12 +9,15 @@ export interface AssetBasic {
   name: string;
   brand?: string;
   model?: string;
+  category?: string;
   serial_number?: string;
+  available_quantity?: number;   // ← added
 }
 
 export interface EmployeeAssetAssignment {
   id: string;
   asset: AssetBasic;
+  quantity: number;               // ← added
   source_type: 'DIRECT' | 'KIT';
   source_kit?: {
     id: string;
@@ -48,7 +51,9 @@ export interface EmployeeAssignmentsData {
 
 export interface AvailableAsset extends AssetBasic {
   is_assigned: boolean;
-  already_assigned_to_employee?: boolean; // used in kits context
+  available_quantity: number;
+  total_quantity: number;
+  already_assigned_to_employee: boolean;
 }
 
 export interface AvailableKit {
@@ -88,18 +93,19 @@ export function useAvailableAssets(employeeId?: string) {
 export function useAssignAssets() {
   const api = useApi();
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: (data: {
       employee_id: string;
-      asset_ids?: string[];
+      assets?: { asset_id: string; quantity: number }[]; // ← new format
       kit_ids?: string[];
       condition?: string;
       notes?: string;
-    }) => api("/api/hr/employee-assets/assignments/", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
+    }) =>
+      api("/api/hr/employee-assets/assignments/", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employee-assignments"] });
       queryClient.invalidateQueries({ queryKey: ["available-assets"] });
@@ -110,16 +116,17 @@ export function useAssignAssets() {
 export function useReturnAssets() {
   const api = useApi();
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: (data: {
       assignment_ids: string[];
       condition_on_return?: string;
       return_notes?: string;
-    }) => api("/api/hr/employee-assets/assignments/", {
-      method: "PATCH",
-      body: JSON.stringify({ ...data, action: 'return' }),
-    }),
+    }) =>
+      api("/api/hr/employee-assets/assignments/", {
+        method: "PATCH",
+        body: JSON.stringify({ ...data, action: "return" }),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employee-assignments"] });
       queryClient.invalidateQueries({ queryKey: ["available-assets"] });

@@ -4,7 +4,7 @@
 import { X, Edit, Package, Layers, Warehouse, User, Calendar, Tag } from "lucide-react";
 import { useProduct } from "@/hooks/useProducts";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency, CurrencyCode } from "@/lib/currency";
+import { formatCurrency } from "@/lib/currency";
 interface Props {
   productId: string; 
   onClose: () => void;
@@ -121,7 +121,7 @@ export default function ProductDetailsModal({ productId, onClose, onEdit }: Prop
           {/* Price range */}
           <div className="mt-4 flex items-baseline gap-1">
             <span className="text-2xl font-bold text-primary">
-              {CurrencyCode()}{minPrice}{minPrice !== maxPrice && ` – ${CurrencyCode()}${maxPrice}`}
+              {minPrice}{minPrice !== maxPrice && ` – ${maxPrice}`}
             </span>
             <span className="text-sm text-muted-foreground ml-1">selling price</span>
           </div>

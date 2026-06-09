@@ -4,11 +4,13 @@ from rest_framework.response import Response
 from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
 from decimal import Decimal
+from rest_framework.exceptions import ValidationError
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
-from apps.finance.models import CustomerInvoice, JournalEntry, JournalLine, Account
+from apps.finance.models import CustomerInvoice, CustomerInvoiceLine
 from apps.finance.serializers import CustomerInvoiceSerializer
 from apps.finance.mixins import CompanyBranchUserMixin, SoftDeleteMixin
+from apps.finance.services.invoice_payment import pay_customer_invoice
 
 
 class CustomerInvoiceViewSet(
@@ -18,115 +20,92 @@ class CustomerInvoiceViewSet(
     SoftDeleteMixin,
     viewsets.ModelViewSet
 ):
+    """
+    Full CRUD + posting action for Customer Invoices in the Finance module.
+    """
     queryset = CustomerInvoice.objects.all()
     serializer_class = CustomerInvoiceSerializer
     permission_module = 'FINANCE'
-    permission_resource = 'customerinvoice'
+    permission_resource = 'customer_invoice'
     lookup_field = '_id'
-    lookup_url_kwarg = '_id'   
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
-        return Response(
-            {
-                "success": True,
-                "message": "Customer invoice created successfully",
-                "data": serializer.data
-            },
-            status=status.HTTP_201_CREATED
+    lookup_url_kwarg = '_id'
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        qs = qs.prefetch_related('lines__variant__product')
+        status_param = self.request.query_params.get('status')
+        if status_param:
+            qs = qs.filter(status=status_param)
+        customer_uuid = self.request.query_params.get('customer')
+        if customer_uuid:
+            from apps.inventory.models import Customer
+            try:
+                customer = Customer.objects.get(_id=customer_uuid, company_id=self.request.user.company_id)
+                qs = qs.filter(customer=customer)
+            except Customer.DoesNotExist:
+                return qs.none()
+        return qs.order_by('-created_at')
+
+    def perform_create(self, serializer):
+        import time, random
+        serializer.save(
+            invoice_number=f"INV-{int(time.time())}-{random.randint(1000, 9999)}",
+            source='FINANCE',
+            company_id=self.request.user.company_id,
+            branch_id=self.request.user.branch_id,
+            created_by=self.request.user,
+            updated_by=self.request.user,
         )
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        if instance.status != 'DRAFT':
+            raise ValidationError('Only DRAFT invoices can be updated.')
+        # NEW: reject if already paid
+        if instance.payment_status == 'PAID':
+            raise ValidationError('Cannot edit a paid invoice.')
+        serializer.save(updated_by=self.request.user)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.status != 'DRAFT':
+            return Response(
+                {'error': 'Only DRAFT invoices can be deleted'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # NEW: reject if already paid
+        if instance.payment_status == 'PAID':
+            return Response(
+                {'error': 'Cannot delete a paid invoice'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        instance.is_deleted = True
+        instance.deleted_by = request.user
+        instance.save(update_fields=['is_deleted', 'deleted_by'])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+    def _pay_invoice(self, invoice, request, amount=None):
+        try:
+            success, message = pay_customer_invoice(invoice, request, amount=amount)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        if not success:
+            return Response({'error': message}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'status': 'success',
+            'message': message,
+            'data': self.get_serializer(invoice).data,
+        })
 
     @action(detail=True, methods=['post'])
     def post_invoice(self, request, _id=None):
+        """Pay invoice in full (legacy alias — books JE + confirms payment)."""
         invoice = self.get_object()
-        
-        if invoice.status != 'DRAFT':
-            return Response(
-                {
-                    "success": False,
-                    "error": "Invoice already processed",
-                    "detail": f"Cannot post invoice with status '{invoice.status}'. Only DRAFT invoices can be posted."
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        try:
-            with transaction.atomic():
-                # Get accounts
-                try:
-                    accounts_receivable = Account.objects.get(
-                        code='AR',
-                        company_id=invoice.company_id,
-                        branch_id=invoice.branch_id,
-                        is_deleted=False
-                    )
-                    sales_revenue = Account.objects.get(
-                        code='SALES',
-                        company_id=invoice.company_id,
-                        branch_id=invoice.branch_id,
-                        is_deleted=False
-                    )
-                except ObjectDoesNotExist as e:
-                    return Response(
-                        {
-                            "success": False,
-                            "error": "Required accounts not found",
-                            "detail": f"Missing account: {str(e)}. Please ensure AR and SALES accounts exist."
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+        return self._pay_invoice(invoice, request, amount=invoice.outstanding)
 
-                # Create journal entry
-                entry = JournalEntry.objects.create(
-                    entry_number=f"JE-INV-{invoice.invoice_number}",
-                    date=invoice.invoice_date,
-                    description=f"Customer invoice {invoice.invoice_number} for {invoice.customer.name}",
-                    reference_type='CustomerInvoice',
-                    reference_id=invoice._id,
-                    company_id=invoice.company_id,
-                    branch_id=invoice.branch_id,
-                    created_by=request.user,
-                    is_posted=True
-                )
-                
-                # Create journal lines
-                JournalLine.objects.create(
-                    journal_entry=entry,
-                    account=accounts_receivable,
-                    debit=invoice.amount,
-                    credit=Decimal('0.00'),
-                    company_id=invoice.company_id,
-                    branch_id=invoice.branch_id
-                )
-                JournalLine.objects.create(
-                    journal_entry=entry,
-                    account=sales_revenue,
-                    debit=Decimal('0.00'),
-                    credit=invoice.amount,
-                    company_id=invoice.company_id,
-                    branch_id=invoice.branch_id
-                )
-                
-                # Update invoice
-                invoice.status = 'POSTED'
-                invoice.journal_entry = entry
-                invoice.save()
-                
-                return Response(
-                    {
-                        "success": True,
-                        "message": f"Customer invoice '{invoice.invoice_number}' posted successfully",
-                        "data": self.get_serializer(invoice).data
-                    },
-                    status=status.HTTP_200_OK
-                )
-        except Exception as e:
-            return Response(
-                {
-                    "success": False,
-                    "error": "Failed to post invoice",
-                    "detail": str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+    @action(detail=True, methods=['post'])
+    def record_payment(self, request, _id=None):
+        """Record a payment against an invoice (books JE on first payment)."""
+        invoice = self.get_object()
+        return self._pay_invoice(invoice, request)

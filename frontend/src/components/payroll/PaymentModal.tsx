@@ -14,6 +14,7 @@ export default function PaymentModal({
   onSuccess,
   selectedMonth,
   selectedYear,
+  apiModule = "hr",
 }: {
   formatCurrency: (amount: number) => string;
   employee: any;
@@ -22,6 +23,7 @@ export default function PaymentModal({
   onSuccess: () => void;
   selectedMonth: number;
   selectedYear: number;
+  apiModule?: "hr" | "finance";
 }) {
   const [bonus, setBonus] = useState(0);
   const [deductions, setDeductions] = useState(0);
@@ -36,8 +38,8 @@ export default function PaymentModal({
 
   const { data: allLoans = [] } = useEmployeeLoans();
   const { data: compensations = [] } = useCompensations();
-  const previewMutation = usePayrollPreview();
-  const processPayroll = useProcessPayroll();
+  const previewMutation = usePayrollPreview(apiModule);
+  const processPayroll = useProcessPayroll(apiModule);
 
   const activeCompensation = compensations.find(
     c => c.employee_id === employee?.id && c.status === "ACTIVE"

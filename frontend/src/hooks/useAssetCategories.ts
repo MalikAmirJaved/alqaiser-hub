@@ -3,6 +3,17 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
+export interface Asset {
+  id: string;
+  name: string;
+  brand?: string;
+  model?: string;
+  serialNumber?: string;
+
+  isAssigned?: boolean;
+  availableQuantity?: number;
+}
+
 export interface AssetCategory {
   id: string;
   name: string;
@@ -10,13 +21,7 @@ export interface AssetCategory {
   isActive: boolean;
   assetIds: string[];
   assetCount: number;
-  assets?: {
-    id: string;
-    name: string;
-    brand?: string;
-    model?: string;
-    serialNumber?: string;
-  }[];
+  assets?: Asset[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -41,6 +46,17 @@ export function useAssetCategories(params?: Record<string, string>) {
     retry: 2,
   });
 }
+
+export function useAssetCategory(id: string | null) {
+  const api = useApi();
+
+  return useQuery<AssetCategory>({
+    queryKey: ["assetCategory", id],
+    queryFn: () => api(`/api/hr/asset-categories/${id}/`),
+    enabled: !!id,
+  });
+}
+
 
 // Fetch asset category stats
 export function useAssetCategoryStats() {

@@ -7,6 +7,7 @@ from apps.inventory.models.sales import (
     SalesReturn, SalesReturnLine
 )
 from apps.inventory.models import ProductVariant, Customer, Warehouse
+from apps.finance.models import BankAccount
 from apps.common.serializer_fields import UUIDForeignRelatedField
 
 
@@ -54,6 +55,7 @@ class SalesOrderLineSerializer(serializers.ModelSerializer):
 class SalesOrderSerializer(serializers.ModelSerializer):
     customer = UUIDForeignRelatedField(queryset=Customer.objects.all(), allow_null=True)
     warehouse = UUIDForeignRelatedField(queryset=Warehouse.objects.all())
+    bank_account = UUIDForeignRelatedField(queryset=BankAccount.objects.all(), allow_null=True, required=False)
     id = serializers.UUIDField(source='_id', read_only=True)
     customer_name = serializers.CharField(source='customer.name', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.warehouse_name', read_only=True)
@@ -69,6 +71,7 @@ class SalesOrderSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'order_number', 'customer', 'customer_name',
             'warehouse', 'warehouse_name', 'status',
+            'payment_method', 'bank_account',
             'order_date', 'total_amount', 'notes',
             'lines', 'line_items',
             'created_at', 'updated_at', 'created_by_info', 'updated_by_info',

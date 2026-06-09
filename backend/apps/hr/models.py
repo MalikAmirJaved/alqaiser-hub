@@ -7,6 +7,7 @@ from django.utils import timezone
 from datetime import date
 
 from apps.common.basemodel import BaseModel
+from apps.finance.services.payable import PayableModelMixin
 
 
 def current_year():
@@ -67,7 +68,12 @@ class Asset(BaseModel):
     serial_number = models.CharField(max_length=100, blank=True, null=True, unique=True)
     description = models.TextField(blank=True, null=True)
     
-    # Purchase Information
+    # New fields for simplified asset management
+    category = models.CharField(max_length=100, blank=True, null=True, help_text="e.g., Laptop, Monitor, Furniture")
+    total_quantity = models.PositiveIntegerField(default=1)
+    available_quantity = models.PositiveIntegerField(default=1)
+    
+    # Purchase Information (optional now)
     purchase_date = models.DateField(null=True, blank=True)
     purchase_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     warranty_until = models.DateField(null=True, blank=True)
@@ -76,11 +82,7 @@ class Asset(BaseModel):
     # Status
     is_active = models.BooleanField(default=True)
     is_assigned = models.BooleanField(default=False)
-    
-    # Quantity tracking
-    total_quantity = models.PositiveIntegerField(default=1, null=True, blank=True)
-    available_quantity = models.PositiveIntegerField(default=1, null=True, blank=True)
-    
+
     class Meta:
         verbose_name = "Asset"
         verbose_name_plural = "Assets"
@@ -91,6 +93,7 @@ class Asset(BaseModel):
             models.Index(fields=['serial_number']),
             models.Index(fields=['is_assigned']),
             models.Index(fields=['vendor']),
+            models.Index(fields=['category']),  
         ]
     
     def __str__(self):
@@ -101,8 +104,6 @@ class Asset(BaseModel):
         if not self.warranty_until:
             return None
         return self.warranty_until >= date.today()
-
-
 # =========================================================
 # ASSET CATEGORY (Kit)
 # =========================================================
@@ -273,7 +274,7 @@ class EmployeeAssetAssignment(BaseModel):
         blank=True,
         related_name='kit_assignments'
     )
-    
+    quantity = models.PositiveIntegerField(default=1, help_text="Number of units assigned")
     assigned_date = models.DateField()
     returned_date = models.DateField(null=True, blank=True)
     expected_return_date = models.DateField(null=True, blank=True)
@@ -484,22 +485,19 @@ class EmployeeLoan(BaseModel):
 # =========================================================
 # PAYROLL RECORD
 # =========================================================
-class PayrollRecord(BaseModel):
-    """Payroll/payment records for employees"""
-    
+class PayrollRecord(PayableModelMixin, BaseModel):
+    """Payroll records for employees. Payments tracked in finance.Payment."""
+
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='payroll_records')
-    
-    # Period
+
     month = models.PositiveSmallIntegerField()
     year = models.PositiveSmallIntegerField()
-    
-    # Salary Details
+
     base_salary = models.DecimalField(max_digits=12, decimal_places=2)
     bonus = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     deductions = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     net_salary = models.DecimalField(max_digits=12, decimal_places=2)
-    
-    # Transaction Details
+
     transaction_type = models.CharField(
         max_length=50,
         choices=[
@@ -508,32 +506,14 @@ class PayrollRecord(BaseModel):
             ('ADVANCE', 'Advance'),
             ('REIMBURSEMENT', 'Reimbursement'),
         ],
-        default='SALARY'
+        default='SALARY',
     )
-    transaction_number = models.CharField(max_length=100, blank=True, null=True)
-    payment_method = models.CharField(
-        max_length=50,
-        choices=[
-            ('BANK_TRANSFER', 'Bank Transfer'),
-            ('CASH', 'Cash'),
-            ('CHEQUE', 'Cheque'),
-            ('WALLET', 'Digital Wallet'),
-        ],
-        default='BANK_TRANSFER'
-    )
-    
-    # Status
-    status = models.CharField(
-        max_length=20,
-        choices=[('PENDING', 'Pending'), ('PAID', 'Paid'), ('CANCELLED', 'Cancelled')],
-        default='PAID'
-    )
-    
-    # Additional Info
+
+    is_cancelled = models.BooleanField(default=False)
     custom_note = models.TextField(blank=True, null=True)
     deduction_breakdown = models.JSONField(default=dict, blank=True)
     processed_at = models.DateTimeField(null=True, blank=True)
-    
+
     class Meta:
         verbose_name = "Payroll Record"
         verbose_name_plural = "Payroll Records"
@@ -541,8 +521,7 @@ class PayrollRecord(BaseModel):
         unique_together = [('employee', 'month', 'year')]
         indexes = [
             models.Index(fields=['company_id', 'month', 'year']),
-            models.Index(fields=['employee', 'status']),
-            models.Index(fields=['transaction_number']),
+            models.Index(fields=['employee', 'is_cancelled']),
         ]
 
 

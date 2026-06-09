@@ -207,12 +207,22 @@ export default function PurchaseOrderDetailPage() {
           <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
             <InfoRow label="Supplier" value={order.supplier_name} />
             <InfoRow label="Warehouse" value={order.warehouse_name} />
+            <InfoRow label="Inventory Type" value={
+  order.inventory_type === 'OFFICE_INVENTORY' 
+    ? 'Office Inventory (Asset) – will create HR assets & Finance expenses on receipt' 
+    : 'For Sale (Stock) – tracked in inventory'
+} />
             <InfoRow label="Order date" value={fmt(order.order_date)} />
             <InfoRow label="Expected delivery" value={fmt(order.expected_delivery_date)} />
             <InfoRow
               label="Order total"
               value={<span className="font-medium text-base">{formatCurrency(order.total_amount)}</span>}
             />
+            <InfoRow label="Payment Status" value={
+              order.payment_status === 'PAID' ? 'Paid' :
+                order.payment_status === 'PARTIAL' ? 'Partially Paid' : 'Unpaid'
+            } />
+            <InfoRow label="Total Paid" value={formatCurrency(order.total_paid)} />
             {order.notes && <InfoRow label="Notes" value={order.notes} />}
           </dl>
         </div>
@@ -278,8 +288,8 @@ export default function PurchaseOrderDetailPage() {
                 line.quantity_received >= line.quantity_ordered
                   ? 'FULLY_RECEIVED'
                   : line.quantity_received > 0
-                  ? 'PARTIALLY_RECEIVED'
-                  : 'PENDING';
+                    ? 'PARTIALLY_RECEIVED'
+                    : 'PENDING';
 
               return (
                 <tr key={line.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">

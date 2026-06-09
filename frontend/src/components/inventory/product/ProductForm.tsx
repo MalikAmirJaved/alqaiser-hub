@@ -472,23 +472,6 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, isLoad
         {/* ── Step 0: Product Info ── */}
         {step === 0 && (
           <div className="space-y-6">
-            <Field label="Product Name" required error={errors.productName?.message}>
-              <Input
-                {...register("productName")}
-                placeholder="e.g. Organic Cotton T-Shirt"
-                className="text-base"
-              />
-            </Field>
-
-            <Field label="Description" hint="Detailed description shown on product pages">
-              <Textarea
-                {...register("description")}
-                placeholder="What makes this product special..."
-                rows={3}
-                className="resize-none"
-              />
-            </Field>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Category" required error={errors.category?.message}>
                 <Controller
@@ -519,6 +502,23 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, onSubmit, isLoad
                 />
               </Field>
             </div>
+
+            <Field label="Product Name" required error={errors.productName?.message}>
+              <Input
+                {...register("productName")}
+                placeholder="e.g. Organic Cotton T-Shirt"
+                className="text-base"
+              />
+            </Field>
+
+            <Field label="Description" hint="Detailed description shown on product pages">
+              <Textarea
+                {...register("description")}
+                placeholder="What makes this product special..."
+                rows={3}
+                className="resize-none"
+              />
+            </Field>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Field label="Unit">

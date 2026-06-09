@@ -21,6 +21,9 @@ export interface PayrollRecord {
   transaction_number?: string;
   payment_method: string;
   status: string;
+  payment_status?: string;
+  paid_amount?: string;
+  outstanding?: string;
   custom_note?: string;
   processed_at?: string;
   created_at?: string;
@@ -118,36 +121,45 @@ export interface PayrollPreview {
 
 
 
+type PayrollApiBase = "hr" | "finance";
+
+function payrollBase(module: PayrollApiBase = "hr") {
+  return module === "finance" ? "/api/finance/payroll" : "/api/hr/payroll";
+}
+
 // ===== Payroll Hooks =====
-export function usePayroll(params?: Record<string, string>) {
+export function usePayroll(params?: Record<string, string>, module: PayrollApiBase = "hr") {
   const api = useApi();
   const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
+  const base = payrollBase(module);
   return useQuery<PayrollRecord[]>({
-    queryKey: ["payroll", params],
-    queryFn: () => api(`/api/hr/payroll/${queryString}`),
+    queryKey: ["payroll", module, params],
+    queryFn: () => api(`${base}/${queryString}`),
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
   });
 }
 
-export function usePayrollStats(params?: Record<string, string>) {
+export function usePayrollStats(params?: Record<string, string>, module: PayrollApiBase = "hr") {
   const api = useApi();
   const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
+  const base = payrollBase(module);
   return useQuery<PayrollStats>({
-    queryKey: ["payrollStats", params],
-    queryFn: () => api(`/api/hr/payroll/stats/${queryString}`),
+    queryKey: ["payrollStats", module, params],
+    queryFn: () => api(`${base}/stats/${queryString}`),
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
   });
 }
 
-export function useProcessPayroll() {
+export function useProcessPayroll(module: PayrollApiBase = "hr") {
   const api = useApi();
   const queryClient = useQueryClient();
+  const base = payrollBase(module);
   return useMutation({
-    mutationFn: (data: any) => api("/api/hr/payroll/", { method: "POST", body: JSON.stringify(data) }),
+    mutationFn: (data: any) => api(`${base}/`, { method: "POST", body: JSON.stringify(data) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payroll"] });
       queryClient.invalidateQueries({ queryKey: ["payrollStats"] });
@@ -264,9 +276,10 @@ export function useUpdateLoanStatus() {
 }
 
 
-export function usePayrollPreview() {
+export function usePayrollPreview(module: PayrollApiBase = "hr") {
   const api = useApi();
+  const base = payrollBase(module);
   return useMutation<PayrollPreview, Error, any>({
-    mutationFn: (data: any) => api("/api/hr/payroll/preview/", { method: "POST", body: JSON.stringify(data) }),
+    mutationFn: (data: any) => api(`${base}/preview/`, { method: "POST", body: JSON.stringify(data) }),
   });
 }

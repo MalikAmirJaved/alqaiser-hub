@@ -1,260 +1,182 @@
 "use client";
 
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { X } from "lucide-react";
-import {
-  useCreatePayment,
-  useUpdatePayment,
-  paymentTypeOptions,
-  paymentMethodOptions,
-  type Payment,
-} from "@/hooks/finance/usePayments";
-import { useBankAccounts } from "@/hooks/finance/useBank";
+import { useEffect, useState } from "react";
+import { useCreatePayment, useUpdatePayment, type Payment } from "@/hooks/finance/usePayments";
 import { useSupplierBills } from "@/hooks/finance/useSupplierBills";
 import { useCustomerInvoices } from "@/hooks/finance/useCustomerInvoices";
+import { useBankAccounts } from "@/hooks/finance/useBank";
+import { Modal, ModalContent, ModalHeader, ModalFooter } from "@/components/ui/modal";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { formatCurrency } from "@/lib/currency";
 
-interface PaymentFormData {
-  payment_type: "RECEIPT" | "PAYMENT";
-  payment_method: Payment["payment_method"];
-  amount: number;
-  payment_date: string;
-  reference_number: string;
-  supplier_bill: string | null;      // UUID or null
-  customer_invoice: string | null;   // UUID or null
-  bank_account: string | null;       // UUID or null
-  notes: string;
-}
-
-interface Props {
+interface PaymentFormModalProps {
   open: boolean;
   onClose: () => void;
   initialData?: Payment | null;
+  onSuccess?: () => void;
 }
 
-export default function PaymentFormModal({ open, onClose, initialData }: Props) {
-  const { register, handleSubmit, reset, setValue, watch } = useForm<PaymentFormData>({
-    defaultValues: {
-      payment_type: "RECEIPT",
-      payment_method: "BANK_TRANSFER",
-      amount: 0,
-      payment_date: new Date().toISOString().split("T")[0],
-      reference_number: "",
-      supplier_bill: null,
-      customer_invoice: null,
-      bank_account: null,
-      notes: "",
-    },
-  });
+export default function PaymentFormModal({ open, onClose, initialData, onSuccess }: PaymentFormModalProps) {
+  const [paymentType, setPaymentType] = useState<"RECEIPT" | "PAYMENT">("RECEIPT");
+  const [paymentMethod, setPaymentMethod] = useState("BANK_TRANSFER");
+  const [amount, setAmount] = useState("");
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
+  const [referenceNumber, setReferenceNumber] = useState("");
+  const [supplierBillId, setSupplierBillId] = useState("");
+  const [customerInvoiceId, setCustomerInvoiceId] = useState("");
+  const [bankAccountId, setBankAccountId] = useState("");
+  const [notes, setNotes] = useState("");
 
   const createPayment = useCreatePayment();
   const updatePayment = useUpdatePayment();
-  const { data: bankAccounts } = useBankAccounts({ is_active: true });
-  const { data: supplierBills } = useSupplierBills({ status: "POSTED" });
-  const { data: customerInvoices } = useCustomerInvoices({ status: "POSTED" });
-
-  const paymentType = watch("payment_type");
+  const { data: supplierBillsRaw } = useSupplierBills();
+  const { data: customerInvoicesRaw } = useCustomerInvoices();
+  const supplierBills = (supplierBillsRaw ?? []).filter((b) => b.payment_status !== "PAID");
+  const customerInvoices = (customerInvoicesRaw ?? []).filter((i) => i.payment_status !== "PAID");
+  const { data: bankAccounts } = useBankAccounts();
 
   useEffect(() => {
     if (initialData) {
-      setValue("payment_type", initialData.payment_type);
-      setValue("payment_method", initialData.payment_method);
-      setValue("amount", initialData.amount);
-      setValue("payment_date", initialData.payment_date);
-      setValue("reference_number", initialData.reference_number);
-      setValue("supplier_bill", initialData.supplier_bill);
-      setValue("customer_invoice", initialData.customer_invoice);
-      setValue("bank_account", initialData.bank_account);
-      setValue("notes", initialData.notes);
+      setPaymentType(initialData.payment_type);
+      setPaymentMethod(initialData.payment_method);
+      setAmount(String(initialData.amount));
+      setPaymentDate(initialData.payment_date);
+      setReferenceNumber(initialData.reference_number || "");
+      setSupplierBillId(initialData.supplier_bill || "");
+      setCustomerInvoiceId(initialData.customer_invoice || "");
+      setBankAccountId(initialData.bank_account || "");
+      setNotes(initialData.notes || "");
     } else {
-      reset({
-        payment_type: "RECEIPT",
-        payment_method: "BANK_TRANSFER",
-        amount: 0,
-        payment_date: new Date().toISOString().split("T")[0],
-        reference_number: "",
-        supplier_bill: null,
-        customer_invoice: null,
-        bank_account: null,
-        notes: "",
-      });
+      resetForm();
     }
-  }, [initialData, setValue, reset]);
+  }, [initialData]);
 
-  const onSubmit = async (data: PaymentFormData) => {
+  const resetForm = () => {
+    setPaymentType("RECEIPT");
+    setPaymentMethod("BANK_TRANSFER");
+    setAmount("");
+    setPaymentDate(new Date().toISOString().split("T")[0]);
+    setReferenceNumber("");
+    setSupplierBillId("");
+    setCustomerInvoiceId("");
+    setBankAccountId("");
+    setNotes("");
+  };
+
+  const handleSubmit = async () => {
+    const payload: any = {
+      payment_type: paymentType,
+      payment_method: paymentMethod,
+      amount: parseFloat(amount),
+      payment_date: paymentDate,
+      reference_number: referenceNumber,
+      notes,
+    };
+    if (paymentType === "RECEIPT" && customerInvoiceId) payload.customer_invoice = customerInvoiceId;
+    if (paymentType === "PAYMENT" && supplierBillId) payload.supplier_bill = supplierBillId;
+    if (bankAccountId) payload.bank_account = bankAccountId;
+
     if (initialData) {
-      await updatePayment.mutateAsync({ id: initialData.id, data });
+      await updatePayment.mutateAsync({ id: initialData.id, data: payload });
     } else {
-      await createPayment.mutateAsync(data);
+      await createPayment.mutateAsync(payload);
     }
+    onSuccess?.();
     onClose();
   };
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-card border-b border-border p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">
-              {initialData ? "Edit Payment" : "Record Payment"}
-            </h2>
-            <button onClick={onClose} className="p-1 rounded-md hover:bg-muted">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="p-4 space-y-4">
+    <Modal open={open} onOpenChange={onClose}>
+      <ModalContent>
+        <ModalHeader>{initialData ? "Edit Payment" : "New Payment"}</ModalHeader>
+        <div className="space-y-4 py-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Type *</label>
-            <select
-              {...register("payment_type")}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-            >
-              {paymentTypeOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+            <Label>Type</Label>
+            <Select value={paymentType} onValueChange={(v: "RECEIPT" | "PAYMENT") => setPaymentType(v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="RECEIPT">Receipt (Customer Payment)</SelectItem>
+                <SelectItem value="PAYMENT">Payment (Supplier Payment)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-
           <div>
-            <label className="block text-sm font-medium mb-1">Method *</label>
-            <select
-              {...register("payment_method", { required: true })}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-            >
-              {paymentMethodOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+            <Label>Amount</Label>
+            <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
           </div>
-
           <div>
-            <label className="block text-sm font-medium mb-1">Date *</label>
-            <input
-              type="date"
-              {...register("payment_date", { required: true })}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-            />
+            <Label>Payment Date</Label>
+            <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
           </div>
-
           <div>
-            <label className="block text-sm font-medium mb-1">Amount *</label>
-            <input
-              type="number"
-              step="0.01"
-              {...register("amount", { required: true, valueAsNumber: true })}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-              placeholder="0.00"
-            />
+            <Label>Method</Label>
+            <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="CASH">Cash</SelectItem>
+                <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
+                <SelectItem value="CHEQUE">Cheque</SelectItem>
+                <SelectItem value="CREDIT_CARD">Credit Card</SelectItem>
+                <SelectItem value="OTHER">Other</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">Reference Number</label>
-            <input
-              {...register("reference_number")}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-              placeholder="e.g., CHQ-001, TRF-123, RCP-001"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Cheque number, transaction ID, or reference code
-            </p>
-          </div>
-
-          {paymentType === "PAYMENT" && (
-            <div>
-              <label className="block text-sm font-medium mb-1">Supplier Bill (optional)</label>
-              <select
-                {...register("supplier_bill")}
-                className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-              >
-                <option value="">-- Select bill to pay --</option>
-                {supplierBills?.map((bill) => (
-                  <option key={bill.id} value={bill.id}>
-                    {bill.bill_number} - {bill.supplier_name || `Supplier #${bill.supplier}`} - {formatCurrency(bill.amount)} (Outstanding: {formatCurrency(bill.outstanding)})
-                  </option>
-                ))}
-              </select>
-              {supplierBills?.length === 0 && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  No posted bills available. Create and post a supplier bill first.
-                </p>
-              )}
-            </div>
-          )}
-
           {paymentType === "RECEIPT" && (
             <div>
-              <label className="block text-sm font-medium mb-1">Customer Invoice (optional)</label>
-              <select
-                {...register("customer_invoice")}
-                className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-              >
-                <option value="">-- Select invoice to receive payment --</option>
-                {customerInvoices?.map((inv) => (
-                  <option key={inv.id} value={inv.id}>
-                    {inv.invoice_number} - {inv.customer_name || `Customer #${inv.customer}`} - {formatCurrency(Number(inv.amount))} (Outstanding: {formatCurrency(Number(inv.outstanding))})
-                  </option>
-                ))}
-              </select>
-              {customerInvoices?.length === 0 && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  No posted invoices available. Create and post a customer invoice first.
-                </p>
-              )}
+              <Label>Customer Invoice</Label>
+              <Select value={customerInvoiceId} onValueChange={setCustomerInvoiceId}>
+                <SelectTrigger><SelectValue placeholder="Select invoice" /></SelectTrigger>
+                <SelectContent>
+                  {customerInvoices?.map((inv) => (
+                    <SelectItem key={inv.id} value={inv.id}>{inv.invoice_number} - {formatCurrency(Number(inv.outstanding))}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
-
+          {paymentType === "PAYMENT" && (
+            <div>
+              <Label>Supplier Bill</Label>
+              <Select value={supplierBillId} onValueChange={setSupplierBillId}>
+                <SelectTrigger><SelectValue placeholder="Select bill" /></SelectTrigger>
+                <SelectContent>
+                  {supplierBills?.map((bill) => (
+                    <SelectItem key={bill.id} value={bill.id}>{bill.bill_number} - {formatCurrency(bill.outstanding)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div>
-            <label className="block text-sm font-medium mb-1">Bank Account (optional)</label>
-            <select
-              {...register("bank_account")}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-            >
-              <option value="">-- Select bank account --</option>
-              {bankAccounts?.map((acc) => (
-                <option key={acc.id} value={acc.id}>
-                  {acc.bank_name} - {acc.account_name} ({acc.account_number})
-                </option>
-              ))}
-            </select>
+            <Label>Bank Account</Label>
+            <Select value={bankAccountId} onValueChange={setBankAccountId}>
+              <SelectTrigger><SelectValue placeholder="Select bank account" /></SelectTrigger>
+              <SelectContent>
+                {bankAccounts?.map((acc) => (
+                  <SelectItem key={acc.id} value={acc.id}>{acc.account_name} ({acc.bank_name})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-
           <div>
-            <label className="block text-sm font-medium mb-1">Notes</label>
-            <textarea
-              {...register("notes")}
-              rows={3}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-              placeholder="Additional information about this payment..."
-            />
+            <Label>Reference Number (optional)</Label>
+            <Input value={referenceNumber} onChange={(e) => setReferenceNumber(e.target.value)} />
           </div>
-
-          <div className="flex justify-end gap-2 pt-4 border-t border-border">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={createPayment.isPending || updatePayment.isPending}
-              className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 disabled:opacity-50"
-            >
-              {createPayment.isPending || updatePayment.isPending ? "Saving..." : "Save"}
-            </button>
+          <div>
+            <Label>Notes</Label>
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
-        </form>
-      </div>
-    </div>
+        </div>
+        <ModalFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={createPayment.isPending || updatePayment.isPending}>
+            {initialData ? "Update" : "Create"}
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   );
 }

@@ -132,7 +132,7 @@ export function ReportTable({ headers, keys, data, title, loading = false, curre
       head: [headers],
       body: sortedData.map((item) => keys.map((key) => {
         const val = item[key];
-        return typeof val === "number" ? val.toFixed(2) : String(val);
+        return typeof val === "number" ? val : String(val);
       })),
       theme: "striped",
       headStyles: { fillColor: [59, 130, 246] },
@@ -221,7 +221,7 @@ export function ReportTable({ headers, keys, data, title, loading = false, curre
                       displayValue = !isNaN(numVal) ? `${currency} ${numVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `$${value}`;
                     } else if (key.includes("rate") || key.includes("percent")) {
                       const numVal = Number(value);
-                      displayValue = !isNaN(numVal) ? `${numVal.toFixed(2)}%` : `${value}%`;
+                      displayValue = !isNaN(numVal) ? `${numVal}%` : `${value}%`;
                     }
 
                     // Highlight dynamic statuses

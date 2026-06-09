@@ -16,6 +16,17 @@ class PurchaseOrder(BaseModel):
         ('FULLY_RECEIVED', 'Fully Received'),
         ('CANCELLED', 'Cancelled'),
     ]
+    INVENTORY_TYPES = [
+        ('FOR_SALE', 'For Sale (Inventory)'),
+        ('OFFICE_INVENTORY', 'Office Inventory (Asset)'),
+    ]
+
+    inventory_type = models.CharField(
+        max_length=20,
+        choices=INVENTORY_TYPES,
+        default='FOR_SALE',
+        help_text="Type of inventory: for resale or office assets"
+    )
 
     order_number = models.CharField(max_length=50, unique=True)
     supplier = models.ForeignKey(
@@ -55,7 +66,9 @@ class PurchaseOrder(BaseModel):
 
 class PurchaseOrderLine(BaseModel):
     """
-    One line of a purchase order – links to a product variant.
+    One line of a purchase order.
+    For FOR_SALE: variant must be set, asset = null
+    For OFFICE_INVENTORY: asset must be set, variant = null
     """
     LINE_STATUS_CHOICES = [
         ('PENDING', 'Pending'),
@@ -72,17 +85,22 @@ class PurchaseOrderLine(BaseModel):
     variant = models.ForeignKey(
         'ProductVariant',
         on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='purchase_lines'
+    )
+    asset = models.ForeignKey(
+        'hr.Asset',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
         related_name='purchase_lines'
     )
     quantity_ordered = models.PositiveIntegerField()
     quantity_received = models.PositiveIntegerField(default=0)
     unit_cost = models.DecimalField(max_digits=12, decimal_places=4)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    status = models.CharField(
-        max_length=20,
-        choices=LINE_STATUS_CHOICES,
-        default='PENDING'
-    )
+    status = models.CharField(max_length=20, choices=LINE_STATUS_CHOICES, default='PENDING')
     notes = models.TextField(blank=True)
 
     class Meta:
@@ -90,13 +108,30 @@ class PurchaseOrderLine(BaseModel):
         indexes = [
             models.Index(fields=['purchase_order']),
             models.Index(fields=['variant']),
+            models.Index(fields=['asset']),
             models.Index(fields=['company_id', 'branch_id']),
         ]
+
+    def clean(self):
+        from apps.inventory.models import PurchaseOrder
+        if self.purchase_order_id:
+            po = self.purchase_order
+            if po.inventory_type == 'FOR_SALE' and not self.variant:
+                raise models.ValidationError("For sale orders require a product variant")
+            if po.inventory_type == 'OFFICE_INVENTORY' and not self.asset:
+                raise models.ValidationError("Office inventory orders require an HR asset")
+            if po.inventory_type == 'FOR_SALE' and self.asset:
+                raise models.ValidationError("For sale orders cannot have an asset")
+            if po.inventory_type == 'OFFICE_INVENTORY' and self.variant:
+                raise models.ValidationError("Office inventory orders cannot have a product variant")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     @property
     def line_total(self):
         return self.quantity_ordered * self.unit_cost
-
 
 class GoodsReceipt(BaseModel):
     """

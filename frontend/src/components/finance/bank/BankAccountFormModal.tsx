@@ -1,154 +1,148 @@
 "use client";
 
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { X } from "lucide-react";
-import {
-  useCreateBankAccount,
-  useUpdateBankAccount,
-  type BankAccount,
-} from "@/hooks/finance/useBank";
+import { useEffect, useState } from "react";
+import { useCreateBankAccount, useUpdateBankAccount } from "@/hooks/finance/useBank";
+import { Modal, ModalContent, ModalHeader, ModalFooter } from "@/components/ui/modal";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 
-interface BankAccountFormData {
-  account_name: string;
-  account_number: string;
-  bank_name: string;
-  opening_balance: number;
-  currency: string;
-  is_active: boolean;
-}
-
-interface Props {
+interface BankAccountFormModalProps {
   open: boolean;
   onClose: () => void;
-  initialData?: BankAccount | null;
+  initialData?: any;
+  onSuccess?: () => void;
 }
 
-export default function BankAccountFormModal({ open, onClose, initialData }: Props) {
-  const { register, handleSubmit, reset, setValue } = useForm<BankAccountFormData>({
-    defaultValues: {
-      account_name: "",
-      account_number: "",
-      bank_name: "",
-      opening_balance: 0,
-      currency: "USD",
-      is_active: true,
-    },
-  });
+export default function BankAccountFormModal({ open, onClose, initialData, onSuccess }: BankAccountFormModalProps) {
+  const [accountName, setAccountName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [openingBalance, setOpeningBalance] = useState("");
+  const [currency, setCurrency] = useState("USD");
+  const [isActive, setIsActive] = useState(true);
+
   const createAccount = useCreateBankAccount();
   const updateAccount = useUpdateBankAccount();
 
   useEffect(() => {
     if (initialData) {
-      setValue("account_name", initialData.account_name);
-      setValue("account_number", initialData.account_number);
-      setValue("bank_name", initialData.bank_name);
-      setValue("opening_balance", initialData.opening_balance);
-      setValue("currency", initialData.currency);
-      setValue("is_active", initialData.is_active);
+      setAccountName(initialData.account_name || "");
+      setAccountNumber(initialData.account_number || "");
+      setBankName(initialData.bank_name || "");
+      setOpeningBalance(String(initialData.opening_balance || initialData.current_balance || 0));
+      setCurrency(initialData.currency || "USD");
+      setIsActive(initialData.is_active ?? true);
     } else {
-      reset({
-        account_name: "",
-        account_number: "",
-        bank_name: "",
-        opening_balance: 0,
-        currency: "USD",
-        is_active: true,
-      });
+      resetForm();
     }
-  }, [initialData, setValue, reset]);
+  }, [initialData, open]);
 
-  const onSubmit = async (data: BankAccountFormData) => {
-    if (initialData) {
-      await updateAccount.mutateAsync({ id: initialData.id, data });
-    } else {
-      await createAccount.mutateAsync(data);
-    }
-    onClose();
+  const resetForm = () => {
+    setAccountName("");
+    setAccountNumber("");
+    setBankName("");
+    setOpeningBalance("");
+    setCurrency("USD");
+    setIsActive(true);
   };
 
-  if (!open) return null;
+  const handleSubmit = async () => {
+    const data = {
+      account_name: accountName,
+      account_number: accountNumber,
+      bank_name: bankName,
+      opening_balance: parseFloat(openingBalance) || 0,
+      currency: currency.toUpperCase(),
+      is_active: isActive,
+    };
+
+    try {
+      if (initialData) {
+        await updateAccount.mutateAsync({ id: initialData.id, data });
+      } else {
+        await createAccount.mutateAsync(data);
+      }
+      onSuccess?.();
+      onClose();
+      resetForm();
+    } catch (error) {
+      console.error("Failed to save bank account:", error);
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl">
-        <div className="flex items-center justify-between border-b border-border p-4">
-          <h2 className="text-lg font-semibold">
-            {initialData ? "Edit Bank Account" : "New Bank Account"}
-          </h2>
-          <button onClick={onClose} className="p-1 rounded-md hover:bg-muted">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="p-4 space-y-4">
+    <Modal open={open} onOpenChange={onClose}>
+      <ModalContent className="max-w-md">
+        <ModalHeader>
+          <h2 className="text-xl font-semibold">{initialData ? "Edit Bank Account" : "New Bank Account"}</h2>
+        </ModalHeader>
+        <div className="space-y-4 py-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Bank Name *</label>
-            <input
-              {...register("bank_name", { required: true })}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
+            <Label htmlFor="accountName">Account Name *</Label>
+            <Input
+              id="accountName"
+              value={accountName}
+              onChange={(e) => setAccountName(e.target.value)}
+              placeholder="e.g., Chase Operating Account"
+              required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Account Name *</label>
-            <input
-              {...register("account_name", { required: true })}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
+            <Label htmlFor="bankName">Bank Name *</Label>
+            <Input
+              id="bankName"
+              value={bankName}
+              onChange={(e) => setBankName(e.target.value)}
+              placeholder="e.g., Chase Bank"
+              required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Account Number *</label>
-            <input
-              {...register("account_number", { required: true })}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
+            <Label htmlFor="accountNumber">Account Number</Label>
+            <Input
+              id="accountNumber"
+              value={accountNumber}
+              onChange={(e) => setAccountNumber(e.target.value)}
+              placeholder="e.g., ****1234"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Opening Balance</label>
-            <input
+            <Label htmlFor="openingBalance">Opening Balance</Label>
+            <Input
+              id="openingBalance"
               type="number"
               step="0.01"
-              {...register("opening_balance", { valueAsNumber: true })}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
+              value={openingBalance}
+              onChange={(e) => setOpeningBalance(e.target.value)}
+              placeholder="0.00"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Currency</label>
-            <select
-              {...register("currency")}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-            >
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
-              <option value="GBP">GBP</option>
-              <option value="PKR">PKR</option>
-            </select>
+            <Label htmlFor="currency">Currency</Label>
+            <Input
+              id="currency"
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+              placeholder="USD"
+              maxLength={3}
+            />
           </div>
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" {...register("is_active")} />
-              Active
-            </label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="isActive">Active</Label>
+            <Switch id="isActive" checked={isActive} onCheckedChange={setIsActive} />
           </div>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={createAccount.isPending || updateAccount.isPending}
-              className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 disabled:opacity-50"
-            >
-              {createAccount.isPending || updateAccount.isPending ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        </div>
+        <ModalFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={createAccount.isPending || updateAccount.isPending}>
+            {createAccount.isPending || updateAccount.isPending ? "Saving..." : initialData ? "Update" : "Create"}
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   );
 }

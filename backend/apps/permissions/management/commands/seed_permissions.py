@@ -11,8 +11,9 @@ MODULES = {
     'HR': {'name': 'Human Resources', 'ordering': 1},
     'INVENTORY': {'name': 'Inventory Management', 'ordering': 2},
     'FINANCE': {'name': 'Finance', 'ordering': 3},
-    'AI_MONITORING': {'name': 'AI Monitoring', 'ordering': 4},
-    'SETTINGS': {'name': 'System Settings', 'ordering': 5},
+    'SALES': {'name': 'Sales', 'ordering': 4},
+    'AI_MONITORING': {'name': 'AI Monitoring', 'ordering': 5},
+    'SETTINGS': {'name': 'System Settings', 'ordering': 6},
 }
 
 RESOURCES = {
@@ -25,8 +26,11 @@ RESOURCES = {
         'stock_transfer', 'barcode','report', 'alert', 'customer', 'sales_order',  'audit_log',
     ],
     'FINANCE': [
-         'dashboard', 'account', 'customer_invoice', 'expense', 'budget',
+         'dashboard', 'account', 'customer_invoice', 'expense', 'budget', 'payroll',
         'bank_account', 'bank_transaction', 'supplier_bill', 'journal_entrie', 'finance_reports', 'payment',  'tax','audit_log',
+    ],
+    'SALES': [
+        'dashboard', 'lead', 'quote', 'sales_customers_invoice', 'sales_customer',
     ],
     'AI_MONITORING': [
         'live_dashboard', 'workforce', 'inventory', 'alert', 'report', 'activity', 
@@ -56,6 +60,7 @@ ROLE_PERMISSIONS = {
         'HR': ['*'],
         'INVENTORY': ['*'],
         'FINANCE': ['*'],
+        'SALES': ['*'],
         'AI_MONITORING': ['*'],
         'SETTINGS': ['*'],
     },

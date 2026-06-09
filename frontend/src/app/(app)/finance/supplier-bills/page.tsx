@@ -3,19 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
-import { useSupplierBills, useDeleteSupplierBill, usePostSupplierBill } from "@/hooks/finance/useSupplierBills";
+import { useSupplierBills, useDeleteSupplierBill, usePaySupplierBill } from "@/hooks/finance/useSupplierBills";
+import { StatusBadge } from "@/components/finance/ui";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import SupplierBillFormModal from "@/components/finance/supplier-bills/SupplierBillFormModal";
 import { formatCurrency } from "@/lib/currency";
 import { Trash2, Send } from "lucide-react";
 
-const statusColors: Record<string, string> = {
-  DRAFT: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-  POSTED: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
-  PARTIAL: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
-  PAID: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-  CANCELLED: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-};
 
 export default function SupplierBillsPage() {
   const router = useRouter();
@@ -24,8 +18,10 @@ export default function SupplierBillsPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const { data: bills, isLoading } = useSupplierBills();
+  console.log("bills, ", bills)
+
   const deleteBill = useDeleteSupplierBill();
-  const postBill = usePostSupplierBill();
+  const payBill = usePaySupplierBill();
   const permissions = useFeaturePermissions("FINANCE", "supplierbill");
   const modulePermissions: ModulePermissions = {
     create: permissions.create,
@@ -48,9 +44,9 @@ export default function SupplierBillsPage() {
     deleteBill.mutate(bill.id);
   };
 
-  const handlePost = (bill: any) => {
-    if (bill.status === "DRAFT") {
-      postBill.mutate(bill.id);
+  const handlePay = (bill: any) => {
+    if (bill.payment_status !== "PAID" && bill.status !== "CANCELLED") {
+      payBill.mutate({ id: bill.id });
     }
   };
 
@@ -62,7 +58,7 @@ export default function SupplierBillsPage() {
   const computeKPIs = (data: any[]) => {
     const totalOutstanding = data.reduce((sum, bill) => sum + Number(bill.outstanding || 0), 0);
     const totalPaid = data.reduce((sum, bill) => sum + Number(bill.paid_amount || 0), 0);
-    const overdueCount = data.filter((bill) => bill.status !== "PAID" && new Date(bill.due_date) < new Date()).length;
+    const overdueCount = data.filter((bill) => bill.payment_status !== "PAID" && new Date(bill.due_date) < new Date()).length;
     const draftCount = data.filter((bill) => bill.status === "DRAFT").length;
     return [
       { label: "Outstanding", value: totalOutstanding, sub: `${data.length} open bills`, tone: "info" as const, isCurrency: true },
@@ -88,17 +84,10 @@ export default function SupplierBillsPage() {
     },
     { key: "currency", label: "Curr", render: () => "USD" },
     {
-      key: "status",
-      label: "Status",
+      key: "payment_status",
+      label: "Payment",
       sortable: true,
-      render: (val: string) => {
-        const status = val as keyof typeof statusColors;
-        return (
-          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[status]}`}>
-            {status}
-          </span>
-        );
-      },
+      render: (val: string) => <StatusBadge status={val || "UNPAID"} />,
     },
   ];
 
@@ -122,13 +111,9 @@ export default function SupplierBillsPage() {
         actions={{
           onEdit: handleEdit,
           onDelete: handleDelete,
-          onPost: (bill) => {
-            if (bill.status === "DRAFT") {
-              handlePost(bill);
-            }
-          },
-          canPost: (bill) => bill.status === "DRAFT",
-
+          onPost: handlePay,
+          canPost: (bill) => bill.payment_status !== "PAID" && bill.status !== "CANCELLED",
+          postLabel: "Pay",
         }}
         onRowClick={handleRowClick}
         exportEnabled={true}
@@ -144,13 +129,13 @@ export default function SupplierBillsPage() {
             </button>
             <button
               onClick={() => {
-                selectedIds.forEach((id) => postBill.mutate(id));
+                selectedIds.forEach((id) => payBill.mutate({ id }));
                 setSelectedIds([]);
               }}
               className="inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary/80"
             >
               <Send className="w-4 h-4" />
-              Post Selected
+              Pay Selected
             </button>
           </>
         }

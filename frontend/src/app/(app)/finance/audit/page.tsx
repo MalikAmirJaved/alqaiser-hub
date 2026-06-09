@@ -1,136 +1,60 @@
 "use client";
 
 import { useState } from "react";
-import PageHeader from "@/components/PageHeader";
-import { TableView, type Column } from "@/components/reuseable/TableGridView";
-import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { DynamicModulePage, type Column } from "@/components/reuseable/final/DynamicModulePage";
 import { useAuditLogs } from "@/hooks/finance/useAuditLogs";
-
-const columns: Column[] = [
-  { key: "created_at", label: "Timestamp", sortable: true },
-  { key: "action", label: "Action" },
-  { key: "entity_type", label: "Entity" },
-  { key: "entity_id", label: "Entity ID" },
-  { key: "user_id", label: "User ID" },
-];
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 export default function AuditLogsPage() {
-  const permissions = useFeaturePermissions("FINANCE", "auditlog");
-
-  const [entityType, setEntityType] = useState("");
-  const [action, setAction] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-
-  // ✅ pagination state (FIX)
   const [page, setPage] = useState(1);
+  const { data, isLoading } = useAuditLogs({ page });
+  const permissions = useFeaturePermissions("FINANCE", "audit_log");
 
-  const { data, isLoading } = useAuditLogs({
-    entity_type: entityType || undefined,
-    action: action || undefined,
-    start_date: startDate || undefined,
-    end_date: endDate || undefined,
-    source_module: "finance",
-    page,
-  });
+  const columns: Column<any>[] = [
+    { key: "created_at", label: "Timestamp", sortable: true },
+    { key: "user_name", label: "User", sortable: true },
+    { key: "action", label: "Action", sortable: true },
+    { key: "entity_type", label: "Entity", sortable: true },
+    { key: "entity_id", label: "Entity ID", mono: true },
+    { key: "source_module", label: "Module" },
+  ];
 
-  const logs = data?.results || [];
-  const tableData = logs.map((log) => ({ ...log })) as Record<string, unknown>[];
-
-  const pageSize = 20; // adjust if backend differs
-  const totalPages = data ? Math.ceil(data.count / pageSize) : 1;
+  // Expandable row to show field changes
+  const renderExpandedRow = (log: any) => (
+    <div className="p-4 bg-muted/10 rounded-md">
+      <div className="text-sm font-medium mb-2">Field Changes</div>
+      <table className="w-full text-xs border border-border">
+        <thead className="bg-surface/40">
+          <tr>
+            <th className="px-2 py-1 text-left">Field</th>
+            <th className="px-2 py-1 text-left">Old Value</th>
+            <th className="px-2 py-1 text-left">New Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {log.field_changes?.map((change: any, idx: number) => (
+            <tr key={idx} className="border-t border-border/60">
+              <td className="px-2 py-1 font-mono">{change.field_name}</td>
+              <td className="px-2 py-1 text-destructive line-through">{change.old_value || "—"}</td>
+              <td className="px-2 py-1 text-success">{change.new_value || "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 
   return (
-    <div className="p-4 md:p-6">
-      <PageHeader title="Audit Logs" subtitle="Track all changes to financial records" />
-
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-4">
-        <select
-          value={entityType}
-          onChange={(e) => {
-            setEntityType(e.target.value);
-            setPage(1);
-          }}
-          className="px-3 py-1.5 text-sm border border-border rounded-md"
-        >
-          <option value="">All Entities</option>
-          <option value="account">Account</option>
-          <option value="supplierbill">Supplier Bill</option>
-          <option value="customerinvoice">Customer Invoice</option>
-          <option value="payment">Payment</option>
-          <option value="expense">Expense</option>
-        </select>
-
-        <select
-          value={action}
-          onChange={(e) => {
-            setAction(e.target.value);
-            setPage(1);
-          }}
-          className="px-3 py-1.5 text-sm border border-border rounded-md"
-        >
-          <option value="">All Actions</option>
-          <option value="CREATE">Create</option>
-          <option value="UPDATE">Update</option>
-          <option value="DELETE">Delete</option>
-        </select>
-
-        <input
-          type="date"
-          value={startDate}
-          onChange={(e) => {
-            setStartDate(e.target.value);
-            setPage(1);
-          }}
-          className="px-3 py-1.5 text-sm border border-border rounded-md"
-        />
-
-        <input
-          type="date"
-          value={endDate}
-          onChange={(e) => {
-            setEndDate(e.target.value);
-            setPage(1);
-          }}
-          className="px-3 py-1.5 text-sm border border-border rounded-md"
-        />
-      </div>
-
-      {/* Table */}
-      <TableView
-        columns={columns}
-        data={tableData}
-        loading={isLoading}
-        actions={() => null}
-      />
-
-      {/* Pagination */}
-      {data && (
-        <div className="flex justify-between items-center mt-4 text-sm">
-          <span>
-            Page {page} of {totalPages} • Total {data.count}
-          </span>
-
-          <div className="flex gap-2">
-            <button
-              disabled={!data.previous}
-              onClick={() => setPage((p) => Math.max(p - 1, 1))}
-              className="px-3 py-1 border rounded-md disabled:opacity-50"
-            >
-              Previous
-            </button>
-
-            <button
-              disabled={!data.next}
-              onClick={() => setPage((p) => p + 1)}
-              className="px-3 py-1 border rounded-md disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+    <DynamicModulePage
+      breadcrumbs={["Governance", "Audit Logs"]}
+      title="Audit Logs"
+      description="Complete history of all changes across the system"
+      data={data?.results || []}
+      isLoading={isLoading}
+      columns={columns}
+      getRowId={(log) => log.id}
+      permissions={{ view: true, create: false, update: false, delete: false, export: true }}
+      exportEnabled
+    />
   );
 }

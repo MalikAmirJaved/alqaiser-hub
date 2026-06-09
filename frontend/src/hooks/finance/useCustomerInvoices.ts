@@ -5,6 +5,17 @@ import { apiFetch } from "@/lib/api";
 // TYPES
 // ============================================
 
+export interface CustomerInvoiceLine {
+  id: string;
+  variant: string;
+  variant_sku?: string;
+  variant_name?: string;
+  quantity: number;
+  unit_price: number;
+  tax_rate: number;
+  discount_amount: number;
+}
+
 export interface CustomerInvoice {
   id: string;
   invoice_number: string;
@@ -16,13 +27,19 @@ export interface CustomerInvoice {
   amount: number | string;
   paid_amount: number | string;
   outstanding: number | string;
-  status: "DRAFT" | "POSTED" | "PAID" | "PARTIAL" | "CANCELLED";
+  status: "DRAFT" | "CANCELLED";
+  payment_status?: "UNPAID" | "PARTIAL" | "PAID";
   journal_entry: number | string | null;
   notes: string;
+  source?: string;
+  payment_method?: string;
+  lines?: CustomerInvoiceLine[];
   created_at: string;
   updated_at: string;
   created_by?: number | string | null;
+  created_by_name?: string;
   updated_by?: number | string | null;
+  updated_by_name?: string;
 }
 
 interface PaginatedResponse<T> {
@@ -32,7 +49,9 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-type CreateCustomerInvoiceData = Omit<CustomerInvoice, "id" | "_id" | "created_at" | "updated_at" | "outstanding" | "paid_amount" | "status" | "journal_entry">;
+type CreateCustomerInvoiceData = Omit<CustomerInvoice, "id" | "_id" | "created_at" | "updated_at" | "outstanding" | "paid_amount" | "status" | "journal_entry"> & {
+  new_customer?: any;
+};
 type UpdateCustomerInvoiceData = Partial<CreateCustomerInvoiceData>;
 
 // ============================================
@@ -71,6 +90,14 @@ async function deleteCustomerInvoice(id: string) {
   return apiFetch<void>(`/api/finance/customer-invoices/${id}/`, { method: "DELETE" });
 }
 
+async function payCustomerInvoice(id: string, body?: Record<string, unknown>) {
+  return apiFetch<CustomerInvoice>(`/api/finance/customer-invoices/${id}/record_payment/`, {
+    method: "POST",
+    body: JSON.stringify(body ?? {}),
+  });
+}
+
+/** @deprecated Use payCustomerInvoice — kept for backward compatibility */
 async function postCustomerInvoice(id: string) {
   return apiFetch<CustomerInvoice>(`/api/finance/customer-invoices/${id}/post_invoice/`, { method: "POST" });
 }
@@ -128,6 +155,19 @@ export function useDeleteCustomerInvoice() {
   });
 }
 
+export function usePayCustomerInvoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body?: Record<string, unknown> }) =>
+      payCustomerInvoice(id, body),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY, id] });
+    },
+  });
+}
+
+/** @deprecated Use usePayCustomerInvoice */
 export function usePostCustomerInvoice() {
   const queryClient = useQueryClient();
   return useMutation({

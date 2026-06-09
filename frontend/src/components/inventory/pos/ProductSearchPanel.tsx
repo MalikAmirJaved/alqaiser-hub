@@ -6,6 +6,7 @@ import { useCategories } from "@/hooks/useCategories";
 import { useBrands } from "@/hooks/useBrands";
 import { useBatchStock } from "@/hooks/useBatchStock";
 import { ProductCard } from "./ProductCard";
+import { useIncomingStock } from "@/hooks/useIncomingStock";
 import debounce from "lodash/debounce";
 
 interface ProductSearchPanelProps {
@@ -58,7 +59,8 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
   const visibleVariantIds = useMemo(() => {
     return filteredVariants.map(v => v.id);
   }, [filteredVariants]);
-  
+    const { data: incomingStockMap = {} } = useIncomingStock(visibleVariantIds);
+
   // Batch stock fetch
   const { data: stockMap, isLoading: stockLoading } = useBatchStock(
     visibleVariantIds,
@@ -69,7 +71,8 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
   const variantsWithStock = useMemo(() => {
     return filteredVariants.map(variant => ({
       ...variant,
-      stock: stockMap?.[variant.id] || { available: 0, reserved: 0, on_hand: 0 }
+      stock: stockMap?.[variant.id] || { available: 0, reserved: 0, on_hand: 0 },
+      incoming: incomingStockMap[variant.id] || 0,   
     }));
   }, [filteredVariants, stockMap]);
   

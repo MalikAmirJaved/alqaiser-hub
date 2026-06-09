@@ -6,6 +6,7 @@ import { CartLine, fmt, cartTotal, cartSubtotal, cartTax } from "@/hooks/useSale
 import { useBatchStock } from "@/hooks/useBatchStock";
 import { CartLineItem } from "./CartLineItem";
 import { formatCurrency } from "@/lib/currency";
+
 interface CartPanelProps {
   cart: CartLine[];
   onUpdateCart: (newCart: CartLine[]) => void;
@@ -45,7 +46,7 @@ export function CartPanel({
 }: CartPanelProps) {
   const [customerSearch, setCustomerSearch] = useState("");
   const [showCustomerDD, setShowCustomerDD] = useState(false);
-  const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
+  const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);  
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerEmail, setNewCustomerEmail] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
@@ -61,6 +62,13 @@ export function CartPanel({
   const { data: customers = [] } = useCustomers(customerSearch || undefined);
   const createCustomer = useCreateCustomer();
   const customerRef = useRef<HTMLDivElement>(null);
+
+  // Clear customer search when a customer is selected
+  useEffect(() => {
+    if (selectedCustomer) {
+      setCustomerSearch("");
+    }
+  }, [selectedCustomer]);
 
   // Get unique variant IDs from cart for batch stock fetch
   const uniqueVariantIds = useMemo(
@@ -163,15 +171,26 @@ export function CartPanel({
         country: "",
         is_active: true,
       });
-      onSelectCustomer(newCust);
-      setShowNewCustomerForm(false);
-      setNewCustomerName("");
-      setNewCustomerEmail("");
-      setNewCustomerPhone("");
-      setCustomerSearch("");
-      setShowCustomerDD(false);
-    } catch {
-      // Error handled by hook
+      
+      // Ensure we have an id (the API returns 'id' from _id, but let's be safe)
+      const customerWithId = newCust?.id ? newCust : { ...newCust, id: newCust?._id };
+      
+      if (customerWithId && customerWithId.id) {
+        // 1. Update parent state
+        onSelectCustomer(customerWithId);
+        // 2. Immediately set the search input to the customer name (closes the dropdown)
+        setCustomerSearch(customerWithId.name);
+        // 3. Reset new customer form
+        setShowNewCustomerForm(false);
+        setNewCustomerName("");
+        setNewCustomerEmail("");
+        setNewCustomerPhone("");
+        setShowCustomerDD(false);
+      } else {
+        console.error('Customer creation returned without id:', newCust);
+      }
+    } catch (err) {
+      console.error('Failed to create customer:', err);
     }
   }, [newCustomerName, newCustomerEmail, newCustomerPhone, createCustomer, onSelectCustomer]);
 
@@ -196,11 +215,15 @@ export function CartPanel({
       if (customerRef.current && !customerRef.current.contains(e.target as Node)) {
         setShowCustomerDD(false);
         setShowNewCustomerForm(false);
+        // Clear search if no customer selected and search is empty
+        if (!selectedCustomer && !customerSearch) {
+          setCustomerSearch("");
+        }
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  }, [selectedCustomer, customerSearch]);
 
   return (
     <div className="flex flex-col h-full bg-card border-l border-border">
@@ -246,6 +269,12 @@ export function CartPanel({
                 setShowCustomerDD(true);
                 setShowNewCustomerForm(false);
               }}
+              onBlur={() => {
+                // Clear search if no customer selected and search is empty
+                if (!selectedCustomer && !customerSearch) {
+                  setCustomerSearch("");
+                }
+              }}
               placeholder="Walk-in or search customer…"
               className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground min-w-0"
               onFocus={() => setShowCustomerDD(true)}
@@ -283,7 +312,10 @@ export function CartPanel({
                   ))}
                   {(customers.length === 0 || customerSearch) && canCreate && (
                     <button
-                      onClick={() => setShowNewCustomerForm(true)}
+                      onClick={() => {
+                        setNewCustomerName(customerSearch);
+                        setShowNewCustomerForm(true);
+                      }}
                       className="w-full text-left px-3 py-2.5 text-sm text-primary hover:bg-accent flex items-center gap-2 transition-colors border-t border-border"
                     >
                       <PlusIcon size={14} />
@@ -318,7 +350,12 @@ export function CartPanel({
                   />
                   <div className="flex gap-2 pt-1">
                     <button
-                      onClick={() => { setShowNewCustomerForm(false); }}
+                      onClick={() => { 
+                        setShowNewCustomerForm(false);
+                        if (!selectedCustomer && !customerSearch) {
+                          setCustomerSearch("");
+                        }
+                      }}
                       className="flex-1 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
                     >
                       Cancel

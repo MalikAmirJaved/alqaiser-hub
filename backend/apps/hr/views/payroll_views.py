@@ -1,5 +1,6 @@
 # apps/hr/views/payroll_views.py
 from datetime import datetime, date, timedelta
+from decimal import Decimal
 from calendar import monthrange
 from django.db import transaction, models
 from django.shortcuts import get_object_or_404
@@ -17,6 +18,11 @@ from apps.hr.models import (
     Employee, PayrollRecord, EmployeeLoan, Compensation, LeaveRequest, PayrollDeductionDetail
 )
 from apps.compsetting.models import CompanySettings, WorkingDay, PublicHoliday
+from apps.finance.services.payable import (
+    annotate_total_paid,
+    create_payment_for,
+    get_latest_confirmed_payment,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +152,9 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             for detail in deduction_details
         ]
         
+        latest_payment = get_latest_confirmed_payment(payroll)
+        payment_status = 'CANCELLED' if payroll.is_cancelled else payroll.payment_status
+
         return {
             "id": str(payroll._id),
             "employee_id": str(payroll.employee._id) if payroll.employee else None,
@@ -160,10 +169,13 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "deductions": str(payroll.deductions),
             "deduction_details": deductions_list,
             "net_salary": str(payroll.net_salary),
+            "paid_amount": str(payroll.paid_amount),
+            "outstanding": str(payroll.outstanding),
             "transaction_type": payroll.transaction_type,
-            "transaction_number": payroll.transaction_number,
-            "payment_method": payroll.payment_method,
-            "status": payroll.status,
+            "transaction_number": latest_payment.reference_number if latest_payment else None,
+            "payment_method": latest_payment.payment_method if latest_payment else None,
+            "payment_status": payment_status,
+            "status": payment_status,
             "custom_note": payroll.custom_note,
             "processed_at": payroll.processed_at.isoformat() if payroll.processed_at else None,
             "created_at": payroll.created_at.isoformat() if payroll.created_at else None,
@@ -198,13 +210,32 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
             query = query.filter(employee=employee)
         if status_filter:
-            query = query.filter(status=status_filter)
+            status_filter = status_filter.upper()
+            if status_filter == 'CANCELLED':
+                query = query.filter(is_cancelled=True)
+            else:
+                query = annotate_total_paid(query, PayrollRecord).filter(is_cancelled=False)
+                if status_filter == 'PAID':
+                    query = query.filter(_total_paid__gte=models.F('net_salary'))
+                elif status_filter in ('PENDING', 'UNPAID'):
+                    query = query.filter(_total_paid=0)
+                elif status_filter == 'PARTIAL':
+                    query = query.filter(_total_paid__gt=0, _total_paid__lt=models.F('net_salary'))
         if search:
+            from django.contrib.contenttypes.models import ContentType
+            from apps.finance.models import Payment
+
+            ct = ContentType.objects.get_for_model(PayrollRecord)
+            payment_payroll_ids = Payment.objects.filter(
+                content_type=ct,
+                reference_number__icontains=search,
+                is_deleted=False,
+            ).values_list('object_id', flat=True)
             query = query.filter(
                 Q(employee__first_name__icontains=search) |
                 Q(employee__last_name__icontains=search) |
                 Q(employee__employee_id__icontains=search) |
-                Q(transaction_number__icontains=search)
+                Q(pk__in=payment_payroll_ids)
             )
         
         records = query.order_by('-year', '-month', '-created_at')
@@ -328,11 +359,11 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         # ---------- Net salary ----------
         net_salary = base_salary + total_compensation + overtime_amount + bonus - total_deductions
         
-        # ---------- Transaction number ----------
         transaction_number = request.data.get('transaction_number') or \
             f"PAY-{year}{str(month).zfill(2)}-{employee.employee_id}"
-        
-        # ---------- Create payroll record ----------
+        payment_method = request.data.get('payment_method', 'BANK_TRANSFER')
+        pay_immediately = request.data.get('pay_immediately', True)
+
         payroll = PayrollRecord.objects.create(
             company_id=company_id,
             branch_id=branch_id,
@@ -344,9 +375,6 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             deductions=total_deductions,
             net_salary=net_salary,
             transaction_type=request.data.get('transaction_type', 'SALARY'),
-            transaction_number=transaction_number,
-            payment_method=request.data.get('payment_method', 'BANK_TRANSFER'),
-            status='PAID',
             custom_note=request.data.get('custom_note'),
             processed_at=timezone.now(),
             created_by=request.user,
@@ -405,10 +433,40 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 updated_by=request.user,
             )
         
+        if pay_immediately and net_salary > 0:
+            bank_account = None
+            bank_account_uuid = request.data.get('bank_account_id')
+            if bank_account_uuid:
+                from apps.finance.models import BankAccount
+                try:
+                    bank_account = BankAccount.objects.get(
+                        _id=bank_account_uuid,
+                        company_id=company_id,
+                    )
+                except BankAccount.DoesNotExist:
+                    return Response(
+                        {'error': 'Bank account not found'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+            try:
+                create_payment_for(
+                    payroll,
+                    amount=Decimal(str(net_salary)),
+                    payment_date=timezone.now().date(),
+                    payment_method=payment_method,
+                    reference_number=transaction_number,
+                    bank_account=bank_account,
+                    user=request.user,
+                    auto_confirm=True,
+                )
+            except ValueError as exc:
+                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
         return Response({
             "message": "Payment processed successfully",
             "id": str(payroll._id),
-            "transaction_number": payroll.transaction_number,
+            "transaction_number": transaction_number,
             "base_salary": str(payroll.base_salary),
             "days_in_month": days_in_month,
             "daily_rate": str(daily_rate),
@@ -417,7 +475,8 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "bonus": str(bonus),
             "deductions": str(total_deductions),
             "net_salary": str(payroll.net_salary),
-            "status": payroll.status,
+            "payment_status": payroll.payment_status,
+            "status": payroll.payment_status,
         }, status=status.HTTP_201_CREATED)
     
     # ------------------------------------------------------------------
@@ -443,10 +502,46 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             company_id=company_id,
             is_deleted=False
         )
-        updatable_fields = ['status', 'custom_note', 'transaction_number', 'payment_method']
-        for field in updatable_fields:
-            if field in request.data:
-                setattr(payroll, field, request.data[field])
+        if 'custom_note' in request.data:
+            payroll.custom_note = request.data['custom_note']
+
+        new_status = request.data.get('status')
+        if new_status == 'CANCELLED':
+            payroll.is_cancelled = True
+        elif new_status == 'PAID' and payroll.payment_status != 'PAID':
+            payment_method = request.data.get('payment_method', 'BANK_TRANSFER')
+            reference_number = request.data.get(
+                'transaction_number',
+                f"PAY-{payroll.year}{str(payroll.month).zfill(2)}-{payroll.employee.employee_id}",
+            )
+            bank_account = None
+            bank_account_uuid = request.data.get('bank_account_id')
+            if bank_account_uuid:
+                from apps.finance.models import BankAccount
+                try:
+                    bank_account = BankAccount.objects.get(
+                        _id=bank_account_uuid,
+                        company_id=company_id,
+                    )
+                except BankAccount.DoesNotExist:
+                    return Response(
+                        {'error': 'Bank account not found'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            try:
+                create_payment_for(
+                    payroll,
+                    amount=payroll.outstanding,
+                    payment_date=timezone.now().date(),
+                    payment_method=payment_method,
+                    reference_number=reference_number,
+                    bank_account=bank_account,
+                    user=request.user,
+                    auto_confirm=True,
+                )
+            except ValueError as exc:
+                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
         payroll.updated_by = request.user
         payroll.save()
         return Response({
@@ -625,7 +720,10 @@ class PayrollStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             is_deleted=False
         )
         total_payroll = current_payroll.aggregate(total=models.Sum('net_salary'))['total'] or 0
-        paid_count = current_payroll.filter(status='PAID').count()
+        paid_count = annotate_total_paid(current_payroll, PayrollRecord).filter(
+            is_cancelled=False,
+            _total_paid__gte=models.F('net_salary'),
+        ).count()
         total_employees = Employee.objects.filter(
             company_id=company_id,
             is_deleted=False,

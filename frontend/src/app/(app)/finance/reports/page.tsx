@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { PageHeader, Card, ToolbarButton } from "@/components/finance/ui";
-import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useTrialBalance } from "@/hooks/finance/useTrialBalance";
 import { useProfitLoss } from "@/hooks/finance/useProfitLoss";
 import { useBalanceSheet } from "@/hooks/finance/useBalanceSheet";
@@ -25,13 +24,13 @@ const toNumber = (val: any): number => {
 };
 
 // --------------------------------------------------------------
-// Report Components (each returns a table)
+// Report Components (same as before)
 // --------------------------------------------------------------
 
 function TrialBalanceReport({ asOfDate }: { asOfDate: string }) {
   const { data, isLoading } = useTrialBalance(asOfDate);
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
-  if (!data?.data.length) return <div className="p-8 text-center text-muted-foreground">No data for selected date</div>;
+  if (!data?.data.length) return <div className="p-8 text-center text-muted-foreground">No data</div>;
 
   return (
     <div className="overflow-x-auto">
@@ -50,7 +49,7 @@ function TrialBalanceReport({ asOfDate }: { asOfDate: string }) {
               <td className="px-4 py-2">
                 <div className="font-mono text-xs text-primary mr-2">{acc.code}</div>
                 <div>{acc.name}</div>
-              </td>
+               </td>
               <td className="px-4 py-2 text-right">{formatCurrency(toNumber(acc.debit))}</td>
               <td className="px-4 py-2 text-right">{formatCurrency(toNumber(acc.credit))}</td>
               <td className="px-4 py-2 text-right font-medium">{formatCurrency(toNumber(acc.balance))}</td>
@@ -73,9 +72,8 @@ function TrialBalanceReport({ asOfDate }: { asOfDate: string }) {
 function ProfitLossReport({ startDate, endDate }: { startDate: string; endDate: string }) {
   const { data, isLoading } = useProfitLoss(startDate, endDate);
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
-  if (!data) return <div className="p-8 text-center text-muted-foreground">No data for selected period</div>;
+  if (!data) return <div className="p-8 text-center text-muted-foreground">No data</div>;
 
-  // Build rows: income accounts, then expense accounts, then net
   const rows = [
     { label: "Income", type: "section", children: data.income.accounts.map(a => ({ label: a.name, amount: a.amount, indent: true })) },
     { label: "Total Income", amount: data.income.total, isBold: true },
@@ -88,10 +86,7 @@ function ProfitLossReport({ startDate, endDate }: { startDate: string; endDate: 
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="text-xs text-muted-foreground border-b border-border bg-surface/40">
-          <tr>
-            <th className="px-4 py-2 text-left">Account</th>
-            <th className="px-4 py-2 text-right">Amount</th>
-          </tr>
+          <tr><th className="px-4 py-2 text-left">Account</th><th className="px-4 py-2 text-right">Amount</th></tr>
         </thead>
         <tbody>
           {rows.map((row, idx) => {
@@ -127,7 +122,7 @@ function ProfitLossReport({ startDate, endDate }: { startDate: string; endDate: 
 function BalanceSheetReport({ asOfDate }: { asOfDate: string }) {
   const { data, isLoading } = useBalanceSheet(asOfDate);
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
-  if (!data) return <div className="p-8 text-center text-muted-foreground">No data for selected date</div>;
+  if (!data) return <div className="p-8 text-center text-muted-foreground">No data</div>;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -191,7 +186,7 @@ function BalanceSheetReport({ asOfDate }: { asOfDate: string }) {
         </div>
         {!data.is_balanced && (
           <div className="p-3 rounded-lg text-center text-sm bg-destructive/10 text-destructive">
-            ✗ Balance sheet is NOT balanced. Check journal entries.
+            ✗ Balance sheet is NOT balanced.
           </div>
         )}
       </div>
@@ -200,14 +195,13 @@ function BalanceSheetReport({ asOfDate }: { asOfDate: string }) {
 }
 
 function CashFlowReport() {
-  // Placeholder – backend not implemented
   return <div className="p-8 text-center text-muted-foreground">Cash Flow Statement coming soon.</div>;
 }
 
 function GeneralLedgerReport() {
   const { data, isLoading } = useJournalEntries({ ordering: "-date" });
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
-  if (!data?.length) return <div className="p-8 text-center text-muted-foreground">No journal entries found</div>;
+  if (!data?.length) return <div className="p-8 text-center text-muted-foreground">No entries</div>;
 
   return (
     <div className="overflow-x-auto">
@@ -262,13 +256,7 @@ function ARAgingReport() {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-xs text-muted-foreground border-b border-border bg-surface/40">
-            <tr>
-              <th className="px-4 py-2">Invoice #</th>
-              <th className="px-4 py-2">Customer</th>
-              <th className="px-4 py-2">Due Date</th>
-              <th className="px-4 py-2 text-right">Outstanding</th>
-              <th className="px-4 py-2">Bucket</th>
-            </tr>
+            <tr><th>Invoice #</th><th>Customer</th><th>Due Date</th><th className="text-right">Outstanding</th><th>Bucket</th></tr>
           </thead>
           <tbody>
             {data.details.map((inv) => (
@@ -308,13 +296,7 @@ function APAgingReport() {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-xs text-muted-foreground border-b border-border bg-surface/40">
-            <tr>
-              <th className="px-4 py-2">Bill #</th>
-              <th className="px-4 py-2">Supplier</th>
-              <th className="px-4 py-2">Due Date</th>
-              <th className="px-4 py-2 text-right">Outstanding</th>
-              <th className="px-4 py-2">Bucket</th>
-            </tr>
+            <tr><th>Bill #</th><th>Supplier</th><th>Due Date</th><th className="text-right">Outstanding</th><th>Bucket</th></tr>
           </thead>
           <tbody>
             {data.details.map((bill) => (
@@ -334,15 +316,14 @@ function APAgingReport() {
 }
 
 function TaxReport() {
-  // Placeholder – requires tax module
-  return <div className="p-8 text-center text-muted-foreground">Tax Reports coming soon. Requires tax configuration.</div>;
+  return <div className="p-8 text-center text-muted-foreground">Tax Reports coming soon.</div>;
 }
 
 function ExpenseReportComponent({ startDate, endDate }: { startDate: string; endDate: string }) {
   const { data: byCategory, isLoading } = useExpenseReport(startDate, endDate);
   const { data: expenses, isLoading: isLoadingExpenses } = useExpenses({ start_date: startDate, end_date: endDate });
   if (isLoading || isLoadingExpenses) return <div className="p-8 text-center">Loading...</div>;
-  if (!byCategory?.length) return <div className="p-8 text-center text-muted-foreground">No expenses for selected period</div>;
+  if (!byCategory?.length) return <div className="p-8 text-center text-muted-foreground">No expenses</div>;
 
   const total = expenses?.reduce((s, e) => s + e.amount, 0) || 0;
 
@@ -354,11 +335,7 @@ function ExpenseReportComponent({ startDate, endDate }: { startDate: string; end
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-xs text-muted-foreground border-b border-border bg-surface/40">
-            <tr>
-              <th className="px-4 py-2">Category</th>
-              <th className="px-4 py-2 text-right">Amount</th>
-              <th className="px-4 py-2 text-right">% of Total</th>
-            </tr>
+            <tr><th>Category</th><th className="text-right">Amount</th><th className="text-right">% of Total</th></tr>
           </thead>
           <tbody>
             {byCategory.map((cat) => (
@@ -379,7 +356,7 @@ function BudgetReportComponent() {
   const [year, setYear] = useState(new Date().getFullYear());
   const { data, isLoading } = useBudgetVariance(year, 'MONTHLY');
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
-  if (!data?.length) return <div className="p-8 text-center text-muted-foreground">No budgets defined for {year}</div>;
+  if (!data?.length) return <div className="p-8 text-center text-muted-foreground">No budgets for {year}</div>;
 
   return (
     <div>
@@ -417,7 +394,7 @@ function BudgetReportComponent() {
 }
 
 // --------------------------------------------------------------
-// Main Page
+// Main Page (FIXED: outer container now manages overflow correctly)
 // --------------------------------------------------------------
 
 const reportsList = [
@@ -434,7 +411,6 @@ const reportsList = [
 ];
 
 export default function FinancialReportsPage() {
-  const permissions = useFeaturePermissions("FINANCE", "report");
   const { settings } = useCompanySettings();
   const [activeReport, setActiveReport] = useState("profit_loss");
   const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0]);
@@ -451,7 +427,9 @@ export default function FinancialReportsPage() {
   };
 
   return (
-    <>
+    // The outer div takes full height of the main (which has overflow-auto from layout)
+    // We set this div to also be flex column with overflow-hidden to prevent double scroll.
+    <div className="flex flex-col h-full overflow-hidden">
       <PageHeader
         breadcrumbs={["Insights", "Financial Reports"]}
         title="Financial Reports"
@@ -464,14 +442,14 @@ export default function FinancialReportsPage() {
           </>
         }
       />
-      <div className="p-6 grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-4 overflow-hidden min-h-0 pt-6">
         {/* Left sidebar - Report Library */}
-        <Card className="xl:col-span-1">
-          <div className="px-5 py-4 border-b border-border">
+        <Card className="xl:col-span-1 flex flex-col overflow-hidden">
+          <div className="px-5 py-4 border-b border-border flex-shrink-0">
             <h3 className="text-base font-semibold">Report Library</h3>
             <p className="text-xs text-muted-foreground">Standard reports</p>
           </div>
-          <div className="divide-y divide-border max-h-[640px] overflow-y-auto">
+          <div className="divide-y divide-border flex-1 overflow-y-auto">
             {reportsList.map((r) => {
               const Icon = r.icon;
               const isActive = activeReport === r.id;
@@ -493,28 +471,28 @@ export default function FinancialReportsPage() {
           </div>
         </Card>
 
-        {/* Main content - Selected report */}
-        <Card className="xl:col-span-2">
-          <div className="px-5 py-4 border-b border-border flex justify-between items-center flex-wrap gap-3">
-            <div>
-              <h3 className="text-base font-semibold">{report.name}</h3>
-              <p className="text-xs text-muted-foreground">{settings?.companyName || "Company"} · {new Date().getFullYear()}</p>
-            </div>
-            <div className="flex gap-2">
-              {report.hasDateRange && (
-                <>
-                  <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="px-3 py-1.5 text-sm border border-border rounded-md bg-background" />
-                  <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="px-3 py-1.5 text-sm border border-border rounded-md bg-background" />
-                </>
-              )}
-              {report.hasAsOfDate && (
-                <input type="date" value={asOfDate} onChange={e => setAsOfDate(e.target.value)} className="px-3 py-1.5 text-sm border border-border rounded-md bg-background" />
-              )}
-            </div>
+        {/* Right content - Scrollable report area */}
+        <Card className="xl:col-span-2 flex flex-col overflow-hidden">
+          <div className="px-5 py-4 border-b border-border flex-shrink-0">
+            <h3 className="text-base font-semibold">{report.name}</h3>
+            <p className="text-xs text-muted-foreground">{settings?.companyName || "Company"} · {new Date().getFullYear()}</p>
           </div>
-          <div className="p-5">{renderContent()}</div>
+          <div className="flex justify-between items-center px-5 py-2 border-b border-border flex-shrink-0">
+            {report.hasDateRange && (
+              <div className="flex gap-2">
+                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="px-3 py-1.5 text-sm border border-border rounded-md bg-background" />
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="px-3 py-1.5 text-sm border border-border rounded-md bg-background" />
+              </div>
+            )}
+            {report.hasAsOfDate && (
+              <input type="date" value={asOfDate} onChange={e => setAsOfDate(e.target.value)} className="px-3 py-1.5 text-sm border border-border rounded-md bg-background" />
+            )}
+          </div>
+          <div className="flex-1 overflow-y-auto p-5">
+            {renderContent()}
+          </div>
         </Card>
       </div>
-    </>
+    </div>
   );
 }
