@@ -10,6 +10,7 @@ from apps.finance.models import CustomerInvoice, CustomerInvoiceLine
 from apps.finance.services.invoice_payment import pay_customer_invoice
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.sales.serializers.invoice import SalesInvoiceSerializer
+from rest_framework.exceptions import ValidationError
 
 
 class SalesInvoiceViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
@@ -56,8 +57,9 @@ class SalesInvoiceViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
     def perform_update(self, serializer):
         instance = serializer.instance
         if instance.status != 'DRAFT':
-            from rest_framework.exceptions import ValidationError
             raise ValidationError('Only DRAFT invoices can be updated.')
+        if instance.payment_status == 'PAID':
+            raise ValidationError('Cannot edit a paid invoice.')
         serializer.save(updated_by=self.request.user)
 
     def destroy(self, request, *args, **kwargs):
@@ -67,10 +69,16 @@ class SalesInvoiceViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
                 {'error': 'Only DRAFT invoices can be deleted'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if instance.payment_status == 'PAID':
+            return Response(
+                {'error': 'Cannot delete a paid invoice'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         instance.is_deleted = True
         instance.deleted_by = request.user
         instance.save(update_fields=['is_deleted', 'deleted_by'])
         return Response(status=status.HTTP_204_NO_CONTENT)
+
 
     @action(detail=True, methods=['post'])
     def post_invoice(self, request, _id=None):

@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
 from decimal import Decimal
-
+from rest_framework.exceptions import ValidationError
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.finance.models import CustomerInvoice, CustomerInvoiceLine
@@ -60,8 +60,10 @@ class CustomerInvoiceViewSet(
     def perform_update(self, serializer):
         instance = serializer.instance
         if instance.status != 'DRAFT':
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError("Only DRAFT invoices can be updated.")
+            raise ValidationError('Only DRAFT invoices can be updated.')
+        # NEW: reject if already paid
+        if instance.payment_status == 'PAID':
+            raise ValidationError('Cannot edit a paid invoice.')
         serializer.save(updated_by=self.request.user)
 
     def destroy(self, request, *args, **kwargs):
@@ -69,12 +71,19 @@ class CustomerInvoiceViewSet(
         if instance.status != 'DRAFT':
             return Response(
                 {'error': 'Only DRAFT invoices can be deleted'},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # NEW: reject if already paid
+        if instance.payment_status == 'PAID':
+            return Response(
+                {'error': 'Cannot delete a paid invoice'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
         instance.is_deleted = True
         instance.deleted_by = request.user
         instance.save(update_fields=['is_deleted', 'deleted_by'])
         return Response(status=status.HTTP_204_NO_CONTENT)
+
 
     def _pay_invoice(self, invoice, request, amount=None):
         try:

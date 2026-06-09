@@ -39,7 +39,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const paidAmount = toNumber(invoice.paid_amount);
   const outstanding = toNumber(invoice.outstanding);
   const canPay = invoice.payment_status !== "PAID" && invoice.status !== "CANCELLED";
-  const canEdit = invoice.status === "DRAFT" && permissions.update;
+  const canEdit = invoice.status === "DRAFT" && permissions.update && invoice.payment_status !== "PAID"
   const canDelete = invoice.status === "DRAFT" && permissions.delete;
   const canRecordPayment = canPay;
 
