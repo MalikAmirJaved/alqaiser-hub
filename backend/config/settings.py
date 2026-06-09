@@ -14,6 +14,11 @@ DEBUG = env.bool("DEBUG", default=False)
 FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1", "0.0.0.0"])
 
+# JWT Settings
+JWT_SECRET_TIME_EXP_MINUTES = env.int("JWT_SECRET_TIME_EXP_MINUTES", default=10)
+JWT_REFRESH_TIME_EXP_DAYS = env.int("JWT_REFRESH_TIME_EXP_DAYS", default=15)
+
+
 # ─── Apps ────────────────────────────────────────────────────────────────────
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -117,8 +122,8 @@ REST_FRAMEWORK = {
 
 # ─── JWT ──────────────────────────────────────────────────────────────────────
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=JWT_SECRET_TIME_EXP_MINUTES),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=JWT_REFRESH_TIME_EXP_DAYS),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': False,
     'AUTH_HEADER_TYPES': ('Bearer',),
@@ -127,7 +132,7 @@ SIMPLE_JWT = {
     'AUTH_COOKIE_HTTP_ONLY': True,
     'AUTH_COOKIE_PATH': '/',
     'AUTH_COOKIE_SAMESITE': 'Lax',
-}
+} 
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
 CORS_ALLOWED_ORIGINS = [FRONTEND_URL]

@@ -1,9 +1,10 @@
 "use client";
 import { useEffect } from "react";
-import { useThemeStore } from "@/stores/useThemeStore";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 
 export function ThemeInitializer() {
-  const theme = useThemeStore((state) => state.theme);
+  const theme = useSelector((state: RootState) => state.theme.theme);
 
   useEffect(() => {
     document.documentElement.classList.remove("light", "dark");

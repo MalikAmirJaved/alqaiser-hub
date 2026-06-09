@@ -1,6 +1,10 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouter, usePathname } from "next/navigation";
 import { useApi } from "./useApi";
+import { useDispatch, useSelector } from "react-redux";
+import { RootState } from "@/store";
+import { setUser, setUnauthenticated, setInitialized } from "@/store/slices/authSlice";
+import { useEffect, useState } from "react";
 
 interface User {
   id: number;
@@ -12,14 +16,48 @@ interface User {
 export function useAuth() {
   const api = useApi();
   const router = useRouter();
+  const pathname = usePathname();
   const queryClient = useQueryClient();
+  const dispatch = useDispatch();
+  
+  const { user, isAuthenticated, isInitialized } = useSelector((state: RootState) => state.auth);
+  const [loading, setLoading] = useState(!isInitialized);
 
-  const { data: user, isLoading } = useQuery({
-    queryKey: ["user"],
-    queryFn: () => api<User>("/api/accounts/me/"),
-    retry: false,
-    staleTime: Infinity,
-  });
+  useEffect(() => {
+    let mounted = true;
+
+    const checkAuth = async () => {
+      if (isAuthenticated && !user) {
+        try {
+          const data = await api<User>("/api/accounts/me/");
+          if (mounted) {
+            dispatch(setUser(data));
+          }
+        } catch (error: any) {
+          if (mounted) {
+            dispatch(setUnauthenticated());
+          }
+        }
+      } else if (!isAuthenticated) {
+        if (mounted) {
+          dispatch(setInitialized());
+        }
+      }
+      if (mounted) {
+        setLoading(false);
+      }
+    };
+
+    if (!isInitialized) {
+      checkAuth();
+    } else {
+      setLoading(false);
+    }
+
+    return () => {
+      mounted = false;
+    };
+  }, [isAuthenticated, user, isInitialized, api, dispatch]);
 
   const loginMutation = useMutation({
     mutationFn: ({ email, password }: { email: string; password: string }) =>
@@ -28,7 +66,7 @@ export function useAuth() {
         body: JSON.stringify({ username: email, password }),
       }),
     onSuccess: (data) => {
-      queryClient.setQueryData(["user"], data.user);
+      dispatch(setUser(data.user));
       router.push("/dashboard");
     },
   });
@@ -36,14 +74,15 @@ export function useAuth() {
   const logoutMutation = useMutation({
     mutationFn: () => api("/api/accounts/logout/", { method: "POST" }).catch(() => {}),
     onSuccess: () => {
-      queryClient.setQueryData(["user"], null);
+      queryClient.clear();
+      dispatch(setUnauthenticated());
       router.push("/login");
     },
   });
 
   return {
     user,
-    ready: !isLoading,
+    ready: !loading,
     login: async (email: string, password: string) => {
       try {
         await loginMutation.mutateAsync({ email, password });

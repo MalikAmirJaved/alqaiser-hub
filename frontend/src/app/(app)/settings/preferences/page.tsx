@@ -3,13 +3,17 @@
 "use client";
 
 import { ls } from "@/services/localStorageService";
-import { useThemeStore } from "@/stores/useThemeStore";
+import { useSelector, useDispatch } from "react-redux";
+import { toggleTheme } from "@/store/slices/themeSlice";
+import { RootState } from "@/store";
 import PageHeader from "@/components/PageHeader";
 
 export default Preferences;
 
 function Preferences() {
-  const { theme, toggle } = useThemeStore() as any;
+  const theme = useSelector((state: RootState) => state.theme.theme);
+  const dispatch = useDispatch();
+  const toggle = () => dispatch(toggleTheme());
 
   const company = ls.get<any>("company", {}) || {};
 

@@ -148,7 +148,7 @@ export default function DesignationsPage() {
       badge: true,
       render: (value: boolean) => (
         <Badge
-          variant={value ? "success" : "destructive"}
+          variant={value ? "default" : "destructive"}
           className="text-xs"
         >
           {value ? "Active" : "Inactive"}
