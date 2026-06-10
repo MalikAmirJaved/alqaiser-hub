@@ -105,11 +105,6 @@ RESOURCES_ACTIONS: dict[str, dict[str, list[str]]] = {
         "sales_customers_invoice":["view", "create", "pay", "update", "delete"],
     },
 
-    # ── Dashboard ───────────────────────────────────────────────────────────
-    "DASHBOARD": {
-        "overall": ["view"],
-    },
-
     # ── AI Monitoring ────────────────────────────────────────────────────────
     "AI_MONITORING": {
         "live_dashboard":   ["view"],
@@ -118,11 +113,6 @@ RESOURCES_ACTIONS: dict[str, dict[str, list[str]]] = {
         "alert":            ["view"],
         "report":           ["view"],
         "activity":         ["view"],
-    },
-
-    # ── Notifications ───────────────────────────────────────────────────────
-    "NOTIFICATIONS": {
-        "notification": ["view", "create", "update", "delete"],
     },
 
     # ── Settings ─────────────────────────────────────────────────────────────
