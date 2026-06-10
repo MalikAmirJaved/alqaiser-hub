@@ -121,7 +121,7 @@ RESOURCES_ACTIONS: dict[str, dict[str, list[str]]] = {
         "branch":       ["view", "create", "update", "delete"],
         "user":         ["view", "create", "update", "delete"],
         "permissions":  ["view", "update"],
-        "department":   ["view"],
+        "department":   ["view", "create", "update", "delete"],
         "designation":  ["view", "create", "update", "delete"],
         "role":         ["view", "create", "update", "delete"],
         "preference":   ["view", "update"],

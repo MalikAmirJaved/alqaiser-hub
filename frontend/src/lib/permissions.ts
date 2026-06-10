@@ -117,7 +117,7 @@ export const PERMISSIONS = {
     company:     ["view","update"]                       as const,
     user:        ["view","create","update","delete"]     as const,
     permissions: ["view","update"]                       as const,
-    department:  ["view"]                                as const,
+    department:  ["view", "create", "update", "delete"]  as const,
     designation: ["view","create","update","delete"]     as const,
     role:        ["view","create","update","delete"]     as const,
     preference:  ["view","update"]                       as const,

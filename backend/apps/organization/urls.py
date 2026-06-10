@@ -1,7 +1,13 @@
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from .views import (
-    UserContextView, SwitchCompanyView, UserProfileView, BranchCreateView,BranchDetailView,UserListView,UserDetailView
+    UserContextView, SwitchCompanyView, UserProfileView, 
+    BranchCreateView, BranchDetailView, UserListView, 
+    UserDetailView, DepartmentViewSet
 )
+
+router = DefaultRouter()
+router.register(r'departments', DepartmentViewSet, basename='department')
 
 urlpatterns = [
     path('context/', UserContextView.as_view(), name='user-context'),
@@ -11,5 +17,5 @@ urlpatterns = [
     path('branches/detail/', BranchDetailView.as_view(), name='branch-detail'),
     path('users/', UserListView.as_view(), name='user-list'),
     path('users/<int:pk>/', UserDetailView.as_view(), name='user-detail'),
-
+    path('', include(router.urls)),
 ]

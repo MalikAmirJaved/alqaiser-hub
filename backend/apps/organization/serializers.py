@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Branch
+from .models import (Branch, Department)
 
 User = get_user_model()
 
@@ -89,3 +89,15 @@ class BranchSerializer(serializers.ModelSerializer):
         validated_data.pop("created_by", None)
         validated_data.pop("updated_by", None)
         return super().create(validated_data)
+    
+
+class DepartmentSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='_id', read_only=True)
+    
+    class Meta:
+        model = Department
+        fields = [
+            'id', 'name', 'code', 'description', 'is_active',
+            'created_at', 'updated_at', 'created_by', 'updated_by'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'created_by', 'updated_by']

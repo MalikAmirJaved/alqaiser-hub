@@ -1,8 +1,9 @@
-// src/app/(dashboard)/designations/page.tsx
+// frontend/src/app/(app)/settings/designations/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { useDesignations, useCreateDesignation, useUpdateDesignation, useDeleteDesignation } from "@/hooks/useDesignations";
+import { useDepartmentOptions } from "@/hooks/useDepartments";
 import DataTable from "@/components/reuseable/DataTable";
 import PageHeader from "@/components/PageHeader";
 import FormModal from "@/components/reuseable/FormModal";
@@ -10,7 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2, Briefcase, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { DEPARTMENT_CHOICES } from "@/lib/departments";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 export default function DesignationsPage() {
@@ -20,6 +20,9 @@ export default function DesignationsPage() {
   const createDesignation = useCreateDesignation();
   const updateDesignation = useUpdateDesignation();
   const deleteDesignation = useDeleteDesignation();
+
+  // ✅ Dynamic department options
+  const { options: departmentOptions, isLoading: deptLoading } = useDepartmentOptions();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingDesignation, setEditingDesignation] = useState<any>(null);
@@ -66,12 +69,10 @@ export default function DesignationsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!formData.name.trim()) {
       alert("Designation name is required");
       return;
     }
-
     try {
       if (editingDesignation) {
         await updateDesignation.mutateAsync({
@@ -105,25 +106,19 @@ export default function DesignationsPage() {
       key: "department",
       label: "Department",
       sortable: true,
-      render: (value: string) => (
-        <span className="text-muted-foreground">{value || "—"}</span>
-      ),
+      render: (value: string) => <span className="text-muted-foreground">{value || "—"}</span>,
     },
     {
       key: "payGrade",
       label: "Pay Grade",
       sortable: true,
-      render: (value: string) => (
-        <span className="text-muted-foreground">{value || "—"}</span>
-      ),
+      render: (value: string) => <span className="text-muted-foreground">{value || "—"}</span>,
     },
     {
       key: "description",
       label: "Description",
       render: (value: string) => (
-        <span className="text-sm text-muted-foreground line-clamp-1">
-          {value || "—"}
-        </span>
+        <span className="text-sm text-muted-foreground line-clamp-1">{value || "—"}</span>
       ),
     },
     {
@@ -131,10 +126,7 @@ export default function DesignationsPage() {
       label: "Status",
       badge: true,
       render: (value: boolean) => (
-        <Badge
-          variant={value ? "default" : "destructive"}
-          className="text-xs"
-        >
+        <Badge variant={value ? "default" : "destructive"} className="text-xs">
           {value ? "Active" : "Inactive"}
         </Badge>
       ),
@@ -213,20 +205,19 @@ export default function DesignationsPage() {
             />
           </div>
 
-          {/* Department */}
+          {/* Department – dynamic dropdown */}
           <div>
-            <label className="text-sm font-medium text-muted-foreground">
-              Department
-            </label>
+            <label className="text-sm font-medium text-muted-foreground">Department</label>
             <select
               value={formData.department}
               onChange={(e) => setFormData({ ...formData, department: e.target.value })}
               className="w-full mt-1 h-10 px-3 rounded-lg border border-border bg-muted/40 focus:border-primary outline-none"
+              disabled={deptLoading}
             >
               <option value="">Select Department</option>
-              {DEPARTMENT_CHOICES.map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
+              {departmentOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
                 </option>
               ))}
             </select>
@@ -234,9 +225,7 @@ export default function DesignationsPage() {
 
           {/* Pay Grade */}
           <div>
-            <label className="text-sm font-medium text-muted-foreground">
-              Pay Grade
-            </label>
+            <label className="text-sm font-medium text-muted-foreground">Pay Grade</label>
             <input
               type="text"
               value={formData.payGrade}
@@ -248,9 +237,7 @@ export default function DesignationsPage() {
 
           {/* Active Status */}
           <div>
-            <label className="text-sm font-medium text-muted-foreground">
-              Status
-            </label>
+            <label className="text-sm font-medium text-muted-foreground">Status</label>
             <select
               value={formData.isActive ? "true" : "false"}
               onChange={(e) => setFormData({ ...formData, isActive: e.target.value === "true" })}
@@ -263,9 +250,7 @@ export default function DesignationsPage() {
 
           {/* Description */}
           <div className="md:col-span-2">
-            <label className="text-sm font-medium text-muted-foreground">
-              Description
-            </label>
+            <label className="text-sm font-medium text-muted-foreground">Description</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}

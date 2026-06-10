@@ -5,12 +5,17 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import generics, status
 from django.db import transaction
 from .models import (
-    UserCompanyContext, Company, Branch, User
+    UserCompanyContext, Company, Branch, User,Department
 )
-from .serializers import (UserProfileSerializer, BranchSerializer)
+from rest_framework import viewsets
+from .serializers import (UserProfileSerializer, BranchSerializer, DepartmentSerializer)
 from rest_framework.generics import RetrieveUpdateDestroyAPIView
 from rest_framework.exceptions import NotFound
 from apps.permissions.mixins import PermissionRequiredMixin
+from apps.common.baseauthentication import CompanyBranchMixin
+from rest_framework.decorators import action
+from django.db.models import Q
+
 
 class UserContextView(PermissionRequiredMixin, APIView):
     """Get/Update current user's company and branch context"""
@@ -260,3 +265,55 @@ class UserDetailView(PermissionRequiredMixin, generics.RetrieveUpdateDestroyAPIV
         instance.deleted_by = self.request.user
         instance.is_active = False
         instance.save()
+
+
+class DepartmentViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+    permission_module = 'SETTINGS'
+    permission_resource = 'department'
+    queryset = Department.objects.all()
+    serializer_class = DepartmentSerializer
+    lookup_field = '_id'
+    lookup_url_kwarg = '_id'
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        qs = qs.filter(is_deleted=False)
+        search = self.request.query_params.get('search')
+        if search:
+            qs = qs.filter(Q(name__icontains=search) | Q(code__icontains=search))
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(
+            company_id=self.request.user.company_id,
+            branch_id=self.request.user.branch_id,
+            created_by=self.request.user,
+            updated_by=self.request.user,
+        )
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=self.request.user)
+
+    @action(detail=True, methods=['get'])
+    def designations(self, request, _id=None):
+        """Get all designations belonging to this department"""
+        department = self.get_object()
+        from apps.compsetting.models import Designation
+        designations = Designation.objects.filter(
+            company_id=request.user.company_id,
+            department=department.name,
+            is_deleted=False
+        ).values('_id', 'name', 'department', 'pay_grade', 'is_active')
+        return Response(list(designations))
+
+    @action(detail=True, methods=['get'])
+    def employees(self, request, _id=None):
+        """Get all employees belonging to this department"""
+        department = self.get_object()
+        employees = Employee.objects.filter(
+            company_id=request.user.company_id,
+            department=department.name,
+            is_deleted=False,
+            employment_status='ACTIVE'
+        ).values('_id', 'first_name', 'last_name', 'employee_id', 'designation')
+        return Response(list(employees))

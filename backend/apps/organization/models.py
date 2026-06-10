@@ -2,6 +2,7 @@ import uuid
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
+from apps.common.basemodel import BaseModel
 
 
 # -----------------------------
@@ -188,3 +189,22 @@ class UserCompanyContext(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.current_company.name if self.current_company else 'No Company'}"
 
+
+class Department(BaseModel):
+    """Company departments (e.g., HR, Inventory, Finance)"""
+    name = models.CharField(max_length=100)
+    code = models.CharField(max_length=50)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'organization_departments'
+        ordering = ['name']
+        unique_together = [['company_id', 'code']]
+        indexes = [
+            models.Index(fields=['company_id', 'is_deleted']),
+            models.Index(fields=['code']),
+        ]
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"

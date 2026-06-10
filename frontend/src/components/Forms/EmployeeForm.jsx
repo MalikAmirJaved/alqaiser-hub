@@ -13,6 +13,7 @@ import { useEmployees } from "@/hooks/useEmployees";
 import { LocationGroup } from "../reuseable/LocationSelectors";
 import SearchableSelect from "../reuseable/SearchableSelect";
 import { DatePicker } from "@/components/reuseable/DatePicker";
+import { useDepartmentOptions } from "@/lib/departments";
 
 export default function EmployeeForm({ initialData = null, onSubmit, onCancel }) {
   const [formData, setFormData] = useState({
@@ -55,6 +56,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
   });
 
   const [loading, setLoading] = useState(false);
+const { options: departmentOptions } = useDepartmentOptions();
 
   // Fetch data from backend
   const { data: designations = [] } = useDesignations();
@@ -334,17 +336,12 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Department *</span>
                   <SearchableSelect
-                    value={formData.department}
-                    onChange={(val) => handleChange("department", val)}
-                    options={[
-                      { value: "HR", label: "HR" },
-                      { value: "INVENTORY", label: "Inventory" },
-                      { value: "FINANCE", label: "Finance" },
-                      { value: "MONITORING", label: "Monitoring" }
-                    ]}
-                    required={true}
-                    placeholder="Select Department"
-                  />
+  value={formData.department}
+  onChange={(val) => handleChange("department", val)}
+  options={departmentOptions}
+  required={true}
+  placeholder="Select Department"
+/>
                 </label>
               </div>
 
