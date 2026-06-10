@@ -16,7 +16,6 @@ export interface DepartmentDesignation {
   _id: string;
   name: string;
   department: string;
-  pay_grade: string;
   is_active: boolean;
 }
 

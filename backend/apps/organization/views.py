@@ -296,15 +296,17 @@ class DepartmentViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Mo
 
     @action(detail=True, methods=['get'])
     def designations(self, request, _id=None):
-        """Get all designations belonging to this department"""
+        """Get all designations belonging to this department (including 'ALL')"""
         department = self.get_object()
         from apps.compsetting.models import Designation
         designations = Designation.objects.filter(
             company_id=request.user.company_id,
-            department=department.name,
             is_deleted=False
-        ).values('_id', 'name', 'department', 'pay_grade', 'is_active')
+        ).filter(
+            Q(department=department.name) | Q(department="ALL")
+        ).values('_id', 'name', 'department', 'is_active')
         return Response(list(designations))
+
 
     @action(detail=True, methods=['get'])
     def employees(self, request, _id=None):

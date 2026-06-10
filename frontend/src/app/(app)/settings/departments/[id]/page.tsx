@@ -30,11 +30,19 @@ export default function DepartmentDetailPage() {
   if (!department) return <div className="p-8 text-center">Department not found</div>;
 
   // Designations columns (typed, will cast when passing to TableView)
-  const designationColumns: Column<DepartmentDesignation>[] = [
-    { key: "name", label: "Designation", sortable: true },
-    { key: "pay_grade", label: "Pay Grade" },
-    { key: "is_active", label: "Status", render: (val) => (val ? "Active" : "Inactive") },
-  ];
+const designationColumns: Column<DepartmentDesignation>[] = [
+  { key: "name", label: "Designation", sortable: true },
+  {
+    key: "department",
+    label: "Department",
+
+    render: (val: unknown) => {
+      const dept = val as string;
+      return dept === "ALL" ? "All Departments" : dept || "—";
+    },
+  },
+  { key: "is_active", label: "Status", render: (val) => (val ? "Active" : "Inactive") },
+];
 
   // Employees columns
   const employeeColumns: Column<DepartmentEmployee>[] = [

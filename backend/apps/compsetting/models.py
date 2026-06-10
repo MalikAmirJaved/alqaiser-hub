@@ -304,12 +304,6 @@ class Designation(TimeStampedModel):
         blank=True
     )
 
-    pay_grade = models.CharField(
-        max_length=50,
-        null=True,
-        blank=True
-    )
-
     description = models.TextField(
         null=True,
         blank=True
@@ -338,7 +332,7 @@ class Designation(TimeStampedModel):
         verbose_name = "Designation"
         verbose_name_plural = "Designations"
 
-        ordering = ['pay_grade', 'name']
+        ordering = ['name']
 
         unique_together = [('company', 'name')]
 
@@ -346,7 +340,6 @@ class Designation(TimeStampedModel):
             models.Index(fields=['company', 'is_deleted']),
             models.Index(fields=['branch']),
             models.Index(fields=['department']),
-            models.Index(fields=['pay_grade']),
             models.Index(fields=['is_active']),
         ]
 
