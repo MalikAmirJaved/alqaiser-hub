@@ -62,9 +62,6 @@ class CompanySettings(TimeStampedModel):
         default=8.00
     )
     
-    # Status
-    is_setup_completed = models.BooleanField(default=False)
-    
     # Audit
     created_by = models.ForeignKey(
         django_settings.AUTH_USER_MODEL,
@@ -87,7 +84,6 @@ class CompanySettings(TimeStampedModel):
         indexes = [
             models.Index(fields=['company', 'is_deleted']),
             models.Index(fields=['branch']),
-            models.Index(fields=['is_setup_completed']),
         ]
 
     def __str__(self):

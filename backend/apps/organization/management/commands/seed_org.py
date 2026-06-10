@@ -115,7 +115,6 @@ class Command(BaseCommand):
                 'default_start_time': '09:00:00',
                 'default_end_time': '18:00:00',
                 'working_hours_per_day': 8.00,
-                'is_setup_completed': True,
                 'created_by': user,
                 'updated_by': user,
             }

@@ -21,7 +21,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   
   const { initialized: permissionsInitialized, permissions } = useSelector((state: RootState) => state.permissions);
-  const { initialized: settingsInitialized, data: settings } = useSelector((state: RootState) => state.companySettings);
+  const { initialized: settingsInitialized } = useSelector((state: RootState) => state.companySettings);
 
   usePermissionSocket(user?.id);
 
@@ -36,15 +36,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       }
     }
   }, [ready, user, permissionsInitialized, settingsInitialized, dispatch]);
-
-  // Redirect to welcome page if user is COMPANY_ADMIN and setup not completed
-  useEffect(() => {
-    if (ready && user && settingsInitialized && settings && pathname !== "/welcome") {
-      if (user.role === "COMPANY_ADMIN" && !settings.isSetupCompleted) {
-        router.replace("/welcome");
-      }
-    }
-  }, [ready, user, settingsInitialized, settings, router, pathname]);
 
   // Route protection based on permissions
   useEffect(() => {
@@ -83,11 +74,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   // If user is not authenticated and route is not public, redirect already happened
   if (!user) return null;
-
-  // Don't render sidebar and topbar on welcome page
-  if (pathname === "/welcome") {
-    return <>{children}</>;
-  }
 
   return (
     <div className="h-screen overflow-y-hidden flex bg-background text-foreground">

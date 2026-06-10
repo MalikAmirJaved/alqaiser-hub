@@ -133,7 +133,6 @@ class CompanySettingsView(BaseCompanyView):
             "defaultStartTime": settings.default_start_time.strftime("%H:%M"),
             "defaultEndTime": settings.default_end_time.strftime("%H:%M"),
             "workingHoursPerDay": str(settings.working_hours_per_day),
-            "isSetupCompleted": settings.is_setup_completed,
             "workingDays": [
                 {
                     "id": str(wd._id),  # UUID string
@@ -225,15 +224,10 @@ class CompanySettingsView(BaseCompanyView):
                         old_value, new_value, user
                     )
 
-        if settings.currency and not settings.is_setup_completed:
-            settings.is_setup_completed = True
-
         settings.updated_by = user
         settings.save()
 
         return Response(self._serialize_settings(company, settings))
-
-
 
 
 class WorkingDaysView(BaseCompanyView):
