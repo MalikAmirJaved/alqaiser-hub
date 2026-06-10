@@ -2,11 +2,14 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q
+from apps.permissions.mixins import PermissionRequiredMixin
 from .models import Module, Permission, UserRole, RolePermission, UserPermission
 
-class UserPermissionsView(APIView):
+class UserPermissionsView(PermissionRequiredMixin, APIView):
     """Return list of permission codes for the current user (optimised)"""
     permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
+    permission_resource = 'permissions'
 
     def get(self, request):
         user = request.user
@@ -41,9 +44,11 @@ class UserPermissionsView(APIView):
         return Response(list(perms))
 
 
-class ModulesTreeView(APIView):
+class ModulesTreeView(PermissionRequiredMixin, APIView):
     """Return nested structure of modules → resources → actions with granted flags"""
     permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
+    permission_resource = 'permissions'
 
     def get(self, request):
         user = request.user

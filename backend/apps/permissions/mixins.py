@@ -94,6 +94,7 @@ CUSTOM_ACTION_TO_PERMISSION: dict[str, str] = {
     "complete_sale":    "complete_sale",
     "hold_sale":        "hold_sale",
     "return_sale":      "return",
+    "reconcile":        "update",
 
     # ── Finance ────────────────────────────────────────────────────
     "pay":              "pay",
@@ -116,6 +117,54 @@ CUSTOM_ACTION_TO_PERMISSION: dict[str, str] = {
     "slow_moving":          "view",
     "reorder_planning":     "view",
     "supplier_performance": "view",
+
+    # ── Financial reports ──────────────────────────────────────────
+    "balance_sheet":        "view",
+    "trial_balance":        "view",
+    "ledger":               "view",
+    "ap_aging":             "view",
+    "ar_aging":             "view",
+    "cashflow":             "view",
+    "expense_breakdown":    "view",
+    "expense_report":       "view",
+    "revenue_trend":        "view",
+    "variance_report":      "view",
+
+    # ── Dashboard/Analytics actions ────────────────────────────────
+    "analytics":            "view",
+    "summary":              "view",
+    "trends":               "view",
+    "history":              "view",
+    "recent_activity":      "view",
+    "recent_payments":      "view",
+    "unread_count":         "view",
+    "utilization":          "view",
+
+    # ── Inventory management ───────────────────────────────────────
+    "adjust_stock":         "adjust",
+    "current_stock":        "view",
+    "incoming_stock":       "view",
+    "variant_summary":      "view",
+    "alerts":               "view",
+
+    # ── Finance/Accounting ─────────────────────────────────────────
+    "record_payment":       "pay",
+    "post_bill":            "create",
+    "post_invoice":         "create",
+    "create_customer":      "create",
+    "bank_balances":        "view",
+    "balances_by_type":     "view",
+
+    # ── Forecast/Analytics ────────────────────────────────────────
+    "regenerate":           "create",
+    "generate_sales_forecast": "create",
+    "generate_stock_forecast": "create",
+
+    # ── Sales/Pipeline ────────────────────────────────────────────
+    "pipeline":             "view",
+    "convert":              "update",
+    "tree":                 "view",
+    "example":              "view",
 }
 
 

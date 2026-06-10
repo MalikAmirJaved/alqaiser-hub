@@ -17,9 +17,11 @@ from apps.hr.models import Employee, LeaveRequest
 logger = logging.getLogger(__name__)
 
 
-class LeaveRequestView(CompanyBranchMixin, APIView):
+class LeaveRequestView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     """CRUD operations for leave requests with UUID support - Simplified"""
     permission_classes = [IsAuthenticated]
+    permission_module = 'HR'
+    permission_resource = 'leave'
     
     def _serialize_leave(self, leave: LeaveRequest) -> dict:
         """Serialize leave request with UUIDs"""

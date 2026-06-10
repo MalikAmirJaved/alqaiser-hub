@@ -173,7 +173,9 @@ class EmployeeAssetAssignmentView(CompanyBranchMixin, PermissionRequiredMixin, A
         return Response({'message': 'Assignment removed'})
 
 
-class AvailableAssetsView(CompanyBranchMixin, APIView):
+class AvailableAssetsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'emp_asset'
     permission_classes = [IsAuthenticated]
     
     def get(self, request):

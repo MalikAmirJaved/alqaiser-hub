@@ -111,7 +111,9 @@ def sync_sales_order_to_invoice(order, user):
             )
 
 
-class SalesOrderViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
+class SalesOrderViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+    permission_module = 'INVENTORY'
+    permission_resource = 'sales_order'
     queryset = SalesOrder.objects.all()
     serializer_class = SalesOrderSerializer
     lookup_field = '_id'

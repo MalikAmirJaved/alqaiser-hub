@@ -20,6 +20,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from apps.permissions.mixins import PermissionRequiredMixin
 
 from .models import (
     Module, Permission, UserRole, RolePermission, UserPermission, Role,
@@ -28,6 +29,12 @@ from .models import (
 from .services import PermissionService
 
 User = get_user_model()
+
+
+class PermissionsAdminView(PermissionRequiredMixin, APIView):
+    permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
+    permission_resource = 'permissions'
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -66,7 +73,7 @@ def _compute_granted_ids(user) -> set:
 # Modules tree — accepts optional ?user_id= query param (admin viewing another user)
 # ─────────────────────────────────────────────────────────────────────────────
 
-class ModulesTreeView(APIView):
+class ModulesTreeView(PermissionsAdminView):
     """
     GET /api/permissions/modules/
     GET /api/permissions/modules/?user_id=42
@@ -129,7 +136,7 @@ class ModulesTreeView(APIView):
 # Roles
 # ─────────────────────────────────────────────────────────────────────────────
 
-class RoleListView(APIView):
+class RoleListView(PermissionsAdminView):
     """GET /api/permissions/roles/ — list all roles with permission count."""
     permission_classes = [IsAuthenticated]
 
@@ -152,7 +159,7 @@ class RoleListView(APIView):
 # User ↔ Role management
 # ─────────────────────────────────────────────────────────────────────────────
 
-class UserRolesView(APIView):
+class UserRolesView(PermissionsAdminView):
     """GET /api/permissions/users/<id>/roles/"""
     permission_classes = [IsAuthenticated]
 
@@ -175,7 +182,7 @@ class UserRolesView(APIView):
         return Response(data)
 
 
-class AssignRoleView(APIView):
+class AssignRoleView(PermissionsAdminView):
     """POST /api/permissions/users/<id>/assign-role/ { role_id }"""
     permission_classes = [IsAuthenticated]
 
@@ -203,7 +210,7 @@ class AssignRoleView(APIView):
         return Response({"detail": "Role assigned"}, status=201)
 
 
-class RemoveRoleView(APIView):
+class RemoveRoleView(PermissionsAdminView):
     """DELETE /api/permissions/users/<id>/remove-role/<role_id>/"""
     permission_classes = [IsAuthenticated]
 
@@ -234,7 +241,7 @@ class RemoveRoleView(APIView):
 # User overrides
 # ─────────────────────────────────────────────────────────────────────────────
 
-class UserOverridesView(APIView):
+class UserOverridesView(PermissionsAdminView):
     """GET /api/permissions/users/<id>/overrides/"""
     permission_classes = [IsAuthenticated]
 
@@ -266,7 +273,7 @@ class UserOverridesView(APIView):
         return Response(data)
 
 
-class OverrideDetailView(APIView):
+class OverrideDetailView(PermissionsAdminView):
     """DELETE /api/permissions/users/<id>/overrides/<ov_id>/"""
     permission_classes = [IsAuthenticated]
 
@@ -291,7 +298,7 @@ class OverrideDetailView(APIView):
 # Bulk override — the main mutation from the UI
 # ─────────────────────────────────────────────────────────────────────────────
 
-class BulkOverrideView(APIView):
+class BulkOverrideView(PermissionsAdminView):
     """
     POST /api/permissions/users/<id>/bulk-override/
     Body: { permissions: [{ permission_code, granted, reason? }] }

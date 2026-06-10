@@ -10,10 +10,13 @@ from .models import (
 from .serializers import (UserProfileSerializer, BranchSerializer)
 from rest_framework.generics import RetrieveUpdateDestroyAPIView
 from rest_framework.exceptions import NotFound
+from apps.permissions.mixins import PermissionRequiredMixin
 
-class UserContextView(APIView):
+class UserContextView(PermissionRequiredMixin, APIView):
     """Get/Update current user's company and branch context"""
     permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
+    permission_resource = 'user'
     
     def get(self, request):
         context, created = UserCompanyContext.objects.get_or_create(
@@ -66,8 +69,10 @@ class UserContextView(APIView):
         })
 
 
-class SwitchCompanyView(APIView):
+class SwitchCompanyView(PermissionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
+    permission_resource = 'user'
 
     def post(self, request):
         company_id = request.data.get('companyId')
@@ -94,8 +99,10 @@ class SwitchCompanyView(APIView):
         return Response({'message': 'Company switched successfully'})
 
 
-class BranchCreateView(APIView):
+class BranchCreateView(PermissionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
+    permission_resource = 'branch'
 
     @transaction.atomic
     def post(self, request):
@@ -133,8 +140,10 @@ class BranchCreateView(APIView):
         }, status=status.HTTP_201_CREATED)
 
 
-class BranchDetailView(RetrieveUpdateDestroyAPIView):
+class BranchDetailView(PermissionRequiredMixin, RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
+    permission_resource = 'branch'
     serializer_class = BranchSerializer
 
     def get_queryset(self):
@@ -167,9 +176,11 @@ class BranchDetailView(RetrieveUpdateDestroyAPIView):
         return Response(status=204)
 
 
-class UserProfileView(APIView):
+class UserProfileView(PermissionRequiredMixin, APIView):
     """Get and update current user's profile (including password)."""
     permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
+    permission_resource = 'user'
 
     def get(self, request):
         serializer = UserProfileSerializer(request.user)
@@ -203,7 +214,10 @@ class UserProfileView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class UserListView(generics.ListCreateAPIView):
+class UserListView(PermissionRequiredMixin, generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
+    permission_resource = 'user'
     serializer_class = UserProfileSerializer
     
     def get_queryset(self):
@@ -223,8 +237,10 @@ class UserListView(generics.ListCreateAPIView):
         )
 
 
-class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
+class UserDetailView(PermissionRequiredMixin, generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
+    permission_resource = 'user'
     serializer_class = UserProfileSerializer
 
     def get_queryset(self):

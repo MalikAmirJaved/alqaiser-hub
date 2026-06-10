@@ -68,12 +68,13 @@ RESOURCES_ACTIONS: dict[str, dict[str, list[str]]] = {
         "warehouse":        ["view", "create", "update", "delete"],
         "purchase_order":   ["view", "create", "confirm", "receive_goods"],
         "supplier":         ["view", "create", "update", "delete"],
+        "vendor":           ["view", "create", "update", "delete"],
         "stock_transfer":   ["view", "create", "confirm"],
         "barcode":          ["view"],
         "report":           ["view"],
         "alert":            ["view"],
         "customer":         ["view", "create", "update", "delete"],
-        "sales_order":      ["view", "complete_sale", "hold_sale", "return"],
+        "sales_order":      ["view", "create", "update", "delete", "complete_sale", "hold_sale", "return"],
         "audit_log":        ["view"],
     },
 
@@ -87,11 +88,12 @@ RESOURCES_ACTIONS: dict[str, dict[str, list[str]]] = {
         "finance_reports":  ["view"],
         "budget":           ["view", "create", "update", "delete"],
         "bank_account":     ["view", "create", "update", "delete"],
+        "bank_transaction": ["view", "create", "update", "delete"],
         "supplier_bill":    ["view", "create", "update", "delete", "pay"],
         "payment":          ["view", "create", "update", "delete", "pay"],
         "tax":              ["view", "create", "update", "delete"],
         "audit_log":        ["view"],
-        "forecast":         ["view", "recompute_sales", "recompute_stock"],
+        "forecast":         ["view", "create", "recompute_sales", "recompute_stock"],
     },
 
     # ── Sales ────────────────────────────────────────────────────────────────
@@ -101,6 +103,11 @@ RESOURCES_ACTIONS: dict[str, dict[str, list[str]]] = {
         "quote":                  ["view", "approve", "reject", "update", "delete"],
         "sales_customer":         ["view", "create", "update", "delete"],
         "sales_customers_invoice":["view", "create", "pay", "update", "delete"],
+    },
+
+    # ── Dashboard ───────────────────────────────────────────────────────────
+    "DASHBOARD": {
+        "overall": ["view"],
     },
 
     # ── AI Monitoring ────────────────────────────────────────────────────────
@@ -113,9 +120,15 @@ RESOURCES_ACTIONS: dict[str, dict[str, list[str]]] = {
         "activity":         ["view"],
     },
 
+    # ── Notifications ───────────────────────────────────────────────────────
+    "NOTIFICATIONS": {
+        "notification": ["view", "create", "update", "delete"],
+    },
+
     # ── Settings ─────────────────────────────────────────────────────────────
     "SETTINGS": {
         "company":      ["view", "update"],
+        "branch":       ["view", "create", "update", "delete"],
         "user":         ["view", "create", "update", "delete"],
         "permissions":  ["view", "update"],
         "department":   ["view"],

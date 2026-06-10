@@ -2,6 +2,9 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
+
 from .models import SalesForecast, StockForecast, ForecastConfiguration
 from .serializers import SalesForecastSerializer, StockForecastSerializer, ForecastConfigSerializer
 from .services import DemandForecaster, StockForecaster
@@ -23,7 +26,9 @@ def _parse_granularity(value):
     return "daily"
 
 
-class SalesForecastViewSet(viewsets.ReadOnlyModelViewSet):
+class SalesForecastViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ReadOnlyModelViewSet):
+    permission_module = 'FINANCE'
+    permission_resource = 'forecast'
     serializer_class = SalesForecastSerializer
     filterset_fields = ["variant", "forecast_date"]
 
@@ -70,7 +75,9 @@ class SalesForecastViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
 
-class StockForecastViewSet(viewsets.ReadOnlyModelViewSet):
+class StockForecastViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ReadOnlyModelViewSet):
+    permission_module = 'FINANCE'
+    permission_resource = 'forecast'
     serializer_class = StockForecastSerializer
     filterset_fields = ["variant", "warehouse"]
 
@@ -109,7 +116,9 @@ class StockForecastViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
 
-class ForecastConfigurationViewSet(viewsets.ModelViewSet):
+class ForecastConfigurationViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+    permission_module = 'FINANCE'
+    permission_resource = 'forecast'
     serializer_class = ForecastConfigSerializer
 
     def get_queryset(self):

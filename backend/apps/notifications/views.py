@@ -7,12 +7,25 @@ from django.db import models
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.permissions.mixins import PermissionRequiredMixin
 from .models import Notification
 from .serializers import NotificationSerializer
 
 
-class NotificationViewSet(CompanyBranchMixin, viewsets.ModelViewSet):
+class NotificationViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     """Notification ViewSet with UUID support"""
+    permission_module = 'NOTIFICATIONS'
+    permission_resource = 'notification'
+    permission_action_map = {
+        'mark_read': 'update',
+        'mark_unread': 'update',
+        'mark_all_read': 'update',
+        'mark_all_unread': 'update',
+        'toggle_favourite': 'update',
+        'delete_notification': 'delete',
+        'clear_all': 'delete',
+        'delete_all_read': 'delete',
+    }
     
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
