@@ -273,7 +273,7 @@ export default function InventoryDashboard() {
         )}
 
         {/* Charts Row 1 */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <Card className="xl:col-span-2">
             <CardHeader
               title="Stock Movement"
@@ -309,38 +309,6 @@ export default function InventoryDashboard() {
                   <Area type="monotone" dataKey="Outgoing" name="Outgoing" stroke="var(--color-chart-3)" fill="url(#gOut)" strokeWidth={2} />
                 </AreaChart>
               </ResponsiveContainer>
-            </div>
-          </Card>
-
-          <Card>
-            <CardHeader title="Warehouse Distribution" subtitle="Stock value by location" />
-            <div className="p-4 h-[300px]">
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie
-                    data={warehouseData}
-                    dataKey="value"
-                    nameKey="name"
-                    innerRadius={55}
-                    outerRadius={90}
-                    paddingAngle={2}
-                  >
-                    {warehouseData.map((_, i) => (
-                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} stroke="var(--color-background)" strokeWidth={2} />
-                    ))}
-                  </Pie>
-                  <Tooltip {...t} formatter={(v: any) => formatCurrency(v)} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="px-5 pb-4 grid grid-cols-1 gap-2 text-xs">
-              {warehouseData.map((item, i) => (
-                <div key={item.name} className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-sm" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
-                  <span className="text-muted-foreground flex-1 truncate">{item.name}</span>
-                  <span className="num font-medium">{formatCurrency(item.value)}</span>
-                </div>
-              ))}
             </div>
           </Card>
         </div>

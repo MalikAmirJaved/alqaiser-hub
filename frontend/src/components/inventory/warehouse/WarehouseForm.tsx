@@ -1,19 +1,18 @@
-// src/components/inventory/WarehouseForm.tsx
-"use client";
+// frontend/src/components/inventory/warehouse/WarehouseForm.tsx
 
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { CountrySelect, StateSelect, CitySelect } from "@/components/reuseable/LocationSelectors";
 import { Checkbox } from "@/components/reuseable/Checkbox";
+import { useEmployees } from "@/hooks/useEmployees";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 interface WarehouseFormData {
   id?: string;
   warehouse_name: string;
   code: string;
-  manager_name: string;
-  phone: string;
-  capacity: number;
-  current_occupancy: number;
+  employee_id?: string | null;
+  landline_number?: string | null;
   country: string;
   state: string;
   city: string;
@@ -32,13 +31,13 @@ interface WarehouseFormProps {
 }
 
 export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: WarehouseFormProps) {
+  const { data: employees = [] } = useEmployees({ employment_status: "ACTIVE" });
+
   const [formData, setFormData] = useState<WarehouseFormData>({
     warehouse_name: "",
     code: "",
-    manager_name: "",
-    phone: "",
-    capacity: 0,
-    current_occupancy: 0,
+    employee_id: null,
+    landline_number: "",
     country: "",
     state: "",
     city: "",
@@ -52,24 +51,22 @@ export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: Wa
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const employeeOptions = employees.map((emp) => ({
+    value: emp.id,
+    label: `${emp.first_name} ${emp.last_name || ""} (${emp.department || "N/A"})`,
+  }));
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
     const newErrors: Record<string, string> = {};
-    
     if (!formData.warehouse_name) newErrors.warehouse_name = "Warehouse name is required";
     if (!formData.code) newErrors.code = "Code is required";
-    if (!formData.manager_name) newErrors.manager_name = "Manager name is required";
-    if (!formData.phone) newErrors.phone = "Phone is required";
-    if (formData.capacity <= 0) newErrors.capacity = "Capacity must be greater than 0";
     if (!formData.country) newErrors.country = "Country is required";
     if (!formData.city) newErrors.city = "City is required";
-    
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
-    
     onSubmit(formData);
   };
 
@@ -81,33 +78,26 @@ export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: Wa
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">
-              Warehouse Name <span className="text-destructive">*</span>
-            </span>
+            <span className="text-muted-foreground text-xs">Warehouse Name *</span>
             <input
               type="text"
               value={formData.warehouse_name}
               onChange={(e) => setFormData({ ...formData, warehouse_name: e.target.value })}
               className={cn(inputClassName, errors.warehouse_name && "border-destructive")}
-              placeholder="Main Warehouse"
             />
-            {errors.warehouse_name && <span className="text-xs text-destructive mt-0.5">{errors.warehouse_name}</span>}
+            {errors.warehouse_name && <span className="text-xs text-destructive">{errors.warehouse_name}</span>}
           </label>
         </div>
-
         <div>
           <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">
-              Code <span className="text-destructive">*</span>
-            </span>
+            <span className="text-muted-foreground text-xs">Code *</span>
             <input
               type="text"
               value={formData.code}
               onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
               className={cn(inputClassName, errors.code && "border-destructive")}
-              placeholder="WH-001"
             />
-            {errors.code && <span className="text-xs text-destructive mt-0.5">{errors.code}</span>}
+            {errors.code && <span className="text-xs text-destructive">{errors.code}</span>}
           </label>
         </div>
       </div>
@@ -115,66 +105,25 @@ export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: Wa
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">
-              Manager Name <span className="text-destructive">*</span>
-            </span>
-            <input
-              type="text"
-              value={formData.manager_name}
-              onChange={(e) => setFormData({ ...formData, manager_name: e.target.value })}
-              className={cn(inputClassName, errors.manager_name && "border-destructive")}
-              placeholder="John Doe"
+            <span className="text-muted-foreground text-xs">Responsible Employee</span>
+            <SearchableSelect
+              value={formData.employee_id || ""}
+              onChange={(val) => setFormData({ ...formData, employee_id: val || null })}
+              options={employeeOptions}
+              placeholder="Select employee"
             />
-            {errors.manager_name && <span className="text-xs text-destructive mt-0.5">{errors.manager_name}</span>}
           </label>
         </div>
-
         <div>
           <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">
-              Phone <span className="text-destructive">*</span>
-            </span>
+            <span className="text-muted-foreground text-xs">Landline Number</span>
             <input
               type="tel"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              className={cn(inputClassName, errors.phone && "border-destructive")}
-              placeholder="+1 234 567 8900"
-            />
-            {errors.phone && <span className="text-xs text-destructive mt-0.5">{errors.phone}</span>}
-          </label>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">
-              Email
-            </span>
-            <input
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              value={formData.landline_number || ""}
+              onChange={(e) => setFormData({ ...formData, landline_number: e.target.value })}
               className={inputClassName}
-              placeholder="warehouse@company.com"
+              placeholder="e.g., +1 234 567 8900"
             />
-          </label>
-        </div>
-
-        <div>
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">
-              Capacity (sq ft) <span className="text-destructive">*</span>
-            </span>
-            <input
-              type="number"
-              value={formData.capacity}
-              onChange={(e) => setFormData({ ...formData, capacity: parseFloat(e.target.value) })}
-              className={cn(inputClassName, errors.capacity && "border-destructive")}
-              placeholder="10000"
-            />
-            {errors.capacity && <span className="text-xs text-destructive mt-0.5">{errors.capacity}</span>}
           </label>
         </div>
       </div>
@@ -187,7 +136,6 @@ export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: Wa
             onChange={(e) => setFormData({ ...formData, address_line: e.target.value })}
             rows={2}
             className={textareaClassName}
-            placeholder="Street address, building, apartment"
           />
         </label>
       </div>
@@ -195,18 +143,14 @@ export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: Wa
       <div className="grid grid-cols-3 gap-4">
         <div>
           <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">Country <span className="text-destructive">*</span></span>
+            <span className="text-muted-foreground text-xs">Country *</span>
             <CountrySelect
               value={formData.country}
-              onChange={(val) => {
-                setFormData({ ...formData, country: val, state: "", city: "" });
-                if (errors.country) setErrors({ ...errors, country: "" });
-              }}
+              onChange={(val) => setFormData({ ...formData, country: val, state: "", city: "" })}
             />
-            {errors.country && <span className="text-xs text-destructive mt-0.5">{errors.country}</span>}
+            {errors.country && <span className="text-xs text-destructive">{errors.country}</span>}
           </label>
         </div>
-
         <div>
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground text-xs">State/Region</span>
@@ -217,20 +161,16 @@ export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: Wa
             />
           </label>
         </div>
-
         <div>
           <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">City <span className="text-destructive">*</span></span>
+            <span className="text-muted-foreground text-xs">City *</span>
             <CitySelect
               countryCode={formData.country}
               stateCode={formData.state}
               value={formData.city}
-              onChange={(val) => {
-                setFormData({ ...formData, city: val });
-                if (errors.city) setErrors({ ...errors, city: "" });
-              }}
+              onChange={(val) => setFormData({ ...formData, city: val })}
             />
-            {errors.city && <span className="text-xs text-destructive mt-0.5">{errors.city}</span>}
+            {errors.city && <span className="text-xs text-destructive">{errors.city}</span>}
           </label>
         </div>
       </div>
@@ -244,20 +184,17 @@ export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: Wa
               value={formData.postal_code}
               onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
               className={inputClassName}
-              placeholder="12345"
             />
           </label>
         </div>
-
         <div>
           <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">Current Occupancy (sq ft)</span>
+            <span className="text-muted-foreground text-xs">Email</span>
             <input
-              type="number"
-              value={formData.current_occupancy}
-              onChange={(e) => setFormData({ ...formData, current_occupancy: parseFloat(e.target.value) })}
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               className={inputClassName}
-              placeholder="0"
             />
           </label>
         </div>
@@ -271,7 +208,6 @@ export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: Wa
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             rows={3}
             className={textareaClassName}
-            placeholder="Additional details about the warehouse..."
           />
         </label>
       </div>

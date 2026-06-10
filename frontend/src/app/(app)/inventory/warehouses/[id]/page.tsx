@@ -1,20 +1,20 @@
+// frontend/src/app/(app)/inventory/warehouses/[id]/page.tsx
+
 "use client";
+
 import { useParams } from "next/navigation";
-import { useWarehouse, useWarehouseUtilization } from "@/hooks/useWarehouses";
+import { useWarehouse } from "@/hooks/useWarehouses";
 import { useCurrentStock, useStockHistory } from "@/hooks/useStockManagement";
 import { useState } from "react";
 import { format } from "date-fns";
-import { fmt } from "@/hooks/useSalesOrder";
+import PageHeader from "@/components/PageHeader";
 
 export default function WarehouseDetailPage() {
   const params = useParams<{ id: string }>();
-
-const warehouseId = params.id;
+  const warehouseId = params.id;
 
   const { data: warehouse, isLoading: warehouseLoading } = useWarehouse(warehouseId);
-  const { data: utilization } = useWarehouseUtilization(warehouseId);
 
-  // Stock items in this warehouse
   const [stockPage, setStockPage] = useState(1);
   const { data: stockData, isLoading: stockLoading } = useCurrentStock({
     warehouse_id: warehouseId,
@@ -22,7 +22,6 @@ const warehouseId = params.id;
     page_size: 20,
   });
 
-  // Transaction history for this warehouse
   const [historyPage, setHistoryPage] = useState(1);
   const { data: historyData, isLoading: historyLoading } = useStockHistory({
     warehouse_id: warehouseId,
@@ -40,28 +39,17 @@ const warehouseId = params.id;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">{warehouse.warehouse_name}</h1>
-        <p className="text-muted-foreground">{warehouse.code} • {warehouse.city}, {warehouse.country}</p>
-      </div>
+      <PageHeader title={warehouse.warehouse_name} subtitle={`${warehouse.code} · ${warehouse.city}, ${warehouse.country}`} />
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-sm text-muted-foreground">Capacity</p>
-          <p className="text-2xl font-bold">{warehouse.capacity?.toLocaleString()} sq ft</p>
-          <p className="text-xs text-muted-foreground">Occupancy: {utilization?.occupancy_percentage?.toFixed(1)}%</p>
+          <p className="text-sm text-muted-foreground">Responsible Employee</p>
+          <p className="text-lg font-semibold">{warehouse.employee_name || "—"}</p>
         </div>
         <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-sm text-muted-foreground">Manager</p>
-          <p className="text-lg font-semibold">{warehouse.manager_name || "—"}</p>
-          <p className="text-xs text-muted-foreground">{warehouse.phone || "No phone"}</p>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-sm text-muted-foreground">Location</p>
-          <p className="text-sm">{warehouse.address_line || "—"}</p>
-          <p className="text-xs text-muted-foreground">{warehouse.city}, {warehouse.state} {warehouse.postal_code}</p>
+          <p className="text-sm text-muted-foreground">Landline Number</p>
+          <p className="text-lg font-semibold">{warehouse.landline_number || "—"}</p>
         </div>
         <div className="bg-card border border-border rounded-xl p-4">
           <p className="text-sm text-muted-foreground">Status</p>
@@ -74,16 +62,8 @@ const warehouseId = params.id;
       {/* Tabs */}
       <div className="border-b border-border">
         <div className="flex gap-6">
-          <button
-            onClick={() => { setStockPage(1); /* active tab handled by state */ }}
-            className="pb-2 text-sm font-medium border-b-2 border-primary"
-          >
-            Stock Items
-          </button>
-          <button
-            onClick={() => { setHistoryPage(1); }}
-            className="pb-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
+          <button className="pb-2 text-sm font-medium border-b-2 border-primary">Stock Items</button>
+          <button className="pb-2 text-sm font-medium text-muted-foreground hover:text-foreground">
             Transaction History
           </button>
         </div>
@@ -121,9 +101,7 @@ const warehouseId = params.id;
                       <td className="p-3 text-xs text-muted-foreground">
                         {format(new Date(item.updated_at), "dd MMM yyyy, HH:mm")}
                       </td>
-                      <td className="p-3 text-xs">
-                        {item.updated_by_name || item.updated_by_email || "—"}
-                      </td>
+                      <td className="p-3 text-xs">{item.updated_by_name || item.updated_by_email || "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -134,14 +112,14 @@ const warehouseId = params.id;
                 <span>Page {stockData.page} of {Math.ceil(stockData.count / stockData.page_size)}</span>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setStockPage(p => Math.max(1, p - 1))}
+                    onClick={() => setStockPage((p) => Math.max(1, p - 1))}
                     disabled={stockData.page === 1}
                     className="px-3 py-1 rounded bg-muted disabled:opacity-50"
                   >
                     Previous
                   </button>
                   <button
-                    onClick={() => setStockPage(p => p + 1)}
+                    onClick={() => setStockPage((p) => p + 1)}
                     disabled={stockData.page * stockData.page_size >= stockData.count}
                     className="px-3 py-1 rounded bg-muted disabled:opacity-50"
                   >
@@ -193,12 +171,8 @@ const warehouseId = params.id;
                         </span>
                       </td>
                       <td className="p-3 text-xs text-muted-foreground">{tx.reason_text || "—"}</td>
-                      <td className="p-3 text-xs font-mono">
-                        {tx.quantity_before} → {tx.quantity_after}
-                      </td>
-                      <td className="p-3 text-xs">
-                        {tx.created_by_name || tx.created_by_email || "System"}
-                      </td>
+                      <td className="p-3 text-xs font-mono">{tx.quantity_before} → {tx.quantity_after}</td>
+                      <td className="p-3 text-xs">{tx.created_by_name || tx.created_by_email || "System"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -209,14 +183,14 @@ const warehouseId = params.id;
                 <span>Page {historyData.page} of {Math.ceil(historyData.count / historyData.page_size)}</span>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                    onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
                     disabled={historyData.page === 1}
                     className="px-3 py-1 rounded bg-muted disabled:opacity-50"
                   >
                     Previous
                   </button>
                   <button
-                    onClick={() => setHistoryPage(p => p + 1)}
+                    onClick={() => setHistoryPage((p) => p + 1)}
                     disabled={historyData.page * historyData.page_size >= historyData.count}
                     className="px-3 py-1 rounded bg-muted disabled:opacity-50"
                   >

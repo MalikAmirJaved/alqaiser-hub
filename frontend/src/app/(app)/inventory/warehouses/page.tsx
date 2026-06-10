@@ -1,15 +1,23 @@
-// src/app/inventory/warehouses/page.tsx
+// frontend/src/app/(app)/inventory/warehouses/page.tsx
+
 "use client";
 
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
-import { Plus, Search, Filter, X } from "lucide-react";
+import { Plus, Search, X } from "lucide-react";
 import { TableView, GridView } from "@/components/reuseable/TableGridView";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { ConfirmationModal, useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import { WarehouseForm } from "@/components/inventory/warehouse/WarehouseForm";
 import { WarehouseDetail } from "@/components/inventory/warehouse/WarehouseDetail";
-import { useWarehouses, useWarehouseStats, useCreateWarehouse, useUpdateWarehouse, useDeleteWarehouse, Warehouse } from "@/hooks/useWarehouses";
+import {
+  useWarehouses,
+  useWarehouseStats,
+  useCreateWarehouse,
+  useUpdateWarehouse,
+  useDeleteWarehouse,
+  Warehouse,
+} from "@/hooks/useWarehouses";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
@@ -24,17 +32,13 @@ export default function WarehousesPage() {
   const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null);
   const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse | null>(null);
 
-  // Queries
   const { data: warehouses = [], isLoading, refetch } = useWarehouses({ search: searchTerm });
   const { data: stats, isLoading: statsLoading } = useWarehouseStats();
   const createWarehouse = useCreateWarehouse();
   const updateWarehouse = useUpdateWarehouse();
   const deleteWarehouse = useDeleteWarehouse();
-
-  // Confirmation modal
   const deleteConfirm = useConfirmationModal();
 
-  // Filtered data based on search
   const filteredWarehouses = useMemo(() => {
     if (!searchTerm) return warehouses;
     const term = searchTerm.toLowerCase();
@@ -42,22 +46,19 @@ export default function WarehousesPage() {
       (w) =>
         w.warehouse_name.toLowerCase().includes(term) ||
         w.code.toLowerCase().includes(term) ||
-        w.manager_name.toLowerCase().includes(term) ||
-        w.city.toLowerCase().includes(term)
+        w.city.toLowerCase().includes(term) ||
+        w.employee_name?.toLowerCase().includes(term)
     );
   }, [warehouses, searchTerm]);
 
-  // Stats for cards
   const statsData = stats
     ? [
         { id: "total", label: "Total Warehouses", value: stats.total_warehouses },
         { id: "active", label: "Active", value: stats.active_warehouses, valueClassName: "text-success" },
         { id: "inactive", label: "Inactive", value: stats.inactive_warehouses, valueClassName: "text-warning" },
-        { id: "occupancy", label: "Overall Occupancy", value: `${(stats.overall_occupancy_percentage)}%`, valueClassName: "text-primary" },
       ]
     : [];
 
-  // Handlers
   const handleCreate = () => {
     setEditingWarehouse(null);
     setIsFormOpen(true);
@@ -107,53 +108,34 @@ export default function WarehousesPage() {
     setSelectedWarehouse(row);
   };
 
-  // Table columns
   const columns = [
     { key: "code", label: "Code", sortable: true, width: "100px" },
     { key: "warehouse_name", label: "Warehouse Name", sortable: true },
-    { key: "manager_name", label: "Manager", sortable: true },
-    { 
-      key: "location", 
-      label: "Location", 
+    { key: "employee_name", label: "Responsible", sortable: true },
+    { key: "landline_number", label: "Landline", sortable: false },
+    {
+      key: "location",
+      label: "Location",
       sortable: true,
-      render: (value: unknown, row: Warehouse) => {
-        return `${row.city}, ${row.country}`;
-      },
-      sortAccessor: (row: Warehouse) => `${row.city} ${row.country}`
-    },
-    { 
-      key: "capacity", 
-      label: "Capacity (sq ft)", 
-      sortable: true,
-      render: (value: unknown) => (value as number).toLocaleString()
-    },
-    { 
-      key: "occupancy_percentage", 
-      label: "Occupancy", 
-      sortable: true,
-      render: (value: unknown, row: Warehouse) => {
-        const percentage = row.occupancy_percentage;
-        let colorClass = "text-success";
-        if (percentage > 85) colorClass = "text-warning";
-        if (percentage > 95) colorClass = "text-destructive";
-        return <span className={colorClass}>{percentage}%</span>;
-      }
+      render: (value: unknown, row: Warehouse) => `${row.city}, ${row.country}`,
+      sortAccessor: (row: Warehouse) => `${row.city} ${row.country}`,
     },
     {
       key: "is_active",
       label: "Status",
       sortable: true,
       render: (value: unknown) => (
-        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-          value ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
-        }`}>
+        <span
+          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+            value ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
+          }`}
+        >
           {value ? "Active" : "Inactive"}
         </span>
       ),
     },
   ];
 
-  // Grid card renderer
   const renderCard = (warehouse: Warehouse) => (
     <div
       onClick={() => handleRowClick(warehouse)}
@@ -167,44 +149,31 @@ export default function WarehousesPage() {
             </h3>
             <p className="text-xs text-muted-foreground mt-0.5">{warehouse.code}</p>
           </div>
-          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-            warehouse.is_active ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
-          }`}>
+          <span
+            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+              warehouse.is_active ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
+            }`}
+          >
             {warehouse.is_active ? "Active" : "Inactive"}
           </span>
         </div>
 
         <div className="space-y-2 text-sm">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <span className="text-xs">Manager:</span>
-            <span className="text-foreground">{warehouse.manager_name}</span>
-          </div>
+          {warehouse.employee_name && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span className="text-xs">Responsible:</span>
+              <span className="text-foreground">{warehouse.employee_name}</span>
+            </div>
+          )}
+          {warehouse.landline_number && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span className="text-xs">Landline:</span>
+              <span className="text-foreground">{warehouse.landline_number}</span>
+            </div>
+          )}
           <div className="flex items-center gap-2 text-muted-foreground">
             <span className="text-xs">Location:</span>
             <span className="text-foreground">{warehouse.city}, {warehouse.country}</span>
-          </div>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <span className="text-xs">Capacity:</span>
-            <span className="text-foreground">{warehouse.capacity.toLocaleString()} sq ft</span>
-          </div>
-        </div>
-
-        <div className="pt-2">
-          <div className="flex items-center justify-between text-xs mb-1">
-            <span className="text-muted-foreground">Occupancy</span>
-            <span className={`font-medium ${
-              warehouse.occupancy_percentage > 85 ? "text-warning" : 
-              warehouse.occupancy_percentage > 95 ? "text-destructive" : 
-              "text-success"
-            }`}>
-              {warehouse.occupancy_percentage}%
-            </span>
-          </div>
-          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary rounded-full transition-all"
-              style={{ width: `${Math.min(warehouse.occupancy_percentage, 100)}%` }}
-            />
           </div>
         </div>
 
@@ -259,10 +228,9 @@ export default function WarehousesPage() {
 
   return (
     <div className="">
-      {/* Header */}
       <PageHeader
         title="Warehouses"
-        subtitle="Manage your warehouse locations and storage facilities"
+        subtitle="Manage your warehouse locations and responsible employees"
         actions={
           permissions.create && (
             <Button onClick={handleCreate}>
@@ -272,10 +240,8 @@ export default function WarehousesPage() {
         }
       />
 
-      {/* Stats Cards */}
       {!statsLoading && statsData.length > 0 && <StatsCards stats={statsData} />}
 
-      {/* Toolbar */}
       <div className="flex items-center justify-between gap-4 mb-4">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -320,7 +286,6 @@ export default function WarehousesPage() {
         </div>
       </div>
 
-      {/* View */}
       {viewMode === "table" ? (
         <TableView
           columns={columns as any}
@@ -341,7 +306,6 @@ export default function WarehousesPage() {
         />
       )}
 
-      {/* Warehouse Detail Sidebar */}
       <WarehouseDetail
         warehouse={selectedWarehouse}
         isOpen={!!selectedWarehouse}
@@ -350,14 +314,11 @@ export default function WarehousesPage() {
         onDelete={permissions.delete ? handleDelete : undefined}
       />
 
-      {/* Warehouse Form Modal */}
-      {isFormOpen && (editingWarehouse ? permissions.update : permissions.create) && (
+      {(isFormOpen && (editingWarehouse ? permissions.update : permissions.create)) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card shadow-2xl">
             <div className="sticky top-0 bg-card border-b border-border px-6 py-4">
-              <h2 className="text-lg font-semibold">
-                {editingWarehouse ? "Edit Warehouse" : "Create New Warehouse"}
-              </h2>
+              <h2 className="text-lg font-semibold">{editingWarehouse ? "Edit Warehouse" : "Create New Warehouse"}</h2>
             </div>
             <div className="p-6">
               <WarehouseForm
@@ -374,7 +335,6 @@ export default function WarehousesPage() {
         </div>
       )}
 
-      {/* Confirmation Modal */}
       <deleteConfirm.Modal />
     </div>
   );
