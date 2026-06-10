@@ -49,15 +49,18 @@ export default function DepartmentsPage() {
       key: "is_active",
       label: "Status",
       render: (value: boolean, row: Department) => (
-        <div className="flex items-center gap-2">
-          <Switch
-            checked={value}
-            onCheckedChange={(checked) => handleToggleStatus(row, checked)}
-            disabled={!permissions.update}
-          />
-          <span className={value ? "text-success" : "text-muted-foreground"}>
-            {value ? "Active" : "Inactive"}
-          </span>
+        // Stop propagation so clicking the switch doesn't trigger row navigation
+        <div onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={value}
+              onCheckedChange={(checked) => handleToggleStatus(row, checked)}
+              disabled={!permissions.update}
+            />
+            <span className={value ? "text-success" : "text-muted-foreground"}>
+              {value ? "Active" : "Inactive"}
+            </span>
+          </div>
         </div>
       ),
     },
