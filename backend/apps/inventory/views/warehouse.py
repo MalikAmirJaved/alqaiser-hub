@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from django.db.models import Q, Sum
+from django.db.models import Q
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import Warehouse
@@ -24,7 +24,6 @@ class WarehouseViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Mod
             qs = qs.filter(
                 Q(warehouse_name__icontains=search) |
                 Q(code__icontains=search) |
-                Q(manager_name__icontains=search) |
                 Q(city__icontains=search) |
                 Q(state__icontains=search) |
                 Q(country__icontains=search)
@@ -104,44 +103,8 @@ class WarehouseViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Mod
         total_warehouses = queryset.count()
         active_warehouses = queryset.filter(is_active=True).count()
 
-        total_capacity = queryset.aggregate(
-            total=Sum('capacity')
-        )['total'] or 0
-
-        total_occupancy = queryset.aggregate(
-            total=Sum('current_occupancy')
-        )['total'] or 0
-
         return Response({
             'total_warehouses': total_warehouses,
             'active_warehouses': active_warehouses,
             'inactive_warehouses': total_warehouses - active_warehouses,
-            'total_capacity': total_capacity,
-            'total_occupancy': total_occupancy,
-            'overall_occupancy_percentage':
-                (total_occupancy / total_capacity * 100)
-                if total_capacity > 0 else 0
         })
-
-    @action(detail=True, methods=['get'])
-    def utilization(self, request, pk=None):
-        warehouse = self.get_object()
-
-        return Response({
-            'id': warehouse._id,
-            'name': warehouse.warehouse_name,
-            'capacity': warehouse.capacity,
-            'current_occupancy': warehouse.current_occupancy,
-            'available_capacity': warehouse.available_capacity,
-            'occupancy_percentage': warehouse.occupancy_percentage,
-            'status': (
-                'Optimal'
-                if warehouse.occupancy_percentage < 80
-                else 'Critical'
-                if warehouse.occupancy_percentage > 95
-                else 'Warning'
-            )
-        })
-
-    def perform_update(self, serializer):
-        serializer.save()
