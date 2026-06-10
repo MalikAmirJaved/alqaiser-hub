@@ -12,6 +12,22 @@ export interface Department {
   updated_at: string;
 }
 
+export interface DepartmentDesignation {
+  _id: string;
+  name: string;
+  department: string;
+  pay_grade: string;
+  is_active: boolean;
+}
+
+export interface DepartmentEmployee {
+  _id: string;
+  first_name: string;
+  last_name: string;
+  employee_id: string;
+  designation: string;
+}
+
 interface PaginatedResponse<T> {
   count: number;
   next: string | null;
@@ -102,7 +118,7 @@ export function useDeleteDepartment() {
 // Get designations for a department
 export function useDepartmentDesignations(departmentId: string | null) {
   const api = useApi();
-  return useQuery({
+  return useQuery<DepartmentDesignation[]>({
     queryKey: ["departmentDesignations", departmentId],
     queryFn: () => api(`/api/organization/departments/${departmentId}/designations/`),
     enabled: !!departmentId,
@@ -113,7 +129,7 @@ export function useDepartmentDesignations(departmentId: string | null) {
 // Get employees for a department
 export function useDepartmentEmployees(departmentId: string | null) {
   const api = useApi();
-  return useQuery({
+  return useQuery<DepartmentEmployee[]>({
     queryKey: ["departmentEmployees", departmentId],
     queryFn: () => api(`/api/organization/departments/${departmentId}/employees/`),
     enabled: !!departmentId,

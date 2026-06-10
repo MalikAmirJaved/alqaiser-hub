@@ -49,7 +49,8 @@ INSTALLED_APPS = [
     'apps.permissions',
     'apps.sales',
     'apps.forecast',
-    'apps.overall_dashboard'
+    'apps.overall_dashboard',
+    'apps.audit',
 ]
 
 AUTH_USER_MODEL = 'organization.User'

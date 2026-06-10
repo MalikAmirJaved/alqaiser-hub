@@ -15,7 +15,7 @@ from apps.permissions.mixins import PermissionRequiredMixin
 from apps.common.baseauthentication import CompanyBranchMixin
 from rest_framework.decorators import action
 from django.db.models import Q
-
+from apps.hr.models import Employee
 
 class UserContextView(PermissionRequiredMixin, APIView):
     """Get/Update current user's company and branch context"""
@@ -317,3 +317,10 @@ class DepartmentViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Mo
             employment_status='ACTIVE'
         ).values('_id', 'first_name', 'last_name', 'employee_id', 'designation')
         return Response(list(employees))
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.is_deleted = True
+        instance.deleted_by = request.user
+        instance.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)

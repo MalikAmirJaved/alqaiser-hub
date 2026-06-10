@@ -11,7 +11,8 @@ import {
 } from "@/hooks/useDepartments";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import DepartmentFormModal from "@/components/settings/departments/DepartmentFormModal";
-import { Switch } from "@/components/ui/switch"; // shadcn/ui switch
+import { Switch } from "@/components/ui/switch";
+import { useRouter } from "next/navigation";
 
 export default function DepartmentsPage() {
   const [modalOpen, setModalOpen] = useState(false);
@@ -22,6 +23,7 @@ export default function DepartmentsPage() {
   const updateDepartment = useUpdateDepartment();
   const deleteDepartment = useDeleteDepartment();
   const permissions = useFeaturePermissions("SETTINGS", "department");
+  const router = useRouter();
 
   const modulePermissions: ModulePermissions = {
     create: permissions.create,
@@ -40,7 +42,7 @@ export default function DepartmentsPage() {
   };
 
   const columns = [
-    { key: "code", label: "Code", sortable: true, mono: true },
+    { key: "code", label: "Code", sortable: true },
     { key: "name", label: "Name", sortable: true },
     { key: "description", label: "Description" },
     {
@@ -99,6 +101,7 @@ export default function DepartmentsPage() {
         isLoading={isLoading}
         columns={columns}
         getRowId={(dept) => dept.id}
+        onRowClick={(dept) => router.push(`/settings/departments/${dept.id}`)}
         permissions={modulePermissions}
         primaryActionLabel="New Department"
         onCreate={handleCreate}
