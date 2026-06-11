@@ -40,7 +40,6 @@ export default function DesignationFormModal({
   });
   const createDesignation = useCreateDesignation();
   const updateDesignation = useUpdateDesignation();
-console.log("departmentOptions:: ", departmentOptions)
   useEffect(() => {
     if (initialData) {
       setValue("name", initialData.name);

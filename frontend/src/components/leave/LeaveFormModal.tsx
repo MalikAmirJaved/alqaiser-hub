@@ -50,6 +50,19 @@ export function LeaveFormModal({
     if (!formData.leave_type) newErrors.leave_type = "Please select leave type";
     if (!formData.start_date) newErrors.start_date = "Please select start date";
     if (!formData.reason) newErrors.reason = "Please provide a reason";
+
+    // Validate date ordering: end date must not be before start date
+    if (formData.start_date && formData.end_date) {
+      try {
+        const s = new Date(formData.start_date);
+        const e = new Date(formData.end_date);
+        if (e < s) {
+          newErrors.end_date = 'End date cannot be before start date';
+        }
+      } catch (e) {
+        newErrors.start_date = 'Invalid date values';
+      }
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -161,6 +174,9 @@ export function LeaveFormModal({
               />
               {errors.start_date && (
                 <p className="text-xs text-red-500 mt-1">{errors.start_date}</p>
+              )}
+              {errors.end_date && (
+                <p className="text-xs text-red-500 mt-1">{errors.end_date}</p>
               )}
             </label>
           </div>

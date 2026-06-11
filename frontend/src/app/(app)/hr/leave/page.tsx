@@ -109,7 +109,6 @@ const leavePermissions = getPermissions(
       setIsApplyOpen(false);
       refreshData();
     } catch (error: any) {
-      alert(error.message || "Failed to submit leave request");
     }
   };
 
@@ -123,7 +122,6 @@ const leavePermissions = getPermissions(
       refreshData();
       setIsDrawerOpen(false);
     } catch (error: any) {
-      alert(error.message || `Failed to ${status.toLowerCase()} leave request`);
     }
   };
 
@@ -137,7 +135,6 @@ const leavePermissions = getPermissions(
       });
       refreshData();
     } catch (error: any) {
-      alert(error.message || "Failed to delete leave request");
     }
   };
 

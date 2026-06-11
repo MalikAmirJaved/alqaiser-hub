@@ -432,6 +432,15 @@ When a form contains a dropdown/select for a related entity (e.g., Department or
   - `DesignationFormModal.tsx` — Department label has a "+ Add New" button (native `<select>`, not `SearchableSelect`) opening `DepartmentFormModal`.
 - Do NOT add separate "New Department" / "New Designation" buttons at the page header level. Keep the creation entry point inside the relevant dropdown.
 
+#### **14. Leave Form Date Validation (Frontend & Backend)**
+When implementing or updating Leave forms and APIs, enforce the following rules to prevent invalid date ranges and incorrect leave applications:
+
+- Frontend: The leave period picker must prevent or validate selection where the end date is before the start date. Forms should show a clear error (e.g., "End date cannot be before start date") and block submission until corrected. Use the shared DateRangePicker components and validate onChange and before submit.
+- Backend: The leave creation/update endpoints must validate that the employee's joining_date is strictly before the leave start_date. If the employee has not joined before the requested leave starts, return HTTP 400 with a descriptive error message (e.g., "Employee must have joined before the leave start date").
+- Rationale: Prevents applying leave for periods that are chronologically invalid or before employment begins. Keep validation on both client and server for UX and security.
+
+---
+
 ---
 
 > [!IMPORTANT]

@@ -149,6 +149,14 @@ class LeaveRequestView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             company_id=company_id, 
             is_deleted=False
         )
+
+        # Validate employee joining date: employee must have joined before the leave start date
+        if getattr(employee, 'joining_date', None):
+            if employee.joining_date >= start_date:
+                return Response(
+                    {'error': 'Employee must have joined before the leave start date'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         
         overlapping = LeaveRequest.objects.filter(
             employee=employee,
