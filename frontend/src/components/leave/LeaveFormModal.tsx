@@ -201,7 +201,8 @@ export function LeaveFormModal({
               <input
                 type="tel"
                 value={formData.emergency_contact}
-                onChange={(e) => setFormData({ ...formData, emergency_contact: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, emergency_contact: e.target.value.replace(/[^0-9+]/g, "").slice(0, 20) })}
+                maxLength={15}
                 className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
                 placeholder="During leave period"
               />

@@ -57,7 +57,6 @@ const payrollPermissions = getPermissions(
   permissionModule,
   "payroll"
 );
-
   // Get payment status for employee in selected month
   const getPaymentStatus = (employeeId: string) => {
     const record = payrollRecords.find(
@@ -288,7 +287,7 @@ const handleRefresh = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {(!isPaid && payrollPermissions.create) && (
+                        {(!isPaid && payrollPermissions.pay_salary) && (
                           <button
                             onClick={() => {
                               setSelectedEmployee(employee);
@@ -319,7 +318,7 @@ const handleRefresh = () => {
       </div>
 
       {/* Modals */}
-      {(paymentModalOpen && selectedEmployee && payrollPermissions.create)&& (
+      {(paymentModalOpen && selectedEmployee && payrollPermissions.pay_salary)&& (
         <PaymentModal
           formatCurrency={formatCurrency}
           employee={selectedEmployee}
