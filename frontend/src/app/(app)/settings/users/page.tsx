@@ -3,8 +3,9 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from "@/hooks/useUsers";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Pencil, Trash2, Search, UserPlus } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, UserPlus, ToggleRight } from "lucide-react";
 import UserForm from "@/components/Forms/UserForm";
+import UserStatusModal from "@/components/UserStatusModal";
 import { toast } from "sonner";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
@@ -15,6 +16,8 @@ export default function UsersPage() {
 
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [selectedUserForStatus, setSelectedUserForStatus] = useState<any>(null);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [storedPrefill, setStoredPrefill] = useState<any>(null);
 
@@ -87,6 +90,22 @@ export default function UsersPage() {
       toast.success("User deleted");
     } catch (error: any) {
       toast.error(error.message || "Delete failed");
+    }
+  };
+
+  const openStatusModal = (user: any) => {
+    setSelectedUserForStatus(user);
+    setStatusModalOpen(true);
+  };
+
+  const handleStatusChange = async (isActive: boolean) => {
+    try {
+      await updateUser.mutateAsync({
+        id: selectedUserForStatus.id,
+        data: { is_active: isActive },
+      });
+    } catch (error: any) {
+      throw error;
     }
   };
 
@@ -170,61 +189,79 @@ export default function UsersPage() {
                   <td className="px-4 py-2.5">{user.email}</td>
                   <td className="px-4 py-2.5">{user.department_name || user.department || "—"}</td>
                   <td className="px-4 py-2.5">
-                    <span
-                      className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
-                        user.is_active
-                          ? "bg-success/15 text-success border-success/30"
-                          : "bg-destructive/15 text-destructive border-destructive/30"
-                      }`}
-                    >
-                      {user.is_active ? "Active" : "Inactive"}
-                    </span>
+                   <button
+                     onClick={(e) => {
+                       e.stopPropagation();
+                       if (permissions.update) {
+                         openStatusModal(user);
+                       }
+                     }}
+                     className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border cursor-pointer hover:opacity-80 transition-opacity ${
+                       user.is_active
+                         ? "bg-success/15 text-success border-success/30"
+                         : "bg-destructive/15 text-destructive border-destructive/30"
+                     }`}
+                     title={permissions.update ? "Click to change status" : "No permission to change status"}
+                   >
+                     {user.is_active ? "Active" : "Inactive"}
+                   </button>
                   </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
                     {permissions.update && (
                       <button
-                        onClick={() => {
-                          setEditingUser(user);
-                          setStoredPrefill(null);
-                          setModalOpen(true);
-                        }}
-                        className="p-1.5 rounded-md hover:bg-muted"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                    )}
+                       onClick={() => openStatusModal(user)}
+                       className="p-1.5 rounded-md hover:bg-blue-100 text-blue-600 transition-colors"
+                       title="Change User Status"
+                       aria-label="Change Status"
+                     >
+                       <ToggleRight className="w-4 h-4" />
+                     </button>
+                   )}
 
-                    {/* Go to Employee: hidden if user already linked to an employee */}
-                    {permissions.create && !user.isfrom_employee_id && (
-                      <button
-                        onClick={() => {
-                          const params = new URLSearchParams({
-                            prefill: "true",
-                            first_name: user.first_name || "",
-                            last_name: user.last_name || "",
-                            email: user.email || "",
-                            phone: user.phone_number || "",
-                            department_id: user.department_id || user.department || "",
-                            designation_id: user.designation_id || user.designation || "",
-                            isfrom_user_id: user._id || "",
-                          });
-                          router.push(`/hr/employees?${params.toString()}`);
-                        }}
-                        className="p-1.5 rounded-md hover:bg-primary/15 text-primary transition-colors"
-                        title="Create Employee from User"
-                      >
-                        <UserPlus className="w-4 h-4" />
-                      </button>
-                    )}
+                   {permissions.update && (
+                     <button
+                       onClick={() => {
+                         setEditingUser(user);
+                         setStoredPrefill(null);
+                         setModalOpen(true);
+                       }}
+                       className="p-1.5 rounded-md hover:bg-muted"
+                     >
+                       <Pencil className="w-4 h-4" />
+                     </button>
+                   )}
 
-                    {permissions.delete && (
-                      <button
-                        onClick={() => handleDelete(user)}
-                        className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+                   {/* Go to Employee: hidden if user already linked to an employee */}
+                   {permissions.create && !user.isfrom_employee_id && (
+                     <button
+                       onClick={() => {
+                         const params = new URLSearchParams({
+                           prefill: "true",
+                           first_name: user.first_name || "",
+                           last_name: user.last_name || "",
+                           email: user.email || "",
+                           phone: user.phone_number || "",
+                           department_id: user.department_id || user.department || "",
+                           designation_id: user.designation_id || user.designation || "",
+                           isfrom_user_id: user._id || "",
+                         });
+                         router.push(`/hr/employees?${params.toString()}`);
+                       }}
+                       className="p-1.5 rounded-md hover:bg-primary/15 text-primary transition-colors"
+                       title="Create Employee from User"
+                     >
+                       <UserPlus className="w-4 h-4" />
+                     </button>
+                   )}
+
+                   {permissions.delete && (
+                     <button
+                       onClick={() => handleDelete(user)}
+                       className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
+                     >
+                       <Trash2 className="w-4 h-4" />
+                     </button>
+                   )}
                   </td>
                 </tr>
               ))}
@@ -244,6 +281,19 @@ export default function UsersPage() {
             setStoredPrefill(null);
           }}
           isLoading={createUser.isPending || updateUser.isPending}
+        />
+      )}
+
+      {/* User Status Modal */}
+      {selectedUserForStatus && (
+        <UserStatusModal
+          open={statusModalOpen}
+          onOpenChange={setStatusModalOpen}
+          user={selectedUserForStatus}
+          onSubmit={handleStatusChange}
+          onSuccess={() => {
+            setSelectedUserForStatus(null);
+          }}
         />
       )}
     </div>

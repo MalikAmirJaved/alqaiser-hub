@@ -16,7 +16,7 @@ export async function apiFetch<T>(
   const method = options.method?.toUpperCase() || "GET";
 
   // APIs where toast should be disabled
-  const disableToastEndpoints = ["/api/accounts/token/refresh/", "/api/inventory/stock/batch-stock/"];
+  const disableToastEndpoints = ["/api/accounts/token/refresh/", "/api/inventory/stock/batch-stock/", "/api/accounts/login/"];
 
   const shouldShowToast = !disableToastEndpoints.includes(endpoint);
 

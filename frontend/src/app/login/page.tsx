@@ -108,6 +108,12 @@ export default function LoginPage() {
             )}
           </div>
 
+          {err && (
+            <div className="mt-4 p-3 rounded-md bg-destructive/15 border border-destructive/30 text-destructive text-sm">
+              {err}
+            </div>
+          )}
+
           {forgot ? (
             <div className="mt-5 space-y-2">
               <button

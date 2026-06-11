@@ -35,6 +35,7 @@ export interface UserFormData {
   designation?: string;
   phone_number?: string;
   password?: string;  // Added password field
+  is_active?: boolean;
 }
 
 interface PaginatedResponse<T> {
