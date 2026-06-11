@@ -30,7 +30,7 @@ import {
   ModuleNode,
 } from "@/hooks/usePermissions";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-
+import { useSearchParams } from "next/navigation";
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const ACTION_COLORS: Record<string, string> = {
@@ -405,14 +405,15 @@ export default function PermissionsPage() {
   const [pendingChanges, setPendingChanges] = useState<Record<string, boolean>>({});
   const [wsOnline, setWsOnline] = useState(true);
   const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
-
+  const searchParams = useSearchParams(); 
+const urlUserId = searchParams.get("userId"); 
   // Hooks
   const { data: users = [], isLoading: usersLoading } = usePermissionUsers();
   const { data: modules = [], isLoading: modulesLoading, refetch: refetchModules } = useUserModules(selectedUserId);
   const { data: overrides = [] } = useUserOverrides(selectedUserId);
   const bulkSet = useBulkSetPermissions();
   const removeOverride = useRemoveOverride();
-
+  
   // Real-time WebSocket
   usePermissionSocket(selectedUserId);
   const selectedUser = users.find(u => u.id === selectedUserId);
@@ -430,7 +431,16 @@ export default function PermissionsPage() {
     }),
     [users, search]
   );
-
+    useEffect(() => {
+    if (urlUserId && users.length > 0) {
+      const id = parseInt(urlUserId, 10);
+      if (users.find(u => u.id === id)) {
+        setSelectedUserId(id);
+        // Optionally remove the query param from URL to avoid re-selecting on refresh
+        // window.history.replaceState({}, '', '/settings/permissions');
+      }
+    }
+  }, [urlUserId, users]);
   // Reset pending when user changes
   useEffect(() => {
     setPendingChanges({});

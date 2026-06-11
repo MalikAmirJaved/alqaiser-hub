@@ -2,13 +2,14 @@
 import { useState, useEffect } from "react";
 import { X, Eye, EyeOff } from "lucide-react";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import { useDepartments } from "@/hooks/useDepartments";
+import { useDesignations } from "@/hooks/useDesignations";
 
 interface UserFormProps {
   initialData?: any;
   onSubmit: (data: any) => void;
   onCancel: () => void;
   isLoading?: boolean;
-  departments?: string[];
 }
 
 export default function UserForm({
@@ -16,14 +17,13 @@ export default function UserForm({
   onSubmit,
   onCancel,
   isLoading,
-  departments = ["HR", "INVENTORY", "FINANCE", "MONITORING", "SETTINGS"],
 }: UserFormProps) {
   const [formData, setFormData] = useState({
     username: "",
     email: "",
     first_name: "",
     last_name: "",
-    department: "",
+    department: "",           // <-- changed from department_id
     designation: "",
     phone_number: "",
     password: "",
@@ -32,6 +32,17 @@ export default function UserForm({
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  const { data: departments = [] } = useDepartments();
+  const departmentOptions = departments
+    .filter((d: any) => d.is_active)
+    .map((d: any) => ({ value: d.id, label: d.name }));
+
+  const { data: designations = [] } = useDesignations();
+  const selectedDept = departments.find((d: any) => d.id === formData.department);
+  const filteredDesignations = designations.filter(
+    (d) => d.department === (selectedDept?.name || "")
+  );
+
   useEffect(() => {
     if (initialData) {
       setFormData({
@@ -39,7 +50,7 @@ export default function UserForm({
         email: initialData.email || "",
         first_name: initialData.first_name || "",
         last_name: initialData.last_name || "",
-        department: initialData.department || "",
+        department: initialData.department_id || "",   // note: initialData has department_id from API
         designation: initialData.designation || "",
         phone_number: initialData.phone_number || "",
         password: "",
@@ -49,31 +60,27 @@ export default function UserForm({
   }, [initialData]);
 
   const handleChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData(prev => ({
+      ...prev,
+      [field]: value,
+      ...(field === "department" && { designation: "" }),
+    }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validate password for new user creation
     if (!initialData && !formData.password) {
       alert("Password is required for new user");
       return;
     }
-    
-    // Validate password match
     if (formData.password !== formData.confirm_password) {
       alert("Passwords do not match");
       return;
     }
-    
-    // Validate password length
     if (formData.password && formData.password.length < 6) {
       alert("Password must be at least 6 characters");
       return;
     }
-    
-    // Remove confirm_password before submitting
     const { confirm_password, ...submitData } = formData;
     onSubmit(submitData);
   };
@@ -143,18 +150,21 @@ export default function UserForm({
               <SearchableSelect
                 value={formData.department}
                 onChange={(val) => handleChange("department", val)}
-                options={departments.map(d => ({ value: d, label: d }))}
+                options={departmentOptions}
                 placeholder="Select department"
               />
             </label>
             <label className="text-sm flex flex-col gap-1">
               <span className="text-muted-foreground">Designation</span>
-              <input
-                type="text"
+              <SearchableSelect
                 value={formData.designation}
-                onChange={(e) => handleChange("designation", e.target.value)}
-                className="bg-muted/40 border border-border rounded-md h-9 px-3"
-                placeholder="e.g., Software Engineer"
+                onChange={(val) => handleChange("designation", val)}
+                options={filteredDesignations.map(d => ({
+                  value: d.name,
+                  label: `${d.name}${d.department ? ` (${d.department})` : ""}`,
+                }))}
+                disabled={!formData.department}
+                placeholder="Select designation"
               />
             </label>
           </div>
@@ -162,14 +172,19 @@ export default function UserForm({
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground">Phone Number</span>
             <input
-              type="tel"
-              value={formData.phone_number}
-              onChange={(e) => handleChange("phone_number", e.target.value)}
-              className="bg-muted/40 border border-border rounded-md h-9 px-3"
-            />
+  type="tel"
+  value={formData.phone_number}
+  onChange={(e) =>
+    handleChange(
+      "phone_number",
+      e.target.value.replace(/[^0-9+\-\s()]/g, "")
+    )
+  }
+  maxLength={20}
+  className="bg-muted/40 border border-border rounded-md h-9 px-3"
+/>
           </label>
 
-          {/* Password Fields */}
           <div className="grid sm:grid-cols-2 gap-3">
             <label className="text-sm flex flex-col gap-1">
               <span className="text-muted-foreground">
@@ -193,7 +208,6 @@ export default function UserForm({
                 </button>
               </div>
             </label>
-
             <label className="text-sm flex flex-col gap-1">
               <span className="text-muted-foreground">
                 {initialData ? "Confirm New Password" : "Confirm Password *"}

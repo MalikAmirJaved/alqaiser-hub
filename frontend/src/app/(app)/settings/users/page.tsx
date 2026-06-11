@@ -6,13 +6,13 @@ import { Plus, Pencil, Trash2, Search } from "lucide-react";
 import UserForm from "@/components/Forms/UserForm";
 import { toast } from "sonner";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-
+import { useRouter } from "next/navigation";
 export default function UsersPage() {
   const permissions = useFeaturePermissions("SETTINGS", "user");
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
-
+const router = useRouter();
   const { data: users = [], isLoading } = useUsers();
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
@@ -22,10 +22,10 @@ export default function UsersPage() {
     try {
       if (editingUser) {
         await updateUser.mutateAsync({ id: editingUser.id, data: userData });
-        toast.success("User updated");
       } else {
-        await createUser.mutateAsync(userData);
-        toast.success("User created");
+        const newUser=await createUser.mutateAsync(userData);
+        toast.success("User created. Set their permissions now.");
+        router.push(`/settings/permissions?userId=${newUser.id}`);
       }
       setModalOpen(false);
       setEditingUser(null);
@@ -166,7 +166,6 @@ export default function UsersPage() {
             setEditingUser(null);
           }}
           isLoading={createUser.isPending || updateUser.isPending}
-          departments={["HR", "INVENTORY", "FINANCE", "MONITORING", "SETTINGS"]}
         />
       )}
     </div>

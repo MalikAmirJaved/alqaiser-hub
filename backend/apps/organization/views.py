@@ -224,22 +224,22 @@ class UserListView(PermissionRequiredMixin, generics.ListCreateAPIView):
     permission_module = 'SETTINGS'
     permission_resource = 'user'
     serializer_class = UserProfileSerializer
-    
+
     def get_queryset(self):
-        # Get users for the current user's company only, exclude deleted
         return User.objects.filter(
             company=self.request.user.company,
             is_deleted=False
-        )#.exclude(id=self.request.user.id)  # Exclude current user from list
+        )
 
     def perform_create(self, serializer):
-        # Set company, branch, and other required fields
+        # Let the serializer handle the department field (which is a UUID from frontend)
         serializer.save(
             company=self.request.user.company,
-            branch=self.request.user.branch,  # Assign to current user's branch
+            branch=self.request.user.branch,
             created_by=self.request.user,
             updated_by=self.request.user
         )
+
 
 
 class UserDetailView(PermissionRequiredMixin, generics.RetrieveUpdateDestroyAPIView):

@@ -12,6 +12,7 @@ import logging
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import Employee, EmployeeDefaultShift, EmployeeAssetAssignment, AssetCategory
+from apps.organization.models import Department
 
 logger = logging.getLogger(__name__)
 
@@ -19,25 +20,23 @@ logger = logging.getLogger(__name__)
 class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'employee'
-    """CRUD for Employees with UUID support"""
     permission_classes = [IsAuthenticated]
-    
+
     def _serialize_employee(self, employee):
-        """Serialize employee with UUID as id"""
+        """Serialize employee with UUID as id and department as object."""
         today = date.today()
         active_default_shift = employee.default_shifts.filter(
-            effective_from__lte=today,
-            is_deleted=False
+            effective_from__lte=today, is_deleted=False
         ).filter(
             models.Q(effective_to__isnull=True) | models.Q(effective_to__gte=today)
         ).select_related('template').first()
-        
+
         reporting_manager_id = None
         reporting_manager_name = None
         if employee.reporting_manager_id and employee.reporting_manager:
             reporting_manager_id = str(employee.reporting_manager._id)
             reporting_manager_name = employee.reporting_manager.full_name
-        
+
         return {
             "id": str(employee._id),
             "employee_id": employee.employee_id,
@@ -60,7 +59,8 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "emergency_contact_phone": employee.emergency_contact_phone,
             "emergency_contact_relation": employee.emergency_contact_relation,
             "role": employee.role,
-            "department": employee.department,
+            "department_id": str(employee.department._id) if employee.department else None,
+            "department_name": employee.department.name if employee.department else None,
             "designation": employee.designation,
             "employment_type": employee.employment_type,
             "employment_status": employee.employment_status,
@@ -79,101 +79,102 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "createdAt": employee.created_at.isoformat() if employee.created_at else None,
             "updatedAt": employee.updated_at.isoformat() if employee.updated_at else None,
         }
-    
+
     def get(self, request):
-        """Get all employees for user's company"""
         company_id = request.user.company_id
         branch_id = request.user.branch_id
-        
+
         if not company_id:
             return Response(
                 {'error': 'User is not associated with any company'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        query = Employee.objects.filter(company_id=company_id, is_deleted=False).select_related('default_shift', 'reporting_manager')
-        
+
+        query = Employee.objects.filter(company_id=company_id, is_deleted=False).select_related('default_shift', 'reporting_manager', 'department')
+
         if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
             query = query.filter(models.Q(branch_id=branch_id) | models.Q(branch_id__isnull=True))
-        
+
         search = request.query_params.get('search')
         if search:
             query = query.filter(
                 models.Q(employee_id__icontains=search) |
                 models.Q(first_name__icontains=search) |
                 models.Q(last_name__icontains=search) |
-                models.Q(department__icontains=search) |
+                models.Q(department__name__icontains=search) |
                 models.Q(designation__icontains=search) |
                 models.Q(email__icontains=search)
             )
-        
-        department = request.query_params.get('department')
+
+        department_filter = request.query_params.get('department')
         status_filter = request.query_params.get('status')
         employment_type = request.query_params.get('employmentType')
-        
-        if department:
-            query = query.filter(department=department)
+
+        if department_filter:
+            # Filter by department name (or optionally UUID)
+            query = query.filter(department__name=department_filter)
         if status_filter:
             query = query.filter(employment_status=status_filter)
         if employment_type:
             query = query.filter(employment_type=employment_type)
-        
+
         employees = query.order_by('first_name', 'last_name')
-        
         return Response([self._serialize_employee(e) for e in employees])
-    
+
     @transaction.atomic
     def post(self, request):
-        """Create new employee"""
         company_id = request.user.company_id
         branch_id = request.user.branch_id
-        
+
         if not company_id:
             return Response(
                 {'error': 'User is not associated with any company'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        required_fields = ['first_name', 'phone', 'department', 'joining_date']
+
+        required_fields = ['first_name', 'phone', 'department_id', 'joining_date']
         for field in required_fields:
             if not request.data.get(field):
                 return Response(
                     {'error': f'{field} is required'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-        
+
         employee_id = request.data.get('employee_id')
         if not employee_id:
             count = Employee.objects.filter(company_id=company_id, is_deleted=False).count()
             employee_id = f"EMP-{str(count + 1).zfill(3)}"
-        
+
         if Employee.objects.filter(company_id=company_id, employee_id=employee_id, is_deleted=False).exists():
             return Response(
                 {'error': 'Employee ID already exists'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
+        department_uuid = request.data.get('department_id')
+        department = None
+        if department_uuid:
+            department = get_object_or_404(Department, _id=department_uuid, company_id=company_id, is_deleted=False)
+
         joining_date = datetime.strptime(request.data['joining_date'], '%Y-%m-%d').date() if request.data.get('joining_date') else None
-        
         date_of_birth = None
         if request.data.get('date_of_birth'):
             date_of_birth = datetime.strptime(request.data['date_of_birth'], '%Y-%m-%d').date()
-        
         confirmation_date = None
         if request.data.get('confirmation_date'):
             confirmation_date = datetime.strptime(request.data['confirmation_date'], '%Y-%m-%d').date()
-        
+
         reporting_manager_uuid = request.data.get('reporting_manager_id')
         reporting_manager = None
         if reporting_manager_uuid:
             reporting_manager = get_object_or_404(Employee, _id=reporting_manager_uuid, company_id=company_id, is_deleted=False)
-        
+
         default_shift_uuid = request.data.get('default_shift_id')
         from apps.hr.models import ShiftTemplate
         default_shift = None
         if default_shift_uuid:
             default_shift = get_object_or_404(ShiftTemplate, _id=default_shift_uuid, company_id=company_id, is_deleted=False)
-        
+
         employee = Employee.objects.create(
             company_id=company_id,
             branch_id=branch_id,
@@ -197,7 +198,7 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             emergency_contact_phone=request.data.get('emergency_contact_phone'),
             emergency_contact_relation=request.data.get('emergency_contact_relation'),
             role=request.data.get('role', 'STAFF'),
-            department=request.data['department'],
+            department=department,
             designation=request.data.get('designation'),
             employment_type=request.data.get('employment_type', 'FULL_TIME'),
             employment_status=request.data.get('employment_status', 'ACTIVE'),
@@ -214,7 +215,7 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             created_by=request.user,
             updated_by=request.user,
         )
-        
+
         if default_shift and joining_date:
             EmployeeDefaultShift.objects.create(
                 company_id=company_id,
@@ -224,22 +225,20 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 created_by=request.user,
                 updated_by=request.user,
             )
-        
+
         asset_category_uuid = request.data.get('asset_category_id')
         if asset_category_uuid:
             self._assign_assets_from_category(employee, asset_category_uuid, request.user)
-        
+
         return Response({
             "message": "Employee created successfully",
             "employee": self._serialize_employee(employee),
         }, status=status.HTTP_201_CREATED)
-    
+
     def _assign_assets_from_category(self, employee, category_uuid, user):
-        """Assign all assets from a category/kit to an employee using UUID"""
         try:
             category = AssetCategory.objects.get(_id=category_uuid, company_id=employee.company_id, is_deleted=False)
             assets = list(category.assets.filter(is_deleted=False, is_active=True))
-            
             assignments = []
             for asset in assets:
                 assignments.append(EmployeeAssetAssignment(
@@ -256,61 +255,66 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                     created_by=user,
                     updated_by=user,
                 ))
-            
             if assignments:
                 EmployeeAssetAssignment.objects.bulk_create(assignments)
-                
         except AssetCategory.DoesNotExist:
             logger.warning(f"AssetCategory {category_uuid} not found")
         except Exception as e:
             logger.error(f"Error assigning assets from kit: {str(e)}")
-    
+
     @transaction.atomic
     def patch(self, request):
-        """Update employee using UUID"""
         company_id = request.user.company_id
-        
+
         if not company_id:
             return Response(
                 {'error': 'User is not associated with any company'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         employee_uuid = request.data.get('id')
         if not employee_uuid:
             return Response(
                 {'error': 'id (UUID) is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         employee = get_object_or_404(
             Employee,
             _id=employee_uuid,
             company_id=company_id,
             is_deleted=False
         )
-        
+
+        # Department update (must come after employee is fetched)
+        if 'department_id' in request.data:
+            value = request.data['department_id']
+            if value:
+                employee.department = get_object_or_404(Department, _id=value, company_id=company_id, is_deleted=False)
+            else:
+                employee.department = None
+
         updatable_fields = [
             'first_name', 'last_name', 'father_name', 'cnic',
             'gender', 'marital_status', 'phone', 'email', 'personal_email',
             'address_line', 'country', 'state', 'city', 'postal_code',
             'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation',
-            'role', 'department', 'designation', 'employment_type', 'employment_status',
+            'role', 'designation', 'employment_type', 'employment_status',
             'work_location', 'bank_name', 'bank_account_number', 'bank_iban', 'salary',
             'probation_days',
         ]
-        
+
         for field in updatable_fields:
             if field in request.data:
                 setattr(employee, field, request.data[field])
-        
+
         if 'reporting_manager_id' in request.data:
             value = request.data['reporting_manager_id']
             if value:
                 employee.reporting_manager = get_object_or_404(Employee, _id=value, company_id=company_id, is_deleted=False)
             else:
                 employee.reporting_manager = None
-        
+
         if 'default_shift_id' in request.data:
             value = request.data['default_shift_id']
             from apps.hr.models import ShiftTemplate
@@ -318,90 +322,88 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 employee.default_shift = get_object_or_404(ShiftTemplate, _id=value, company_id=company_id, is_deleted=False)
             else:
                 employee.default_shift = None
-        
+
         if 'date_of_birth' in request.data:
             val = request.data['date_of_birth']
             employee.date_of_birth = datetime.strptime(val, '%Y-%m-%d').date() if val else None
-        
+
         if 'joining_date' in request.data:
             val = request.data['joining_date']
             employee.joining_date = datetime.strptime(val, '%Y-%m-%d').date() if val else None
-        
+
         if 'confirmation_date' in request.data:
             val = request.data['confirmation_date']
             employee.confirmation_date = datetime.strptime(val, '%Y-%m-%d').date() if val else None
-        
+
         employee.updated_by = request.user
         employee.save()
-        
+
         return Response({
             "message": "Employee updated successfully",
             "employee": self._serialize_employee(employee),
         })
-    
+
     @transaction.atomic
     def delete(self, request):
-        """Soft delete employee using UUID"""
         company_id = request.user.company_id
-        
         if not company_id:
             return Response(
                 {'error': 'User is not associated with any company'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         employee_uuid = request.data.get('id')
         if not employee_uuid:
             return Response(
                 {'error': 'id (UUID) is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         employee = get_object_or_404(
             Employee,
             _id=employee_uuid,
             company_id=company_id,
             is_deleted=False
         )
-        
+
         active_assignments = employee.asset_assignments.filter(status='ACTIVE')
         if active_assignments.exists():
             return Response(
                 {'error': 'Cannot delete employee with active asset assignments. Please return assets first.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         employee.is_deleted = True
         employee.deleted_at = timezone.now()
         employee.deleted_by = request.user
         employee.save()
-        
         return Response({'message': 'Employee deleted successfully'})
 
 
 class EmployeeStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'employee'
-    """Get employee statistics"""
     permission_classes = [IsAuthenticated]
-    
+
     def get(self, request):
         company_id = request.user.company_id
-        
         if not company_id:
             return Response(
                 {'error': 'User is not associated with any company'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         employees = Employee.objects.filter(company_id=company_id, is_deleted=False)
-        
+        # Use department__name for grouping
+        dept_counts = list(employees.values('department__name').annotate(count=models.Count('id')).order_by('-count'))
+        status_counts = list(employees.values('employment_status').annotate(count=models.Count('id')))
+
         return Response({
             "totalEmployees": employees.count(),
             "activeEmployees": employees.filter(employment_status='ACTIVE').count(),
             "onLeave": employees.filter(employment_status='ON_LEAVE').count(),
-            "departments": employees.values('department').distinct().count(),
+            "departments": employees.values('department__name').distinct().count(),
             "withDefaultShift": employees.filter(default_shift__isnull=False).count(),
-            "byDepartment": list(employees.values('department').annotate(count=models.Count('id')).order_by('-count')),
-            "byStatus": list(employees.values('employment_status').annotate(count=models.Count('id'))),
+            "byDepartment": dept_counts,
+            "byStatus": status_counts,
         })

@@ -8,7 +8,7 @@ from datetime import date
 
 from apps.common.basemodel import BaseModel
 from apps.finance.services.payable import PayableModelMixin
-
+from apps.organization.models import Department
 
 def current_year():
     return date.today().year
@@ -184,7 +184,14 @@ class Employee(BaseModel):
         choices=[('STAFF', 'Staff'), ('BRANCH_ADMIN', 'Branch Admin'), ('COMPANY_ADMIN', 'Company Admin')],
         default='STAFF'
     )
-    department = models.CharField(max_length=100)
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='employees'
+    )
+
     designation = models.CharField(max_length=100, blank=True, null=True)
     employment_type = models.CharField(
         max_length=50,

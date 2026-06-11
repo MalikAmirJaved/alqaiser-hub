@@ -1,129 +1,157 @@
+# apps/audit/signals.py
+import json
 import uuid
-from django.db.models.signals import post_save, pre_delete, pre_save
+from datetime import date, datetime
+from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
-from django.forms.models import model_to_dict
 from .models import AuditLog
-from apps.common.middleware import get_current_request
 
-# Store previous state for updates
-_previous_state = {}
+def _serialize_for_json(obj):
+    """Recursively convert non-JSON-serializable objects to strings."""
+    if isinstance(obj, uuid.UUID):
+        return str(obj)
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    # Django model instance -> convert to string representation (avoid storing whole object)
+    if hasattr(obj, '_meta') and hasattr(obj, 'pk'):
+        return str(obj.pk) if obj.pk is not None else str(obj)
+    if isinstance(obj, dict):
+        return {k: _serialize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_serialize_for_json(i) for i in obj]
+    return obj
 
-def get_model_module(model):
-    """Map model class to module name."""
-    app_label = model._meta.app_label
-    if app_label.startswith('apps.'):
-        return app_label.split('.')[1]  # e.g., 'hr', 'inventory', 'organization'
-    return app_label
 
-def get_audited_models():
-    """Return a set of model classes that should be audited (skip AuditLog itself)."""
-    from django.apps import apps
-    from .models import AuditLog
-    audited = set()
-    for model in apps.get_models():
-        if hasattr(model, '_id') and hasattr(model, 'is_deleted'):
-            if model != AuditLog:          # ← skip the audit log model
-                audited.add(model)
-    return audited
+def _has_uuid_field(instance):
+    """Check if the model has a UUID field named '_id' that is a UUID instance."""
+    if not hasattr(instance, '_id'):
+        return False
+    # _id can be a UUIDField (value is UUID) or could be a string; check type
+    return isinstance(instance._id, uuid.UUID)
 
-def convert_to_serializable(value):
-    """Convert UUID to string for JSON serialization."""
-    if isinstance(value, uuid.UUID):
-        return str(value)
-    return value
-
-@receiver(pre_save)
-def capture_previous_state(sender, instance, **kwargs):
-    """Store old state before update for audited models."""
-    if sender not in get_audited_models():
-        return
-    if instance.pk:
-        try:
-            old = sender.objects.get(pk=instance.pk)
-            _previous_state[(sender, instance.pk)] = model_to_dict(old)
-        except sender.DoesNotExist:
-            pass
 
 @receiver(post_save)
 def audit_create_update(sender, instance, created, **kwargs):
-    if sender not in get_audited_models():
+    """Log creation or update of any model that has a UUID _id field."""
+    # Skip models without a UUID _id field
+    if not _has_uuid_field(instance):
         return
 
-    request = get_current_request()
-    user = None
+    # Skip audit logs themselves
+    if sender.__name__ == 'AuditLog':
+        return
+
+    # Skip Django internal apps
+    if sender._meta.app_label in ['admin', 'auth', 'contenttypes', 'sessions']:
+        return
+
+    # Skip the Migration model
+    if sender.__name__ == 'Migration':
+        return
+
+    # Try to get request from the instance (if attached by middleware)
+    request = getattr(instance, '_request', None)
+
+    user = getattr(request, 'user', None) if request else None
     ip = None
-    ua = None
-    if request and hasattr(request, 'user') and request.user.is_authenticated:
-        user = request.user
+    user_agent = None
+    if request:
         ip = request.META.get('REMOTE_ADDR')
-        ua = request.META.get('HTTP_USER_AGENT', '')[:500]
+        user_agent = request.META.get('HTTP_USER_AGENT', '')[:255]
 
-    key = (sender, instance.pk)
-    old_state = _previous_state.pop(key, None)
-
+    # Build changes dict
     changes = {}
-    if created:
-        action = 'CREATE'
-        new_dict = model_to_dict(instance)
-        for field, new_val in new_dict.items():
-            if field not in ['id', '_id', 'created_at', 'updated_at', 'is_deleted']:
-                changes[field] = {'old': None, 'new': convert_to_serializable(new_val)}
-    elif old_state:
-        action = 'UPDATE'
-        new_dict = model_to_dict(instance)
-        for field, old_val in old_state.items():
-            new_val = new_dict.get(field)
-            if old_val != new_val:
-                changes[field] = {
-                    'old': convert_to_serializable(old_val),
-                    'new': convert_to_serializable(new_val)
-                }
+    if not created:
+        try:
+            old_instance = sender.objects.get(pk=instance.pk)
+            for field in instance._meta.fields:
+                old_val = getattr(old_instance, field.name)
+                new_val = getattr(instance, field.name)
+                if old_val != new_val:
+                    changes[field.name] = {
+                        'old': _serialize_for_json(old_val),
+                        'new': _serialize_for_json(new_val)
+                    }
+        except sender.DoesNotExist:
+            pass
     else:
-        return
+        for field in instance._meta.fields:
+            val = getattr(instance, field.name)
+            if val is not None:
+                changes[field.name] = _serialize_for_json(val)
 
-    if changes:
-        AuditLog.objects.create(
-            user=user,
-            action=action,
-            model_name=sender._meta.model_name,
-            record_id=instance._id,
-            module=get_model_module(sender),
-            changes=changes,
-            ip_address=ip,
-            user_agent=ua,
-            company_id=getattr(instance, 'company_id', None),
-            branch_id=getattr(instance, 'branch_id', None),
-        )
+    if not changes and created:
+        changes['action'] = 'created'
+
+    changes_serialized = _serialize_for_json(changes)
+
+    module = sender._meta.app_label
+
+    # record_id is the UUID string
+    record_id = str(instance._id)
+
+    audit_data = {
+        'model_name': sender.__name__,
+        'record_id': record_id,
+        'action': 'CREATE' if created else 'UPDATE',
+        'changes': changes_serialized,
+        'user': user,
+        'ip_address': ip,
+        'user_agent': user_agent,
+        'module': module,
+    }
+    # Add company_id if the instance has it (BaseModel includes it)
+    if hasattr(instance, 'company_id') and instance.company_id:
+        audit_data['company_id'] = instance.company_id
+    elif hasattr(instance, 'company') and instance.company and hasattr(instance.company, 'id'):
+        audit_data['company_id'] = instance.company.id
+
+    AuditLog.objects.create(**audit_data)
+
 
 @receiver(pre_delete)
 def audit_delete(sender, instance, **kwargs):
-    if sender not in get_audited_models():
+    """Log deletion for models that have a UUID _id field."""
+    if not _has_uuid_field(instance):
         return
 
-    request = get_current_request()
-    user = None
+    if sender.__name__ == 'AuditLog':
+        return
+    if sender._meta.app_label in ['admin', 'auth', 'contenttypes', 'sessions']:
+        return
+    if sender.__name__ == 'Migration':
+        return
+
+    request = getattr(instance, '_request', None)
+    user = getattr(request, 'user', None) if request else None
     ip = None
-    ua = None
-    if request and hasattr(request, 'user') and request.user.is_authenticated:
-        user = request.user
+    user_agent = None
+    if request:
         ip = request.META.get('REMOTE_ADDR')
-        ua = request.META.get('HTTP_USER_AGENT', '')[:500]
+        user_agent = request.META.get('HTTP_USER_AGENT', '')[:255]
 
-    old_dict = model_to_dict(instance)
-    changes = {}
-    for field, old_val in old_dict.items():
-        if field not in ['id', '_id', 'created_at', 'updated_at', 'is_deleted']:
-            changes[field] = {'old': convert_to_serializable(old_val), 'new': None}
+    data = {}
+    for field in instance._meta.fields:
+        val = getattr(instance, field.name)
+        if val is not None:
+            data[field.name] = _serialize_for_json(val)
 
-    AuditLog.objects.create(
-        user=user,
-        action='DELETE',
-        model_name=sender._meta.model_name,
-        record_id=instance._id,
-        module=get_model_module(sender),
-        changes=changes,
-        ip_address=ip,
-        user_agent=ua,
-        company_id=getattr(instance, 'company_id', None),
-        branch_id=getattr(instance, 'branch_id', None),
-    )
+    module = sender._meta.app_label
+    record_id = str(instance._id)
+
+    audit_data = {
+        'model_name': sender.__name__,
+        'record_id': record_id,
+        'action': 'DELETE',
+        'changes': data,
+        'user': user,
+        'ip_address': ip,
+        'user_agent': user_agent,
+        'module': module,
+    }
+    if hasattr(instance, 'company_id') and instance.company_id:
+        audit_data['company_id'] = instance.company_id
+    elif hasattr(instance, 'company') and instance.company and hasattr(instance.company, 'id'):
+        audit_data['company_id'] = instance.company.id
+
+    AuditLog.objects.create(**audit_data)

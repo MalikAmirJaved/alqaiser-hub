@@ -13,7 +13,7 @@ import { useEmployees } from "@/hooks/useEmployees";
 import { LocationGroup } from "../reuseable/LocationSelectors";
 import SearchableSelect from "../reuseable/SearchableSelect";
 import { DatePicker } from "@/components/reuseable/DatePicker";
-import { useDepartmentOptions } from "@/lib/departments";
+import { useDepartments } from "@/hooks/useDepartments";
 
 export default function EmployeeForm({ initialData = null, onSubmit, onCancel }) {
   const [formData, setFormData] = useState({
@@ -56,14 +56,22 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
   });
 
   const [loading, setLoading] = useState(false);
-const { options: departmentOptions } = useDepartmentOptions();
 
-  // Fetch data from backend
+  // Fetch departments (assumed to return array directly from API)
+  const { data: departments = [] } = useDepartments();
+
+  // Transform departments to options for SearchableSelect
+  const departmentOptions = departments
+    .filter(dept => dept.is_active)
+    .map(dept => ({ value: dept.name, label: dept.name }));
+
+  // Fetch designations (array after pagination fix)
   const { data: designations = [] } = useDesignations();
   const { data: shiftTemplates = [] } = useShiftTemplates();
   const { data: assetCategories = [] } = useAssetCategories();
   const { data: employees = [] } = useEmployees();
 
+  // Filter designations based on selected department
   const filteredDesignations = designations.filter(
     (d) => d.department === formData.department
   );
@@ -155,12 +163,12 @@ const { options: departmentOptions } = useDepartmentOptions();
 
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs">Employee ID</span>
-               <input
-  type="text"
-  disabled
-  value={formData.employee_id}
-  className="bg-muted/40 border border-border rounded-md h-9 px-2 font-mono text-xs cursor-not-allowed"
-/>
+                <input
+                  type="text"
+                  disabled
+                  value={formData.employee_id}
+                  className="bg-muted/40 border border-border rounded-md h-9 px-2 font-mono text-xs cursor-not-allowed"
+                />
               </label>
 
               <div className="grid grid-cols-2 gap-3">
@@ -336,12 +344,12 @@ const { options: departmentOptions } = useDepartmentOptions();
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Department *</span>
                   <SearchableSelect
-  value={formData.department}
-  onChange={(val) => handleChange("department", val)}
-  options={departmentOptions}
-  required={true}
-  placeholder="Select Department"
-/>
+                    value={formData.department}
+                    onChange={(val) => handleChange("department", val)}
+                    options={departmentOptions}
+                    required={true}
+                    placeholder="Select Department"
+                  />
                 </label>
               </div>
 
