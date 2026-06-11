@@ -419,6 +419,19 @@ Do **NOT** bypass `apiFetch` in these cases:
 - Streaming responses (use native fetch with streaming).
 - For these, wrap the response in toast notifications manually if needed.
 
+#### **13. Inline "Add New" Pattern for Dropdowns**
+When a form contains a dropdown/select for a related entity (e.g., Department or Designation), allow users to create that entity inline without leaving the form:
+
+- **`SearchableSelect`** supports `onAddNew` and `addNewLabel` props (defined in `frontend/src/components/reuseable/SearchableSelect.tsx`). When provided, an "+ Add New" item renders at the bottom of the dropdown list.
+- Clicking "+ Add New" opens a small overlay modal (the entity's creation form) on top of the parent form.
+- The **parent form stays open** and **all filled fields are preserved** — the sub-modal is a separate overlay (`fixed z-50`) that renders above it.
+- After the sub-modal successfully creates the record, call `refetch()` on the parent's data hook so the new option appears in the dropdown.
+- Examples in the codebase:
+  - `EmployeeForm.jsx` — Department and Designation dropdowns have `onAddNew` opening `DepartmentFormModal` / `DesignationFormModal`.
+  - `UserForm.tsx` — Same pattern for both dropdowns.
+  - `DesignationFormModal.tsx` — Department label has a "+ Add New" button (native `<select>`, not `SearchableSelect`) opening `DepartmentFormModal`.
+- Do NOT add separate "New Department" / "New Designation" buttons at the page header level. Keep the creation entry point inside the relevant dropdown.
+
 ---
 
 > [!IMPORTANT]
