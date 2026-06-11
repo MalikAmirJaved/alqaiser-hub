@@ -6,9 +6,10 @@ import { useEmployees, useEmployeeStats, useCreateEmployee, useUpdateEmployee, u
 import { useShiftTemplates } from "@/hooks/useShiftTemplates";
 import PageHeader from "@/components/PageHeader";
 import EmployeeForm from "@/components/Forms/EmployeeForm";
+import EmployeeStatusModal from "@/components/EmployeeStatusModal";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { TableView, GridView } from "@/components/reuseable/TableGridView";
-import { Plus, Pencil, Trash2, Search, Download, Shield, Clock, LayoutGrid, LayoutList, Building2, Briefcase, Award, Phone, Key } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Download, Shield, Clock, LayoutGrid, LayoutList, Building2, Briefcase, Award, Phone, Key, ToggleRight } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,8 @@ export default function EmployeesPage() {
   const { confirm } = useConfirmation();
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [selectedEmployeeForStatus, setSelectedEmployeeForStatus] = useState<any>(null);
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
@@ -175,6 +178,11 @@ export default function EmployeesPage() {
     setModalOpen(true);
   };
 
+  const openStatusModal = (employee) => {
+    setSelectedEmployeeForStatus(employee);
+    setStatusModalOpen(true);
+  };
+
   const exportCsv = () => {
     const headers = ["Employee ID", "First Name", "Last Name", "Department", "Designation", "Employment Type", "Status", "Phone", "Email", "Default Shift"];
     const rows = employees.map(emp => [
@@ -266,15 +274,24 @@ export default function EmployeesPage() {
       key: "employment_status",
       label: "Status",
       sortable: true,
-      render: (value) => (
-        <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${value === "ACTIVE"
-          ? "bg-success/15 text-success border-success/30"
-          : value === "ON_LEAVE"
-            ? "bg-warning/15 text-warning border-warning/30"
-            : "bg-destructive/15 text-destructive border-destructive/30"
-          }`}>
+      render: (value, row) => (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (employeePermissions.update) {
+              openStatusModal(row);
+            }
+          }}
+          className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border cursor-pointer hover:opacity-80 transition-opacity ${value === "ACTIVE"
+            ? "bg-success/15 text-success border-success/30"
+            : value === "ON_LEAVE"
+              ? "bg-warning/15 text-warning border-warning/30"
+              : "bg-destructive/15 text-destructive border-destructive/30"
+            }`}
+          title={employeePermissions.update ? "Click to change status" : "No permission to change status"}
+        >
           {value}
-        </span>
+        </button>
       )
     },
     {
@@ -305,6 +322,16 @@ export default function EmployeesPage() {
 
   const renderActions = (row, idx) => (
     <>
+      {employeePermissions.update && (
+        <button
+          onClick={() => openStatusModal(row)}
+          className="p-1.5 rounded-md hover:bg-blue-100 text-blue-600 transition-colors"
+          title="Change Employment Status"
+          aria-label="Change Status"
+        >
+          <ToggleRight className="w-4 h-4" />
+        </button>
+      )}
       {!userExistsForEmployee(row) && (
         <button
           onClick={() => router.push(getPrefillUserUrl(row))}
@@ -620,6 +647,17 @@ export default function EmployeesPage() {
             setModalOpen(false);
             setEditingEmployee(null);
             setStoredPrefillData(null);
+          }}
+        />
+      )}
+
+      {selectedEmployeeForStatus && (
+        <EmployeeStatusModal
+          open={statusModalOpen}
+          onOpenChange={setStatusModalOpen}
+          employee={selectedEmployeeForStatus}
+          onSuccess={() => {
+            setSelectedEmployeeForStatus(null);
           }}
         />
       )}
