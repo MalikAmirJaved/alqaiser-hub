@@ -21,6 +21,7 @@ import { useRouter } from "next/navigation";
 import { getPermissions } from "@/lib/permissions";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
+import { useUsers } from "@/hooks/useUsers";  // add this
 
 export default function EmployeesPage() {
   const { user, ready } = useAuth();
@@ -30,6 +31,7 @@ export default function EmployeesPage() {
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
+  const { data: users = [] } = useUsers();
   const router = useRouter();
   const { data: employees = [], isLoading } = useEmployees(
     query ? { search: query } : undefined
@@ -37,6 +39,11 @@ export default function EmployeesPage() {
   const permissions = useSelector(
     (state: RootState) => state.permissions.permissions
   );
+  const userExistsForEmployee = (employee: any) => {
+    if (!employee.email) return false;
+    return users.some(u => u.email === employee.email);
+  };
+
 
   const employeePermissions = getPermissions(
     permissions,
@@ -58,8 +65,9 @@ export default function EmployeesPage() {
       email: employee.email || "",
       phone_number: employee.phone || "",
       department_id: employee.department_id || "",  // expects UUID
-      designation: employee.designation || "",
+      designation_id: employee.designation_id || "",
     });
+    console.log("sending params data::", params.toString());
     return `/settings/users?${params.toString()}`;
   };
 
@@ -220,14 +228,14 @@ export default function EmployeesPage() {
 
     },
     {
-      key: "department",
+      key: "department_name",
       label: "Department",
       sortable: true,
-      sortAccessor: (row) => (row.department ?? "").toLowerCase()
+      sortAccessor: (row) => (row.department_name ?? "").toLowerCase()
 
     },
     {
-      key: "designation",
+      key: "designation_name",
       label: "Designation",
       sortable: true,
       sortAccessor: (row) => (row.designation ?? "").toLowerCase()
@@ -283,13 +291,15 @@ export default function EmployeesPage() {
   // Define actions for each row
   const renderActions = (row, idx) => (
     <>
-      <button
-        onClick={() => router.push(getPrefillUserUrl(row))}
-        className="p-1.5 rounded-md hover:bg-primary/15 text-primary transition-colors"
-        aria-label="Give Login Access"
-      >
-        <Key className="w-4 h-4" />
-      </button>
+      {!userExistsForEmployee(row) && (
+        <button
+          onClick={() => router.push(getPrefillUserUrl(row))}
+          className="p-1.5 rounded-md hover:bg-primary/15 text-primary transition-colors"
+          aria-label="Give Login Access"
+        >
+          <Key className="w-4 h-4" />
+        </button>
+      )}
       {employeePermissions.update && (
         <button
           onClick={() => openEditModal(row)}

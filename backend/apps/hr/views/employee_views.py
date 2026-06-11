@@ -13,6 +13,7 @@ from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import Employee, EmployeeDefaultShift, EmployeeAssetAssignment, AssetCategory
 from apps.organization.models import Department
+from apps.compsetting.models import Designation   # <-- ADDED
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def _serialize_employee(self, employee):
-        """Serialize employee with UUID as id and department as object."""
+        """Serialize employee with UUID as id, department and designation as objects."""
         today = date.today()
         active_default_shift = employee.default_shifts.filter(
             effective_from__lte=today, is_deleted=False
@@ -61,7 +62,8 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "role": employee.role,
             "department_id": str(employee.department._id) if employee.department else None,
             "department_name": employee.department.name if employee.department else None,
-            "designation": employee.designation,
+            "designation_id": str(employee.designation._id) if employee.designation else None,
+            "designation_name": employee.designation.name if employee.designation else None,
             "employment_type": employee.employment_type,
             "employment_status": employee.employment_status,
             "joining_date": employee.joining_date.isoformat() if employee.joining_date else None,
@@ -90,7 +92,9 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        query = Employee.objects.filter(company_id=company_id, is_deleted=False).select_related('default_shift', 'reporting_manager', 'department')
+        query = Employee.objects.filter(company_id=company_id, is_deleted=False).select_related(
+            'default_shift', 'reporting_manager', 'department', 'designation'
+        )
 
         if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
             query = query.filter(models.Q(branch_id=branch_id) | models.Q(branch_id__isnull=True))
@@ -102,7 +106,7 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 models.Q(first_name__icontains=search) |
                 models.Q(last_name__icontains=search) |
                 models.Q(department__name__icontains=search) |
-                models.Q(designation__icontains=search) |
+                models.Q(designation__name__icontains=search) |
                 models.Q(email__icontains=search)
             )
 
@@ -111,7 +115,6 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         employment_type = request.query_params.get('employmentType')
 
         if department_filter:
-            # Filter by department name (or optionally UUID)
             query = query.filter(department__name=department_filter)
         if status_filter:
             query = query.filter(employment_status=status_filter)
@@ -156,6 +159,11 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         if department_uuid:
             department = get_object_or_404(Department, _id=department_uuid, company_id=company_id, is_deleted=False)
 
+        designation_uuid = request.data.get('designation_id')
+        designation = None
+        if designation_uuid:
+            designation = get_object_or_404(Designation, _id=designation_uuid, company_id=company_id, is_deleted=False)
+
         joining_date = datetime.strptime(request.data['joining_date'], '%Y-%m-%d').date() if request.data.get('joining_date') else None
         date_of_birth = None
         if request.data.get('date_of_birth'):
@@ -199,7 +207,7 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             emergency_contact_relation=request.data.get('emergency_contact_relation'),
             role=request.data.get('role', 'STAFF'),
             department=department,
-            designation=request.data.get('designation'),
+            designation=designation,
             employment_type=request.data.get('employment_type', 'FULL_TIME'),
             employment_status=request.data.get('employment_status', 'ACTIVE'),
             joining_date=joining_date,
@@ -286,7 +294,7 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             is_deleted=False
         )
 
-        # Department update (must come after employee is fetched)
+        # Department update
         if 'department_id' in request.data:
             value = request.data['department_id']
             if value:
@@ -294,12 +302,20 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             else:
                 employee.department = None
 
+        # Designation update
+        if 'designation_id' in request.data:
+            value = request.data['designation_id']
+            if value:
+                employee.designation = get_object_or_404(Designation, _id=value, company_id=company_id, is_deleted=False)
+            else:
+                employee.designation = None
+
         updatable_fields = [
             'first_name', 'last_name', 'father_name', 'cnic',
             'gender', 'marital_status', 'phone', 'email', 'personal_email',
             'address_line', 'country', 'state', 'city', 'postal_code',
             'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation',
-            'role', 'designation', 'employment_type', 'employment_status',
+            'role', 'employment_type', 'employment_status',
             'work_location', 'bank_name', 'bank_account_number', 'bank_iban', 'salary',
             'probation_days',
         ]
@@ -394,7 +410,6 @@ class EmployeeStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             )
 
         employees = Employee.objects.filter(company_id=company_id, is_deleted=False)
-        # Use department__name for grouping
         dept_counts = list(employees.values('department__name').annotate(count=models.Count('id')).order_by('-count'))
         status_counts = list(employees.values('employment_status').annotate(count=models.Count('id')))
 

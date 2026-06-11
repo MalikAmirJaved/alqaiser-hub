@@ -61,15 +61,23 @@ class User(AbstractUser):
     role = models.CharField(max_length=50, default="staff")
     full_name = models.CharField(max_length=255, blank=True, null=True)
 
-    # Changed: department as ForeignKey to Department
+    # Department as ForeignKey to Department (string reference)
     department = models.ForeignKey(
-        'organization.Department',   # string reference to avoid circular import
+        'organization.Department',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='users'
     )
-    designation = models.CharField(max_length=100, blank=True, null=True)
+    # Designation as ForeignKey to compsetting.Designation (string reference)
+    designation = models.ForeignKey(
+        'compsetting.Designation',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='users'
+    )
+
     phone_number = models.CharField(max_length=30, blank=True, null=True)
 
     company = models.ForeignKey(

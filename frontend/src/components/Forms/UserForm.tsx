@@ -23,7 +23,7 @@ export default function UserForm({
     email: "",
     first_name: "",
     last_name: "",
-    department: "",           // <-- changed from department_id
+    department: "",
     designation: "",
     phone_number: "",
     password: "",
@@ -38,11 +38,9 @@ export default function UserForm({
     .map((d: any) => ({ value: d.id, label: d.name }));
 
   const { data: designations = [] } = useDesignations();
-  const selectedDept = departments.find((d: any) => d.id === formData.department);
-  const filteredDesignations = designations.filter(
-    (d) => d.department === (selectedDept?.name || "")
-  );
+  const designationOptions = designations.map((d: any) => ({ value: d.id, label: d.name }));
 
+  // ---- POPULATE FORM WHEN INITIAL DATA IS AVAILABLE (e.g., from prefill) ----
   useEffect(() => {
     if (initialData) {
       setFormData({
@@ -50,14 +48,18 @@ export default function UserForm({
         email: initialData.email || "",
         first_name: initialData.first_name || "",
         last_name: initialData.last_name || "",
-        department: initialData.department_id || "",   // note: initialData has department_id from API
-        designation: initialData.designation || "",
+        department: initialData.department || "",   // already UUID
+        designation: initialData.designation || "", // already UUID
         phone_number: initialData.phone_number || "",
         password: "",
         confirm_password: "",
       });
     }
-  }, [initialData]);
+  }, [initialData]); // runs when initialData changes
+
+  // ---- Optional: re‑populate when departments/designations finish loading (in case UUIDs weren't matched yet)
+  // This ensures that if the form was populated before the option lists were available, the values are kept.
+  // The SearchableSelect will automatically display the correct label once the options are loaded.
 
   const handleChange = (field: string, value: any) => {
     setFormData(prev => ({
@@ -108,7 +110,8 @@ export default function UserForm({
                 value={formData.username}
                 onChange={(e) => handleChange("username", e.target.value)}
                 required
-                className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
+                disabled={initialData?._disableUsername}
+                className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </label>
             <label className="text-sm flex flex-col gap-1">
@@ -118,7 +121,8 @@ export default function UserForm({
                 value={formData.email}
                 onChange={(e) => handleChange("email", e.target.value)}
                 required
-                className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
+                disabled={initialData?._disableUsername}
+                className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </label>
           </div>
@@ -159,30 +163,28 @@ export default function UserForm({
               <SearchableSelect
                 value={formData.designation}
                 onChange={(val) => handleChange("designation", val)}
-                options={filteredDesignations.map(d => ({
-                  value: d.name,
-                  label: `${d.name}${d.department ? ` (${d.department})` : ""}`,
-                }))}
+                options={designationOptions}
                 disabled={!formData.department}
                 placeholder="Select designation"
               />
             </label>
           </div>
 
+          {/* rest of the form unchanged */}
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground">Phone Number</span>
             <input
-  type="tel"
-  value={formData.phone_number}
-  onChange={(e) =>
-    handleChange(
-      "phone_number",
-      e.target.value.replace(/[^0-9+\-\s()]/g, "")
-    )
-  }
-  maxLength={20}
-  className="bg-muted/40 border border-border rounded-md h-9 px-3"
-/>
+              type="tel"
+              value={formData.phone_number}
+              onChange={(e) =>
+                handleChange(
+                  "phone_number",
+                  e.target.value.replace(/[^0-9+\-\s()]/g, "")
+                )
+              }
+              maxLength={20}
+              className="bg-muted/40 border border-border rounded-md h-9 px-3"
+            />
           </label>
 
           <div className="grid sm:grid-cols-2 gap-3">

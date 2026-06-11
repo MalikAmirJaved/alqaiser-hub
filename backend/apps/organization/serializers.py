@@ -2,7 +2,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import Branch, Department
-
+from apps.compsetting.models import Designation
 User = get_user_model()
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -11,6 +11,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
     department_id = serializers.UUIDField(source='department._id', read_only=True)
     department_name = serializers.CharField(source='department.name', read_only=True)
     password = serializers.CharField(write_only=True, required=False, min_length=6)
+    designation_id = serializers.UUIDField(source='designation._id', read_only=True)
+    designation_name = serializers.CharField(source='designation.name', read_only=True)
 
     class Meta:
         model = User
@@ -18,7 +20,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'id', '_id', 'username', 'email', 'first_name', 'last_name',
             'department_id', 'department_name', 'designation', 'phone_number',
             'is_active', 'branch_id', 'branch_name', 'created_at', 'updated_at',
-            'password'
+            'password','designation_id', 'designation_name', 
         ]
         read_only_fields = ['id', '_id', 'created_at', 'updated_at', 'branch_id', 'branch_name', 'department_id', 'department_name']
         extra_kwargs = {'password': {'write_only': True}}
@@ -39,12 +41,19 @@ class UserProfileSerializer(serializers.ModelSerializer):
         password = validated_data.pop('password', None)
         department_value = validated_data.pop('department', None)
         department = self._get_department(department_value)
+        designation_uuid = validated_data.pop('designation', None)
+        if designation_uuid:
+            try:
+                designation = Designation.objects.get(_id=designation_uuid, is_deleted=False)
+            except Designation.DoesNotExist:
+                pass
 
         # Set default values
         validated_data['role'] = 'STAFF'
         validated_data['is_staff'] = True
         validated_data['is_superuser'] = False
         validated_data['is_active'] = True
+        designation = None
 
         user = User(**validated_data, department=department)
         if password:

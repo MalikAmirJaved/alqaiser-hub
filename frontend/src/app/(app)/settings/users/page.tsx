@@ -26,17 +26,19 @@ export default function UsersPage() {
   const prefill = searchParams.get("prefill");
   const prefillData = useMemo(() => {
     if (!prefill) return null;
-    const email = searchParams.get("email") || "";
+    const email = searchParams.get("email") || "";  
+    console.log("reciveing the data::: ", searchParams.toString())
     return {
       username: email.split("@")[0] || "",
       email: email,
       first_name: searchParams.get("first_name") || "",
       last_name: searchParams.get("last_name") || "",
       department: searchParams.get("department_id") || "",   // department UUID
-      designation: searchParams.get("designation") || "",
+      designation: searchParams.get("designation_id") || "",
       phone_number: searchParams.get("phone_number") || "",
       password: "",      // still required, user must set password
       confirm_password: "",
+      _disableUsername: true
     };
   }, [searchParams, prefill]);
 

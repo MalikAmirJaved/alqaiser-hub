@@ -125,6 +125,7 @@ class Command(BaseCommand):
             self.stdout.write(f'— Company settings already exist for {company.name}')
 
         # Create default working days (Monday=0 .. Sunday=6)
+        # NOTE: WorkingDay model now uses 'company_settings' instead of 'settings'
         default_days = [
             {'day': 0, 'is_working': True,  'start_time': '09:00', 'end_time': '18:00'},
             {'day': 1, 'is_working': True,  'start_time': '09:00', 'end_time': '18:00'},
@@ -137,8 +138,9 @@ class Command(BaseCommand):
 
         working_days_created = 0
         for day_data in default_days:
+            # Use company_settings instead of settings
             obj, created = WorkingDay.objects.get_or_create(
-                settings=settings,
+                company_settings=settings,  # ✅ Changed from 'settings' to 'company_settings'
                 day=day_data['day'],
                 defaults={
                     'company': company,
