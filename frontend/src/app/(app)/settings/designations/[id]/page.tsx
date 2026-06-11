@@ -72,7 +72,6 @@ export default function DesignationDetailPage() {
           {[
             ["Name", designation.name],
             ["Department", designation.department_name === "ALL" ? "All Departments" : (designation.department_name || "—")],
-            ["Pay Grade", designation.pay_grade || "—"],           // ✅ snake_case
             ["Description", designation.description || "—"],
             ["Status", designation.isActive ? "Active" : "Inactive"],
             ["Created", new Date(designation.created_at).toLocaleDateString()],   // ✅ snake_case
@@ -124,7 +123,6 @@ export default function DesignationDetailPage() {
       data={designation}
       meta={[
         { label: "Department", value: designation.department_name === "ALL" ? "All Departments" : (designation.department_name || "—") },
-        { label: "Pay Grade", value: designation.pay_grade || "—" },
       ]}
       summary={[
         { label: "Employees", value: employees.length, isCurrency: false, tone: "info" },

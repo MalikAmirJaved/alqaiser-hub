@@ -9,7 +9,6 @@ export interface Designation {
   name: string;
   department?: string;        // stored department id or 'ALL'
   department_name?: string;   // human-readable department name
-  pay_grade?: string | null;   // snake_case to match API
   description?: string;
   isActive: boolean;
   created_at: string;          // snake_case
@@ -20,7 +19,7 @@ export interface DesignationDetail {
   id: string;
   name: string;
   department: string;
-  pay_grade: string;
+  department_name: string;
   description: string;
   isActive: boolean;
   created_at: string;

@@ -40,13 +40,13 @@ export default function DesignationFormModal({
   });
   const createDesignation = useCreateDesignation();
   const updateDesignation = useUpdateDesignation();
-
+console.log("departmentOptions:: ", departmentOptions)
   useEffect(() => {
     if (initialData) {
       setValue("name", initialData.name);
-      // API now returns department_id and department_name
-      // Use department_id for the select value; 'ALL' remains as option for all departments
-      setValue("department", (initialData as any).department_id || "");
+      // API may return department (id) or department_id and department_name
+      // Use department (preferred) falling back to department_id
+      setValue("department", (initialData as any).department || (initialData as any).department_id || "");
       setValue("description", initialData.description || "");
       setValue("isActive", initialData.isActive);
     } else {

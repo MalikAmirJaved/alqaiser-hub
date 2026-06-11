@@ -4,6 +4,7 @@ import { useApi } from "@/hooks/useApi";
 
 export interface Department {
   id: string;
+  _id?: string;
   name: string;
   code: string;
   description: string;
@@ -54,7 +55,7 @@ export function useDepartmentOptions() {
   const { data: departments, isLoading } = useDepartments();
   const options = (departments || [])
     .filter(d => d.is_active)
-    .map(d => ({ value: d.name, label: d.name }));
+    .map(d => ({ value: (d as any)._id || (d as any).id || d.name, label: d.name }));
   return { options, isLoading };
 }
 

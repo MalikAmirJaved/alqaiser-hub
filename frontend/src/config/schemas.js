@@ -971,7 +971,6 @@ export const schemas = {
       { key: "title", label: "Title", type: "text", required: true },
       { key: "department", label: "Department", type: "select", options: ["HR", "INVENTORY", "FINANCE"], required: true },
       { key: "level", label: "Level", type: "select", options: ["Junior", "Mid", "Senior", "Lead", "Manager", "Director"] },
-      { key: "pay_grade", label: "Pay Grade", type: "text" },
       { key: "is_active", label: "Status", type: "select", options: ["true", "false"] },
       { key: "company_id", label: "Company", type: "text", required: true, hidden: true },
       { key: "branch_id", label: "Branch", type: "text", hidden: true },
@@ -979,8 +978,8 @@ export const schemas = {
       { key: "created_at", label: "Created At", type: "text", hidden: true },
       { key: "updated_at", label: "Updated At", type: "text", hidden: true },
     ],
-    columns: ["title", "department", "pay_grade", "level", "is_active"],
-  },
+    columns: ["title", "department", "level", "is_active"],
+  }, 
   departments: {
     title: "Departments",
     storeKey: "departments",
