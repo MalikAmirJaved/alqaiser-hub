@@ -7,15 +7,14 @@
 
 import { useState } from "react";
 import {
-  Header, HeaderCards, PageHeader, Toolbar,
+  HeaderCards, PageHeader, Toolbar,
   TableView, GridView, GridCard,
   FullForm, LittleForm,
   ToggleStatusModal, DetailPanel, DetailRow,
   DatePicker, DateRangePicker,
   Dropdown, DropdownWithCreate,
   SearchableDropdown, SearchableDropdownWithCreate,
-  Toggle, Checkbox, Badge, Button, Toast,
-  Input, Pagination, EmptyState,
+  Toggle, Checkbox, Badge, Button, Input, Pagination, EmptyState,
   type StatusVariant,
 } from "@/components/reuseableComponents";
 
@@ -124,24 +123,6 @@ export default function UIShowcasePage() {
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
-      {/* ── Header ──────────────────────────────────────── */}
-      <Header
-        title="AcmeERP"
-        logo={
-          <div className="w-7 h-7 rounded-lg bg-[var(--primary)] flex items-center justify-center text-[var(--primary-foreground)] text-xs font-bold">
-            A
-          </div>
-        }
-        nav={NAV_ITEMS}
-        user={{ name: "Aisha Malik", email: "aisha@acme.io", initials: "AM" }}
-        actions={
-          <Button size="sm" variant="secondary">
-            <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none"><path d="M8 1v10M4 8l4 4 4-4M2 13h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            Export
-          </Button>
-        }
-      />
-
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col gap-10">
 
         {/* ── Page Header ─────────────────────────────────── */}
@@ -149,13 +130,6 @@ export default function UIShowcasePage() {
           title="People Management"
           description="Manage user accounts, roles, and permissions across your organisation."
           breadcrumbs={[{ label: "Home", href: "#" }, { label: "Users" }]}
-          tabs={[
-            { label: "All Users", value: "all", badge: SAMPLE_USERS.length },
-            { label: "Active",    value: "active", badge: 2 },
-            { label: "Pending",   value: "pending" },
-            { label: "Archived",  value: "archived" },
-          ]}
-          activeTab="all"
           actions={
             <>
               <Button variant="secondary" size="sm">Import CSV</Button>
@@ -194,7 +168,7 @@ export default function UIShowcasePage() {
           {viewMode === "table" ? (
             <TableView
               columns={TABLE_COLUMNS as never}
-              data={filteredUsers as never}
+              data={[]}
               selectedRows={selected}
               onRowSelect={handleRowSelect}
               onRowClick={(row) => { setDetailRow(row as typeof SAMPLE_USERS[0]); setDetailOpen(true); }}
@@ -206,7 +180,7 @@ export default function UIShowcasePage() {
             />
           ) : (
             <GridView
-              data={filteredUsers as never}
+              data={[]}
               columns={3}
               renderCard={(item) => {
                 const u = item as typeof SAMPLE_USERS[0];
@@ -279,15 +253,9 @@ export default function UIShowcasePage() {
             </div>
           </div>
 
-          {/* Toast previews */}
+          {/* previews */}
           <div className="flex flex-col gap-4">
-            <h2 className="text-base font-semibold text-[var(--foreground)]">Notifications</h2>
-            <div className="flex flex-col gap-3">
-              <Toast variant="success" title="Changes saved" description="Your profile has been updated successfully." />
-              <Toast variant="warning" title="Subscription expiring" description="Your plan renews in 3 days." />
-              <Toast variant="danger"  title="Action failed"  description="Could not connect to server. Please retry." />
-              <Toast variant="info"    title="Maintenance scheduled" description="Downtime on Sunday 02:00–04:00 UTC." />
-            </div>
+           
 
             {/* Badges */}
             <h2 className="text-base font-semibold text-[var(--foreground)] mt-2">Status Badges</h2>

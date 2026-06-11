@@ -11,7 +11,9 @@ import { useShiftTemplates } from "@/hooks/useShiftTemplates";
 import { permissionService } from "@/services/permissionService";
 import PageHeader from "@/components/PageHeader";
 import EmployeeForm from "@/components/Forms/EmployeeForm";
-import { Plus, Pencil, Trash2, Search, Download, Shield, Clock } from "lucide-react";
+import { StatsCards } from "@/components/reuseable/StatsCards";
+import { TableView, GridView } from "@/components/reuseable/TableGridView";
+import { Plus, Pencil, Trash2, Search, Download, Shield, Clock, LayoutGrid, LayoutList } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
@@ -20,6 +22,8 @@ export default function EmployeesPage() {
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   
   const { data: employees = [], isLoading } = useEmployees(
     query ? { search: query } : undefined
@@ -73,6 +77,7 @@ export default function EmployeesPage() {
       
       setModalOpen(false);
       setEditingEmployee(null);
+      setSelectedRows(new Set()); // Clear selections after save
     } catch (error: any) {
       toast.error(error.message || "Failed to save employee");
     }
@@ -87,8 +92,31 @@ export default function EmployeesPage() {
     
     try {
       await deleteEmployee.mutateAsync(employee.id);
+      setSelectedRows(new Set()); // Clear selections after delete
     } catch (error: any) {
       toast.error(error.message || "Failed to delete employee");
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!permissions.canDelete) {
+      toast.error("You don't have permission to delete employees.");
+      return;
+    }
+    
+    const selectedEmployees = Array.from(selectedRows).map(idx => employees[idx]);
+    if (selectedEmployees.length === 0) return;
+    
+    if (!confirm(`Delete ${selectedEmployees.length} employee(s)? This action cannot be undone.`)) return;
+    
+    try {
+      // TODO: Replace with bulk delete API when available
+      // For now, delete one by one
+      await Promise.all(selectedEmployees.map(emp => deleteEmployee.mutateAsync(emp.id)));
+      setSelectedRows(new Set());
+      toast.success(`${selectedEmployees.length} employee(s) deleted successfully`);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to delete employees");
     }
   };
 
@@ -134,6 +162,234 @@ export default function EmployeesPage() {
     URL.revokeObjectURL(url);
   };
 
+  // Prepare stats data for the reusable component
+  const employeeStats = [
+    {
+      id: "total-employees",
+      label: "Total Employees",
+      value: stats?.totalEmployees || employees.length
+    },
+    {
+      id: "active",
+      label: "Active",
+      value: stats?.activeEmployees || employees.filter(e => e.employment_status === "ACTIVE").length,
+      valueClassName: "text-success"
+    },
+    {
+      id: "on-leave",
+      label: "On Leave",
+      value: stats?.onLeave || employees.filter(e => e.employment_status === "ON_LEAVE").length,
+      valueClassName: "text-warning"
+    },
+    {
+      id: "departments",
+      label: "Departments",
+      value: stats?.departments || new Set(employees.map(e => e.department)).size
+    },
+    {
+      id: "default-shift",
+      label: "With Default Shift",
+      value: stats?.withDefaultShift || employees.filter(e => e.default_shift_id || e.default_shift_name).length
+    }
+  ];
+
+  // Define columns for the table
+  const employeeColumns = [
+    {
+      key: "employee_id",
+      label: "Employee ID",
+      sortable: true,
+      render: (value) => <span className="font-mono text-xs">{value}</span>
+    },
+    {
+      key: "full_name",
+      label: "Full Name",
+      sortable: true,
+      render: (_, row) => `${row.first_name} ${row.last_name || ""}`
+    },
+    {
+      key: "department",
+      label: "Department",
+      sortable: true
+    },
+    {
+      key: "designation",
+      label: "Designation",
+      render: (value) => value || "—"
+    },
+    {
+      key: "employment_type",
+      label: "Employment Type",
+      render: (value) => value?.replace("_", " ")
+    },
+    {
+      key: "employment_status",
+      label: "Status",
+      sortable: true,
+      render: (value) => (
+        <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
+          value === "ACTIVE"
+            ? "bg-success/15 text-success border-success/30"
+            : value === "ON_LEAVE"
+            ? "bg-warning/15 text-warning border-warning/30"
+            : "bg-destructive/15 text-destructive border-destructive/30"
+        }`}>
+          {value}
+        </span>
+      )
+    },
+    {
+      key: "default_shift",
+      label: "Default Shift",
+      render: (_, row) => {
+        const shiftName = getEmployeeDefaultShiftName(row);
+        return shiftName ? (
+          <div className="flex items-center gap-1.5">
+            <Clock className="w-3 h-3 text-muted-foreground" />
+            <span className="text-xs">{shiftName}</span>
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground italic">—</span>
+        );
+      }
+    },
+    {
+      key: "phone",
+      label: "Phone"
+    }
+  ];
+
+  // Define actions for each row
+  const renderActions = (row, idx) => (
+    <>
+      {permissions.canUpdate && (
+        <button
+          onClick={() => openEditModal(row)}
+          className="p-1.5 rounded-md hover:bg-muted transition-colors"
+          aria-label="Edit"
+        >
+          <Pencil className="w-4 h-4" />
+        </button>
+      )}
+      {permissions.canDelete && (
+        <button
+          onClick={() => handleDelete(row)}
+          className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive transition-colors"
+          aria-label="Delete"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      )}
+    </>
+  );
+
+  // Render card for grid view
+  const renderEmployeeCard = (employee, idx) => {
+    const isSelected = selectedRows.has(idx);
+    const defaultShiftName = getEmployeeDefaultShiftName(employee);
+    
+    return (
+      <div 
+        className={`relative rounded-xl border transition-all hover:shadow-md ${
+          isSelected 
+            ? "border-primary bg-primary/5 ring-2 ring-primary/20" 
+            : "border-border bg-card hover:border-primary/50"
+        }`}
+      >
+        {/* Selection Checkbox */}
+        {permissions.canDelete && (
+          <div className="absolute top-3 left-3 z-10">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={(e) => {
+                e.stopPropagation();
+                const newSelected = new Set(selectedRows);
+                if (e.target.checked) {
+                  newSelected.add(idx);
+                } else {
+                  newSelected.delete(idx);
+                }
+                setSelectedRows(newSelected);
+              }}
+              className="w-4 h-4 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+        )}
+        
+        {/* Card Content */}
+        <div className="p-4">
+          {/* Employee ID & Status Badge */}
+          <div className="flex items-center justify-between mb-3">
+            <span className="font-mono text-xs text-muted-foreground">{employee.employee_id}</span>
+            <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
+              employee.employment_status === "ACTIVE"
+                ? "bg-success/15 text-success border-success/30"
+                : employee.employment_status === "ON_LEAVE"
+                ? "bg-warning/15 text-warning border-warning/30"
+                : "bg-destructive/15 text-destructive border-destructive/30"
+            }`}>
+              {employee.employment_status}
+            </span>
+          </div>
+          
+          {/* Name */}
+          <h3 className="font-semibold text-lg mb-1">
+            {employee.first_name} {employee.last_name || ""}
+          </h3>
+          
+          {/* Designation & Department */}
+          <div className="space-y-2 mb-3">
+            {employee.designation && (
+              <p className="text-sm text-muted-foreground">{employee.designation}</p>
+            )}
+            <div className="flex items-center gap-2 text-xs">
+              <span className="px-2 py-0.5 rounded bg-muted">{employee.department}</span>
+              <span className="text-muted-foreground">{employee.employment_type?.replace("_", " ")}</span>
+            </div>
+          </div>
+          
+          {/* Shift Info */}
+          {defaultShiftName && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
+              <Clock className="w-3 h-3" />
+              <span>{defaultShiftName}</span>
+            </div>
+          )}
+          
+          {/* Contact Info */}
+          {employee.phone && (
+            <p className="text-xs text-muted-foreground mb-3">{employee.phone}</p>
+          )}
+          
+          {/* Actions */}
+          {(permissions.canUpdate || permissions.canDelete) && (
+            <div className="flex items-center justify-end gap-1 pt-2 border-t border-border">
+              {permissions.canUpdate && (
+                <button
+                  onClick={() => openEditModal(employee)}
+                  className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                  aria-label="Edit"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {permissions.canDelete && (
+                <button
+                  onClick={() => handleDelete(employee)}
+                  className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive transition-colors"
+                  aria-label="Delete"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   if (permissions.loading || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -167,158 +423,130 @@ export default function EmployeesPage() {
         title="Employee Management"
         subtitle="Manage employee records, employment details, and default shifts"
         actions={
-          <>
+          <div className="flex items-center gap-2">
+            {/* Bulk Delete Button */}
+            {selectedRows.size > 0 && permissions.canDelete && (
+              <button
+                onClick={handleBulkDelete}
+                className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-destructive text-destructive-foreground text-sm hover:bg-destructive/90 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" /> Delete Selected ({selectedRows.size})
+              </button>
+            )}
+            
+            {/* Export Button */}
             <button
               onClick={exportCsv}
-              className="inline-flex items-center gap-2 px-3 h-9 rounded-md border border-border text-sm hover:bg-muted"
+              className="inline-flex items-center gap-2 px-3 h-9 rounded-md border border-border text-sm hover:bg-muted transition-colors"
             >
               <Download className="w-4 h-4" /> Export
             </button>
+            
+            {/* View Toggle Buttons */}
+            <div className="flex items-center gap-1 p-0.5 rounded-md border border-border">
+              <button
+                onClick={() => setViewMode("table")}
+                className={`p-1.5 rounded transition-colors ${
+                  viewMode === "table" 
+                    ? "bg-primary text-primary-foreground" 
+                    : "hover:bg-muted text-muted-foreground"
+                }`}
+                aria-label="Table view"
+              >
+                <LayoutList className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`p-1.5 rounded transition-colors ${
+                  viewMode === "grid" 
+                    ? "bg-primary text-primary-foreground" 
+                    : "hover:bg-muted text-muted-foreground"
+                }`}
+                aria-label="Grid view"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+            </div>
+            
+            {/* Add Employee Button */}
             {permissions.canCreate && (
               <button
                 onClick={openAddModal}
-                className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90"
+                className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-colors"
               >
                 <Plus className="w-4 h-4" /> Add Employee
               </button>
             )}
-          </>
+          </div>
         }
       />
 
       {/* Stats Cards */}
-      <div className="grid sm:grid-cols-5 gap-3 mb-4">
-        <div className="bg-card border border-border rounded-xl p-3">
-          <div className="text-xs text-muted-foreground">Total Employees</div>
-          <div className="text-xl font-semibold">{stats?.totalEmployees || employees.length}</div>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-3">
-          <div className="text-xs text-muted-foreground">Active</div>
-          <div className="text-xl font-semibold text-success">
-            {stats?.activeEmployees || employees.filter(e => e.employment_status === "ACTIVE").length}
-          </div>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-3">
-          <div className="text-xs text-muted-foreground">On Leave</div>
-          <div className="text-xl font-semibold text-warning">
-            {stats?.onLeave || employees.filter(e => e.employment_status === "ON_LEAVE").length}
-          </div>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-3">
-          <div className="text-xs text-muted-foreground">Departments</div>
-          <div className="text-xl font-semibold">
-            {stats?.departments || new Set(employees.map(e => e.department)).size}
-          </div>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-3">
-          <div className="text-xs text-muted-foreground">With Default Shift</div>
-          <div className="text-xl font-semibold">
-            {stats?.withDefaultShift || employees.filter(e => e.default_shift_id || e.default_shift_name).length}
-          </div>
-        </div>
-      </div>
+      <StatsCards stats={employeeStats} />
 
       {/* Search Bar */}
-      <div className="bg-card border border-border rounded-2xl shadow-sm">
-        <div className="p-3 border-b border-border">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search employees by ID, name, department, designation..."
-              className="w-full bg-muted/40 pl-9 pr-3 h-9 rounded-md text-sm outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-        </div>
-
-        {/* Employees Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="text-left px-4 py-2.5">Employee ID</th>
-                <th className="text-left px-4 py-2.5">Full Name</th>
-                <th className="text-left px-4 py-2.5">Department</th>
-                <th className="text-left px-4 py-2.5">Designation</th>
-                <th className="text-left px-4 py-2.5">Employment Type</th>
-                <th className="text-left px-4 py-2.5">Status</th>
-                <th className="text-left px-4 py-2.5">Default Shift</th>
-                <th className="text-left px-4 py-2.5">Phone</th>
-                <th className="px-4 py-2.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {employees.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="text-center py-10 text-muted-foreground">
-                    No employees found.
-                  </td>
-                </tr>
-              )}
-              {employees.map((employee) => {
-                const defaultShiftName = getEmployeeDefaultShiftName(employee);
-                return (
-                  <tr key={employee.id} className="border-t border-border hover:bg-muted/30">
-                    <td className="px-4 py-2.5 font-mono text-xs">{employee.employee_id}</td>
-                    <td className="px-4 py-2.5 font-medium">
-                      {employee.first_name} {employee.last_name || ""}
-                    </td>
-                    <td className="px-4 py-2.5">{employee.department}</td>
-                    <td className="px-4 py-2.5">{employee.designation || "—"}</td>
-                    <td className="px-4 py-2.5">{employee.employment_type?.replace("_", " ")}</td>
-                    <td className="px-4 py-2.5">
-                      <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
-                        employee.employment_status === "ACTIVE"
-                          ? "bg-success/15 text-success border-success/30"
-                          : employee.employment_status === "ON_LEAVE"
-                          ? "bg-warning/15 text-warning border-warning/30"
-                          : "bg-destructive/15 text-destructive border-destructive/30"
-                      }`}>
-                        {employee.employment_status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {defaultShiftName ? (
-                        <div className="flex items-center gap-1.5">
-                          <Clock className="w-3 h-3 text-muted-foreground" />
-                          <span className="text-xs">{defaultShiftName}</span>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground italic">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5">{employee.phone}</td>
-                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                      {permissions.canUpdate && (
-                        <button
-                          onClick={() => openEditModal(employee)}
-                          className="p-1.5 rounded-md hover:bg-muted"
-                          aria-label="Edit"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                      )}
-                      {permissions.canDelete && (
-                        <button
-                          onClick={() => handleDelete(employee)}
-                          className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
-                          aria-label="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                      {!permissions.canUpdate && !permissions.canDelete && (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      <div className="mb-4">
+        <div className="relative max-w-md">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search employees by ID, name, department, designation..."
+            className="w-full bg-background pl-9 pr-3 h-9 rounded-md text-sm outline-none focus:ring-2 focus:ring-ring border border-border"
+          />
         </div>
       </div>
+
+      {/* View Mode Toggle */}
+      {viewMode === "table" ? (
+        <TableView
+          columns={employeeColumns}
+          data={employees}
+          loading={isLoading}
+          selectedRows={selectedRows}
+          onRowSelect={setSelectedRows}
+          onRowClick={(row, idx) => {
+            // Optional: Navigate to employee detail page
+            console.log("Row clicked:", row);
+          }}
+          actions={permissions.canUpdate || permissions.canDelete ? renderActions : undefined}
+          stickyHeader={true}
+        />
+      ) : (
+        <GridView
+          data={employees}
+          renderCard={renderEmployeeCard}
+          loading={isLoading}
+          emptyMessage="No employees found"
+          columns={4}
+          gap={4}
+        />
+      )}
+      
+      {/* Selection Info Bar */}
+      {selectedRows.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
+          <div className="bg-card border border-border rounded-lg shadow-lg px-4 py-2 flex items-center gap-3">
+            <span className="text-sm font-medium">
+              {selectedRows.size} employee{selectedRows.size !== 1 && 's'} selected
+            </span>
+            {permissions.canDelete && (
+              <button
+                onClick={handleBulkDelete}
+                className="text-xs px-2 py-1 rounded bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+              >
+                Delete All
+              </button>
+            )}
+            <button
+              onClick={() => setSelectedRows(new Set())}
+              className="text-xs px-2 py-1 rounded border border-border hover:bg-muted transition-colors"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Employee Form Modal */}
       {modalOpen && (

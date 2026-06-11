@@ -56,17 +56,17 @@ export interface FormField {
   name: string;
   label: string;
   type:
-    | "text"
-    | "email"
-    | "password"
-    | "number"
-    | "textarea"
-    | "select"
-    | "date"
-    | "daterange"
-    | "toggle"
-    | "checkbox"
-    | "radio";
+  | "text"
+  | "email"
+  | "password"
+  | "number"
+  | "textarea"
+  | "select"
+  | "date"
+  | "daterange"
+  | "toggle"
+  | "checkbox"
+  | "radio";
   placeholder?: string;
   required?: boolean;
   options?: SelectOption[];
@@ -126,8 +126,8 @@ function getFirstDayOfMonth(year: number, month: number): number {
 }
 
 const MONTHS = [
-  "January","February","March","April","May","June",
-  "July","August","September","October","November","December",
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
 ];
 const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
@@ -136,12 +136,12 @@ const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 // ─────────────────────────────────────────────────────────────
 
 const statusStyles: Record<StatusVariant, string> = {
-  active:   "bg-[var(--success)]/15 text-[var(--success)] border-[var(--success)]/30",
+  active: "bg-[var(--success)]/15 text-[var(--success)] border-[var(--success)]/30",
   inactive: "bg-[var(--muted)] text-[var(--muted-foreground)] border-[var(--border)]",
-  pending:  "bg-[var(--warning)]/15 text-[var(--warning)] border-[var(--warning)]/30",
-  success:  "bg-[var(--success)]/15 text-[var(--success)] border-[var(--success)]/30",
-  warning:  "bg-[var(--warning)]/15 text-[var(--warning)] border-[var(--warning)]/30",
-  danger:   "bg-[var(--destructive)]/15 text-[var(--destructive)] border-[var(--destructive)]/30",
+  pending: "bg-[var(--warning)]/15 text-[var(--warning)] border-[var(--warning)]/30",
+  success: "bg-[var(--success)]/15 text-[var(--success)] border-[var(--success)]/30",
+  warning: "bg-[var(--warning)]/15 text-[var(--warning)] border-[var(--warning)]/30",
+  danger: "bg-[var(--destructive)]/15 text-[var(--destructive)] border-[var(--destructive)]/30",
 };
 
 export function Badge({
@@ -545,7 +545,7 @@ export function Dropdown({
   }, []);
 
   return (
-    <div className={cn("flex flex-col gap-1.5", className)} ref={ref}>
+    <div className={cn("relative flex flex-col gap-1.5", className)} ref={ref}>
       {label && (
         <label className="text-sm font-medium text-[var(--foreground)]">
           {label}
@@ -571,12 +571,13 @@ export function Dropdown({
         <ChevronIcon open={open} />
       </button>
       {open && (
-        <div className={cn(
-          "absolute z-50 mt-1 w-full min-w-[180px] rounded-[var(--radius-md)]",
-          "border border-[var(--border)] bg-[var(--popover)] shadow-xl py-1",
-          "animate-in fade-in-0 zoom-in-95 duration-100"
-        )}
-        style={{ top: label ? "calc(100% + 2px)" : undefined, position: "relative" }}
+        <div
+          className={cn(
+            "absolute top-full left-0 z-50 mt-1 w-full min-w-[180px]",
+            "rounded-[var(--radius-md)] border border-[var(--border)]",
+            "bg-[var(--popover)] shadow-xl py-1",
+            "animate-in fade-in-0 zoom-in-95 duration-100"
+          )}
         >
           {options.map((opt) => (
             <button
@@ -1204,8 +1205,8 @@ export function DateRangePicker({
     from && to
       ? `${formatDate(from)} – ${formatDate(to)}`
       : from
-      ? `${formatDate(from)} – ...`
-      : "Select date range";
+        ? `${formatDate(from)} – ...`
+        : "Select date range";
 
   return (
     <div className={cn("flex flex-col gap-1.5", className)} ref={ref}>
@@ -1292,147 +1293,7 @@ export function DateRangePicker({
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// 13. HEADER
-// ─────────────────────────────────────────────────────────────
 
-export function Header({
-  logo,
-  title,
-  nav,
-  actions,
-  user,
-  onMenuClick,
-  className,
-}: {
-  logo?: React.ReactNode;
-  title?: string;
-  nav?: NavItem[];
-  actions?: React.ReactNode;
-  user?: { name: string; email?: string; avatar?: string; initials?: string };
-  onMenuClick?: () => void;
-  className?: string;
-}) {
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const userRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (userRef.current && !userRef.current.contains(e.target as Node))
-        setUserMenuOpen(false);
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  return (
-    <header
-      className={cn(
-        "h-14 flex items-center gap-4 px-4 lg:px-6",
-        "bg-[var(--background)] border-b border-[var(--border)]",
-        "sticky top-0 z-40 backdrop-blur-sm",
-        className
-      )}
-    >
-      {/* Mobile menu */}
-      <button
-        type="button"
-        onClick={onMenuClick}
-        className="lg:hidden p-2 rounded-[var(--radius-md)] hover:bg-[var(--accent)] text-[var(--muted-foreground)] transition-colors"
-      >
-        <MenuIcon />
-      </button>
-
-      {/* Logo / Title */}
-      <div className="flex items-center gap-3">
-        {logo && <div className="flex-shrink-0">{logo}</div>}
-        {title && (
-          <span className="font-semibold text-[var(--foreground)] text-sm tracking-tight hidden sm:block">
-            {title}
-          </span>
-        )}
-      </div>
-
-      {/* Nav */}
-      {nav && (
-        <nav className="hidden lg:flex items-center gap-1 ml-4">
-          {nav.map((item, i) => (
-            <a
-              key={i}
-              href={item.href ?? "#"}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm transition-colors",
-                item.active
-                  ? "bg-[var(--accent)] text-[var(--accent-foreground)] font-medium"
-                  : "text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)]"
-              )}
-            >
-              {item.icon}
-              {item.label}
-              {item.badge !== undefined && (
-                <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold bg-[var(--primary)] text-[var(--primary-foreground)]">
-                  {item.badge}
-                </span>
-              )}
-            </a>
-          ))}
-        </nav>
-      )}
-
-      <div className="ml-auto flex items-center gap-2">
-        {actions}
-
-        {/* User menu */}
-        {user && (
-          <div className="relative" ref={userRef}>
-            <button
-              type="button"
-              onClick={() => setUserMenuOpen(!userMenuOpen)}
-              className="flex items-center gap-2 p-1 rounded-[var(--radius-md)] hover:bg-[var(--accent)] transition-colors"
-            >
-              {user.avatar ? (
-                <img src={user.avatar} alt={user.name} className="w-7 h-7 rounded-full object-cover" />
-              ) : (
-                <div className="w-7 h-7 rounded-full bg-[var(--primary)] flex items-center justify-center text-[var(--primary-foreground)] text-xs font-semibold">
-                  {user.initials ?? user.name.slice(0, 2).toUpperCase()}
-                </div>
-              )}
-              <span className="text-sm font-medium text-[var(--foreground)] hidden md:block">
-                {user.name}
-              </span>
-              <ChevronIcon open={userMenuOpen} size="sm" />
-            </button>
-            {userMenuOpen && (
-              <div className="absolute right-0 top-full mt-1 w-52 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--popover)] shadow-xl py-1 z-50">
-                <div className="px-3 py-2 border-b border-[var(--border)]">
-                  <p className="text-sm font-medium text-[var(--foreground)]">{user.name}</p>
-                  {user.email && <p className="text-xs text-[var(--muted-foreground)] truncate">{user.email}</p>}
-                </div>
-                {[
-                  { label: "Profile", icon: <UserIcon /> },
-                  { label: "Settings", icon: <SettingsIcon /> },
-                  { label: "Sign out", icon: <LogoutIcon />, danger: true },
-                ].map((item) => (
-                  <button
-                    key={item.label}
-                    type="button"
-                    className={cn(
-                      "w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-[var(--accent)]",
-                      item.danger ? "text-[var(--destructive)]" : "text-[var(--foreground)]"
-                    )}
-                  >
-                    <span className="text-[var(--muted-foreground)]">{item.icon}</span>
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </header>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────
 // 14. HEADER CARD (Stats / Summary Cards)
@@ -2330,8 +2191,6 @@ export function PageHeader({
   description,
   breadcrumbs,
   actions,
-  tabs,
-  activeTab,
   onTabChange,
   className,
 }: {
@@ -2339,8 +2198,6 @@ export function PageHeader({
   description?: string;
   breadcrumbs?: Array<{ label: string; href?: string }>;
   actions?: React.ReactNode;
-  tabs?: Array<{ label: string; value: string; badge?: string | number }>;
-  activeTab?: string;
   onTabChange?: (tab: string) => void;
   className?: string;
 }) {
@@ -2369,30 +2226,6 @@ export function PageHeader({
         </div>
         {actions && <div className="flex items-center gap-2 flex-wrap">{actions}</div>}
       </div>
-      {tabs && (
-        <div className="flex items-center gap-0 border-b border-[var(--border)] -mb-px">
-          {tabs.map((tab) => (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => onTabChange?.(tab.value)}
-              className={cn(
-                "flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors",
-                activeTab === tab.value
-                  ? "border-[var(--primary)] text-[var(--primary)]"
-                  : "border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:border-[var(--border)]"
-              )}
-            >
-              {tab.label}
-              {tab.badge !== undefined && (
-                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold bg-[var(--muted)] text-[var(--muted-foreground)]">
-                  {tab.badge}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -2524,51 +2357,6 @@ export function EmptyState({
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// 25. TOAST / NOTIFICATION
-// ─────────────────────────────────────────────────────────────
-
-export function Toast({
-  variant = "success",
-  title,
-  description,
-  onClose,
-}: {
-  variant?: "success" | "warning" | "danger" | "info";
-  title: string;
-  description?: string;
-  onClose?: () => void;
-}) {
-  const styles = {
-    success: { bar: "bg-[var(--success)]", icon: "✓", iconBg: "bg-[var(--success)]/15 text-[var(--success)]" },
-    warning: { bar: "bg-[var(--warning)]", icon: "!", iconBg: "bg-[var(--warning)]/15 text-[var(--warning)]" },
-    danger: { bar: "bg-[var(--destructive)]", icon: "✕", iconBg: "bg-[var(--destructive)]/15 text-[var(--destructive)]" },
-    info: { bar: "bg-[var(--info)]", icon: "i", iconBg: "bg-[var(--info)]/15 text-[var(--info)]" },
-  };
-  const s = styles[variant];
-
-  return (
-    <div className="flex items-start gap-3 rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--card)] p-4 shadow-xl w-80 overflow-hidden relative">
-      <div className={`absolute left-0 top-0 bottom-0 w-1 ${s.bar} rounded-l-[var(--radius-xl)]`} />
-      <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ml-1", s.iconBg)}>
-        {s.icon}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-[var(--foreground)]">{title}</p>
-        {description && <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{description}</p>}
-      </div>
-      {onClose && (
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] flex-shrink-0 transition-colors"
-        >
-          <XIcon />
-        </button>
-      )}
-    </div>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────
 // ICON PRIMITIVES
@@ -2731,7 +2519,7 @@ function InboxIcon() {
 // DetailPanel         — Slide-in right-side detail panel
 // DetailRow           — Label/value row for DetailPanel
 // Toolbar             — Search + view toggle + actions
-// PageHeader          — Title + breadcrumbs + tabs + actions
+// PageHeader          — Title + breadcrumbs +  actions
 // Pagination          — Page navigation with size selector
 // EmptyState          — Empty placeholder with CTA
 // Toast               — Notification toast (success/warning/danger/info)
