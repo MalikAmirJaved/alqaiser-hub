@@ -8,12 +8,13 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 import logging
-
+import json
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import Employee, EmployeeDefaultShift, EmployeeAssetAssignment, AssetCategory
 from apps.organization.models import Department
 from apps.compsetting.models import Designation   # <-- ADDED
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -296,108 +297,134 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
 
     @transaction.atomic
     def patch(self, request):
-        company_id = request.user.company_id
-
-        if not company_id:
-            return Response(
-                {'error': 'User is not associated with any company'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        employee_uuid = request.data.get('id')
-        if not employee_uuid:
-            return Response(
-                {'error': 'id (UUID) is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        employee = get_object_or_404(
-            Employee,
-            _id=employee_uuid,
-            company_id=company_id,
-            is_deleted=False
-        )
-
-        # Department update
-        if 'department_id' in request.data:
-            value = request.data['department_id']
-            if value:
-                employee.department = get_object_or_404(Department, _id=value, company_id=company_id, is_deleted=False)
-            else:
-                employee.department = None
-
-        # Designation update
-        if 'designation_id' in request.data:
-            value = request.data['designation_id']
-            if value:
-                employee.designation = get_object_or_404(Designation, _id=value, company_id=company_id, is_deleted=False)
-            else:
-                employee.designation = None
-
-        updatable_fields = [
-            'first_name', 'last_name', 'father_name', 'cnic',
-            'gender', 'marital_status', 'phone', 'email', 'personal_email',
-            'address_line', 'country', 'state', 'city', 'postal_code',
-            'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation',
-            'role', 'employment_type', 'employment_status',
-            'work_location', 'bank_name', 'bank_account_number', 'bank_iban', 'salary',
-            'probation_days',
-        ]
-
-        for field in updatable_fields:
-            if field in request.data:
-                setattr(employee, field, request.data[field])
-
-        if 'reporting_manager_id' in request.data:
-            value = request.data['reporting_manager_id']
-            if value:
-                employee.reporting_manager = get_object_or_404(Employee, _id=value, company_id=company_id, is_deleted=False)
-            else:
-                employee.reporting_manager = None
-
-        if 'default_shift_id' in request.data:
-            value = request.data['default_shift_id']
-            from apps.hr.models import ShiftTemplate
-            if value:
-                employee.default_shift = get_object_or_404(ShiftTemplate, _id=value, company_id=company_id, is_deleted=False)
-            else:
-                employee.default_shift = None
-
-        if 'date_of_birth' in request.data:
-            val = request.data['date_of_birth']
-            employee.date_of_birth = datetime.strptime(val, '%Y-%m-%d').date() if val else None
-
-        if 'joining_date' in request.data:
-            val = request.data['joining_date']
-            employee.joining_date = datetime.strptime(val, '%Y-%m-%d').date() if val else None
-
-        if 'confirmation_date' in request.data:
-            val = request.data['confirmation_date']
-            employee.confirmation_date = datetime.strptime(val, '%Y-%m-%d').date() if val else None
-
-        # If update includes explicit link to user, handle it
         try:
-            explicit_user_id = request.data.get('isfrom_user_id')
-            if explicit_user_id:
-                from apps.organization.models import User
+            company_id = request.user.company_id
+            if not company_id:
+                return Response(
+                    {'error': 'User is not associated with any company'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            employee_uuid = request.data.get('id')
+            if not employee_uuid:
+                return Response(
+                    {'error': 'id (UUID) is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            employee = get_object_or_404(
+                Employee,
+                _id=employee_uuid,
+                company_id=company_id,
+                is_deleted=False
+            )
+
+            # ---------- Department ----------
+            if 'department_id' in request.data:
+                value = request.data['department_id']
+                if value:
+                    employee.department = get_object_or_404(
+                        Department, _id=value, company_id=company_id, is_deleted=False
+                    )
+                else:
+                    employee.department = None
+
+            # ---------- Designation ----------
+            if 'designation_id' in request.data:
+                value = request.data['designation_id']
+                if value:
+                    employee.designation = get_object_or_404(
+                        Designation, _id=value, company_id=company_id, is_deleted=False
+                    )
+                else:
+                    employee.designation = None
+
+            # ---------- Simple string / number fields ----------
+            updatable_fields = [
+                'first_name', 'last_name', 'father_name', 'cnic',
+                'gender', 'marital_status', 'phone', 'email', 'personal_email',
+                'address_line', 'country', 'state', 'city', 'postal_code',
+                'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation',
+                'role', 'employment_type', 'employment_status',
+                'work_location', 'bank_name', 'bank_account_number', 'bank_iban',
+                'probation_days',
+            ]
+            for field in updatable_fields:
+                if field in request.data:
+                    setattr(employee, field, request.data[field])
+
+            # ---------- Salary (Decimal) ----------
+            if 'salary' in request.data:
                 try:
-                    user = User.objects.get(_id=explicit_user_id, company_id=company_id, is_deleted=False)
-                    employee.isfrom_user = user
-                    user.isfrom_employee = employee
-                    user.save()
-                except User.DoesNotExist:
-                    pass
-        except Exception:
-            pass
+                    employee.salary = request.data['salary']
+                except Exception as e:
+                    logger.warning(f"Invalid salary value: {request.data['salary']} - {e}")
 
-        employee.updated_by = request.user
-        employee.save()
+            # ---------- Reporting Manager ----------
+            if 'reporting_manager_id' in request.data:
+                value = request.data['reporting_manager_id']
+                if value:
+                    employee.reporting_manager = get_object_or_404(
+                        Employee, _id=value, company_id=company_id, is_deleted=False
+                    )
+                else:
+                    employee.reporting_manager = None
 
-        return Response({
-            "message": "Employee updated successfully",
-            "employee": self._serialize_employee(employee),
-        })
+            # ---------- Default Shift ----------
+            if 'default_shift_id' in request.data:
+                value = request.data['default_shift_id']
+                from apps.hr.models import ShiftTemplate
+                if value:
+                    employee.default_shift = get_object_or_404(
+                        ShiftTemplate, _id=value, company_id=company_id, is_deleted=False
+                    )
+                else:
+                    employee.default_shift = None
 
+            # ---------- Date fields (handle empty string / None) ----------
+            if 'date_of_birth' in request.data:
+                val = request.data['date_of_birth']
+                employee.date_of_birth = datetime.strptime(val, '%Y-%m-%d').date() if val else None
+
+            if 'joining_date' in request.data:
+                val = request.data['joining_date']
+                employee.joining_date = datetime.strptime(val, '%Y-%m-%d').date() if val else None
+
+            if 'confirmation_date' in request.data:
+                val = request.data['confirmation_date']
+                employee.confirmation_date = datetime.strptime(val, '%Y-%m-%d').date() if val else None
+
+            # ---------- Link to User (if provided) ----------
+            try:
+                explicit_user_id = request.data.get('isfrom_user_id')
+                if explicit_user_id:
+                    from apps.organization.models import User
+                    try:
+                        user = User.objects.get(_id=explicit_user_id, company_id=company_id, is_deleted=False)
+                        employee.isfrom_user = user
+                        user.isfrom_employee = employee
+                        user.save()
+                    except User.DoesNotExist:
+                        logger.warning(f"User with _id {explicit_user_id} not found for employee update")
+            except Exception as e:
+                logger.error(f"Error linking user: {e}")
+
+            employee.updated_by = request.user
+            employee.save()
+
+            return Response({
+                "message": "Employee updated successfully",
+                "employee": self._serialize_employee(employee),
+            })
+
+        except Exception as e:
+            logger.error(f"Employee PATCH error: {str(e)}\n{traceback.format_exc()}")
+            return Response(
+                {'error': f'Internal server error: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    
     @transaction.atomic
     def delete(self, request):
         company_id = request.user.company_id

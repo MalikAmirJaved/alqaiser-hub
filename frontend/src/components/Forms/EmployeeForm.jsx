@@ -116,13 +116,56 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
     e.preventDefault();
     const requiredFields = ["first_name", "phone", "department_id", "joining_date"];
     for (const field of requiredFields) {
-      if (!formData[field]) {
-        alert(`Please fill ${field.replace(/_/g, " ")} field`);
-        return;
-      }
+        if (!formData[field]) {
+            alert(`Please fill ${field.replace(/_/g, " ")} field`);
+            return;
+        }
     }
-    onSubmit(formData);
-  };
+    // Prepare clean payload
+    const payload = {
+        id: formData.id,          
+        employee_id: formData.employee_id,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        father_name: formData.father_name,
+        cnic: formData.cnic,
+        date_of_birth: formData.date_of_birth,
+        gender: formData.gender,
+        marital_status: formData.marital_status,
+        phone: formData.phone,
+        email: formData.email,
+        personal_email: formData.personal_email,
+        address_line: formData.address_line,
+        country: formData.country,
+        state: formData.state,
+        city: formData.city,
+        postal_code: formData.postal_code,
+        emergency_contact_name: formData.emergency_contact_name,
+        emergency_contact_phone: formData.emergency_contact_phone,
+        emergency_contact_relation: formData.emergency_contact_relation,
+        role: formData.role,
+        department_id: formData.department_id || null,
+        designation_id: formData.designation_id || null,
+        employment_type: formData.employment_type,
+        employment_status: formData.employment_status,
+        joining_date: formData.joining_date,
+        confirmation_date: formData.confirmation_date || null,
+        probation_days: formData.probation_days,
+        work_location: formData.work_location,
+        reporting_manager_id: formData.reporting_manager_id || null,
+        bank_name: formData.bank_name,
+        bank_account_number: formData.bank_account_number,
+        bank_iban: formData.bank_iban,
+        salary: formData.salary,
+        default_shift_id: formData.default_shift_id || null,
+        // Do NOT send: old_default_shift_id, asset_category_id, department_name, designation_name, etc.
+    };
+    // If it's an update, also send isfrom_user_id if you want to (re)link
+    if (formData.isfrom_user_id) {
+        payload.isfrom_user_id = formData.isfrom_user_id;
+    }
+    onSubmit(payload);
+};
 
   const activeShiftTemplates = shiftTemplates.filter(t => t.is_active);
   const activeAssetCategories = assetCategories.filter(c => c.isActive);

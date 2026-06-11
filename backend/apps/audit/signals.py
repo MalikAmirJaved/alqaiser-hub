@@ -2,6 +2,7 @@
 import json
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
 from .models import AuditLog
@@ -12,6 +13,8 @@ def _serialize_for_json(obj):
         return str(obj)
     if isinstance(obj, (datetime, date)):
         return obj.isoformat()
+    if isinstance(obj, Decimal):
+        return float(obj)
     # Django model instance -> convert to string representation (avoid storing whole object)
     if hasattr(obj, '_meta') and hasattr(obj, 'pk'):
         return str(obj.pk) if obj.pk is not None else str(obj)

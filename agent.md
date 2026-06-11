@@ -238,5 +238,193 @@ Run the following commands inside `docker-compose exec backend <cmd>` to populat
 
 ---
 
+---
+
+## 8. **AI AGENT RULES & GUIDELINES** (Copilot CLI, Gemini, and Other AI Assistants)
+
+### Critical Restrictions
+> [!IMPORTANT]
+> **DO NOT** execute these commands under any circumstances:
+> - `git commit`, `git push`, `git merge`, `git rebase`, or any git command
+> - `python manage.py migrate`, `python manage.py makemigrations`, or any Django migration command
+> - Any destructive database operations without explicit user confirmation
+
+### Data & API Usage Rules
+
+#### **1. Always Use Dynamic Data**
+- **Never hardcode** static values, IDs, or test data in code.
+- Fetch all data from the database/API at runtime using the backend endpoints.
+- For dropdown lists, categories, or enums, use the API responses or query the database.
+- Example: Instead of hardcoding `["draft", "published", "archived"]`, fetch statuses from the backend response or enum.
+
+#### **2. Toast Notifications - Single Source of Truth**
+- **ONLY** use the toast system defined in `@frontend/src/lib/api.ts` (`apiFetch` wrapper).
+- **DO NOT** create alternative notification files (e.g., separate toast service, custom notification handler).
+- The `apiFetch` function automatically shows:
+  - ✅ **Success toast** for POST, PUT, PATCH, DELETE operations with `message` or `detail` in response.
+  - ❌ **Error toast** for failed requests.
+- All backend responses should include `message` or `detail` fields for user feedback.
+- Example API response:
+  ```json
+  {
+    "id": "uuid-123",
+    "message": "Employee created successfully",
+    "detail": "Employee John Doe added to the system"
+  }
+  ```
+
+#### **3. WebSocket Integration & Real-Time Updates**
+- Use WebSocket for real-time data synchronization and notifications.
+- **Notification WebSocket** (`/ws/notifications/{company_id}/{branch_id}/`):
+  - Handles real-time notifications pushed to users.
+  - Managed by `NotificationProvider` in `@frontend/src/contexts/NotificationContext.tsx`.
+  - Emits `type: "notification"` events for user alerts.
+  - Emits `type: "data_update"` events for cache invalidation (entity name and action).
+  
+- **Permission WebSocket** (`/ws/permissions/`):
+  - Pushes permission changes in real-time via `permission_changed` event.
+  - Triggers Redux state update in `usePermissions.ts` hook.
+  - Debounced to avoid spam (300ms delay).
+
+- **Backend Consumer Pattern** (in `/backend/consumers/`):
+  ```python
+  class NotificationConsumer(AsyncWebsocketConsumer):
+      async def connect(self):
+          await self.channel_layer.group_add(...)
+          await self.accept()
+      
+      async def notify_event(self, event):
+          await self.send(text_data=json.dumps(event))
+  ```
+
+- **Frontend Hook Pattern** (React Query cache invalidation):
+  ```typescript
+  const [notifications, setNotifications] = useState([]);
+  const queryClient = useQueryClient();
+  
+  // On WebSocket message:
+  if (data.type === "data_update") {
+    const { entity, action } = data;
+    queryClient.invalidateQueries({ queryKey: [entity] }); // Refetch data
+  }
+  ```
+
+#### **4. Update NotificationContext & Trigger Cache Refresh**
+When implementing data mutations or real-time features:
+- Trigger WebSocket events that emit `type: "data_update"` with entity name.
+- The `NotificationContext` will automatically invalidate React Query caches.
+- This ensures UI reflects backend changes without manual page reload.
+- Example:
+  ```python
+  # Backend: Send update notification
+  channel_layer.group_send(
+      f"notifications_{company_id}_{branch_id}",
+      {
+          "type": "notify_event",
+          "data": {
+              "type": "data_update",
+              "entity": "inventory_product",
+              "action": "created",
+              "record_id": product._id
+          }
+      }
+  )
+  ```
+
+#### **5. Multi-Tenant Data Isolation**
+- **Always** query by `company_id` and `branch_id` from `request.user`.
+- Use `CompanyBranchMixin` in DRF ViewSets to auto-filter queries.
+- Use `_id` (UUID) for API lookups, NOT `id` (auto-increment).
+- Never expose raw `id` fields in API responses (security risk - ID enumeration).
+- All model serializers should expose `_id` as the identifier.
+
+#### **6. Permission Checks & RBAC**
+- Use `PermissionRequiredMixin` on backend ViewSets with module/resource/action.
+- Frontend: Check permissions via Redux slice (`state.permissions.modules`).
+- Use `usePermissions()` hook to sync permission changes with WebSocket.
+- Implement route guards on protected pages using `routePermissions.ts` mapping.
+
+#### **7. API Response Structure**
+All backend API responses should follow this pattern:
+```json
+{
+  "id": "UUID (exposed as _id in serializers)",
+  "message": "Human-readable success/status message",
+  "detail": "Optional detailed description",
+  "data": { /* main response body */ },
+  "errors": { /* field-level validation errors (POST/PUT/PATCH) */ }
+}
+```
+
+#### **8. React Query & TanStack Query**
+- Leverage React Query hooks in `/frontend/src/hooks/` for server-state management.
+- All hooks use `apiFetch` internally (already integrated with toast).
+- Cache keys follow pattern: `[entity, entityId]` or `[entity, "stats"]`.
+- Use `invalidateQueries` when mutations succeed.
+- Example hook pattern:
+  ```typescript
+  export function useProducts() {
+    return useQuery({
+      queryKey: ["inventory_product"],
+      queryFn: () => api("/api/inventory/products/", { method: "GET" })
+    });
+  }
+  ```
+
+#### **9. Backend Serializers & Responses**
+- Always inherit from `DRF Serializers` (or model serializers).
+- Include `_id` (UUID) field in serializers for API exposure.
+- Add `message`/`detail` fields in `create()`, `update()`, `destroy()` methods.
+- Use `CompanyBranchMixin` + `PermissionRequiredMixin` on ViewSets.
+- Example:
+  ```python
+  class ProductViewSet(viewsets.ModelViewSet, CompanyBranchMixin, PermissionRequiredMixin):
+      permission_module = 'INVENTORY'
+      permission_resource = 'product'
+      queryset = Product.objects.all()
+      serializer_class = ProductSerializer
+      
+      def perform_create(self, serializer):
+          serializer.save(created_by=self.request.user)
+  ```
+
+#### **10. Frontend Component Patterns**
+- Use hooks from `/frontend/src/hooks/` for data fetching.
+- Call `apiFetch` via `useApi()` hook for mutations.
+- Handle loading/error states with React Query.
+- Example form submission:
+  ```typescript
+  const api = useApi();
+  const { mutate: createProduct } = useMutation({
+    mutationFn: (data) => api("/api/inventory/products/", { 
+      method: "POST", 
+      body: JSON.stringify(data) 
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
+    }
+  });
+  ```
+
+#### **11. Environment & Configuration**
+- Never commit `.env` files or secrets.
+- Use `NEXT_PUBLIC_*` prefix only for client-safe values in frontend.
+- Backend environment variables are injected via Docker Compose.
+- Frontend API URL: `process.env.NEXT_PUBLIC_API_URL` (e.g., `http://localhost:8000`).
+
+#### **12. When NOT to Use apiFetch Directly**
+Do **NOT** bypass `apiFetch` in these cases:
+- File uploads (use multipart form data with special handling).
+- WebSocket connections (use dedicated consumer classes).
+- Streaming responses (use native fetch with streaming).
+- For these, wrap the response in toast notifications manually if needed.
+
+---
+
 > [!IMPORTANT]
 > Always verify that your model queries fetch using `_id` (UUID) in the API views instead of `id` (bigint auto-increment) to comply with lookup configurations.
+> **AI agents MUST NOT:**
+> - Run any git, migration, or destructive database commands
+> - Use static/hardcoded data
+> - Create alternative notification systems (use `apiFetch` + `NotificationContext`)
+> - Expose `id` fields in API responses (use `_id` only)
