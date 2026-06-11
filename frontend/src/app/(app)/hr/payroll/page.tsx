@@ -11,7 +11,6 @@ import PaymentModal from "@/components/payroll/PaymentModal";
 import PayslipModal from "@/components/payroll/PayslipModal";
 import MonthSelectorModal from "@/components/payroll/MonthSelectorModal";
 import { DollarSign, Users, Clock, TrendingUp, Search, Filter, Eye, CreditCard, Calendar, RefreshCw } from "lucide-react";
-import { toast } from "sonner";
 
 export default function PayrollPage() {
   const { formatCurrency } = useCompanySettings();
@@ -91,10 +90,20 @@ export default function PayrollPage() {
   const monthNames = ["January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"];
 
-  const handleRefresh = () => {
-    // React Query will auto-refetch when we invalidate queries
-    window.location.reload();
-  };
+const payrollQuery = usePayroll({
+  month: String(selectedMonth),
+  year: String(selectedYear),
+});
+
+const statsQuery = usePayrollStats({
+  month: String(selectedMonth),
+  year: String(selectedYear),
+});
+
+const handleRefresh = () => {
+  payrollQuery.refetch();
+  statsQuery.refetch();
+};
 
   if (permissions.loading || employeesLoading) {
     return (

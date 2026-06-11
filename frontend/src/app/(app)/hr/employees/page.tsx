@@ -585,7 +585,6 @@ const handleDelete = async (employee) => {
           onRowSelect={setSelectedRows}
           onRowClick={(row, idx) => {
             // Optional: Navigate to employee detail page
-            console.log("Row clicked:", row);
           }}
           actions={permissions.canUpdate || permissions.canDelete ? renderActions : undefined}
           stickyHeader={true}

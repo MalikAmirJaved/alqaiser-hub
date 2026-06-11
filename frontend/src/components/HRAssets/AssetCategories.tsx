@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { useRouter } from "next/navigation";
 import {
   Layers,
   Plus,
@@ -134,6 +135,7 @@ function AssetMultiSelect({ options, selected, onChange, assets }: any) {
 
 export default function AssetCategories() {
   const [searchQuery, setSearchQuery] = useState("");
+  const navigate = useRouter();
   
   const { data: assets = [] } = useAssets();
   const { data: categories = [], isLoading } = useAssetCategories(
@@ -356,7 +358,7 @@ export default function AssetCategories() {
                       size="sm" 
                       className="w-full"
                       onClick={() => {
-                        window.location.href = `/hr/assets/employee-assets?kit=${cat.id}`;
+                        navigate.push(`employee-assets?kit=${cat.id}`);
                       }}
                     >
                       <Users className="w-4 h-4 mr-2" />
