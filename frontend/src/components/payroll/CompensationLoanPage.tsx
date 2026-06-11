@@ -4,10 +4,17 @@
 import { useState, useMemo } from "react";
 import { useEmployees } from "@/hooks/useEmployees";
 import {
-  useCompensations, useCreateCompensation, useUpdateCompensation, useDeleteCompensation,
-  useEmployeeLoans, useCreateEmployeeLoan, useUpdateEmployeeLoan, useDeleteEmployeeLoan,
-  useUpdateLoanStatus
+  useCompensations,
+  useCreateCompensation,
+  useUpdateCompensation,
+  useDeleteCompensation,
+  useEmployeeLoans,
+  useCreateEmployeeLoan,
+  useUpdateEmployeeLoan,
+  useDeleteEmployeeLoan,
+  useUpdateLoanStatus,
 } from "@/hooks/usePayroll";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HandCoins, TrendingUp, Plus, Search } from "lucide-react";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
@@ -21,12 +28,17 @@ interface CompensationLoanPageProps {
   formatCurrency: (amount: number) => string;
 }
 
-export default function CompensationLoanPage({ formatCurrency }: CompensationLoanPageProps) {
+export default function CompensationLoanPage({
+  formatCurrency,
+}: CompensationLoanPageProps) {
   const permissions = useFeaturePermissions("HR", "compensation");
+
   const [activeTab, setActiveTab] = useState("compensation");
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
-  const [modalType, setModalType] = useState<"compensation" | "loan">("compensation");
+  const [modalType, setModalType] = useState<"compensation" | "loan">(
+    "compensation"
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [formData, setFormData] = useState<any>({});
@@ -34,11 +46,10 @@ export default function CompensationLoanPage({ formatCurrency }: CompensationLoa
   const [selectedEmployeeSalary, setSelectedEmployeeSalary] = useState<number>(0);
   const [loanValidationErrors, setLoanValidationErrors] = useState<string[]>([]);
 
-  // Fetch data from backend
   const { data: employees = [] } = useEmployees();
-  const { data: compensations = [], isLoading: compLoading } = useCompensations();
-  const { data: loans = [], isLoading: loansLoading } = useEmployeeLoans();
-  
+  const { data: compensations = [] } = useCompensations();
+  const { data: loans = [] } = useEmployeeLoans();
+
   const createCompensation = useCreateCompensation();
   const updateCompensation = useUpdateCompensation();
   const deleteCompensation = useDeleteCompensation();
@@ -47,16 +58,36 @@ export default function CompensationLoanPage({ formatCurrency }: CompensationLoa
   const deleteLoan = useDeleteEmployeeLoan();
   const updateLoanStatus = useUpdateLoanStatus();
 
-  // Get employees who already have active compensation
+  // -----------------------------
+  // Permissions helpers
+  // -----------------------------
+  const canCreate =
+    (activeTab === "compensation" && permissions.create_compensation) ||
+    (activeTab === "loans" && permissions.create_loan);
+
+  const canUpdateModal = editingItem
+    ? modalType === "compensation"
+      ? permissions.update_compensation
+      : permissions.update_loan
+    : modalType === "compensation"
+      ? permissions.create_compensation
+      : permissions.create_loan;
+
+  // -----------------------------
+  // Derived data
+  // -----------------------------
   const employeesWithCompensation = useMemo(() => {
     return compensations
-      .filter(c => c.status === "ACTIVE")
-      .map(c => c.employee_id);
+      .filter((c) => c.status === "ACTIVE")
+      .map((c) => c.employee_id);
   }, [compensations]);
 
-  // Filter employee options based on whether they have compensation
   const employeeOptionsForCompensation = employees
-    .filter(e => !employeesWithCompensation.includes(e.id) || (editingItem && editingItem.employee_id === e.id))
+    .filter(
+      (e) =>
+        !employeesWithCompensation.includes(e.id) ||
+        (editingItem && editingItem.employee_id === e.id)
+    )
     .map((e) => ({
       value: String(e.id),
       label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""}`,
@@ -64,29 +95,36 @@ export default function CompensationLoanPage({ formatCurrency }: CompensationLoa
 
   const employeeOptionsForLoan = employees.map((e) => ({
     value: String(e.id),
-    label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""} (${formatCurrency(parseFloat(e.salary || "0"))})`,
+    label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""} (${formatCurrency(
+      parseFloat(e.salary || "0")
+    )})`,
   }));
 
+  // -----------------------------
+  // Actions
+  // -----------------------------
   const handleSave = async () => {
     try {
       if (modalType === "compensation") {
         if (editingItem) {
-          await updateCompensation.mutateAsync({ id: editingItem.id, ...formData });
+          await updateCompensation.mutateAsync({
+            id: editingItem.id,
+            ...formData,
+          });
           toast.success("Compensation updated successfully");
         } else {
           await createCompensation.mutateAsync(formData);
           toast.success("Compensation created successfully");
         }
       } else {
-        // Validate loan before saving
         if (loanValidationErrors.length > 0) {
           toast.error(loanValidationErrors[0]);
           return;
         }
-        
+
         const payload = { ...formData };
         delete payload.status;
-        
+
         if (editingItem) {
           await updateLoan.mutateAsync({ id: editingItem.id, ...payload });
           toast.success("Loan updated successfully");
@@ -95,6 +133,7 @@ export default function CompensationLoanPage({ formatCurrency }: CompensationLoa
           toast.success("Loan created successfully");
         }
       }
+
       setShowModal(false);
       setEditingItem(null);
       setFormData({});
@@ -107,6 +146,7 @@ export default function CompensationLoanPage({ formatCurrency }: CompensationLoa
 
   const handleDelete = async (type: string, id: string) => {
     if (!confirm("Are you sure you want to delete this record?")) return;
+
     try {
       if (type === "compensation") {
         await deleteCompensation.mutateAsync(id);
@@ -143,88 +183,61 @@ export default function CompensationLoanPage({ formatCurrency }: CompensationLoa
     setModalType(type);
     setEditingItem(item);
     setFormData(item);
+
     if (type === "loan") {
       setSelectedEmployeeSalary(parseFloat(item.monthly_salary || "0"));
     }
+
     setShowModal(true);
   };
 
-  // Handle employee selection change for loan
-  const handleEmployeeChangeForLoan = (employeeId: string) => {
-    setFormData({ ...formData, employee_id: employeeId });
-    if (employeeId) {
-      const employee = employees.find(e => String(e.id) === employeeId);
-      if (employee) {
-        setSelectedEmployeeSalary(parseFloat(employee.salary || "0"));
-      }
-    }
-  };
-
-  // Filter data
-  const filteredCompensations = compensations.filter(c =>
-    c.employee_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.grade?.toLowerCase().includes(searchQuery.toLowerCase())
+  // -----------------------------
+  // Filters
+  // -----------------------------
+  const filteredCompensations = compensations.filter(
+    (c) =>
+      c.employee_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.grade?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredLoans = loans.filter(l =>
-    l.employee_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    l.loan_type?.toLowerCase().includes(searchQuery.toLowerCase())
-  ).filter(l => statusFilter === "all" || l.status === statusFilter);
-
-  const renderFormFields = () => {
-    if (modalType === "compensation") {
-      return (
-        <CompensationForm
-          formData={formData}
-          setFormData={setFormData}
-          employeeOptions={employeeOptionsForCompensation}
-          formatCurrency={formatCurrency}
-        />
-      );
-    }
-
-    return (
-      <LoanForm
-        formData={formData}
-        setFormData={(data) => {
-          setFormData(data);
-          // Update employee salary when employee changes
-          if (data.employee_id !== formData.employee_id) {
-            const employee = employees.find(e => String(e.id) === data.employee_id);
-            if (employee) {
-              setSelectedEmployeeSalary(parseFloat(employee.salary || "0"));
-            }
-          }
-        }}
-        employeeOptions={employeeOptionsForLoan}
-        selectedEmployeeSalary={selectedEmployeeSalary}
-        formatCurrency={formatCurrency}
-        errors={[]}
-        onValidationChange={(hasErrors) => {
-          // Validation will be handled by the form component
-        }}
-      />
+  const filteredLoans = loans
+    .filter(
+      (l) =>
+        l.employee_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        l.loan_type?.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .filter(
+      (l) => statusFilter === "all" || l.status === statusFilter
     );
-  };
 
+  // -----------------------------
+  // UI
+  // -----------------------------
   return (
     <div className="mt-5">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+
+        {/* Header */}
+        <div className="flex justify-between items-center mb-4">
           <TabsList className="bg-muted/40">
-            <TabsTrigger value="compensation" className="flex items-center gap-2">
-              <TrendingUp className="w-4 h-4" />
+            <TabsTrigger value="compensation">
+              <TrendingUp className="w-4 h-4 mr-2" />
               Salary Structure
             </TabsTrigger>
-            <TabsTrigger value="loans" className="flex items-center gap-2">
-              <HandCoins className="w-4 h-4" />
+
+            <TabsTrigger value="loans">
+              <HandCoins className="w-4 h-4 mr-2" />
               Loans & Advances
             </TabsTrigger>
           </TabsList>
 
-          {permissions.create && (
+          {canCreate && (
             <button
-              onClick={() => openAddModal(activeTab === "compensation" ? "compensation" : "loan")}
+              onClick={() =>
+                openAddModal(
+                  activeTab === "compensation" ? "compensation" : "loan"
+                )
+              }
               className="inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity shadow-sm"
             >
               <Plus className="w-4 h-4" />
@@ -233,97 +246,123 @@ export default function CompensationLoanPage({ formatCurrency }: CompensationLoa
           )}
         </div>
 
-        <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-border bg-muted/20">
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by employee name..."
-                  className="w-full bg-background pl-9 pr-3 h-10 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 border border-border"
-                />
-              </div>
-              {activeTab === "loans" && (
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-40 h-10 rounded-lg border border-border bg-background text-sm px-3 focus:outline-none focus:ring-2 focus:ring-primary/20"
-                >
-                  <option value="all">All Status</option>
-                  <option value="ACTIVE">Active</option>
-                  <option value="PENDING">Pending</option>
-                  <option value="PAID">Paid</option>
-                  <option value="CANCELLED">Cancelled</option>
-                </select>
-              )}
+        {/* Search + Filters */}
+        <div className="bg-card border rounded-xl p-4 mb-3">
+          <div className="flex gap-3">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 h-10 border rounded-lg"
+                placeholder="Search employee..."
+              />
             </div>
+
+            {activeTab === "loans" && (
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="h-10 border rounded-lg px-3"
+              >
+                <option value="all">All</option>
+                <option value="ACTIVE">Active</option>
+                <option value="PENDING">Pending</option>
+                <option value="PAID">Paid</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+            )}
           </div>
-
-          <TabsContent value="compensation" className="m-0">
-            <CompensationTab
-              filteredCompensations={filteredCompensations}
-              formatCurrency={formatCurrency}
-              onEdit={permissions.update ? (item) => openEditModal("compensation", item) : undefined}
-              onDelete={permissions.delete ? (id) => handleDelete("compensation", id) : undefined}
-            />
-          </TabsContent>
-
-          <TabsContent value="loans" className="m-0">
-            <LoanTab
-              filteredLoans={filteredLoans}
-              formatCurrency={formatCurrency}
-              statusDropdownId={statusDropdownId}
-              setStatusDropdownId={setStatusDropdownId}
-              onEdit={permissions.update ? (item) => openEditModal("loan", item) : undefined}
-              onDelete={permissions.delete ? (id) => handleDelete("loan", id) : undefined}
-              onStatusChange={permissions.update ? handleStatusChange : undefined}
-            />
-          </TabsContent>
         </div>
+
+        {/* Tabs */}
+        <TabsContent value="compensation">
+          <CompensationTab
+            filteredCompensations={filteredCompensations}
+            formatCurrency={formatCurrency}
+            onEdit={
+              permissions.update_compensation
+                ? (item) => openEditModal("compensation", item)
+                : undefined
+            }
+            onDelete={
+              permissions.delete_compensation
+                ? (id) => handleDelete("compensation", id)
+                : undefined
+            }
+          />
+        </TabsContent>
+
+        <TabsContent value="loans">
+          <LoanTab
+            filteredLoans={filteredLoans}
+            formatCurrency={formatCurrency}
+            statusDropdownId={statusDropdownId}
+            setStatusDropdownId={setStatusDropdownId}
+            onEdit={
+              permissions.update_loan
+                ? (item) => openEditModal("loan", item)
+                : undefined
+            }
+            onDelete={
+              permissions.delete_loan
+                ? (id) => handleDelete("loan", id)
+                : undefined
+            }
+            onStatusChange={
+              permissions.update_loan_status
+                ? handleStatusChange
+                : undefined
+            }
+          />
+        </TabsContent>
       </Tabs>
 
-      {/* Modal Form */}
-      {showModal && (editingItem ? permissions.update : permissions.create) && (
-        <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4 backdrop-blur-sm">
-          <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between p-5 border-b border-border sticky top-0 bg-card z-10">
-              <h2 className="text-lg font-semibold">
-                {editingItem ? "Edit" : "Add"} {modalType === "compensation" ? "Compensation" : "Loan"}
+      {/* Modal */}
+      {showModal && canUpdateModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4">
+          <div className="bg-card rounded-xl w-full max-w-3xl">
+            <div className="p-4 border-b flex justify-between">
+              <h2>
+                {editingItem ? "Edit" : "Add"}{" "}
+                {modalType === "compensation" ? "Compensation" : "Loan"}
               </h2>
-              <button 
-                onClick={() => setShowModal(false)} 
-                className="p-1.5 rounded-md hover:bg-muted transition-colors"
-              >
-                ✕
-              </button>
+              <button onClick={() => setShowModal(false)}>✕</button>
             </div>
-            <div className="p-5">
-              {renderFormFields()}
+
+            <div className="p-4">
+              {modalType === "compensation" ? (
+                <CompensationForm
+                  formData={formData}
+                  setFormData={setFormData}
+                  employeeOptions={employeeOptionsForCompensation}
+                  formatCurrency={formatCurrency}
+                />
+              ) : (
+                <LoanForm
+                  formData={formData}
+                  setFormData={setFormData}
+                  employeeOptions={employeeOptionsForLoan}
+                  selectedEmployeeSalary={selectedEmployeeSalary}
+                  formatCurrency={formatCurrency}
+                  errors={[]}
+                  onValidationChange={() => {}}
+                />
+              )}
             </div>
-            <div className="p-5 border-t border-border flex justify-end gap-3 sticky bottom-0 bg-card">
-              <button 
-                onClick={() => setShowModal(false)} 
-                className="px-4 h-10 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleSave} 
-                className="px-4 h-10 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={modalType === "loan" && loanValidationErrors.length > 0}
-              >
+
+            <div className="p-4 border-t flex justify-end gap-2">
+              <button onClick={() => setShowModal(false)}>Cancel</button>
+              <button onClick={handleSave}>
                 {editingItem ? "Update" : "Save"}
               </button>
             </div>
           </div>
         </div>
       )}
-      
-      {/* Click outside to close status dropdown */}
+
       {statusDropdownId && (
-        <div 
+        <div
           className="fixed inset-0 z-40"
           onClick={() => setStatusDropdownId(null)}
         />
