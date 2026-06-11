@@ -279,7 +279,14 @@ class Designation(TimeStampedModel):
     )
 
     name = models.CharField(max_length=150)
-    department = models.CharField(max_length=150, null=True, blank=True)
+    # Store FK to Department instead of department name string. Use NULL to represent 'ALL' departments.
+    department = models.ForeignKey(
+        'organization.Department',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='designations'
+    )
     description = models.TextField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
 
@@ -311,4 +318,4 @@ class Designation(TimeStampedModel):
         ]
 
     def __str__(self):
-        return f"{self.name} - {self.department or 'General'}"
+        return f"{self.name} - {self.department.name if self.department else 'General'}"

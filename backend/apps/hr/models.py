@@ -168,6 +168,11 @@ class Employee(BaseModel):
     phone = models.CharField(max_length=20)
     email = models.EmailField(blank=True, null=True)
     personal_email = models.EmailField(blank=True, null=True)
+
+    # If this employee was used to create a system user, link it here
+    isfrom_user = models.ForeignKey(
+        'organization.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='employee_profile'
+    )
     
     # Address
     address_line = models.TextField(blank=True, null=True)

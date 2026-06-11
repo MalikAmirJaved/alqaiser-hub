@@ -42,7 +42,7 @@ export default function DesignationsPage() {
   const columns = [
     { key: "name", label: "Designation", sortable: true },
     {
-      key: "department",
+      key: "department_name",
       label: "Department",
       sortable: true,
       render: (value: string) => (
@@ -51,6 +51,7 @@ export default function DesignationsPage() {
         </span>
       ),
     },
+
     { key: "description", label: "Description" },
     {
       key: "isActive",

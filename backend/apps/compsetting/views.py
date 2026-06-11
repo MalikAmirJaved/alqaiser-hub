@@ -460,7 +460,7 @@ class DesignationViewSet(BaseCompanyView, viewsets.ModelViewSet):
         designation = self.get_object()
         employees = Employee.objects.filter(
             company_id=request.user.company_id,
-            designation=designation.name,
+            designation=designation,
             is_deleted=False,
             employment_status='ACTIVE'
         ).values('_id', 'first_name', 'last_name', 'employee_id', 'department')
@@ -509,12 +509,22 @@ class WelcomeDesignationSetupView(BaseCompanyView):
                 ).exists():
                     raise ValueError(f"Designation '{name}' already exists")
 
+                # Resolve department UUID to Department instance; 'ALL' or missing -> None
+                dept_uuid = des_data.get('department')
+                dept_obj = None
+                if dept_uuid and str(dept_uuid).upper() != 'ALL':
+                    from apps.organization.models import Department as DeptModel
+                    try:
+                        dept_obj = DeptModel.objects.get(_id=dept_uuid, company=company, is_deleted=False)
+                    except DeptModel.DoesNotExist:
+                        raise ValueError(f"Department {dept_uuid} not found for designation '{name}'")
+
                 designation = Designation.objects.create(
                     company_settings=settings,  # ✅ Changed from 'settings' to 'company_settings'
                     company=company,
                     branch_id=request.user.branch_id,
                     name=name,
-                    department=des_data.get('department'),
+                    department=dept_obj,
                     description=des_data.get('description'),
                     is_active=des_data.get('isActive', True),
                     created_by=user,
@@ -551,7 +561,7 @@ class DesignationEmployeesView(BaseCompanyView):
         designation = get_object_or_404(Designation, _id=designation_id, company=company, is_deleted=False)
         employees = Employee.objects.filter(
             company_id=company.id,
-            designation=designation.name,
+            designation=designation,
             is_deleted=False,
             employment_status='ACTIVE'
         ).values('_id', 'first_name', 'last_name', 'employee_id', 'department')

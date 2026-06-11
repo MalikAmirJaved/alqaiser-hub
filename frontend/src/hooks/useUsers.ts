@@ -11,13 +11,19 @@ export interface User {
   first_name: string;
   last_name: string;
   department: string;
+  department_id?: string;
+  department_name?: string;
   designation: string;
+  designation_id?: string;
+  designation_name?: string;
   phone_number: string;
   is_active: boolean;
   branch_id?: string;
   branch_name?: string;
   created_at: string;
   updated_at: string;
+  // Link to employee if created from an employee
+  isfrom_employee_id?: string;
 }
 
 export interface UserFormData {
@@ -86,6 +92,9 @@ export function useCreateUser() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
+      // Refresh employees so UI reflects new isfrom_user links when users are created from employees
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+      queryClient.invalidateQueries({ queryKey: ["employeeStats"] });
     },
   });
 }

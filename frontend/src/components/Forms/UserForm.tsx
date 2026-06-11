@@ -40,7 +40,6 @@ export default function UserForm({
   const { data: designations = [] } = useDesignations();
   const designationOptions = designations.map((d: any) => ({ value: d.id, label: d.name }));
 
-  // ---- POPULATE FORM WHEN INITIAL DATA IS AVAILABLE (e.g., from prefill) ----
   useEffect(() => {
     if (initialData) {
       setFormData({
@@ -48,18 +47,14 @@ export default function UserForm({
         email: initialData.email || "",
         first_name: initialData.first_name || "",
         last_name: initialData.last_name || "",
-        department: initialData.department || "",   // already UUID
-        designation: initialData.designation || "", // already UUID
+        department: initialData.department || "",
+        designation: initialData.designation || "",
         phone_number: initialData.phone_number || "",
         password: "",
         confirm_password: "",
       });
     }
-  }, [initialData]); // runs when initialData changes
-
-  // ---- Optional: re‑populate when departments/designations finish loading (in case UUIDs weren't matched yet)
-  // This ensures that if the form was populated before the option lists were available, the values are kept.
-  // The SearchableSelect will automatically display the correct label once the options are loaded.
+  }, [initialData]);
 
   const handleChange = (field: string, value: any) => {
     setFormData(prev => ({
@@ -110,8 +105,7 @@ export default function UserForm({
                 value={formData.username}
                 onChange={(e) => handleChange("username", e.target.value)}
                 required
-                disabled={initialData?._disableUsername}
-                className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
               />
             </label>
             <label className="text-sm flex flex-col gap-1">
@@ -121,8 +115,7 @@ export default function UserForm({
                 value={formData.email}
                 onChange={(e) => handleChange("email", e.target.value)}
                 required
-                disabled={initialData?._disableUsername}
-                className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
               />
             </label>
           </div>
@@ -134,7 +127,7 @@ export default function UserForm({
                 type="text"
                 value={formData.first_name}
                 onChange={(e) => handleChange("first_name", e.target.value)}
-                className="bg-muted/40 border border-border rounded-md h-9 px-3"
+                className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
               />
             </label>
             <label className="text-sm flex flex-col gap-1">
@@ -143,7 +136,7 @@ export default function UserForm({
                 type="text"
                 value={formData.last_name}
                 onChange={(e) => handleChange("last_name", e.target.value)}
-                className="bg-muted/40 border border-border rounded-md h-9 px-3"
+                className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
               />
             </label>
           </div>
@@ -170,7 +163,6 @@ export default function UserForm({
             </label>
           </div>
 
-          {/* rest of the form unchanged */}
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground">Phone Number</span>
             <input
@@ -183,7 +175,7 @@ export default function UserForm({
                 )
               }
               maxLength={20}
-              className="bg-muted/40 border border-border rounded-md h-9 px-3"
+              className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
             />
           </label>
 

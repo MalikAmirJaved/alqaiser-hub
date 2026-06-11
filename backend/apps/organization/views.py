@@ -296,16 +296,32 @@ class DepartmentViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Mo
 
     @action(detail=True, methods=['get'])
     def designations(self, request, _id=None):
-        """Get all designations belonging to this department (including 'ALL')"""
+        """Get all designations belonging to this department (including 'ALL').
+        Designation.department now stores department UUID or 'ALL'.
+        Return department_id and department_name for each designation.
+        """
         department = self.get_object()
         from apps.compsetting.models import Designation
-        designations = Designation.objects.filter(
+        qs = Designation.objects.filter(
             company_id=request.user.company_id,
             is_deleted=False
         ).filter(
-            Q(department=department.name) | Q(department="ALL")
-        ).values('_id', 'name', 'department', 'is_active')
-        return Response(list(designations))
+            Q(department=department) | Q(department__isnull=True)
+        )
+
+        result = []
+        for d in qs.select_related('department'):
+            dept_obj = d.department
+            dept_id = str(dept_obj._id) if dept_obj else None
+            dept_name = dept_obj.name if dept_obj else 'ALL'
+            result.append({
+                '_id': str(d._id),
+                'name': d.name,
+                'department_id': dept_id,
+                'department_name': dept_name,
+                'is_active': d.is_active,
+            })
+        return Response(result)
 
 
     @action(detail=True, methods=['get'])
@@ -314,7 +330,7 @@ class DepartmentViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Mo
         department = self.get_object()
         employees = Employee.objects.filter(
             company_id=request.user.company_id,
-            department=department.name,
+            department=department,
             is_deleted=False,
             employment_status='ACTIVE'
         ).values('_id', 'first_name', 'last_name', 'employee_id', 'designation')

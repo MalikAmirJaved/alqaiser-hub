@@ -71,7 +71,7 @@ export default function DesignationDetailPage() {
         <div className="grid grid-cols-2 gap-4 text-sm">
           {[
             ["Name", designation.name],
-            ["Department", designation.department === "ALL" ? "All Departments" : designation.department || "—"],
+            ["Department", designation.department_name === "ALL" ? "All Departments" : (designation.department_name || "—")],
             ["Pay Grade", designation.pay_grade || "—"],           // ✅ snake_case
             ["Description", designation.description || "—"],
             ["Status", designation.isActive ? "Active" : "Inactive"],
@@ -123,7 +123,7 @@ export default function DesignationDetailPage() {
       subtitle={designation.description || "No description"}
       data={designation}
       meta={[
-        { label: "Department", value: designation.department === "ALL" ? "All Departments" : designation.department || "—" },
+        { label: "Department", value: designation.department_name === "ALL" ? "All Departments" : (designation.department_name || "—") },
         { label: "Pay Grade", value: designation.pay_grade || "—" },
       ]}
       summary={[

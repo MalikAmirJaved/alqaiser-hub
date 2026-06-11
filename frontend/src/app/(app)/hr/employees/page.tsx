@@ -1,11 +1,7 @@
 // @ts-nocheck
 "use client";
 
-// ============================================
-// FILE: src/app/(dashboard)/hr/employees/page.tsx (BACKEND INTEGRATED)
-// ============================================
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useEmployees, useEmployeeStats, useCreateEmployee, useUpdateEmployee, useDeleteEmployee } from "@/hooks/useEmployees";
 import { useShiftTemplates } from "@/hooks/useShiftTemplates";
 import PageHeader from "@/components/PageHeader";
@@ -17,11 +13,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useConfirmation } from "@/contexts/ConfirmationModalContext";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getPermissions } from "@/lib/permissions";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
-import { useUsers } from "@/hooks/useUsers";  // add this
 
 export default function EmployeesPage() {
   const { user, ready } = useAuth();
@@ -31,8 +26,24 @@ export default function EmployeesPage() {
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
-  const { data: users = [] } = useUsers();
+  const [storedPrefillData, setStoredPrefillData] = useState<any>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const prefill = searchParams.get("prefill");
+
+  const prefillData = useMemo(() => {
+    if (!prefill) return null;
+    return {
+      first_name: searchParams.get("first_name") || "",
+      last_name: searchParams.get("last_name") || "",
+      email: searchParams.get("email") || "",
+      phone: searchParams.get("phone") || "",
+      department_id: searchParams.get("department_id") || "",
+      designation_id: searchParams.get("designation_id") || "",
+      isfrom_user_id: searchParams.get("isfrom_user_id") || null,
+    };
+  }, [searchParams, prefill]);
+
   const { data: employees = [], isLoading } = useEmployees(
     query ? { search: query } : undefined
   );
@@ -40,10 +51,8 @@ export default function EmployeesPage() {
     (state: RootState) => state.permissions.permissions
   );
   const userExistsForEmployee = (employee: any) => {
-    if (!employee.email) return false;
-    return users.some(u => u.email === employee.email);
+    return !!employee.isfrom_user_id;
   };
-
 
   const employeePermissions = getPermissions(
     permissions,
@@ -64,13 +73,13 @@ export default function EmployeesPage() {
       last_name: employee.last_name || "",
       email: employee.email || "",
       phone_number: employee.phone || "",
-      department_id: employee.department_id || "",  // expects UUID
+      department_id: employee.department_id || "",
       designation_id: employee.designation_id || "",
+      isfrom_employee_id: employee._id || employee.id || "",
     });
     console.log("sending params data::", params.toString());
     return `/settings/users?${params.toString()}`;
   };
-
 
   const getEmployeeDefaultShiftName = (employee) => {
     if (employee.default_shift_name) return employee.default_shift_name;
@@ -81,28 +90,42 @@ export default function EmployeesPage() {
     return null;
   };
 
+  // Auto-open modal when navigated here with prefill params
+  const hasAutoOpened = useRef(false);
+  useEffect(() => {
+    if (prefill && !hasAutoOpened.current && employeePermissions.create) {
+      hasAutoOpened.current = true;
+      setStoredPrefillData(prefillData);
+      setEditingEmployee(null);
+      setModalOpen(true);
+      router.replace("/hr/employees", undefined);
+    }
+  }, [prefill, employeePermissions.create, router, prefillData]);
+
   const handleSaveEmployee = async (employeeData) => {
     try {
+      const payload = { ...employeeData };
+      if (!editingEmployee && storedPrefillData?.isfrom_user_id) {
+        payload.isfrom_user_id = storedPrefillData.isfrom_user_id;
+      }
       if (editingEmployee) {
         await updateEmployee.mutateAsync({
           id: editingEmployee.id,
-          ...employeeData,
+          ...payload,
         });
       } else {
-        await createEmployee.mutateAsync(employeeData);
+        await createEmployee.mutateAsync(payload);
       }
-
       setModalOpen(false);
       setEditingEmployee(null);
-      setSelectedRows(new Set()); // Clear selections after save
+      setStoredPrefillData(null);
+      setSelectedRows(new Set());
     } catch (error: any) {
       toast.error(error.message || "Failed to save employee");
     }
   };
 
   const handleDelete = async (employee) => {
-
-
     confirm({
       title: "Delete Employee",
       message: `Are you sure you want to delete "${employee.first_name} ${employee.last_name || ''}"? This action cannot be undone.`,
@@ -120,13 +143,9 @@ export default function EmployeesPage() {
     });
   };
 
-
   const handleBulkDelete = async () => {
-
-
     const selectedEmployees = Array.from(selectedRows).map(idx => employees[idx]);
     if (selectedEmployees.length === 0) return;
-
     confirm({
       title: "Bulk Delete Employees",
       message: `You are about to delete ${selectedEmployees.length} employee(s). This action cannot be undone.`,
@@ -146,14 +165,15 @@ export default function EmployeesPage() {
 
   const openAddModal = () => {
     setEditingEmployee(null);
+    setStoredPrefillData(null);
     setModalOpen(true);
   };
 
   const openEditModal = (employee) => {
     setEditingEmployee(employee);
+    setStoredPrefillData(null);
     setModalOpen(true);
   };
-
 
   const exportCsv = () => {
     const headers = ["Employee ID", "First Name", "Last Name", "Department", "Designation", "Employment Type", "Status", "Phone", "Email", "Default Shift"];
@@ -179,7 +199,6 @@ export default function EmployeesPage() {
     URL.revokeObjectURL(url);
   };
 
-  // Prepare stats data for the reusable component
   const employeeStats = [
     {
       id: "total-employees",
@@ -210,7 +229,6 @@ export default function EmployeesPage() {
     }
   ];
 
-  // Define columns for the table
   const employeeColumns = [
     {
       key: "employee_id",
@@ -225,14 +243,12 @@ export default function EmployeesPage() {
       sortAccessor: (row) =>
         `${row.first_name ?? ""} ${row.last_name ?? ""}`.toLowerCase(),
       render: (_, row) => `${row.first_name} ${row.last_name || ""}`
-
     },
     {
       key: "department_name",
       label: "Department",
       sortable: true,
       sortAccessor: (row) => (row.department_name ?? "").toLowerCase()
-
     },
     {
       key: "designation_name",
@@ -267,7 +283,6 @@ export default function EmployeesPage() {
       sortable: true,
       sortAccessor: (row) =>
         (getEmployeeDefaultShiftName(row) ?? "").toLowerCase(),
-
       render: (_, row) => {
         const shiftName = getEmployeeDefaultShiftName(row);
         return shiftName ? (
@@ -288,7 +303,6 @@ export default function EmployeesPage() {
     }
   ];
 
-  // Define actions for each row
   const renderActions = (row, idx) => (
     <>
       {!userExistsForEmployee(row) && (
@@ -321,7 +335,6 @@ export default function EmployeesPage() {
     </>
   );
 
-  // Render card for grid view
   const renderEmployeeCard = (employee, idx) => {
     const isSelected = selectedRows.has(idx);
     const defaultShiftName = getEmployeeDefaultShiftName(employee);
@@ -336,13 +349,11 @@ export default function EmployeesPage() {
           isSelected
             ? "border-primary bg-primary/5 ring-2 ring-primary/20 shadow-md scale-[1.02]"
             : "border-border bg-card hover:border-primary/30",
-          // Add subtle gradient overlay on hover
           "after:absolute after:inset-0 after:rounded-xl after:opacity-0 after:transition-opacity after:duration-300",
           "after:bg-gradient-to-b after:from-primary/5 after:to-transparent",
           "hover:after:opacity-100"
         )}
       >
-        {/* Selection Checkbox with improved styling */}
         <div className={cn(
           "absolute top-2 left-2 z-10 transition-all duration-200",
           isSelected ? "opacity-100 scale-100" : "opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100"
@@ -364,9 +375,7 @@ export default function EmployeesPage() {
           />
         </div>
 
-        {/* Card Content */}
         <div className="p-5">
-          {/* Header: ID & Status */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <span className="font-mono text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-md">
@@ -391,7 +400,6 @@ export default function EmployeesPage() {
             </span>
           </div>
 
-          {/* Avatar/Initial Circle & Name */}
           <div className="flex items-start gap-3 mb-4">
             <div className={cn(
               "w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold shrink-0",
@@ -417,9 +425,7 @@ export default function EmployeesPage() {
             </div>
           </div>
 
-          {/* Details Grid */}
           <div className="space-y-2.5 mb-4">
-            {/* Department & Employment Type */}
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-muted font-medium">
                 <Building2 className="w-3 h-3 text-muted-foreground" />
@@ -433,7 +439,6 @@ export default function EmployeesPage() {
               )}
             </div>
 
-            {/* Designation */}
             {employee.designation && (
               <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                 <Award className="w-3.5 h-3.5 flex-shrink-0" />
@@ -441,7 +446,6 @@ export default function EmployeesPage() {
               </p>
             )}
 
-            {/* Shift Info */}
             {defaultShiftName && (
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-lg px-2.5 py-1.5">
                 <Clock className="w-3.5 h-3.5 flex-shrink-0" />
@@ -449,7 +453,6 @@ export default function EmployeesPage() {
               </div>
             )}
 
-            {/* Phone */}
             {employee.phone && (
               <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                 <Phone className="w-3.5 h-3.5 flex-shrink-0" />
@@ -458,7 +461,6 @@ export default function EmployeesPage() {
             )}
           </div>
 
-          {/* Actions Footer */}
           <div className={cn(
             "flex items-center justify-between pt-3 border-t border-border",
             "transition-all duration-200"
@@ -486,7 +488,6 @@ export default function EmployeesPage() {
     );
   }
 
-
   return (
     <div>
       <PageHeader
@@ -494,7 +495,6 @@ export default function EmployeesPage() {
         subtitle="Manage employee records, employment details, and default shifts"
         actions={
           <div className="flex items-center gap-2">
-            {/* Bulk Delete Button */}
             {selectedRows.size > 0 && (
               <button
                 onClick={handleBulkDelete}
@@ -504,7 +504,6 @@ export default function EmployeesPage() {
               </button>
             )}
 
-            {/* Export Button */}
             {employeePermissions.export && (
               <button
                 onClick={exportCsv}
@@ -514,7 +513,6 @@ export default function EmployeesPage() {
               </button>
             )}
 
-            {/* View Toggle Buttons */}
             <div className="flex items-center gap-1 p-0.5 rounded-md border border-border">
               <button
                 onClick={() => setViewMode("table")}
@@ -538,9 +536,7 @@ export default function EmployeesPage() {
               </button>
             </div>
 
-            {/* Add Employee Button */}
             {employeePermissions.create && (
-
               <button
                 onClick={openAddModal}
                 className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-colors"
@@ -552,10 +548,8 @@ export default function EmployeesPage() {
         }
       />
 
-      {/* Stats Cards */}
       <StatsCards stats={employeeStats} />
 
-      {/* Search Bar */}
       <div className="mb-4">
         <div className="relative max-w-md">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -568,7 +562,6 @@ export default function EmployeesPage() {
         </div>
       </div>
 
-      {/* View Mode Toggle */}
       {viewMode === "table" ? (
         <TableView
           columns={employeeColumns}
@@ -588,19 +581,15 @@ export default function EmployeesPage() {
           renderCard={renderEmployeeCard}
           loading={isLoading}
           emptyMessage="No employees found"
-          emptyAction={
-            {
-              label: "Add Employee",
-              onClick: openAddModal,
-            }
-            || undefined
-          }
+          emptyAction={{
+            label: "Add Employee",
+            onClick: openAddModal,
+          }}
           columns={4}
           gap={4}
         />
       )}
 
-      {/* Selection Info Bar */}
       {selectedRows.size > 0 && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
           <div className="bg-card border border-border rounded-lg shadow-lg px-4 py-2 flex items-center gap-3">
@@ -623,14 +612,14 @@ export default function EmployeesPage() {
         </div>
       )}
 
-      {/* Employee Form Modal */}
       {(modalOpen && (editingEmployee ? employeePermissions.update : employeePermissions.create)) && (
         <EmployeeForm
-          initialData={editingEmployee}
+          initialData={editingEmployee ? editingEmployee : storedPrefillData || undefined}
           onSubmit={handleSaveEmployee}
           onCancel={() => {
             setModalOpen(false);
             setEditingEmployee(null);
+            setStoredPrefillData(null);
           }}
         />
       )}

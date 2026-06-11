@@ -78,6 +78,8 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "bank_account_number": employee.bank_account_number,
             "bank_iban": employee.bank_iban,
             "salary": str(employee.salary),
+            "isfrom_user_id": str(employee.isfrom_user._id) if getattr(employee, 'isfrom_user', None) else None,
+            "isfrom_user_email": employee.isfrom_user.email if getattr(employee, 'isfrom_user', None) else None,
             "createdAt": employee.created_at.isoformat() if employee.created_at else None,
             "updatedAt": employee.updated_at.isoformat() if employee.updated_at else None,
         }
@@ -238,6 +240,28 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         if asset_category_uuid:
             self._assign_assets_from_category(employee, asset_category_uuid, request.user)
 
+        # Link to user: priority — explicit user id passed from frontend, else match by email
+        try:
+            from apps.organization.models import User
+            explicit_user_id = request.data.get('isfrom_user_id')
+            user = None
+            if explicit_user_id:
+                try:
+                    user = User.objects.get(_id=explicit_user_id, company_id=company_id, is_deleted=False)
+                except User.DoesNotExist:
+                    user = None
+
+            if not user and employee.email:
+                user = User.objects.filter(email=employee.email, company_id=company_id, is_deleted=False).first()
+
+            if user:
+                employee.isfrom_user = user
+                employee.save()
+                user.isfrom_employee = employee
+                user.save()
+        except Exception:
+            pass
+
         return Response({
             "message": "Employee created successfully",
             "employee": self._serialize_employee(employee),
@@ -350,6 +374,21 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         if 'confirmation_date' in request.data:
             val = request.data['confirmation_date']
             employee.confirmation_date = datetime.strptime(val, '%Y-%m-%d').date() if val else None
+
+        # If update includes explicit link to user, handle it
+        try:
+            explicit_user_id = request.data.get('isfrom_user_id')
+            if explicit_user_id:
+                from apps.organization.models import User
+                try:
+                    user = User.objects.get(_id=explicit_user_id, company_id=company_id, is_deleted=False)
+                    employee.isfrom_user = user
+                    user.isfrom_employee = employee
+                    user.save()
+                except User.DoesNotExist:
+                    pass
+        except Exception:
+            pass
 
         employee.updated_by = request.user
         employee.save()

@@ -7,7 +7,8 @@ export interface Designation {
   id: string;           // UUID as string
   _id: string;
   name: string;
-  department?: string;
+  department?: string;        // stored department id or 'ALL'
+  department_name?: string;   // human-readable department name
   pay_grade?: string | null;   // snake_case to match API
   description?: string;
   isActive: boolean;
@@ -113,6 +114,7 @@ export function useDesignation(id: string | null) {
     enabled: !!id,
   });
 }
+
 
 // Fetch employees under a designation (this URL is correct per backend)
 export function useDesignationEmployees(designationId: string | null) {

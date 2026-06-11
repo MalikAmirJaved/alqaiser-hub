@@ -39,7 +39,9 @@ export default function DesignationFormModal({
   useEffect(() => {
     if (initialData) {
       setValue("name", initialData.name);
-      setValue("department", initialData.department || "");
+      // API now returns department_id and department_name
+      // Use department_id for the select value; 'ALL' remains as option for all departments
+      setValue("department", (initialData as any).department_id || "");
       setValue("description", initialData.description || "");
       setValue("isActive", initialData.isActive);
     } else {

@@ -39,6 +39,8 @@ export interface Employee {
   default_shift_name?: string;
   asset_category_id?: string;
   bank_name?: string;
+  // Link to a User if this employee was used to create a user account
+  isfrom_user_id?: string;
   bank_account_number?: string;
   bank_iban?: string;
   salary: string;
@@ -96,6 +98,8 @@ export function useCreateEmployee() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employees"] });
       queryClient.invalidateQueries({ queryKey: ["employeeStats"] });
+      // Refresh users so UI reflects new isfrom_employee links when employees are created from users
+      queryClient.invalidateQueries({ queryKey: ["users"] });
     },
   });
 }

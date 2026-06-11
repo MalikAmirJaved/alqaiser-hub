@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from "@/hooks/useUsers";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Pencil, Trash2, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, UserPlus } from "lucide-react";
 import UserForm from "@/components/Forms/UserForm";
 import { toast } from "sonner";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
@@ -16,6 +16,7 @@ export default function UsersPage() {
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
+  const [storedPrefill, setStoredPrefill] = useState<any>(null);
 
   const { data: users = [], isLoading } = useUsers();
   const createUser = useCreateUser();
@@ -26,33 +27,32 @@ export default function UsersPage() {
   const prefill = searchParams.get("prefill");
   const prefillData = useMemo(() => {
     if (!prefill) return null;
-    const email = searchParams.get("email") || "";  
-    console.log("reciveing the data::: ", searchParams.toString())
+    const email = searchParams.get("email") || "";
     return {
       username: email.split("@")[0] || "",
       email: email,
       first_name: searchParams.get("first_name") || "",
       last_name: searchParams.get("last_name") || "",
-      department: searchParams.get("department_id") || "",   // department UUID
-      designation: searchParams.get("designation_id") || "",
+      department: searchParams.get("department_id") || searchParams.get("department") || "",
+      designation: searchParams.get("designation_id") || searchParams.get("designation") || "",
       phone_number: searchParams.get("phone_number") || "",
-      password: "",      // still required, user must set password
+      isfrom_employee_id: searchParams.get("isfrom_employee_id") || null,
+      password: "",
       confirm_password: "",
-      _disableUsername: true
     };
   }, [searchParams, prefill]);
 
-  // Auto open modal when prefill is present and user has create permission
+  // Auto‑open modal when prefill is present and user has create permission
   const hasAutoOpened = useRef(false);
   useEffect(() => {
     if (prefill && !hasAutoOpened.current && permissions.create) {
       hasAutoOpened.current = true;
-      setEditingUser(null);      // ensure we are in create mode
+      setStoredPrefill(prefillData);
+      setEditingUser(null);
       setModalOpen(true);
-      // Remove query params from URL to avoid reopening on refresh
       router.replace("/settings/users", undefined);
     }
-  }, [prefill, permissions.create, router]);
+  }, [prefill, permissions.create, router, prefillData]);
 
   const handleSave = async (userData: any) => {
     try {
@@ -60,14 +60,21 @@ export default function UsersPage() {
         await updateUser.mutateAsync({ id: editingUser.id, data: userData });
         toast.success("User updated");
       } else {
-        const newUser = await createUser.mutateAsync(userData);
+        const payload = { ...userData };
+        if (storedPrefill?.isfrom_employee_id) {
+          payload.isfrom_employee_id = storedPrefill.isfrom_employee_id;
+        }
+        const newUser = await createUser.mutateAsync(payload);
         toast.success(
-          `User created. ${prefill ? "Login access granted." : "Set permissions if needed."}`
+          `User created. ${storedPrefill ? "Login access granted." : "Set permissions if needed."}`
         );
-        router.push(`/settings/permissions?userId=${newUser.id}`);
+        if (storedPrefill) {
+          router.push(`/settings/permissions?userId=${newUser.id}`);
+        }
       }
       setModalOpen(false);
       setEditingUser(null);
+      setStoredPrefill(null);
     } catch (error: any) {
       toast.error(error.message || "Operation failed");
     }
@@ -109,6 +116,7 @@ export default function UsersPage() {
             <button
               onClick={() => {
                 setEditingUser(null);
+                setStoredPrefill(null);
                 setModalOpen(true);
               }}
               className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm"
@@ -160,7 +168,7 @@ export default function UsersPage() {
                     {user.first_name} {user.last_name}
                   </td>
                   <td className="px-4 py-2.5">{user.email}</td>
-                  <td className="px-4 py-2.5">{user.department || "—"}</td>
+                  <td className="px-4 py-2.5">{user.department_name || user.department || "—"}</td>
                   <td className="px-4 py-2.5">
                     <span
                       className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
@@ -177,6 +185,7 @@ export default function UsersPage() {
                       <button
                         onClick={() => {
                           setEditingUser(user);
+                          setStoredPrefill(null);
                           setModalOpen(true);
                         }}
                         className="p-1.5 rounded-md hover:bg-muted"
@@ -184,6 +193,30 @@ export default function UsersPage() {
                         <Pencil className="w-4 h-4" />
                       </button>
                     )}
+
+                    {/* Go to Employee: hidden if user already linked to an employee */}
+                    {permissions.create && !user.isfrom_employee_id && (
+                      <button
+                        onClick={() => {
+                          const params = new URLSearchParams({
+                            prefill: "true",
+                            first_name: user.first_name || "",
+                            last_name: user.last_name || "",
+                            email: user.email || "",
+                            phone: user.phone_number || "",
+                            department_id: user.department_id || user.department || "",
+                            designation_id: user.designation_id || user.designation || "",
+                            isfrom_user_id: user._id || "",
+                          });
+                          router.push(`/hr/employees?${params.toString()}`);
+                        }}
+                        className="p-1.5 rounded-md hover:bg-primary/15 text-primary transition-colors"
+                        title="Create Employee from User"
+                      >
+                        <UserPlus className="w-4 h-4" />
+                      </button>
+                    )}
+
                     {permissions.delete && (
                       <button
                         onClick={() => handleDelete(user)}
@@ -203,11 +236,12 @@ export default function UsersPage() {
       {/* User Form Modal */}
       {(modalOpen && (editingUser ? permissions.update : permissions.create)) && (
         <UserForm
-          initialData={editingUser ? editingUser : prefillData || undefined}
+          initialData={editingUser ? editingUser : storedPrefill || undefined}
           onSubmit={handleSave}
           onCancel={() => {
             setModalOpen(false);
             setEditingUser(null);
+            setStoredPrefill(null);
           }}
           isLoading={createUser.isPending || updateUser.isPending}
         />

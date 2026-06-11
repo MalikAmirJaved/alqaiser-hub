@@ -87,6 +87,10 @@ class User(AbstractUser):
         Branch, on_delete=models.CASCADE, null=True, blank=True, related_name="users"
     )
     employee_id = models.CharField(max_length=50, blank=True, null=True)
+    # Link back to corresponding Employee record if this user was created from an employee
+    isfrom_employee = models.ForeignKey(
+        'hr.Employee', on_delete=models.SET_NULL, null=True, blank=True, related_name='user_account'
+    )
     status = models.CharField(max_length=20, default="active")
 
     created_by = models.ForeignKey(
