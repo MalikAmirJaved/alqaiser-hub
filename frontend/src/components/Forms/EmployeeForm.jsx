@@ -89,7 +89,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
   };
 
   const getManagerEmployees = () => {
-    return employees.filter(emp => 
+    return employees.filter(emp =>
       emp.role !== 'STAFF' || emp.designation?.toLowerCase().includes('manager') ||
       emp.designation?.toLowerCase().includes('lead') ||
       emp.designation?.toLowerCase().includes('director')
@@ -120,7 +120,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
 
   // Get active shift templates
   const activeShiftTemplates = shiftTemplates.filter(t => t.is_active);
-  
+
   // Get active asset categories
   const activeAssetCategories = assetCategories.filter(c => c.isActive);
 
@@ -153,13 +153,12 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
 
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs">Employee ID</span>
-                <input
-                  type="text"
-                  value={formData.employee_id}
-                  onChange={(e) => handleChange("employee_id", e.target.value)}
-                  className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring font-mono text-xs"
-                  readOnly={!initialData}
-                />
+               <input
+  type="text"
+  disabled
+  value={formData.employee_id}
+  className="bg-muted/40 border border-border rounded-md h-9 px-2 font-mono text-xs cursor-not-allowed"
+/>
               </label>
 
               <div className="grid grid-cols-2 gap-3">
@@ -354,9 +353,9 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 <SearchableSelect
                   value={formData.designation}
                   onChange={(val) => handleChange("designation", val)}
-                  options={filteredDesignations.map(d => ({ 
-                    value: d.name, 
-                    label: `${d.name} (${d.department || "N/A"})` 
+                  options={filteredDesignations.map(d => ({
+                    value: d.name,
+                    label: `${d.name} (${d.department || "N/A"})`
                   }))}
                   disabled={!formData.department}
                   placeholder="Select Designation"
@@ -472,7 +471,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
               {/* Asset Kit Selection */}
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs flex items-center gap-1">
-                  <Briefcase className="w-3 h-3"/> Default Asset Kit
+                  <Briefcase className="w-3 h-3" /> Default Asset Kit
                 </span>
                 <SearchableSelect
                   value={formData.asset_category_id}

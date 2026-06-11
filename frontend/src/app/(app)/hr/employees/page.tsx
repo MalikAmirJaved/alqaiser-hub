@@ -13,9 +13,11 @@ import PageHeader from "@/components/PageHeader";
 import EmployeeForm from "@/components/Forms/EmployeeForm";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { TableView, GridView } from "@/components/reuseable/TableGridView";
-import { Plus, Pencil, Trash2, Search, Download, Shield, Clock, LayoutGrid, LayoutList } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Download, Shield, Clock, LayoutGrid, LayoutList, Building2, Briefcase, Award, Phone } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+
 
 export default function EmployeesPage() {
   const { user, ready } = useAuth();
@@ -138,6 +140,7 @@ export default function EmployeesPage() {
     setModalOpen(true);
   };
 
+
   const exportCsv = () => {
     const headers = ["Employee ID", "First Name", "Last Name", "Department", "Designation", "Employment Type", "Status", "Phone", "Email", "Default Shift"];
     const rows = employees.map(emp => [
@@ -235,10 +238,10 @@ export default function EmployeesPage() {
       sortable: true,
       render: (value) => (
         <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${value === "ACTIVE"
-            ? "bg-success/15 text-success border-success/30"
-            : value === "ON_LEAVE"
-              ? "bg-warning/15 text-warning border-warning/30"
-              : "bg-destructive/15 text-destructive border-destructive/30"
+          ? "bg-success/15 text-success border-success/30"
+          : value === "ON_LEAVE"
+            ? "bg-warning/15 text-warning border-warning/30"
+            : "bg-destructive/15 text-destructive border-destructive/30"
           }`}>
           {value}
         </span>
@@ -264,11 +267,11 @@ export default function EmployeesPage() {
       }
     },
     {
-  key: "phone",
-  label: "Phone",
-  sortable: true,
-  sortAccessor: (row) => row.phone?.replace(/\D/g, "") ?? ""
-}
+      key: "phone",
+      label: "Phone",
+      sortable: true,
+      sortAccessor: (row) => row.phone?.replace(/\D/g, "") ?? ""
+    }
   ];
 
   // Define actions for each row
@@ -299,102 +302,154 @@ export default function EmployeesPage() {
   const renderEmployeeCard = (employee, idx) => {
     const isSelected = selectedRows.has(idx);
     const defaultShiftName = getEmployeeDefaultShiftName(employee);
+    const isActive = employee.employment_status === "ACTIVE";
+    const isOnLeave = employee.employment_status === "ON_LEAVE";
 
     return (
       <div
-        className={`relative rounded-xl border transition-all hover:shadow-md ${isSelected
-            ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-            : "border-border bg-card hover:border-primary/50"
-          }`}
-      >
-        {/* Selection Checkbox */}
-        {permissions.canDelete && (
-          <div className="absolute top-3 left-3 z-10">
-            <input
-              type="checkbox"
-              checked={isSelected}
-              onChange={(e) => {
-                e.stopPropagation();
-                const newSelected = new Set(selectedRows);
-                if (e.target.checked) {
-                  newSelected.add(idx);
-                } else {
-                  newSelected.delete(idx);
-                }
-                setSelectedRows(newSelected);
-              }}
-              className="w-4 h-4 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
-            />
-          </div>
+        className={cn(
+          "group relative rounded-xl border transition-all duration-300 ease-out",
+          "hover:shadow-lg hover:-translate-y-0.5",
+          isSelected
+            ? "border-primary bg-primary/5 ring-2 ring-primary/20 shadow-md scale-[1.02]"
+            : "border-border bg-card hover:border-primary/30",
+          // Add subtle gradient overlay on hover
+          "after:absolute after:inset-0 after:rounded-xl after:opacity-0 after:transition-opacity after:duration-300",
+          "after:bg-gradient-to-b after:from-primary/5 after:to-transparent",
+          "hover:after:opacity-100"
         )}
+      >
+        {/* Selection Checkbox with improved styling */}
+        <div className={cn(
+          "absolute top-2 left-2 z-10 transition-all duration-200",
+          isSelected ? "opacity-100 scale-100" : "opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100"
+        )}>
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => {
+              e.stopPropagation();
+              const newSelected = new Set(selectedRows);
+              if (e.target.checked) {
+                newSelected.add(idx);
+              } else {
+                newSelected.delete(idx);
+              }
+              setSelectedRows(newSelected);
+            }}
+            className="w-4 h-4 rounded border-2 border-border checked:border-primary checked:bg-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
+          />
+        </div>
 
         {/* Card Content */}
-        <div className="p-4">
-          {/* Employee ID & Status Badge */}
-          <div className="flex items-center justify-between mb-3">
-            <span className="font-mono text-xs text-muted-foreground">{employee.employee_id}</span>
-            <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${employee.employment_status === "ACTIVE"
-                ? "bg-success/15 text-success border-success/30"
-                : employee.employment_status === "ON_LEAVE"
-                  ? "bg-warning/15 text-warning border-warning/30"
-                  : "bg-destructive/15 text-destructive border-destructive/30"
-              }`}>
-              {employee.employment_status}
+        <div className="p-5">
+          {/* Header: ID & Status */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-md">
+                {employee.employee_id}
+              </span>
+              {isActive && (
+                <div className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                </div>
+              )}
+            </div>
+            <span className={cn(
+              "inline-flex px-2.5 py-1 text-[11px] rounded-full border font-medium",
+              "transition-transform duration-200 group-hover:scale-105",
+              isActive
+                ? "bg-success/10 text-success border-success/30"
+                : isOnLeave
+                  ? "bg-warning/10 text-warning border-warning/30"
+                  : "bg-destructive/10 text-destructive border-destructive/30"
+            )}>
+              {employee.employment_status.replace("_", " ")}
             </span>
           </div>
 
-          {/* Name */}
-          <h3 className="font-semibold text-lg mb-1">
-            {employee.first_name} {employee.last_name || ""}
-          </h3>
-
-          {/* Designation & Department */}
-          <div className="space-y-2 mb-3">
-            {employee.designation && (
-              <p className="text-sm text-muted-foreground">{employee.designation}</p>
-            )}
-            <div className="flex items-center gap-2 text-xs">
-              <span className="px-2 py-0.5 rounded bg-muted">{employee.department}</span>
-              <span className="text-muted-foreground">{employee.employment_type?.replace("_", " ")}</span>
+          {/* Avatar/Initial Circle & Name */}
+          <div className="flex items-start gap-3 mb-4">
+            <div className={cn(
+              "w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold shrink-0",
+              "transition-all duration-300",
+              isActive
+                ? "bg-primary/10 text-primary"
+                : isOnLeave
+                  ? "bg-warning/10 text-warning"
+                  : "bg-destructive/10 text-destructive",
+              "group-hover:shadow-md group-hover:scale-105"
+            )}>
+              {`${employee.first_name?.[0] || ''}${employee.last_name?.[0] || ''}`.toUpperCase() || '?'}
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-semibold text-base truncate group-hover:text-primary transition-colors duration-200">
+                {employee.first_name} {employee.last_name || ""}
+              </h3>
+              {employee.email && (
+                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                  {employee.email}
+                </p>
+              )}
             </div>
           </div>
 
-          {/* Shift Info */}
-          {defaultShiftName && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
-              <Clock className="w-3 h-3" />
-              <span>{defaultShiftName}</span>
-            </div>
-          )}
-
-          {/* Contact Info */}
-          {employee.phone && (
-            <p className="text-xs text-muted-foreground mb-3">{employee.phone}</p>
-          )}
-
-          {/* Actions */}
-          {(permissions.canUpdate || permissions.canDelete) && (
-            <div className="flex items-center justify-end gap-1 pt-2 border-t border-border">
-              {permissions.canUpdate && (
-                <button
-                  onClick={() => openEditModal(employee)}
-                  className="p-1.5 rounded-md hover:bg-muted transition-colors"
-                  aria-label="Edit"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-              )}
-              {permissions.canDelete && (
-                <button
-                  onClick={() => handleDelete(employee)}
-                  className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive transition-colors"
-                  aria-label="Delete"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+          {/* Details Grid */}
+          <div className="space-y-2.5 mb-4">
+            {/* Department & Employment Type */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-muted font-medium">
+                <Building2 className="w-3 h-3 text-muted-foreground" />
+                {employee.department}
+              </span>
+              {employee.employment_type && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-muted/50 text-muted-foreground">
+                  <Briefcase className="w-3 h-3" />
+                  {employee.employment_type.replace("_", " ")}
+                </span>
               )}
             </div>
-          )}
+
+            {/* Designation */}
+            {employee.designation && (
+              <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                <Award className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="truncate">{employee.designation}</span>
+              </p>
+            )}
+
+            {/* Shift Info */}
+            {defaultShiftName && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-lg px-2.5 py-1.5">
+                <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="truncate">{defaultShiftName}</span>
+              </div>
+            )}
+
+            {/* Phone */}
+            {employee.phone && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 flex-shrink-0" />
+                {employee.phone}
+              </p>
+            )}
+          </div>
+
+          {/* Actions Footer */}
+          <div className={cn(
+            "flex items-center justify-between pt-3 border-t border-border",
+            "transition-all duration-200",
+            permissions.canUpdate || permissions.canDelete
+              ? "opacity-100"
+              : "opacity-0"
+          )}>
+            <span className="text-xs text-muted-foreground">
+              Updated {new Date(employee.updated_at || Date.now()).toLocaleDateString()}
+            </span>
+            <div className="flex items-center gap-0.5 relative z-20">
+  {renderActions(employee, idx)}
+</div>
+          </div>
         </div>
       </div>
     );
@@ -457,8 +512,8 @@ export default function EmployeesPage() {
               <button
                 onClick={() => setViewMode("table")}
                 className={`p-1.5 rounded transition-colors ${viewMode === "table"
-                    ? "bg-primary text-primary-foreground"
-                    : "hover:bg-muted text-muted-foreground"
+                  ? "bg-primary text-primary-foreground"
+                  : "hover:bg-muted text-muted-foreground"
                   }`}
                 aria-label="Table view"
               >
@@ -467,8 +522,8 @@ export default function EmployeesPage() {
               <button
                 onClick={() => setViewMode("grid")}
                 className={`p-1.5 rounded transition-colors ${viewMode === "grid"
-                    ? "bg-primary text-primary-foreground"
-                    : "hover:bg-muted text-muted-foreground"
+                  ? "bg-primary text-primary-foreground"
+                  : "hover:bg-muted text-muted-foreground"
                   }`}
                 aria-label="Grid view"
               >
@@ -526,6 +581,14 @@ export default function EmployeesPage() {
           renderCard={renderEmployeeCard}
           loading={isLoading}
           emptyMessage="No employees found"
+          emptyAction={
+            permissions.canCreate
+              ? {
+                label: "Add Employee",
+                onClick: openAddModal,
+              }
+              : undefined
+          }
           columns={4}
           gap={4}
         />

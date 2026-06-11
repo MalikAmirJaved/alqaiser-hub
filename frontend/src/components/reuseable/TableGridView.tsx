@@ -6,6 +6,7 @@ import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "./Checkbox";
 import InboxIcon from "./InboxIcon";
+import { Plus } from "lucide-react";
 
 export interface Column<T = Record<string, unknown>> {
   key: string;
@@ -50,24 +51,24 @@ export function TableView<T extends Record<string, unknown>>({
   // Memoize sorted data to avoid recalculation on every render
   const sortedData = useMemo(() => {
     if (!sortKey) return data;
-    
+
     return [...data].sort((a, b) => {
       const column = columns.find(c => c.key === sortKey);
 
-const av = column?.sortAccessor ? column.sortAccessor(a) : a[sortKey];
-const bv = column?.sortAccessor ? column.sortAccessor(b) : b[sortKey];
-      
+      const av = column?.sortAccessor ? column.sortAccessor(a) : a[sortKey];
+      const bv = column?.sortAccessor ? column.sortAccessor(b) : b[sortKey];
+
       // Handle null/undefined values
       if (av == null && bv == null) return 0;
       if (av == null) return 1;
       if (bv == null) return -1;
-      
+
       // Handle string comparison with case insensitivity
       if (typeof av === 'string' && typeof bv === 'string') {
         const cmp = av.toLowerCase().localeCompare(bv.toLowerCase());
         return sortDir === "asc" ? cmp : -cmp;
       }
-      
+
       // Handle number and other types
       if (av < bv) return sortDir === "asc" ? -1 : 1;
       if (av > bv) return sortDir === "asc" ? 1 : -1;
@@ -83,23 +84,23 @@ const bv = column?.sortAccessor ? column.sortAccessor(b) : b[sortKey];
   };
 
   // Handle header checkbox selection (selects all visible items)
-const handleSelectAll = (checked: boolean) => {
-  if (!onRowSelect) return;
+  const handleSelectAll = (checked: boolean) => {
+    if (!onRowSelect) return;
 
-  const newSelected = new Set(selectedRows);
+    const newSelected = new Set(selectedRows);
 
-  sortedData.forEach((_, sortedIdx) => {
-    const originalIdx = getOriginalIndex(sortedIdx);
+    sortedData.forEach((_, sortedIdx) => {
+      const originalIdx = getOriginalIndex(sortedIdx);
 
-    if (checked) {
-      newSelected.add(originalIdx);
-    } else {
-      newSelected.delete(originalIdx);
-    }
-  });
+      if (checked) {
+        newSelected.add(originalIdx);
+      } else {
+        newSelected.delete(originalIdx);
+      }
+    });
 
-  onRowSelect(newSelected);
-};
+    onRowSelect(newSelected);
+  };
 
   // Check if all visible items are selected
   const isAllSelected = sortedData.length > 0 && sortedData.every((_, sortedIdx) => {
@@ -177,7 +178,7 @@ const handleSelectAll = (checked: boolean) => {
               sortedData.map((row, sortedIdx) => {
                 const originalIdx = getOriginalIndex(sortedIdx);
                 const isSelected = selectedRows?.has(originalIdx) ?? false;
-                
+
                 return (
                   <tr
                     key={(row as any).id ?? originalIdx}
@@ -193,16 +194,16 @@ const handleSelectAll = (checked: boolean) => {
                         <Checkbox
                           checked={isSelected}
                           onChange={(v) => {
-  const newSelected = new Set(selectedRows);
+                            const newSelected = new Set(selectedRows);
 
-  if (v) {
-    newSelected.add(originalIdx);
-  } else {
-    newSelected.delete(originalIdx);
-  }
+                            if (v) {
+                              newSelected.add(originalIdx);
+                            } else {
+                              newSelected.delete(originalIdx);
+                            }
 
-  onRowSelect(newSelected);
-}}
+                            onRowSelect(newSelected);
+                          }}
                         />
                       </td>
                     )}
@@ -230,7 +231,7 @@ const handleSelectAll = (checked: boolean) => {
 }
 
 // ─────────────────────────────────────────────────────────────
-// GRID VIEW (Card grid)
+// GRID VIEW (Card grid) - Enhanced UI/UX
 // ─────────────────────────────────────────────────────────────
 
 export function GridView<T extends Record<string, unknown>>({
@@ -238,6 +239,7 @@ export function GridView<T extends Record<string, unknown>>({
   renderCard,
   loading,
   emptyMessage = "No items found",
+  emptyAction,
   columns = 3,
   gap = 4,
   className,
@@ -246,6 +248,10 @@ export function GridView<T extends Record<string, unknown>>({
   renderCard: (item: T, idx: number) => React.ReactNode;
   loading?: boolean;
   emptyMessage?: string;
+  emptyAction?: {
+    label: string;
+    onClick: () => void;
+  };
   columns?: 2 | 3 | 4 | 5 | 6;
   gap?: number;
   className?: string;
@@ -262,10 +268,39 @@ export function GridView<T extends Record<string, unknown>>({
     return (
       <div className={cn("grid", colClass[columns], `gap-${gap}`, className)}>
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--card)] p-4 flex flex-col gap-3">
-            <div className="h-32 rounded-[var(--radius-lg)] bg-[var(--muted)] animate-pulse" />
-            <div className="h-4 w-3/4 rounded bg-[var(--muted)] animate-pulse" />
-            <div className="h-3 w-1/2 rounded bg-[var(--muted)] animate-pulse" />
+          <div
+            key={i}
+            className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--card)] overflow-hidden"
+            style={{ animationDelay: `${i * 100}ms` }}
+          >
+            {/* Image/content placeholder */}
+            <div className="h-40 bg-[var(--muted)] animate-pulse relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-shimmer" />
+            </div>
+            
+            {/* Content placeholders */}
+            <div className="p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="h-3 w-20 rounded-full bg-[var(--muted)] animate-pulse" />
+                <div className="h-5 w-16 rounded-full bg-[var(--muted)] animate-pulse" />
+              </div>
+              <div className="h-5 w-3/4 rounded bg-[var(--muted)] animate-pulse" />
+              <div className="space-y-2">
+                <div className="h-3 w-full rounded bg-[var(--muted)] animate-pulse" />
+                <div className="h-3 w-2/3 rounded bg-[var(--muted)] animate-pulse" />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <div className="h-6 w-16 rounded-md bg-[var(--muted)] animate-pulse" />
+                <div className="h-6 w-20 rounded-md bg-[var(--muted)] animate-pulse" />
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t border-[var(--border)]">
+                <div className="h-4 w-24 rounded bg-[var(--muted)] animate-pulse" />
+                <div className="flex gap-1">
+                  <div className="h-7 w-7 rounded-md bg-[var(--muted)] animate-pulse" />
+                  <div className="h-7 w-7 rounded-md bg-[var(--muted)] animate-pulse" />
+                </div>
+              </div>
+            </div>
           </div>
         ))}
       </div>
@@ -274,18 +309,45 @@ export function GridView<T extends Record<string, unknown>>({
 
   if (data.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 gap-3 text-[var(--muted-foreground)]">
-        <div className="w-12 h-12 rounded-full bg-[var(--muted)] flex items-center justify-center">
-          <InboxIcon />
+      <div className="flex flex-col items-center justify-center py-20 gap-4 text-[var(--muted-foreground)]">
+        <div className="relative">
+          <div className="w-20 h-20 rounded-2xl bg-[var(--muted)] flex items-center justify-center transform rotate-3 transition-transform hover:rotate-6">
+            <InboxIcon />
+          </div>
+          <div className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-[var(--card)] border-2 border-[var(--border)] flex items-center justify-center shadow-sm">
+            <span className="text-xs font-semibold">0</span>
+          </div>
         </div>
-        <p className="text-sm">{emptyMessage}</p>
+        <div className="text-center space-y-2">
+          <p className="text-base font-medium">{emptyMessage}</p>
+          <p className="text-sm text-[var(--muted-foreground)]/70">
+            Try adjusting your search or filters to find what you're looking for.
+          </p>
+        </div>
+        {emptyAction && (
+          <button
+            onClick={emptyAction.onClick}
+            className="inline-flex items-center gap-2 px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-opacity mt-2"
+          >
+            <Plus className="w-4 h-4" />
+            {emptyAction.label}
+          </button>
+        )}
       </div>
     );
   }
 
   return (
     <div className={cn("grid", colClass[columns], `gap-${gap}`, className)}>
-      {data.map((item, i) => renderCard(item, i))}
+      {data.map((item, i) => (
+        <div
+          key={i}
+          className="group animate-fade-in-up"
+          style={{ animationDelay: `${i * 50}ms` }}
+        >
+          {renderCard(item, i)}
+        </div>
+      ))}
     </div>
   );
 }
