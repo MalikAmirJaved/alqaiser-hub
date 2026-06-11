@@ -12,7 +12,7 @@ import PageHeader from "@/components/PageHeader";
 import EmployeeForm from "@/components/Forms/EmployeeForm";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { TableView, GridView } from "@/components/reuseable/TableGridView";
-import { Plus, Pencil, Trash2, Search, Download, Shield, Clock, LayoutGrid, LayoutList, Building2, Briefcase, Award, Phone } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Download, Shield, Clock, LayoutGrid, LayoutList, Building2, Briefcase, Award, Phone, Key } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -35,14 +35,14 @@ export default function EmployeesPage() {
     query ? { search: query } : undefined
   );
   const permissions = useSelector(
-  (state: RootState) => state.permissions.permissions
-);
+    (state: RootState) => state.permissions.permissions
+  );
 
-const employeePermissions = getPermissions(
-  permissions,
-  "HR",
-  "employee"
-);
+  const employeePermissions = getPermissions(
+    permissions,
+    "HR",
+    "employee"
+  );
 
   const { data: stats } = useEmployeeStats();
   const { data: shiftTemplates = [] } = useShiftTemplates();
@@ -50,6 +50,18 @@ const employeePermissions = getPermissions(
   const updateEmployee = useUpdateEmployee();
   const deleteEmployee = useDeleteEmployee();
 
+  const getPrefillUserUrl = (employee: any) => {
+    const params = new URLSearchParams({
+      prefill: "true",
+      first_name: employee.first_name || "",
+      last_name: employee.last_name || "",
+      email: employee.email || "",
+      phone_number: employee.phone || "",
+      department_id: employee.department_id || "",  // expects UUID
+      designation: employee.designation || "",
+    });
+    return `/settings/users?${params.toString()}`;
+  };
 
 
   const getEmployeeDefaultShiftName = (employee) => {
@@ -271,24 +283,31 @@ const employeePermissions = getPermissions(
   // Define actions for each row
   const renderActions = (row, idx) => (
     <>
-    {employeePermissions.update && (
       <button
-        onClick={() => openEditModal(row)}
-        className="p-1.5 rounded-md hover:bg-muted transition-colors"
-        aria-label="Edit"
+        onClick={() => router.push(getPrefillUserUrl(row))}
+        className="p-1.5 rounded-md hover:bg-primary/15 text-primary transition-colors"
+        aria-label="Give Login Access"
       >
-        <Pencil className="w-4 h-4" />
+        <Key className="w-4 h-4" />
       </button>
-    )} 
-    {employeePermissions.delete && (
-      <button
-        onClick={() => handleDelete(row)}
-        className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive transition-colors"
-        aria-label="Delete"
-      >
-        <Trash2 className="w-4 h-4" />
-      </button>
-    )}
+      {employeePermissions.update && (
+        <button
+          onClick={() => openEditModal(row)}
+          className="p-1.5 rounded-md hover:bg-muted transition-colors"
+          aria-label="Edit"
+        >
+          <Pencil className="w-4 h-4" />
+        </button>
+      )}
+      {employeePermissions.delete && (
+        <button
+          onClick={() => handleDelete(row)}
+          className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive transition-colors"
+          aria-label="Delete"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      )}
     </>
   );
 
@@ -512,12 +531,12 @@ const employeePermissions = getPermissions(
             {/* Add Employee Button */}
             {employeePermissions.create && (
 
-            <button
-              onClick={openAddModal}
-              className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-colors"
-            >
-              <Plus className="w-4 h-4" /> Add Employee
-            </button>
+              <button
+                onClick={openAddModal}
+                className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-colors"
+              >
+                <Plus className="w-4 h-4" /> Add Employee
+              </button>
             )}
           </div>
         }
@@ -595,7 +614,7 @@ const employeePermissions = getPermissions(
       )}
 
       {/* Employee Form Modal */}
-      {(modalOpen && (editingEmployee? employeePermissions.update: employeePermissions.create)) && (
+      {(modalOpen && (editingEmployee ? employeePermissions.update : employeePermissions.create)) && (
         <EmployeeForm
           initialData={editingEmployee}
           onSubmit={handleSaveEmployee}

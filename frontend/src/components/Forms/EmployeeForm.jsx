@@ -1,7 +1,7 @@
 "use client";
 
 // ============================================
-// FILE: src/components/Forms/EmployeeForm.jsx 
+// FILE: src/components/Forms/EmployeeForm.jsx
 // ============================================
 
 import { useEffect, useState } from "react";
@@ -37,7 +37,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
     emergency_contact_phone: "",
     emergency_contact_relation: "",
     role: "STAFF",
-    department: "",
+    department_id: "",           // Changed from 'department' to 'department_id'
     designation: "",
     employment_type: "FULL_TIME",
     employment_status: "ACTIVE",
@@ -60,10 +60,10 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
   // Fetch departments (assumed to return array directly from API)
   const { data: departments = [] } = useDepartments();
 
-  // Transform departments to options for SearchableSelect
+  // Transform departments to options for SearchableSelect (value = UUID)
   const departmentOptions = departments
     .filter(dept => dept.is_active)
-    .map(dept => ({ value: dept.name, label: dept.name }));
+    .map(dept => ({ value: dept.id, label: dept.name }));
 
   // Fetch designations (array after pagination fix)
   const { data: designations = [] } = useDesignations();
@@ -71,9 +71,11 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
   const { data: assetCategories = [] } = useAssetCategories();
   const { data: employees = [] } = useEmployees();
 
-  // Filter designations based on selected department
+  // Find the selected department object to get its name for filtering designations
+  const selectedDept = departments.find(d => d.id === formData.department_id);
+  // Filter designations based on selected department name
   const filteredDesignations = designations.filter(
-    (d) => d.department === formData.department
+    (d) => d.department === (selectedDept?.name || "")
   );
 
   // Load initial data
@@ -81,6 +83,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
     if (initialData) {
       setFormData({
         ...initialData,
+        department_id: initialData.department_id || "",   // Use department_id from API
         old_default_shift_id: initialData.default_shift_id || "",
         asset_category_id: initialData.asset_category_id || "",
       });
@@ -100,7 +103,8 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
 
   const getManagerEmployees = () => {
     return employees.filter(emp =>
-      emp.role !== 'STAFF' || emp.designation?.toLowerCase().includes('manager') ||
+      emp.role !== 'STAFF' ||
+      emp.designation?.toLowerCase().includes('manager') ||
       emp.designation?.toLowerCase().includes('lead') ||
       emp.designation?.toLowerCase().includes('director')
     );
@@ -110,21 +114,21 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
     setFormData(prev => ({
       ...prev,
       [field]: value,
-      ...(field === "department" && { designation: "" })
+      ...(field === "department_id" && { designation: "" })
     }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    const requiredFields = ["first_name", "phone", "department", "joining_date"];
+    const requiredFields = ["first_name", "phone", "department_id", "joining_date"];
     for (const field of requiredFields) {
       if (!formData[field]) {
         alert(`Please fill ${field.replace(/_/g, " ")} field`);
         return;
       }
     }
-
+    console.log("formdata: ", formData);
     onSubmit(formData);
   };
 
@@ -209,7 +213,8 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                   <input
                     type="text"
                     value={formData.cnic}
-                    onChange={(e) => handleChange("cnic", e.target.value)}
+                    onChange={(e) => handleChange("cnic", e.target.value.replace(/[^0-9-]/g, "").slice(0, 15))}
+                    maxLength={15}
                     placeholder="42101-1234567-1"
                     className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
                   />
@@ -259,7 +264,8 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 <input
                   type="tel"
                   value={formData.phone}
-                  onChange={(e) => handleChange("phone", e.target.value)}
+                  onChange={(e) => handleChange("phone", e.target.value.replace(/[^0-9+]/g, "").slice(0, 20))}
+                  maxLength={20}
                   required
                   className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
                 />
@@ -344,8 +350,8 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Department *</span>
                   <SearchableSelect
-                    value={formData.department}
-                    onChange={(val) => handleChange("department", val)}
+                    value={formData.department_id}
+                    onChange={(val) => handleChange("department_id", val)}
                     options={departmentOptions}
                     required={true}
                     placeholder="Select Department"
@@ -362,7 +368,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                     value: d.name,
                     label: `${d.name} (${d.department || "N/A"})`
                   }))}
-                  disabled={!formData.department}
+                  disabled={!formData.department_id}
                   placeholder="Select Designation"
                 />
               </label>
@@ -512,7 +518,8 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 <input
                   type="tel"
                   value={formData.emergency_contact_phone}
-                  onChange={(e) => handleChange("emergency_contact_phone", e.target.value)}
+                  onChange={(e) => handleChange("emergency_contact_phone", e.target.value.replace(/[^0-9+]/g, "").slice(0, 20))}
+                  maxLength={20}
                   className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring"
                 />
               </label>

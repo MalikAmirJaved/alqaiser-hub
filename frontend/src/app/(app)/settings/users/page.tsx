@@ -1,30 +1,67 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from "@/hooks/useUsers";
 import PageHeader from "@/components/PageHeader";
 import { Plus, Pencil, Trash2, Search } from "lucide-react";
 import UserForm from "@/components/Forms/UserForm";
 import { toast } from "sonner";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { useRouter } from "next/navigation";
+
 export default function UsersPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const permissions = useFeaturePermissions("SETTINGS", "user");
+
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
-const router = useRouter();
+
   const { data: users = [], isLoading } = useUsers();
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
 
+  // --- Prefill data from employee page (when coming from employee "Login Access")
+  const prefill = searchParams.get("prefill");
+  const prefillData = useMemo(() => {
+    if (!prefill) return null;
+    const email = searchParams.get("email") || "";
+    return {
+      username: email.split("@")[0] || "",
+      email: email,
+      first_name: searchParams.get("first_name") || "",
+      last_name: searchParams.get("last_name") || "",
+      department: searchParams.get("department_id") || "",   // department UUID
+      designation: searchParams.get("designation") || "",
+      phone_number: searchParams.get("phone_number") || "",
+      password: "",      // still required, user must set password
+      confirm_password: "",
+    };
+  }, [searchParams, prefill]);
+
+  // Auto open modal when prefill is present and user has create permission
+  const hasAutoOpened = useRef(false);
+  useEffect(() => {
+    if (prefill && !hasAutoOpened.current && permissions.create) {
+      hasAutoOpened.current = true;
+      setEditingUser(null);      // ensure we are in create mode
+      setModalOpen(true);
+      // Remove query params from URL to avoid reopening on refresh
+      router.replace("/settings/users", undefined);
+    }
+  }, [prefill, permissions.create, router]);
+
   const handleSave = async (userData: any) => {
     try {
       if (editingUser) {
         await updateUser.mutateAsync({ id: editingUser.id, data: userData });
+        toast.success("User updated");
       } else {
-        const newUser=await createUser.mutateAsync(userData);
-        toast.success("User created. Set their permissions now.");
+        const newUser = await createUser.mutateAsync(userData);
+        toast.success(
+          `User created. ${prefill ? "Login access granted." : "Set permissions if needed."}`
+        );
         router.push(`/settings/permissions?userId=${newUser.id}`);
       }
       setModalOpen(false);
@@ -43,11 +80,13 @@ const router = useRouter();
       toast.error(error.message || "Delete failed");
     }
   };
-  const filteredUsers = users.filter(u =>
-    u.username?.toLowerCase().includes(query.toLowerCase()) ||
-    u.email?.toLowerCase().includes(query.toLowerCase()) ||
-    u.first_name?.toLowerCase().includes(query.toLowerCase()) ||
-    u.last_name?.toLowerCase().includes(query.toLowerCase())
+
+  const filteredUsers = users.filter(
+    (u) =>
+      u.username?.toLowerCase().includes(query.toLowerCase()) ||
+      u.email?.toLowerCase().includes(query.toLowerCase()) ||
+      u.first_name?.toLowerCase().includes(query.toLowerCase()) ||
+      u.last_name?.toLowerCase().includes(query.toLowerCase())
   );
 
   if (isLoading) {
@@ -107,7 +146,7 @@ const router = useRouter();
             <tbody>
               {filteredUsers.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center py-10 text-muted-foreground">
+                  <td colSpan={6} className="text-center py-10 text-muted-foreground">
                     No users found.
                   </td>
                 </tr>
@@ -121,11 +160,13 @@ const router = useRouter();
                   <td className="px-4 py-2.5">{user.email}</td>
                   <td className="px-4 py-2.5">{user.department || "—"}</td>
                   <td className="px-4 py-2.5">
-                    <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
-                      user.is_active
-                        ? "bg-success/15 text-success border-success/30"
-                        : "bg-destructive/15 text-destructive border-destructive/30"
-                    }`}>
+                    <span
+                      className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
+                        user.is_active
+                          ? "bg-success/15 text-success border-success/30"
+                          : "bg-destructive/15 text-destructive border-destructive/30"
+                      }`}
+                    >
                       {user.is_active ? "Active" : "Inactive"}
                     </span>
                   </td>
@@ -157,9 +198,10 @@ const router = useRouter();
         </div>
       </div>
 
+      {/* User Form Modal */}
       {(modalOpen && (editingUser ? permissions.update : permissions.create)) && (
         <UserForm
-          initialData={editingUser}
+          initialData={editingUser ? editingUser : prefillData || undefined}
           onSubmit={handleSave}
           onCancel={() => {
             setModalOpen(false);
