@@ -17,10 +17,12 @@ import { Plus, Pencil, Trash2, Search, Download, Shield, Clock, LayoutGrid, Layo
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useConfirmation } from "@/contexts/ConfirmationModalContext";
 
 
 export default function EmployeesPage() {
   const { user, ready } = useAuth();
+  const { confirm } = useConfirmation(); 
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
@@ -85,20 +87,29 @@ export default function EmployeesPage() {
     }
   };
 
-  const handleDelete = async (employee) => {
+const handleDelete = async (employee) => {
     if (!permissions.canDelete) {
       toast.error("You don't have permission to delete employees.");
       return;
     }
-    if (!confirm(`Delete employee "${employee.first_name} ${employee.last_name || ''}"?`)) return;
 
-    try {
-      await deleteEmployee.mutateAsync(employee.id);
-      setSelectedRows(new Set()); // Clear selections after delete
-    } catch (error: any) {
-      toast.error(error.message || "Failed to delete employee");
-    }
+    confirm({
+      title: "Delete Employee",
+      message: `Are you sure you want to delete "${employee.first_name} ${employee.last_name || ''}"? This action cannot be undone.`,
+      type: "danger",
+      confirmText: "Delete",
+      onConfirm: async () => {
+        try {
+          await deleteEmployee.mutateAsync(employee.id);
+          setSelectedRows(new Set());
+          toast.success(`${employee.first_name} ${employee.last_name || ''} deleted successfully`);
+        } catch (error: any) {
+          toast.error(error.message || "Failed to delete employee");
+        }
+      },
+    });
   };
+
 
   const handleBulkDelete = async () => {
     if (!permissions.canDelete) {
@@ -109,17 +120,21 @@ export default function EmployeesPage() {
     const selectedEmployees = Array.from(selectedRows).map(idx => employees[idx]);
     if (selectedEmployees.length === 0) return;
 
-    if (!confirm(`Delete ${selectedEmployees.length} employee(s)? This action cannot be undone.`)) return;
-
-    try {
-      // TODO: Replace with bulk delete API when available
-      // For now, delete one by one
-      await Promise.all(selectedEmployees.map(emp => deleteEmployee.mutateAsync(emp.id)));
-      setSelectedRows(new Set());
-      toast.success(`${selectedEmployees.length} employee(s) deleted successfully`);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to delete employees");
-    }
+    confirm({
+      title: "Bulk Delete Employees",
+      message: `You are about to delete ${selectedEmployees.length} employee(s). This action cannot be undone.`,
+      type: "danger",
+      confirmText: `Delete ${selectedEmployees.length}`,
+      onConfirm: async () => {
+        try {
+          await Promise.all(selectedEmployees.map(emp => deleteEmployee.mutateAsync(emp.id)));
+          setSelectedRows(new Set());
+          toast.success(`${selectedEmployees.length} employee(s) deleted successfully`);
+        } catch (error: any) {
+          toast.error(error.message || "Failed to delete employees");
+        }
+      },
+    });
   };
 
   const openAddModal = () => {
@@ -447,8 +462,8 @@ export default function EmployeesPage() {
               Updated {new Date(employee.updated_at || Date.now()).toLocaleDateString()}
             </span>
             <div className="flex items-center gap-0.5 relative z-20">
-  {renderActions(employee, idx)}
-</div>
+              {renderActions(employee, idx)}
+            </div>
           </div>
         </div>
       </div>

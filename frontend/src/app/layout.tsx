@@ -4,6 +4,7 @@ import { ThemeInitializer } from "@/components/ThemeInitializer";
 import "@/styles.css";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
+import { ConfirmationProvider } from "@/contexts/ConfirmationModalContext";
 
 const inter = Inter({ subsets: ["latin"], display: "swap", variable: "--font-inter" });
 
@@ -18,14 +19,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={inter.variable}>
         <ReactQueryProvider>
           <ThemeInitializer />
-          {children}
-          <Toaster 
-          position="bottom-right"
-          richColors
-          closeButton
-          duration={4000}
-          theme="system"        // or "light" / "dark"
-        />
+          <ConfirmationProvider>
+            {children}
+            <Toaster
+              position="bottom-right"
+              richColors
+              closeButton
+              duration={4000}
+              theme="system"        // or "light" / "dark"
+            />
+          </ConfirmationProvider>
         </ReactQueryProvider>
       </body>
     </html>
