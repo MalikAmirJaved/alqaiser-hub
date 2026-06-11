@@ -4,6 +4,8 @@ import { X, Eye, EyeOff } from "lucide-react";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useDesignations } from "@/hooks/useDesignations";
+import DepartmentFormModal from "@/components/settings/departments/DepartmentFormModal";
+import DesignationFormModal from "@/components/settings/designations/DesignationFormModal";
 
 interface UserFormProps {
   initialData?: any;
@@ -31,13 +33,15 @@ export default function UserForm({
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [deptModalOpen, setDeptModalOpen] = useState(false);
+  const [desigModalOpen, setDesigModalOpen] = useState(false);
 
-  const { data: departments = [] } = useDepartments();
+  const { data: departments = [], refetch: refetchDepartments } = useDepartments();
   const departmentOptions = departments
     .filter((d: any) => d.is_active)
     .map((d: any) => ({ value: d.id, label: d.name }));
 
-  const { data: designations = [] } = useDesignations();
+  const { data: designations = [], refetch: refetchDesignations } = useDesignations();
   const designationOptions = designations.map((d: any) => ({ value: d.id, label: d.name }));
 
   useEffect(() => {
@@ -149,6 +153,8 @@ export default function UserForm({
                 onChange={(val) => handleChange("department", val)}
                 options={departmentOptions}
                 placeholder="Select department"
+                onAddNew={() => setDeptModalOpen(true)}
+                addNewLabel="+ New Department"
               />
             </label>
             <label className="text-sm flex flex-col gap-1">
@@ -159,6 +165,8 @@ export default function UserForm({
                 options={designationOptions}
                 disabled={!formData.department}
                 placeholder="Select designation"
+                onAddNew={() => setDesigModalOpen(true)}
+                addNewLabel="+ New Designation"
               />
             </label>
           </div>
@@ -244,6 +252,19 @@ export default function UserForm({
           </button>
         </div>
       </form>
+
+      <DepartmentFormModal
+        open={deptModalOpen}
+        onClose={() => setDeptModalOpen(false)}
+        onSuccess={() => { refetchDepartments(); setDeptModalOpen(false); }}
+      />
+
+      <DesignationFormModal
+        open={desigModalOpen}
+        onClose={() => setDesigModalOpen(false)}
+        onSuccess={() => { refetchDesignations(); setDesigModalOpen(false); }}
+        departmentOptions={departmentOptions}
+      />
     </div>
   );
 }

@@ -19,6 +19,7 @@ import { getPermissions } from "@/lib/permissions";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
 
+
 export default function EmployeesPage() {
   const { user, ready } = useAuth();
   const { confirm } = useConfirmation();

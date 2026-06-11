@@ -16,6 +16,8 @@ export interface SearchableSelectProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  onAddNew?: () => void;
+  addNewLabel?: string;
 }
 
 export default function SearchableSelect({
@@ -26,6 +28,8 @@ export default function SearchableSelect({
   placeholder = "Select...",
   disabled = false,
   className = "",
+  onAddNew,
+  addNewLabel = "Add New",
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [query, setQuery] = useState<string>("");
@@ -162,36 +166,53 @@ export default function SearchableSelect({
       {/* DROPDOWN */}
       {isOpen && (
         <ul className="absolute z-50 mt-1 w-full bg-card border border-border rounded-md shadow-lg max-h-60 overflow-auto py-1">
-          {filteredOptions.length === 0 ? (
+          {filteredOptions.length === 0 && !onAddNew ? (
             <li className="px-3 py-2 text-sm text-muted-foreground">
               No results found
             </li>
           ) : (
-            filteredOptions.map((option, index) => {
-              const isSelected = value === option.value;
-              const isHighlighted = highlightedIndex === index;
+            <>
+              {filteredOptions.map((option, index) => {
+                const isSelected = value === option.value;
+                const isHighlighted = highlightedIndex === index;
 
-              return (
+                return (
+                  <li
+                    key={option.value}
+                    data-index={index}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleSelect(option);
+                    }}
+                    onMouseEnter={() => setHighlightedIndex(index)}
+                    className={`px-3 py-2 text-sm cursor-pointer flex justify-between
+                      ${isHighlighted ? "bg-muted/60" : ""}
+                      ${isSelected ? "font-semibold text-primary" : ""}
+                    `}
+                  >
+                    {option.label}
+                    {isSelected && (
+                      <Check className="w-4 h-4 text-primary" />
+                    )}
+                  </li>
+                );
+              })}
+              {onAddNew && (
                 <li
-                  key={option.value}
-                  data-index={index}
                   onMouseDown={(e) => {
                     e.preventDefault();
-                    handleSelect(option);
+                    e.stopPropagation();
+                    onAddNew();
                   }}
-                  onMouseEnter={() => setHighlightedIndex(index)}
-                  className={`px-3 py-2 text-sm cursor-pointer flex justify-between
-                    ${isHighlighted ? "bg-muted/60" : ""}
-                    ${isSelected ? "font-semibold text-primary" : ""}
-                  `}
+                  className="px-3 py-2 text-sm cursor-pointer border-t border-border text-primary hover:bg-primary/5 font-medium flex items-center gap-1.5"
                 >
-                  {option.label}
-                  {isSelected && (
-                    <Check className="w-4 h-4 text-primary" />
-                  )}
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  {addNewLabel}
                 </li>
-              );
-            })
+              )}
+            </>
           )}
         </ul>
       )}

@@ -14,6 +14,8 @@ import { LocationGroup } from "../reuseable/LocationSelectors";
 import SearchableSelect from "../reuseable/SearchableSelect";
 import { DatePicker } from "@/components/reuseable/DatePicker";
 import { useDepartments } from "@/hooks/useDepartments";
+import DepartmentFormModal from "@/components/settings/departments/DepartmentFormModal";
+import DesignationFormModal from "@/components/settings/designations/DesignationFormModal";
 
 export default function EmployeeForm({ initialData = null, onSubmit, onCancel }) {
   const [formData, setFormData] = useState({
@@ -56,15 +58,17 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
   });
 
   const [loading, setLoading] = useState(false);
+  const [deptModalOpen, setDeptModalOpen] = useState(false);
+  const [desigModalOpen, setDesigModalOpen] = useState(false);
 
   // Departments
-  const { data: departments = [] } = useDepartments();
+  const { data: departments = [], refetch: refetchDepartments } = useDepartments();
   const departmentOptions = departments
     .filter(dept => dept.is_active)
     .map(dept => ({ value: dept.id, label: dept.name }));
 
   // Designations
-  const { data: designations = [] } = useDesignations();
+  const { data: designations = [], refetch: refetchDesignations } = useDesignations();
   const designationOptions = designations.map(d => ({ value: d.id, label: d.name }));
 
   const { data: shiftTemplates = [] } = useShiftTemplates();
@@ -275,7 +279,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 </label>
                 <label className="text-sm flex flex-col gap-1">
                   <span className="text-muted-foreground text-xs">Department *</span>
-                  <SearchableSelect value={formData.department_id} onChange={(val) => handleChange("department_id", val)} options={departmentOptions} required placeholder="Select Department" />
+                  <SearchableSelect value={formData.department_id} onChange={(val) => handleChange("department_id", val)} options={departmentOptions} required placeholder="Select Department" onAddNew={() => setDeptModalOpen(true)} addNewLabel="+ New Department" />
                 </label>
               </div>
 
@@ -287,6 +291,8 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                   options={designationOptions}
                   disabled={!formData.department_id}
                   placeholder="Select Designation"
+                  onAddNew={() => setDesigModalOpen(true)}
+                  addNewLabel="+ New Designation"
                 />
               </label>
 
@@ -371,6 +377,19 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
           <button type="submit" disabled={loading} className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 disabled:opacity-50">{loading ? "Saving..." : initialData ? "Save Changes" : "Create Employee"}</button>
         </div>
       </form>
+
+      <DepartmentFormModal
+        open={deptModalOpen}
+        onClose={() => setDeptModalOpen(false)}
+        onSuccess={() => { refetchDepartments(); setDeptModalOpen(false); }}
+      />
+
+      <DesignationFormModal
+        open={desigModalOpen}
+        onClose={() => setDesigModalOpen(false)}
+        onSuccess={() => { refetchDesignations(); setDesigModalOpen(false); }}
+        departmentOptions={departmentOptions}
+      />
     </div>
   );
 }

@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { X } from "lucide-react";
+import { X, Plus } from "lucide-react";
 import { useCreateDesignation, useUpdateDesignation, type Designation } from "@/hooks/useDesignations";
+import DepartmentFormModal from "@/components/settings/departments/DepartmentFormModal";
+import { useDepartments } from "@/hooks/useDepartments";
 
 interface DesignationFormData {
   name: string;
@@ -25,6 +27,9 @@ export default function DesignationFormModal({
   onSuccess?: () => void;
   departmentOptions: { value: string; label: string }[];
 }) {
+  const [deptModalOpen, setDeptModalOpen] = useState(false);
+  const { refetch: refetchDepartments } = useDepartments();
+
   const { register, handleSubmit, reset, setValue } = useForm<DesignationFormData>({
     defaultValues: {
       name: "",
@@ -86,7 +91,16 @@ export default function DesignationFormModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Department</label>
+            <label className="block text-sm font-medium mb-1 flex items-center gap-2">
+              <span>Department</span>
+              <button
+                type="button"
+                onClick={() => setDeptModalOpen(true)}
+                className="inline-flex items-center gap-0.5 text-xs text-primary hover:text-primary/80 font-medium"
+              >
+                <Plus className="w-3 h-3" /> Add New
+              </button>
+            </label>
             <select
               {...register("department")}
               className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
@@ -124,6 +138,12 @@ export default function DesignationFormModal({
           </div>
         </form>
       </div>
+
+      <DepartmentFormModal
+        open={deptModalOpen}
+        onClose={() => setDeptModalOpen(false)}
+        onSuccess={() => { refetchDepartments(); setDeptModalOpen(false); }}
+      />
     </div>
   );
 }
