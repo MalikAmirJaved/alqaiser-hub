@@ -12,6 +12,7 @@ export interface Column<T = Record<string, unknown>> {
   label: string;
   sortable?: boolean;
   render?: (value: unknown, row: T) => React.ReactNode;
+  sortAccessor?: (row: T) => string | number;
   width?: string;
 }
 
@@ -51,8 +52,10 @@ export function TableView<T extends Record<string, unknown>>({
     if (!sortKey) return data;
     
     return [...data].sort((a, b) => {
-      const av = a[sortKey];
-      const bv = b[sortKey];
+      const column = columns.find(c => c.key === sortKey);
+
+const av = column?.sortAccessor ? column.sortAccessor(a) : a[sortKey];
+const bv = column?.sortAccessor ? column.sortAccessor(b) : b[sortKey];
       
       // Handle null/undefined values
       if (av == null && bv == null) return 0;

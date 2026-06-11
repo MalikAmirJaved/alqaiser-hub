@@ -24,13 +24,13 @@ export default function EmployeesPage() {
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
-  
+
   const { data: employees = [], isLoading } = useEmployees(
     query ? { search: query } : undefined
   );
   const { data: stats } = useEmployeeStats();
   const { data: shiftTemplates = [] } = useShiftTemplates();
-  
+
   const createEmployee = useCreateEmployee();
   const updateEmployee = useUpdateEmployee();
   const deleteEmployee = useDeleteEmployee();
@@ -45,7 +45,7 @@ export default function EmployeesPage() {
 
   useEffect(() => {
     permissionService.init();
-    
+
     setPermissions({
       canCreate: permissionService.hasPermission("HR", "Employee Management", "create"),
       canUpdate: permissionService.hasPermission("HR", "Employee Management", "update"),
@@ -74,7 +74,7 @@ export default function EmployeesPage() {
       } else {
         await createEmployee.mutateAsync(employeeData);
       }
-      
+
       setModalOpen(false);
       setEditingEmployee(null);
       setSelectedRows(new Set()); // Clear selections after save
@@ -89,7 +89,7 @@ export default function EmployeesPage() {
       return;
     }
     if (!confirm(`Delete employee "${employee.first_name} ${employee.last_name || ''}"?`)) return;
-    
+
     try {
       await deleteEmployee.mutateAsync(employee.id);
       setSelectedRows(new Set()); // Clear selections after delete
@@ -103,12 +103,12 @@ export default function EmployeesPage() {
       toast.error("You don't have permission to delete employees.");
       return;
     }
-    
+
     const selectedEmployees = Array.from(selectedRows).map(idx => employees[idx]);
     if (selectedEmployees.length === 0) return;
-    
+
     if (!confirm(`Delete ${selectedEmployees.length} employee(s)? This action cannot be undone.`)) return;
-    
+
     try {
       // TODO: Replace with bulk delete API when available
       // For now, delete one by one
@@ -205,35 +205,41 @@ export default function EmployeesPage() {
       key: "full_name",
       label: "Full Name",
       sortable: true,
+      sortAccessor: (row) =>
+        `${row.first_name ?? ""} ${row.last_name ?? ""}`.toLowerCase(),
       render: (_, row) => `${row.first_name} ${row.last_name || ""}`
+
     },
     {
       key: "department",
       label: "Department",
-      sortable: true
+      sortable: true,
+      sortAccessor: (row) => (row.department ?? "").toLowerCase()
+
     },
     {
       key: "designation",
       label: "Designation",
-      render: (value) => value || "—"
+      sortable: true,
+      sortAccessor: (row) => (row.designation ?? "").toLowerCase()
     },
     {
       key: "employment_type",
       label: "Employment Type",
-      render: (value) => value?.replace("_", " ")
+      sortable: true,
+      sortAccessor: (row) => (row.employment_type ?? "").toLowerCase()
     },
     {
       key: "employment_status",
       label: "Status",
       sortable: true,
       render: (value) => (
-        <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
-          value === "ACTIVE"
+        <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${value === "ACTIVE"
             ? "bg-success/15 text-success border-success/30"
             : value === "ON_LEAVE"
-            ? "bg-warning/15 text-warning border-warning/30"
-            : "bg-destructive/15 text-destructive border-destructive/30"
-        }`}>
+              ? "bg-warning/15 text-warning border-warning/30"
+              : "bg-destructive/15 text-destructive border-destructive/30"
+          }`}>
           {value}
         </span>
       )
@@ -241,6 +247,10 @@ export default function EmployeesPage() {
     {
       key: "default_shift",
       label: "Default Shift",
+      sortable: true,
+      sortAccessor: (row) =>
+        (getEmployeeDefaultShiftName(row) ?? "").toLowerCase(),
+
       render: (_, row) => {
         const shiftName = getEmployeeDefaultShiftName(row);
         return shiftName ? (
@@ -254,9 +264,11 @@ export default function EmployeesPage() {
       }
     },
     {
-      key: "phone",
-      label: "Phone"
-    }
+  key: "phone",
+  label: "Phone",
+  sortable: true,
+  sortAccessor: (row) => row.phone?.replace(/\D/g, "") ?? ""
+}
   ];
 
   // Define actions for each row
@@ -287,14 +299,13 @@ export default function EmployeesPage() {
   const renderEmployeeCard = (employee, idx) => {
     const isSelected = selectedRows.has(idx);
     const defaultShiftName = getEmployeeDefaultShiftName(employee);
-    
+
     return (
-      <div 
-        className={`relative rounded-xl border transition-all hover:shadow-md ${
-          isSelected 
-            ? "border-primary bg-primary/5 ring-2 ring-primary/20" 
+      <div
+        className={`relative rounded-xl border transition-all hover:shadow-md ${isSelected
+            ? "border-primary bg-primary/5 ring-2 ring-primary/20"
             : "border-border bg-card hover:border-primary/50"
-        }`}
+          }`}
       >
         {/* Selection Checkbox */}
         {permissions.canDelete && (
@@ -316,28 +327,27 @@ export default function EmployeesPage() {
             />
           </div>
         )}
-        
+
         {/* Card Content */}
         <div className="p-4">
           {/* Employee ID & Status Badge */}
           <div className="flex items-center justify-between mb-3">
             <span className="font-mono text-xs text-muted-foreground">{employee.employee_id}</span>
-            <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
-              employee.employment_status === "ACTIVE"
+            <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${employee.employment_status === "ACTIVE"
                 ? "bg-success/15 text-success border-success/30"
                 : employee.employment_status === "ON_LEAVE"
-                ? "bg-warning/15 text-warning border-warning/30"
-                : "bg-destructive/15 text-destructive border-destructive/30"
-            }`}>
+                  ? "bg-warning/15 text-warning border-warning/30"
+                  : "bg-destructive/15 text-destructive border-destructive/30"
+              }`}>
               {employee.employment_status}
             </span>
           </div>
-          
+
           {/* Name */}
           <h3 className="font-semibold text-lg mb-1">
             {employee.first_name} {employee.last_name || ""}
           </h3>
-          
+
           {/* Designation & Department */}
           <div className="space-y-2 mb-3">
             {employee.designation && (
@@ -348,7 +358,7 @@ export default function EmployeesPage() {
               <span className="text-muted-foreground">{employee.employment_type?.replace("_", " ")}</span>
             </div>
           </div>
-          
+
           {/* Shift Info */}
           {defaultShiftName && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
@@ -356,12 +366,12 @@ export default function EmployeesPage() {
               <span>{defaultShiftName}</span>
             </div>
           )}
-          
+
           {/* Contact Info */}
           {employee.phone && (
             <p className="text-xs text-muted-foreground mb-3">{employee.phone}</p>
           )}
-          
+
           {/* Actions */}
           {(permissions.canUpdate || permissions.canDelete) && (
             <div className="flex items-center justify-end gap-1 pt-2 border-t border-border">
@@ -433,7 +443,7 @@ export default function EmployeesPage() {
                 <Trash2 className="w-4 h-4" /> Delete Selected ({selectedRows.size})
               </button>
             )}
-            
+
             {/* Export Button */}
             <button
               onClick={exportCsv}
@@ -441,33 +451,31 @@ export default function EmployeesPage() {
             >
               <Download className="w-4 h-4" /> Export
             </button>
-            
+
             {/* View Toggle Buttons */}
             <div className="flex items-center gap-1 p-0.5 rounded-md border border-border">
               <button
                 onClick={() => setViewMode("table")}
-                className={`p-1.5 rounded transition-colors ${
-                  viewMode === "table" 
-                    ? "bg-primary text-primary-foreground" 
+                className={`p-1.5 rounded transition-colors ${viewMode === "table"
+                    ? "bg-primary text-primary-foreground"
                     : "hover:bg-muted text-muted-foreground"
-                }`}
+                  }`}
                 aria-label="Table view"
               >
                 <LayoutList className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setViewMode("grid")}
-                className={`p-1.5 rounded transition-colors ${
-                  viewMode === "grid" 
-                    ? "bg-primary text-primary-foreground" 
+                className={`p-1.5 rounded transition-colors ${viewMode === "grid"
+                    ? "bg-primary text-primary-foreground"
                     : "hover:bg-muted text-muted-foreground"
-                }`}
+                  }`}
                 aria-label="Grid view"
               >
                 <LayoutGrid className="w-4 h-4" />
               </button>
             </div>
-            
+
             {/* Add Employee Button */}
             {permissions.canCreate && (
               <button
@@ -522,7 +530,7 @@ export default function EmployeesPage() {
           gap={4}
         />
       )}
-      
+
       {/* Selection Info Bar */}
       {selectedRows.size > 0 && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
