@@ -59,7 +59,7 @@ class BaseCompanyView(PermissionRequiredMixin, APIView):
     def _log_change(self, settings, company, field_name, old_value, new_value, user):
         """Log settings changes to history"""
         CompanySettingHistory.objects.create(
-            settings=settings,
+            company_settings=settings,
             company=company,
             field_name=field_name,
             old_value=str(old_value) if old_value is not None else None,
@@ -103,7 +103,7 @@ class CompanySettingsView(BaseCompanyView):
 
         for day_config in default_days:
             WorkingDay.objects.create(
-                settings=settings,
+                company_settings=settings,
                 company=company,
                 created_by=user,
                 updated_by=user,
