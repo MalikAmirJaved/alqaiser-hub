@@ -3,6 +3,20 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
+export type CreateLeaveRequestData = {
+  employee_id: number;
+  leave_type_id: number;
+  leave_year: number;
+  start_date: string;
+  end_date: string;
+  total_days: number;
+  is_half_day: "false" | "true";
+  reason: string;
+  contact_number?: string;
+  document_url?: string;
+};
+
+
 export interface LeaveRequest {
   id: number;
   employee_id: number;
@@ -137,7 +151,7 @@ export function useCreateLeaveRequest() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: Omit<LeaveRequest, "id" | "applied_at" | "employee_name" | "leave_type_name" | "status">) =>
+    mutationFn: (data: CreateLeaveRequestData) =>
       api("/api/hr/leaves/", {
         method: "POST",
         body: JSON.stringify(data),
@@ -149,6 +163,7 @@ export function useCreateLeaveRequest() {
     },
   });
 }
+
 
 // Update leave request
 export function useUpdateLeaveRequest() {
