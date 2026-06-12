@@ -54,44 +54,6 @@ class Migration(migrations.Migration):
             },
         ),
         migrations.CreateModel(
-            name='ExitInterview',
-            fields=[
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('is_deleted', models.BooleanField(default=False)),
-                ('deleted_at', models.DateTimeField(blank=True, null=True)),
-                ('id', models.BigAutoField(primary_key=True, serialize=False)),
-                ('_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('interview_date', models.DateField(blank=True, null=True)),
-                ('interviewed_by_name', models.CharField(blank=True, max_length=255, null=True)),
-                ('reason_for_leaving', models.TextField(blank=True, null=True)),
-                ('feedback_management', models.TextField(blank=True, null=True)),
-                ('feedback_work_environment', models.TextField(blank=True, null=True)),
-                ('feedback_compensation', models.TextField(blank=True, null=True)),
-                ('feedback_growth', models.TextField(blank=True, null=True)),
-                ('overall_experience', models.PositiveSmallIntegerField(blank=True, null=True)),
-                ('management_rating', models.PositiveSmallIntegerField(blank=True, null=True)),
-                ('work_environment_rating', models.PositiveSmallIntegerField(blank=True, null=True)),
-                ('new_employer', models.CharField(blank=True, max_length=255, null=True)),
-                ('new_position', models.CharField(blank=True, max_length=255, null=True)),
-                ('new_salary_range', models.CharField(blank=True, max_length=50, null=True)),
-                ('willing_to_rejoin', models.BooleanField(default=False)),
-                ('any_concerns', models.TextField(blank=True, null=True)),
-                ('general_feedback', models.TextField(blank=True, null=True)),
-                ('company', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='exit_interviews', to='organization.company')),
-                ('created_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='created_exit_interviews', to=settings.AUTH_USER_MODEL)),
-                ('deleted_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_deleted', to=settings.AUTH_USER_MODEL)),
-                ('interviewed_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='conducted_exit_interviews', to='hr.employee')),
-                ('updated_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='updated_exit_interviews', to=settings.AUTH_USER_MODEL)),
-                ('exit_record', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='interview', to='hr.exitrecord')),
-            ],
-            options={
-                'verbose_name': 'Exit Interview',
-                'verbose_name_plural': 'Exit Interviews',
-                'db_table': 'hr_exit_interviews',
-            },
-        ),
-        migrations.CreateModel(
             name='ExitChecklist',
             fields=[
                 ('created_at', models.DateTimeField(auto_now_add=True)),
@@ -165,18 +127,6 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name='exitrecord',
             constraint=models.UniqueConstraint(condition=models.Q(('is_deleted', False), ('status', 'ACTIVE')), fields=('employee',), name='unique_active_exit_per_employee'),
-        ),
-        migrations.AddIndex(
-            model_name='exitinterview',
-            index=models.Index(fields=['exit_record'], name='hr_exit_int_exit_re_e06a57_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='exitinterview',
-            index=models.Index(fields=['interviewed_by'], name='hr_exit_int_intervi_97e52d_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='exitinterview',
-            index=models.Index(fields=['interview_date'], name='hr_exit_int_intervi_4533ba_idx'),
         ),
         migrations.AddIndex(
             model_name='exitchecklist',

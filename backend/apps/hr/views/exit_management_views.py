@@ -11,7 +11,7 @@ from rest_framework import status
 from django.db.models import Count, Sum, Avg, Q, Case, When, Value, IntegerField
 
 from apps.hr.models import (
-    ExitRecord, ExitChecklist, ExitInterview, Employee
+    ExitRecord, ExitChecklist, Employee
 )
 
 logger = logging.getLogger(__name__)
@@ -534,104 +534,6 @@ class ExitChecklistView(BaseExitView):
             setattr(exit_record, f'clearance_{clearance_type.lower()}', is_cleared)
         
         exit_record.save()
-
-
-class ExitInterviewView(BaseExitView):
-    """Manage exit interviews"""
-    
-    def get(self, request):
-        """Get exit interview for an exit record"""
-        company_id, _ = self._get_company_context(request)
-        exit_record_id = request.query_params.get('exit_record_id')
-        
-        if not exit_record_id:
-            return Response(
-                {'error': 'exit_record_id is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        interview = ExitInterview.objects.filter(
-            exit_record_id=exit_record_id,
-            exit_record__company_id=company_id,
-            is_deleted=False
-        ).first()
-        
-        if not interview:
-            return Response(None)
-        
-        return Response({
-            "id": interview.id,
-            "exit_record_id": interview.exit_record_id,
-            "interview_date": interview.interview_date.isoformat() if interview.interview_date else None,
-            "interviewed_by": interview.interviewed_by_id,
-            "interviewed_by_name": interview.interviewed_by_name,
-            "reason_for_leaving": interview.reason_for_leaving,
-            "feedback_management": interview.feedback_management,
-            "feedback_work_environment": interview.feedback_work_environment,
-            "feedback_compensation": interview.feedback_compensation,
-            "feedback_growth": interview.feedback_growth,
-            "overall_experience": interview.overall_experience,
-            "management_rating": interview.management_rating,
-            "work_environment_rating": interview.work_environment_rating,
-            "new_employer": interview.new_employer,
-            "new_position": interview.new_position,
-            "new_salary_range": interview.new_salary_range,
-            "willing_to_rejoin": interview.willing_to_rejoin,
-            "any_concerns": interview.any_concerns,
-            "general_feedback": interview.general_feedback,
-        })
-    
-    @transaction.atomic
-    def post(self, request):
-        """Create or update exit interview"""
-        company_id, _ = self._get_company_context(request)
-        
-        exit_record_id = request.data.get('exit_record_id')
-        if not exit_record_id:
-            return Response(
-                {'error': 'exit_record_id is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        exit_record = get_object_or_404(
-            ExitRecord,
-            id=exit_record_id,
-            company_id=company_id,
-            is_deleted=False
-        )
-        
-        # Create or update interview
-        interview, created = ExitInterview.objects.update_or_create(
-            exit_record=exit_record,
-            company_id=company_id,
-            defaults={
-                'interview_date': request.data.get('interview_date'),
-                'interviewed_by_id': request.data.get('interviewed_by'),
-                'interviewed_by_name': request.data.get('interviewed_by_name'),
-                'reason_for_leaving': request.data.get('reason_for_leaving'),
-                'feedback_management': request.data.get('feedback_management'),
-                'feedback_work_environment': request.data.get('feedback_work_environment'),
-                'feedback_compensation': request.data.get('feedback_compensation'),
-                'feedback_growth': request.data.get('feedback_growth'),
-                'overall_experience': request.data.get('overall_experience'),
-                'management_rating': request.data.get('management_rating'),
-                'work_environment_rating': request.data.get('work_environment_rating'),
-                'new_employer': request.data.get('new_employer'),
-                'new_position': request.data.get('new_position'),
-                'new_salary_range': request.data.get('new_salary_range'),
-                'willing_to_rejoin': request.data.get('willing_to_rejoin', False),
-                'any_concerns': request.data.get('any_concerns'),
-                'general_feedback': request.data.get('general_feedback'),
-                'created_by': request.user if created else interview.created_by,
-                'updated_by': request.user,
-            }
-        )
-        
-        return Response({
-            "message": "Exit interview saved successfully",
-            "interview_id": interview.id,
-            "created": created
-        }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
 class ExitBulkActionView(BaseExitView):

@@ -45,7 +45,6 @@ from apps.hr.views.exit_management_views import (
     ExitRecordView,
     ExitStatsView,
     ExitChecklistView,
-    ExitInterviewView,
     ExitBulkActionView,
 )
 
@@ -116,7 +115,6 @@ path('recruitment/candidates/<int:candidate_id>/detail/', RecruitmentCandidateDe
     path('exits/', ExitRecordView.as_view(), name='exit-records'),
     path('exits/stats/', ExitStatsView.as_view(), name='exit-stats'),
     path('exits/checklist/', ExitChecklistView.as_view(), name='exit-checklist'),
-    path('exits/interview/', ExitInterviewView.as_view(), name='exit-interview'),
     path('exits/bulk-action/', ExitBulkActionView.as_view(), name='exit-bulk-action'),
 
 ]

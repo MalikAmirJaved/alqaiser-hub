@@ -11,8 +11,8 @@ import { DatePicker } from "@/components/reuseable/DatePicker";
 import { Checkbox } from "@/components/reuseable/Checkbox";
 import ConfirmationModal, { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import {
-  Search, Plus, Filter, Eye, Trash2, Pencil, LogOut, ShieldCheck, 
-  Briefcase, Wallet, Clock, ArrowRight, CheckCircle2, AlertTriangle, 
+  Search, Plus, Filter, Eye, Trash2, Pencil, LogOut, ShieldCheck,
+  Briefcase, Wallet, Clock, ArrowRight, CheckCircle2, AlertTriangle,
   X, RefreshCw, Download, ChevronDown, ChevronUp, FileText
 } from "lucide-react";
 
@@ -78,28 +78,6 @@ interface ExitChecklistItem {
   notes: string;
 }
 
-interface ExitInterview {
-  id: number;
-  exit_record_id: number;
-  interview_date: string | null;
-  interviewed_by: number | null;
-  interviewed_by_name: string | null;
-  reason_for_leaving: string;
-  feedback_management: string;
-  feedback_work_environment: string;
-  feedback_compensation: string;
-  feedback_growth: string;
-  overall_experience: number | null;
-  management_rating: number | null;
-  work_environment_rating: number | null;
-  new_employer: string;
-  new_position: string;
-  new_salary_range: string;
-  willing_to_rejoin: boolean;
-  any_concerns: string;
-  general_feedback: string;
-}
-
 const EXIT_REASONS: SearchableSelectOption[] = [
   { value: "RESIGNATION", label: "👋 Resignation" },
   { value: "TERMINATION", label: "❌ Termination" },
@@ -122,7 +100,7 @@ export default function ExitManagementPage() {
   const api = useApi();
   const { data: employees = [] } = useEmployees();
   const confirmationModal = useConfirmationModal();
-  
+
   const [records, setRecords] = useState<ExitRecord[]>([]);
   const [stats, setStats] = useState<ExitStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -138,7 +116,6 @@ export default function ExitManagementPage() {
   const [interviewModal, setInterviewModal] = useState(false);
   const [activeRecord, setActiveRecord] = useState<ExitRecord | null>(null);
   const [checklistItems, setChecklistItems] = useState<ExitChecklistItem[]>([]);
-  const [interview, setInterview] = useState<ExitInterview | null>(null);
 
   // Load data
   const loadData = useCallback(async () => {
@@ -168,16 +145,6 @@ export default function ExitManagementPage() {
       setChecklistItems(items);
     } catch (error) {
       console.error("Failed to load checklist:", error);
-    }
-  }, [api]);
-
-  // Load interview
-  const loadInterview = useCallback(async (recordId: number) => {
-    try {
-      const data = await api<ExitInterview | null>(`/api/hr/exits/interview/?exit_record_id=${recordId}`);
-      setInterview(data);
-    } catch (error) {
-      console.error("Failed to load interview:", error);
     }
   }, [api]);
 
@@ -288,22 +255,6 @@ export default function ExitManagementPage() {
       }
     } catch (error: any) {
       alert(error.message || "Failed to update checklist item");
-    }
-  };
-
-  const handleSaveInterview = async (data: Partial<ExitInterview>) => {
-    try {
-      await api("/api/hr/exits/interview/", {
-        method: "POST",
-        body: JSON.stringify(data),
-      });
-      alert("Interview saved successfully!");
-      setInterviewModal(false);
-      if (activeRecord) {
-        await loadInterview(activeRecord.id);
-      }
-    } catch (error: any) {
-      alert(error.message || "Failed to save interview");
     }
   };
 
@@ -481,28 +432,49 @@ export default function ExitManagementPage() {
                       <div className="text-[10px] text-muted-foreground">LWD: {r.last_working_day || "—"}</div>
                     </td>
                     <td className="px-4 py-2.5 text-xs">
-                      <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
-                        r.reason_value === "RESIGNATION" ? "bg-info/15 text-info border-info/30" :
-                        r.reason_value === "TERMINATION" ? "bg-destructive/15 text-destructive border-destructive/30" :
-                        "bg-muted text-muted-foreground border-border"
-                      }`}>
+                      <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${r.reason_value === "RESIGNATION" ? "bg-info/15 text-info border-info/30" :
+                          r.reason_value === "TERMINATION" ? "bg-destructive/15 text-destructive border-destructive/30" :
+                            "bg-muted text-muted-foreground border-border"
+                        }`}>
                         {r.reason}
                       </span>
                     </td>
                     <td className="px-4 py-2.5">
-                      <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
-                        r.clearance_status_value === "COMPLETED" ? "bg-success/15 text-success border-success/30" :
-                        r.clearance_status_value === "APPROVED" ? "bg-info/15 text-info border-info/30" :
-                        r.clearance_status_value === "IN_PROGRESS" ? "bg-warning/15 text-warning border-warning/30" :
-                        "bg-muted text-muted-foreground border-border"
-                      }`}>
+                      <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${r.clearance_status_value === "COMPLETED" ? "bg-success/15 text-success border-success/30" :
+                          r.clearance_status_value === "APPROVED" ? "bg-info/15 text-info border-info/30" :
+                            r.clearance_status_value === "IN_PROGRESS" ? "bg-warning/15 text-warning border-warning/30" :
+                              "bg-muted text-muted-foreground border-border"
+                        }`}>
                         {r.clearance_status}
                       </span>
                       <div className="flex gap-1 mt-1">
-                        <ShieldCheck className={`w-3 h-3 ${r.clearance_hr ? "text-success" : "text-muted-foreground/40"}`} title="HR" />
-                        <ShieldCheck className={`w-3 h-3 ${r.clearance_it ? "text-success" : "text-muted-foreground/40"}`} title="IT" />
-                        <ShieldCheck className={`w-3 h-3 ${r.clearance_finance ? "text-success" : "text-muted-foreground/40"}`} title="Finance" />
-                        <ShieldCheck className={`w-3 h-3 ${r.clearance_admin ? "text-success" : "text-muted-foreground/40"}`} title="Admin" />
+                        <span title="HR">
+                          <ShieldCheck
+                            className={`w-3 h-3 ${r.clearance_hr ? "text-success" : "text-muted-foreground/40"
+                              }`}
+                          />
+                        </span>
+
+                        <span title="IT">
+                          <ShieldCheck
+                            className={`w-3 h-3 ${r.clearance_it ? "text-success" : "text-muted-foreground/40"
+                              }`}
+                          />
+                        </span>
+
+                        <span title="Finance">
+                          <ShieldCheck
+                            className={`w-3 h-3 ${r.clearance_finance ? "text-success" : "text-muted-foreground/40"
+                              }`}
+                          />
+                        </span>
+
+                        <span title="Admin">
+                          <ShieldCheck
+                            className={`w-3 h-3 ${r.clearance_admin ? "text-success" : "text-muted-foreground/40"
+                              }`}
+                          />
+                        </span>
                       </div>
                     </td>
                     <td className="px-4 py-2.5">
@@ -529,17 +501,6 @@ export default function ExitManagementPage() {
                           title="Checklist"
                         >
                           <FileText className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setActiveRecord(r);
-                            setInterviewModal(true);
-                            loadInterview(r.id);
-                          }}
-                          className="p-1.5 rounded-md hover:bg-muted"
-                          title="Exit Interview"
-                        >
-                          <Eye className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => { setEditingRecord(r); setModalOpen(true); }}
@@ -621,17 +582,6 @@ export default function ExitManagementPage() {
         />
       )}
 
-      {/* Exit Interview Modal */}
-      {interviewModal && activeRecord && (
-        <ExitInterviewModal
-          record={activeRecord}
-          interview={interview}
-          employees={employees}
-          onSubmit={handleSaveInterview}
-          onClose={() => setInterviewModal(false)}
-        />
-      )}
-
       {/* Confirmation Modal */}
       <confirmationModal.Modal />
     </div>
@@ -641,15 +591,15 @@ export default function ExitManagementPage() {
 // ==========================================
 // EXIT FORM MODAL
 // ==========================================
-function ExitFormModal({ 
-  initialData, 
-  employees, 
-  onSubmit, 
-  onClose 
-}: { 
-  initialData: ExitRecord | null; 
-  employees: any[]; 
-  onSubmit: (d: any) => void; 
+function ExitFormModal({
+  initialData,
+  employees,
+  onSubmit,
+  onClose
+}: {
+  initialData: ExitRecord | null;
+  employees: any[];
+  onSubmit: (d: any) => void;
   onClose: () => void;
 }) {
   const [formData, setFormData] = useState({
@@ -704,7 +654,7 @@ function ExitFormModal({
             <X className="w-4 h-4" />
           </button>
         </div>
-        
+
         <div className="p-5 grid sm:grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto">
           <label className="text-sm flex flex-col gap-1 sm:col-span-2">
             <span className="text-muted-foreground">Employee *</span>
@@ -716,7 +666,7 @@ function ExitFormModal({
               required
             />
           </label>
-          
+
           {selectedEmployee && (
             <>
               <label className="text-sm flex flex-col gap-1">
@@ -748,7 +698,7 @@ function ExitFormModal({
               required
             />
           </label>
-          
+
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground">Exit Date *</span>
             <DatePicker
@@ -757,7 +707,7 @@ function ExitFormModal({
               required
             />
           </label>
-          
+
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground">Last Working Day</span>
             <DatePicker
@@ -765,7 +715,7 @@ function ExitFormModal({
               onChange={v => setFormData({ ...formData, last_working_day: v || "" })}
             />
           </label>
-          
+
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground">Notice Period Served?</span>
             <select
@@ -810,7 +760,7 @@ function ExitFormModal({
               />
             </div>
           </label>
-          
+
           <label className="text-sm flex flex-col gap-1 sm:col-span-2">
             <span className="text-muted-foreground">Notes / Handover Details</span>
             <textarea
@@ -833,7 +783,7 @@ function ExitFormModal({
             </label>
           )}
         </div>
-        
+
         <div className="p-4 border-t border-border flex justify-end gap-2">
           <button type="button" onClick={onClose} className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted">
             Cancel
@@ -879,7 +829,7 @@ function ChecklistModal({
             <X className="w-4 h-4" />
           </button>
         </div>
-        
+
         <div className="p-5 space-y-4">
           {Object.entries(groupedItems).map(([type, typeItems]) => (
             <div key={type}>
@@ -920,248 +870,13 @@ function ChecklistModal({
             <div className="text-center py-8 text-muted-foreground">No checklist items yet</div>
           )}
         </div>
-        
+
         <div className="p-4 border-t border-border flex justify-end">
           <button onClick={onClose} className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted">
             Close
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ==========================================
-// EXIT INTERVIEW MODAL
-// ==========================================
-function ExitInterviewModal({
-  record,
-  interview: existingInterview,
-  employees,
-  onSubmit,
-  onClose,
-}: {
-  record: ExitRecord;
-  interview: ExitInterview | null;
-  employees: any[];
-  onSubmit: (data: any) => void;
-  onClose: () => void;
-}) {
-  const [formData, setFormData] = useState({
-    exit_record_id: record.id,
-    interview_date: existingInterview?.interview_date || "",
-    interviewed_by: existingInterview?.interviewed_by || "",
-    reason_for_leaving: existingInterview?.reason_for_leaving || "",
-    feedback_management: existingInterview?.feedback_management || "",
-    feedback_work_environment: existingInterview?.feedback_work_environment || "",
-    feedback_compensation: existingInterview?.feedback_compensation || "",
-    feedback_growth: existingInterview?.feedback_growth || "",
-    overall_experience: existingInterview?.overall_experience || 0,
-    management_rating: existingInterview?.management_rating || 0,
-    work_environment_rating: existingInterview?.work_environment_rating || 0,
-    new_employer: existingInterview?.new_employer || "",
-    new_position: existingInterview?.new_position || "",
-    new_salary_range: existingInterview?.new_salary_range || "",
-    willing_to_rejoin: existingInterview?.willing_to_rejoin || false,
-    any_concerns: existingInterview?.any_concerns || "",
-    general_feedback: existingInterview?.general_feedback || "",
-  });
-
-  const interviewerOpts: SearchableSelectOption[] = employees.map(e => ({
-    value: String(e.id),
-    label: `${e.first_name} ${e.last_name || ""}`
-  }));
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit(formData);
-  };
-
-  const RatingInput = ({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) => (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <div className="flex gap-1">
-        {[1, 2, 3, 4, 5].map(star => (
-          <button
-            key={star}
-            type="button"
-            onClick={() => onChange(star)}
-            className={`w-8 h-8 rounded text-sm ${value >= star ? "bg-warning text-warning-foreground" : "bg-muted text-muted-foreground"}`}
-          >
-            ★
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4 overflow-y-auto" onClick={onClose}>
-      <form onSubmit={handleSubmit} className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-3xl max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-card">
-          <div>
-            <h2 className="font-semibold">Exit Interview</h2>
-            <p className="text-sm text-muted-foreground">{record.employee_name}</p>
-          </div>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-md hover:bg-muted">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        
-        <div className="p-5 grid sm:grid-cols-2 gap-4">
-          <label className="text-sm flex flex-col gap-1 sm:col-span-2">
-            <span className="text-muted-foreground">Interview Date</span>
-            <DatePicker
-              value={formData.interview_date}
-              onChange={v => setFormData({ ...formData, interview_date: v || "" })}
-            />
-          </label>
-          
-          <label className="text-sm flex flex-col gap-1 sm:col-span-2">
-            <span className="text-muted-foreground">Interviewed By</span>
-            <SearchableSelect
-              value={String(formData.interviewed_by)}
-              onChange={v => setFormData({ ...formData, interviewed_by: v })}
-              options={interviewerOpts}
-              placeholder="Select interviewer"
-            />
-          </label>
-
-          <div className="sm:col-span-2 grid grid-cols-3 gap-4">
-            <RatingInput
-              label="Overall Experience"
-              value={formData.overall_experience}
-              onChange={v => setFormData({ ...formData, overall_experience: v })}
-            />
-            <RatingInput
-              label="Management Rating"
-              value={formData.management_rating}
-              onChange={v => setFormData({ ...formData, management_rating: v })}
-            />
-            <RatingInput
-              label="Work Environment"
-              value={formData.work_environment_rating}
-              onChange={v => setFormData({ ...formData, work_environment_rating: v })}
-            />
-          </div>
-
-          <label className="text-sm flex flex-col gap-1 sm:col-span-2">
-            <span className="text-muted-foreground">Reason for Leaving</span>
-            <textarea
-              rows={2}
-              value={formData.reason_for_leaving}
-              onChange={e => setFormData({ ...formData, reason_for_leaving: e.target.value })}
-              className="bg-muted/40 border border-border rounded-md p-3 outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
-
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground">Feedback on Management</span>
-            <textarea
-              rows={2}
-              value={formData.feedback_management}
-              onChange={e => setFormData({ ...formData, feedback_management: e.target.value })}
-              className="bg-muted/40 border border-border rounded-md p-3 outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
-
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground">Work Environment Feedback</span>
-            <textarea
-              rows={2}
-              value={formData.feedback_work_environment}
-              onChange={e => setFormData({ ...formData, feedback_work_environment: e.target.value })}
-              className="bg-muted/40 border border-border rounded-md p-3 outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
-
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground">Compensation Feedback</span>
-            <textarea
-              rows={2}
-              value={formData.feedback_compensation}
-              onChange={e => setFormData({ ...formData, feedback_compensation: e.target.value })}
-              className="bg-muted/40 border border-border rounded-md p-3 outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
-
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground">Growth Opportunities Feedback</span>
-            <textarea
-              rows={2}
-              value={formData.feedback_growth}
-              onChange={e => setFormData({ ...formData, feedback_growth: e.target.value })}
-              className="bg-muted/40 border border-border rounded-md p-3 outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
-
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground">New Employer</span>
-            <input
-              value={formData.new_employer}
-              onChange={e => setFormData({ ...formData, new_employer: e.target.value })}
-              className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
-
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground">New Position</span>
-            <input
-              value={formData.new_position}
-              onChange={e => setFormData({ ...formData, new_position: e.target.value })}
-              className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
-
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground">New Salary Range</span>
-            <input
-              value={formData.new_salary_range}
-              onChange={e => setFormData({ ...formData, new_salary_range: e.target.value })}
-              className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
-              placeholder="e.g., 100,000 - 150,000"
-            />
-          </label>
-
-          <label className="text-sm flex flex-col gap-1">
-            <Checkbox
-              checked={formData.willing_to_rejoin}
-              onChange={v => setFormData({ ...formData, willing_to_rejoin: v })}
-              label="Willing to Rejoin"
-            />
-          </label>
-
-          <label className="text-sm flex flex-col gap-1 sm:col-span-2">
-            <span className="text-muted-foreground">Any Concerns</span>
-            <textarea
-              rows={2}
-              value={formData.any_concerns}
-              onChange={e => setFormData({ ...formData, any_concerns: e.target.value })}
-              className="bg-muted/40 border border-border rounded-md p-3 outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
-
-          <label className="text-sm flex flex-col gap-1 sm:col-span-2">
-            <span className="text-muted-foreground">General Feedback</span>
-            <textarea
-              rows={3}
-              value={formData.general_feedback}
-              onChange={e => setFormData({ ...formData, general_feedback: e.target.value })}
-              className="bg-muted/40 border border-border rounded-md p-3 outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Any additional feedback or suggestions..."
-            />
-          </label>
-        </div>
-        
-        <div className="p-4 border-t border-border flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted">
-            Cancel
-          </button>
-          <button type="submit" className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90">
-            Save Interview
-          </button>
-        </div>
-      </form>
     </div>
   );
 }
