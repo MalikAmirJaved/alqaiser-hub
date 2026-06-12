@@ -7,23 +7,28 @@ until pg_isready -h "${DB_HOST:-db}" -U "${DB_USER:-alqaiser_user}" -d "${DB_NAM
 done
 echo "DB is ready."
 
-# Step 1: Make migrations for apps that have models (safe to run repeatedly)
+# Delete old migration files only
+echo "Deleting old migration files..."
+find . -path "*/migrations/*.py" ! -name "__init__.py" -delete
+find . -path "*/migrations/*.pyc" -delete
+
+# Create fresh migrations
+echo "Creating migrations..."
 python manage.py makemigrations organization --no-input
 python manage.py makemigrations compsetting --no-input
+python manage.py makemigrations hr --no-input
 python manage.py makemigrations --no-input
 
-# Step 2: Apply all migrations in dependency order
-python manage.py migrate organization --no-input
-python manage.py migrate compsetting --no-input
-python manage.py migrate --no-input
+# IMPORTANT:
+# Fake initial because tables already exist
+echo "Applying migrations..."
+python manage.py migrate --fake-initial --no-input
 
-# Step 3: Collect static files (needed even in dev for admin)
+# Collect static
 python manage.py collectstatic --no-input --clear 2>/dev/null || true
 
-# Step 4: Seed initial data
-echo "Seeding data..."
-python manage.py seed_org
+# Seed
+python manage.py seed_org || true
 
-# Step 5: Start server
 echo "Starting server..."
 exec python manage.py runserver 0.0.0.0:8000

@@ -7,7 +7,12 @@ from apps.hr.views.employee_views import EmployeeView, EmployeeStatsView
 from apps.hr.views.payroll_views import (
     PayrollView, PayrollStatsView, 
     EmployeeLoanView, CompensationView,
-    LoanStatusUpdateView  # New view
+    LoanStatusUpdateView 
+)
+from apps.hr.views.employee_asset_views import (
+    EmployeeAssetAssignmentView,
+    AvailableAssetsView,
+    BulkAssignmentView
 )
 
 urlpatterns = [
@@ -33,7 +38,11 @@ urlpatterns = [
     # Loans (with individual update/delete support)
     path('loans/', EmployeeLoanView.as_view(), name='employee-loans'),
     path('loans/status/', LoanStatusUpdateView.as_view(), name='loan-status-update'),  # New endpoint
-    
+
     # Compensations
     path('compensations/', CompensationView.as_view(), name='compensations'),
+
+    path('employee-assets/assignments/', EmployeeAssetAssignmentView.as_view(), name='employee-asset-assignments'),
+    path('employee-assets/available/', AvailableAssetsView.as_view(), name='available-assets'),
+    path('employee-assets/bulk/', BulkAssignmentView.as_view(), name='bulk-assignments'),
 ]

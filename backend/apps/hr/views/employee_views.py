@@ -239,45 +239,63 @@ class EmployeeView(APIView):
         
         # Assign assets from kit if provided
         asset_category_id = request.data.get('asset_category_id')
+
         if asset_category_id and asset_category_id != '':
             self._assign_assets_from_category(employee, asset_category_id, request.user)
-        
+
         return Response({
             "message": "Employee created successfully",
             "employee": self._serialize_employee(employee),
         }, status=status.HTTP_201_CREATED)
 
     def _assign_assets_from_category(self, employee, category_id, user):
-        """Assign all assets from a category to an employee"""
+        """Assign all assets from a category/kit to an employee"""
         try:
             category = AssetCategory.objects.get(
                 id=category_id,
                 company_id=employee.company_id,
                 is_deleted=False
             )
-            
-            for asset in category.assets.filter(is_deleted=False, is_assigned=False):
-                EmployeeAssetAssignment.objects.create(
-                    company_id=employee.company_id,
-                    branch_id=employee.branch_id,
-                    employee=employee,
-                    asset=asset,
-                    category=category,
-                    assigned_date=date.today(),
-                    status='ACTIVE',
-                    condition='NEW',
-                    notes=f"Assigned via kit: {category.name}",
-                    created_by=user,
-                    updated_by=user,
+
+            # Get all assets in the category
+            assets = list(
+                category.assets.filter(
+                    is_deleted=False,
+                    is_active=True
                 )
-                
-                # Mark asset as assigned
-                asset.is_assigned = True
-                asset.save()
-                
+            )
+
+
+            assignments = []
+
+            for asset in assets:
+                assignments.append(
+                    EmployeeAssetAssignment(
+                        company_id=employee.company_id,
+                        branch_id=employee.branch_id,
+                        employee=employee,
+                        asset=asset,
+                        source_type='KIT',
+                        source_kit=category,
+                        assigned_date=date.today(),
+                        status='ACTIVE',
+                        condition_on_assignment='NEW',
+                        notes=f"Assigned via kit: {category.name}",
+                        created_by=user,
+                        updated_by=user,
+                    )
+                )
+
+            if assignments:
+                # Bulk create all assignments
+                EmployeeAssetAssignment.objects.bulk_create(assignments)
+
         except AssetCategory.DoesNotExist:
-            pass
-    
+            logger.warning(f"AssetCategory {category_id} not found")
+        except Exception as e:
+            logger.error(f"Error assigning assets from kit: {str(e)}")
+            raise
+
     @transaction.atomic
     def patch(self, request):
         """Update employee"""

@@ -130,6 +130,10 @@ class Asset(TimeStampedModel):
     is_active = models.BooleanField(default=True)
     is_assigned = models.BooleanField(default=False)
     
+    # Adding quantity tracking for future stock management
+    total_quantity = models.PositiveIntegerField(default=1, null=True, blank=True)  
+    available_quantity = models.PositiveIntegerField(default=1, null=True, blank=True)
+
     # Audit
     created_by = models.ForeignKey(
         django_settings.AUTH_USER_MODEL,
@@ -157,6 +161,7 @@ class Asset(TimeStampedModel):
             models.Index(fields=['is_assigned']),
             models.Index(fields=['vendor']),
         ]
+
     
     def __str__(self):
         return f"{self.name} ({self.brand or 'No Brand'})"
@@ -411,44 +416,35 @@ class Employee(TimeStampedModel):
         return f"{self.first_name} {self.last_name or ''}".strip()
 
 
-class EmployeeAssetAssignment(TimeStampedModel):
-    """Track asset assignments to employees"""
+class EmployeeAssetAssignment(models.Model):
+    """Individual asset assignments (generated from direct assignment or kit expansion)"""
     id = models.BigAutoField(primary_key=True)
     _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     
-    company = models.ForeignKey(
-        Company,
-        on_delete=models.CASCADE,
-        related_name='employee_asset_assignments'
-    )
-    branch = models.ForeignKey(
-        Branch,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='employee_asset_assignments'
-    )
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='employee_asset_assignments')
+    branch = models.ForeignKey(Branch, on_delete=models.SET_NULL, null=True, blank=True, related_name='employee_asset_assignments')
     
-    employee = models.ForeignKey(
-        Employee,
-        on_delete=models.CASCADE,
-        related_name='asset_assignments'
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='asset_assignments')
+    asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name='employee_assignments')
+    
+    # Track source: direct or from kit
+    source_type = models.CharField(
+        max_length=20,
+        choices=[('DIRECT', 'Direct Assignment'), ('KIT', 'Kit Assignment')],
+        default='DIRECT'
     )
-    asset = models.ForeignKey(
-        Asset,
-        on_delete=models.CASCADE,
-        related_name='employee_assignments'
-    )
-    category = models.ForeignKey(
-        AssetCategory,
+    source_kit = models.ForeignKey(
+        AssetCategory,  # This IS the Kit model
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='employee_assignments'
+        related_name='kit_assignments'
     )
     
     assigned_date = models.DateField()
     returned_date = models.DateField(null=True, blank=True)
+    expected_return_date = models.DateField(null=True, blank=True)
+    
     status = models.CharField(
         max_length=20,
         choices=[
@@ -459,42 +455,39 @@ class EmployeeAssetAssignment(TimeStampedModel):
         ],
         default='ACTIVE'
     )
-    condition = models.CharField(
+    condition_on_assignment = models.CharField(
         max_length=20,
-        choices=[
-            ('NEW', 'New'),
-            ('GOOD', 'Good'),
-            ('FAIR', 'Fair'),
-            ('POOR', 'Poor'),
-        ],
-        default='NEW'
+        choices=[('NEW', 'New'), ('GOOD', 'Good'), ('FAIR', 'Fair'), ('POOR', 'Poor')],
+        default='GOOD'
+    )
+    condition_on_return = models.CharField(
+        max_length=20,
+        choices=[('GOOD', 'Good'), ('FAIR', 'Fair'), ('POOR', 'Poor'), ('DAMAGED', 'Damaged')],
+        null=True,
+        blank=True
     )
     notes = models.TextField(blank=True, null=True)
+    return_notes = models.TextField(blank=True, null=True)
     
-    created_by = models.ForeignKey(
-        django_settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='created_asset_assignments'
-    )
-    updated_by = models.ForeignKey(
-        django_settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='updated_asset_assignments'
-    )
+    created_by = models.ForeignKey(django_settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_asset_assignments')
+    updated_by = models.ForeignKey(django_settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='updated_asset_assignments')
     
     class Meta:
-        verbose_name = "Employee Asset Assignment"
-        verbose_name_plural = "Employee Asset Assignments"
         ordering = ['-assigned_date']
         indexes = [
             models.Index(fields=['employee', 'status']),
             models.Index(fields=['asset', 'status']),
+            models.Index(fields=['company', 'status']),
+            models.Index(fields=['source_kit']),
         ]
-
+        constraints = [
+            # Prevent duplicate active assignments of same asset to same employee
+            models.UniqueConstraint(
+                fields=['employee', 'asset'],
+                condition=models.Q(status='ACTIVE'),
+                name='unique_active_assignment'
+            )
+        ]
 
 class EmployeeDefaultShift(TimeStampedModel):
     """Track employee default shift history"""
