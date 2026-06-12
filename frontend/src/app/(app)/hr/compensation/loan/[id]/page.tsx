@@ -141,7 +141,6 @@ export default function LoanDetailPage() {
           <InfoRow label="Paid Amount" value={fmtCurrency(loan.paid_amount)} />
           <InfoRow label="Remaining Amount" value={fmtCurrency(loan.remaining_amount)} />
           <InfoRow label="Paid Months" value={loan.paid_months ?? 0} />
-          {loan.end_date && <InfoRow label="End Date" value={fmtDate(loan.end_date)} />}
         </div>
 
         {/* Repayment Progress */}

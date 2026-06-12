@@ -28,9 +28,12 @@ export interface Compensation {
   utilities_allowance?: number;
   education_allowance?: number;
   other_allowances?: number;
+  employer_pf?: number;
+  employer_eobi?: number;
   total_allowances?: string;
   total_monthly?: string;
   overtime_rate?: number;
+  bonus_percentage?: number;
   notes?: string;
   status?: string;
   frequency_type: 'ONE_TIME' | 'SELECTED_MONTH' | 'MONTH_RANGE';

@@ -395,7 +395,6 @@ class Compensation(BaseModel):
     )
     
     # Status & Dates
-    is_active = models.BooleanField(default=True)
     status = models.CharField(
         max_length=20,
         choices=[('ACTIVE', 'Active'), ('INACTIVE', 'Inactive')],
@@ -409,8 +408,8 @@ class Compensation(BaseModel):
         verbose_name_plural = "Compensations"
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['employee', 'is_active']),
-            models.Index(fields=['company_id', 'is_active']),
+            models.Index(fields=['employee']),
+            models.Index(fields=['company_id', 'status']),
             models.Index(fields=['frequency_type']),
         ]
     
@@ -508,9 +507,6 @@ class EmployeeLoan(BaseModel):
         ],
         default='MONTH_RANGE'
     )
-    
-    # Dates
-    end_date = models.DateField(null=True, blank=True)
     
     # Status
     status = models.CharField(

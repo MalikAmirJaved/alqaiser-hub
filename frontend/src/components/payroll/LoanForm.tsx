@@ -69,11 +69,13 @@ export default function LoanForm({
 
   const mr = formData.month_range || {};
 
-  // Filter available months for start month based on joining date (same pattern as CompensationForm)
+  // Filter available months for start month based on joining date and selected start year
   const availableStartMonths = useMemo(() => {
     if (!joiningDate) return MONTHS;
+    const year = mr.start_year;
+    if (year && year > joiningDate.year) return MONTHS;
     return MONTHS.filter(m => m.value >= joiningDate.month);
-  }, [joiningDate]);
+  }, [joiningDate, mr.start_year]);
 
   // Filter end month options based on start selection (exclude start month)
   const availableEndMonths = useMemo(() => {

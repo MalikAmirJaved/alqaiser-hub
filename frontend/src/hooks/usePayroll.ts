@@ -95,15 +95,11 @@ export interface EmployeeLoan {
   remaining_amount: string;
   paid_amount: string;
   paid_months: number;
-  total_months?: number;
-  monthly_deduction?: string;
   interest_rate: string;
   total_payable: string;
   frequency_type: 'ONE_TIME' | 'SELECTED_MONTH' | 'MONTH_RANGE';
   selected_months: SelectedMonth[];
   month_range: MonthRange | null;
-  start_date?: string;
-  end_date?: string;
   status: string;
   purpose?: string;
   transaction_number?: string;
@@ -137,7 +133,6 @@ export interface Compensation {
   frequency_type: 'ONE_TIME' | 'SELECTED_MONTH' | 'MONTH_RANGE';
   selected_months: SelectedMonth[];
   month_range: MonthRange | null;
-  is_active: boolean;
   status: string;
   review_date?: string;
   notes?: string;
@@ -257,7 +252,10 @@ export function useUpdateEmployeeLoan() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: any) => api("/api/hr/loans/", { method: "PATCH", body: JSON.stringify(data) }),
+    mutationFn: (data: any) => {
+      const { id, ...rest } = data;
+      return api(`/api/hr/loans/${id}/`, { method: "PATCH", body: JSON.stringify(rest) });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employeeLoans"] });
     },
@@ -268,7 +266,7 @@ export function useDeleteEmployeeLoan() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api("/api/hr/loans/", { method: "DELETE", body: JSON.stringify({ id }) }),
+    mutationFn: (id: string) => api(`/api/hr/loans/${id}/`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employeeLoans"] });
     },
@@ -315,7 +313,10 @@ export function useUpdateCompensation() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: any) => api("/api/hr/compensations/", { method: "PATCH", body: JSON.stringify(data) }),
+    mutationFn: (data: any) => {
+      const { id, ...rest } = data;
+      return api(`/api/hr/compensations/${id}/`, { method: "PATCH", body: JSON.stringify(rest) });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["compensations"] });
       queryClient.invalidateQueries({ queryKey: ["employees"] });
@@ -327,7 +328,7 @@ export function useDeleteCompensation() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api("/api/hr/compensations/", { method: "DELETE", body: JSON.stringify({ id }) }),
+    mutationFn: (id: string) => api(`/api/hr/compensations/${id}/`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["compensations"] });
       queryClient.invalidateQueries({ queryKey: ["employees"] });

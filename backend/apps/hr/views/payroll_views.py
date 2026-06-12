@@ -2,7 +2,7 @@
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 from calendar import monthrange
-from django.db import models
+from django.db import models, transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.views import APIView
@@ -11,8 +11,6 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from django.db.models import Q
 import logging
-
-from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import (
     Employee, PayrollRecord, EmployeeLoan, Compensation, LeaveRequest, PayrollDeductionDetail,
@@ -28,15 +26,8 @@ from apps.finance.services.payable import (
 
 logger = logging.getLogger(__name__)
 
-def safe_date(value):
-    if not value:
-        return None
-    if hasattr(value, "isoformat"):
-        return value.isoformat()
-    return value
 
-
-class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+class PayrollView(PermissionRequiredMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'payroll'
     """Payroll management with UUID support - Leave deduction uses working days only"""
@@ -285,6 +276,7 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     # POST (Process Payroll)
     # ------------------------------------------------------------------
 
+    @transaction.atomic
     def post(self, request):
         company_id = request.user.company_id
         branch_id = request.user.branch_id
@@ -349,7 +341,7 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         # ---------- Compensation allowances (month-aware) ----------
         compensation = Compensation.objects.filter(
             employee=employee,
-            is_active=True,
+            status='ACTIVE',
             is_deleted=False
         ).prefetch_related('selected_months', 'month_range').first()
         total_compensation = 0
@@ -585,14 +577,15 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     # PATCH - Update payroll record
     # ------------------------------------------------------------------
 
-    def patch(self, request):
+    @transaction.atomic
+    def patch(self, request, pk=None):
         company_id = request.user.company_id
         if not company_id:
             return Response(
                 {'error': 'User is not associated with any company'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        payroll_uuid = request.data.get('id')
+        payroll_uuid = pk or request.data.get('id')
         if not payroll_uuid:
             return Response(
                 {'error': 'id (UUID) is required'},
@@ -655,14 +648,15 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     # DELETE - Soft delete payroll record
     # ------------------------------------------------------------------
 
-    def delete(self, request):
+    @transaction.atomic
+    def delete(self, request, pk=None):
         company_id = request.user.company_id
         if not company_id:
             return Response(
                 {'error': 'User is not associated with any company'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        payroll_uuid = request.data.get('id')
+        payroll_uuid = pk or request.data.get('id')
         if not payroll_uuid:
             return Response(
                 {'error': 'id (UUID) is required'},
@@ -734,7 +728,7 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         # Compensation (month-aware)
         compensation = Compensation.objects.filter(
             employee=employee,
-            is_active=True,
+            status='ACTIVE',
             is_deleted=False
         ).prefetch_related('selected_months', 'month_range').first()
         total_compensation = 0
@@ -847,7 +841,7 @@ class PayrollPreviewView(PayrollView):
 # Other views (PayrollStatsView, EmployeeLoanView, etc.) remain unchanged
 # ============================================================================
 
-class PayrollStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+class PayrollStatsView(PermissionRequiredMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'payroll'
     """Payroll statistics"""
@@ -890,7 +884,7 @@ class PayrollStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         })
 
 
-class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+class EmployeeLoanView(PermissionRequiredMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'compensation'
     """Employee loans management with UUID support"""
@@ -937,7 +931,6 @@ class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "frequency_type": loan.frequency_type,
             "selected_months": selected_months,
             "month_range": month_range,
-            "end_date": safe_date(loan.end_date),
             "status": loan.status,
             "purpose": loan.purpose,
             "transaction_number": loan.transaction_number,
@@ -984,6 +977,7 @@ class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         return Response([self._serialize_loan(l) for l in loans])
     
 
+    @transaction.atomic
     def post(self, request):
         company_id = request.user.company_id
         branch_id = request.user.branch_id
@@ -1004,7 +998,6 @@ class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             company_id=company_id,
             is_deleted=False
         )
-        monthly_salary = float(employee.salary)
         principal_amount = float(request.data.get('principal_amount', 0))
         interest_rate = float(request.data.get('interest_rate', 0))
         frequency_type = request.data.get('frequency_type', 'MONTH_RANGE')
@@ -1084,7 +1077,6 @@ class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             interest_rate=interest_rate,
             total_payable=total_payable,
             frequency_type=frequency_type,
-            end_date=request.data.get('end_date'),
             status='PENDING',
             purpose=request.data.get('purpose'),
             notes=request.data.get('notes'),
@@ -1141,14 +1133,15 @@ class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         }, status=status.HTTP_201_CREATED)
     
 
-    def patch(self, request):
+    @transaction.atomic
+    def patch(self, request, pk=None):
         company_id = request.user.company_id
         if not company_id:
             return Response(
                 {'error': 'User is not associated with any company'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        loan_uuid = request.data.get('id')
+        loan_uuid = pk or request.data.get('id')
         if not loan_uuid:
             return Response(
                 {'error': 'id (UUID) is required'},
@@ -1160,7 +1153,7 @@ class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             company_id=company_id,
             is_deleted=False
         )
-        updatable_fields = ['loan_type', 'interest_rate', 'end_date', 'purpose', 'notes', 'frequency_type']
+        updatable_fields = ['loan_type', 'interest_rate', 'purpose', 'notes', 'frequency_type']
         for field in updatable_fields:
             if field in request.data:
                 setattr(loan, field, request.data[field])
@@ -1230,14 +1223,15 @@ class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         })
     
 
-    def delete(self, request):
+    @transaction.atomic
+    def delete(self, request, pk=None):
         company_id = request.user.company_id
         if not company_id:
             return Response(
                 {'error': 'User is not associated with any company'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        loan_uuid = request.data.get('id')
+        loan_uuid = pk or request.data.get('id')
         if not loan_uuid:
             return Response(
                 {'error': 'id (UUID) is required'},
@@ -1261,11 +1255,12 @@ class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         return Response({'message': 'Loan deleted successfully'})
 
 
-class LoanStatusUpdateView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+class LoanStatusUpdateView(PermissionRequiredMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'compensation'
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def post(self, request):
         company_id = request.user.company_id
         if not company_id:
@@ -1312,7 +1307,7 @@ class LoanStatusUpdateView(CompanyBranchMixin, PermissionRequiredMixin, APIView)
         })
 
 
-class CompensationView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+class CompensationView(PermissionRequiredMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'compensation'
     permission_classes = [IsAuthenticated]
@@ -1363,7 +1358,6 @@ class CompensationView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "frequency_type": comp.frequency_type,
             "selected_months": selected_months,
             "month_range": month_range,
-            "is_active": comp.is_active,
             "status": comp.status,
             "review_date": comp.review_date.isoformat() if comp.review_date else None,
             "notes": comp.notes,
@@ -1406,6 +1400,7 @@ class CompensationView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         return Response([self._serialize_compensation(c) for c in compensations])
     
 
+    @transaction.atomic
     def post(self, request):
         company_id = request.user.company_id
         branch_id = request.user.branch_id
@@ -1423,7 +1418,7 @@ class CompensationView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
         existing_compensation = Compensation.objects.filter(
             employee=employee,
-            is_active=True,
+            status='ACTIVE',
             is_deleted=False
         ).first()
         if existing_compensation:
@@ -1497,7 +1492,6 @@ class CompensationView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             bonus_percentage=request.data.get('bonus_percentage', 0),
             frequency_type=frequency_type,
             status='ACTIVE',
-            is_active=True,
             review_date=request.data.get('review_date'),
             notes=request.data.get('notes'),
             created_by=request.user,
@@ -1535,14 +1529,15 @@ class CompensationView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         }, status=status.HTTP_201_CREATED)
     
 
-    def patch(self, request):
+    @transaction.atomic
+    def patch(self, request, pk=None):
         company_id = request.user.company_id
         if not company_id:
             return Response(
                 {'error': 'User is not associated with any company'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        comp_uuid = request.data.get('id')
+        comp_uuid = pk or request.data.get('id')
         if not comp_uuid:
             return Response(
                 {'error': 'id (UUID) is required'},
@@ -1559,7 +1554,7 @@ class CompensationView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             'transport_allowance', 'phone_allowance',
             'utilities_allowance', 'education_allowance', 'other_allowances',
             'employer_pf', 'employer_eobi', 'overtime_rate', 'bonus_percentage',
-            'frequency_type', 'status', 'is_active', 'review_date', 'notes'
+            'frequency_type', 'status', 'review_date', 'notes'
         ]
         for field in updatable_fields:
             if field in request.data:
@@ -1606,14 +1601,15 @@ class CompensationView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         })
     
 
-    def delete(self, request):
+    @transaction.atomic
+    def delete(self, request, pk=None):
         company_id = request.user.company_id
         if not company_id:
             return Response(
                 {'error': 'User is not associated with any company'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        comp_uuid = request.data.get('id')
+        comp_uuid = pk or request.data.get('id')
         if not comp_uuid:
             return Response(
                 {'error': 'id (UUID) is required'},
@@ -1627,7 +1623,6 @@ class CompensationView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         )
         compensation.is_deleted = True
         compensation.status = 'INACTIVE'
-        compensation.is_active = False
         compensation.deleted_at = timezone.now()
         compensation.deleted_by = request.user
         compensation.save()
