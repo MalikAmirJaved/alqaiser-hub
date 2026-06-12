@@ -80,9 +80,11 @@ urlpatterns = [
     # Loans (with individual update/delete support)
     path('loans/', EmployeeLoanView.as_view(), name='employee-loans'),
     path('loans/status/', LoanStatusUpdateView.as_view(), name='loan-status-update'),
+    path('loans/<str:pk>/', EmployeeLoanView.as_view(), name='employee-loan-detail'),
 
     # Compensations
     path('compensations/', CompensationView.as_view(), name='compensations'),
+    path('compensations/<str:pk>/', CompensationView.as_view(), name='compensation-detail'),
 
     # employee assets
     path('employee-assets/assignments/', EmployeeAssetAssignmentView.as_view(), name='employee-asset-assignments'),

@@ -37,7 +37,6 @@ class AuditLog(BaseModel):
     model_name = models.CharField(max_length=100, db_index=True)
     record_id = models.UUIDField(db_index=True)
     module = models.CharField(max_length=50, db_index=True)
-    changes = models.JSONField(default=dict, blank=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True, null=True)
 
@@ -52,3 +51,25 @@ class AuditLog(BaseModel):
 
     def __str__(self):
         return f"{self.action} {self.model_name} {self.record_id} by {self.user} at {self.created_at}"
+
+
+class AuditLogChange(BaseModel):
+    audit_log = models.ForeignKey(AuditLog, on_delete=models.CASCADE, related_name='field_changes', db_index=True)
+    field_name = models.CharField(max_length=100, db_index=True)
+    old_value = models.TextField(null=True, blank=True)
+    new_value = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'audit_log_changes'
+        ordering = ['field_name']
+        indexes = [
+            models.Index(fields=['field_name']),
+            models.Index(fields=['audit_log', 'field_name']),
+        ]
+
+    def __str__(self):
+        if self.old_value is None and self.new_value is not None:
+            return f"CREATE {self.field_name} = {self.new_value}"
+        elif self.old_value is not None and self.new_value is None:
+            return f"DELETE {self.field_name} = {self.old_value}"
+        return f"UPDATE {self.field_name}: {self.old_value} \u2192 {self.new_value}"

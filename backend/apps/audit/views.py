@@ -8,7 +8,7 @@ class AuditLogListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = AuditLogSerializer
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['model_name', 'record_id', 'module', 'action', 'user__id']
+    filterset_fields = ['model_name', 'record_id', 'module', 'action', 'user__id', 'user']
 
     def get_queryset(self):
         user = self.request.user

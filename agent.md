@@ -450,3 +450,98 @@ When implementing or updating Leave forms and APIs, enforce the following rules 
 > - Use static/hardcoded data
 > - Create alternative notification systems (use `apiFetch` + `NotificationContext`)
 > - Expose `id` fields in API responses (use `_id` only)
+
+---
+
+> [!IMPORTANT]
+> **ALWAYS USE PURE POSTGRESQL RELATIONAL DB FORMAT**
+> - Use proper relational database design patterns with PostgreSQL
+> - Define explicit foreign key relationships between models
+> - Use appropriate data types (e.g., `DecimalField` for money, `PositiveSmallIntegerField` for months/years)
+> - Create database indexes for frequently queried columns
+- Use `unique_together` constraints where needed for data integrity
+> - Follow PostgreSQL naming conventions (snake_case for tables and columns)
+> - Use `JSONField` only for truly unstructured data; prefer normalized tables for relational data
+> - Always use `on_delete` behavior explicitly (CASCADE, SET_NULL, etc.)
+
+---
+
+## 9. Compensation & Loan Module - IMPLEMENTED
+
+### Compensation Module Changes (Implemented)
+
+#### Fields REMOVED from `Compensation` model:
+- `grade` (CharField) - Removed
+- `effective_date` (DateField) - Removed
+
+#### New Child Tables (Implemented):
+- `CompensationSelectedMonth` - Stores multiple selected months for SELECTED_MONTH frequency
+- `CompensationMonthRange` - Stores start/end range for MONTH_RANGE frequency (OneToOne with Compensation)
+
+#### Frequency Type Behavior:
+- **SELECTED_MONTH**: Multi-select month picker with checkboxes. User can select multiple months.
+- **MONTH_RANGE**: Start/end month+year dropdowns with validation:
+  - End month/year must not be before start month/year
+  - Start month/year must not be before employee's joining_date
+  - Months before employee joining date are filtered out from dropdowns
+
+---
+
+### Loan Module Changes (Implemented)
+
+#### Fields REMOVED from `EmployeeLoan` model:
+- `monthly_deduction` (DecimalField) - Removed (now in child tables)
+- `total_months` (PositiveIntegerField) - Removed
+- `start_date` (DateField) - Removed
+
+#### New Child Tables (Implemented):
+- `LoanSelectedMonth` - Stores multiple selected months + deduction for SELECTED_MONTH frequency
+  - `deduction` field: Auto-calculated (total_payable / num_months), EDITABLE by user
+- `LoanMonthRange` - Stores start/end range + deduction for MONTH_RANGE frequency
+  - `deduction` field: Auto-calculated (total_payable / total_months), NOT editable
+
+#### Frequency Type Behavior:
+- **SELECTED_MONTH**: Multi-select month picker + per-month deduction fields (auto-calculated, editable)
+- **MONTH_RANGE**: Start/end month+year dropdowns + deduction display (auto-calculated, read-only)
+- Same validation rules as compensation (end >= start, start >= joining_date)
+
+---
+
+### Files Modified
+
+#### Backend:
+- `backend/apps/hr/models.py` - Removed fields, added 4 new child models
+- `backend/apps/hr/views/payroll_views.py` - Updated serializers, CRUD operations, validation
+
+#### Frontend:
+- `frontend/src/components/payroll/types.ts` - New interfaces (SelectedMonth, MonthRange), helper functions
+- `frontend/src/components/payroll/CompensationForm.tsx` - Removed grade/effective_date, multi-select UI, validation
+- `frontend/src/components/payroll/LoanForm.tsx` - Removed monthly_deduction/total_months/start_date, deduction fields
+- `frontend/src/components/payroll/CompensationTab.tsx` - Removed Grade/Effective Date columns
+- `frontend/src/components/payroll/LoanTab.tsx` - Updated display (removed Monthly column, shows Total Payable)
+- `frontend/src/components/payroll/CompensationLoanPage.tsx` - Passes employee joining date to forms
+- `frontend/src/hooks/usePayroll.ts` - Updated interfaces for new data structures
+
+### API Response Structure
+
+#### Compensation Response:
+```json
+{
+  "id": "uuid",
+  "employee_id": "uuid",
+  "frequency_type": "SELECTED_MONTH",
+  "selected_months": [{"month": 1, "year": 2025}, ...],
+  "month_range": {"start_month": 1, "start_year": 2025, "end_month": 12, "end_year": 2025}
+}
+```
+
+#### Loan Response:
+```json
+{
+  "id": "uuid",
+  "employee_id": "uuid",
+  "frequency_type": "MONTH_RANGE",
+  "selected_months": [{"month": 1, "year": 2025, "deduction": "5000.00"}, ...],
+  "month_range": {"start_month": 1, "start_year": 2025, "end_month": 12, "end_year": 2025, "deduction": "5000.00"}
+}
+```

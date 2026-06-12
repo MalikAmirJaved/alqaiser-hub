@@ -1,8 +1,9 @@
 // components/payroll/LoanTab.tsx
 "use client";
 
-import { useState } from "react";
-import { Pencil, Trash2, MoreHorizontal, HandCoins, Calendar, DollarSign, TrendingDown } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Pencil, Trash2, MoreHorizontal, HandCoins, Clock, Eye } from "lucide-react";
+import { getFrequencyLabel, getFrequencyBadgeColor } from "./types";
 
 interface LoanTabProps {
     filteredLoans: any[];
@@ -23,6 +24,7 @@ export default function LoanTab({
     onDelete,
     onStatusChange
 }: LoanTabProps) {
+    const router = useRouter();
     const getStatusColor = (status: string) => {
         switch (status) {
             case "ACTIVE": return "bg-green-500/15 text-green-600 border-green-500/30";
@@ -34,19 +36,30 @@ export default function LoanTab({
     };
 
     const getLoanTypeIcon = (type: string) => {
-        if (type.includes('CAR')) return '🚗';
-        if (type.includes('HOUSE')) return '🏠';
-        if (type.includes('EDUCATION')) return '📚';
-        if (type.includes('MEDICAL')) return '🏥';
-        if (type.includes('SALARY')) return '💰';
-        if (type.includes('EMERGENCY')) return '🚨';
-        return '💳';
+        if (type.includes('CAR')) return '\uD83D\uDE97';
+        if (type.includes('HOUSE')) return '\uD83C\uDFE0';
+        if (type.includes('EDUCATION')) return '\uD83D\uDCDA';
+        if (type.includes('MEDICAL')) return '\uD83C\uDFE5';
+        if (type.includes('SALARY')) return '\uD83D\uDCB0';
+        if (type.includes('EMERGENCY')) return '\uD83D\uDEA8';
+        return '\uD83D\uDCB3';
     };
 
-    const calculateProgress = (remaining: number, principal: number) => {
-        if (principal === 0) return 0;
-        const paid = principal - remaining;
-        return (paid / principal) * 100;
+    const calculateProgress = (remaining: number, totalPayable: number) => {
+        if (totalPayable === 0) return 0;
+        const paid = totalPayable - remaining;
+        return (paid / totalPayable) * 100;
+    };
+
+    const getDeductionDisplay = (item: any) => {
+        if (item.frequency_type === 'MONTH_RANGE' && item.month_range) {
+            return formatCurrency(parseFloat(item.month_range.deduction || "0"));
+        }
+        if ((item.frequency_type === 'SELECTED_MONTH' || item.frequency_type === 'ONE_TIME') && item.selected_months?.length > 0) {
+            const avg = item.selected_months.reduce((sum: number, sm: any) => sum + parseFloat(sm.deduction || "0"), 0) / item.selected_months.length;
+            return formatCurrency(avg);
+        }
+        return "\u2014";
     };
 
     return (
@@ -57,9 +70,10 @@ export default function LoanTab({
                         <th className="text-left px-4 py-3 font-medium">Employee</th>
                         <th className="text-left px-4 py-3 font-medium">Loan Type</th>
                         <th className="text-left px-4 py-3 font-medium">Principal</th>
-                        <th className="text-left px-4 py-3 font-medium">Monthly</th>
+                        <th className="text-left px-4 py-3 font-medium">Total Payable</th>
                         <th className="text-left px-4 py-3 font-medium">Remaining</th>
                         <th className="text-left px-4 py-3 font-medium">Progress</th>
+                        <th className="text-left px-4 py-3 font-medium">Frequency</th>
                         <th className="text-left px-4 py-3 font-medium">Status</th>
                         <th className="px-4 py-3 text-right font-medium">Actions</th>
                     </tr>
@@ -67,14 +81,14 @@ export default function LoanTab({
                 <tbody>
                     {filteredLoans.length === 0 && (
                         <tr>
-                            <td colSpan={8} className="text-center py-12 text-muted-foreground">
+                            <td colSpan={9} className="text-center py-12 text-muted-foreground">
                                 <HandCoins className="w-12 h-12 mx-auto mb-3 opacity-30" />
                                 No loan records found.
                             </td>
                         </tr>
                     )}
                     {filteredLoans.map((item) => {
-                        const progress = calculateProgress(parseFloat(item.remaining_amount), parseFloat(item.principal_amount));
+                        const progress = calculateProgress(parseFloat(item.remaining_amount), parseFloat(item.total_payable));
                         return (
                             <tr key={item.id} className="border-b border-border transition-colors hover:bg-muted/30" >
                                 <td className="px-4 py-3">
@@ -88,7 +102,7 @@ export default function LoanTab({
                                     </div>
                                 </td>
                                 <td className="px-4 py-3 font-semibold">{formatCurrency(parseFloat(item.principal_amount))}</td>
-                                <td className="px-4 py-3">{formatCurrency(parseFloat(item.monthly_deduction))}</td>
+                                <td className="px-4 py-3">{formatCurrency(parseFloat(item.total_payable))}</td>
                                 <td className="px-4 py-3">{formatCurrency(parseFloat(item.remaining_amount))}</td>
                                 <td className="px-4 py-3">
                                     <div className="flex items-center gap-2">
@@ -100,6 +114,12 @@ export default function LoanTab({
                                         </div>
                                         <span className="text-xs text-muted-foreground">{Math.round(progress)}%</span>
                                     </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-xs ${getFrequencyBadgeColor(item)}`}>
+                                        <Clock className="w-3 h-3" />
+                                        {getFrequencyLabel(item)}
+                                    </span>
                                 </td>
                                 <td className="px-4 py-3 relative overflow-visible">
                                     <div className="relative">
@@ -136,6 +156,13 @@ export default function LoanTab({
                                 </td>
                                 <td className="px-4 py-3 text-right whitespace-nowrap">
                                     <div className="flex items-center justify-end gap-1">
+                                        <button
+                                            onClick={() => router.push(`/hr/compensation/loan/${item.id}`)}
+                                            className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                                            title="View Details"
+                                        >
+                                            <Eye className="w-4 h-4" />
+                                        </button>
                                         {onEdit && (
                                           <button
                                               onClick={() => onEdit(item)}

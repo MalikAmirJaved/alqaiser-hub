@@ -306,7 +306,6 @@ export default function EmployeeDetailPage() {
                 { label: "HRA", val: latestCompensation.house_rent_allowance },
                 { label: "Medical", val: latestCompensation.medical_allowance },
                 { label: "Transport", val: latestCompensation.transport_allowance },
-                { label: "Fuel", val: latestCompensation.fuel_allowance },
                 { label: "Phone", val: latestCompensation.phone_allowance },
                 { label: "Utilities", val: latestCompensation.utilities_allowance },
                 { label: "Education", val: latestCompensation.education_allowance },

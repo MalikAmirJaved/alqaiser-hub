@@ -367,11 +367,9 @@ class Compensation(BaseModel):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='compensations')
     
     # Salary Structure
-    grade = models.CharField(max_length=50, blank=True, null=True)
     house_rent_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     medical_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     transport_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    fuel_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     phone_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     utilities_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     education_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -385,6 +383,17 @@ class Compensation(BaseModel):
     overtime_rate = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     bonus_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     
+    # Frequency Type
+    frequency_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('ONE_TIME', 'One Time'),
+            ('SELECTED_MONTH', 'Selected Month'),
+            ('MONTH_RANGE', 'Month Range'),
+        ],
+        default='MONTH_RANGE'
+    )
+    
     # Status & Dates
     is_active = models.BooleanField(default=True)
     status = models.CharField(
@@ -392,17 +401,17 @@ class Compensation(BaseModel):
         choices=[('ACTIVE', 'Active'), ('INACTIVE', 'Inactive')],
         default='ACTIVE'
     )
-    effective_date = models.DateField()
     review_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True, null=True)
     
     class Meta:
         verbose_name = "Compensation"
         verbose_name_plural = "Compensations"
-        ordering = ['-effective_date']
+        ordering = ['-created_at']
         indexes = [
             models.Index(fields=['employee', 'is_active']),
             models.Index(fields=['company_id', 'is_active']),
+            models.Index(fields=['frequency_type']),
         ]
     
     @property
@@ -411,7 +420,6 @@ class Compensation(BaseModel):
             self.house_rent_allowance +
             self.medical_allowance +
             self.transport_allowance +
-            self.fuel_allowance +
             self.phone_allowance +
             self.utilities_allowance +
             self.education_allowance +
@@ -425,6 +433,37 @@ class Compensation(BaseModel):
     @property
     def total_monthly(self):
         return self.total_allowances
+
+
+class CompensationSelectedMonth(BaseModel):
+    """Selected months for compensation with SELECTED_MONTH frequency"""
+    
+    compensation = models.ForeignKey(Compensation, on_delete=models.CASCADE, related_name='selected_months')
+    month = models.PositiveSmallIntegerField(help_text="1-12")
+    year = models.PositiveSmallIntegerField()
+    
+    class Meta:
+        verbose_name = "Compensation Selected Month"
+        verbose_name_plural = "Compensation Selected Months"
+        ordering = ['year', 'month']
+        unique_together = ('compensation', 'month', 'year')
+        indexes = [
+            models.Index(fields=['compensation']),
+        ]
+
+
+class CompensationMonthRange(BaseModel):
+    """Month range for compensation with MONTH_RANGE frequency"""
+    
+    compensation = models.OneToOneField(Compensation, on_delete=models.CASCADE, related_name='month_range')
+    start_month = models.PositiveSmallIntegerField(help_text="1-12")
+    start_year = models.PositiveSmallIntegerField()
+    end_month = models.PositiveSmallIntegerField(help_text="1-12")
+    end_year = models.PositiveSmallIntegerField()
+    
+    class Meta:
+        verbose_name = "Compensation Month Range"
+        verbose_name_plural = "Compensation Month Ranges"
 
 
 # =========================================================
@@ -451,17 +490,26 @@ class EmployeeLoan(BaseModel):
         default='PERSONAL_LOAN'
     )
     principal_amount = models.DecimalField(max_digits=12, decimal_places=2)
-    monthly_deduction = models.DecimalField(max_digits=12, decimal_places=2)
     remaining_amount = models.DecimalField(max_digits=12, decimal_places=2)
-    total_months = models.PositiveIntegerField()
+    paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     paid_months = models.PositiveIntegerField(default=0)
     
     # Interest
     interest_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     total_payable = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     
+    # Frequency Type
+    frequency_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('ONE_TIME', 'One Time'),
+            ('SELECTED_MONTH', 'Selected Month'),
+            ('MONTH_RANGE', 'Month Range'),
+        ],
+        default='MONTH_RANGE'
+    )
+    
     # Dates
-    start_date = models.DateField()
     end_date = models.DateField(null=True, blank=True)
     
     # Status
@@ -497,11 +545,41 @@ class EmployeeLoan(BaseModel):
         indexes = [
             models.Index(fields=['employee', 'status']),
             models.Index(fields=['company_id', 'status']),
+            models.Index(fields=['frequency_type']),
         ]
+
+
+class LoanSelectedMonth(BaseModel):
+    """Selected months for loan with SELECTED_MONTH frequency"""
     
-    @property
-    def remaining_months(self):
-        return max(0, self.total_months - self.paid_months)
+    loan = models.ForeignKey(EmployeeLoan, on_delete=models.CASCADE, related_name='selected_months')
+    month = models.PositiveSmallIntegerField(help_text="1-12")
+    year = models.PositiveSmallIntegerField()
+    deduction = models.DecimalField(max_digits=12, decimal_places=2, help_text="Auto-calculated but editable")
+    
+    class Meta:
+        verbose_name = "Loan Selected Month"
+        verbose_name_plural = "Loan Selected Months"
+        ordering = ['year', 'month']
+        unique_together = ('loan', 'month', 'year')
+        indexes = [
+            models.Index(fields=['loan']),
+        ]
+
+
+class LoanMonthRange(BaseModel):
+    """Month range for loan with MONTH_RANGE frequency"""
+    
+    loan = models.OneToOneField(EmployeeLoan, on_delete=models.CASCADE, related_name='month_range')
+    start_month = models.PositiveSmallIntegerField(help_text="1-12")
+    start_year = models.PositiveSmallIntegerField()
+    end_month = models.PositiveSmallIntegerField(help_text="1-12")
+    end_year = models.PositiveSmallIntegerField()
+    deduction = models.DecimalField(max_digits=12, decimal_places=2, help_text="Auto-calculated, not editable")
+    
+    class Meta:
+        verbose_name = "Loan Month Range"
+        verbose_name_plural = "Loan Month Ranges"
 
 
 # =========================================================

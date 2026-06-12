@@ -579,7 +579,6 @@ export const schemas = {
       { key: "house_rent_allowance", label: "HRA", type: "number" },
       { key: "medical_allowance", label: "Medical Allowance", type: "number" },
       { key: "transport_allowance", label: "Transport Allowance", type: "number" },
-      { key: "fuel_allowance", label: "Fuel Allowance", type: "number" },
       { key: "phone_allowance", label: "Phone Allowance", type: "number" },
       { key: "other_allowances", label: "Other Allowances", type: "number" },
       { key: "total_allowances", label: "Total Allowances", type: "number" },

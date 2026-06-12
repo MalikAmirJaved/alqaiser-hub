@@ -39,6 +39,22 @@ export interface PayrollStats {
   year: number;
 }
 
+export interface SelectedMonth {
+  id?: string;
+  month: number;
+  year: number;
+  deduction?: number;
+}
+
+export interface MonthRange {
+  id?: string;
+  start_month: number;
+  start_year: number;
+  end_month: number;
+  end_year: number;
+  deduction?: number;
+}
+
 export interface EmployeeLoan {
   id: string;
   employee_id: string;
@@ -49,14 +65,17 @@ export interface EmployeeLoan {
   loan_type: string;
   loan_type_display: string;
   principal_amount: string;
-  monthly_deduction: string;
   remaining_amount: string;
-  total_months: number;
+  paid_amount: string;
   paid_months: number;
-  remaining_months: number;
+  total_months?: number;
+  monthly_deduction?: string;
   interest_rate: string;
   total_payable: string;
-  start_date: string;
+  frequency_type: 'ONE_TIME' | 'SELECTED_MONTH' | 'MONTH_RANGE';
+  selected_months: SelectedMonth[];
+  month_range: MonthRange | null;
+  start_date?: string;
   end_date?: string;
   status: string;
   purpose?: string;
@@ -73,12 +92,10 @@ export interface Compensation {
   employee_code: string;
   department: string;
   designation?: string;
-  grade?: string;
   basic_salary: string;
   house_rent_allowance: string;
   medical_allowance: string;
   transport_allowance: string;
-  fuel_allowance: string;
   phone_allowance: string;
   utilities_allowance: string;
   education_allowance: string;
@@ -90,9 +107,11 @@ export interface Compensation {
   total_allowances: string;
   total_ctc: string;
   total_monthly: string;
+  frequency_type: 'ONE_TIME' | 'SELECTED_MONTH' | 'MONTH_RANGE';
+  selected_months: SelectedMonth[];
+  month_range: MonthRange | null;
   is_active: boolean;
   status: string;
-  effective_date: string;
   review_date?: string;
   notes?: string;
   created_at?: string;
@@ -181,6 +200,17 @@ export function useEmployeeLoans(params?: Record<string, string>) {
   });
 }
 
+export function useEmployeeLoan(id: string | null) {
+  const api = useApi();
+  return useQuery<EmployeeLoan>({
+    queryKey: ["employeeLoan", id],
+    queryFn: () => api(`/api/hr/loans/${id}/`),
+    enabled: !!id,
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
+}
+
 export function useCreateEmployeeLoan() {
   const api = useApi();
   const queryClient = useQueryClient();
@@ -224,6 +254,17 @@ export function useCompensations(params?: Record<string, string>) {
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
+  });
+}
+
+export function useCompensation(id: string | null) {
+  const api = useApi();
+  return useQuery<Compensation>({
+    queryKey: ["compensation", id],
+    queryFn: () => api(`/api/hr/compensations/${id}/`),
+    enabled: !!id,
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 }
 

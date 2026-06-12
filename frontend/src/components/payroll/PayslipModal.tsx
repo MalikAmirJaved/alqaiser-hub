@@ -104,7 +104,7 @@ export default function PayslipModal({
                   <div key={loan.id} className="bg-warning/10 rounded-xl p-3">
                     <div className="flex justify-between text-sm">
                       <span>{loan.loan_type_display || loan.loan_type}</span>
-                      <span className="font-medium">{formatCurrency(parseFloat(loan.monthly_deduction))}/month</span>
+                      <span className="font-medium">{formatCurrency(parseFloat(loan.monthly_deduction ?? '0'))}/month</span>
                     </div>
                     <div className="flex justify-between text-sm mt-1">
                       <span className="text-muted-foreground">Remaining</span>

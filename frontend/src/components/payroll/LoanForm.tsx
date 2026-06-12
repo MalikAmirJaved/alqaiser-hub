@@ -1,12 +1,13 @@
 // components/payroll/LoanForm.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
-import { DatePicker } from "@/components/reuseable/DatePicker";
-import { AlertCircle, Calculator,  Calendar, Target, FileText } from "lucide-react";
+import { AlertCircle, Calculator, Target, FileText, Clock, Check, X, ChevronDown, ChevronRight } from "lucide-react";
 
 import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { FREQUENCY_TYPES, MONTHS, generateYearOptions, getMonthLabel } from "./types";
+
 interface LoanFormProps {
   formData: any;
   setFormData: (data: any) => void;
@@ -15,153 +16,239 @@ interface LoanFormProps {
   formatCurrency: (amount: number) => string;
   errors: string[];
   onValidationChange?: (hasErrors: boolean) => void;
+  employeeJoiningDate?: string | null;
 }
 
-export default function LoanForm({ 
-  formData, 
-  setFormData, 
-  employeeOptions, 
-  selectedEmployeeSalary, 
+function generateMonthList(startMonth: number, startYear: number, endMonth: number, endYear: number) {
+  const months: Array<{ month: number; year: number }> = [];
+  let current = { month: startMonth, year: startYear };
+  while (current.year < endYear || (current.year === endYear && current.month <= endMonth)) {
+    months.push({ ...current });
+    current.month += 1;
+    if (current.month > 12) {
+      current.month = 1;
+      current.year += 1;
+    }
+  }
+  return months;
+}
+
+export default function LoanForm({
+  formData,
+  setFormData,
+  employeeOptions,
+  selectedEmployeeSalary,
   formatCurrency,
   errors,
-  onValidationChange 
+  onValidationChange,
+  employeeJoiningDate
 }: LoanFormProps) {
-  const [calculationMode, setCalculationMode] = useState<'deduction' | 'months'>('deduction');
   const [localErrors, setLocalErrors] = useState<string[]>([]);
+  const [freqExpanded, setFreqExpanded] = useState(true);
   const { CurrencyCode } = useCompanySettings();
+  const yearOptions = generateYearOptions();
+  const frequencyType = formData.frequency_type || 'MONTH_RANGE';
 
-  // Calculate loan fields
-  const calculateLoanFields = useCallback((data: any, mode: 'deduction' | 'months') => {
-    const principal = parseFloat(data.principal_amount) || 0;
-    const interest = parseFloat(data.interest_rate) || 0;
-    const totalPayable = interest > 0 ? principal + (principal * interest / 100) : principal;
-    
-    let monthlyDeduction: number | null = null;
-let totalMonths: number | null = null;
-    
-    if (mode === 'deduction' && data.monthly_deduction && data.monthly_deduction > 0) {
-      monthlyDeduction = parseFloat(data.monthly_deduction);
-      totalMonths = Math.ceil(totalPayable / monthlyDeduction);
-    } else if (mode === 'months' && data.total_months && data.total_months > 0) {
-      totalMonths = parseInt(data.total_months);
-      monthlyDeduction = totalPayable / totalMonths;
-    }
-    
-    return {
-      totalPayable,
-      monthly_deduction: monthlyDeduction,
-      total_months: totalMonths,
-    };
-  }, []);
+  // Get joining date components
+  const joiningDate = useMemo(() => {
+    if (!employeeJoiningDate) return null;
+    const d = new Date(employeeJoiningDate);
+    return { month: d.getMonth() + 1, year: d.getFullYear() };
+  }, [employeeJoiningDate]);
 
-  // Validate loan data
-  const validateLoan = useCallback((data: any, salary: number) => {
-    const newErrors: string[] = [];
-    const principal = parseFloat(data.principal_amount) || 0;
-    const interest = parseFloat(data.interest_rate) || 0;
-    const totalPayable = interest > 0 ? principal + (principal * interest / 100) : principal;
-    
-    let monthlyDeduction = parseFloat(data.monthly_deduction) || 0;
-    let totalMonths = parseInt(data.total_months) || 0;
-    
-    // Auto-calculate if only one field is filled
-    if (monthlyDeduction > 0 && totalMonths === 0) {
-      totalMonths = Math.ceil(totalPayable / monthlyDeduction);
-    } else if (totalMonths > 0 && monthlyDeduction === 0) {
-      monthlyDeduction = totalPayable / totalMonths;
-    }
-    
-    // Check monthly deduction vs salary
-    if (monthlyDeduction > 0 && monthlyDeduction > salary) {
-      newErrors.push(`Monthly deduction (${formatCurrency(monthlyDeduction)}) exceeds employee salary (${formatCurrency(salary)})`);
-    }
-    
-    // Check calculation consistency
-    if (monthlyDeduction > 0 && totalMonths > 0) {
-      const calculated = monthlyDeduction * totalMonths;
-      if (Math.abs(calculated - totalPayable) > 0.01) {
-        newErrors.push(`Monthly deduction × months (${formatCurrency(calculated)}) doesn't match total payable (${formatCurrency(totalPayable)})`);
-      }
-    }
-    
-    // Check if principal is zero
-    if (principal === 0) {
-      newErrors.push("Principal amount is required");
-    }
-    
-    setLocalErrors(newErrors);
-    if (onValidationChange) {
-      onValidationChange(newErrors.length > 0);
-    }
-    return newErrors;
-  }, [formatCurrency, onValidationChange]);
+  const principal = parseFloat(formData.principal_amount) || 0;
 
-  // Handle field changes with auto-calculation
-  const handleFieldChange = (field: string, value: any) => {
-    const updated = { ...formData, [field]: value };
-    
-    // Auto-calculate based on which field changed
-    if (field === 'monthly_deduction' && value > 0) {
-      setCalculationMode('deduction');
-      const { monthly_deduction, total_months } = calculateLoanFields(updated, 'deduction');
-      updated.monthly_deduction = monthly_deduction;
-      updated.total_months = total_months;
-    } else if (field === 'total_months' && value > 0) {
-      setCalculationMode('months');
-      const { monthly_deduction, total_months } = calculateLoanFields(updated, 'months');
-      updated.monthly_deduction = monthly_deduction;
-      updated.total_months = total_months;
-    } else if (field === 'principal_amount' || field === 'interest_rate') {
-      // Recalculate based on current mode
-      if (calculationMode === 'deduction' && updated.monthly_deduction > 0) {
-        const { monthly_deduction, total_months } = calculateLoanFields(updated, 'deduction');
-        updated.monthly_deduction = monthly_deduction;
-        updated.total_months = total_months;
-      } else if (calculationMode === 'months' && updated.total_months > 0) {
-        const { monthly_deduction, total_months } = calculateLoanFields(updated, 'months');
-        updated.monthly_deduction = monthly_deduction;
-        updated.total_months = total_months;
-      }
+  // Calculate total payable
+  const totalPayable = useMemo(() => {
+    const interest = parseFloat(formData.interest_rate) || 0;
+    return interest > 0 ? principal + (principal * interest / 100) : principal;
+  }, [principal, formData.interest_rate]);
+
+  // Selected months
+  const selectedMonths = formData.selected_months || [];
+
+  const mr = formData.month_range || {};
+
+  // Filter available months for start month based on joining date (same pattern as CompensationForm)
+  const availableStartMonths = useMemo(() => {
+    if (!joiningDate) return MONTHS;
+    return MONTHS.filter(m => m.value >= joiningDate.month);
+  }, [joiningDate]);
+
+  // Filter end month options based on start selection (exclude start month)
+  const availableEndMonths = useMemo(() => {
+    if (!mr.start_month || !mr.start_year) return MONTHS;
+    const effectiveEndYear = mr.end_year || mr.start_year;
+    if (effectiveEndYear > mr.start_year) return MONTHS;
+    if (effectiveEndYear === mr.start_year) {
+      return MONTHS.filter(m => m.value > mr.start_month);
     }
-    
-    setFormData(updated);
-  };
+    return MONTHS;
+  }, [mr.start_month, mr.start_year, mr.end_year]);
 
-  // Handle employee change
-  const handleEmployeeChange = (employeeId: string) => {
-    setFormData({ ...formData, employee_id: employeeId });
-  };
+  const availableEndYears = useMemo(() => {
+    if (!mr.start_year) return yearOptions;
+    return yearOptions.filter(y => y.value >= mr.start_year);
+  }, [mr.start_year, yearOptions]);
 
-  // Validate on changes
+  // Generate individual months from month range selection
   useEffect(() => {
-    if (formData.employee_id && selectedEmployeeSalary > 0) {
-      validateLoan(formData, selectedEmployeeSalary);
-    }
-  }, [formData, selectedEmployeeSalary, validateLoan]);
+    if (frequencyType !== 'MONTH_RANGE') return;
+    const sm = mr.start_month;
+    const sy = mr.start_year;
+    const em = mr.end_month;
+    const ey = mr.end_year;
+    if (!sm || !sy || !em || !ey) return;
 
-  const calculatedData = calculateLoanFields(formData, calculationMode);
+    const generated = generateMonthList(sm, sy, em, ey);
+    const autoDeduction = generated.length > 0 ? totalPayable / generated.length : 0;
+
+    // Preserve existing deductions where possible
+    const merged = generated.map(g => ({ ...g, deduction: autoDeduction }));
+
+    // Check if anything changed to avoid infinite loops
+    const currentJson = JSON.stringify(selectedMonths.map((s: any) => ({ month: s.month, year: s.year, deduction: s.deduction })));
+    const newJson = JSON.stringify(merged);
+    if (currentJson !== newJson) {
+      setFormData({ ...formData, selected_months: merged });
+    }
+  }, [frequencyType, mr.start_month, mr.start_year, mr.end_month, mr.end_year, totalPayable]);
+
+  // Auto-set end year and reset end month when start changes
+  useEffect(() => {
+    if (frequencyType !== 'MONTH_RANGE') return;
+    const currentRange = formData.month_range || {};
+    let updated = { ...currentRange };
+
+    if (currentRange.start_year && (!currentRange.end_year || currentRange.end_year < currentRange.start_year)) {
+      updated.end_year = currentRange.start_year;
+    }
+
+    if (
+      currentRange.start_year && currentRange.end_year === currentRange.start_year &&
+      currentRange.start_month && currentRange.end_month &&
+      currentRange.end_month <= currentRange.start_month
+    ) {
+      updated.end_month = null;
+    }
+
+    if (updated.end_year !== currentRange.end_year || updated.end_month !== currentRange.end_month) {
+      setFormData({ ...formData, month_range: updated });
+    }
+  }, [formData.month_range?.start_year, formData.month_range?.start_month, frequencyType]);
+
+  // Auto-calculate deduction per month for selected months (totalPayable / num months)
+  const selectedMonthDeduction = useMemo(() => {
+    if (selectedMonths.length === 0 || principal <= 0) return 0;
+    return totalPayable / selectedMonths.length;
+  }, [selectedMonths.length, totalPayable, principal]);
+
+  // Sum of all deductions
+  const totalDeductions = useMemo(() => {
+    return selectedMonths.reduce((sum: number, sm: any) => sum + (parseFloat(sm.deduction) || 0), 0);
+  }, [selectedMonths]);
+
+  // Deduction sum mismatch error (compare against totalPayable)
+  const deductionSumError = useMemo(() => {
+    if (selectedMonths.length === 0 || principal <= 0) return null;
+    const diff = Math.abs(totalDeductions - totalPayable);
+    if (diff > 0.01) {
+      return `Sum of deductions (${formatCurrency(totalDeductions)}) must equal Total Payable (${formatCurrency(totalPayable)})`;
+    }
+    return null;
+  }, [selectedMonths, totalDeductions, totalPayable, principal, formatCurrency]);
+
+  // Toggle month selection - recalculate all deductions based on totalPayable / count
+  const toggleMonth = (month: number, year: number) => {
+    const existing = selectedMonths.find((sm: any) => sm.month === month && sm.year === year);
+    if (existing) {
+      const remaining = selectedMonths.filter((sm: any) => !(sm.month === month && sm.year === year));
+      const deduction = remaining.length > 0 ? totalPayable / remaining.length : 0;
+      setFormData({
+        ...formData,
+        selected_months: remaining.map((sm: any) => ({ ...sm, deduction }))
+      });
+    } else {
+      const newCount = selectedMonths.length + 1;
+      const deduction = totalPayable / newCount;
+      setFormData({
+        ...formData,
+        selected_months: frequencyType === 'ONE_TIME'
+          ? [{ month, year, deduction }]
+          : [...selectedMonths.map((sm: any) => ({ ...sm, deduction })), { month, year, deduction }]
+      });
+    }
+  };
+
+  // Update deduction for a specific selected month
+  const updateMonthDeduction = (month: number, year: number, deduction: number) => {
+    setFormData({
+      ...formData,
+      selected_months: selectedMonths.map((sm: any) =>
+        sm.month === month && sm.year === year ? { ...sm, deduction } : sm
+      )
+    });
+  };
+
+  // Validation for month range
+  const monthRangeError = useMemo(() => {
+    const mr = formData.month_range;
+    if (!mr?.start_month || !mr?.start_year || !mr?.end_month || !mr?.end_year) return null;
+    if (mr.end_year < mr.start_year || (mr.end_year === mr.start_year && mr.end_month <= mr.start_month)) {
+      return "End month/year must be after start month/year";
+    }
+    if (joiningDate) {
+      if (mr.start_year < joiningDate.year || (mr.start_year === joiningDate.year && mr.start_month < joiningDate.month)) {
+        return `Start month must not be before employee joining date (${getMonthLabel(joiningDate.month)} ${joiningDate.year})`;
+      }
+    }
+    return null;
+  }, [formData.month_range, joiningDate]);
+
+  // Validate
+  useEffect(() => {
+    const newErrors: string[] = [];
+    if (principal === 0) newErrors.push("Principal amount is required");
+
+    if (frequencyType === 'MONTH_RANGE') {
+      if (monthRangeError) newErrors.push(monthRangeError);
+    }
+    if ((frequencyType === 'SELECTED_MONTH' || frequencyType === 'ONE_TIME') && selectedMonths.length === 0) {
+      newErrors.push("At least one month must be selected");
+    }
+    if (frequencyType === 'MONTH_RANGE' && (!mr.start_month || !mr.start_year || !mr.end_month || !mr.end_year)) {
+      newErrors.push("Please complete the month range selection");
+    }
+    if (deductionSumError) newErrors.push(deductionSumError);
+
+    setLocalErrors(newErrors);
+    if (onValidationChange) onValidationChange(newErrors.length > 0);
+  }, [formData, frequencyType, selectedMonths, monthRangeError, deductionSumError, principal, mr, onValidationChange]);
+
   const allErrors = [...errors, ...localErrors];
-  const isMonthlyDeductionExceeds = parseFloat(formData.monthly_deduction) > selectedEmployeeSalary;
+
+  // Available months for selected month grid
+  const availableMonthsForGrid = useMemo(() => {
+    if (!joiningDate) return MONTHS;
+    return MONTHS.filter(m => m.value >= joiningDate.month);
+  }, [joiningDate]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Employee Selection */}
       <div className="space-y-2">
-        <label className="text-sm font-medium flex items-center gap-2">
+        <label className="text-sm font-semibold flex items-center gap-2 text-foreground">
           <span className="text-red-500">*</span> Employee
         </label>
         <SearchableSelect
           value={formData.employee_id || ""}
-          onChange={handleEmployeeChange}
+          onChange={(employeeId) => setFormData({ ...formData, employee_id: employeeId })}
           options={employeeOptions}
           placeholder="Select Employee"
           required
         />
         {selectedEmployeeSalary > 0 && (
-          <div className="flex items-center gap-2 mt-2 p-2 bg-primary/5 rounded-lg text-sm">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-              {CurrencyCode()}
-            </span>
+          <div className="flex items-center gap-2 mt-2 p-3 bg-primary/10 rounded-lg text-sm border border-primary/20">
             <span className="text-muted-foreground">Monthly Salary:</span>
             <span className="font-semibold text-primary">{formatCurrency(selectedEmployeeSalary)}</span>
           </div>
@@ -171,158 +258,334 @@ let totalMonths: number | null = null;
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Loan Type */}
         <div className="space-y-2">
-          <label className="text-sm font-medium flex items-center gap-2">
+          <label className="text-sm font-medium flex items-center gap-2 text-foreground">
             <span className="text-red-500">*</span> Loan Type
           </label>
-          <select 
-            value={formData.loan_type || "PERSONAL_LOAN"} 
+          <select
+            value={formData.loan_type || "PERSONAL_LOAN"}
             onChange={(e) => setFormData({ ...formData, loan_type: e.target.value })}
-            className="w-full bg-muted/40 border border-border rounded-lg h-10 px-3 focus:outline-none focus:ring-2 focus:ring-primary/20"
+            className="w-full bg-background border border-border rounded-lg h-10 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-ring"
           >
-            <option value="PERSONAL_LOAN">💳 Personal Loan</option>
-            <option value="SALARY_ADVANCE">💰 Salary Advance</option>
-            <option value="CAR_LOAN">🚗 Car Loan</option>
-            <option value="HOUSE_LOAN">🏠 House Loan</option>
-            <option value="EDUCATION_LOAN">📚 Education Loan</option>
-            <option value="MEDICAL_LOAN">🏥 Medical Loan</option>
-            <option value="EMERGENCY_LOAN">🚨 Emergency Loan</option>
+            <option value="PERSONAL_LOAN">Personal Loan</option>
+            <option value="SALARY_ADVANCE">Salary Advance</option>
+            <option value="CAR_LOAN">Car Loan</option>
+            <option value="HOUSE_LOAN">House Loan</option>
+            <option value="EDUCATION_LOAN">Education Loan</option>
+            <option value="MEDICAL_LOAN">Medical Loan</option>
+            <option value="EMERGENCY_LOAN">Emergency Loan</option>
           </select>
         </div>
 
         {/* Principal Amount */}
         <div className="space-y-2">
-          <label className="text-sm font-medium flex items-center gap-2">
+          <label className="text-sm font-medium flex items-center gap-2 text-foreground">
             <span className="text-red-500">*</span> Principal Amount
           </label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">
               {CurrencyCode()}
             </span>
-            <input 
-              type="number" 
-              value={formData.principal_amount || ""} 
-              onChange={(e) => handleFieldChange("principal_amount", Number(e.target.value))}
+            <input
+              type="number"
+              value={formData.principal_amount || ""}
+              onChange={(e) => setFormData({ ...formData, principal_amount: Number(e.target.value) })}
               placeholder="0.00"
-              className="w-full bg-muted/40 border border-border rounded-lg h-10 pl-12 pr-3 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="w-full bg-background border border-border rounded-lg h-10 pl-12 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-ring"
             />
           </div>
         </div>
 
         {/* Interest Rate */}
         <div className="space-y-2">
-          <label className="text-sm font-medium">Interest Rate (%)</label>
+          <label className="text-sm font-medium text-foreground">Interest Rate (%)</label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
-            <input 
-              type="number" 
-              value={formData.interest_rate || ""} 
-              onChange={(e) => handleFieldChange("interest_rate", Number(e.target.value))}
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">%</span>
+            <input
+              type="number"
+              value={formData.interest_rate || ""}
+              onChange={(e) => setFormData({ ...formData, interest_rate: Number(e.target.value) })}
               placeholder="0"
               step="0.1"
-              className="w-full bg-muted/40 border border-border rounded-lg h-10 pl-8 pr-3 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="w-full bg-background border border-border rounded-lg h-10 pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-ring"
             />
           </div>
         </div>
+      </div>
 
-        {/* Monthly Deduction with auto-calculation */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium flex items-center gap-2">
-            Monthly Deduction
-            <span className="text-xs text-muted-foreground">(auto-calculates months)</span>
-          </label>
-          <div className={`relative ${isMonthlyDeductionExceeds ? 'ring-2 ring-red-500 rounded-lg' : ''}`}>
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-              {CurrencyCode()}
+      {/* Collapsible Frequency Type */}
+      <div className="bg-muted/30 rounded-xl border border-border overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setFreqExpanded(!freqExpanded)}
+          className="w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-primary" />
+            <span className="text-sm font-semibold text-foreground">Frequency Type</span>
+            <span className="text-xs text-muted-foreground ml-2">
+              ({FREQUENCY_TYPES.find(ft => ft.value === frequencyType)?.label || frequencyType})
             </span>
-            <input 
-              type="number" 
-              value={formData.monthly_deduction || ""} 
-              onChange={(e) => handleFieldChange("monthly_deduction", Number(e.target.value))}
-              placeholder="Auto from months"
-              className={`w-full rounded-lg h-10 pl-12 pr-3 focus:outline-none focus:ring-2 focus:ring-primary/20 ${
-                isMonthlyDeductionExceeds 
-                  ? "bg-red-50 dark:bg-red-950/20 border-2 border-red-500" 
-                  : "bg-muted/40 border border-border"
-              }`}
-            />
           </div>
-          {isMonthlyDeductionExceeds && (
-            <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
-              <AlertCircle className="w-3 h-3" />
-              Exceeds monthly salary
-            </p>
-          )}
-        </div>
+          {freqExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+        </button>
 
-        {/* Total Months with auto-calculation */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium flex items-center gap-2">
-            Total Months
-            <span className="text-xs text-muted-foreground">(auto-calculates deduction)</span>
-          </label>
-          <div className="relative">
-            <Target className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input 
-              type="number" 
-              value={formData.total_months || ""} 
-              onChange={(e) => handleFieldChange("total_months", Number(e.target.value))}
-              placeholder="Auto from deduction"
-              className="w-full bg-muted/40 border border-border rounded-lg h-10 pl-9 pr-3 focus:outline-none focus:ring-2 focus:ring-primary/20"
-            />
+        {freqExpanded && (
+          <div className="px-4 pb-4 space-y-4">
+            <select
+              value={frequencyType}
+              onChange={(e) => setFormData({ ...formData, frequency_type: e.target.value, selected_months: [], month_range: {} })}
+              className="w-full bg-background border border-border rounded-lg h-10 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-ring"
+            >
+              {FREQUENCY_TYPES.map((ft) => (
+                <option key={ft.value} value={ft.value}>{ft.label}</option>
+              ))}
+            </select>
+
+            {/* ONE_TIME / SELECTED_MONTH - Multi-select months with deduction */}
+            {(frequencyType === 'ONE_TIME' || frequencyType === 'SELECTED_MONTH') && (
+              <div className="bg-background rounded-lg p-4 border border-border">
+                <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  {frequencyType === 'ONE_TIME' ? 'One Time - Select Months' : 'Selected Months'}
+                </h4>
+                <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+                  {frequencyType === 'ONE_TIME' ? 'Select one month for this one-time deduction' : 'Select months and set deduction amount for each (auto-calculated, editable)'}
+                </p>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mb-4">
+                  {yearOptions.filter(y => !joiningDate || y.value >= joiningDate.year).map((y) => (
+                    MONTHS.filter(m => !joiningDate || (y.value === joiningDate.year ? m.value >= joiningDate.month : true)).map((m) => {
+                      const isSelected = selectedMonths.some((sm: any) => sm.month === m.value && sm.year === y.value);
+                      return (
+                        <button
+                          key={`${m.value}-${y.value}`}
+                          type="button"
+                          onClick={() => toggleMonth(m.value, y.value)}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-primary/15 border-primary text-primary shadow-sm'
+                              : 'bg-background border-border hover:bg-muted'
+                          }`}
+                        >
+                          {isSelected ? <Check className="w-3 h-3" /> : <div className="w-3 h-3" />}
+                          <span>{m.label.slice(0, 3)} {y.value}</span>
+                        </button>
+                      );
+                    })
+                  ))}
+                </div>
+
+                {/* Per-month deduction fields */}
+                {selectedMonths.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground font-medium">
+                        {selectedMonths.length} month(s) selected
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, selected_months: [] })}
+                        className="text-xs text-red-500 hover:text-red-700 font-medium flex items-center gap-1 transition-colors"
+                      >
+                        <X className="w-3 h-3" /> Clear all
+                      </button>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
+                      {selectedMonths.map((sm: any) => (
+                        <div key={`${sm.month}-${sm.year}`} className="flex items-center gap-3 p-2.5 bg-background rounded-lg border border-border hover:border-primary/30 transition-colors">
+                          <span className="text-sm font-medium min-w-[90px] text-foreground">
+                            {getMonthLabel(sm.month)} {sm.year}
+                          </span>
+                          <div className="relative flex-1">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium">
+                              {CurrencyCode()}
+                            </span>
+                            <input
+                              type="number"
+                              value={sm.deduction || ""}
+                              onChange={(e) => updateMonthDeduction(sm.month, sm.year, Number(e.target.value))}
+                              placeholder={formatCurrency(selectedMonthDeduction)}
+                              className="w-full bg-background border border-border rounded-lg h-8 pl-10 pr-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 transition-ring"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {deductionSumError && selectedMonths.length > 0 && (
+                      <p className="text-xs text-red-500 font-medium mt-2">{deductionSumError}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* MONTH_RANGE */}
+            {frequencyType === 'MONTH_RANGE' && (
+              <div className="bg-background rounded-lg p-4 border border-border">
+                <h4 className="text-sm font-medium mb-4 flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  Month Range
+                </h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground">Start Month</label>
+                    <select
+                      value={mr.start_month || ""}
+                      onChange={(e) => {
+                        const newMonth = Number(e.target.value);
+                        const updated = { ...mr, start_month: newMonth };
+                        if (mr.end_year === mr.start_year && mr.end_month <= newMonth) {
+                          updated.end_month = 0;
+                        }
+                        setFormData({ ...formData, month_range: updated });
+                      }}
+                      className="w-full bg-background border border-border rounded-lg h-9 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-ring"
+                    >
+                      <option value="">Month</option>
+                      {availableStartMonths.map((m) => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground">Start Year</label>
+                    <select
+                      value={mr.start_year || ""}
+                      onChange={(e) => {
+                        const newYear = Number(e.target.value);
+                        const updated = { ...mr, start_year: newYear };
+                        if (mr.end_year < newYear) {
+                          updated.end_month = 0;
+                          updated.end_year = 0;
+                        } else if (mr.end_year === newYear && mr.end_month <= mr.start_month) {
+                          updated.end_month = 0;
+                        }
+                        setFormData({ ...formData, month_range: updated });
+                      }}
+                      className="w-full bg-background border border-border rounded-lg h-9 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-ring"
+                    >
+                      <option value="">Year</option>
+                      {yearOptions.filter(y => !joiningDate || y.value >= joiningDate.year).map((y) => (
+                        <option key={y.value} value={y.value}>{y.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground">End Month</label>
+                    <select
+                      value={mr.end_month || ""}
+                      disabled={!mr.start_month || !mr.start_year}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        month_range: { ...mr, end_month: Number(e.target.value) }
+                      })}
+                      className="w-full bg-background border border-border rounded-lg h-9 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-ring disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Month</option>
+                      {availableEndMonths.map((m) => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground">End Year</label>
+                    <select
+                      value={mr.end_year || ""}
+                      disabled={!mr.start_month || !mr.start_year}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        month_range: { ...mr, end_year: Number(e.target.value) }
+                      })}
+                      className="w-full bg-background border border-border rounded-lg h-9 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-ring disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Year</option>
+                      {availableEndYears.map((y) => (
+                        <option key={y.value} value={y.value}>{y.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                {monthRangeError && (
+                  <p className="text-xs text-red-500 font-medium mb-2">{monthRangeError}</p>
+                )}
+
+                {/* Per-month deduction fields for generated range */}
+                {selectedMonths.length > 0 && (
+                  <div className="space-y-2 mt-3 pt-3 border-t border-border">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground font-medium">
+                        {selectedMonths.length} month(s) in range
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        Auto: <span className="text-primary font-semibold">{formatCurrency(selectedMonthDeduction)}</span>/month
+                      </span>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
+                      {selectedMonths.map((sm: any) => (
+                        <div key={`${sm.month}-${sm.year}`} className="flex items-center gap-3 p-2.5 bg-background rounded-lg border border-border hover:border-primary/30 transition-colors">
+                          <span className="text-sm font-medium min-w-[90px] text-foreground">
+                            {getMonthLabel(sm.month)} {sm.year}
+                          </span>
+                          <div className="relative flex-1">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium">
+                              {CurrencyCode()}
+                            </span>
+                            <input
+                              type="number"
+                              value={sm.deduction || ""}
+                              onChange={(e) => updateMonthDeduction(sm.month, sm.year, Number(e.target.value))}
+                              placeholder={formatCurrency(selectedMonthDeduction)}
+                              className="w-full bg-background border border-border rounded-lg h-8 pl-10 pr-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 transition-ring"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {deductionSumError && (
+                      <p className="text-xs text-red-500 font-medium mt-2">{deductionSumError}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        </div>
-
-        {/* Start Date */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium flex items-center gap-2">
-            <Calendar className="w-4 h-4" />
-            Start Date
-          </label>
-          <DatePicker 
-            value={formData.start_date} 
-            onChange={(val) => setFormData({ ...formData, start_date: val || "" })} 
-          />
-        </div>
+        )}
       </div>
 
       {/* Purpose */}
       <div className="space-y-2">
-        <label className="text-sm font-medium flex items-center gap-2">
-          <FileText className="w-4 h-4" />
+        <label className="text-sm font-medium flex items-center gap-2 text-foreground">
+          <FileText className="w-4 h-4 text-primary" />
           Purpose
         </label>
-        <textarea 
-          rows={3} 
-          value={formData.purpose || ""} 
+        <textarea
+          rows={3}
+          value={formData.purpose || ""}
           onChange={(e) => setFormData({ ...formData, purpose: e.target.value })}
           placeholder="Explain the purpose of this loan..."
-          className="w-full bg-muted/40 border border-border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+          className="w-full bg-background border border-border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none transition-ring"
         />
       </div>
 
       {/* Loan Summary Card */}
       {formData.principal_amount > 0 && (
-        <div className="bg-gradient-to-r from-primary/5 to-primary/10 rounded-xl p-4 border border-primary/20">
+        <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-background rounded-lg p-4 border border-primary/20 shadow-sm">
           <div className="flex items-center gap-2 mb-3">
             <Calculator className="w-5 h-5 text-primary" />
-            <h3 className="font-semibold text-sm">Loan Summary</h3>
+            <h3 className="font-semibold text-sm text-foreground">Loan Summary</h3>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Total Payable</p>
-              <p className="text-lg font-bold text-primary">{formatCurrency(calculatedData.totalPayable)}</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="bg-background/50 rounded-lg p-3 border border-border/50">
+              <p className="text-xs text-muted-foreground font-medium mb-1">Principal Amount</p>
+              <p className="text-lg font-bold text-primary">{formatCurrency(parseFloat(formData.principal_amount))}</p>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Monthly Deduction</p>
-              <p className="text-lg font-semibold">{calculatedData.monthly_deduction ? formatCurrency(calculatedData.monthly_deduction) : "—"}</p>
+            <div className="bg-background/50 rounded-lg p-3 border border-border/50">
+              <p className="text-xs text-muted-foreground font-medium mb-1">Total Payable</p>
+              <p className="text-lg font-bold text-primary">{formatCurrency(totalPayable)}</p>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Total Months</p>
-              <p className="text-lg font-semibold">{calculatedData.total_months || "—"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Interest Rate</p>
-              <p className="text-lg font-semibold">{formData.interest_rate || 0}%</p>
+            <div className="bg-background/50 rounded-lg p-3 border border-border/50">
+              <p className="text-xs text-muted-foreground font-medium mb-1">Interest Rate</p>
+              <p className="text-lg font-semibold text-foreground">{formData.interest_rate || 0}%</p>
             </div>
           </div>
         </div>
@@ -330,15 +593,15 @@ let totalMonths: number | null = null;
 
       {/* Validation Errors */}
       {allErrors.length > 0 && (
-        <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
-          <div className="flex items-start gap-2">
+        <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50 rounded-lg p-4 shadow-sm">
+          <div className="flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-red-700 dark:text-red-400">Please fix the following issues:</p>
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-red-700 dark:text-red-400">Please fix the following issues:</p>
               <ul className="text-xs text-red-600 dark:text-red-300 space-y-1">
                 {allErrors.map((error, index) => (
-                  <li key={index} className="flex items-center gap-1">
-                    <span>•</span> {error}
+                  <li key={index} className="flex items-center gap-2">
+                    <span className="text-red-400">•</span> {error}
                   </li>
                 ))}
               </ul>

@@ -1,58 +1,85 @@
 # apps/audit/signals.py
-import json
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
-from .models import AuditLog
+from .models import AuditLog, AuditLogChange
 
-def _serialize_for_json(obj):
-    """Recursively convert non-JSON-serializable objects to strings."""
-    if isinstance(obj, uuid.UUID):
-        return str(obj)
-    if isinstance(obj, (datetime, date)):
-        return obj.isoformat()
-    if isinstance(obj, Decimal):
-        return float(obj)
-    # Django model instance -> convert to string representation (avoid storing whole object)
-    if hasattr(obj, '_meta') and hasattr(obj, 'pk'):
-        return str(obj.pk) if obj.pk is not None else str(obj)
-    if isinstance(obj, dict):
-        return {k: _serialize_for_json(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [_serialize_for_json(i) for i in obj]
-    return obj
+
+def _value_to_str(value):
+    """Convert any Python value to a plain string for relational storage."""
+    if value is None:
+        return None
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return str(value)
+    if hasattr(value, '_id'):
+        return str(value._id)
+    if hasattr(value, 'pk'):
+        return str(value.pk)
+    if isinstance(value, (list, dict)):
+        return None
+    return str(value)
 
 
 def _has_uuid_field(instance):
     """Check if the model has a UUID field named '_id' that is a UUID instance."""
     if not hasattr(instance, '_id'):
         return False
-    # _id can be a UUIDField (value is UUID) or could be a string; check type
     return isinstance(instance._id, uuid.UUID)
+
+
+def _get_field_changes(instance, created):
+    """Collect field changes as list of (field_name, old_value, new_value) tuples."""
+    changes = []
+    if not created:
+        try:
+            old_instance = instance.__class__.objects.get(pk=instance.pk)
+            for field in instance._meta.fields:
+                field_name = field.name
+                if field_name.startswith('_'):
+                    continue
+                old_val = getattr(old_instance, field_name)
+                new_val = getattr(instance, field_name)
+                if old_val != new_val:
+                    old_str = _value_to_str(old_val)
+                    new_str = _value_to_str(new_val)
+                    if old_str is not None or new_str is not None:
+                        changes.append((field_name, old_str, new_str))
+        except instance.__class__.DoesNotExist:
+            pass
+    else:
+        for field in instance._meta.fields:
+            field_name = field.name
+            if field_name.startswith('_'):
+                continue
+            val = getattr(instance, field_name)
+            if val is not None:
+                val_str = _value_to_str(val)
+                if val_str is not None:
+                    changes.append((field_name, None, val_str))
+    return changes
 
 
 @receiver(post_save)
 def audit_create_update(sender, instance, created, **kwargs):
     """Log creation or update of any model that has a UUID _id field."""
-    # Skip models without a UUID _id field
     if not _has_uuid_field(instance):
         return
 
-    # Skip audit logs themselves
     if sender.__name__ == 'AuditLog':
         return
 
-    # Skip Django internal apps
     if sender._meta.app_label in ['admin', 'auth', 'contenttypes', 'sessions']:
         return
 
-    # Skip the Migration model
     if sender.__name__ == 'Migration':
         return
 
-    # Try to get request from the instance (if attached by middleware)
     request = getattr(instance, '_request', None)
 
     user = getattr(request, 'user', None) if request else None
@@ -62,54 +89,46 @@ def audit_create_update(sender, instance, created, **kwargs):
         ip = request.META.get('REMOTE_ADDR')
         user_agent = request.META.get('HTTP_USER_AGENT', '')[:255]
 
-    # Build changes dict
-    changes = {}
-    if not created:
-        try:
-            old_instance = sender.objects.get(pk=instance.pk)
-            for field in instance._meta.fields:
-                old_val = getattr(old_instance, field.name)
-                new_val = getattr(instance, field.name)
-                if old_val != new_val:
-                    changes[field.name] = {
-                        'old': _serialize_for_json(old_val),
-                        'new': _serialize_for_json(new_val)
-                    }
-        except sender.DoesNotExist:
-            pass
-    else:
-        for field in instance._meta.fields:
-            val = getattr(instance, field.name)
-            if val is not None:
-                changes[field.name] = _serialize_for_json(val)
-
-    if not changes and created:
-        changes['action'] = 'created'
-
-    changes_serialized = _serialize_for_json(changes)
+    field_changes = _get_field_changes(instance, created)
 
     module = sender._meta.app_label
-
-    # record_id is the UUID string
     record_id = str(instance._id)
 
     audit_data = {
         'model_name': sender.__name__,
         'record_id': record_id,
         'action': 'CREATE' if created else 'UPDATE',
-        'changes': changes_serialized,
         'user': user,
         'ip_address': ip,
         'user_agent': user_agent,
         'module': module,
     }
-    # Add company_id if the instance has it (BaseModel includes it)
     if hasattr(instance, 'company_id') and instance.company_id:
         audit_data['company_id'] = instance.company_id
     elif hasattr(instance, 'company') and instance.company and hasattr(instance.company, 'id'):
         audit_data['company_id'] = instance.company.id
 
-    AuditLog.objects.create(**audit_data)
+    if hasattr(instance, 'branch_id') and instance.branch_id:
+        audit_data['branch_id'] = instance.branch_id
+
+    if not field_changes and not created:
+        return
+
+    audit_log = AuditLog.objects.create(**audit_data)
+
+    change_objects = [
+        AuditLogChange(
+            audit_log=audit_log,
+            field_name=field_name,
+            old_value=old_val,
+            new_value=new_val,
+            company_id=audit_data.get('company_id'),
+            branch_id=audit_data.get('branch_id'),
+        )
+        for field_name, old_val, new_val in field_changes
+    ]
+    if change_objects:
+        AuditLogChange.objects.bulk_create(change_objects)
 
 
 @receiver(pre_delete)
@@ -133,12 +152,6 @@ def audit_delete(sender, instance, **kwargs):
         ip = request.META.get('REMOTE_ADDR')
         user_agent = request.META.get('HTTP_USER_AGENT', '')[:255]
 
-    data = {}
-    for field in instance._meta.fields:
-        val = getattr(instance, field.name)
-        if val is not None:
-            data[field.name] = _serialize_for_json(val)
-
     module = sender._meta.app_label
     record_id = str(instance._id)
 
@@ -146,7 +159,6 @@ def audit_delete(sender, instance, **kwargs):
         'model_name': sender.__name__,
         'record_id': record_id,
         'action': 'DELETE',
-        'changes': data,
         'user': user,
         'ip_address': ip,
         'user_agent': user_agent,
@@ -157,4 +169,28 @@ def audit_delete(sender, instance, **kwargs):
     elif hasattr(instance, 'company') and instance.company and hasattr(instance.company, 'id'):
         audit_data['company_id'] = instance.company.id
 
-    AuditLog.objects.create(**audit_data)
+    if hasattr(instance, 'branch_id') and instance.branch_id:
+        audit_data['branch_id'] = instance.branch_id
+
+    audit_log = AuditLog.objects.create(**audit_data)
+
+    change_objects = []
+    for field in instance._meta.fields:
+        field_name = field.name
+        if field_name.startswith('_'):
+            continue
+        val = getattr(instance, field_name)
+        val_str = _value_to_str(val)
+        if val_str is not None:
+            change_objects.append(
+                AuditLogChange(
+                    audit_log=audit_log,
+                    field_name=field_name,
+                    old_value=val_str,
+                    new_value=None,
+                    company_id=audit_data.get('company_id'),
+                    branch_id=audit_data.get('branch_id'),
+                )
+            )
+    if change_objects:
+        AuditLogChange.objects.bulk_create(change_objects)

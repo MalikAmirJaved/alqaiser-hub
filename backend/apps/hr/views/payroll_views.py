@@ -15,7 +15,8 @@ import logging
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import (
-    Employee, PayrollRecord, EmployeeLoan, Compensation, LeaveRequest, PayrollDeductionDetail
+    Employee, PayrollRecord, EmployeeLoan, Compensation, LeaveRequest, PayrollDeductionDetail,
+    CompensationSelectedMonth, CompensationMonthRange, LoanSelectedMonth, LoanMonthRange
 )
 from apps.compsetting.models import CompanySettings, WorkingDay, PublicHoliday
 from apps.finance.services.payable import (
@@ -327,27 +328,41 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 _id__in=selected_loan_uuids,
                 status='ACTIVE',
                 is_deleted=False
-            )
+            ).prefetch_related('selected_months', 'month_range')
             
             for loan in active_loans:
-                monthly_deduction_with_interest = float(loan.monthly_deduction)
+                deduction_amount = 0
+                if loan.frequency_type == 'SELECTED_MONTH':
+                    selected = loan.selected_months.filter(month=month, year=year).first()
+                    if selected:
+                        deduction_amount = float(selected.deduction)
+                elif loan.frequency_type == 'MONTH_RANGE':
+                    mr = loan.month_range.first()
+                    if mr:
+                        deduction_amount = float(mr.deduction)
+                elif loan.frequency_type == 'ONE_TIME':
+                    selected = loan.selected_months.filter(month=month, year=year).first()
+                    if selected:
+                        deduction_amount = float(selected.deduction)
+                
+                if deduction_amount <= 0:
+                    continue
+                
                 interest_amount = 0
-                
                 if float(loan.interest_rate) > 0:
-                    remaining_months = loan.remaining_months or 1
-                    interest_amount = (float(loan.remaining_amount) * float(loan.interest_rate) / 100) / remaining_months
-                    monthly_deduction_with_interest += interest_amount
+                    interest_amount = (float(loan.remaining_amount) * float(loan.interest_rate) / 100) / max(1, loan.paid_months or 1)
                 
+                monthly_deduction_with_interest = deduction_amount + interest_amount
                 loan_deductions += monthly_deduction_with_interest
                 processed_loans.append({
                     'loan': loan,
-                    'principal': float(loan.monthly_deduction),
+                    'principal': deduction_amount,
                     'interest': interest_amount,
                     'total': monthly_deduction_with_interest
                 })
                 
-                # Update loan remaining amount
-                loan.remaining_amount = max(0, float(loan.remaining_amount) - float(loan.monthly_deduction))
+                loan.paid_amount = float(loan.paid_amount) + deduction_amount
+                loan.remaining_amount = max(0, float(loan.remaining_amount) - deduction_amount)
                 loan.paid_months += 1
                 if loan.remaining_amount <= 0:
                     loan.status = 'PAID'
@@ -644,19 +659,31 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 _id__in=selected_loan_uuids,
                 status='ACTIVE',
                 is_deleted=False
-            )
+            ).prefetch_related('selected_months', 'month_range')
             for loan in active_loans:
-                monthly_deduction = float(loan.monthly_deduction)
+                deduction_amount = 0
+                if loan.frequency_type == 'SELECTED_MONTH':
+                    selected = loan.selected_months.filter(month=month, year=year).first()
+                    if selected:
+                        deduction_amount = float(selected.deduction)
+                elif loan.frequency_type == 'MONTH_RANGE':
+                    mr = loan.month_range.first()
+                    if mr:
+                        deduction_amount = float(mr.deduction)
+                elif loan.frequency_type == 'ONE_TIME':
+                    selected = loan.selected_months.filter(month=month, year=year).first()
+                    if selected:
+                        deduction_amount = float(selected.deduction)
+                
                 interest_amount = 0
-                if float(loan.interest_rate) > 0:
-                    remaining_months = loan.remaining_months or 1
-                    interest_amount = (float(loan.remaining_amount) * float(loan.interest_rate) / 100) / remaining_months
-                total = monthly_deduction + interest_amount
+                if float(loan.interest_rate) > 0 and deduction_amount > 0:
+                    interest_amount = (float(loan.remaining_amount) * float(loan.interest_rate) / 100) / max(1, loan.paid_months or 1)
+                total = deduction_amount + interest_amount
                 loan_deductions += total
                 loan_details.append({
                     'loan_id': str(loan._id),
                     'loan_type': loan.get_loan_type_display(),
-                    'principal': monthly_deduction,
+                    'principal': deduction_amount,
                     'interest': interest_amount,
                     'total': total
                 })
@@ -748,6 +775,28 @@ class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
     
     def _serialize_loan(self, loan):
+        selected_months = [
+            {
+                "id": str(sm._id),
+                "month": sm.month,
+                "year": sm.year,
+                "deduction": str(sm.deduction),
+            }
+            for sm in loan.selected_months.all()
+        ]
+        month_range = None
+        try:
+            mr = loan.month_range
+            month_range = {
+                "id": str(mr._id),
+                "start_month": mr.start_month,
+                "start_year": mr.start_year,
+                "end_month": mr.end_month,
+                "end_year": mr.end_year,
+                "deduction": str(mr.deduction),
+            }
+        except LoanMonthRange.DoesNotExist:
+            pass
         return {
             "id": str(loan._id),
             "employee_id": str(loan.employee._id) if loan.employee else None,
@@ -758,14 +807,14 @@ class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "loan_type": loan.loan_type,
             "loan_type_display": loan.get_loan_type_display(),
             "principal_amount": str(loan.principal_amount),
-            "monthly_deduction": str(loan.monthly_deduction),
             "remaining_amount": str(loan.remaining_amount),
-            "total_months": loan.total_months,
+            "paid_amount": str(loan.paid_amount),
             "paid_months": loan.paid_months,
-            "remaining_months": loan.remaining_months,
             "interest_rate": str(loan.interest_rate),
             "total_payable": str(loan.total_payable),
-            "start_date": safe_date(loan.start_date),
+            "frequency_type": loan.frequency_type,
+            "selected_months": selected_months,
+            "month_range": month_range,
             "end_date": safe_date(loan.end_date),
             "status": loan.status,
             "purpose": loan.purpose,
@@ -775,20 +824,28 @@ class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "created_at": loan.created_at.isoformat() if loan.created_at else None,
         }
     
-    def get(self, request):
+    def get(self, request, pk=None):
         company_id = request.user.company_id
         if not company_id:
             return Response(
                 {'error': 'User is not associated with any company'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        if pk:
+            loan = get_object_or_404(
+                EmployeeLoan,
+                _id=pk,
+                company_id=company_id,
+                is_deleted=False
+            )
+            return Response(self._serialize_loan(loan))
         employee_uuid = request.query_params.get('employee_id')
         status_filter = request.query_params.get('status')
         search = request.query_params.get('search')
         query = EmployeeLoan.objects.filter(
             company_id=company_id,
             is_deleted=False
-        ).select_related('employee')
+        ).select_related('employee').prefetch_related('selected_months', 'month_range')
         if employee_uuid:
             employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
             query = query.filter(employee=employee)
@@ -828,33 +885,70 @@ class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         monthly_salary = float(employee.salary)
         principal_amount = float(request.data.get('principal_amount', 0))
         interest_rate = float(request.data.get('interest_rate', 0))
-        total_months = int(request.data.get('total_months', 0))
-        monthly_deduction = float(request.data.get('monthly_deduction', 0))
-        if monthly_deduction > 0 and monthly_deduction > monthly_salary:
-            return Response(
-                {'error': f'Monthly deduction ({monthly_deduction}) cannot exceed monthly salary ({monthly_salary})'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        frequency_type = request.data.get('frequency_type', 'MONTH_RANGE')
+        
         if interest_rate > 0:
             total_payable = principal_amount + (principal_amount * interest_rate / 100)
         else:
             total_payable = principal_amount
-        if total_months > 0 and monthly_deduction > 0:
-            calculated_total = monthly_deduction * total_months
-            if abs(calculated_total - total_payable) > 0.01:
+        
+        # Validate frequency-specific data
+        selected_months_data = request.data.get('selected_months', [])
+        month_range_data = request.data.get('month_range', {})
+        
+        if frequency_type in ('SELECTED_MONTH', 'ONE_TIME', 'MONTH_RANGE'):
+            if not selected_months_data:
                 return Response(
-                    {'error': f'Monthly deduction × Total months does not match total payable'},
+                    {'error': 'At least one selected month is required'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-        elif total_months > 0 and monthly_deduction == 0:
-            monthly_deduction = total_payable / total_months
-        elif monthly_deduction > 0 and total_months == 0:
-            total_months = int(total_payable / monthly_deduction)
-        else:
-            return Response(
-                {'error': 'Please provide either total_months or monthly_deduction'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            # Validate no month before employee joining date
+            if employee.joining_date:
+                join_month = employee.joining_date.month
+                join_year = employee.joining_date.year
+                for sm in selected_months_data:
+                    m, y = sm.get('month'), sm.get('year')
+                    if y < join_year or (y == join_year and m < join_month):
+                        return Response(
+                            {'error': f'Selected month {m}/{y} is before employee joining date {join_month}/{join_year}'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+            # Validate sum of deductions equals total_payable
+            if total_payable > 0:
+                deductions_sum = sum(float(sm.get('deduction', 0)) for sm in selected_months_data)
+                if abs(deductions_sum - total_payable) > 0.01:
+                    return Response(
+                        {'error': f'Sum of deductions ({deductions_sum:.2f}) must equal total payable amount ({total_payable:.2f})'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+        
+        if frequency_type == 'MONTH_RANGE':
+            if not month_range_data:
+                return Response(
+                    {'error': 'Month range data is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            sm, sy = month_range_data.get('start_month'), month_range_data.get('start_year')
+            em, ey = month_range_data.get('end_month'), month_range_data.get('end_year')
+            if not all([sm, sy, em, ey]):
+                return Response(
+                    {'error': 'Start and end month/year are required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if ey < sy or (ey == sy and em < sm):
+                return Response(
+                    {'error': 'End month/year must not be before start month/year'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if employee.joining_date:
+                join_month = employee.joining_date.month
+                join_year = employee.joining_date.year
+                if sy < join_year or (sy == join_year and sm < join_month):
+                    return Response(
+                        {'error': f'Start month {sm}/{sy} is before employee joining date {join_month}/{join_year}'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+        
         transaction_number = f"LN-{datetime.now().strftime('%Y%m%d')}-{employee.employee_id}"
         loan = EmployeeLoan.objects.create(
             company_id=company_id,
@@ -862,13 +956,12 @@ class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             employee=employee,
             loan_type=request.data.get('loan_type', 'PERSONAL_LOAN'),
             principal_amount=principal_amount,
-            monthly_deduction=monthly_deduction,
             remaining_amount=total_payable,
-            total_months=total_months,
+            paid_amount=0,
             paid_months=0,
             interest_rate=interest_rate,
             total_payable=total_payable,
-            start_date=request.data.get('start_date', date.today()),
+            frequency_type=frequency_type,
             end_date=request.data.get('end_date'),
             status='PENDING',
             purpose=request.data.get('purpose'),
@@ -877,6 +970,49 @@ class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             created_by=request.user,
             updated_by=request.user,
         )
+        
+        # Create child table records
+        if frequency_type in ('SELECTED_MONTH', 'ONE_TIME'):
+            for sm in selected_months_data:
+                LoanSelectedMonth.objects.create(
+                    loan=loan,
+                    month=sm['month'],
+                    year=sm['year'],
+                    deduction=sm.get('deduction', total_payable / len(selected_months_data)),
+                    company_id=company_id,
+                    branch_id=branch_id,
+                    created_by=request.user,
+                    updated_by=request.user,
+                )
+        elif frequency_type == 'MONTH_RANGE':
+            # Save individual selected months for MONTH_RANGE (with per-month editable deductions)
+            for sm in selected_months_data:
+                LoanSelectedMonth.objects.create(
+                    loan=loan,
+                    month=sm['month'],
+                    year=sm['year'],
+                    deduction=sm.get('deduction', 0),
+                    company_id=company_id,
+                    branch_id=branch_id,
+                    created_by=request.user,
+                    updated_by=request.user,
+                )
+            total_months_count = (month_range_data['end_year'] - month_range_data['start_year']) * 12 + \
+                                 (month_range_data['end_month'] - month_range_data['start_month']) + 1
+            deduction_per_month = total_payable / total_months_count if total_months_count > 0 else total_payable
+            LoanMonthRange.objects.create(
+                loan=loan,
+                start_month=month_range_data['start_month'],
+                start_year=month_range_data['start_year'],
+                end_month=month_range_data['end_month'],
+                end_year=month_range_data['end_year'],
+                deduction=deduction_per_month,
+                company_id=company_id,
+                branch_id=branch_id,
+                created_by=request.user,
+                updated_by=request.user,
+            )
+        
         return Response({
             "message": "Loan created successfully",
             "loan": self._serialize_loan(loan)
@@ -902,10 +1038,11 @@ class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             company_id=company_id,
             is_deleted=False
         )
-        updatable_fields = ['loan_type', 'principal_amount', 'total_months', 'interest_rate', 'start_date', 'end_date', 'purpose', 'notes']
+        updatable_fields = ['loan_type', 'interest_rate', 'end_date', 'purpose', 'notes', 'frequency_type']
         for field in updatable_fields:
             if field in request.data:
                 setattr(loan, field, request.data[field])
+        
         if 'principal_amount' in request.data or 'interest_rate' in request.data:
             principal = float(request.data.get('principal_amount', loan.principal_amount))
             interest = float(request.data.get('interest_rate', loan.interest_rate))
@@ -913,9 +1050,56 @@ class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 loan.total_payable = principal + (principal * interest / 100)
             else:
                 loan.total_payable = principal
-            if loan.total_months > 0:
-                loan.monthly_deduction = float(loan.total_payable) / loan.total_months
-                loan.remaining_amount = float(loan.total_payable) - (float(loan.monthly_deduction) * loan.paid_months)
+            loan.remaining_amount = float(loan.total_payable) - float(loan.paid_amount)
+        
+        # Update selected months if provided
+        if 'selected_months' in request.data:
+            # Validate sum of deductions equals total_payable
+            total_payable_val = float(loan.total_payable)
+            if total_payable_val > 0:
+                deductions_sum = sum(float(sm.get('deduction', 0)) for sm in request.data['selected_months'])
+                if abs(deductions_sum - total_payable_val) > 0.01:
+                    return Response(
+                        {'error': f'Sum of deductions ({deductions_sum:.2f}) must equal total payable amount ({total_payable_val:.2f})'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            loan.selected_months.all().delete()
+            for sm in request.data['selected_months']:
+                LoanSelectedMonth.objects.create(
+                    loan=loan,
+                    month=sm['month'],
+                    year=sm['year'],
+                    deduction=sm.get('deduction', 0),
+                    company_id=company_id,
+                    branch_id=loan.branch_id,
+                    created_by=request.user,
+                    updated_by=request.user,
+                )
+        
+        # Update month range if provided
+        if 'month_range' in request.data:
+            try:
+                loan.month_range.delete()
+            except (LoanMonthRange.DoesNotExist, AttributeError):
+                pass
+            mr_data = request.data['month_range']
+            total_months_count = (mr_data['end_year'] - mr_data['start_year']) * 12 + \
+                                 (mr_data['end_month'] - mr_data['start_month']) + 1
+            tp = float(loan.total_payable)
+            deduction_per_month = tp / total_months_count if total_months_count > 0 else tp
+            LoanMonthRange.objects.create(
+                loan=loan,
+                start_month=mr_data['start_month'],
+                start_year=mr_data['start_year'],
+                end_month=mr_data['end_month'],
+                end_year=mr_data['end_year'],
+                deduction=deduction_per_month,
+                company_id=company_id,
+                branch_id=loan.branch_id,
+                created_by=request.user,
+                updated_by=request.user,
+            )
+        
         loan.updated_by = request.user
         loan.save()
         return Response({
@@ -994,7 +1178,7 @@ class LoanStatusUpdateView(CompanyBranchMixin, PermissionRequiredMixin, APIView)
             loan.remaining_amount = 0
         elif new_status == 'PAID':
             loan.remaining_amount = 0
-            loan.paid_months = loan.total_months
+            loan.paid_amount = float(loan.total_payable)
         loan.updated_by = request.user
         loan.save()
         return Response({
@@ -1012,19 +1196,37 @@ class CompensationView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
     
     def _serialize_compensation(self, comp):
+        selected_months = [
+            {
+                "id": str(sm._id),
+                "month": sm.month,
+                "year": sm.year,
+            }
+            for sm in comp.selected_months.all()
+        ]
+        month_range = None
+        try:
+            mr = comp.month_range
+            month_range = {
+                "id": str(mr._id),
+                "start_month": mr.start_month,
+                "start_year": mr.start_year,
+                "end_month": mr.end_month,
+                "end_year": mr.end_year,
+            }
+        except CompensationMonthRange.DoesNotExist:
+            pass
         return {
             "id": str(comp._id),
             "employee_id": str(comp.employee._id) if comp.employee else None,
             "employee_name": comp.employee.full_name if comp.employee else None,
             "employee_code": comp.employee.employee_id if comp.employee else None,
-            "department": comp.employee.department if comp.employee else None,
-            "designation": comp.employee.designation if comp.employee else None,
+            "department": comp.employee.department.name if comp.employee and comp.employee.department else None,
+            "designation": comp.employee.designation.name if comp.employee and comp.employee.designation else None,
             "basic_salary": str(comp.employee.salary) if comp.employee else "0",
-            "grade": comp.grade,
             "house_rent_allowance": str(comp.house_rent_allowance),
             "medical_allowance": str(comp.medical_allowance),
             "transport_allowance": str(comp.transport_allowance),
-            "fuel_allowance": str(comp.fuel_allowance),
             "phone_allowance": str(comp.phone_allowance),
             "utilities_allowance": str(comp.utilities_allowance),
             "education_allowance": str(comp.education_allowance),
@@ -1036,28 +1238,38 @@ class CompensationView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "total_allowances": str(comp.total_allowances),
             "total_ctc": str(comp.total_ctc),
             "total_monthly": str(comp.total_monthly),
+            "frequency_type": comp.frequency_type,
+            "selected_months": selected_months,
+            "month_range": month_range,
             "is_active": comp.is_active,
             "status": comp.status,
-            "effective_date": comp.effective_date.isoformat() if hasattr(comp.effective_date, "isoformat") else comp.effective_date,
             "review_date": comp.review_date.isoformat() if comp.review_date else None,
             "notes": comp.notes,
             "created_at": comp.created_at.isoformat() if comp.created_at else None,
         }
     
-    def get(self, request):
+    def get(self, request, pk=None):
         company_id = request.user.company_id
         if not company_id:
             return Response(
                 {'error': 'User is not associated with any company'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        if pk:
+            compensation = get_object_or_404(
+                Compensation,
+                _id=pk,
+                company_id=company_id,
+                is_deleted=False
+            )
+            return Response(self._serialize_compensation(compensation))
         employee_uuid = request.query_params.get('employee_id')
         search = request.query_params.get('search')
         status_filter = request.query_params.get('status')
         query = Compensation.objects.filter(
             company_id=company_id,
             is_deleted=False
-        ).select_related('employee')
+        ).select_related('employee').prefetch_related('selected_months')
         if employee_uuid:
             employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
             query = query.filter(employee=employee)
@@ -1066,21 +1278,15 @@ class CompensationView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         if search:
             query = query.filter(
                 Q(employee__first_name__icontains=search) |
-                Q(employee__last_name__icontains=search) |
-                Q(grade__icontains=search)
+                Q(employee__last_name__icontains=search)
             )
-        compensations = query.order_by('-effective_date')
+        compensations = query.order_by('-created_at')
         return Response([self._serialize_compensation(c) for c in compensations])
     
     @transaction.atomic
     def post(self, request):
         company_id = request.user.company_id
         branch_id = request.user.branch_id
-        effective_date = request.data.get('effective_date')
-        effective_date = (
-            datetime.strptime(effective_date, "%Y-%m-%d").date()
-            if effective_date else date.today()
-        )
         if not company_id:
             return Response(
                 {'error': 'User is not associated with any company'},
@@ -1103,15 +1309,62 @@ class CompensationView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 {'error': 'Employee already has an active compensation. Please deactivate it first.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        frequency_type = request.data.get('frequency_type', 'MONTH_RANGE')
+        selected_months_data = request.data.get('selected_months', [])
+        month_range_data = request.data.get('month_range', {})
+        
+        # Validate frequency-specific data
+        if frequency_type in ('SELECTED_MONTH', 'ONE_TIME'):
+            if not selected_months_data:
+                return Response(
+                    {'error': 'At least one selected month is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if employee.joining_date:
+                join_month = employee.joining_date.month
+                join_year = employee.joining_date.year
+                for sm in selected_months_data:
+                    m, y = sm.get('month'), sm.get('year')
+                    if y < join_year or (y == join_year and m < join_month):
+                        return Response(
+                            {'error': f'Selected month {m}/{y} is before employee joining date {join_month}/{join_year}'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+        elif frequency_type == 'MONTH_RANGE':
+            if not month_range_data:
+                return Response(
+                    {'error': 'Month range data is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            sm, sy = month_range_data.get('start_month'), month_range_data.get('start_year')
+            em, ey = month_range_data.get('end_month'), month_range_data.get('end_year')
+            if not all([sm, sy, em, ey]):
+                return Response(
+                    {'error': 'Start and end month/year are required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if ey < sy or (ey == sy and em < sm):
+                return Response(
+                    {'error': 'End month/year must not be before start month/year'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if employee.joining_date:
+                join_month = employee.joining_date.month
+                join_year = employee.joining_date.year
+                if sy < join_year or (sy == join_year and sm < join_month):
+                    return Response(
+                        {'error': f'Start month {sm}/{sy} is before employee joining date {join_month}/{join_year}'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+        
         compensation = Compensation.objects.create(
             company_id=company_id,
             branch_id=branch_id,
             employee=employee,
-            grade=request.data.get('grade'),
             house_rent_allowance=request.data.get('house_rent_allowance', 0),
             medical_allowance=request.data.get('medical_allowance', 0),
             transport_allowance=request.data.get('transport_allowance', 0),
-            fuel_allowance=request.data.get('fuel_allowance', 0),
             phone_allowance=request.data.get('phone_allowance', 0),
             utilities_allowance=request.data.get('utilities_allowance', 0),
             education_allowance=request.data.get('education_allowance', 0),
@@ -1120,14 +1373,40 @@ class CompensationView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             employer_eobi=request.data.get('employer_eobi', 0),
             overtime_rate=request.data.get('overtime_rate', 0),
             bonus_percentage=request.data.get('bonus_percentage', 0),
+            frequency_type=frequency_type,
             status='ACTIVE',
             is_active=True,
-            effective_date=effective_date,
             review_date=request.data.get('review_date'),
             notes=request.data.get('notes'),
             created_by=request.user,
             updated_by=request.user,
         )
+        
+        # Create child table records
+        if frequency_type in ('SELECTED_MONTH', 'ONE_TIME'):
+            for sm in selected_months_data:
+                CompensationSelectedMonth.objects.create(
+                    compensation=compensation,
+                    month=sm['month'],
+                    year=sm['year'],
+                    company_id=company_id,
+                    branch_id=branch_id,
+                    created_by=request.user,
+                    updated_by=request.user,
+                )
+        elif frequency_type == 'MONTH_RANGE':
+            CompensationMonthRange.objects.create(
+                compensation=compensation,
+                start_month=month_range_data['start_month'],
+                start_year=month_range_data['start_year'],
+                end_month=month_range_data['end_month'],
+                end_year=month_range_data['end_year'],
+                company_id=company_id,
+                branch_id=branch_id,
+                created_by=request.user,
+                updated_by=request.user,
+            )
+        
         return Response({
             "message": "Compensation created successfully",
             "compensation": self._serialize_compensation(compensation)
@@ -1154,15 +1433,49 @@ class CompensationView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             is_deleted=False
         )
         updatable_fields = [
-            'grade', 'house_rent_allowance', 'medical_allowance',
-            'transport_allowance', 'fuel_allowance', 'phone_allowance',
+            'house_rent_allowance', 'medical_allowance',
+            'transport_allowance', 'phone_allowance',
             'utilities_allowance', 'education_allowance', 'other_allowances',
             'employer_pf', 'employer_eobi', 'overtime_rate', 'bonus_percentage',
-            'status', 'is_active', 'effective_date', 'review_date', 'notes'
+            'frequency_type', 'status', 'is_active', 'review_date', 'notes'
         ]
         for field in updatable_fields:
             if field in request.data:
                 setattr(compensation, field, request.data[field])
+        
+        # Update selected months if provided
+        if 'selected_months' in request.data:
+            compensation.selected_months.all().delete()
+            for sm in request.data['selected_months']:
+                CompensationSelectedMonth.objects.create(
+                    compensation=compensation,
+                    month=sm['month'],
+                    year=sm['year'],
+                    company_id=company_id,
+                    branch_id=compensation.branch_id,
+                    created_by=request.user,
+                    updated_by=request.user,
+                )
+        
+        # Update month range if provided
+        if 'month_range' in request.data:
+            try:
+                compensation.month_range.delete()
+            except (CompensationMonthRange.DoesNotExist, AttributeError):
+                pass
+            mr_data = request.data['month_range']
+            CompensationMonthRange.objects.create(
+                compensation=compensation,
+                start_month=mr_data['start_month'],
+                start_year=mr_data['start_year'],
+                end_month=mr_data['end_month'],
+                end_year=mr_data['end_year'],
+                company_id=company_id,
+                branch_id=compensation.branch_id,
+                created_by=request.user,
+                updated_by=request.user,
+            )
+        
         compensation.updated_by = request.user
         compensation.save()
         return Response({
