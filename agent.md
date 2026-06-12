@@ -18,6 +18,23 @@ graph TD
     Daphne -->|Real-Time Sync| Channels[Redis Channel Layer / DB 0]
 ```
 
+### API URL Map
+All API routes are registered in `backend/config/urls.py`:
+| Prefix | App | Purpose |
+|---|---|---|
+| `/api/accounts/` | accounts | Auth (login, logout, refresh, me) |
+| `/api/hr/` | hr | Employees, payroll, leave, shifts, assets, recruitment, policies, compensation, loans |
+| `/api/inventory/` | inventory | Products, variants, stock, warehouses, purchases, sales, brands, categories, customers, suppliers, transfers, barcode, alerts, audit |
+| `/api/finance/` | finance | Accounts, journal entries, payments, customer invoices, supplier bills, expenses, budgets, bank accounts, payroll, reports |
+| `/api/organization/` | organization | Company, branch, user management |
+| `/api/company/` | compsetting | Company settings, departments, designations |
+| `/api/notifications/` | notifications | WebSocket notifications |
+| `/api/permissions/` | permissions | RBAC (roles, permissions, modules) |
+| `/api/sales/` | sales | Leads, quotes |
+| `/api/forecast/` | forecast | Sales & stock forecasting |
+| `/api/overall/` | overall_dashboard | Unified dashboard KPIs |
+| `/api/audit/` | audit | Audit log viewer |
+
 ### Core Technologies
 *   **Frontend**: Next.js 14+ (App Router), React, Redux Toolkit (global client state), TanStack Query (server cache/queries), Tailwind CSS, shadcn/ui.
 *   **Backend**: Python, Django 6.0+, Django REST Framework (DRF), Django Channels 4.1 (WebSockets), Daphne (ASGI web server).
@@ -68,7 +85,27 @@ Authentication is fully cookie-based. Standard JWT strings are hidden from front
 
 ---
 
-## 4. Role-Based Access Control (RBAC) & Real-Time Sync
+## 4. Audit Logging System
+
+The audit app (`apps/audit/`) provides generic, signal-based audit logging for all models with UUID `_id` fields.
+
+### How It Works
+- **`post_save` signal** (`audit_create_update`): Logs `CREATE` (all fields) and `UPDATE` (changed fields only) operations.
+- **`pre_delete` signal** (`audit_delete`): Logs all field values before deletion.
+- Skipped for: `AuditLog` itself, Django admin/auth/sessions/contenttypes models, and models without `_id` UUID.
+
+### Database Models
+- **`AuditLog`**: Stores `user`, `action` (CREATE/UPDATE/DELETE), `model_name`, `record_id` (UUID), `module` (app label), `ip_address`, `user_agent`. Inherits `BaseModel` for multi-tenant isolation.
+- **`AuditLogChange`**: Stores individual field-level changes: `field_name`, `old_value`, `new_value`. FK to `AuditLog`.
+
+### Key Details
+- The `AuditLog` model overrides `created_by`/`updated_by`/`deleted_by` with custom `related_name` to avoid clashes with the auto-populated BaseModel fields.
+- Audit signals require the `_request` attribute on model instances (set via thread-local middleware in middleware.py).
+- Frontend route: `/inventory/audit` and `/finance/audit` provide dedicated audit log viewers.
+
+---
+
+## 5. Role-Based Access Control (RBAC) & Real-Time Sync
 
 Al-Qaiser features a customized granular access control engine instead of standard Django Groups.
 
@@ -129,30 +166,42 @@ sequenceDiagram
 
 ---
 
-## 5. Codebase Directory Layout
+## 6. Codebase Directory Layout
 
 ### Backend Structure (`/backend`)
 ```
 backend/
 ├── apps/                          # Django modular apps
 │   ├── accounts/                  # Auth views (login, logout, refresh, me)
+│   ├── audit/                     # Generic audit logging via signals (AuditLog, AuditLogChange)
 │   ├── common/                    # Core abstract classes (BaseModel, CookieJWTAuthentication, CompanyBranchMixin)
-│   ├── compsetting/               # Tenant company setup settings
-│   ├── finance/                   # Chart of accounts, journal entries, ledgers
-│   ├── hr/                        # Employee directories, shifts, attendance, leaves
-│   ├── inventory/                 # Product variants, warehouses, stocks, transfers, PO/SO
+│   ├── compsetting/               # Tenant company setup settings (CompanySettings, Department, Designation)
+│   ├── finance/                   # Chart of accounts, journal entries, ledgers, payments, budgets, payroll
+│   │   ├── models/                # account, bank, budget, customer_invoice, expense, journal, payment, supplier_bill
+│   │   ├── serializers/           # Per-model serializers
+│   │   ├── services/              # document, invoice_payment, payable
+│   │   └── views/                 # Per-model viewsets
+│   ├── forecast/                  # Sales & stock forecasting (models, services, tasks, analytics)
+│   ├── hr/                        # Employee directories, shifts, attendance, leaves, payroll, compensation, loans, assets, recruitment, policies, exit mgmt
+│   │   ├── serializers/           # asset, policy, recruitment, shift serializers
+│   │   ├── services/              # assignment, shift services
+│   │   └── views/                 # Per-feature viewsets (employee, leave, payroll, shift, asset, recruitment, policy, exit)
+│   ├── inventory/                 # Products, variants, warehouses, stocks, transfers, PO/SO, brands, categories, customers, suppliers
+│   │   ├── models/                # Per-model files (product, variant, stock, warehouse, purchase, sales, etc.)
+│   │   ├── serializers/           # Per-model serializers
+│   │   └── views/                 # Per-feature viewsets
 │   ├── monitoring/                # AI logging & workforce dashboard metrics
-│   ├── notifications/             # WebSockets middleware & notification consumers
-│   ├── organization/              # Company, Branch, and Custom User model schemas
-│   ├── permissions/               # Custom RBAC database models, views, and helpers
-└───sales/                     # Leads (title/source), Quotes, and Sales workflows
+│   ├── notifications/             # WebSocket notification consumer + models
+│   ├── organization/              # Company, Branch, Custom User model + seed_org management command
+│   ├── overall_dashboard/         # Unified KPIs (finance + inventory + sales)
+│   ├── permissions/               # Custom RBAC (Module, Resource, Action, Permission, Role, UserRole, UserPermission) + seed_permissions
+│   └── sales/                     # Leads, Quotes with customer conversion workflow
 
 ├── config/                        # Django project main config
-
 │   ├── asgi.py                    # Daphne ASGI routing (HTTP + WebSockets)
 │   ├── settings.py                # Main settings (SimpleJWT, CACHES, CHANNEL_LAYERS, CORS)
 │   └── urls.py                    # Root URL router mapping to sub-apps
-├── consumers/                     # Independent channel consumer logic
+├── consumers/                     # Independent channel consumer logic (permission_consumer)
 ├── entrypoint.sh                  # Shell startup scripts (wait-for-db, Daphne run command)
 ├── requirements.txt               # Main python packages list
 └── Dockerfile                     # Docker container config
@@ -162,26 +211,56 @@ backend/
 ```
 frontend/src/
 ├── app/                           # Next.js App Router folders
-│   ├── (app)/                     # Authenticated layout group (dashboard, inventory, hr, settings, finance)
+│   ├── (app)/                     # Authenticated layout group
+│   │   ├── dashboard/             # Overall ERP dashboard page
+│   │   ├── hr/                    # HR routes (employees, payroll, leave, attendance, shifts, assets, recruitment, compensation, exit, policies, performance)
+│   │   ├── inventory/             # Inventory routes (dashboard, products, stock, warehouses, purchases, suppliers, transfers, barcode, reports, alerts, customers, pos, audit)
+│   │   ├── sales/                 # Sales routes (dashboard, leads, quotes, customers, customer-invoices)
+│   │   ├── finance/               # Finance routes (dashboard, accounts, expenses, budgets, bank-accounts, supplier-bills, payments, journal-entries, reports, payroll, taxes, audit, forecast)
+│   │   ├── monitoring/            # AI Monitoring routes (dashboard, activity-tracking, inventory-monitoring, workforce-monitoring, alerts-events, reports-insights)
+│   │   ├── settings/              # Settings routes (company, users, departments, designations, permissions, preferences)
+│   │   └── page.tsx               # Root redirect → /dashboard
 │   ├── login/                     # Simple username/password login page
 │   ├── unauthorized/              # Standard access-denied route
 │   └── layout.tsx / providers.tsx # Context wrap setup (Redux + React Query Providers)
 ├── components/                    # Sharable React/shadcn UI components
+│   ├── payroll/                   # Payroll, Compensation, Loan forms/tables/modals
+│   ├── leave/                     # Leave form modals
+│   ├── finance/                   # Finance-specific (accounts, bank, budgets, etc.)
+│   ├── inventory/                 # Inventory-specific (brand, category, product, warehouse, etc.)
+│   ├── sales/                     # Sales-specific components
+│   ├── settings/                  # Settings-specific (departments, designations)
+│   ├── HRAssets/                  # HR asset management
+│   ├── monitoring/                # Monitoring views
+│   ├── recruitment/               # Recruitment components
+│   ├── reuseable/                 # Reusable (StatsCards, SearchableSelect, etc.)
+│   ├── cards/                     # Shared card components
+│   ├── navbar/                    # Top navigation bar
+│   ├── sidebar/                   # Sidebar navigation
+│   └── ui/                        # shadcn/ui primitives
 ├── config/                        # Configuration mappings
-│   └── routePermissions.ts        # Maps absolute routes to permission strings
+│   └── routePermissions.ts        # Maps absolute routes to permission strings + menuPermissionMapping
 ├── contexts/                      # Shared context classes
+│   └── NotificationContext.tsx     # WebSocket notification consumer + React Query cache invalidation
 ├── hooks/                         # Global React Hooks
-│   ├── sales/                     # Sales hooks (useLeads, useQuotes)
-│   ├── finance/                   # Finance hooks
+│   ├── sales/                     # Sales hooks (useLeads, useQuotes, useSalesDashboard)
+│   ├── finance/                   # Finance hooks (useAccounts, useExpenses, useBudgets, useBank, etc.)
+│   ├── overall/                   # useOverallDashboard
 │   ├── useAuth.ts                 # Accesses auth actions (login, logout)
 │   ├── useApi.ts                  # Axios/fetch hook wrapper
-│   └── usePermissions.ts          # React query hooks + permissions WebSocket hook
+│   ├── usePermissions.ts          # React query hooks + permissions WebSocket hook
+│   ├── usePayroll.ts              # Payroll, Compensation, Loan hooks
+│   ├── useEmployees.ts            # Employee hook
+│   ├── useDepartments.ts          # Department hook
+│   ├── useDesignations.ts         # Designation hook
+│   ├── useLeaves.ts               # Leave hook
+│   ├── ... (60+ hooks total)
 ├── layouts/                       # Layout components
 │   └── AppLayout.tsx              # Main UI Shell. Watches route guards & company setup status
 ├── lib/                           # Utility scripts
 │   └── api.ts                     # Core `apiFetch` wrapper mapping methods to toast notifications
 ├── store/                         # Redux Toolkit setup
-│   ├── slices/                    # Slices (authSlice, permissionSlice, themeSlice)
+│   ├── slices/                    # authSlice, permissionSlice, themeSlice, companySettingsSlice
 │   └── index.ts                   # Store initialization export
 ├── types/                         # Shared typescript types definitions
 └── styles.css                     # Global styles configuration
@@ -189,7 +268,7 @@ frontend/src/
 
 ---
 
-## 6. Key Developer Workflows
+## 7. Key Developer Workflows
 
 ### Creating a New Backend API Model
 When creating models, make sure to:
@@ -200,6 +279,16 @@ When creating models, make sure to:
     permission_module = 'INVENTORY'
     permission_resource = 'brand'
     ```
+4.  Audit logging is automatic via signals (no manual action needed) — models with `_id` UUID fields are tracked by `apps/audit/signals.py`.
+5.  For real-time cache invalidation, send WebSocket `data_update` events from your views after mutations (see rule #4 above).
+
+### Creating a New Django App
+1. Create the app under `backend/apps/` with `python manage.py startapp <name> backend/apps/<name>`.
+2. Add it to `INSTALLED_APPS` in `backend/config/settings.py`.
+3. Register API routes in `backend/config/urls.py` under the `/api/` prefix.
+4. Add Module/Resource/Action entries in `seed_permissions.py` for RBAC.
+5. Create frontend route + permission mapping in `routePermissions.ts`.
+6. Add entity-to-query-key mapping in `NotificationContext.tsx` for cache invalidation.
 
 ### Protecting a Frontend Next.js Route
 1.  Create your page folder under `src/app/(app)/my-feature/page.tsx`.
@@ -208,10 +297,27 @@ When creating models, make sure to:
     "/my-feature": "MODULE:resource:view"
     ```
 3.  Add sidebar filters in `menuPermissionMapping` using the menu title to hide sidebar navigation dynamically if the user lacks access.
+4.  For nested route groups (e.g. `/hr/compensation/[id]`), the `getRequiredPermission()` helper uses prefix matching — parent route permission covers nested paths.
+
+### Adding Real-Time Cache Invalidation for a New Entity
+1. Add entity name → query keys mapping in `NotificationContext.tsx` ENTITY_TO_QUERY_KEY:
+   ```typescript
+   my_entity: ["myEntity", "myEntityStats"]
+   ```
+2. From backend views, trigger WebSocket after mutations:
+   ```python
+   from channels.layers import get_channel_layer
+   from asgiref.sync import async_to_sync
+   channel_layer = get_channel_layer()
+   async_to_sync(channel_layer.group_send)(
+       f"notify_c{company_id}_b{branch_id}",
+       {"type": "data_update", "entity": "my_entity", "action": "created", "record_id": obj._id}
+   )
+   ```
 
 ---
 
-## 7. Initialization & Environment Seeding
+## 8. Initialization & Environment Seeding
 
 ### Seeding commands (Run inside the Django backend container)
 Run the following commands inside `docker-compose exec backend <cmd>` to populate standard system data:
@@ -230,6 +336,15 @@ Run the following commands inside `docker-compose exec backend <cmd>` to populat
     python manage.py seed_chart_of_accounts --company-id=1 --branch-id=1
     ```
 
+> **Order matters**: Run `seed_org` first (creates company + admin user), then `seed_permissions` (creates RBAC matrix), then `seed_chart_of_accounts` (creates finance templates).
+
+### Management Commands Summary
+| Command | Source | Description |
+|---|---|---|
+| `seed_org` | `apps/organization/management/commands/seed_org.py` | Creates company, default branch, and admin user |
+| `seed_permissions` | `apps/permissions/management/commands/seed_permissions.py` | Seeds modules, resources, actions, permissions, roles |
+| `seed_chart_of_accounts` | `apps/finance/management/commands/seed_chart_of_accounts.py` | Seeds finance COA templates |
+
 ### Docker Port Layout (Dev Environment)
 *   **Host Port 3000**: Next.js App dev server.
 *   **Host Port 8000**: Daphne ASGI backend server (serves REST endpoints under `/api/` and WS under `/ws/`).
@@ -240,7 +355,7 @@ Run the following commands inside `docker-compose exec backend <cmd>` to populat
 
 ---
 
-## 8. **AI AGENT RULES & GUIDELINES** (Copilot CLI, Gemini, and Other AI Assistants)
+## 9. **AI AGENT RULES & GUIDELINES** (Copilot CLI, Gemini, and Other AI Assistants)
 
 ### Critical Restrictions
 > [!IMPORTANT]
@@ -312,21 +427,36 @@ Run the following commands inside `docker-compose exec backend <cmd>` to populat
 #### **4. Update NotificationContext & Trigger Cache Refresh**
 When implementing data mutations or real-time features:
 - Trigger WebSocket events that emit `type: "data_update"` with entity name.
-- The `NotificationContext` will automatically invalidate React Query caches.
-- This ensures UI reflects backend changes without manual page reload.
-- Example:
+- The `NotificationContext` will automatically invalidate React Query caches via `ENTITY_TO_QUERY_KEY` mapping.
+- Current entity-to-query-key mappings in `@frontend/src/contexts/NotificationContext.tsx`:
+
+| Backend Entity | React Query Keys Invalidated |
+|---|---|
+| `employees` | `employees`, `employeeStats` |
+| `leaves` | `leaves`, `leaveStats`, `leaveBalances` |
+| `payroll` | `payroll`, `payrollStats` |
+| `compensations` | `compensations` |
+| `loans` | `loans`, `employeeLoans` |
+| `inventory_product` | `inventory_product` |
+| `inventory_variant` | `inventory_variant`, `batchStock` |
+| `inventory_stock` | `inventory_stock`, `batchStock` |
+| `inventory_sales_order` | `inventory_sales_order` |
+| `finance_customer_invoice` | `finance_customer_invoice` |
+| ... | (full list in file) |
+
+- Example backend trigger:
   ```python
-  # Backend: Send update notification
-  channel_layer.group_send(
-      f"notifications_{company_id}_{branch_id}",
+  from asgiref.sync import async_to_sync
+  from channels.layers import get_channel_layer
+  
+  channel_layer = get_channel_layer()
+  async_to_sync(channel_layer.group_send)(
+      f"notify_c{company_id}_b{branch_id}",
       {
-          "type": "notify_event",
-          "data": {
-              "type": "data_update",
-              "entity": "inventory_product",
-              "action": "created",
-              "record_id": product._id
-          }
+          "type": "data_update",
+          "entity": "inventory_product",
+          "action": "created",
+          "record_id": product._id
       }
   )
   ```
@@ -466,7 +596,7 @@ When implementing or updating Leave forms and APIs, enforce the following rules 
 
 ---
 
-## 9. Compensation & Loan Module - IMPLEMENTED
+## 10. Compensation & Loan Module - IMPLEMENTED
 
 ### Compensation Module Changes (Implemented)
 
@@ -510,8 +640,10 @@ When implementing or updating Leave forms and APIs, enforce the following rules 
 ### Files Modified
 
 #### Backend:
-- `backend/apps/hr/models.py` - Removed fields, added 4 new child models
-- `backend/apps/hr/views/payroll_views.py` - Updated serializers, CRUD operations, validation
+- `backend/apps/hr/models.py` - Removed fields, added 4 new child models (CompensationSelectedMonth, CompensationMonthRange, LoanSelectedMonth, LoanMonthRange)
+- `backend/apps/hr/views/payroll_views.py` - Major refactor (463 lines changed), updated serializers, CRUD operations, validation
+- `backend/apps/hr/urls.py` - Added routes for compensation detail and loan detail
+- `backend/apps/hr/migrations/0005-0007` - Compensation/Loan migration changes, fuel_allowance removal
 
 #### Frontend:
 - `frontend/src/components/payroll/types.ts` - New interfaces (SelectedMonth, MonthRange), helper functions
@@ -519,8 +651,10 @@ When implementing or updating Leave forms and APIs, enforce the following rules 
 - `frontend/src/components/payroll/LoanForm.tsx` - Removed monthly_deduction/total_months/start_date, deduction fields
 - `frontend/src/components/payroll/CompensationTab.tsx` - Removed Grade/Effective Date columns
 - `frontend/src/components/payroll/LoanTab.tsx` - Updated display (removed Monthly column, shows Total Payable)
-- `frontend/src/components/payroll/CompensationLoanPage.tsx` - Passes employee joining date to forms
-- `frontend/src/hooks/usePayroll.ts` - Updated interfaces for new data structures
+- `frontend/src/components/payroll/CompensationLoanPage.tsx` - Refactored with employee joining date, tab-based UI
+- `frontend/src/hooks/usePayroll.ts` - Updated interfaces, new hooks (useCompensation, useEmployeeLoan, useUpdateLoanStatus, usePayrollPreview)
+- `frontend/src/app/(app)/hr/compensation/[id]/page.tsx` - **NEW**: Compensation detail page with allowances breakdown, CTC summary
+- `frontend/src/app/(app)/hr/compensation/loan/[id]/page.tsx` - **NEW**: Loan detail page with repayment progress, monthly deductions
 
 ### API Response Structure
 
