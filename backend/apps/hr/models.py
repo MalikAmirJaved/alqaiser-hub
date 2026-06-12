@@ -1675,6 +1675,43 @@ class RecruitmentCandidate(TimeStampedModel):
         if self.assigned_to_id and not self.assigned_name:
             self.assigned_name = self.assigned_to.full_name
         super().save(*args, **kwargs)
+    @property
+    def current_round(self):
+        """Get current active/pending round"""
+        rounds = self.interview_rounds.all()
+        for round_obj in rounds:
+            if round_obj.status in ['PENDING', 'SCHEDULED']:
+                return round_obj.round_number
+        return None
+    
+    @property
+    def highest_round(self):
+        """Get highest round number"""
+        rounds = self.interview_rounds.all()
+        if rounds.exists():
+            return max(rounds.values_list('round_number', flat=True))
+        return 0
+    
+    @property
+    def overall_status(self):
+        """Calculate overall candidate status based on rounds"""
+        rounds = self.interview_rounds.all()
+        if not rounds.exists():
+            return self.stage
+        
+        # If any round failed, candidate is Rejected
+        if rounds.filter(status='FAILED').exists():
+            return 'Rejected'
+        
+        # If all rounds passed, candidate can move to Offer
+        if rounds.filter(status='PASSED').count() == rounds.count():
+            return 'Offer' if self.stage != 'Hired' else self.stage
+        
+        # If any round is scheduled or pending
+        if rounds.filter(status__in=['SCHEDULED', 'PENDING']).exists():
+            return 'Interview'
+        
+        return self.stage
 
 
 class RecruitmentActivityLog(TimeStampedModel):
@@ -1744,3 +1781,89 @@ class RecruitmentActivityLog(TimeStampedModel):
     
     def __str__(self):
         return f"{self.candidate.name} - {self.action} - {self.created_at}"
+
+
+class InterviewRound(models.Model):
+    """Individual interview rounds for recruitment candidates"""
+    
+    ROUND_STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('PASSED', 'Passed'),
+        ('FAILED', 'Failed'),
+        ('SCHEDULED', 'Scheduled'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+    
+    INTERVIEW_TYPE_CHOICES = [
+        ('TECHNICAL', 'Technical Interview'),
+        ('HR', 'HR Interview'),
+        ('MANAGERIAL', 'Managerial Interview'),
+        ('CODING', 'Coding Test'),
+        ('ASSIGNMENT', 'Assignment Review'),
+        ('BEHAVIORAL', 'Behavioral Assessment'),
+        ('GROUP', 'Group Discussion'),
+        ('PRESENTATION', 'Presentation'),
+        ('OTHER', 'Other'),
+    ]
+    
+    id = models.BigAutoField(primary_key=True)
+    _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    
+    candidate = models.ForeignKey(
+        RecruitmentCandidate,
+        on_delete=models.CASCADE,
+        related_name='interview_rounds'
+    )
+    
+    # Round Information
+    round_number = models.PositiveSmallIntegerField()
+    round_title = models.CharField(max_length=255)
+    interview_type = models.CharField(max_length=50, choices=INTERVIEW_TYPE_CHOICES, default='TECHNICAL')
+    
+    # Round Status
+    status = models.CharField(max_length=20, choices=ROUND_STATUS_CHOICES, default='PENDING')
+    
+    # Interview Details
+    interview_date = models.DateTimeField(null=True, blank=True)
+    interviewer = models.ForeignKey(
+        Employee,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='conducted_interviews'
+    )
+    interviewer_name = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Round Feedback
+    feedback = models.TextField(blank=True, null=True)
+    rating = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Rating out of 10")
+    
+    # Additional Metadata
+    notes = models.TextField(blank=True, null=True)
+    meeting_link = models.URLField(blank=True, null=True)
+    duration_minutes = models.PositiveIntegerField(null=True, blank=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'hr_interview_rounds'
+        verbose_name = "Interview Round"
+        verbose_name_plural = "Interview Rounds"
+        ordering = ['candidate', 'round_number']
+        unique_together = [('candidate', 'round_number')]
+        indexes = [
+            models.Index(fields=['candidate', 'round_number']),
+            models.Index(fields=['candidate', 'status']),
+            models.Index(fields=['interviewer']),
+            models.Index(fields=['interview_date']),
+        ]
+    
+    def __str__(self):
+        return f"{self.candidate.name} - Round {self.round_number}: {self.round_title} ({self.status})"
+    
+    def save(self, *args, **kwargs):
+        if self.interviewer_id and not self.interviewer_name:
+            self.interviewer_name = self.interviewer.full_name
+        super().save(*args, **kwargs)

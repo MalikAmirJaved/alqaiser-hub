@@ -53,6 +53,20 @@ export interface RecruitmentStats {
   by_month: Array<{ month: string; applications: number; hired: number }>;
 }
 
+interface InterviewRound {
+  id: number;
+  round_number: number;
+  round_title: string;
+  interview_type: string;
+  status: "PENDING" | "PASSED" | "FAILED" | "SCHEDULED" | "CANCELLED";
+  interview_date?: string;
+  feedback?: string;
+  rating?: number;
+  interviewer_name?: string;
+  duration_minutes?: number;
+  meeting_link?: string;
+}
+
 export function useRecruitment(params?: {
   department?: string;
   stage?: string;
@@ -204,5 +218,23 @@ export function useRecruitmentActivities(candidateId?: number, params?: {
     queryFn: () => api(`${endpoint}${queryString}`),
     staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,
+  });
+}
+
+export interface RecruitmentCandidateDetail extends RecruitmentCandidate {
+  interview_rounds: InterviewRound[];
+  current_round: number | null;
+  highest_round: number;
+  overall_status: string;
+}
+
+export function useRecruitmentDetail(candidateId?: number) {
+  const api = useApi();
+  
+  return useQuery<RecruitmentCandidateDetail>({
+    queryKey: ["recruitmentDetail", candidateId],
+    queryFn: () => api(`/api/hr/recruitment/candidates/${candidateId}/detail/`),
+    enabled: !!candidateId,
+    staleTime: 30 * 1000,
   });
 }

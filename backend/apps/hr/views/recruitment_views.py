@@ -11,11 +11,16 @@ from datetime import datetime, date, timedelta
 import logging
 from django.utils import timezone
 
-from apps.hr.models import RecruitmentCandidate, RecruitmentActivityLog, Employee
+from apps.hr.models import RecruitmentCandidate, RecruitmentActivityLog, Employee,InterviewRound
 from apps.hr.serializers.recruitment_serializers import (
     RecruitmentCandidateSerializer,
     RecruitmentActivityLogSerializer,
-    RecruitmentStatsSerializer
+    RecruitmentStatsSerializer,
+    InterviewRoundSerializer, 
+    InterviewRoundUpdateSerializer,
+    RoundBulkCreateSerializer,
+    RecruitmentCandidateDetailSerializer,
+    RecruitmentCandidateListSerializer
 )
 
 logger = logging.getLogger(__name__)
@@ -519,3 +524,322 @@ class RecruitmentBulkActionView(APIView):
                 {'error': f'Invalid action: {action}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+class InterviewRoundView(APIView):
+    """CRUD operations for Interview Rounds"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, candidate_id):
+        """Get all rounds for a candidate"""
+        company_id = request.user.company_id
+        
+        if not company_id:
+            return Response(
+                {'error': 'User is not associated with any company'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        candidate = get_object_or_404(
+            RecruitmentCandidate,
+            id=candidate_id,
+            company_id=company_id,
+            is_deleted=False
+        )
+        
+        rounds = candidate.interview_rounds.all().order_by('round_number')
+        serializer = InterviewRoundSerializer(rounds, many=True)
+        return Response(serializer.data)
+    
+    def post(self, request, candidate_id):
+        """Create a new interview round"""
+        company_id = request.user.company_id
+        
+        if not company_id:
+            return Response(
+                {'error': 'User is not associated with any company'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        candidate = get_object_or_404(
+            RecruitmentCandidate,
+            id=candidate_id,
+            company_id=company_id,
+            is_deleted=False
+        )
+        
+        # Check if round number already exists
+        round_number = request.data.get('round_number')
+        if InterviewRound.objects.filter(candidate=candidate, round_number=round_number).exists():
+            return Response(
+                {'error': f'Round {round_number} already exists'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        serializer = InterviewRoundSerializer(data=request.data)
+        if serializer.is_valid():
+            interview_round = serializer.save(
+                candidate=candidate,
+                interviewer=request.user.employee if hasattr(request.user, 'employee') else None
+            )
+            
+            # Log activity
+            RecruitmentActivityLog.objects.create(
+                company_id=company_id,
+                candidate=candidate,
+                action='INTERVIEW_SCHEDULED',
+                new_value=f"Round {round_number}: {interview_round.round_title}",
+                metadata={'round_number': round_number},
+                performed_by=request.user,
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT')
+            )
+            
+            return Response(InterviewRoundSerializer(interview_round).data, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def patch(self, request, candidate_id, round_id):
+        """Update a specific round"""
+        company_id = request.user.company_id
+        
+        if not company_id:
+            return Response(
+                {'error': 'User is not associated with any company'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        interview_round = get_object_or_404(
+            InterviewRound,
+            id=round_id,
+            candidate_id=candidate_id,
+            candidate__company_id=company_id
+        )
+        
+        old_status = interview_round.status
+        
+        serializer = InterviewRoundUpdateSerializer(interview_round, data=request.data, partial=True)
+        
+        if serializer.is_valid():
+            updated_round = serializer.save()
+            
+            # Log activity
+            if old_status != updated_round.status:
+                RecruitmentActivityLog.objects.create(
+                    company_id=company_id,
+                    candidate=interview_round.candidate,
+                    action='STAGE_CHANGED',
+                    old_value=f"Round {updated_round.round_number}: {old_status}",
+                    new_value=f"Round {updated_round.round_number}: {updated_round.status}",
+                    metadata={'round_number': updated_round.round_number, 'status': updated_round.status},
+                    performed_by=request.user,
+                    ip_address=request.META.get('REMOTE_ADDR'),
+                    user_agent=request.META.get('HTTP_USER_AGENT')
+                )
+            
+            return Response(InterviewRoundSerializer(updated_round).data)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def delete(self, request, candidate_id, round_id):
+        """Delete a round"""
+        company_id = request.user.company_id
+        
+        if not company_id:
+            return Response(
+                {'error': 'User is not associated with any company'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        interview_round = get_object_or_404(
+            InterviewRound,
+            id=round_id,
+            candidate_id=candidate_id,
+            candidate__company_id=company_id
+        )
+        
+        interview_round.delete()
+        return Response({'message': 'Round deleted successfully'})
+
+
+class RoundBulkCreateView(APIView):
+    """Bulk create interview rounds for a candidate"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, candidate_id):
+        company_id = request.user.company_id
+        
+        if not company_id:
+            return Response(
+                {'error': 'User is not associated with any company'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        candidate = get_object_or_404(
+            RecruitmentCandidate,
+            id=candidate_id,
+            company_id=company_id,
+            is_deleted=False
+        )
+        
+        # Delete existing rounds
+        candidate.interview_rounds.all().delete()
+        
+        # Create new rounds
+        serializer = RoundBulkCreateSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            rounds_data = serializer.validated_data['rounds']
+            created_rounds = []
+            
+            for round_data in rounds_data:
+                interview_round = InterviewRound.objects.create(
+                    candidate=candidate,
+                    round_number=round_data['round_number'],
+                    round_title=round_data['round_title'],
+                    interview_type=round_data.get('interview_type', 'TECHNICAL'),
+                    status='PENDING',
+                    interviewer_id=round_data.get('interviewer_id'),
+                    duration_minutes=round_data.get('duration_minutes'),
+                    notes=round_data.get('notes', '')
+                )
+                created_rounds.append(interview_round)
+            
+            # Update candidate stage to Interview if not already
+            if candidate.stage != 'Interview':
+                candidate.stage = 'Interview'
+                candidate.save()
+            
+            # Log activity
+            RecruitmentActivityLog.objects.create(
+                company_id=company_id,
+                candidate=candidate,
+                action='INTERVIEW_SCHEDULED',
+                new_value=f"Created {len(created_rounds)} interview rounds",
+                metadata={'rounds_count': len(created_rounds)},
+                performed_by=request.user,
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT')
+            )
+            
+            return Response({
+                'message': f'Successfully created {len(created_rounds)} rounds',
+                'rounds': InterviewRoundSerializer(created_rounds, many=True).data
+            }, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class RoundStatusBulkUpdateView(APIView):
+    """Bulk update round statuses with cascade logic"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, candidate_id):
+        company_id = request.user.company_id
+        
+        if not company_id:
+            return Response(
+                {'error': 'User is not associated with any company'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        candidate = get_object_or_404(
+            RecruitmentCandidate,
+            id=candidate_id,
+            company_id=company_id,
+            is_deleted=False
+        )
+        
+        updates = request.data.get('updates', [])
+        # updates format: [{"round_id": 1, "status": "PASSED", "feedback": "..."}]
+        
+        updated_rounds = []
+        
+        for update in updates:
+            round_id = update.get('round_id')
+            new_status = update.get('status')
+            
+            interview_round = get_object_or_404(InterviewRound, id=round_id, candidate=candidate)
+            old_status = interview_round.status
+            
+            interview_round.status = new_status
+            interview_round.feedback = update.get('feedback', interview_round.feedback)
+            interview_round.rating = update.get('rating', interview_round.rating)
+            
+            if update.get('interview_date'):
+                interview_round.interview_date = update.get('interview_date')
+            
+            interview_round.save()
+            
+            # Cascade logic: if failed, mark next rounds as failed
+            if new_status == 'FAILED' and old_status != 'FAILED':
+                next_rounds = candidate.interview_rounds.filter(
+                    round_number__gt=interview_round.round_number,
+                    status__in=['PENDING', 'SCHEDULED']
+                )
+                for nr in next_rounds:
+                    nr.status = 'FAILED'
+                    nr.feedback = f"Auto-rejected due to failure in Round {interview_round.round_number}"
+                    nr.save()
+                    updated_rounds.append(nr.id)
+            
+            updated_rounds.append(round_id)
+        
+        # Update candidate overall status
+        all_rounds = candidate.interview_rounds.all().order_by('round_number')
+        
+        # Check if any round failed
+        if all_rounds.filter(status='FAILED').exists():
+            candidate.stage = 'Rejected'
+            candidate.status = 'Closed'
+            candidate.rejection_date = date.today()
+            if not candidate.rejection_reason:
+                failed_round = all_rounds.filter(status='FAILED').first()
+                candidate.rejection_reason = f"Failed in Round {failed_round.round_number}: {failed_round.round_title}"
+        # Check if all rounds passed
+        elif all_rounds.count() > 0 and all_rounds.filter(status='PASSED').count() == all_rounds.count():
+            candidate.stage = 'Offer'
+        # Check if any round is pending/scheduled
+        elif all_rounds.filter(status__in=['PENDING', 'SCHEDULED']).exists():
+            candidate.stage = 'Interview'
+        
+        candidate.save()
+        
+        # Log bulk update
+        RecruitmentActivityLog.objects.create(
+            company_id=company_id,
+            candidate=candidate,
+            action='STAGE_CHANGED',
+            new_value=f"Bulk updated {len(updates)} rounds",
+            metadata={'updated_rounds': updated_rounds},
+            performed_by=request.user,
+            ip_address=request.META.get('REMOTE_ADDR'),
+            user_agent=request.META.get('HTTP_USER_AGENT')
+        )
+        
+        return Response({
+            'message': f'Successfully updated {len(updates)} rounds',
+            'candidate_status': candidate.stage
+        })
+    
+class RecruitmentCandidateDetailView(APIView):
+    """Get detailed candidate information with rounds"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, candidate_id):
+        company_id = request.user.company_id
+        
+        if not company_id:
+            return Response(
+                {'error': 'User is not associated with any company'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        candidate = get_object_or_404(
+            RecruitmentCandidate,
+            id=candidate_id,
+            company_id=company_id,
+            is_deleted=False
+        )
+        
+        serializer = RecruitmentCandidateDetailSerializer(candidate)
+        return Response(serializer.data)

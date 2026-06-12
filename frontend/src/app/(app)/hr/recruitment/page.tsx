@@ -1,18 +1,20 @@
 // src/app/recruitment/page.tsx
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import PageHeader from "@/components/PageHeader";
 import StatCard from "@/components/cards/StatCard";
-import SearchableSelect, { SearchableSelectOption } from "@/components/reuseable/SearchableSelect";
-import { DatePicker } from "@/components/reuseable/DatePicker";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import {
-  Search, Plus, Filter, Eye, Trash2, Pencil, UserCheck, CalendarDays,
-  Users, ArrowRight, ShieldCheck, X, Loader2, Briefcase, FileText, Award
+  Search, Plus, Filter, Trash2, Pencil, UserCheck, CalendarDays,
+  Users, FileText, Award, X, Loader2, Briefcase, Eye, ChevronRight
 } from "lucide-react";
 import { useRecruitment, useRecruitmentStats, useCreateRecruitmentCandidate, useUpdateRecruitmentCandidate, useDeleteRecruitmentCandidate } from "@/hooks/useRecruitment";
 import { useEmployees } from "@/hooks/useEmployees";
 import { toast } from "sonner";
+import { RoundBuilder } from "@/components/recruitment/RoundBuilder";
+import { RoundStatusModal } from "@/components/recruitment/RoundStatusModal";
+import { useInterviewRounds, useBulkCreateRounds, useBulkUpdateRoundStatus } from "@/hooks/useInterviewRounds";
 
 // ==========================================
 // TYPES & INTERFACES
@@ -40,9 +42,6 @@ interface RecruitmentRecord {
   current_position?: string;
   years_of_experience?: number;
   notice_period_days?: number;
-  interview_round: number;
-  interview_notes?: string;
-  interviewers?: string;
   offer_sent_date?: string;
   offer_accepted_date?: string;
   offer_amount?: number;
@@ -53,6 +52,20 @@ interface RecruitmentRecord {
   updated_at: string;
   created_by_name?: string;
   updated_by_name?: string;
+}
+
+interface InterviewRound {
+  id: number;
+  round_number: number;
+  round_title: string;
+  interview_type: string;
+  status: "PENDING" | "PASSED" | "FAILED" | "SCHEDULED" | "CANCELLED";
+  interview_date?: string;
+  feedback?: string;
+  rating?: number;
+  interviewer_name?: string;
+  duration_minutes?: number;
+  meeting_link?: string;
 }
 
 const DEPARTMENTS = [
@@ -90,6 +103,9 @@ export default function RecruitmentPage() {
   const [filterStage, setFilterStage] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<RecruitmentRecord | null>(null);
+  const [roundsModalOpen, setRoundsModalOpen] = useState(false);
+  const [selectedCandidate, setSelectedCandidate] = useState<RecruitmentRecord | null>(null);
+  const [existingRounds, setExistingRounds] = useState<InterviewRound[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
 
@@ -104,6 +120,14 @@ export default function RecruitmentPage() {
 
   const { data: statsData, isLoading: statsLoading } = useRecruitmentStats();
   const { data: employeesData } = useEmployees({ status: "ACTIVE" });
+  
+  // Only enable the rounds query when modal is open and candidate is selected
+  const { data: roundsData, refetch: refetchRounds, isFetching: roundsLoading } = useInterviewRounds(
+    roundsModalOpen && selectedCandidate?.id ? selectedCandidate.id : undefined
+  );
+  
+  const createRoundsMutation = useBulkCreateRounds();
+  const updateRoundsMutation = useBulkUpdateRoundStatus();
 
   const createMutation = useCreateRecruitmentCandidate();
   const updateMutation = useUpdateRecruitmentCandidate();
@@ -112,6 +136,13 @@ export default function RecruitmentPage() {
   const records = recruitmentData?.data || [];
   const totalRecords = recruitmentData?.pagination?.total || 0;
   const employees = employeesData || [];
+
+  // Update existing rounds when data loads
+  useState(() => {
+    if (roundsData && roundsModalOpen) {
+      setExistingRounds(roundsData);
+    }
+  });
 
   // ==========================================
   // STATS COMPUTATION
@@ -127,15 +158,34 @@ export default function RecruitmentPage() {
   // ==========================================
   // ACTIONS
   // ==========================================
-  const handleSave = async (data: Partial<RecruitmentRecord>) => {
+  const handleSave = async (data: Partial<RecruitmentRecord>, rounds?: any[]) => {
     try {
+      let savedCandidate;
       if (editingRecord) {
         await updateMutation.mutateAsync({ id: editingRecord.id, ...data });
+        savedCandidate = editingRecord;
         toast.success("Candidate updated successfully");
       } else {
-        await createMutation.mutateAsync(data as any);
+        const result = await createMutation.mutateAsync(data as any);
+        savedCandidate = result;
         toast.success("Candidate added successfully");
       }
+
+      // If rounds are provided, create them
+      if (rounds && rounds.length > 0 && savedCandidate?.id) {
+        await createRoundsMutation.mutateAsync({
+          candidateId: savedCandidate.id,
+          rounds: rounds.map(r => ({
+            round_title: r.round_title,
+            interview_type: r.interview_type,
+            interviewer_id: r.interviewer_id,
+            duration_minutes: r.duration_minutes,
+            notes: r.notes
+          }))
+        });
+        toast.success(`${rounds.length} interview rounds created`);
+      }
+
       setModalOpen(false);
       setEditingRecord(null);
       refetch();
@@ -153,6 +203,40 @@ export default function RecruitmentPage() {
       } catch (error: any) {
         toast.error(error.message || "Failed to delete candidate");
       }
+    }
+  };
+
+  const handleViewRounds = async (candidate: RecruitmentRecord) => {
+    setSelectedCandidate(candidate);
+    setRoundsModalOpen(true);
+    // The query will automatically fetch when selectedCandidate is set
+    // because the enabled condition will become true
+    setTimeout(() => {
+      if (roundsData) {
+        setExistingRounds(roundsData);
+      }
+    }, 100);
+  };
+
+  const handleCloseRoundsModal = () => {
+    setRoundsModalOpen(false);
+    setSelectedCandidate(null);
+    setExistingRounds([]);
+  };
+
+  const handleUpdateRounds = async (updates: Array<{ round_id: number; status: string; feedback?: string; rating?: number; interview_date?: string }>) => {
+    if (!selectedCandidate) return;
+    
+    try {
+      await updateRoundsMutation.mutateAsync({
+        candidateId: selectedCandidate.id,
+        updates
+      });
+      toast.success("Round statuses updated successfully");
+      await refetchRounds();
+      refetch(); // Refresh main list
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update rounds");
     }
   };
 
@@ -188,7 +272,7 @@ export default function RecruitmentPage() {
     <div className="space-y-5">
       <PageHeader
         title="Recruitment Management"
-        subtitle="Track applicants, interviews, and hiring pipeline"
+        subtitle="Track applicants, interviews, and hiring pipeline with round-based interviews"
         actions={
           <button 
             onClick={() => { setEditingRecord(null); setModalOpen(true); }} 
@@ -201,41 +285,11 @@ export default function RecruitmentPage() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <StatCard 
-          label="Total Applicants" 
-          value={stats.total} 
-          icon={Users} 
-          accent="info" 
-          loading={statsLoading}
-        />
-        <StatCard 
-          label="Screening" 
-          value={stats.screening} 
-          icon={FileText} 
-          accent="info" 
-          loading={statsLoading}
-        />
-        <StatCard 
-          label="Interviewing" 
-          value={stats.interviewing} 
-          icon={CalendarDays} 
-          accent="warning" 
-          loading={statsLoading}
-        />
-        <StatCard 
-          label="Hired" 
-          value={stats.hired} 
-          icon={UserCheck} 
-          accent="success" 
-          loading={statsLoading}
-        />
-        <StatCard 
-          label="Rejected" 
-          value={stats.rejected} 
-          icon={X} 
-          accent="destructive" 
-          loading={statsLoading}
-        />
+        <StatCard label="Total Applicants" value={stats.total} icon={Users} accent="info" loading={statsLoading} />
+        <StatCard label="Screening" value={stats.screening} icon={FileText} accent="info" loading={statsLoading} />
+        <StatCard label="Interviewing" value={stats.interviewing} icon={CalendarDays} accent="warning" loading={statsLoading} />
+        <StatCard label="Hired" value={stats.hired} icon={UserCheck} accent="success" loading={statsLoading} />
+        <StatCard label="Rejected" value={stats.rejected} icon={X} accent="destructive" loading={statsLoading} />
       </div>
 
       {/* Filters & Search */}
@@ -292,7 +346,7 @@ export default function RecruitmentPage() {
                 <th className="text-left px-4 py-3">Position / Dept</th>
                 <th className="text-left px-4 py-3">Experience</th>
                 <th className="text-left px-4 py-3">Applied</th>
-                <th className="text-left px-4 py-3">Interview</th>
+                <th className="text-left px-4 py-3">Rounds</th>
                 <th className="text-left px-4 py-3">Assigned To</th>
                 <th className="text-left px-4 py-3">Stage</th>
                 <th className="px-4 py-3 text-right">Actions</th>
@@ -305,10 +359,7 @@ export default function RecruitmentPage() {
                     <div className="flex flex-col items-center gap-2">
                       <Users className="w-12 h-12 opacity-20" />
                       <p>No candidates found</p>
-                      <button 
-                        onClick={() => setModalOpen(true)} 
-                        className="text-primary text-sm hover:underline"
-                      >
+                      <button onClick={() => setModalOpen(true)} className="text-primary text-sm hover:underline">
                         Add your first candidate
                       </button>
                     </div>
@@ -316,7 +367,7 @@ export default function RecruitmentPage() {
                 </tr>
               ) : (
                 records.map(r => (
-                  <tr key={r.id} className="border-t border-border hover:bg-muted/30 transition-colors">
+                  <tr key={r.id} className="border-t border-border hover:bg-muted/30 transition-colors group">
                     <td className="px-4 py-3">
                       <div className="font-medium">{r.name}</div>
                       <div className="text-xs text-muted-foreground mt-0.5">
@@ -334,22 +385,18 @@ export default function RecruitmentPage() {
                     </td>
                     <td className="px-4 py-3 text-xs">
                       {r.years_of_experience ? `${r.years_of_experience} years` : "—"}
-                      {r.notice_period_days && (
-                        <div className="text-xs text-muted-foreground">
-                          Notice: {r.notice_period_days} days
-                        </div>
-                      )}
                     </td>
                     <td className="px-4 py-3 text-xs">
                       {r.apply_date ? new Date(r.apply_date).toLocaleDateString() : "—"}
                     </td>
-                    <td className="px-4 py-3 text-xs">
-                      {r.interview_date ? new Date(r.interview_date).toLocaleDateString() : "—"}
-                      {r.interview_round > 0 && (
-                        <div className="text-xs text-muted-foreground">
-                          Round {r.interview_round}
-                        </div>
-                      )}
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => handleViewRounds(r)}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary text-xs hover:bg-primary/20 transition-colors"
+                      >
+                        <Eye className="w-3 h-3" />
+                        View Rounds
+                      </button>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2 text-xs">
@@ -435,12 +482,22 @@ export default function RecruitmentPage() {
           }} 
         />
       )}
+
+      {/* Rounds Status Modal */}
+      {roundsModalOpen && selectedCandidate && (
+        <RoundStatusModal
+          rounds={existingRounds.length > 0 ? existingRounds : (roundsData || [])}
+          candidateName={selectedCandidate.name}
+          onClose={handleCloseRoundsModal}
+          onUpdate={handleUpdateRounds}
+        />
+      )}
     </div>
   );
 }
 
 // ==========================================
-// REUSABLE MODAL FORM COMPONENT
+// CANDIDATE FORM MODAL WITH ROUND BUILDER
 // ==========================================
 function CandidateFormModal({ 
   initialData, 
@@ -450,9 +507,10 @@ function CandidateFormModal({
 }: { 
   initialData: RecruitmentRecord | null; 
   employeeOptions: any[]; 
-  onSubmit: (d: Partial<RecruitmentRecord>) => void; 
+  onSubmit: (d: Partial<RecruitmentRecord>, rounds?: any[]) => void; 
   onClose: () => void;
 }) {
+  const [step, setStep] = useState<"basic" | "rounds">("basic");
   const [formData, setFormData] = useState<Partial<RecruitmentRecord>>({
     name: "", 
     position: "", 
@@ -460,16 +518,29 @@ function CandidateFormModal({
     stage: "Applied", 
     status: "Active", 
     apply_date: new Date().toISOString().split("T")[0],
-    interview_round: 0,
     ...initialData
   });
+  const [rounds, setRounds] = useState<any[]>([]);
   const [assignedId, setAssignedId] = useState(initialData?.assigned_to_id?.toString() || "");
   const [loading, setLoading] = useState(false);
 
-  const employeeOpts: SearchableSelectOption[] = employeeOptions.map(e => ({
+  const employeeOpts = employeeOptions.map(e => ({
     value: e.id.toString(), 
     label: `${e.first_name} ${e.last_name || ""} (${e.department})`
   }));
+
+  const handleNext = () => {
+    // Validate basic info
+    if (!formData.name || !formData.position || !formData.department) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+    setStep("rounds");
+  };
+
+  const handleBack = () => {
+    setStep("basic");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -482,318 +553,163 @@ function CandidateFormModal({
       assigned_name: assigned ? `${assigned.first_name} ${assigned.last_name}` : undefined,
     };
     
-    await onSubmit(submitData);
+    // Only include rounds if we're creating a new candidate
+    const roundsToSubmit = !initialData && rounds.length > 0 ? rounds : undefined;
+    
+    await onSubmit(submitData, roundsToSubmit);
     setLoading(false);
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4 overflow-y-auto" >
+    <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4 overflow-y-auto">
       <form onSubmit={handleSubmit} className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="sticky top-0 bg-card border-b border-border flex items-center justify-between p-4 z-10">
-          <h2 className="font-semibold text-lg">
-            {initialData ? "Edit Candidate" : "Add New Candidate"}
-          </h2>
+          <div>
+            <h2 className="font-semibold text-lg">
+              {initialData ? "Edit Candidate" : "Add New Candidate"}
+            </h2>
+            {!initialData && (
+              <div className="flex items-center gap-2 mt-1">
+                <div className={`text-xs px-2 py-0.5 rounded-full ${step === "basic" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
+                  Step 1: Basic Info
+                </div>
+                <ChevronRight className="w-3 h-3 text-muted-foreground" />
+                <div className={`text-xs px-2 py-0.5 rounded-full ${step === "rounds" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
+                  Step 2: Interview Rounds
+                </div>
+              </div>
+            )}
+          </div>
           <button type="button" onClick={onClose} className="p-1.5 rounded-md hover:bg-muted transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
         
         <div className="p-5">
-          {/* Basic Information Section */}
-          <div className="mb-6">
-            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-              <Users className="w-4 h-4" /> Basic Information
-            </h3>
-            <div className="grid sm:grid-cols-2 gap-4">
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Candidate Name *</span>
-                <input 
-                  required 
-                  value={formData.name || ""} 
-                  onChange={e => setFormData({ ...formData, name: e.target.value })} 
-                  className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring transition-all" 
-                />
-              </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Email</span>
-                <input 
-                  type="email" 
-                  value={formData.email || ""} 
-                  onChange={e => setFormData({ ...formData, email: e.target.value })} 
-                  className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring transition-all" 
-                />
-              </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Phone</span>
-                <input 
-                  type="tel" 
-                  value={formData.phone || ""} 
-                  onChange={e => setFormData({ ...formData, phone: e.target.value })} 
-                  className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring transition-all" 
-                />
-              </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Source</span>
-                <SearchableSelect 
-                  value={formData.source || ""} 
-                  onChange={v => setFormData({ ...formData, source: v })} 
-                  options={SOURCES} 
-                  placeholder="Select Source" 
-                  clearable
-                />
-              </label>
-            </div>
-          </div>
+          {step === "basic" ? (
+            // Basic Information Form
+            <div className="space-y-6">
+              {/* Basic Information Section */}
+              <div>
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Users className="w-4 h-4" /> Basic Information
+                </h3>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <label className="text-sm flex flex-col gap-1">
+                    <span className="text-muted-foreground">Candidate Name *</span>
+                    <input required value={formData.name || ""} onChange={e => setFormData({ ...formData, name: e.target.value })} className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring" />
+                  </label>
+                  <label className="text-sm flex flex-col gap-1">
+                    <span className="text-muted-foreground">Email</span>
+                    <input type="email" value={formData.email || ""} onChange={e => setFormData({ ...formData, email: e.target.value })} className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring" />
+                  </label>
+                  <label className="text-sm flex flex-col gap-1">
+                    <span className="text-muted-foreground">Phone</span>
+                    <input type="tel" value={formData.phone || ""} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring" />
+                  </label>
+                  <label className="text-sm flex flex-col gap-1">
+                    <span className="text-muted-foreground">Source</span>
+                    <SearchableSelect value={formData.source || ""} onChange={v => setFormData({ ...formData, source: v })} options={SOURCES} placeholder="Select Source" />
+                  </label>
+                </div>
+              </div>
 
-          {/* Position & Experience Section */}
-          <div className="mb-6">
-            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-              <Briefcase className="w-4 h-4" /> Position & Experience
-            </h3>
-            <div className="grid sm:grid-cols-2 gap-4">
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Position *</span>
-                <input 
-                  required 
-                  value={formData.position || ""} 
-                  onChange={e => setFormData({ ...formData, position: e.target.value })} 
-                  className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring transition-all" 
-                />
-              </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Department *</span>
-                <SearchableSelect 
-                  value={formData.department || ""} 
-                  onChange={v => setFormData({ ...formData, department: v })} 
-                  options={DEPARTMENTS} 
-                  placeholder="Select Department" 
-                />
-              </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Current Company</span>
-                <input 
-                  value={formData.current_company || ""} 
-                  onChange={e => setFormData({ ...formData, current_company: e.target.value })} 
-                  className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring transition-all" 
-                />
-              </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Current Position</span>
-                <input 
-                  value={formData.current_position || ""} 
-                  onChange={e => setFormData({ ...formData, current_position: e.target.value })} 
-                  className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring transition-all" 
-                />
-              </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Years of Experience</span>
-                <input 
-                  type="number" 
-                  step="0.5"
-                  value={formData.years_of_experience || ""} 
-                  onChange={e => setFormData({ ...formData, years_of_experience: e.target.value ? parseFloat(e.target.value) : undefined })} 
-                  className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring transition-all" 
-                />
-              </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Notice Period (days)</span>
-                <input 
-                  type="number" 
-                  value={formData.notice_period_days || ""} 
-                  onChange={e => setFormData({ ...formData, notice_period_days: e.target.value ? parseInt(e.target.value) : undefined })} 
-                  className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring transition-all" 
-                />
-              </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Expected Salary</span>
-                <input 
-                  type="number" 
-                  step="1000"
-                  value={formData.expected_salary || ""} 
-                  onChange={e => setFormData({ ...formData, expected_salary: e.target.value ? parseFloat(e.target.value) : undefined })} 
-                  className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring transition-all" 
-                />
-              </label>
-            </div>
-          </div>
+              {/* Position & Experience Section */}
+              <div>
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Briefcase className="w-4 h-4" /> Position & Experience
+                </h3>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <label className="text-sm flex flex-col gap-1">
+                    <span className="text-muted-foreground">Position *</span>
+                    <input required value={formData.position || ""} onChange={e => setFormData({ ...formData, position: e.target.value })} className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring" />
+                  </label>
+                  <label className="text-sm flex flex-col gap-1">
+                    <span className="text-muted-foreground">Department *</span>
+                    <SearchableSelect value={formData.department || ""} onChange={v => setFormData({ ...formData, department: v })} options={DEPARTMENTS} placeholder="Select Department" />
+                  </label>
+                  <label className="text-sm flex flex-col gap-1">
+                    <span className="text-muted-foreground">Current Company</span>
+                    <input value={formData.current_company || ""} onChange={e => setFormData({ ...formData, current_company: e.target.value })} className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring" />
+                  </label>
+                  <label className="text-sm flex flex-col gap-1">
+                    <span className="text-muted-foreground">Current Position</span>
+                    <input value={formData.current_position || ""} onChange={e => setFormData({ ...formData, current_position: e.target.value })} className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring" />
+                  </label>
+                  <label className="text-sm flex flex-col gap-1">
+                    <span className="text-muted-foreground">Years of Experience</span>
+                    <input type="number" step="0.5" value={formData.years_of_experience || ""} onChange={e => setFormData({ ...formData, years_of_experience: e.target.value ? parseFloat(e.target.value) : undefined })} className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring" />
+                  </label>
+                  <label className="text-sm flex flex-col gap-1">
+                    <span className="text-muted-foreground">Notice Period (days)</span>
+                    <input type="number" value={formData.notice_period_days || ""} onChange={e => setFormData({ ...formData, notice_period_days: e.target.value ? parseInt(e.target.value) : undefined })} className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring" />
+                  </label>
+                  <label className="text-sm flex flex-col gap-1">
+                    <span className="text-muted-foreground">Expected Salary</span>
+                    <input type="number" step="1000" value={formData.expected_salary || ""} onChange={e => setFormData({ ...formData, expected_salary: e.target.value ? parseFloat(e.target.value) : undefined })} className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring" />
+                  </label>
+                </div>
+              </div>
 
-          {/* Recruitment Process Section */}
-          <div className="mb-6">
-            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-              <CalendarDays className="w-4 h-4" /> Recruitment Process
-            </h3>
-            <div className="grid sm:grid-cols-2 gap-4">
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Stage *</span>
-                <SearchableSelect 
-                  value={formData.stage || "Applied"} 
-                  onChange={v => setFormData({ ...formData, stage: v as any })} 
-                  options={STAGES} 
-                  placeholder="Stage" 
-                />
-              </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Applied Date *</span>
-                <DatePicker 
-                  value={formData.apply_date || ""} 
-                  onChange={v => setFormData({ ...formData, apply_date: v || "" })} 
-                />
-              </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Interview Date</span>
-                <DatePicker 
-                  value={formData.interview_date} 
-                  onChange={v => setFormData({ ...formData, interview_date: v || undefined })} 
-                />
-              </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Interview Round</span>
-                <input 
-                  type="number" 
-                  min="0"
-                  value={formData.interview_round || 0} 
-                  onChange={e => setFormData({ ...formData, interview_round: parseInt(e.target.value) || 0 })} 
-                  className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring transition-all" 
-                />
-              </label>
-              <label className="text-sm flex flex-col gap-1 sm:col-span-2">
-                <span className="text-muted-foreground">Interview Notes</span>
-                <textarea 
-                  rows={2} 
-                  value={formData.interview_notes || ""} 
-                  onChange={e => setFormData({ ...formData, interview_notes: e.target.value })} 
-                  className="bg-muted/40 border border-border rounded-md p-3 outline-none focus:ring-2 focus:ring-ring transition-all" 
-                />
-              </label>
-            </div>
-          </div>
-
-          {/* Offer Details Section (shown when stage is Offer or Hired) */}
-          {(formData.stage === "Offer" || formData.stage === "Hired") && (
-            <div className="mb-6">
-              <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                <Award className="w-4 h-4" /> Offer Details
-              </h3>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground">Offer Amount</span>
-                  <input 
-                    type="number" 
-                    step="1000"
-                    value={formData.offer_amount || ""} 
-                    onChange={e => setFormData({ ...formData, offer_amount: e.target.value ? parseFloat(e.target.value) : undefined })} 
-                    className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring transition-all" 
-                  />
-                </label>
-                <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground">Offer Sent Date</span>
-                  <DatePicker 
-                    value={formData.offer_sent_date} 
-                    onChange={v => setFormData({ ...formData, offer_sent_date: v || undefined })} 
-                  />
-                </label>
-                <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground">Offer Accepted Date</span>
-                  <DatePicker 
-                    value={formData.offer_accepted_date} 
-                    onChange={v => setFormData({ ...formData, offer_accepted_date: v || undefined })} 
-                  />
-                </label>
-                <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground">Joining Date</span>
-                  <DatePicker 
-                    value={formData.joining_date} 
-                    onChange={v => setFormData({ ...formData, joining_date: v || undefined })} 
-                  />
-                </label>
+              {/* Assignment Section */}
+              <div>
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <UserCheck className="w-4 h-4" /> Assignment
+                </h3>
+                <div className="grid gap-4">
+                  <label className="text-sm flex flex-col gap-1">
+                    <span className="text-muted-foreground">Assigned Employee</span>
+                    <SearchableSelect value={assignedId} onChange={setAssignedId} options={employeeOpts} placeholder="Assign to..." />
+                  </label>
+                  <label className="text-sm flex flex-col gap-1">
+                    <span className="text-muted-foreground">Resume / Portfolio URL</span>
+                    <input value={formData.resume_url || ""} onChange={e => setFormData({ ...formData, resume_url: e.target.value })} className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring" placeholder="https://..." />
+                  </label>
+                  <label className="text-sm flex flex-col gap-1">
+                    <span className="text-muted-foreground">Notes</span>
+                    <textarea rows={3} value={formData.notes || ""} onChange={e => setFormData({ ...formData, notes: e.target.value })} className="bg-muted/40 border border-border rounded-md p-3 outline-none focus:ring-2 focus:ring-ring" placeholder="Additional notes about the candidate..." />
+                  </label>
+                </div>
               </div>
             </div>
-          )}
-
-          {/* Rejection Section (shown when stage is Rejected) */}
-          {formData.stage === "Rejected" && (
-            <div className="mb-6">
-              <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                <X className="w-4 h-4" /> Rejection Details
-              </h3>
-              <div className="grid gap-4">
-                <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground">Rejection Reason *</span>
-                  <textarea 
-                    rows={2} 
-                    required
-                    value={formData.rejection_reason || ""} 
-                    onChange={e => setFormData({ ...formData, rejection_reason: e.target.value })} 
-                    className="bg-muted/40 border border-border rounded-md p-3 outline-none focus:ring-2 focus:ring-ring transition-all" 
-                  />
-                </label>
-                <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground">Rejection Date</span>
-                  <DatePicker 
-                    value={formData.rejection_date} 
-                    onChange={v => setFormData({ ...formData, rejection_date: v || undefined })} 
-                  />
-                </label>
-              </div>
+          ) : (
+            // Interview Rounds Builder
+            <div>
+              <RoundBuilder
+                value={rounds}
+                onChange={setRounds}
+                employees={employeeOptions}
+              />
             </div>
           )}
-
-          {/* Assignment & Notes Section */}
-          <div className="mb-6">
-            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-              <UserCheck className="w-4 h-4" /> Assignment & Notes
-            </h3>
-            <div className="grid gap-4">
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Assigned Employee</span>
-                <SearchableSelect 
-                  value={assignedId} 
-                  onChange={setAssignedId} 
-                  options={employeeOpts} 
-                  placeholder="Assign to..." 
-                  clearable
-                />
-              </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Resume / Portfolio URL</span>
-                <input 
-                  value={formData.resume_url || ""} 
-                  onChange={e => setFormData({ ...formData, resume_url: e.target.value })} 
-                  className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring transition-all" 
-                  placeholder="https://..." 
-                />
-              </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Notes</span>
-                <textarea 
-                  rows={3} 
-                  value={formData.notes || ""} 
-                  onChange={e => setFormData({ ...formData, notes: e.target.value })} 
-                  className="bg-muted/40 border border-border rounded-md p-3 outline-none focus:ring-2 focus:ring-ring transition-all" 
-                  placeholder="Additional notes about the candidate..." 
-                />
-              </label>
-            </div>
-          </div>
         </div>
 
         <div className="sticky bottom-0 bg-card border-t border-border p-4 flex justify-end gap-2">
-          <button 
-            type="button" 
-            onClick={onClose} 
-            className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted transition-all"
-            disabled={loading}
-          >
+          <button type="button" onClick={onClose} className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted transition-all" disabled={loading}>
             Cancel
           </button>
-          <button 
-            type="submit" 
-            className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2"
-            disabled={loading}
-          >
-            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {loading ? "Saving..." : "Save Candidate"}
-          </button>
+          {step === "basic" && !initialData && (
+            <button type="button" onClick={handleNext} className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-all flex items-center gap-2">
+              Next: Setup Rounds <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
+          {step === "rounds" && !initialData && (
+            <>
+              <button type="button" onClick={handleBack} className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted transition-all">
+                Back
+              </button>
+              <button type="submit" className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2" disabled={loading}>
+                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                {loading ? "Creating..." : "Create Candidate with Rounds"}
+              </button>
+            </>
+          )}
+          {initialData && (
+            <button type="submit" className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2" disabled={loading}>
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {loading ? "Saving..." : "Update Candidate"}
+            </button>
+          )}
         </div>
       </form>
     </div>

@@ -31,9 +31,10 @@ export function DatePicker({
   minDate,
   maxDate,
 }: DatePickerProps) {
+
   const [date, setDate] = React.useState<Date | undefined>(
-    value ? parseISO(`${value}T00:00:00`) : undefined
-  );
+  value ? parseISO(value) : undefined
+);
   const [view, setView] = React.useState<ViewMode>("date");
   const [tempDate, setTempDate] = React.useState<Date | undefined>(date);
   const [open, setOpen] = React.useState(false);
@@ -41,7 +42,7 @@ export function DatePicker({
   // Sync internal state when external value changes
   React.useEffect(() => {
     if (value) {
-      const parsed = parseISO(`${value}T00:00:00`);
+      const parsed = parseISO(value);
       setDate(parsed);
       setTempDate(parsed);
     }
@@ -119,8 +120,8 @@ export function DatePicker({
     tempDate?.getFullYear() === year;
 
   const isDateDisabled = (day: Date) => {
-    if (minDate && day < parseISO(`${minDate}T00:00:00`)) return true;
-    if (maxDate && day > parseISO(`${maxDate}T00:00:00`)) return true;
+    if (minDate && day < parseISO(minDate)) return true;
+if (maxDate && day > parseISO(maxDate)) return true;
     return false;
   };
 

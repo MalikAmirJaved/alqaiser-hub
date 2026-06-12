@@ -34,7 +34,11 @@ from apps.hr.views.recruitment_views import (
     RecruitmentCandidateView,
     RecruitmentStatsView,
     RecruitmentActivityLogView,
-    RecruitmentBulkActionView
+    RecruitmentBulkActionView,
+    InterviewRoundView,
+    RoundBulkCreateView,
+    RoundStatusBulkUpdateView,
+    RecruitmentCandidateDetailView,
 )
 
 urlpatterns = [
@@ -92,4 +96,10 @@ urlpatterns = [
     path('recruitment/activities/', RecruitmentActivityLogView.as_view(), name='recruitment-activities'),
     path('recruitment/activities/<int:candidate_id>/', RecruitmentActivityLogView.as_view(), name='recruitment-candidate-activities'),
     path('recruitment/bulk-action/', RecruitmentBulkActionView.as_view(), name='recruitment-bulk-action'),
+
+path('recruitment/candidates/<int:candidate_id>/detail/', RecruitmentCandidateDetailView.as_view(), name='recruitment-candidate-detail'),
+    path('recruitment/candidates/<int:candidate_id>/rounds/', InterviewRoundView.as_view(), name='interview-rounds'),
+    path('recruitment/candidates/<int:candidate_id>/rounds/<int:round_id>/', InterviewRoundView.as_view(), name='interview-round-detail'),
+    path('recruitment/candidates/<int:candidate_id>/rounds/bulk/', RoundBulkCreateView.as_view(), name='rounds-bulk-create'),
+    path('recruitment/candidates/<int:candidate_id>/rounds/bulk-status/', RoundStatusBulkUpdateView.as_view(), name='rounds-bulk-status'),
 ]
