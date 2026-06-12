@@ -1531,3 +1531,216 @@ class YearEndCarryForward(TimeStampedModel):
     
     def __str__(self):
         return f"Carry forward from {self.from_year} to {self.to_year} - {self.status}"
+    
+
+class RecruitmentCandidate(TimeStampedModel):
+    """Recruitment/Candidate tracking"""
+    
+    STAGE_CHOICES = [
+        ('Applied', 'Applied'),
+        ('Screening', 'Screening'),
+        ('Interview', 'Interview'),
+        ('Offer', 'Offer Sent'),
+        ('Hired', 'Hired'),
+        ('Rejected', 'Rejected'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('Active', 'Active'),
+        ('Closed', 'Closed'),
+    ]
+    
+    id = models.BigAutoField(primary_key=True)
+    _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    
+    # Company & Branch Context
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='recruitment_candidates'
+    )
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='recruitment_candidates'
+    )
+    
+    # Candidate Information
+    name = models.CharField(max_length=255, db_index=True)
+    email = models.EmailField(blank=True, null=True, db_index=True)
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    
+    # Position Details
+    position = models.CharField(max_length=255, db_index=True)
+    department = models.CharField(max_length=100, db_index=True)
+    
+    # Recruitment Stages
+    stage = models.CharField(max_length=20, choices=STAGE_CHOICES, default='Applied', db_index=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Active', db_index=True)
+    
+    # Dates
+    apply_date = models.DateField(db_index=True)
+    interview_date = models.DateField(null=True, blank=True)
+    
+    # Assignment
+    assigned_to = models.ForeignKey(
+        Employee,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_candidates'
+    )
+    assigned_name = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Documents & Notes
+    resume_url = models.TextField(blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    
+    # Additional Fields for scalability
+    source = models.CharField(
+        max_length=50,
+        choices=[
+            ('WEBSITE', 'Company Website'),
+            ('LINKEDIN', 'LinkedIn'),
+            ('INDEED', 'Indeed'),
+            ('REFERRAL', 'Employee Referral'),
+            ('AGENCY', 'Recruitment Agency'),
+            ('WALKIN', 'Walk-in'),
+            ('OTHER', 'Other'),
+        ],
+        blank=True,
+        null=True,
+        db_index=True
+    )
+    expected_salary = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    current_company = models.CharField(max_length=255, blank=True, null=True)
+    current_position = models.CharField(max_length=255, blank=True, null=True)
+    years_of_experience = models.DecimalField(max_digits=4, decimal_places=1, blank=True, null=True)
+    notice_period_days = models.PositiveIntegerField(blank=True, null=True)
+    
+    # Interview tracking
+    interview_round = models.PositiveSmallIntegerField(default=0)
+    interview_notes = models.TextField(blank=True, null=True)
+    interviewers = models.TextField(blank=True, null=True)  # JSON or comma-separated IDs
+    
+    # Offer details
+    offer_sent_date = models.DateField(blank=True, null=True)
+    offer_accepted_date = models.DateField(blank=True, null=True)
+    offer_amount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    joining_date = models.DateField(blank=True, null=True)
+    
+    # Rejection reason
+    rejection_reason = models.TextField(blank=True, null=True)
+    rejection_date = models.DateField(blank=True, null=True)
+    
+    # Audit
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_recruitment_candidates'
+    )
+    updated_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_recruitment_candidates'
+    )
+    
+    class Meta:
+        db_table = 'hr_recruitment_candidates'
+        verbose_name = "Recruitment Candidate"
+        verbose_name_plural = "Recruitment Candidates"
+        ordering = ['-apply_date', '-created_at']
+        indexes = [
+            models.Index(fields=['company', 'is_deleted']),
+            models.Index(fields=['company', 'stage', 'status']),
+            models.Index(fields=['company', 'department']),
+            models.Index(fields=['company', 'position']),
+            models.Index(fields=['assigned_to', 'stage']),
+            models.Index(fields=['apply_date']),
+            models.Index(fields=['source']),
+            models.Index(fields=['name', 'email']),  # For search
+        ]
+    
+    def __str__(self):
+        return f"{self.name} - {self.position} ({self.stage})"
+    
+    def save(self, *args, **kwargs):
+        # Auto-populate assigned_name if assigned_to is set
+        if self.assigned_to_id and not self.assigned_name:
+            self.assigned_name = self.assigned_to.full_name
+        super().save(*args, **kwargs)
+
+
+class RecruitmentActivityLog(TimeStampedModel):
+    """Track all activities/changes for recruitment candidates"""
+    
+    ACTION_CHOICES = [
+        ('CREATED', 'Candidate Created'),
+        ('STAGE_CHANGED', 'Stage Changed'),
+        ('INTERVIEW_SCHEDULED', 'Interview Scheduled'),
+        ('OFFER_SENT', 'Offer Sent'),
+        ('OFFER_ACCEPTED', 'Offer Accepted'),
+        ('OFFER_REJECTED', 'Offer Rejected'),
+        ('HIRED', 'Hired'),
+        ('REJECTED', 'Rejected'),
+        ('NOTE_ADDED', 'Note Added'),
+        ('ASSIGNMENT_CHANGED', 'Assignment Changed'),
+        ('DOCUMENT_ADDED', 'Document Added'),
+    ]
+    
+    id = models.BigAutoField(primary_key=True)
+    _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='recruitment_activity_logs'
+    )
+    
+    candidate = models.ForeignKey(
+        RecruitmentCandidate,
+        on_delete=models.CASCADE,
+        related_name='activity_logs'
+    )
+    
+    action = models.CharField(max_length=30, choices=ACTION_CHOICES, db_index=True)
+    
+    # Old and new values for changes
+    old_value = models.TextField(blank=True, null=True)
+    new_value = models.TextField(blank=True, null=True)
+    
+    # Additional metadata
+    metadata = models.JSONField(default=dict, blank=True)
+    
+    # IP and user agent for audit
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    user_agent = models.TextField(blank=True, null=True)
+    
+    # Audit
+    performed_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='recruitment_activities'
+    )
+    
+    class Meta:
+        db_table = 'hr_recruitment_activity_logs'
+        verbose_name = "Recruitment Activity Log"
+        verbose_name_plural = "Recruitment Activity Logs"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['company', 'candidate']),
+            models.Index(fields=['company', 'action', 'created_at']),
+            models.Index(fields=['performed_by']),
+        ]
+    
+    def __str__(self):
+        return f"{self.candidate.name} - {self.action} - {self.created_at}"

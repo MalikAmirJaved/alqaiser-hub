@@ -30,6 +30,13 @@ from apps.hr.views.leave_views import (
     YearEndCarryForwardView,
 )
 
+from apps.hr.views.recruitment_views import (
+    RecruitmentCandidateView,
+    RecruitmentStatsView,
+    RecruitmentActivityLogView,
+    RecruitmentBulkActionView
+)
+
 urlpatterns = [
     # Shift Templates
     path('shift-templates/', ShiftTemplateView.as_view(), name='shift-templates'),
@@ -78,4 +85,11 @@ urlpatterns = [
     path('leaves/stats/', LeaveStatsView.as_view(), name='leave-stats'),
     path('leaves/history/', LeaveHistoryView.as_view(), name='leave-history'),
     path('leaves/carry-forward/', YearEndCarryForwardView.as_view(), name='leave-carry-forward'),
+
+    # recruitment Management
+    path('recruitment/candidates/', RecruitmentCandidateView.as_view(), name='recruitment-candidates'),
+    path('recruitment/stats/', RecruitmentStatsView.as_view(), name='recruitment-stats'),
+    path('recruitment/activities/', RecruitmentActivityLogView.as_view(), name='recruitment-activities'),
+    path('recruitment/activities/<int:candidate_id>/', RecruitmentActivityLogView.as_view(), name='recruitment-candidate-activities'),
+    path('recruitment/bulk-action/', RecruitmentBulkActionView.as_view(), name='recruitment-bulk-action'),
 ]
