@@ -48,6 +48,16 @@ from apps.hr.views.exit_management_views import (
     ExitBulkActionView,
 )
 
+from apps.hr.views.policy_views import (
+    PolicyView,
+    PolicyStatsView,
+    PolicyAcknowledgmentView,
+    PolicyBulkActionView,
+    PolicyVersionView,
+    PolicyCategoryView,
+    EmployeePendingAcknowledgmentsView,
+)
+
 
 urlpatterns = [
     # Shift Templates
@@ -117,4 +127,27 @@ path('recruitment/candidates/<int:candidate_id>/detail/', RecruitmentCandidateDe
     path('exits/checklist/', ExitChecklistView.as_view(), name='exit-checklist'),
     path('exits/bulk-action/', ExitBulkActionView.as_view(), name='exit-bulk-action'),
 
+
+    # Policy Management
+    path('policies/', PolicyView.as_view(), name='policies'),
+    path('policies/stats/', PolicyStatsView.as_view(), name='policy-stats'),
+    path('policies/bulk-action/', PolicyBulkActionView.as_view(), name='policy-bulk-action'),
+    
+    # Policy Detail with ID
+    path('policies/<int:pk>/', PolicyView.as_view(), name='policy-detail'),
+    
+    # Policy Versions
+    path('policies/<int:policy_id>/versions/', PolicyVersionView.as_view(), name='policy-versions'),
+    
+    # Policy Acknowledgments
+    path('policies/<int:policy_id>/acknowledgments/', PolicyAcknowledgmentView.as_view(), name='policy-acknowledgments'),
+    path('policies/<int:policy_id>/acknowledge/', PolicyAcknowledgmentView.as_view(), name='policy-acknowledge'),
+    
+    # Custom Categories
+    path('policies/categories/', PolicyCategoryView.as_view(), name='policy-categories'),
+    
+    # Employee-specific
+    path('employees/<int:employee_id>/pending-acknowledgments/', 
+         EmployeePendingAcknowledgmentsView.as_view(), 
+         name='employee-pending-acknowledgments'),
 ]

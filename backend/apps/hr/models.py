@@ -5,6 +5,8 @@ from django.conf import settings as django_settings
 from apps.organization.models import Company, Branch
 from apps.compsetting.models import LeaveType
 from datetime import date
+from django.core.validators import MinLengthValidator
+from django.utils import timezone
 
 def current_year():
     return date.today().year
@@ -2155,3 +2157,262 @@ class ExitChecklist(TimeStampedModel):
     
     def __str__(self):
         return f"{self.item_name} ({self.item_type}) - {self.status}"
+
+
+# =========================================================
+# POLICY MODEL
+# =========================================================
+class Policy(TimeStampedModel):
+    """
+    HR Policy model for managing company policies.
+    Multi-company safe + production ready.
+    """
+
+    class PolicyStatus(models.TextChoices):
+        DRAFT = 'DRAFT', 'Draft'
+        PENDING_REVIEW = 'PENDING_REVIEW', 'Pending Review'
+        APPROVED = 'APPROVED', 'Approved'
+        PUBLISHED = 'PUBLISHED', 'Published'
+        ARCHIVED = 'ARCHIVED', 'Archived'
+        REVOKED = 'REVOKED', 'Revoked'
+
+    class EmployeeType(models.TextChoices):
+        ALL = 'ALL', 'All Employees'
+        FULL_TIME = 'FULL_TIME', 'Full Time'
+        PART_TIME = 'PART_TIME', 'Part Time'
+        CONTRACT = 'CONTRACT', 'Contract'
+        INTERN = 'INTERN', 'Intern'
+
+    class Category(models.TextChoices):
+        EMPLOYMENT = 'Employment', 'Employment'
+        CODE_OF_CONDUCT = 'Code of Conduct', 'Code of Conduct'
+        LEAVE_ATTENDANCE = 'Leave & Attendance', 'Leave & Attendance'
+        COMPENSATION_BENEFITS = 'Compensation & Benefits', 'Compensation & Benefits'
+        HEALTH_SAFETY = 'Health & Safety', 'Health & Safety'
+        IT_DATA_SECURITY = 'IT & Data Security', 'IT & Data Security'
+        REMOTE_WORK = 'Remote Work', 'Remote Work'
+        PERFORMANCE = 'Performance', 'Performance'
+        DISCIPLINARY = 'Disciplinary', 'Disciplinary'
+        OTHER = 'Other', 'Other'
+
+    # ---------------- COMPANY ----------------
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='policies'
+    )
+
+    # ---------------- IDENTIFICATION ----------------
+    code = models.CharField(
+        max_length=50,
+        validators=[MinLengthValidator(3)],
+        help_text="Unique policy code (e.g., POL-001)"
+    )
+    title = models.CharField(max_length=255)
+    version = models.CharField(max_length=20, default="1.0")
+
+    # ---------------- CLASSIFICATION ----------------
+    category = models.CharField(
+        max_length=50,
+        choices=Category.choices,
+        db_index=True
+    )
+    department = models.CharField(
+        max_length=100,
+        default="ALL",
+        db_index=True
+    )
+    employee_type = models.CharField(
+        max_length=20,
+        choices=EmployeeType.choices,
+        default='ALL',
+        db_index=True
+    )
+
+    # ---------------- STATUS ----------------
+    status = models.CharField(
+        max_length=20,
+        choices=PolicyStatus.choices,
+        default='DRAFT',
+        db_index=True
+    )
+
+    # ---------------- DATES ----------------
+    effective_date = models.DateField()
+    review_date = models.DateField(null=True, blank=True)
+    expiry_date = models.DateField(null=True, blank=True)
+    approval_date = models.DateField(null=True, blank=True)
+
+    # ---------------- CONTENT ----------------
+    content = models.TextField()
+    document_url = models.URLField(max_length=500, null=True, blank=True)
+    change_summary = models.TextField(null=True, blank=True)
+
+    # ---------------- ACKNOWLEDGEMENT ----------------
+    requires_acknowledgment = models.BooleanField(default=False, db_index=True)
+    acknowledgment_deadline = models.PositiveIntegerField(null=True, blank=True)
+
+    # ---------------- APPROVAL ----------------
+    approved_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_policies'
+    )
+
+    # ---------------- AUDIT ----------------
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_policies'
+    )
+
+    updated_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_policies'
+    )
+
+    # ---------------- FLAGS ----------------
+    is_archived = models.BooleanField(default=False, db_index=True)
+
+    class Meta:
+        db_table = 'hr_policies'
+        ordering = ['-created_at']
+
+        indexes = [
+            models.Index(fields=['company', 'status']),
+            models.Index(fields=['company', 'category']),
+            models.Index(fields=['company', 'department']),
+            models.Index(fields=['company', 'employee_type']),
+            models.Index(fields=['code']),
+            models.Index(fields=['effective_date']),
+        ]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=['company', 'code'],
+                name='unique_company_policy_code'
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.code} - {self.title} (v{self.version})"
+
+    @property
+    def is_expired(self):
+        if self.expiry_date:
+            return self.expiry_date < timezone.now().date()
+        return False
+
+    @property
+    def needs_review(self):
+        if self.review_date:
+            return self.review_date <= timezone.now().date()
+        return False
+
+
+# =========================================================
+# POLICY ACKNOWLEDGMENT
+# =========================================================
+class PolicyAcknowledgment(TimeStampedModel):
+    policy = models.ForeignKey(
+        Policy,
+        on_delete=models.CASCADE,
+        related_name='acknowledgments'
+    )
+
+    employee = models.ForeignKey(
+        'Employee',
+        on_delete=models.CASCADE,
+        related_name='policy_acknowledgments'
+    )
+
+    acknowledged_at = models.DateTimeField(default=timezone.now)
+    acknowledged_via = models.CharField(max_length=50, default='WEB')
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'hr_policy_acknowledgments'
+        ordering = ['-acknowledged_at']
+
+        indexes = [
+            models.Index(fields=['policy', 'employee']),
+            models.Index(fields=['employee', 'acknowledged_at']),
+        ]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=['policy', 'employee'],
+                name='unique_policy_employee_acknowledgment'
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.employee} acknowledged {self.policy}"
+
+
+# =========================================================
+# POLICY VERSION
+# =========================================================
+class PolicyVersion(TimeStampedModel):
+    policy = models.ForeignKey(
+        Policy,
+        on_delete=models.CASCADE,
+        related_name='versions'
+    )
+
+    version = models.CharField(max_length=20)
+    content = models.TextField()
+    document_url = models.URLField(max_length=500, null=True, blank=True)
+    change_summary = models.TextField(null=True, blank=True)
+    effective_date = models.DateField()
+
+    changed_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='policy_changes'
+    )
+
+    class Meta:
+        db_table = 'hr_policy_versions'
+        ordering = ['-created_at']
+
+        indexes = [
+            models.Index(fields=['policy', 'version']),
+        ]
+
+    def __str__(self):
+        return f"{self.policy.code} - v{self.version}"
+
+
+# =========================================================
+# POLICY CATEGORY
+# =========================================================
+class PolicyCategory(TimeStampedModel):
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='policy_categories'
+    )
+
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    sorting_order = models.IntegerField(default=0)
+    color_code = models.CharField(max_length=7, null=True, blank=True)
+    icon = models.CharField(max_length=50, null=True, blank=True)
+
+    class Meta:
+        db_table = 'hr_policy_categories'
+        ordering = ['sorting_order', 'name']
+
+    def __str__(self):
+        return self.name
