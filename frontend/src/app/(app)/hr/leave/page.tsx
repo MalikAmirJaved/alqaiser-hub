@@ -15,6 +15,7 @@ import { LeaveFormModal } from "@/components/leave/LeaveFormModal";
 import { LeaveDetailDrawer } from "@/components/leave/LeaveDetailDrawer";
 import { LeaveBalanceCard } from "@/components/leave/LeaveBalanceCard";
 import { ApprovalActions } from "@/components/leave/ApprovalActions";
+import { LeaveCard } from "@/components/leave/LeaveCard";
 import {
   CalendarDays,
   UserCheck,
@@ -31,6 +32,8 @@ import {
   Calendar,
   Users,
   FileText,
+  LayoutGrid,
+  Table,
 } from "lucide-react";
 
 interface LeaveFormData {
@@ -45,6 +48,7 @@ interface LeaveFormData {
   document_url: string;
 }
 
+type ViewMode = "grid" | "table";
 
 export default function LeaveManagementPage() {
   const { user, ready } = useAuth();
@@ -52,6 +56,7 @@ export default function LeaveManagementPage() {
   const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState("my-leaves");
+  const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [isApplyOpen, setIsApplyOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedLeave, setSelectedLeave] = useState<any>(null);
@@ -94,53 +99,55 @@ export default function LeaveManagementPage() {
   }, [refetchLeaves, refetchBalances, refetchStats]);
 
   const getUserLeaves = () => {
-    const userEmployee = employees.find(e => e.email === user?.email);
-    if (!userEmployee) return leaves.filter(l => l.created_by === user?.id);
-    return leaves.filter(l => l.employee_id === userEmployee.id);
+    const userEmployee = employees.find((e: any) => e.email === user?.email);
+    if (!userEmployee) return leaves.filter((l: any) => l.created_by === user?.id);
+    return leaves.filter((l: any) => l.employee_id === userEmployee.id);
   };
 
   const getPendingApprovals = () => {
-    return leaves.filter(l => l.status === "PENDING");
+    return leaves.filter((l: any) => l.status === "PENDING");
+  };
+
+  const getAllLeavesForAdmin = () => {
+    return leaves;
   };
 
   const calculateTotalDays = (startDate: string, endDate: string, isHalfDay: string) => {
-  if (!startDate) return 0;
-  const start = new Date(startDate);
-  const end = endDate ? new Date(endDate) : start;
-  const diffTime = Math.abs(end.getTime() - start.getTime());
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-  return isHalfDay === "true" && diffDays === 1 ? 0.5 : diffDays;
-};
-
+    if (!startDate) return 0;
+    const start = new Date(startDate);
+    const end = endDate ? new Date(endDate) : start;
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    return isHalfDay === "true" && diffDays === 1 ? 0.5 : diffDays;
+  };
 
   const handleApply = async (formData: LeaveFormData) => {
-  try {
-    const totalDays = calculateTotalDays(
-      formData.start_date,
-      formData.end_date || formData.start_date,
-      formData.is_half_day
-    );
+    try {
+      const totalDays = calculateTotalDays(
+        formData.start_date,
+        formData.end_date || formData.start_date,
+        formData.is_half_day
+      );
 
-    await createLeave.mutateAsync({
-      employee_id: parseInt(formData.employee_id),
-      leave_type_id: parseInt(formData.leave_type_id),
-      leave_year: formData.leave_year,
-      start_date: formData.start_date,
-      end_date: formData.end_date || formData.start_date,
-      is_half_day: formData.is_half_day,
-      total_days: totalDays,
-      reason: formData.reason,
-      contact_number: formData.contact_number,
-      document_url: formData.document_url,
-    });
+      await createLeave.mutateAsync({
+        employee_id: parseInt(formData.employee_id),
+        leave_type_id: parseInt(formData.leave_type_id),
+        leave_year: formData.leave_year,
+        start_date: formData.start_date,
+        end_date: formData.end_date || formData.start_date,
+        is_half_day: formData.is_half_day,
+        total_days: totalDays,
+        reason: formData.reason,
+        contact_number: formData.contact_number,
+        document_url: formData.document_url,
+      });
 
-    setIsApplyOpen(false);
-    refreshData();
-  } catch (error: any) {
-    alert(error.message || "Failed to submit leave request");
-  }
-};
-
+      setIsApplyOpen(false);
+      refreshData();
+    } catch (error: any) {
+      alert(error.message || "Failed to submit leave request");
+    }
+  };
 
   const handleApproval = async (leaveId: number, status: string, rejectionReason = "") => {
     try {
@@ -181,6 +188,12 @@ export default function LeaveManagementPage() {
     return styles[status] || styles.PENDING;
   };
 
+  // Format date for display
+  const formatDateTime = (dateStr: string) => {
+    if (!dateStr) return "—";
+    return new Date(dateStr).toLocaleString();
+  };
+
   if (permissions.loading || !ready) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -207,6 +220,7 @@ export default function LeaveManagementPage() {
 
   const userLeaves = getUserLeaves();
   const pendingApprovals = getPendingApprovals();
+  const allLeaves = getAllLeavesForAdmin();
   const myStats = stats?.my_leaves || { total: 0, approved: 0, pending: 0, rejected: 0 };
 
   // Stats cards configuration
@@ -217,65 +231,181 @@ export default function LeaveManagementPage() {
     { id: "rejected", label: "Rejected", value: myStats.rejected, valueClassName: "text-red-600" },
   ];
 
-  // Table columns for My Leaves
-const myLeavesColumns: Column<any>[] = [
-  { key: "leave_type_name", label: "Leave Type", sortable: true },
-  { key: "start_date", label: "Start Date", sortable: true },
-  { key: "end_date", label: "End Date", sortable: true },
-  { 
-    key: "total_days", 
-    label: "Days", 
-    sortable: true,
-    render: (value: unknown, row: any) => (
-      <span>{String(value)}{row.is_half_day === "true" && " (Half)"}</span>
-    )
-  },
-  { 
-    key: "reason", 
-    label: "Reason", 
-    sortable: false,
-    render: (value: unknown) => (
-      <div className="max-w-[200px] truncate" title={String(value)}>
-        {String(value)}
-      </div>
-    )
-  },
-  {
-    key: "status",
-    label: "Status",
-    sortable: true,
-    render: (value: unknown) => (
-      <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full border ${getStatusBadge(String(value))}`}>
-        {String(value)}
-      </span>
-    )
-  },
-];
+  // Enhanced Table columns for My Leaves with approval info
+  const myLeavesColumns: Column<any>[] = [
+    { key: "leave_type_name", label: "Leave Type", sortable: true },
+    { key: "start_date", label: "Start Date", sortable: true },
+    { key: "end_date", label: "End Date", sortable: true },
+    { 
+      key: "total_days", 
+      label: "Days", 
+      sortable: true,
+      render: (value: unknown, row: any) => (
+        <span>{String(value)}{row.is_half_day === "true" && " (Half)"}</span>
+      )
+    },
+    { 
+      key: "reason", 
+      label: "Reason", 
+      sortable: false,
+      render: (value: unknown) => (
+        <div className="max-w-[200px] truncate" title={String(value)}>
+          {String(value)}
+        </div>
+      )
+    },
+    {
+      key: "status",
+      label: "Status",
+      sortable: true,
+      render: (value: unknown) => (
+        <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full border ${getStatusBadge(String(value))}`}>
+          {String(value)}
+        </span>
+      )
+    },
+    {
+      key: "approval_info",
+      label: "Approved/Rejected By",
+      sortable: false,
+      render: (_: unknown, row: any) => {
+        if (row.status === "APPROVED" && row.approved_by_name) {
+          return (
+            <div>
+              <div className="text-sm font-medium text-green-700">{row.approved_by_name}</div>
+              {row.approval_date && (
+                <div className="text-xs text-muted-foreground">{formatDateTime(row.approval_date)}</div>
+              )}
+            </div>
+          );
+        }
+        if (row.status === "REJECTED" && row.approved_by_name) {
+          return (
+            <div>
+              <div className="text-sm font-medium text-red-700">{row.approved_by_name}</div>
+              {row.approval_date && (
+                <div className="text-xs text-muted-foreground">{formatDateTime(row.approval_date)}</div>
+              )}
+            </div>
+          );
+        }
+        return <span className="text-muted-foreground">—</span>;
+      }
+    },
+    {
+      key: "rejection_reason",
+      label: "Rejection Reason",
+      sortable: false,
+      render: (value: unknown) => (
+        value ? (
+          <div className="max-w-[150px] truncate text-red-600" title={String(value)}>
+            {String(value)}
+          </div>
+        ) : <span className="text-muted-foreground">—</span>
+      )
+    },
+  ];
 
-// Table columns for Approvals - Fixed version
-const approvalsColumns: Column<any>[] = [
-  { key: "employee_name", label: "Employee", sortable: true },
-  { key: "department", label: "Department", sortable: true },
-  { key: "leave_type_name", label: "Leave Type", sortable: true },
-  { 
-    key: "dates", 
-    label: "Dates", 
-    sortable: false,
-    render: (_: unknown, row: any) => `${row.start_date} → ${row.end_date}`
-  },
-  { key: "total_days", label: "Days", sortable: true },
-  { 
-    key: "reason", 
-    label: "Reason", 
-    sortable: false,
-    render: (value: unknown) => (
-      <div className="max-w-[150px] truncate" title={String(value)}>
-        {String(value)}
-      </div>
-    )
-  },
-];
+  // Enhanced Table columns for Approvals
+  const approvalsColumns: Column<any>[] = [
+    { key: "employee_name", label: "Employee", sortable: true },
+    { key: "department", label: "Department", sortable: true },
+    { key: "leave_type_name", label: "Leave Type", sortable: true },
+    { 
+      key: "dates", 
+      label: "Dates", 
+      sortable: false,
+      render: (_: unknown, row: any) => `${row.start_date} → ${row.end_date}`
+    },
+    { key: "total_days", label: "Days", sortable: true },
+    { 
+      key: "reason", 
+      label: "Reason", 
+      sortable: false,
+      render: (value: unknown) => (
+        <div className="max-w-[150px] truncate" title={String(value)}>
+          {String(value)}
+        </div>
+      )
+    },
+    {
+      key: "applied_at",
+      label: "Applied On",
+      sortable: true,
+      render: (value: unknown) => formatDateTime(String(value))
+    },
+  ];
 
+  // All Leaves columns for admin (with approval info)
+  const allLeavesColumns: Column<any>[] = [
+    { key: "employee_name", label: "Employee", sortable: true },
+    { key: "leave_type_name", label: "Leave Type", sortable: true },
+    { key: "start_date", label: "Start Date", sortable: true },
+    { key: "end_date", label: "End Date", sortable: true },
+    { key: "total_days", label: "Days", sortable: true },
+    {
+      key: "status",
+      label: "Status",
+      sortable: true,
+      render: (value: unknown) => (
+        <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full border ${getStatusBadge(String(value))}`}>
+          {String(value)}
+        </span>
+      )
+    },
+    {
+      key: "approved_by",
+      label: "Approved/Rejected By",
+      sortable: false,
+      render: (_: unknown, row: any) => {
+        if ((row.status === "APPROVED" || row.status === "REJECTED") && row.approved_by_name) {
+          return (
+            <div>
+              <div className="text-sm font-medium">{row.approved_by_name}</div>
+              {row.approval_date && (
+                <div className="text-xs text-muted-foreground">{formatDateTime(row.approval_date)}</div>
+              )}
+            </div>
+          );
+        }
+        return <span className="text-muted-foreground">—</span>;
+      }
+    },
+    {
+      key: "rejection_reason",
+      label: "Rejection Reason",
+      sortable: false,
+      render: (value: unknown) => (
+        value ? (
+          <div className="max-w-[150px] truncate text-red-600" title={String(value)}>
+            {String(value)}
+          </div>
+        ) : <span className="text-muted-foreground">—</span>
+      )
+    },
+  ];
+
+  // Render grid view for leaves
+  const renderGridView = (leavesData: any[], showApprovalInfo: boolean = true, showCancel: boolean = true) => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {leavesData.length === 0 ? (
+        <div className="col-span-full text-center py-10 text-muted-foreground">
+          No leave records found.
+        </div>
+      ) : (
+        leavesData.map((leave) => (
+          <LeaveCard
+            key={leave.id}
+            leave={leave}
+            onView={() => { setSelectedLeave(leave); setIsDrawerOpen(true); }}
+            onCancel={showCancel && leave.status === "PENDING" ? () => handleDelete(leave.id) : undefined}
+            getStatusBadge={getStatusBadge}
+            showApprovalInfo={showApprovalInfo}
+          />
+        ))
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -321,6 +451,11 @@ const approvalsColumns: Column<any>[] = [
               )}
             </TabsTrigger>
           )}
+          {permissions.canApprove && (
+            <TabsTrigger value="all-leaves">
+              <FileText className="w-4 h-4 mr-2" /> All Leaves
+            </TabsTrigger>
+          )}
           <TabsTrigger value="balances">
             <Clock className="w-4 h-4 mr-2" /> Leave Balances
           </TabsTrigger>
@@ -328,32 +463,56 @@ const approvalsColumns: Column<any>[] = [
 
         {/* My Leaves Tab */}
         <TabsContent value="my-leaves" className="m-0">
-          <TableView
-            columns={myLeavesColumns}
-            data={userLeaves}
-            loading={leavesLoading}
-            emptyMessage="No leave records found. Click 'Apply for Leave' to submit a request."
-            actions={(row) => (
-              <div className="flex items-center justify-end gap-1">
-                <button
-                  onClick={() => { setSelectedLeave(row); setIsDrawerOpen(true); }}
-                  className="p-1.5 rounded-md hover:bg-muted transition-colors"
-                  title="View Details"
-                >
-                  <Eye className="w-4 h-4" />
-                </button>
-                {row.status === "PENDING" && (
+          {/* View Toggle */}
+          <div className="flex justify-end mb-4">
+            <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-lg">
+              <button
+                onClick={() => setViewMode("table")}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === "table" ? "bg-background shadow-sm" : "hover:bg-muted"}`}
+                title="Table View"
+              >
+                <Table className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === "grid" ? "bg-background shadow-sm" : "hover:bg-muted"}`}
+                title="Grid View"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {viewMode === "table" ? (
+            <TableView
+              columns={myLeavesColumns}
+              data={userLeaves}
+              loading={leavesLoading}
+              emptyMessage="No leave records found. Click 'Apply for Leave' to submit a request."
+              actions={(row) => (
+                <div className="flex items-center justify-end gap-1">
                   <button
-                    onClick={() => handleDelete(row.id)}
-                    className="p-1.5 rounded-md hover:bg-red-100 text-red-600 transition-colors"
-                    title="Cancel"
+                    onClick={() => { setSelectedLeave(row); setIsDrawerOpen(true); }}
+                    className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                    title="View Details"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Eye className="w-4 h-4" />
                   </button>
-                )}
-              </div>
-            )}
-          />
+                  {row.status === "PENDING" && (
+                    <button
+                      onClick={() => handleDelete(row.id)}
+                      className="p-1.5 rounded-md hover:bg-red-100 text-red-600 transition-colors"
+                      title="Cancel"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              )}
+            />
+          ) : (
+            renderGridView(userLeaves, true, true)
+          )}
         </TabsContent>
 
         {/* Approvals Tab */}
@@ -361,7 +520,7 @@ const approvalsColumns: Column<any>[] = [
           <TabsContent value="approvals" className="m-0">
             <TableView
               columns={approvalsColumns}
-              data={pendingApprovals.map(l => ({
+              data={pendingApprovals.map((l: any) => ({
                 ...l,
                 department: employees.find((e: any) => e.id === l.employee_id)?.department || "—"
               }))}
@@ -378,6 +537,52 @@ const approvalsColumns: Column<any>[] = [
                 />
               )}
             />
+          </TabsContent>
+        )}
+
+        {/* All Leaves Tab (Admin only) */}
+        {permissions.canApprove && (
+          <TabsContent value="all-leaves" className="m-0">
+            <div className="flex justify-end mb-4">
+              <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-lg">
+                <button
+                  onClick={() => setViewMode("table")}
+                  className={`p-1.5 rounded-md transition-colors ${viewMode === "table" ? "bg-background shadow-sm" : "hover:bg-muted"}`}
+                  title="Table View"
+                >
+                  <Table className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode("grid")}
+                  className={`p-1.5 rounded-md transition-colors ${viewMode === "grid" ? "bg-background shadow-sm" : "hover:bg-muted"}`}
+                  title="Grid View"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {viewMode === "table" ? (
+              <TableView
+                columns={allLeavesColumns}
+                data={allLeaves}
+                loading={leavesLoading}
+                emptyMessage="No leave records found."
+                actions={(row) => (
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      onClick={() => { setSelectedLeave(row); setIsDrawerOpen(true); }}
+                      className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                      title="View Details"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              />
+            ) : (
+              renderGridView(allLeaves, true, false)
+            )}
           </TabsContent>
         )}
 

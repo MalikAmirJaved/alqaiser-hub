@@ -16,7 +16,6 @@ export type CreateLeaveRequestData = {
   document_url?: string;
 };
 
-
 export interface LeaveRequest {
   id: number;
   employee_id: number;
@@ -36,7 +35,10 @@ export interface LeaveRequest {
   approval_date?: string;
   rejection_reason?: string;
   approved_by?: string;
+  approved_by_name?: string;  // Added
+  approver_role?: string;      // Added
   created_by?: number;
+  created_by_name?: string;    // Added
 }
 
 export interface LeaveBalance {
@@ -163,7 +165,6 @@ export function useCreateLeaveRequest() {
     },
   });
 }
-
 
 // Update leave request
 export function useUpdateLeaveRequest() {

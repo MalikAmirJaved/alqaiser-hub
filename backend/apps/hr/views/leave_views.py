@@ -79,6 +79,18 @@ class LeaveRequestView(APIView):
     
     def _serialize_leave(self, leave: LeaveRequest) -> dict:
         """Serialize leave request for API response"""
+        # Get approver user details
+        approved_by_name = None
+        approver_role = None
+        if leave.approved_by:
+            approved_by_name = leave.approved_by.get_full_name() or leave.approved_by.email
+            approver_role = leave.approved_by.role if hasattr(leave.approved_by, 'role') else None
+        
+        # Get creator details
+        created_by_name = None
+        if leave.created_by:
+            created_by_name = leave.created_by.get_full_name() or leave.created_by.email
+        
         return {
             "id": leave.id,
             "_id": str(leave._id),
@@ -97,8 +109,12 @@ class LeaveRequestView(APIView):
             "status": leave.status,
             "applied_at": leave.applied_at.isoformat() if leave.applied_at else None,
             "approved_by_id": leave.approved_by_id,
+            "approved_by_name": approved_by_name,
+            "approver_role": approver_role,
             "approval_date": leave.approval_date.isoformat() if leave.approval_date else None,
             "rejection_reason": leave.rejection_reason,
+            "created_by": leave.created_by_id,
+            "created_by_name": created_by_name,
             "created_at": leave.created_at.isoformat() if leave.created_at else None,
             "updated_at": leave.updated_at.isoformat() if leave.updated_at else None,
         }

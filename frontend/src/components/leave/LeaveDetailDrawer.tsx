@@ -129,30 +129,82 @@ export function LeaveDetailDrawer({
             )}
 
             {/* Approval Information */}
-            {(leave.rejection_reason || leave.approved_by) && (
-              <Section title="Approval Information">
-                {leave.status === "REJECTED" && leave.rejection_reason && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                    <div className="flex items-start gap-2">
-                      <XCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <div className="text-xs font-medium text-red-700 mb-1">Rejection Reason</div>
-                        <p className="text-sm text-red-600">{leave.rejection_reason}</p>
-                      </div>
-                    </div>
-                  </div>
+           {(leave.rejection_reason || leave.approved_by_name || leave.approver_role) && (
+  <Section title="Approval Information">
+    {leave.status === "APPROVED" && leave.approved_by_name && (
+      <>
+        <DetailRow 
+          label="Approved By" 
+          value={
+            <div>
+              <div>{leave.approved_by_name}</div>
+              {leave.approver_role && (
+                <div className="text-xs text-muted-foreground mt-0.5">{leave.approver_role}</div>
+              )}
+            </div>
+          } 
+          icon={UserCheck} 
+        />
+        <DetailRow
+          label="Approved On"
+          value={new Date(leave.approval_date).toLocaleString()}
+          icon={Calendar}
+        />
+      </>
+    )}
+    {leave.status === "REJECTED" && (
+      <>
+        {leave.approved_by_name && (
+          <DetailRow 
+            label="Rejected By" 
+            value={
+              <div>
+                <div>{leave.approved_by_name}</div>
+                {leave.approver_role && (
+                  <div className="text-xs text-muted-foreground mt-0.5">{leave.approver_role}</div>
                 )}
-                {leave.status === "APPROVED" && (
-                  <>
-                    <DetailRow label="Approved By" value={leave.approved_by} icon={UserCheck} />
-                    <DetailRow
-                      label="Approved On"
-                      value={new Date(leave.approval_date).toLocaleDateString()}
-                    />
-                  </>
-                )}
-              </Section>
-            )}
+              </div>
+            } 
+            icon={XCircle} 
+          />
+        )}
+        {leave.approval_date && (
+          <DetailRow
+            label="Rejected On"
+            value={new Date(leave.approval_date).toLocaleString()}
+            icon={Calendar}
+          />
+        )}
+        {leave.rejection_reason && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 mt-2">
+            <div className="flex items-start gap-2">
+              <XCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <div className="text-xs font-medium text-red-700 mb-1">Rejection Reason</div>
+                <p className="text-sm text-red-600">{leave.rejection_reason}</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    )}
+  </Section>
+)}
+{/* Applied Information */}
+<Section title="Request Information">
+  <DetailRow
+    label="Applied On"
+    value={new Date(leave.applied_at).toLocaleString()}
+    icon={Clock}
+  />
+  {leave.created_by_name && (
+    <DetailRow
+      label="Applied By"
+      value={leave.created_by_name}
+      icon={User}
+    />
+  )}
+</Section>
           </div>
 
           {/* Footer Actions */}
