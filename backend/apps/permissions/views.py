@@ -5,11 +5,9 @@ from django.db.models import Q
 from apps.permissions.mixins import PermissionRequiredMixin
 from .models import Module, Permission, UserRole, RolePermission, UserPermission
 
-class UserPermissionsView(PermissionRequiredMixin, APIView):
+class UserPermissionsView(APIView):
     """Return list of permission codes for the current user (optimised)"""
     permission_classes = [IsAuthenticated]
-    permission_module = 'SETTINGS'
-    permission_resource = 'permissions'
 
     def get(self, request):
         user = request.user
@@ -44,11 +42,9 @@ class UserPermissionsView(PermissionRequiredMixin, APIView):
         return Response(list(perms))
 
 
-class ModulesTreeView(PermissionRequiredMixin, APIView):
+class ModulesTreeView(APIView):
     """Return nested structure of modules → resources → actions with granted flags"""
     permission_classes = [IsAuthenticated]
-    permission_module = 'SETTINGS'
-    permission_resource = 'permissions'
 
     def get(self, request):
         user = request.user

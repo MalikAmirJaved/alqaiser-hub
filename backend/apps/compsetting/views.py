@@ -26,6 +26,7 @@ class BaseCompanyView(PermissionRequiredMixin, APIView):
     """Base view with common methods"""
     permission_classes = [IsAuthenticated]
     permission_module = 'SETTINGS'
+    skip_safe_methods = True
 
     def _get_company(self, user):
         """Get company with error handling"""

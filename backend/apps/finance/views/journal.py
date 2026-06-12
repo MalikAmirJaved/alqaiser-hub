@@ -11,7 +11,7 @@ class JournalEntryViewSet(CompanyBranchUserMixin, CompanyBranchMixin, Permission
     queryset = JournalEntry.objects.all()
     serializer_class = JournalEntrySerializer
     permission_module = 'FINANCE'
-    permission_resource = 'journal'
+    permission_resource = 'journal_entrie'
     lookup_field = '_id'
     lookup_url_kwarg = '_id'
     filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]

@@ -32,6 +32,12 @@ class PayrollView(PermissionRequiredMixin, APIView):
     permission_resource = 'payroll'
     """Payroll management with UUID support - Leave deduction uses working days only"""
     permission_classes = [IsAuthenticated]
+
+    def get_permission_action(self):
+        method = self.request.method.upper()
+        if method == 'POST':
+            return 'pay_salary'
+        return super().get_permission_action()
     
     # ------------------------------------------------------------------
     # Helper methods for leave deduction (using working days only)
@@ -889,6 +895,14 @@ class EmployeeLoanView(PermissionRequiredMixin, APIView):
     permission_resource = 'compensation'
     """Employee loans management with UUID support"""
     permission_classes = [IsAuthenticated]
+
+    def get_permission_action(self):
+        method = self.request.method.upper()
+        if method == 'GET':    return 'view_loan'
+        if method == 'POST':   return 'create_loan'
+        if method == 'PATCH':  return 'update_loan'
+        if method == 'DELETE': return 'delete_loan'
+        return super().get_permission_action()
     
     def _serialize_loan(self, loan):
         selected_months = [
@@ -1261,6 +1275,9 @@ class LoanStatusUpdateView(PermissionRequiredMixin, APIView):
     permission_resource = 'compensation'
     permission_classes = [IsAuthenticated]
 
+    def get_permission_action(self):
+        return 'update_loan_status'
+
     @transaction.atomic
     def post(self, request):
         company_id = request.user.company_id
@@ -1312,6 +1329,14 @@ class CompensationView(PermissionRequiredMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'compensation'
     permission_classes = [IsAuthenticated]
+
+    def get_permission_action(self):
+        method = self.request.method.upper()
+        if method == 'GET':    return 'view_compensation'
+        if method == 'POST':   return 'create_compensation'
+        if method == 'PATCH':  return 'update_compensation'
+        if method == 'DELETE': return 'delete_compensation'
+        return super().get_permission_action()
     
     def _serialize_compensation(self, comp):
         selected_months = [

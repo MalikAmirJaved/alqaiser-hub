@@ -24,7 +24,8 @@ MODULES: dict[str, dict] = {
     "FINANCE":      {"name": "Finance",             "ordering": 3},
     "SALES":        {"name": "Sales",               "ordering": 4},
     "AI_MONITORING":{"name": "AI Monitoring",       "ordering": 5},
-    "SETTINGS":     {"name": "System Settings",     "ordering": 6},
+    "NOTIFICATIONS":{"name": "Notifications",       "ordering": 6},
+    "SETTINGS":     {"name": "System Settings",     "ordering": 7},
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -127,6 +128,11 @@ RESOURCES_ACTIONS: dict[str, dict[str, list[str]]] = {
         "preference":   ["view", "update"],
         "dashboard":    ["view"],
     },
+
+    # ── Notifications ─────────────────────────────────────────────────────────
+    "NOTIFICATIONS": {
+        "notification": ["view", "create", "update", "delete"],
+    },
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -194,6 +200,7 @@ ROLE_PERMISSIONS: dict[str, dict[str, list[str]]] = {
         "FINANCE":      ["*"],
         "SALES":        ["*"],
         "AI_MONITORING":["*"],
+        "NOTIFICATIONS":["*"],
         "SETTINGS":     ["*"],
     },
     "BRANCH_ADMIN": {},

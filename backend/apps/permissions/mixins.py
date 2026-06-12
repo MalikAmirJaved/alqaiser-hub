@@ -190,6 +190,7 @@ class PermissionRequiredMixin:
     permission_action_map: dict[str, str] = {}
     action_permission_any_of: dict[str, list[tuple[str, str]]] = {}
     skip_permission_check: bool = False
+    skip_safe_methods: bool = False
 
     # ------------------------------------------------------------------
 
@@ -223,6 +224,8 @@ class PermissionRequiredMixin:
 
     def _enforce_resource_permission(self, request) -> None:
         if self.skip_permission_check:
+            return
+        if self.skip_safe_methods and request.method in ('GET', 'HEAD', 'OPTIONS'):
             return
 
         module   = getattr(self, "permission_module", None)

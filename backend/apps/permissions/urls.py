@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import UserPermissionsView, ModulesTreeView
+from .views import UserPermissionsView
 from .views_extended import (
     ModulesTreeView, RoleListView,
     UserRolesView, AssignRoleView, RemoveRoleView,

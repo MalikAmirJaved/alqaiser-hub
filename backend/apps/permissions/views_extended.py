@@ -20,6 +20,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 from apps.permissions.mixins import PermissionRequiredMixin
 
 from .models import (
@@ -73,21 +74,28 @@ def _compute_granted_ids(user) -> set:
 # Modules tree — accepts optional ?user_id= query param (admin viewing another user)
 # ─────────────────────────────────────────────────────────────────────────────
 
-class ModulesTreeView(PermissionsAdminView):
+class ModulesTreeView(APIView):
     """
     GET /api/permissions/modules/
     GET /api/permissions/modules/?user_id=42
 
     Returns nested module → resource → action tree with granted flags.
-    Without user_id, uses the requesting user (as before).
+    Without user_id, uses the requesting user — no module permission required.
     With user_id, resolves that user (company-scoped) — admin only.
     """
     permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
+    permission_resource = 'permissions'
 
     def get(self, request):
+        from apps.permissions.mixins import PermissionRequiredMixin, check_permission  # noqa
+
+        from apps.permissions.checks import check_permission
+
         uid = request.query_params.get("user_id")
         if uid:
-            # Company admin viewing another user
+            if not check_permission(request.user, 'SETTINGS', 'permissions', 'view'):
+                raise PermissionDenied("You do not have permission to view other users.")
             target_user = _get_company_user(request, int(uid))
         else:
             target_user = request.user
