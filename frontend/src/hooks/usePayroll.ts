@@ -3,6 +3,27 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
+export interface CompensationBreakdown {
+  id: string;
+  compensation_id: string;
+  amount: string;
+}
+
+export interface LoanBreakdown {
+  id: string;
+  loan_id: string;
+  principal_amount: string;
+  interest_amount: string;
+  total_amount: string;
+}
+
+export interface LeaveBreakdown {
+  id: string;
+  leave_request_id: string | null;
+  working_days: string;
+  amount: string;
+}
+
 export interface PayrollRecord {
   id: string;
   employee_id: string;
@@ -15,6 +36,12 @@ export interface PayrollRecord {
   base_salary: string;
   bonus: string;
   deductions: string;
+  total_compensation: string;
+  total_loan_deduction: string;
+  total_leave_deduction: string;
+  compensation_breakdown: CompensationBreakdown[];
+  loan_breakdown: LoanBreakdown[];
+  leave_breakdown: LeaveBreakdown[];
   deduction_breakdown?: any;
   net_salary: string;
   transaction_type: string;
@@ -118,6 +145,10 @@ export interface Compensation {
 }
 
 export interface PayrollPreview {
+  employee_id: string;
+  employee_name: string;
+  employee_code: string;
+  joining_date: string | null;
   base_salary: number;
   compensation: number;
   overtime_hours: number;

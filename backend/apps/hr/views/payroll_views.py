@@ -16,7 +16,8 @@ from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import (
     Employee, PayrollRecord, EmployeeLoan, Compensation, LeaveRequest, PayrollDeductionDetail,
-    CompensationSelectedMonth, CompensationMonthRange, LoanSelectedMonth, LoanMonthRange
+    CompensationSelectedMonth, CompensationMonthRange, LoanSelectedMonth, LoanMonthRange,
+    PayrollCompensation, PayrollLoanDeduction, PayrollLeaveDeduction
 )
 from apps.compsetting.models import CompanySettings, WorkingDay, PublicHoliday
 from apps.finance.services.payable import (
@@ -65,15 +66,13 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         Check if a specific date is a working day for the company.
         Uses WorkingDay settings (is_working flag) and excludes public holidays.
         """
-        settings = CompanySettings.objects.filter(company_id=company_id).first()
-        if not settings:
-            # If no settings defined, treat all days as working days
+        company_settings = CompanySettings.objects.filter(company_id=company_id).first()
+        if not company_settings:
             return True
         
-        # Get working days set from database (Monday=0 to Sunday=6)
         working_days_set = set(
             WorkingDay.objects.filter(
-                settings=settings, 
+                company_settings=company_settings, 
                 is_working=True
             ).values_list('day', flat=True)
         )
@@ -140,6 +139,35 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     # Serializers
     # ------------------------------------------------------------------
     def _serialize_payroll(self, payroll):
+        # Relational child records
+        compensation_breakdown = [
+            {
+                "id": str(pc._id),
+                "compensation_id": str(pc.compensation._id),
+                "amount": str(pc.amount),
+            }
+            for pc in payroll.payroll_compensations.all()
+        ]
+        loan_breakdown = [
+            {
+                "id": str(pld._id),
+                "loan_id": str(pld.loan._id),
+                "principal_amount": str(pld.principal_amount),
+                "interest_amount": str(pld.interest_amount),
+                "total_amount": str(pld.total_amount),
+            }
+            for pld in payroll.payroll_loan_deductions.all()
+        ]
+        leave_breakdown = [
+            {
+                "id": str(pld._id),
+                "leave_request_id": str(pld.leave_request._id) if pld.leave_request else None,
+                "working_days": str(pld.working_days),
+                "amount": str(pld.amount),
+            }
+            for pld in payroll.payroll_leave_deductions.all()
+        ]
+
         deduction_details = payroll.deduction_details.all()
         deductions_list = [
             {
@@ -168,6 +196,12 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "base_salary": str(payroll.base_salary),
             "bonus": str(payroll.bonus),
             "deductions": str(payroll.deductions),
+            "total_compensation": str(payroll.total_compensation),
+            "total_loan_deduction": str(payroll.total_loan_deduction),
+            "total_leave_deduction": str(payroll.total_leave_deduction),
+            "compensation_breakdown": compensation_breakdown,
+            "loan_breakdown": loan_breakdown,
+            "leave_breakdown": leave_breakdown,
             "deduction_details": deductions_list,
             "net_salary": str(payroll.net_salary),
             "paid_amount": str(payroll.paid_amount),
@@ -201,7 +235,12 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         query = PayrollRecord.objects.filter(
             company_id=company_id,
             is_deleted=False
-        ).select_related('employee').prefetch_related('deduction_details')
+        ).select_related('employee').prefetch_related(
+            'deduction_details',
+            'payroll_compensations',
+            'payroll_loan_deductions',
+            'payroll_leave_deductions',
+        )
         
         if month:
             query = query.filter(month=int(month))
@@ -273,6 +312,14 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             is_deleted=False
         )
         
+        # Validate employee joining date
+        join_date = employee.joining_date
+        if join_date and (year < join_date.year or (year == join_date.year and month < join_date.month)):
+            return Response(
+                {'error': f'Employee joined on {join_date}. Cannot process payroll before joining date.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         # Check for existing payroll
         if PayrollRecord.objects.filter(
             employee=employee,
@@ -292,17 +339,37 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         days_in_month = self._get_days_in_month(year, month)  # Returns 30
         daily_rate = base_salary / days_in_month  # base_salary / 30
         
+        # ---------- Month boundaries for leave/loan filtering ----------
+        first_day, last_day = self._get_month_days(year, month)
+        
         # ---------- Leave deduction (ONLY working days in leave period) ----------
         leave_deduction = self._get_leave_deduction(employee.id, company_id, year, month, daily_rate)
         leave_working_days = leave_deduction / daily_rate if daily_rate > 0 else 0
         
-        # ---------- Compensation allowances ----------
+        # ---------- Compensation allowances (month-aware) ----------
         compensation = Compensation.objects.filter(
             employee=employee,
             is_active=True,
             is_deleted=False
-        ).first()
-        total_compensation = float(compensation.total_allowances) if compensation else 0
+        ).prefetch_related('selected_months', 'month_range').first()
+        total_compensation = 0
+        if compensation:
+            freq = compensation.frequency_type
+            if freq in ('ONE_TIME', 'SELECTED_MONTH'):
+                if compensation.selected_months.filter(month=month, year=year).exists():
+                    total_compensation = float(compensation.total_allowances)
+            elif freq == 'MONTH_RANGE':
+                try:
+                    mr = compensation.month_range
+                    start = (mr.start_year, mr.start_month)
+                    end = (mr.end_year, mr.end_month)
+                    current = (year, month)
+                    if start <= current <= end:
+                        total_compensation = float(compensation.total_allowances)
+                except CompensationMonthRange.DoesNotExist:
+                    pass
+            else:
+                total_compensation = float(compensation.total_allowances)
         
         # ---------- Overtime ----------
         overtime_hours = float(request.data.get('overtime_hours', 0))
@@ -337,9 +404,15 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                     if selected:
                         deduction_amount = float(selected.deduction)
                 elif loan.frequency_type == 'MONTH_RANGE':
-                    mr = loan.month_range.first()
-                    if mr:
-                        deduction_amount = float(mr.deduction)
+                    selected = loan.selected_months.filter(month=month, year=year).first()
+                    if selected:
+                        deduction_amount = float(selected.deduction)
+                    else:
+                        try:
+                            mr = loan.month_range
+                            deduction_amount = float(mr.deduction)
+                        except LoanMonthRange.DoesNotExist:
+                            deduction_amount = 0
                 elif loan.frequency_type == 'ONE_TIME':
                     selected = loan.selected_months.filter(month=month, year=year).first()
                     if selected:
@@ -389,6 +462,9 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             bonus=bonus,
             deductions=total_deductions,
             net_salary=net_salary,
+            total_compensation=total_compensation,
+            total_loan_deduction=loan_deductions,
+            total_leave_deduction=leave_deduction,
             transaction_type=request.data.get('transaction_type', 'SALARY'),
             custom_note=request.data.get('custom_note'),
             processed_at=timezone.now(),
@@ -396,57 +472,66 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             updated_by=request.user,
         )
         
-        # ---------- Create deduction details ----------
-        if leave_deduction > 0:
-            PayrollDeductionDetail.objects.create(
+        # ---------- Create relational child records ----------
+        # PayrollCompensation
+        if compensation and total_compensation > 0:
+            PayrollCompensation.objects.create(
                 payroll=payroll,
-                deduction_type='LEAVE',
-                amount=leave_deduction,
-                description=f"Leave deduction for {leave_working_days:.1f} working day(s)",
-                leave_days=leave_working_days,
+                compensation=compensation,
+                amount=total_compensation,
                 company_id=company_id,
                 branch_id=branch_id,
                 created_by=request.user,
                 updated_by=request.user,
             )
         
+        # PayrollLoanDeduction
         for loan_data in processed_loans:
-            if loan_data['principal'] > 0:
-                PayrollDeductionDetail.objects.create(
+            if loan_data['total'] > 0:
+                PayrollLoanDeduction.objects.create(
                     payroll=payroll,
-                    deduction_type='LOAN_PRINCIPAL',
-                    amount=loan_data['principal'],
-                    description=f"Loan principal deduction - {loan_data['loan'].get_loan_type_display()}",
                     loan=loan_data['loan'],
-                    company_id=company_id,
-                    branch_id=branch_id,
-                    created_by=request.user,
-                    updated_by=request.user,
-                )
-            if loan_data['interest'] > 0:
-                PayrollDeductionDetail.objects.create(
-                    payroll=payroll,
-                    deduction_type='LOAN_INTEREST',
-                    amount=loan_data['interest'],
-                    description=f"Loan interest deduction - {loan_data['loan'].get_loan_type_display()}",
-                    loan=loan_data['loan'],
+                    principal_amount=loan_data['principal'],
+                    interest_amount=loan_data['interest'],
+                    total_amount=loan_data['total'],
                     company_id=company_id,
                     branch_id=branch_id,
                     created_by=request.user,
                     updated_by=request.user,
                 )
         
-        if custom_deductions > 0:
-            PayrollDeductionDetail.objects.create(
-                payroll=payroll,
-                deduction_type='CUSTOM',
-                amount=custom_deductions,
-                description=request.data.get('deduction_reason', 'Custom deduction'),
-                company_id=company_id,
-                branch_id=branch_id,
-                created_by=request.user,
-                updated_by=request.user,
+        # PayrollLeaveDeduction - attribute per-leave working days
+        if leave_deduction > 0:
+            approved_leaves = LeaveRequest.objects.filter(
+                employee=employee,
+                status='APPROVED',
+                start_date__lte=last_day,
+                end_date__gte=first_day,
+                is_deleted=False
             )
+            for leave_req in approved_leaves:
+                l_start = max(leave_req.start_date, first_day)
+                l_end = min(leave_req.end_date, last_day)
+                l_current = l_start
+                l_working_days = 0
+                while l_current <= l_end:
+                    if self._is_working_day(company_id, l_current):
+                        l_working_days += 1
+                    l_current += timedelta(days=1)
+                if leave_req.is_half_day and l_working_days == 1:
+                    l_working_days = 0.5
+                l_amount = l_working_days * daily_rate
+                if l_amount > 0:
+                    PayrollLeaveDeduction.objects.create(
+                        payroll=payroll,
+                        leave_request=leave_req,
+                        working_days=l_working_days,
+                        amount=l_amount,
+                        company_id=company_id,
+                        branch_id=branch_id,
+                        created_by=request.user,
+                        updated_by=request.user,
+                    )
         
         if pay_immediately and net_salary > 0:
             bank_account = None
@@ -486,6 +571,8 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "days_in_month": days_in_month,
             "daily_rate": str(daily_rate),
             "compensation": str(total_compensation),
+            "total_leave_deduction": str(payroll.total_leave_deduction),
+            "total_loan_deduction": str(payroll.total_loan_deduction),
             "overtime": str(overtime_amount),
             "bonus": str(bonus),
             "deductions": str(total_deductions),
@@ -626,6 +713,14 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             is_deleted=False
         )
         
+        # Validate employee joining date
+        join_date = employee.joining_date
+        if join_date and (year < join_date.year or (year == join_date.year and month < join_date.month)):
+            return Response(
+                {'error': f'Employee joined on {join_date}. Cannot process payroll before joining date.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         base_salary = float(employee.salary)
         
         # Calculate daily rate based on FIXED 30 days per month
@@ -636,13 +731,30 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         leave_deduction = self._get_leave_deduction(employee.id, company_id, year, month, daily_rate)
         leave_working_days = leave_deduction / daily_rate if daily_rate > 0 else 0
         
-        # Compensation
+        # Compensation (month-aware)
         compensation = Compensation.objects.filter(
             employee=employee,
             is_active=True,
             is_deleted=False
-        ).first()
-        total_compensation = float(compensation.total_allowances) if compensation else 0
+        ).prefetch_related('selected_months', 'month_range').first()
+        total_compensation = 0
+        if compensation:
+            freq = compensation.frequency_type
+            if freq in ('ONE_TIME', 'SELECTED_MONTH'):
+                if compensation.selected_months.filter(month=month, year=year).exists():
+                    total_compensation = float(compensation.total_allowances)
+            elif freq == 'MONTH_RANGE':
+                try:
+                    mr = compensation.month_range
+                    start = (mr.start_year, mr.start_month)
+                    end = (mr.end_year, mr.end_month)
+                    current = (year, month)
+                    if start <= current <= end:
+                        total_compensation = float(compensation.total_allowances)
+                except CompensationMonthRange.DoesNotExist:
+                    pass
+            else:
+                total_compensation = float(compensation.total_allowances)
         
         # Overtime
         overtime_amount = 0
@@ -667,9 +779,15 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                     if selected:
                         deduction_amount = float(selected.deduction)
                 elif loan.frequency_type == 'MONTH_RANGE':
-                    mr = loan.month_range.first()
-                    if mr:
-                        deduction_amount = float(mr.deduction)
+                    selected = loan.selected_months.filter(month=month, year=year).first()
+                    if selected:
+                        deduction_amount = float(selected.deduction)
+                    else:
+                        try:
+                            mr = loan.month_range
+                            deduction_amount = float(mr.deduction)
+                        except LoanMonthRange.DoesNotExist:
+                            deduction_amount = 0
                 elif loan.frequency_type == 'ONE_TIME':
                     selected = loan.selected_months.filter(month=month, year=year).first()
                     if selected:
@@ -692,6 +810,10 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         net_salary = base_salary + total_compensation + overtime_amount + bonus - total_deductions
         
         return Response({
+            'employee_id': str(employee._id),
+            'employee_name': employee.full_name,
+            'employee_code': employee.employee_id,
+            'joining_date': employee.joining_date.isoformat() if employee.joining_date else None,
             'base_salary': base_salary,
             'daily_rate': daily_rate,
             'days_in_month': days_in_month,

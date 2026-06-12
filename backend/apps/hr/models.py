@@ -598,6 +598,11 @@ class PayrollRecord(PayableModelMixin, BaseModel):
     deductions = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     net_salary = models.DecimalField(max_digits=12, decimal_places=2)
 
+    # Denormalized totals from child relational tables
+    total_compensation = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_loan_deduction = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_leave_deduction = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
     transaction_type = models.CharField(
         max_length=50,
         choices=[
@@ -660,6 +665,76 @@ class PayrollDeductionDetail(BaseModel):
     
     def __str__(self):
         return f"{self.get_deduction_type_display()} - {self.amount}"
+
+
+# =========================================================
+# PAYROLL COMPENSATION (relational link)
+# =========================================================
+class PayrollCompensation(BaseModel):
+    """Relational link between PayrollRecord and Compensation for the payroll month"""
+
+    payroll = models.ForeignKey(PayrollRecord, on_delete=models.CASCADE, related_name='payroll_compensations')
+    compensation = models.ForeignKey(Compensation, on_delete=models.CASCADE, related_name='payroll_records')
+    amount = models.DecimalField(max_digits=12, decimal_places=2, help_text="Compensation amount applied for this payroll month")
+
+    class Meta:
+        verbose_name = "Payroll Compensation"
+        verbose_name_plural = "Payroll Compensations"
+        unique_together = ('payroll', 'compensation')
+        indexes = [
+            models.Index(fields=['payroll', 'compensation']),
+        ]
+
+    def __str__(self):
+        return f"PayrollCompensation({self.amount})"
+
+
+# =========================================================
+# PAYROLL LOAN DEDUCTION (relational link)
+# =========================================================
+class PayrollLoanDeduction(BaseModel):
+    """Relational link between PayrollRecord and EmployeeLoan deduction"""
+
+    payroll = models.ForeignKey(PayrollRecord, on_delete=models.CASCADE, related_name='payroll_loan_deductions')
+    loan = models.ForeignKey(EmployeeLoan, on_delete=models.CASCADE, related_name='payroll_loan_deductions')
+    principal_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    interest_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        verbose_name = "Payroll Loan Deduction"
+        verbose_name_plural = "Payroll Loan Deductions"
+        indexes = [
+            models.Index(fields=['payroll']),
+            models.Index(fields=['loan']),
+        ]
+
+    def __str__(self):
+        return f"PayrollLoanDeduction({self.total_amount})"
+
+
+# =========================================================
+# PAYROLL LEAVE DEDUCTION (relational link)
+# =========================================================
+class PayrollLeaveDeduction(BaseModel):
+    """Relational link between PayrollRecord and Leave deduction"""
+
+    payroll = models.ForeignKey(PayrollRecord, on_delete=models.CASCADE, related_name='payroll_leave_deductions')
+    leave_request = models.ForeignKey('LeaveRequest', on_delete=models.CASCADE, related_name='payroll_deductions')
+    working_days = models.DecimalField(max_digits=5, decimal_places=1)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        verbose_name = "Payroll Leave Deduction"
+        verbose_name_plural = "Payroll Leave Deductions"
+        indexes = [
+            models.Index(fields=['payroll']),
+            models.Index(fields=['leave_request']),
+        ]
+
+    def __str__(self):
+        return f"PayrollLeaveDeduction({self.working_days}d, {self.amount})"
+
 
 # =========================================================
 # SHIFT OVERRIDE
