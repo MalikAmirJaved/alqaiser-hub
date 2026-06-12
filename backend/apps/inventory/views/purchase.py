@@ -6,7 +6,6 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from django.db import transaction
 from django.db.models import F
 import uuid
 from decimal import Decimal
@@ -44,7 +43,6 @@ class PurchaseOrderViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets
             qs = qs.filter(supplier_id=supplier)
         return qs
 
-    @transaction.atomic
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -99,7 +97,6 @@ class GoodsReceiptViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
                 return qs.none()
         return qs
 
-    @transaction.atomic
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -117,7 +114,6 @@ class GoodsReceiptViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
         }, status=status.HTTP_201_CREATED)
     
     
-    @transaction.atomic
     def _process_receipt(self, goods_receipt, user):
         """
         Process a goods receipt:

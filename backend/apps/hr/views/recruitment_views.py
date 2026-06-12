@@ -1,6 +1,5 @@
 # apps/hr/views/recruitment_views.py
 
-from django.db import models
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -10,7 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from datetime import datetime, date, timedelta
 import logging
-from django.db import models, transaction
+from django.db import models
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import RecruitmentCandidate, RecruitmentActivityLog, Employee, InterviewRound
@@ -144,7 +143,7 @@ class RecruitmentCandidateView(CompanyBranchMixin, PermissionRequiredMixin, APIV
             }
         })
     
-    @transaction.atomic
+
     def post(self, request):
         """Create new candidate"""
         company_id = request.user.company_id
@@ -200,7 +199,7 @@ class RecruitmentCandidateView(CompanyBranchMixin, PermissionRequiredMixin, APIV
         
         return Response(self._serialize_candidate(candidate), status=status.HTTP_201_CREATED)
     
-    @transaction.atomic
+
     def patch(self, request):
         """Update candidate using UUID"""
         company_id = request.user.company_id
@@ -280,7 +279,7 @@ class RecruitmentCandidateView(CompanyBranchMixin, PermissionRequiredMixin, APIV
         
         return Response(self._serialize_candidate(candidate))
     
-    @transaction.atomic
+
     def delete(self, request):
         """Soft delete candidate using UUID"""
         company_id = request.user.company_id
@@ -470,7 +469,7 @@ class RecruitmentBulkActionView(CompanyBranchMixin, PermissionRequiredMixin, API
     """Bulk actions for recruitment candidates with UUID support"""
     permission_classes = [IsAuthenticated]
     
-    @transaction.atomic
+
     def post(self, request):
         company_id = request.user.company_id
         action = request.data.get('action')
@@ -609,7 +608,7 @@ class InterviewRoundView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             for r in rounds
         ])
     
-    @transaction.atomic
+
     def post(self, request, candidate_id):
         """Create a new interview round"""
         company_id = request.user.company_id
@@ -673,7 +672,7 @@ class InterviewRoundView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "status": interview_round.status,
         }, status=status.HTTP_201_CREATED)
     
-    @transaction.atomic
+
     def patch(self, request, candidate_id, round_id):
         """Update a specific round using UUID"""
         company_id = request.user.company_id
@@ -734,7 +733,7 @@ class InterviewRoundView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "status": interview_round.status,
         })
     
-    @transaction.atomic
+
     def delete(self, request, candidate_id, round_id):
         """Delete a round using UUID"""
         company_id = request.user.company_id
@@ -768,7 +767,7 @@ class RoundBulkCreateView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     """Bulk create interview rounds for a candidate"""
     permission_classes = [IsAuthenticated]
     
-    @transaction.atomic
+
     def post(self, request, candidate_id):
         company_id = request.user.company_id
         
@@ -848,7 +847,7 @@ class RoundStatusBulkUpdateView(CompanyBranchMixin, PermissionRequiredMixin, API
     """Bulk update round statuses with cascade logic"""
     permission_classes = [IsAuthenticated]
     
-    @transaction.atomic
+
     def post(self, request, candidate_id):
         company_id = request.user.company_id
         

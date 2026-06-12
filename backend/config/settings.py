@@ -108,6 +108,7 @@ DATABASES = {
         'HOST': env("DB_HOST"),
         'PORT': env("DB_PORT", default="5432"),
         'CONN_MAX_AGE': 60,   # persistent connections for scalability
+        'ATOMIC_REQUESTS': True,  # wrap every request in a transaction
         'OPTIONS': {
             'connect_timeout': 10,
         },

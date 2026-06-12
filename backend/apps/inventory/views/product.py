@@ -59,7 +59,6 @@ class ProductViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Model
 
         return qs
 
-    @transaction.atomic
     def create(self, request, *args, **kwargs):
         user = request.user
         data = request.data
@@ -184,7 +183,6 @@ class ProductViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Model
             'data': serializer.data
         }, status=status.HTTP_201_CREATED)
 
-    @transaction.atomic
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
         product = self.get_object()

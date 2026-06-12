@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime, date
-from django.db import transaction, models
+from django.db import models
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.views import APIView
@@ -135,7 +135,7 @@ class ExitRecordView(BaseExitView):
             }
         })
     
-    @transaction.atomic
+
     def post(self, request):
         """Create new exit record"""
         company_id, branch_id = self._get_company_context(request)
@@ -245,7 +245,7 @@ class ExitRecordView(BaseExitView):
         if checklist_items:
             ExitChecklist.objects.bulk_create(checklist_items)
     
-    @transaction.atomic
+
     def patch(self, request):
         """Update exit record using UUID"""
         company_id, _ = self._get_company_context(request)
@@ -293,7 +293,7 @@ class ExitRecordView(BaseExitView):
             "exit_record": self._serialize_exit_record(exit_record)
         })
     
-    @transaction.atomic
+
     def delete(self, request):
         """Soft delete exit record using UUID"""
         company_id, _ = self._get_company_context(request)
@@ -402,7 +402,7 @@ class ExitChecklistView(BaseExitView):
             for item in checklist_items
         ])
     
-    @transaction.atomic
+
     def patch(self, request):
         """Update checklist item status using UUID"""
         company_id, _ = self._get_company_context(request)
@@ -475,7 +475,7 @@ class ExitChecklistView(BaseExitView):
 class ExitBulkActionView(BaseExitView):
     """Bulk actions for exit records with UUID support"""
     
-    @transaction.atomic
+
     def post(self, request):
         """Perform bulk actions"""
         company_id, _ = self._get_company_context(request)

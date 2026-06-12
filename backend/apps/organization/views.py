@@ -3,7 +3,6 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import generics, status
-from django.db import transaction
 from .models import (
     UserCompanyContext, Company, Branch, User,Department
 )
@@ -109,7 +108,6 @@ class BranchCreateView(PermissionRequiredMixin, APIView):
     permission_module = 'SETTINGS'
     permission_resource = 'branch'
 
-    @transaction.atomic
     def post(self, request):
         user = request.user
 

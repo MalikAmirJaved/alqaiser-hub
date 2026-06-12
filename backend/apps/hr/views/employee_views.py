@@ -1,6 +1,6 @@
 # apps/hr/views/employee_views.py
 from datetime import datetime, date
-from django.db import transaction, models
+from django.db import models
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.views import APIView
@@ -127,7 +127,7 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         employees = query.order_by('first_name', 'last_name')
         return Response([self._serialize_employee(e) for e in employees])
 
-    @transaction.atomic
+
     def post(self, request):
         company_id = request.user.company_id
         branch_id = request.user.branch_id
@@ -295,7 +295,7 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         except Exception as e:
             logger.error(f"Error assigning assets from kit: {str(e)}")
 
-    @transaction.atomic
+
     def patch(self, request):
         try:
             company_id = request.user.company_id
@@ -425,7 +425,7 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             )
 
     
-    @transaction.atomic
+
     def delete(self, request):
         company_id = request.user.company_id
         if not company_id:

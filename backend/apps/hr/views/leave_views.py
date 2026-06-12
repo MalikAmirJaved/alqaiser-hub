@@ -1,6 +1,5 @@
 # apps/hr/views/leave_views.py
 from datetime import date
-from django.db import transaction
 from django.db.models import Q, Count
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -9,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 import logging
-from django.db import transaction, models
+from django.db import models
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import Employee, LeaveRequest
@@ -107,7 +106,7 @@ class LeaveRequestView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         
         return Response([self._serialize_leave(l) for l in query])
     
-    @transaction.atomic
+
     def post(self, request):
         """Create a new leave request - no balance validation"""
         company_id = request.user.company_id
@@ -193,7 +192,7 @@ class LeaveRequestView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "leave": self._serialize_leave(leave_request)
         }, status=status.HTTP_201_CREATED)
     
-    @transaction.atomic
+
     def patch(self, request):
         """Update leave request (only if PENDING)"""
         company_id = request.user.company_id
@@ -251,7 +250,7 @@ class LeaveRequestView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "leave": self._serialize_leave(leave_request)
         })
     
-    @transaction.atomic
+
     def delete(self, request):
         """Soft delete leave request (only if PENDING)"""
         company_id = request.user.company_id
@@ -304,7 +303,7 @@ class LeaveApprovalView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             return 'reject'
         return 'approve'
 
-    @transaction.atomic
+
     def post(self, request):
         company_id = request.user.company_id
         

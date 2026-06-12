@@ -2,7 +2,7 @@
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 from calendar import monthrange
-from django.db import transaction, models
+from django.db import models
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.views import APIView
@@ -284,7 +284,7 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     # ------------------------------------------------------------------
     # POST (Process Payroll)
     # ------------------------------------------------------------------
-    @transaction.atomic
+
     def post(self, request):
         company_id = request.user.company_id
         branch_id = request.user.branch_id
@@ -584,7 +584,7 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     # ------------------------------------------------------------------
     # PATCH - Update payroll record
     # ------------------------------------------------------------------
-    @transaction.atomic
+
     def patch(self, request):
         company_id = request.user.company_id
         if not company_id:
@@ -654,7 +654,7 @@ class PayrollView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     # ------------------------------------------------------------------
     # DELETE - Soft delete payroll record
     # ------------------------------------------------------------------
-    @transaction.atomic
+
     def delete(self, request):
         company_id = request.user.company_id
         if not company_id:
@@ -983,7 +983,7 @@ class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         loans = query.order_by('-created_at')
         return Response([self._serialize_loan(l) for l in loans])
     
-    @transaction.atomic
+
     def post(self, request):
         company_id = request.user.company_id
         branch_id = request.user.branch_id
@@ -1140,7 +1140,7 @@ class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "loan": self._serialize_loan(loan)
         }, status=status.HTTP_201_CREATED)
     
-    @transaction.atomic
+
     def patch(self, request):
         company_id = request.user.company_id
         if not company_id:
@@ -1229,7 +1229,7 @@ class EmployeeLoanView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "loan": self._serialize_loan(loan)
         })
     
-    @transaction.atomic
+
     def delete(self, request):
         company_id = request.user.company_id
         if not company_id:
@@ -1265,7 +1265,7 @@ class LoanStatusUpdateView(CompanyBranchMixin, PermissionRequiredMixin, APIView)
     permission_module = 'HR'
     permission_resource = 'compensation'
     permission_classes = [IsAuthenticated]
-    @transaction.atomic
+
     def post(self, request):
         company_id = request.user.company_id
         if not company_id:
@@ -1405,7 +1405,7 @@ class CompensationView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         compensations = query.order_by('-created_at')
         return Response([self._serialize_compensation(c) for c in compensations])
     
-    @transaction.atomic
+
     def post(self, request):
         company_id = request.user.company_id
         branch_id = request.user.branch_id
@@ -1534,7 +1534,7 @@ class CompensationView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "compensation": self._serialize_compensation(compensation)
         }, status=status.HTTP_201_CREATED)
     
-    @transaction.atomic
+
     def patch(self, request):
         company_id = request.user.company_id
         if not company_id:
@@ -1605,7 +1605,7 @@ class CompensationView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "compensation": self._serialize_compensation(compensation)
         })
     
-    @transaction.atomic
+
     def delete(self, request):
         company_id = request.user.company_id
         if not company_id:

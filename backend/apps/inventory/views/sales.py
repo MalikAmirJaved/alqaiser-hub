@@ -134,7 +134,6 @@ class SalesOrderViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Mo
                 return qs.none()
         return qs
 
-    @transaction.atomic
     def create(self, request, *args, **kwargs):
         # logger.error("request.data:: %s", request.data)
         serializer = self.get_serializer(data=request.data)
@@ -616,7 +615,6 @@ class SalesReturnViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.M
                 return qs.none()
         return qs
 
-    @transaction.atomic
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)

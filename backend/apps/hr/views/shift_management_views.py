@@ -1,6 +1,5 @@
 # apps/hr/views/shift_management_views.py
 from datetime import date, datetime, timedelta
-from django.db import transaction
 from django.db.models import Q, Count, F
 from django.core.cache import cache
 from django.shortcuts import get_object_or_404
@@ -180,7 +179,7 @@ class ShiftOverrideView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             for o in overrides
         ])
     
-    @transaction.atomic
+
     def post(self, request):
         company_id = request.user.company_id
         
@@ -228,7 +227,7 @@ class ShiftOverrideView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
     
-    @transaction.atomic
+
     def delete(self, request):
         company_id = request.user.company_id
         
@@ -320,7 +319,7 @@ class ShiftDateRangeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             for a in assignments
         ])
     
-    @transaction.atomic
+
     def post(self, request):
         company_id = request.user.company_id
         
@@ -373,7 +372,7 @@ class ShiftDateRangeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
     
-    @transaction.atomic
+
     def patch(self, request):
         company_id = request.user.company_id
         
@@ -411,7 +410,7 @@ class ShiftDateRangeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
     
-    @transaction.atomic
+
     def delete(self, request):
         company_id = request.user.company_id
         
@@ -451,7 +450,7 @@ class BulkShiftAssignmentView(CompanyBranchMixin, PermissionRequiredMixin, APIVi
     """Bulk shift assignment for multiple employees with UUID support"""
     permission_classes = [IsAuthenticated]
     
-    @transaction.atomic
+
     def post(self, request):
         company_id = request.user.company_id
         
@@ -699,7 +698,7 @@ class ShiftScheduleGenerateView(CompanyBranchMixin, PermissionRequiredMixin, API
     """Generate and cache shift schedules for performance with UUID support"""
     permission_classes = [IsAuthenticated]
     
-    @transaction.atomic
+
     def post(self, request):
         company_id = request.user.company_id
         

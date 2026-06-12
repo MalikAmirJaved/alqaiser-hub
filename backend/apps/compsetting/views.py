@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime
-from django.db import transaction
 from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
@@ -166,7 +165,6 @@ class CompanySettingsView(BaseCompanyView):
         company, settings = self._get_settings(request.user)
         return Response(self._serialize_settings(company, settings))
 
-    @transaction.atomic
     def patch(self, request):
         company, settings = self._get_settings(request.user)
         user = request.user
@@ -231,7 +229,6 @@ class CompanySettingsView(BaseCompanyView):
 class WorkingDaysView(BaseCompanyView):
     permission_resource = 'preference'
 
-    @transaction.atomic
     def patch(self, request):
         company, settings = self._get_settings(request.user)
         user = request.user
@@ -331,7 +328,6 @@ class PublicHolidaysView(BaseCompanyView):
 
         return Response([...])
 
-    @transaction.atomic
     def post(self, request):
         company, settings = self._get_settings(request.user)
         holidays_data = request.data if isinstance(request.data, list) else [request.data]
@@ -369,7 +365,6 @@ class PublicHolidaysView(BaseCompanyView):
 
         return Response({...})
 
-    @transaction.atomic
     def delete(self, request, holiday_id=None):
         _, settings = self._get_settings(request.user)
 
@@ -474,7 +469,6 @@ class WelcomeDesignationSetupView(BaseCompanyView):
             return 'create'
         return super().get_permission_action()
 
-    @transaction.atomic
     def post(self, request):
         company, settings = self._get_settings(request.user)
         user = request.user

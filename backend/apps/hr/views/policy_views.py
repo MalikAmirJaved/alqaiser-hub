@@ -1,6 +1,6 @@
 # apps/hr/views/policy_views.py
 from datetime import date, datetime
-from django.db import models, transaction
+from django.db import models
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -136,7 +136,7 @@ class PolicyView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         serializer = PolicyListSerializer(paginated_queryset, many=True)
         return paginator.get_paginated_response(serializer.data)
     
-    @transaction.atomic
+
     def post(self, request):
         """
         POST /api/hr/policies/ - Create new policy
@@ -160,7 +160,7 @@ class PolicyView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         detail_serializer = PolicyDetailSerializer(policy)
         return Response(detail_serializer.data, status=status.HTTP_201_CREATED)
     
-    @transaction.atomic
+
     def patch(self, request, pk=None):
         """
         PATCH /api/hr/policies/{uuid}/ - Update existing policy
@@ -193,7 +193,7 @@ class PolicyView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         detail_serializer = PolicyDetailSerializer(updated_policy)
         return Response(detail_serializer.data)
     
-    @transaction.atomic
+
     def delete(self, request, pk=None):
         """
         DELETE /api/hr/policies/{uuid}/ - Soft delete policy
@@ -345,7 +345,7 @@ class PolicyAcknowledgmentView(CompanyBranchMixin, PermissionRequiredMixin, APIV
         serializer = PolicyAcknowledgmentSerializer(acknowledgments, many=True)
         return Response(serializer.data)
     
-    @transaction.atomic
+
     def post(self, request, policy_id=None):
         """
         POST /api/hr/policies/{uuid}/acknowledge/ - Acknowledge a policy
@@ -397,7 +397,7 @@ class PolicyBulkActionView(CompanyBranchMixin, PermissionRequiredMixin, APIView)
     """
     permission_classes = [IsAuthenticated]
     
-    @transaction.atomic
+
     def post(self, request):
         """
         POST /api/hr/policies/bulk-action/
@@ -579,7 +579,7 @@ class PolicyCategoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         serializer = PolicyCategorySerializer(categories, many=True)
         return Response(serializer.data)
     
-    @transaction.atomic
+
     def post(self, request):
         """
         POST /api/hr/policies/categories/ - Create new category
@@ -606,7 +606,7 @@ class PolicyCategoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         
         return Response(response_data, status=status.HTTP_201_CREATED)
     
-    @transaction.atomic
+
     def patch(self, request):
         """
         PATCH /api/hr/policies/categories/ - Update category using UUID
@@ -641,7 +641,7 @@ class PolicyCategoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         
         return Response(response_data)
     
-    @transaction.atomic
+
     def delete(self, request):
         """
         DELETE /api/hr/policies/categories/ - Soft delete category using UUID

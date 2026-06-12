@@ -1,6 +1,6 @@
 # apps/hr/views/asset_views.py
 from datetime import datetime, date
-from django.db import transaction, models
+from django.db import models
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.views import APIView
@@ -63,7 +63,7 @@ class AssetView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         serializer = AssetSerializer(assets, many=True)
         return Response(serializer.data)
     
-    @transaction.atomic
+
     def post(self, request):
         """Create new asset (simplified)"""
         company_id = request.user.company_id
@@ -125,7 +125,7 @@ class AssetView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "data": AssetSerializer(asset).data
         }, status=status.HTTP_201_CREATED)
     
-    @transaction.atomic
+
     def patch(self, request):
         """Update asset using UUID"""
         company_id = request.user.company_id
@@ -195,7 +195,7 @@ class AssetView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "data": serializer.data
         })
     
-    @transaction.atomic
+
     def delete(self, request):
         """Soft delete asset using UUID"""
         company_id = request.user.company_id
