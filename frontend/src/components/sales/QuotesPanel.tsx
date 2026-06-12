@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation";
 import { useQuotes, useDeleteQuote, useAcceptQuote, useRejectQuote, Quote } from "@/hooks/sales/useQuotes";
 import { DynamicModulePage, type ModulePermissions, type Kpi } from "@/components/reuseable/final/DynamicModulePage";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatusBadge } from "@/components/finance/ui";
 import { CheckCircle, XCircle, Trash2 } from "lucide-react";
 import QuoteFormModal from "./QuoteFormModal";
 
 export default function QuotesPanel() {
+  const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [modalOpen, setModalOpen] = useState(false);

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useAccounts } from "@/hooks/finance/useAccounts";
 import { useTrialBalance } from "@/hooks/finance/useTrialBalance";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { PageHeader, Card, ToolbarButton } from "@/components/finance/ui";
 import { Plus, Download, Upload, ChevronRight, ChevronDown } from "lucide-react";
 import AccountFormModal from "@/components/finance/accounts/AccountFormModal";
@@ -79,6 +79,7 @@ function AccountRow({ node, depth = 0, filterType, searchTerm, onRowClick }: {
   searchTerm: string;
   onRowClick: (account: AccountNode) => void;
 }) {
+  const formatCurrency = useFormatCurrency();
   const [open, setOpen] = useState(depth < 1);
   const hasChildren = node.children.length > 0;
   const matchesFilter = filterType === "All" || node.account_type === filterType;
@@ -130,6 +131,7 @@ function AccountRow({ node, depth = 0, filterType, searchTerm, onRowClick }: {
 }
 
 export default function ChartOfAccountsPage() {
+  const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const permissions = useFeaturePermissions("FINANCE", "account");
   const [searchTerm, setSearchTerm] = useState("");

@@ -3,7 +3,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useCompensation } from "@/hooks/usePayroll";
-import { formatCurrency } from "@/lib/currency";
+
 import {
   ArrowLeft,
   Clock,

@@ -6,11 +6,12 @@ import { DynamicModulePage, type ModulePermissions } from "@/components/reuseabl
 import { useExpenses, useDeleteExpense, expenseCategoryLabels } from "@/hooks/finance/useExpenses";
 import { usePaySupplierBill } from "@/hooks/finance/useSupplierBills";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { Trash2, Send } from "lucide-react";
 import ExpenseFormModal from "@/components/finance/expenses/ExpenseFormModal";
 
 export default function ExpensesPage() {
+    const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<any>(null);

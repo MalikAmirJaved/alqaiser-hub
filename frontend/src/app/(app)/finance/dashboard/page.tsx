@@ -7,7 +7,7 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, Legend,
 } from "recharts";
 import { PageHeader, Card, CardHeader, StatusBadge, ToolbarButton } from "@/components/finance/ui";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import {
   useFinanceDashboardSummary,
   useFinanceCashflow,
@@ -92,6 +92,7 @@ function Kpi({
 // Main Dashboard Component
 // ------------------------------------------------------------
 export default function FinanceDashboardPage() {
+  const formatCurrency = useFormatCurrency();
   const queryClient = useQueryClient();
   const t = tooltipStyle();
 

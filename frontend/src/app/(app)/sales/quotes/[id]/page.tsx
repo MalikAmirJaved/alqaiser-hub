@@ -5,10 +5,11 @@ import { useParams, useRouter } from "next/navigation";
 import { DetailLayout, StandardSidebar, RelatedRecords, type DetailTab } from "@/components/reuseable/final/DetailLayout";
 import { useQuote, useUpdateQuote, useAcceptQuote, useRejectQuote } from "@/hooks/sales/useQuotes";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import QuoteFormModal from "@/components/sales/QuoteFormModal";
 
 export default function QuoteDetailPage() {
+    const formatCurrency = useFormatCurrency();
   const { id } = useParams();
   const router = useRouter();
   const { data: quote, isLoading, refetch } = useQuote(id as string);

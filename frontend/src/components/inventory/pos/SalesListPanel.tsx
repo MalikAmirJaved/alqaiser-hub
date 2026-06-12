@@ -1,8 +1,9 @@
 "use client";
 import { useSalesOrders } from "@/hooks/useSalesOrder";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 export function SalesListPanel() {
+  const formatCurrency = useFormatCurrency();
   const { data: orders = [], isLoading } = useSalesOrders(); // fetch all orders (no status filter)
 
   if (isLoading) {

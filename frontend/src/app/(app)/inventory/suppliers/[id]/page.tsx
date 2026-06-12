@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import { useSupplier } from "@/hooks/useSuppliers";
 import { usePayments, type Payment } from "@/hooks/finance/usePayments";
 import PageHeader from "@/components/PageHeader";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ import { addDays, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, for
 type DateRange = { start: string; end: string };
 
 export default function SupplierDetailPage() {
+    const formatCurrency = useFormatCurrency();
   const { id } = useParams();
   const { data: supplier, isLoading: supplierLoading } = useSupplier(id as string);
   const [dateRange, setDateRange] = useState<DateRange>({ start: "", end: "" });

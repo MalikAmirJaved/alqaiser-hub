@@ -2,7 +2,7 @@
 "use client";
 import { VariantDetail } from "@/hooks/useAllVariants";
 import { memo } from "react";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 interface StockData {
   available: number;
@@ -16,11 +16,12 @@ interface ProductCardProps {
   stockData?: StockData;
 }
 
-export const ProductCard = memo(function ProductCard({ 
+export const ProductCard = memo(function ProductCard({
   variant, 
   onAdd, 
   stockData 
 }: ProductCardProps) {
+  const formatCurrency = useFormatCurrency();
   const availableStock = stockData?.available ?? variant.stock?.available ?? 0;
   const reservedStock = stockData?.reserved ?? variant.stock?.reserved ?? 0;
   const incoming = variant.incoming ?? 0;

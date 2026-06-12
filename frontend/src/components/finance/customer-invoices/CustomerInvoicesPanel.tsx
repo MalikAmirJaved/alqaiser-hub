@@ -6,7 +6,7 @@ import { DynamicModulePage, type ModulePermissions } from "@/components/reuseabl
 import { useCustomerInvoices, useDeleteCustomerInvoice, usePayCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import CustomerInvoiceFormModal from "@/components/finance/customer-invoices/CustomerInvoiceFormModal";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatusBadge } from "@/components/finance/ui";
 import { Trash2, Send } from "lucide-react";
 
@@ -15,6 +15,7 @@ interface CustomerInvoicesPanelProps {
 }
 
 export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPanelProps) {
+  const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any>(null);

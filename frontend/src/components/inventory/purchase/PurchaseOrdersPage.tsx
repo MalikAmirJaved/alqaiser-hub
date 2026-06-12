@@ -17,7 +17,7 @@ import { GoodsReceiptModal } from './GoodsReceiptModal';
 import type { PurchaseOrder, PurchaseOrderPayload, GoodsReceiptPayload } from '@/types/purchase';
 import PageHeader from '@/components/PageHeader';
 import { StatsCards } from '@/components/reuseable/StatsCards';
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 // ─── Status config ───────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<
@@ -92,6 +92,7 @@ function StatCard({
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function PurchaseOrdersPage() {
+  const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const { data: orders = [], isLoading } = usePurchaseOrders();
   const createMutation = useCreatePurchaseOrder();

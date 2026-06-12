@@ -4,10 +4,11 @@ import { useState } from "react";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
 import { useBudgets, useDeleteBudget } from "@/hooks/finance/useBudgets";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import BudgetFormModal from "@/components/finance/budgets/BudgetFormModal";
 
 export default function BudgetsPage() {
+    const formatCurrency = useFormatCurrency();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<any>(null);
   const [year, setYear] = useState(new Date().getFullYear());

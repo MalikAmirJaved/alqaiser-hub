@@ -25,7 +25,7 @@ import {
 import { useEmployees } from "@/hooks/useEmployees";
 import { toast } from "sonner";
 import { useApi } from "@/hooks/useApi";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
@@ -45,6 +45,7 @@ const CLEARANCE_STATUSES: SearchableSelectOption[] = [
 ];
 
 export default function ExitManagementPage() {
+  const formatCurrency = useFormatCurrency();
   const permissions = useFeaturePermissions("HR", "exit");
   const api = useApi();
   const { data: employees = [] } = useEmployees();

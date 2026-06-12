@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useState, useMemo } from "react";
 import { PageHeader, Card, TableToolbar, ToolbarButton } from "@/components/finance/ui";
 import { Plus, Download, Pencil, Trash2, Send } from "lucide-react";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 
 export type Column<T = any> = {
@@ -83,6 +83,7 @@ export function DynamicModulePage<T>({
   batchActions,
   onRowClick,
 }: DynamicModulePageProps<T>) {
+  const formatCurrency = useFormatCurrency();
   const { confirm, Modal: ConfirmModal } = useConfirmationModal();
 
   const [sortKey, setSortKey] = useState<string | null>(null);

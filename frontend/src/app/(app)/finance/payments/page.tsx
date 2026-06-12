@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions, type Kpi } from "@/components/reuseable/final/DynamicModulePage";
 import { usePayments, useDeletePayment, type Payment } from "@/hooks/finance/usePayments";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatusBadge } from "@/components/finance/ui";
 import PaymentFormModal from "@/components/finance/payments/PaymentFormModal";
 
@@ -17,6 +17,7 @@ const toNumber = (amount: number | string): number => {
 };
 
 export default function PaymentsPage() {
+    const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);

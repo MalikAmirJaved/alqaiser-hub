@@ -14,10 +14,11 @@ import { useProducts, useDeleteProduct, useCreateProduct, useUpdateProduct, Prod
 import { useCategories } from "@/hooks/useCategories";
 import { useBrands } from "@/hooks/useBrands";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 export default function ProductsPage() {
+    const formatCurrency = useFormatCurrency();
   const permissions = useFeaturePermissions("INVENTORY", "product");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [showProductModal, setShowProductModal] = useState(false);

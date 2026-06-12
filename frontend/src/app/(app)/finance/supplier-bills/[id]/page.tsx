@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { DetailLayout, StandardSidebar, RelatedRecords, type DetailTab } from "@/components/reuseable/final/DetailLayout";
 import { useSupplierBill, useUpdateSupplierBill } from "@/hooks/finance/useSupplierBills";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import SupplierBillFormModal from "@/components/finance/supplier-bills/SupplierBillFormModal";
 
 const toNumber = (value: number | string): number => {
@@ -13,6 +13,7 @@ const toNumber = (value: number | string): number => {
 };
 
 export default function SupplierBillDetailPage() {
+    const formatCurrency = useFormatCurrency();
   const { id } = useParams();
   const router = useRouter();
   const { data: bill, isLoading, refetch } = useSupplierBill(id as string);

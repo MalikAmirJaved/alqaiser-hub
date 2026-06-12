@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useEmployees } from "@/hooks/useEmployees";
 import { usePayroll, usePayrollStats } from "@/hooks/usePayroll";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import PageHeader from "@/components/PageHeader";
 import PaymentModal from "@/components/payroll/PaymentModal";
 import PayslipModal from "@/components/payroll/PayslipModal";
@@ -28,6 +28,7 @@ export function PayrollPage({
   title?: string;
   permissionModule?: "HR" | "FINANCE";
 }) {
+  const formatCurrency = useFormatCurrency();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);

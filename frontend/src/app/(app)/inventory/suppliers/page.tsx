@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Edit, Trash2 } from "lucide-react";
 import { useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier, type Supplier } from "@/hooks/useSuppliers";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useRouter } from 'next/navigation';
 
@@ -73,6 +73,7 @@ const formFields = [
 ];
 
 export default function SuppliersPage() {
+    const formatCurrency = useFormatCurrency();
   const permissions = useFeaturePermissions("INVENTORY", "supplier");
   const [selectedItem, setSelectedItem] = useState<Supplier | null>(null);
   const [modalOpen, setModalOpen] = useState(false);

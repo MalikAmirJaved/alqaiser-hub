@@ -10,7 +10,7 @@ import {
 import { useCustomers } from "@/hooks/useCustomers";
 import { useAllVariantsSimple } from "@/hooks/useAllVariants";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 interface InvoiceLine {
   variant: string;
@@ -41,6 +41,7 @@ interface Props {
 }
 
 export default function CustomerInvoiceFormModal({ open, onClose, initialData, onSuccess }: Props) {
+  const formatCurrency = useFormatCurrency();
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [newCustomerInfo, setNewCustomerInfo] = useState<any>(null);
   const { data: customers = [], refetch: refetchCustomers } = useCustomers("");

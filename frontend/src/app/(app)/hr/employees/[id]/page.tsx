@@ -55,7 +55,7 @@ import {
   Tag,
   Percent,
 } from "lucide-react";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -144,6 +144,7 @@ const TABS = [
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function EmployeeDetailPage() {
+  const formatCurrency = useFormatCurrency();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("overview");

@@ -6,7 +6,7 @@ import { useCustomers } from "@/hooks/useCustomers";
 import { useAllVariantsSimple } from "@/hooks/useAllVariants";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
 import { useCreateQuote, useUpdateQuote, Quote } from "@/hooks/sales/useQuotes";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 interface QuoteLine {
   variant: string;
@@ -33,6 +33,7 @@ export default function QuoteFormModal({
   initialCustomerId,
   onSuccess,
 }: QuoteFormModalProps) {
+  const formatCurrency = useFormatCurrency();
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [newCustomerInfo, setNewCustomerInfo] = useState<any>(null);
   const { data: customers = [], refetch: refetchCustomers } = useCustomers("");

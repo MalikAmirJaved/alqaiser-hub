@@ -7,11 +7,12 @@ import { useSupplierBills, useDeleteSupplierBill, usePaySupplierBill } from "@/h
 import { StatusBadge } from "@/components/finance/ui";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import SupplierBillFormModal from "@/components/finance/supplier-bills/SupplierBillFormModal";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { Trash2, Send } from "lucide-react";
 
 
 export default function SupplierBillsPage() {
+    const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingBill, setEditingBill] = useState<any>(null);

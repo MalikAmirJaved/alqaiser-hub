@@ -48,7 +48,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 // Helper to format date
@@ -58,6 +58,7 @@ const formatDate = (dateStr?: string) => {
 };
 
 export default function AssetsList() {
+  const formatCurrency = useFormatCurrency();
   const permissions = useFeaturePermissions("HR", "emp_asset");
   const [searchQuery, setSearchQuery] = useState("");
   const { data: assets = [], isLoading } = useAssets(

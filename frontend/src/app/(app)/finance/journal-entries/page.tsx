@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
 import { useJournalEntries, type JournalEntry } from "@/hooks/finance/useJournalEntries";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 const toNumber = (value: number | string): number => {
   return typeof value === "string" ? parseFloat(value) : value;
 };
 
 export default function JournalEntriesPage() {
+    const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const [referenceType, setReferenceType] = useState("");
   const [startDate, setStartDate] = useState("");

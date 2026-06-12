@@ -4,9 +4,10 @@ import { useParams } from "next/navigation";
 import { DetailLayout, StandardSidebar } from "@/components/reuseable/final/DetailLayout";
 import { usePayment } from "@/hooks/finance/usePayments";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 export default function PaymentDetailPage() {
+    const formatCurrency = useFormatCurrency();
   const { id } = useParams();
   const { data: payment, isLoading } = usePayment(id as string);
   const permissions = useFeaturePermissions("FINANCE", "payment");

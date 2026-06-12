@@ -17,7 +17,8 @@ import {
   showDesktopNotification,
 } from "@/lib/notifications";
 import { useSelector } from "react-redux";
-import { RootState } from "@/store";
+import { RootState, store } from "@/store";
+import { loadCompanySettings } from "@/store/slices/companySettingsSlice";
 
 // ----------------------------------------------------------------------
 // Map backend entity names to React Query keys for cache invalidation
@@ -50,7 +51,7 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   inventory_stock_transfer: ["inventory_stock_transfer"],
   inventory_purchase_order: ["inventory_purchase_order"],
 
-  // Inventory aliases (optional)
+  // Inventory aliases
   product: ["inventory_product"],
   inventory: ["inventory_product"],
   supplier: ["inventory_supplier"],
@@ -76,7 +77,6 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   finance_bank_transaction: ["finance_bank_transactions"],
   finance_budget: ["finance_budgets"],
   finance_expense: ["finance_expenses"],
-  // Additional finance aliases
   supplier_bill: ["finance_supplier_bills"],
   customer_invoice: ["finance_customer_invoices"],
   bank_transaction: ["finance_bank_transactions"],
@@ -231,6 +231,20 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
               queryKeys.forEach((key) => {
                 queryClient.invalidateQueries({ queryKey: [key] });
               });
+            }
+
+            // 🔄 Refresh Redux company settings when they change (e.g., currency update)
+            if (entity === "company_settings") {
+              console.log("[NotificationContext] Refreshing company settings via Redux thunk");
+              store
+                .dispatch(loadCompanySettings())
+                .unwrap()
+                .then(() => {
+                  console.log("[NotificationContext] Company settings refreshed successfully");
+                })
+                .catch((err) => {
+                  console.error("[NotificationContext] Failed to refresh company settings:", err);
+                });
             }
           }
         } catch (e) {

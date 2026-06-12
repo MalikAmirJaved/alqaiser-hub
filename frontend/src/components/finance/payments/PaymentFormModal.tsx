@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 interface PaymentFormModalProps {
   open: boolean;
@@ -20,6 +20,7 @@ interface PaymentFormModalProps {
 }
 
 export default function PaymentFormModal({ open, onClose, initialData, onSuccess }: PaymentFormModalProps) {
+  const formatCurrency = useFormatCurrency();
   const [paymentType, setPaymentType] = useState<"RECEIPT" | "PAYMENT">("RECEIPT");
   const [paymentMethod, setPaymentMethod] = useState("BANK_TRANSFER");
   const [amount, setAmount] = useState("");

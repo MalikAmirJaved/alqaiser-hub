@@ -1,10 +1,11 @@
 // src/app/(app)/hr/compensation/page.tsx
 "use client";
 import CompensationLoanPage from "@/components/payroll/CompensationLoanPage";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import PageHeader from "@/components/PageHeader";
 
 export default function CompensationLoanModule() {
+  const formatCurrency = useFormatCurrency();
 
   return (
     <div>

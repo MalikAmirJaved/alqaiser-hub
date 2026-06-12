@@ -9,7 +9,7 @@ import {
   Truck, Clock, CheckCircle2, DollarSign
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, PieChart, Pie, Cell, AreaChart, Area } from "recharts";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { PageHeader, Card, CardHeader, StatusBadge, ToolbarButton } from "@/components/finance/ui";
 import {
   useOverallSummary,
@@ -92,6 +92,7 @@ function Kpi({
 }
 
 export default function InventoryDashboard() {
+  const formatCurrency = useFormatCurrency();
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
   const queryClient = useQueryClient();
   const t = tooltipStyle();

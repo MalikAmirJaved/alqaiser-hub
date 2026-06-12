@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { DetailLayout, StandardSidebar, RelatedRecords, type DetailTab } from "@/components/reuseable/final/DetailLayout";
 import { useCustomerInvoice, useUpdateCustomerInvoice, usePayCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatusBadge } from "@/components/finance/ui";
 import CustomerInvoiceFormModal from "./CustomerInvoiceFormModal";
 import { FileText, Send, Printer, Download, Share2, Receipt } from "lucide-react";
@@ -22,6 +22,7 @@ const toNumber = (value: number | string | undefined): number => {
 };
 
 export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: CustomerInvoiceDetailProps) {
+  const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const { data: invoice, isLoading, refetch } = useCustomerInvoice(id);
   const updateInvoice = useUpdateCustomerInvoice();

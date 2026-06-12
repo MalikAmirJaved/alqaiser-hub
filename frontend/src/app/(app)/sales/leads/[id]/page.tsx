@@ -14,12 +14,13 @@ import {
   useCreateCustomerFromLead,
 } from "@/hooks/sales/useLeads";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import LeadFormModal from "@/components/sales/LeadFormModal";
 import QuoteFormModal from "@/components/sales/QuoteFormModal";
 import { Quote } from "@/hooks/sales/useQuotes";
 
 export default function LeadDetailPage() {
+    const formatCurrency = useFormatCurrency();
   const { id } = useParams();
   const router = useRouter();
   const { data: lead, isLoading, refetch } = useLead(id as string);
