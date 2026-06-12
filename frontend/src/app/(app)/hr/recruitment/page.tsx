@@ -14,7 +14,8 @@ import { useEmployees } from "@/hooks/useEmployees";
 import { toast } from "sonner";
 import { RoundBuilder } from "@/components/recruitment/RoundBuilder";
 import { RoundStatusModal } from "@/components/recruitment/RoundStatusModal";
-import { useInterviewRounds, useBulkCreateRounds, useBulkUpdateRoundStatus } from "@/hooks/useInterviewRounds";
+import { useInterviewRounds, useBulkCreateRounds, useBulkUpdateRoundStatus } from "@/hooks/useInterviewRound";
+import { StatsCards } from "@/components/reuseable/StatsCards";
 
 // ==========================================
 // TYPES & INTERFACES
@@ -155,6 +156,42 @@ export default function RecruitmentPage() {
     rejected: statsData?.rejected || 0,
   }), [statsData]);
 
+
+
+    // Prepare stats data for the reusable component
+  const recruitmentStats = [
+  {
+    id: "Total-Applicants",
+    label: "Total Applicants",
+    value: stats.total,
+    valueClassName: "text-primary"
+  },
+  {
+    id: "Screening",
+    label: "Screening",
+    value: stats.screening,
+    valueClassName: "text-info"
+  },
+  {
+    id: "Interviewing",
+    label: "Interviewing",
+    value: stats.interviewing,
+    valueClassName: "text-warning"
+  },
+  {
+    id: "Hired",
+    label: "Hired",
+    value: stats.hired,
+    valueClassName: "text-success"
+  },
+  {
+    id: "Rejected",
+    label: "Rejected",
+    value: stats.rejected,
+    valueClassName: "text-danger"
+  }
+];
+
   // ==========================================
   // ACTIONS
   // ==========================================
@@ -283,14 +320,7 @@ export default function RecruitmentPage() {
         }
       />
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <StatCard label="Total Applicants" value={stats.total} icon={Users} accent="info" loading={statsLoading} />
-        <StatCard label="Screening" value={stats.screening} icon={FileText} accent="info" loading={statsLoading} />
-        <StatCard label="Interviewing" value={stats.interviewing} icon={CalendarDays} accent="warning" loading={statsLoading} />
-        <StatCard label="Hired" value={stats.hired} icon={UserCheck} accent="success" loading={statsLoading} />
-        <StatCard label="Rejected" value={stats.rejected} icon={X} accent="destructive" loading={statsLoading} />
-      </div>
+        <StatsCards stats={recruitmentStats} />
 
       {/* Filters & Search */}
       <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
@@ -311,7 +341,6 @@ export default function RecruitmentPage() {
               options={DEPARTMENTS} 
               placeholder="Department" 
               className="w-44" 
-              clearable
             />
             <SearchableSelect 
               value={filterStage} 
@@ -319,7 +348,6 @@ export default function RecruitmentPage() {
               options={STAGES} 
               placeholder="Stage" 
               className="w-36" 
-              clearable
             />
             <button 
               onClick={() => { 
