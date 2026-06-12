@@ -41,6 +41,15 @@ from apps.hr.views.recruitment_views import (
     RecruitmentCandidateDetailView,
 )
 
+from apps.hr.views.exit_management_views import (
+    ExitRecordView,
+    ExitStatsView,
+    ExitChecklistView,
+    ExitInterviewView,
+    ExitBulkActionView,
+)
+
+
 urlpatterns = [
     # Shift Templates
     path('shift-templates/', ShiftTemplateView.as_view(), name='shift-templates'),
@@ -102,4 +111,12 @@ path('recruitment/candidates/<int:candidate_id>/detail/', RecruitmentCandidateDe
     path('recruitment/candidates/<int:candidate_id>/rounds/<int:round_id>/', InterviewRoundView.as_view(), name='interview-round-detail'),
     path('recruitment/candidates/<int:candidate_id>/rounds/bulk/', RoundBulkCreateView.as_view(), name='rounds-bulk-create'),
     path('recruitment/candidates/<int:candidate_id>/rounds/bulk-status/', RoundStatusBulkUpdateView.as_view(), name='rounds-bulk-status'),
+
+    # Exit Management
+    path('exits/', ExitRecordView.as_view(), name='exit-records'),
+    path('exits/stats/', ExitStatsView.as_view(), name='exit-stats'),
+    path('exits/checklist/', ExitChecklistView.as_view(), name='exit-checklist'),
+    path('exits/interview/', ExitInterviewView.as_view(), name='exit-interview'),
+    path('exits/bulk-action/', ExitBulkActionView.as_view(), name='exit-bulk-action'),
+
 ]

@@ -1867,3 +1867,374 @@ class InterviewRound(models.Model):
         if self.interviewer_id and not self.interviewer_name:
             self.interviewer_name = self.interviewer.full_name
         super().save(*args, **kwargs)
+
+
+class ExitRecord(TimeStampedModel):
+    """Employee exit/offboarding management"""
+    
+    EXIT_REASONS = [
+        ('RESIGNATION', 'Resignation'),
+        ('TERMINATION', 'Termination'),
+        ('CONTRACT_END', 'Contract End'),
+        ('RETIREMENT', 'Retirement'),
+        ('OTHER', 'Other'),
+    ]
+    
+    CLEARANCE_STATUS = [
+        ('PENDING', 'Pending'),
+        ('IN_PROGRESS', 'In Progress'),
+        ('APPROVED', 'Approved'),
+        ('COMPLETED', 'Completed'),
+    ]
+    
+    RECORD_STATUS = [
+        ('ACTIVE', 'Active'),
+        ('CLOSED', 'Closed'),
+    ]
+    
+    id = models.BigAutoField(primary_key=True)
+    _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    
+    # Company & Branch Context
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='exit_records'
+    )
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='exit_records'
+    )
+    
+    # Employee Information
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name='exit_records'
+    )
+    employee_name = models.CharField(max_length=255, blank=True, db_index=True)
+    department = models.CharField(max_length=100, db_index=True)
+    designation = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Exit Details
+    exit_date = models.DateField(db_index=True)
+    last_working_day = models.DateField(null=True, blank=True)
+    reason = models.CharField(
+        max_length=50,
+        choices=EXIT_REASONS,
+        default='RESIGNATION',
+        db_index=True
+    )
+    notice_served = models.BooleanField(default=True)
+    
+    # Clearance Tracking
+    clearance_hr = models.BooleanField(default=False, verbose_name="HR Clearance")
+    clearance_it = models.BooleanField(default=False, verbose_name="IT Clearance")
+    clearance_finance = models.BooleanField(default=False, verbose_name="Finance Clearance")
+    clearance_admin = models.BooleanField(default=False, verbose_name="Admin Clearance")
+    clearance_status = models.CharField(
+        max_length=20,
+        choices=CLEARANCE_STATUS,
+        default='PENDING',
+        db_index=True
+    )
+    
+    # Settlement
+    final_settlement = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="Final settlement amount in company currency"
+    )
+    
+    # Additional Information
+    notes = models.TextField(blank=True, null=True, help_text="Handover details, asset returns, etc.")
+    
+    # Status
+    status = models.CharField(
+        max_length=20,
+        choices=RECORD_STATUS,
+        default='ACTIVE',
+        db_index=True
+    )
+    
+    # Audit
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_exit_records'
+    )
+    updated_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_exit_records'
+    )
+    
+    class Meta:
+        db_table = 'hr_exit_records'
+        verbose_name = "Exit Record"
+        verbose_name_plural = "Exit Records"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['company', 'is_deleted']),
+            models.Index(fields=['company', 'status']),
+            models.Index(fields=['company', 'clearance_status']),
+            models.Index(fields=['company', 'reason']),
+            models.Index(fields=['employee', 'status']),
+            models.Index(fields=['department', 'status']),
+            models.Index(fields=['exit_date']),
+            models.Index(fields=['last_working_day']),
+            # Composite indexes for common queries
+            models.Index(
+                fields=['company', 'clearance_status', 'status'],
+                name='exit_clearance_status_idx'
+            ),
+            models.Index(
+                fields=['company', 'department', 'reason'],
+                name='exit_dept_reason_idx'
+            ),
+        ]
+        constraints = [
+            # Ensure only one active exit record per employee
+            models.UniqueConstraint(
+                fields=['employee'],
+                condition=models.Q(status='ACTIVE', is_deleted=False),
+                name='unique_active_exit_per_employee'
+            )
+        ]
+    
+    def __str__(self):
+        return f"{self.employee_name} - {self.reason} ({self.exit_date})"
+    
+    def save(self, *args, **kwargs):
+        # Auto-populate employee details
+        if self.employee_id and not self.employee_name:
+            self.employee_name = self.employee.full_name if hasattr(self.employee, 'full_name') else str(self.employee)
+        
+        if self.employee_id and not self.department:
+            self.department = self.employee.department
+        
+        if self.employee_id and not self.designation:
+            self.designation = self.employee.designation
+        
+        # Auto-calculate clearance status
+        all_clearances = [self.clearance_hr, self.clearance_it, 
+                         self.clearance_finance, self.clearance_admin]
+        completed_clearances = sum(all_clearances)
+        
+        if completed_clearances == 4:
+            self.clearance_status = 'COMPLETED'
+        elif completed_clearances > 0:
+            self.clearance_status = 'IN_PROGRESS'
+        else:
+            self.clearance_status = 'PENDING'
+        
+        super().save(*args, **kwargs)
+    
+    @property
+    def clearance_progress(self):
+        """Calculate clearance progress percentage"""
+        clearances = [self.clearance_hr, self.clearance_it, 
+                     self.clearance_finance, self.clearance_admin]
+        return int((sum(clearances) / 4) * 100)
+    
+    @property
+    def is_clearance_complete(self):
+        """Check if all clearances are completed"""
+        return all([self.clearance_hr, self.clearance_it, 
+                   self.clearance_finance, self.clearance_admin])
+
+
+class ExitChecklist(TimeStampedModel):
+    """Detailed exit checklist items"""
+    
+    CHECKLIST_TYPES = [
+        ('HR', 'HR'),
+        ('IT', 'IT'),
+        ('FINANCE', 'Finance'),
+        ('ADMIN', 'Admin'),
+        ('GENERAL', 'General'),
+    ]
+    
+    CHECKLIST_STATUS = [
+        ('PENDING', 'Pending'),
+        ('COMPLETED', 'Completed'),
+        ('WAIVED', 'Waived'),
+        ('NOT_APPLICABLE', 'Not Applicable'),
+    ]
+    
+    id = models.BigAutoField(primary_key=True)
+    _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    
+    # Company Context
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='exit_checklists'
+    )
+    
+    # Exit Record
+    exit_record = models.ForeignKey(
+        ExitRecord,
+        on_delete=models.CASCADE,
+        related_name='checklist_items'
+    )
+    
+    # Item Details
+    item_type = models.CharField(
+        max_length=20,
+        choices=CHECKLIST_TYPES,
+        default='GENERAL'
+    )
+    item_name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    
+    # Status
+    status = models.CharField(
+        max_length=20,
+        choices=CHECKLIST_STATUS,
+        default='PENDING'
+    )
+    
+    # Responsible Person
+    assigned_to = models.ForeignKey(
+        Employee,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='exit_checklist_items'
+    )
+    assigned_to_name = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Completion
+    completed_at = models.DateTimeField(null=True, blank=True)
+    completed_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='completed_exit_checklists'
+    )
+    
+    # Notes
+    notes = models.TextField(blank=True, null=True)
+    
+    # Audit
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_exit_checklists'
+    )
+    updated_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_exit_checklists'
+    )
+    
+    class Meta:
+        db_table = 'hr_exit_checklists'
+        verbose_name = "Exit Checklist"
+        verbose_name_plural = "Exit Checklists"
+        ordering = ['item_type', 'item_name']
+        indexes = [
+            models.Index(fields=['exit_record', 'status']),
+            models.Index(fields=['exit_record', 'item_type']),
+            models.Index(fields=['assigned_to', 'status']),
+        ]
+    
+    def __str__(self):
+        return f"{self.item_name} ({self.item_type}) - {self.status}"
+
+
+class ExitInterview(TimeStampedModel):
+    """Exit interview feedback"""
+    
+    id = models.BigAutoField(primary_key=True)
+    _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    
+    # Company Context
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='exit_interviews'
+    )
+    
+    # Exit Record
+    exit_record = models.OneToOneField(
+        ExitRecord,
+        on_delete=models.CASCADE,
+        related_name='interview'
+    )
+    
+    # Interview Details
+    interview_date = models.DateField(null=True, blank=True)
+    interviewed_by = models.ForeignKey(
+        Employee,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='conducted_exit_interviews'
+    )
+    interviewed_by_name = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Feedback Categories
+    reason_for_leaving = models.TextField(blank=True, null=True)
+    feedback_management = models.TextField(blank=True, null=True)
+    feedback_work_environment = models.TextField(blank=True, null=True)
+    feedback_compensation = models.TextField(blank=True, null=True)
+    feedback_growth = models.TextField(blank=True, null=True)
+    
+    # Ratings (1-5 scale)
+    overall_experience = models.PositiveSmallIntegerField(null=True, blank=True)
+    management_rating = models.PositiveSmallIntegerField(null=True, blank=True)
+    work_environment_rating = models.PositiveSmallIntegerField(null=True, blank=True)
+    
+    # Future Plans
+    new_employer = models.CharField(max_length=255, blank=True, null=True)
+    new_position = models.CharField(max_length=255, blank=True, null=True)
+    new_salary_range = models.CharField(max_length=50, blank=True, null=True)
+    
+    # Additional
+    willing_to_rejoin = models.BooleanField(default=False)
+    any_concerns = models.TextField(blank=True, null=True)
+    general_feedback = models.TextField(blank=True, null=True)
+    
+    # Audit
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_exit_interviews'
+    )
+    updated_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_exit_interviews'
+    )
+    
+    class Meta:
+        db_table = 'hr_exit_interviews'
+        verbose_name = "Exit Interview"
+        verbose_name_plural = "Exit Interviews"
+        indexes = [
+            models.Index(fields=['exit_record']),
+            models.Index(fields=['interviewed_by']),
+            models.Index(fields=['interview_date']),
+        ]
+    
+    def __str__(self):
+        return f"Exit Interview - {self.exit_record.employee_name}"
