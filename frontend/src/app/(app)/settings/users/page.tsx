@@ -71,9 +71,8 @@ export default function UsersPage() {
         toast.success(
           `User created. ${storedPrefill ? "Login access granted." : "Set permissions if needed."}`
         );
-        if (storedPrefill) {
           router.push(`/settings/permissions?userId=${newUser.id}`);
-        }
+        
       }
       setModalOpen(false);
       setEditingUser(null);
