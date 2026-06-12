@@ -143,11 +143,17 @@ export default function CompensationDetailPage() {
                 {comp.frequency_type === "ONE_TIME" ? "One Time Month" : "Selected Months"}
               </p>
               <div className="flex flex-wrap gap-2">
-                {comp.selected_months.map((sm: any, i: number) => (
-                  <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-xs font-medium">
-                    {getMonthLabel(sm.month)} {sm.year}
-                  </span>
-                ))}
+                {comp.selected_months.map((sm: any, i: number) => {
+                  const isPaid = comp.paid_months_set?.some(([m, y]) => m === sm.month && y === sm.year);
+                  return (
+                    <span key={i} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium ${
+                      isPaid ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground'
+                    }`}>
+                      {getMonthLabel(sm.month)} {sm.year}
+                      {isPaid ? <BadgeCheck className="w-3 h-3" /> : null}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           )}

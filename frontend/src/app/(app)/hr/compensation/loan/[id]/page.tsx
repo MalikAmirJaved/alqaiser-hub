@@ -198,12 +198,23 @@ export default function LoanDetailPage() {
                 <>
                   <p className="text-xs text-muted-foreground font-medium mb-2">Monthly Deductions</p>
                   <div className="space-y-1.5">
-                    {loan.selected_months.map((sm, i) => (
-                      <div key={sm.id || i} className="flex items-center justify-between px-3 py-2 bg-background rounded-lg border border-border">
-                        <span className="text-sm font-medium">{getMonthLabel(sm.month)} {sm.year}</span>
-                        <span className="text-sm font-semibold text-primary">{fmtCurrency(sm.deduction)}</span>
-                      </div>
-                    ))}
+                    {loan.selected_months.map((sm, i) => {
+                      const isPaid = loan.paid_months_set?.some(([m, y]) => m === sm.month && y === sm.year);
+                      return (
+                        <div key={sm.id || i} className="flex items-center justify-between px-3 py-2 bg-background rounded-lg border border-border">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${isPaid ? 'bg-success' : 'bg-muted-foreground/30'}`} />
+                            <span className="text-sm font-medium">{getMonthLabel(sm.month)} {sm.year}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-semibold text-primary">{fmtCurrency(sm.deduction)}</span>
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${isPaid ? 'text-success bg-success/10' : 'text-muted-foreground bg-muted'}`}>
+                              {isPaid ? 'PAID' : 'UNPAID'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                   <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/50 text-sm">
                     <span className="text-muted-foreground">Per Month Deduction</span>
@@ -227,12 +238,23 @@ export default function LoanDetailPage() {
                 </p>
               </div>
               <div className="max-h-60 overflow-y-auto space-y-1.5">
-                {loan.selected_months.map((sm, i) => (
-                  <div key={sm.id || i} className="flex items-center justify-between px-3 py-2 bg-background rounded-lg border border-border">
-                    <span className="text-sm font-medium">{getMonthLabel(sm.month)} {sm.year}</span>
-                    <span className="text-sm font-semibold text-primary">{fmtCurrency(sm.deduction)}</span>
-                  </div>
-                ))}
+                {loan.selected_months.map((sm, i) => {
+                  const isPaid = loan.paid_months_set?.some(([m, y]) => m === sm.month && y === sm.year);
+                  return (
+                    <div key={sm.id || i} className="flex items-center justify-between px-3 py-2 bg-background rounded-lg border border-border">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${isPaid ? 'bg-success' : 'bg-muted-foreground/30'}`} />
+                        <span className="text-sm font-medium">{getMonthLabel(sm.month)} {sm.year}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-semibold text-primary">{fmtCurrency(sm.deduction)}</span>
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${isPaid ? 'text-success bg-success/10' : 'text-muted-foreground bg-muted'}`}>
+                          {isPaid ? 'PAID' : 'UNPAID'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

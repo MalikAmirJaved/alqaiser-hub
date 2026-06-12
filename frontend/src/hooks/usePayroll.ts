@@ -101,6 +101,7 @@ export interface EmployeeLoan {
   selected_months: SelectedMonth[];
   month_range: MonthRange | null;
   status: string;
+  paid_months_set?: Array<[number, number]>;
   purpose?: string;
   transaction_number?: string;
   approved_at?: string;
@@ -134,6 +135,7 @@ export interface Compensation {
   selected_months: SelectedMonth[];
   month_range: MonthRange | null;
   status: string;
+  paid_months_set?: Array<[number, number]>;
   review_date?: string;
   notes?: string;
   created_at?: string;
