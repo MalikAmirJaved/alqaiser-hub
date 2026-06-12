@@ -9,7 +9,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useLeaves } from "@/hooks/useLeaves";
-import { usePayroll, useEmployeeLoans, useCompensations } from "@/hooks/usePayroll";
+import { usePayroll, useEmployeeLoans, useCompensations, computeTotalMonths } from "@/hooks/usePayroll";
 import { useEmployeeAssignments } from "@/hooks/useEmployeeAssets";
 import { useShiftTemplates } from "@/hooks/useShiftTemplates";
 import { useExitRecords } from "@/hooks/useExitManagement";
@@ -55,6 +55,7 @@ import {
   Tag,
   Percent,
 } from "lucide-react";
+import { formatCurrency } from "@/lib/currency";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -85,10 +86,7 @@ const fmt = (val?: string | number | null, fallback = "—") =>
 const fmtDate = (d?: string) =>
   d ? new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "—";
 
-const fmtCurrency = (val?: string | number, currency = "USD") => {
-  const n = parseFloat(String(val || 0));
-  return isNaN(n) ? "—" : new Intl.NumberFormat("en-US", { style: "currency", currency }).format(n);
-};
+
 
 const initials = (first?: string, last?: string) =>
   `${(first || "?")[0]}${(last || "")[0] || ""}`.toUpperCase();
@@ -280,14 +278,14 @@ export default function EmployeeDetailPage() {
         </SectionCard>
 
         <SectionCard title="Compensation Summary" icon={DollarSign}>
-          <InfoRow label="Base Salary" value={fmtCurrency(employee.salary)} />
+          <InfoRow label="Base Salary" value={formatCurrency(employee.salary)} />
           {latestCompensation && (
             <>
-              <InfoRow label="Basic" value={fmtCurrency(latestCompensation.basic_salary)} />
-              <InfoRow label="HRA" value={fmtCurrency(latestCompensation.house_rent_allowance)} />
-              <InfoRow label="Medical" value={fmtCurrency(latestCompensation.medical_allowance)} />
-              <InfoRow label="Transport" value={fmtCurrency(latestCompensation.transport_allowance)} />
-              <InfoRow label="Total CTC" value={fmtCurrency(latestCompensation.total_ctc)} />
+              <InfoRow label="Basic" value={formatCurrency(latestCompensation.basic_salary)} />
+              <InfoRow label="HRA" value={formatCurrency(latestCompensation.house_rent_allowance)} />
+              <InfoRow label="Medical" value={formatCurrency(latestCompensation.medical_allowance)} />
+              <InfoRow label="Transport" value={formatCurrency(latestCompensation.transport_allowance)} />
+              <InfoRow label="Total CTC" value={formatCurrency(latestCompensation.total_ctc)} />
             </>
           )}
         </SectionCard>
@@ -316,13 +314,13 @@ export default function EmployeeDetailPage() {
               ].map(({ label, val }) => (
                 <div key={label} className="bg-muted/40 rounded-lg p-3">
                   <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
-                  <p className="text-sm font-semibold">{fmtCurrency(val)}</p>
+                  <p className="text-sm font-semibold">{formatCurrency(val)}</p>
                 </div>
               ))}
             </div>
             <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
               <span className="text-sm font-semibold">Total Monthly CTC</span>
-              <span className="text-lg font-bold text-primary">{fmtCurrency(latestCompensation.total_monthly)}</span>
+              <span className="text-lg font-bold text-primary">{formatCurrency(latestCompensation.total_monthly)}</span>
             </div>
           </SectionCard>
         )}
@@ -347,10 +345,10 @@ export default function EmployeeDetailPage() {
                       <td className="py-2.5 pr-4 whitespace-nowrap font-mono text-xs">
                         {p.year}-{String(p.month).padStart(2, "0")}
                       </td>
-                      <td className="py-2.5 pr-4 whitespace-nowrap">{fmtCurrency(p.base_salary)}</td>
-                      <td className="py-2.5 pr-4 whitespace-nowrap text-success">{fmtCurrency(p.bonus)}</td>
-                      <td className="py-2.5 pr-4 whitespace-nowrap text-destructive">{fmtCurrency(p.deductions)}</td>
-                      <td className="py-2.5 pr-4 whitespace-nowrap font-semibold">{fmtCurrency(p.net_salary)}</td>
+                      <td className="py-2.5 pr-4 whitespace-nowrap">{formatCurrency(p.base_salary)}</td>
+                      <td className="py-2.5 pr-4 whitespace-nowrap text-success">{formatCurrency(p.bonus)}</td>
+                      <td className="py-2.5 pr-4 whitespace-nowrap text-destructive">{formatCurrency(p.deductions)}</td>
+                      <td className="py-2.5 pr-4 whitespace-nowrap font-semibold">{formatCurrency(p.net_salary)}</td>
                       <td className="py-2.5 pr-4">{badge(p.status, statusColors[p.status])}</td>
                       <td className="py-2.5 text-muted-foreground text-xs">{p.payment_method?.replace("_", " ")}</td>
                     </tr>
@@ -371,8 +369,9 @@ export default function EmployeeDetailPage() {
         ) : (
           <div className="space-y-4">
             {loans.map((loan) => {
-              const paidPct = loan.total_months
-                ? Math.round((loan.paid_months / loan.total_months) * 100)
+              const totMonths = computeTotalMonths(loan);
+              const paidPct = totMonths
+                ? Math.round((loan.paid_months / totMonths) * 100)
                 : 0;
               return (
                 <div key={loan.id} className="border border-border rounded-xl p-4 space-y-3">
@@ -385,9 +384,9 @@ export default function EmployeeDetailPage() {
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                     {[
-                      { label: "Principal", val: fmtCurrency(loan.principal_amount) },
-                      { label: "Remaining", val: fmtCurrency(loan.remaining_amount) },
-                      { label: "Monthly", val: fmtCurrency(loan.monthly_deduction) },
+                      { label: "Principal", val: formatCurrency(loan.principal_amount) },
+                      { label: "Remaining", val: formatCurrency(loan.remaining_amount) },
+                      { label: "Monthly", val: formatCurrency(loan.monthly_deduction) },
                       { label: "Interest", val: `${loan.interest_rate}%` },
                     ].map(({ label, val }) => (
                       <div key={label} className="bg-muted/40 rounded-lg p-2">
@@ -399,7 +398,7 @@ export default function EmployeeDetailPage() {
                   {/* Progress */}
                   <div>
                     <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                      <span>{loan.paid_months} / {loan.total_months} months paid</span>
+                      <span>{loan.paid_months} / {computeTotalMonths(loan)} months paid</span>
                       <span>{paidPct}%</span>
                     </div>
                     <div className="h-1.5 bg-muted rounded-full overflow-hidden">
@@ -569,7 +568,7 @@ export default function EmployeeDetailPage() {
                   <XCircle className="w-4 h-4 text-destructive" />
                 )}
               </InfoRow>
-              <InfoRow label="Final Settlement" value={fmtCurrency(exitRecord.final_settlement)} />
+              <InfoRow label="Final Settlement" value={formatCurrency(exitRecord.final_settlement)} />
               {exitRecord.notes && <InfoRow label="Notes" value={exitRecord.notes} />}
             </SectionCard>
 
@@ -681,7 +680,7 @@ export default function EmployeeDetailPage() {
               {
                 icon: DollarSign,
                 label: "Salary",
-                value: fmtCurrency(employee.salary),
+                value: formatCurrency(employee.salary),
               },
             ].map(({ icon: Icon, label, value }) => (
               <div key={label} className="bg-muted/40 rounded-xl p-3 flex items-center gap-2.5">

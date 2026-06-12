@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useEmployeeLoans, useCompensations, usePayrollPreview, useProcessPayroll } from "@/hooks/usePayroll";
+import { useEmployeeLoans, useCompensations, usePayrollPreview, useProcessPayroll, computeTotalMonths } from "@/hooks/usePayroll";
 import { CreditCard, Plus, Minus, X, CheckCircle, Clock, CalendarDays, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -249,7 +249,7 @@ const leaveDays = preview?.leave_days ?? 0;
                       <div>
                         <div className="text-sm">{loan.loan_type_display || loan.loan_type}</div>
                         <div className="text-xs text-muted-foreground">
-                          Remaining: {formatCurrency(parseFloat(loan.remaining_amount))} ({loan.paid_months}/{loan.total_months} months)
+                          Remaining: {formatCurrency(parseFloat(loan.remaining_amount))} ({loan.paid_months}/{computeTotalMonths(loan)} months)
                         </div>
                       </div>
                     </div>

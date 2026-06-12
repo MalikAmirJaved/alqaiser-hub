@@ -107,6 +107,24 @@ export interface EmployeeLoan {
   approved_at?: string;
   notes?: string;
   created_at?: string;
+  total_months?: number;
+}
+
+export function computeTotalMonths(loan: EmployeeLoan): number {
+  if (loan.total_months != null) return loan.total_months;
+  switch (loan.frequency_type) {
+    case 'ONE_TIME':
+      return 1;
+    case 'SELECTED_MONTH':
+      return loan.selected_months?.length ?? 0;
+    case 'MONTH_RANGE': {
+      const r = loan.month_range;
+      if (!r) return 0;
+      return (r.end_year - r.start_year) * 12 + (r.end_month - r.start_month + 1);
+    }
+    default:
+      return 0;
+  }
 }
 
 export interface Compensation {
