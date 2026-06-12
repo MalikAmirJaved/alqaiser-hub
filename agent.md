@@ -70,6 +70,7 @@ Located in [baseauthentication.py](file:///home/devteam/Documents/Projects/alqai
 *   Automatically filters every query by `company_id = request.user.company_id`.
 *   Restricts access by `branch_id` unless the user holds the role of `COMPANY_ADMIN` (HQ level access).
 *   Filters out soft-deleted records (`is_deleted=False`).
+*   **⚠️ Only works with `GenericAPIView` or `ViewSet`** (requires `get_queryset()`). Views inheriting from plain `APIView` must manually filter by `company_id`, `branch_id`, and `is_deleted=False` in each handler method.
 
 ---
 
@@ -273,7 +274,7 @@ frontend/src/
 ### Creating a New Backend API Model
 When creating models, make sure to:
 1.  Inherit from [BaseModel](file:///home/devteam/Documents/Projects/alqaiser/backend/apps/common/basemodel.py) to enable multi-tenant columns (`company_id`, `branch_id`), UUID lookup (`_id`), and soft deletes (`is_deleted`).
-2.  Inherit your view from [CompanyBranchMixin](file:///home/devteam/Documents/Projects/alqaiser/backend/apps/common/baseauthentication.py) to automatically isolate records based on company.
+2.  Inherit your view from [CompanyBranchMixin](file:///home/devteam/Documents/Projects/alqaiser/backend/apps/common/baseauthentication.py) to automatically isolate records based on company. **⚠️ Only use with `GenericAPIView`/`ViewSet` — plain `APIView` does not have `get_queryset()`**. For `APIView`, manually filter by `company_id`, `branch_id`, and `is_deleted=False` in each method.
 3.  Inherit your view from [PermissionRequiredMixin](file:///home/devteam/Documents/Projects/alqaiser/backend/apps/permissions/mixins.py) to validate permissions, specifying:
     ```python
     permission_module = 'INVENTORY'
@@ -463,7 +464,7 @@ When implementing data mutations or real-time features:
 
 #### **5. Multi-Tenant Data Isolation**
 - **Always** query by `company_id` and `branch_id` from `request.user`.
-- Use `CompanyBranchMixin` in DRF ViewSets to auto-filter queries.
+- Use `CompanyBranchMixin` in DRF `ViewSet`/`GenericAPIView` classes to auto-filter queries. **Do NOT inherit it on plain `APIView`** (it requires `get_queryset()`). For `APIView`, manually filter by `company_id`, `branch_id`, and `is_deleted=False` in each handler method.
 - Use `_id` (UUID) for API lookups, NOT `id` (auto-increment).
 - Never expose raw `id` fields in API responses (security risk - ID enumeration).
 - All model serializers should expose `_id` as the identifier.
@@ -577,7 +578,20 @@ When a form contains a dropdown/select for a related entity (e.g., Department or
       return Response(...)  # Either all succeed or all rollback
   ```
 
-#### **15. Leave Form Date Validation (Frontend & Backend)**
+#### **15. Use RESTful URLs for Mutations**
+- All PATCH, PUT, and DELETE requests **MUST** target the detail endpoint with the resource ID in the URL path: `PATCH /api/hr/loans/{pk}/`, `DELETE /api/hr/loans/{pk}/`.
+- Do **NOT** send `id` in the request body for mutations — use the URL path parameter instead.
+- Backend handler methods **MUST** accept `pk=None` with fallback `pk or request.data.get('id')` for backward compatibility during migration.
+- Frontend mutation hooks should extract `id` from the data object and construct the URL before calling `apiFetch`:
+  ```typescript
+  mutationFn: (data: any) => {
+    const { id, ...rest } = data;
+    return api(`/api/hr/loans/${id}/`, { method: "PATCH", body: JSON.stringify(rest) });
+  }
+  ```
+- This ensures proper REST semantics and enables URL-based caching and idempotency.
+
+#### **16. Leave Form Date Validation (Frontend & Backend)**
 When implementing or updating Leave forms and APIs, enforce the following rules to prevent invalid date ranges and incorrect leave applications:
 
 - Frontend: The leave period picker must prevent or validate selection where the end date is before the start date. Forms should show a clear error (e.g., "End date cannot be before start date") and block submission until corrected. Use the shared DateRangePicker components and validate onChange and before submit.
@@ -613,63 +627,158 @@ When implementing or updating Leave forms and APIs, enforce the following rules 
 
 ## 10. Compensation & Loan Module - IMPLEMENTED
 
-### Compensation Module Changes (Implemented)
+### Compensation Model Schema
 
-#### Fields REMOVED from `Compensation` model:
+| Field | Type | Notes |
+|---|---|---|
+| `employee` | FK → Employee | Cascade delete |
+| `house_rent_allowance` | Decimal(12,2) | Default 0 |
+| `medical_allowance` | Decimal(12,2) | Default 0 |
+| `transport_allowance` | Decimal(12,2) | Default 0 |
+| `phone_allowance` | Decimal(12,2) | Default 0 |
+| `utilities_allowance` | Decimal(12,2) | Default 0 |
+| `education_allowance` | Decimal(12,2) | Default 0 |
+| `other_allowances` | Decimal(12,2) | Default 0 |
+| `employer_pf` | Decimal(12,2) | Employer PF contribution |
+| `employer_eobi` | Decimal(12,2) | Employer EOBI contribution |
+| `overtime_rate` | Decimal(12,2) | Per hour |
+| `bonus_percentage` | Decimal(5,2) | Bonus % of salary |
+| `frequency_type` | CharField | ONE_TIME / SELECTED_MONTH / MONTH_RANGE |
+| `status` | CharField | ACTIVE / INACTIVE (single source of truth) |
+| `review_date` | Date | Nullable |
+| `notes` | Text | Nullable |
+
+#### Fields REMOVED from `Compensation` model (post-refactor):
 - `grade` (CharField) - Removed
 - `effective_date` (DateField) - Removed
+- `is_active` (BooleanField) - Removed (redundant with `status`)
 
-#### New Child Tables (Implemented):
-- `CompensationSelectedMonth` - Stores multiple selected months for SELECTED_MONTH frequency
-- `CompensationMonthRange` - Stores start/end range for MONTH_RANGE frequency (OneToOne with Compensation)
+#### Computed Properties:
+- `total_allowances` → sum of all 7 allowance fields
+- `total_ctc` → `total_allowances + employer_pf + employer_eobi`
+- `total_monthly` → `total_allowances` (aliased)
 
-#### Frequency Type Behavior:
-- **SELECTED_MONTH**: Multi-select month picker with checkboxes. User can select multiple months.
-- **MONTH_RANGE**: Start/end month+year dropdowns with validation:
-  - End month/year must not be before start month/year
-  - Start month/year must not be before employee's joining_date
-  - Months before employee joining date are filtered out from dropdowns
+#### Child Tables:
+- `CompensationSelectedMonth` - Stores multiple selected months for SELECTED_MONTH frequency (`compensation` FK, `month`, `year`, `unique_together`)
+- `CompensationMonthRange` - Stores start/end range for MONTH_RANGE frequency (`compensation` OneToOne, `start_month`, `start_year`, `end_month`, `end_year`)
 
----
+### Loan Model Schema
 
-### Loan Module Changes (Implemented)
+| Field | Type | Notes |
+|---|---|---|
+| `employee` | FK → Employee | Cascade delete |
+| `loan_type` | CharField | PERSONAL_LOAN / SALARY_ADVANCE / CAR_LOAN / HOUSE_LOAN / EDUCATION_LOAN / MEDICAL_LOAN / EMERGENCY_LOAN / OTHER |
+| `principal_amount` | Decimal(12,2) | |
+| `remaining_amount` | Decimal(12,2) | Updated by payroll processing |
+| `paid_amount` | Decimal(12,2) | Default 0 |
+| `paid_months` | PositiveInteger | Default 0 |
+| `interest_rate` | Decimal(5,2) | Percentage |
+| `total_payable` | Decimal(12,2) | principal + interest |
+| `frequency_type` | CharField | ONE_TIME / SELECTED_MONTH / MONTH_RANGE |
+| `status` | CharField | PENDING / ACTIVE / PAID / DEFAULTED / CANCELLED |
+| `purpose` | Text | Nullable |
+| `approved_by` | FK → User | Nullable, SET_NULL |
+| `approved_at` | DateTime | Nullable |
+| `notes` | Text | Nullable |
+| `transaction_number` | CharField | Auto-generated `LN-YYYYMMDD-{emp_code}` |
 
-#### Fields REMOVED from `EmployeeLoan` model:
+#### Fields REMOVED from `EmployeeLoan` model (post-refactor):
 - `monthly_deduction` (DecimalField) - Removed (now in child tables)
 - `total_months` (PositiveIntegerField) - Removed
 - `start_date` (DateField) - Removed
+- `end_date` (DateField) - Removed (unvalidated, duplicative)
 
-#### New Child Tables (Implemented):
-- `LoanSelectedMonth` - Stores multiple selected months + deduction for SELECTED_MONTH frequency
-  - `deduction` field: Auto-calculated (total_payable / num_months), EDITABLE by user
-- `LoanMonthRange` - Stores start/end range + deduction for MONTH_RANGE frequency
-  - `deduction` field: Auto-calculated (total_payable / total_months), NOT editable
+#### Child Tables:
+- `LoanSelectedMonth` - Stores multiple selected months + editable deduction for SELECTED_MONTH frequency
+- `LoanMonthRange` - Stores start/end range + auto-calculated deduction for MONTH_RANGE frequency
 
-#### Frequency Type Behavior:
-- **SELECTED_MONTH**: Multi-select month picker + per-month deduction fields (auto-calculated, editable)
-- **MONTH_RANGE**: Start/end month+year dropdowns + deduction display (auto-calculated, read-only)
-- Same validation rules as compensation (end >= start, start >= joining_date)
+### Payroll Linking Models
 
----
+| Model | Purpose | FK Fields |
+|---|---|---|
+| `PayrollCompensation` | Links `PayrollRecord` ↔ `Compensation` | `payroll` → PayrollRecord, `compensation` → Compensation, `amount` |
+| `PayrollLoanDeduction` | Links `PayrollRecord` ↔ `EmployeeLoan` | `payroll` → PayrollRecord, `loan` → EmployeeLoan, `principal_amount`, `interest_amount`, `total_amount` |
 
-### Files Modified
+These are populated during payroll processing (`PayrollView.post`). Each `PayrollRecord` has `month` and `year` fields (unique per employee + month + year). The `paid_months_set` field in detail serializers queries these linking tables to determine which months have been processed for a given compensation or loan.
+
+### Frequency Type Behavior
+
+| Frequency | Compensation UI | Loan UI |
+|---|---|---|
+| **ONE_TIME** | Single month select | Single month select + auto-calculated editable deduction |
+| **SELECTED_MONTH** | Multi-select month grid | Multi-select month grid + per-month editable deduction fields |
+| **MONTH_RANGE** | Start/end month+year dropdowns | Start/end month+year dropdowns + auto-calculated read-only deduction |
+
+Validation rules apply to all:
+- End month/year must not be before start month/year
+- Start month/year must not be before employee's joining_date
+- Month dropdowns are year-aware: if start_year > joining_year, all 12 months shown; if start_year === joining_year, only months >= joining month shown
+
+### Critical Implementation Rules
+
+#### 1. Atomic Transactions
+Every POST/PATCH/DELETE method in `payroll_views.py` **MUST** be decorated with `@transaction.atomic` because:
+- Compensations create child records (selected_months, month_range) atomically
+- Loans create child records (selected_months, month_range) atomically
+- Payroll processing creates PayrollRecord + PayrollCompensation + PayrollLoanDeduction atomically
+- Status updates modify `paid_amount`, `remaining_amount`, `paid_months` atomically
+
+#### 2. RESTful URL Pattern (not legacy body ID)
+Update and delete mutations use proper RESTful URLs:
+- `PATCH /api/hr/loans/{pk}/` (not `PATCH /api/hr/loans/` with `id` in body)
+- `DELETE /api/hr/loans/{pk}/` (not `DELETE /api/hr/loans/` with `id` in body)
+- Same for compensations: `PATCH /api/hr/compensations/{pk}/`, `DELETE /api/hr/compensations/{pk}/`
+- Backend views accept `pk=None` with fallback `pk or request.data.get('id')` for backward compatibility
+
+#### 3. Data Isolation
+Views manually filter by `company_id`, `branch_id`, and `is_deleted=False` in each method. `CompanyBranchMixin` is NOT used because these are `APIView`-based (the mixin requires `GenericAPIView`/`ViewSet` with `get_queryset()`).
+
+#### 4. Paid Status on Detail Pages
+Both detail pages show paid/unpaid status per month:
+- **Loan detail page**: Each month row displays a green "PAID" or grey "UNPAID" badge, determined by checking `PayrollLoanDeduction` records linked to the loan
+- **Compensation detail page**: Each month displays a green checkmark if a `PayrollCompensation` record exists for that compensation + month
+- The `paid_months_set` field returns `[[month, year], ...]` tuples from the backend
+
+### Frontend Forms (post-refactor)
+
+#### CompensationForm.tsx
+- Employee select (with joining-date-aware month filtering)
+- Overtime rate input
+- Collapsible frequency type selector (ONE_TIME/SELECTED_MONTH/MONTH_RANGE)
+  - Month grid for ONE_TIME/SELECTED_MONTH (year-aware, joining-date-filtered)
+  - Start/end month+year dropdowns for MONTH_RANGE (year-aware, joining-date-filtered)
+- Allowances section (7 allowance fields with currency formatting)
+- Employer contributions section (employer PF, employer EOBI, bonus percentage)
+- Notes textarea
+
+#### LoanForm.tsx
+- Employee select (shows monthly salary)
+- Loan type dropdown (8 types)
+- Principal amount + interest rate
+- Collapsible frequency type selector
+  - Month grid with per-month editable deduction inputs (auto-calculated, sum must equal total payable)
+  - Start/end month+year dropdowns for MONTH_RANGE (auto-calculated read-only deduction)
+- Loan summary card (principal, total payable, interest rate)
+- Validation errors display
+- Purpose textarea
+
+### Files Modified (Complete List)
 
 #### Backend:
-- `backend/apps/hr/models.py` - Removed fields, added 4 new child models (CompensationSelectedMonth, CompensationMonthRange, LoanSelectedMonth, LoanMonthRange)
-- `backend/apps/hr/views/payroll_views.py` - Major refactor (463 lines changed), updated serializers, CRUD operations, validation
-- `backend/apps/hr/urls.py` - Added routes for compensation detail and loan detail
-- `backend/apps/hr/migrations/0005-0007` - Compensation/Loan migration changes, fuel_allowance removal
+- `backend/apps/hr/models.py` - Compensation/Loan model definitions, child tables, PayrollCompensation/PayrollLoanDeduction linking models
+- `backend/apps/hr/views/payroll_views.py` - Full CRUD for compensations, loans, payroll processing, status updates, paid_months_set serialization
+- `backend/apps/hr/urls.py` - Routes for compensation detail and loan detail
 
 #### Frontend:
-- `frontend/src/components/payroll/types.ts` - New interfaces (SelectedMonth, MonthRange), helper functions
-- `frontend/src/components/payroll/CompensationForm.tsx` - Removed grade/effective_date, multi-select UI, validation
-- `frontend/src/components/payroll/LoanForm.tsx` - Removed monthly_deduction/total_months/start_date, deduction fields
-- `frontend/src/components/payroll/CompensationTab.tsx` - Removed Grade/Effective Date columns
-- `frontend/src/components/payroll/LoanTab.tsx` - Updated display (removed Monthly column, shows Total Payable)
-- `frontend/src/components/payroll/CompensationLoanPage.tsx` - Refactored with employee joining date, tab-based UI
-- `frontend/src/hooks/usePayroll.ts` - Updated interfaces, new hooks (useCompensation, useEmployeeLoan, useUpdateLoanStatus, usePayrollPreview)
-- `frontend/src/app/(app)/hr/compensation/[id]/page.tsx` - **NEW**: Compensation detail page with allowances breakdown, CTC summary
-- `frontend/src/app/(app)/hr/compensation/loan/[id]/page.tsx` - **NEW**: Loan detail page with repayment progress, monthly deductions
+- `frontend/src/components/payroll/types.ts` - Interfaces (SelectedMonth, MonthRange, Compensation, Loan, LoanFormData), helpers
+- `frontend/src/components/payroll/CompensationForm.tsx` - Full form with frequency types, allowances, employer contributions
+- `frontend/src/components/payroll/LoanForm.tsx` - Full form with frequency types, per-month deductions, validation
+- `frontend/src/components/payroll/CompensationTab.tsx` - Compensation list table
+- `frontend/src/components/payroll/LoanTab.tsx` - Loan list table with inline status change
+- `frontend/src/components/payroll/CompensationLoanPage.tsx` - Tab-based page with modals, CRUD orchestration
+- `frontend/src/hooks/usePayroll.ts` - React Query hooks for payroll, compensations, loans; typed interfaces
+- `frontend/src/app/(app)/hr/compensation/[id]/page.tsx` - Compensation detail page with paid status per month
+- `frontend/src/app/(app)/hr/compensation/loan/[id]/page.tsx` - Loan detail page with PAID/UNPAID per month
 
 ### API Response Structure
 
@@ -678,9 +787,18 @@ When implementing or updating Leave forms and APIs, enforce the following rules 
 {
   "id": "uuid",
   "employee_id": "uuid",
+  "employee_name": "...",
   "frequency_type": "SELECTED_MONTH",
   "selected_months": [{"month": 1, "year": 2025}, ...],
-  "month_range": {"start_month": 1, "start_year": 2025, "end_month": 12, "end_year": 2025}
+  "month_range": {"start_month": 1, "start_year": 2025, "end_month": 12, "end_year": 2025},
+  "paid_months_set": [[1, 2025], [2, 2025]],
+  "employer_pf": "5000.00",
+  "employer_eobi": "2000.00",
+  "bonus_percentage": "10.00",
+  "status": "ACTIVE",
+  "total_allowances": "50000.00",
+  "total_ctc": "57000.00",
+  "total_monthly": "50000.00"
 }
 ```
 
@@ -691,6 +809,11 @@ When implementing or updating Leave forms and APIs, enforce the following rules 
   "employee_id": "uuid",
   "frequency_type": "MONTH_RANGE",
   "selected_months": [{"month": 1, "year": 2025, "deduction": "5000.00"}, ...],
-  "month_range": {"start_month": 1, "start_year": 2025, "end_month": 12, "end_year": 2025, "deduction": "5000.00"}
+  "month_range": {"start_month": 1, "start_year": 2025, "end_month": 12, "end_year": 2025, "deduction": "5000.00"},
+  "paid_months_set": [[1, 2025], [2, 2025]],
+  "paid_amount": "10000.00",
+  "remaining_amount": "50000.00",
+  "paid_months": 2,
+  "status": "ACTIVE"
 }
 ```
