@@ -7,27 +7,23 @@ until pg_isready -h "${DB_HOST:-db}" -U "${DB_USER:-alqaiser_user}" -d "${DB_NAM
 done
 echo "DB is ready."
 
-# Delete old migration files only
-echo "Deleting old migration files..."
-find . -path "*/migrations/*.py" ! -name "__init__.py" -delete
-find . -path "*/migrations/*.pyc" -delete
+# IMPORTANT: DO NOT delete migration files - they are needed for Django to work
+# Only delete __pycache__ files if needed
+echo "Cleaning pycache files..."
+find . -path "*/__pycache__/*" -delete 2>/dev/null || true
 
-# Create fresh migrations
+# Create new migrations ONLY IF models changed
 echo "Creating migrations..."
-python manage.py makemigrations organization --no-input
-python manage.py makemigrations compsetting --no-input
-python manage.py makemigrations hr --no-input
 python manage.py makemigrations --no-input
 
-# IMPORTANT:
-# Fake initial because tables already exist
+# Apply migrations (DO NOT USE --fake-initial unless you know what you're doing)
 echo "Applying migrations..."
-python manage.py migrate --fake-initial --no-input
+python manage.py migrate --no-input
 
 # Collect static
 python manage.py collectstatic --no-input --clear 2>/dev/null || true
 
-# Seed
+# Seed (first time only - should check if already seeded)
 python manage.py seed_org || true
 
 echo "Starting server..."

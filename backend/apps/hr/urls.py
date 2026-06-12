@@ -15,6 +15,21 @@ from apps.hr.views.employee_asset_views import (
     BulkAssignmentView
 )
 
+from apps.hr.views.shift_management_views import (
+    EmployeeShiftResolveView, ShiftOverrideView, ShiftDateRangeView,
+    BulkShiftAssignmentView, ShiftHistoryView, ShiftStatisticsView,
+    ShiftScheduleGenerateView
+)
+
+from apps.hr.views.leave_views import (
+    LeaveRequestView,
+    LeaveApprovalView,
+    LeaveBalanceView,
+    LeaveStatsView,
+    LeaveHistoryView,
+    YearEndCarryForwardView,
+)
+
 urlpatterns = [
     # Shift Templates
     path('shift-templates/', ShiftTemplateView.as_view(), name='shift-templates'),
@@ -42,7 +57,25 @@ urlpatterns = [
     # Compensations
     path('compensations/', CompensationView.as_view(), name='compensations'),
 
+    # employee assets
     path('employee-assets/assignments/', EmployeeAssetAssignmentView.as_view(), name='employee-asset-assignments'),
     path('employee-assets/available/', AvailableAssetsView.as_view(), name='available-assets'),
     path('employee-assets/bulk/', BulkAssignmentView.as_view(), name='bulk-assignments'),
+
+    # Shift Management Endpoints
+    path('shifts/resolve/', EmployeeShiftResolveView.as_view(), name='shift-resolve'),
+    path('shifts/overrides/', ShiftOverrideView.as_view(), name='shift-overrides'),
+    path('shifts/date-range/', ShiftDateRangeView.as_view(), name='shift-date-range'),
+    path('shifts/bulk/', BulkShiftAssignmentView.as_view(), name='shift-bulk'),
+    path('shifts/history/', ShiftHistoryView.as_view(), name='shift-history'),
+    path('shifts/stats/', ShiftStatisticsView.as_view(), name='shift-stats'),
+    path('shifts/generate-schedule/', ShiftScheduleGenerateView.as_view(), name='shift-generate-schedule'),
+
+    # leave Management
+    path('leaves/', LeaveRequestView.as_view(), name='leave-requests'),
+    path('leaves/approve/', LeaveApprovalView.as_view(), name='leave-approve'),
+    path('leaves/balances/', LeaveBalanceView.as_view(), name='leave-balances'),
+    path('leaves/stats/', LeaveStatsView.as_view(), name='leave-stats'),
+    path('leaves/history/', LeaveHistoryView.as_view(), name='leave-history'),
+    path('leaves/carry-forward/', YearEndCarryForwardView.as_view(), name='leave-carry-forward'),
 ]
