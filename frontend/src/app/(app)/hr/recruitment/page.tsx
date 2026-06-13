@@ -496,6 +496,7 @@ export default function RecruitmentPage() {
                                 email: r.email || "",
                                 phone: r.phone || "",
                                 candidate_id: r.id,
+                                expected_salary: String(r.expected_salary || 0),
                               });
                               router.push(`/hr/employees?${params.toString()}`);
                             }}

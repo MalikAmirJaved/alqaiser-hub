@@ -56,11 +56,9 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
     asset_category_id: "",
     old_default_shift_id: "",
   });
-
   const [loading, setLoading] = useState(false);
   const [deptModalOpen, setDeptModalOpen] = useState(false);
   const [desigModalOpen, setDesigModalOpen] = useState(false);
-
   // Departments
   const { data: departments = [], refetch: refetchDepartments } = useDepartments();
   const departmentOptions = departments
@@ -84,6 +82,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
         designation_id: initialData.designation_id || "",
         old_default_shift_id: initialData.default_shift_id || "",
         asset_category_id: initialData.asset_category_id || "",
+        salary: initialData.salary ? Number(initialData.salary) : (initialData.expected_salary ? Number(initialData.expected_salary) : null),
       });
     } else {
       generateEmployeeId();
@@ -162,7 +161,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
         bank_name: formData.bank_name,
         bank_account_number: formData.bank_account_number,
         bank_iban: formData.bank_iban,
-        salary: formData.salary,
+        salary: Number(formData.salary),
         default_shift_id: formData.default_shift_id || null,
         // Do NOT send: old_default_shift_id, asset_category_id, department_name, designation_name, etc.
     };
@@ -369,7 +368,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
             </div>
             <div className="grid md:grid-cols-2 gap-3">
               <label className="text-sm flex flex-col gap-1"><span className="text-muted-foreground text-xs">IBAN</span><input type="text" value={formData.bank_iban} onChange={(e) => handleChange("bank_iban", e.target.value)} className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring" /></label>
-              <label className="text-sm flex flex-col gap-1"><span className="text-muted-foreground text-xs">Basic Salary</span><input type="number" value={formData.salary} onChange={(e) => handleChange("salary", parseInt(e.target.value) || 0)} className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring" /></label>
+              <label className="text-sm flex flex-col gap-1"><span className="text-muted-foreground text-xs">Basic Salary</span><input type="number" value={Number(formData.salary)} onChange={(e) => handleChange("salary", parseInt(e.target.value) || 0)} className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring" /></label>
             </div>
           </div>
         </div>

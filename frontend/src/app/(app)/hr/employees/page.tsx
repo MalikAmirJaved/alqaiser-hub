@@ -46,6 +46,7 @@ export default function EmployeesPage() {
       designation_id: searchParams.get("designation_id") || "",
       isfrom_user_id: searchParams.get("isfrom_user_id") || null,
       candidate_id: searchParams.get("candidate_id") || null,
+      expected_salary: searchParams.get("expected_salary") || null,
     };
   }, [searchParams, prefill]);
 
@@ -55,6 +56,7 @@ export default function EmployeesPage() {
   const permissions = useSelector(
     (state: RootState) => state.permissions.permissions
   );
+
   const userExistsForEmployee = (employee: any) => {
     return !!employee.isfrom_user_id;
   };
@@ -82,7 +84,6 @@ export default function EmployeesPage() {
       designation_id: employee.designation_id || "",
       isfrom_employee_id: employee._id || employee.id || "",
     });
-    console.log("sending params data::", params.toString());
     return `/settings/users?${params.toString()}`;
   };
 
