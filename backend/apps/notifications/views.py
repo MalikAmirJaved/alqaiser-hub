@@ -22,18 +22,29 @@ class NotificationViewSet(viewsets.ModelViewSet):
     def mark_read(self, request, pk=None):
         notification = self.get_object()
         notification.mark_as_read()
-        return Response({'status': 'marked as read'})
+        return Response({
+            'status': 'marked as read',
+            'message': 'Notification has been marked as read successfully'
+        })
 
     @action(detail=False, methods=['post'])
     def mark_all_read(self, request):
         queryset = self.get_queryset().filter(is_read=False)
         for notif in queryset:
             notif.mark_as_read()
-        return Response({'status': 'all marked as read'})
+        return Response({
+            'status': 'all marked as read',
+            'message': 'All notifications have been marked as read'
+        })
 
     @action(detail=True, methods=['post'])
     def toggle_favourite(self, request, pk=None):
         notification = self.get_object()
         notification.is_favourite = not notification.is_favourite
         notification.save(update_fields=['is_favourite'])
-        return Response({'status': 'toggled', 'is_favourite': notification.is_favourite})
+
+        return Response({
+            'status': 'toggled',
+            'is_favourite': notification.is_favourite,
+            'message': 'Favourite status updated successfully'
+        })
