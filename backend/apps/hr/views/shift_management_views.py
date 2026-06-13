@@ -75,7 +75,7 @@ class EmployeeShiftResolveView(CompanyBranchMixin, PermissionRequiredMixin, APIV
                 results.append({
                     'employee_id': str(emp._id),
                     'employee_name': emp.full_name,
-                    'employee_department': emp.department,
+                    'employee_department': str(emp.department),
                     'template_id': str(resolved.get('template_id')) if resolved.get('template_id') else None,
                     'template_name': resolved.get('template_name'),
                     'start_time': resolved.get('start_time'),
@@ -107,7 +107,7 @@ class EmployeeShiftResolveView(CompanyBranchMixin, PermissionRequiredMixin, APIV
                 if employee:
                     formatted_results[str(employee._id)] = {
                         'employee_name': employee.full_name,
-                        'employee_department': employee.department,
+                        'employee_department': str(employee.department),
                         'shifts': {}
                     }
                     for date_str, shift_data in shifts.items():
