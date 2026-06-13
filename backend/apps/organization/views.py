@@ -282,6 +282,7 @@ class ActiveUsersView(PermissionRequiredMixin, generics.ListAPIView):
 class DepartmentViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'SETTINGS'
     permission_resource = 'department'
+    skip_safe_methods = True  # GET requests skip permission checks
     queryset = Department.objects.all()
     serializer_class = DepartmentSerializer
     lookup_field = '_id'
