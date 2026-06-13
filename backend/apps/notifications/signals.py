@@ -10,12 +10,12 @@ def send_notification_on_save(sender, instance, created, **kwargs):
         channel_layer = get_channel_layer()
         event = {
             'type': 'send_notification',
+            'id': instance.id,                      # ← include ID
             'message': instance.message,
             'title': instance.title,
             'notification_type': instance.notification_type,
             'created_at': instance.created_at.isoformat() if instance.created_at else None,
-        }
-        
+        }        
         if instance.user:
             # Send to specific user
             group_name = f"notify_u{instance.user.id}"

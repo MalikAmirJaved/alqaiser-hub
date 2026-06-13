@@ -102,17 +102,29 @@ export const NotificationProvider = ({
           const data = JSON.parse(event.data);
 
           // Handle notification messages
-          if (data.type === "notification") {
-            setNotifications((prev) => {
-              const exists = prev.find((n) => n.id === data.id);
-              if (exists) return prev;
-              return [data, ...prev];
-            });
+          if (data.type === 'notification') {
+      setNotifications((prev) => {
+        // If the message has an id, prevent duplicates
+        if (data.id && prev.find((n) => n.id === data.id)) return prev;
+        
+        // Convert the WebSocket message into a notification object
+        const newNotif = {
+          id: data.id || Date.now(),           // fallback unique ID
+          title: data.title,
+          message: data.message,
+          is_read: false,
+          read_at: null,
+          is_favourite: false,
+          created_at: data.created_at || new Date().toISOString(),
+          notification_type: data.notification_type,
+        };
+        return [newNotif, ...prev];
+      });
 
-            toast(data.title || "New Notification", {
-              description: data.message,
-            });
-          }
+      toast(data.title || "New Notification", {
+        description: data.message,
+      });
+    }
           // Handle data update messages (cache invalidation)
           else if (data.type === "data_update") {
             const { entity, action, record_id } = data;

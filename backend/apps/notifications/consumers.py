@@ -50,18 +50,16 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         pass
         
     async def send_notification(self, event):
-        message = event['message']
-        notification_type = event.get('type', 'info')
-        title = event.get('title', 'Notification')
-        created_at = event.get('created_at', None)
-
-        # Send message to WebSocket
+        """Handle notification messages"""
         await self.send(text_data=json.dumps({
-            'message': message,
-            'type': notification_type,
-            'title': title,
-            'created_at': created_at,
+            'type': 'notification',          # ← explicit type
+            'id': event.get('id'),           # include notification ID if available
+            'message': event['message'],
+            'title': event.get('title', 'Notification'),
+            'notification_type': event.get('notification_type', 'info'),
+            'created_at': event.get('created_at'),
         }))
+
 
     async def data_update(self, event):
         """Handle data update messages to trigger cache invalidation on frontend"""
