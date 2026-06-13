@@ -29,6 +29,9 @@ export default function PaymentsPage() {
 
   const modulePermissions: ModulePermissions = {
     view: permissions.view,
+    create: permissions.create,
+    update: permissions.update,
+    delete: permissions.delete,
     export: permissions.export,
   };
 

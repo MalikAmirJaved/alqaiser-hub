@@ -273,7 +273,7 @@ const leavePermissions = getPermissions(
       sortable: true,
       render: (_: unknown, row: any) => {
         const employee = employees.find((e: any) => e.id === row.employee_id);
-        return employee?.department_name || employee?.department || "—";
+        return employee?.department_name || "—";
       }
     },
     { key: "leave_type_display", label: "Leave Type", sortable: true },

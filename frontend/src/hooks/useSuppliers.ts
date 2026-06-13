@@ -15,10 +15,6 @@ export interface Supplier extends Record<string, unknown> {
   state: string;
   city: string;
   postal_code: string;
-  payment_terms: string;
-  credit_limit: number;
-  balance: number;
-  rating: number;
   status: "active" | "inactive" | "suspended";
   created_at: string;
   updated_at: string;

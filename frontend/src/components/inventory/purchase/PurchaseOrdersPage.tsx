@@ -102,7 +102,6 @@ export default function PurchaseOrdersPage() {
   const createReceiptMutation = useCreateGoodsReceipt();
   const { confirm, Modal: ConfirmModal } = useConfirmationModal();
   const permissions = useFeaturePermissions("INVENTORY", "purchase_order");
-console.log("permissions:: ", permissions)
   const [modalOpen, setModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<PurchaseOrder | undefined>();
   const [receiptOrder, setReceiptOrder] = useState<PurchaseOrder | null>(null);

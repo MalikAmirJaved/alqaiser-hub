@@ -106,16 +106,9 @@ export const ProductCard = memo(function ProductCard({
 
       {/* Price and Add Button */}
       <div className="flex items-center justify-between mt-auto pt-2 border-t border-border">
-        <div className="flex flex-col">
-          <span className="text-base font-semibold text-primary">
-            {formatCurrency(variant.selling_price)}
-          </span>
-          {variant.buying_price > 0 && variant.buying_price !== variant.selling_price && (
-            <span className="text-xs text-muted-foreground line-through">
-              {formatCurrency(variant.buying_price)}
-            </span>
-          )}
-        </div>
+        <span className="text-base font-semibold text-primary">
+          {formatCurrency(variant.selling_price)}
+        </span>
         {!isOutOfStock && (
           <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold">
             +

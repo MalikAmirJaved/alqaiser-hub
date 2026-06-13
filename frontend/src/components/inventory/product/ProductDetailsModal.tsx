@@ -229,7 +229,6 @@ export default function ProductDetailsModal({ productId, onClose, onEdit }: Prop
                   </div>
                   <div className="text-right shrink-0 ml-4">
                     <p className="text-sm font-bold text-success">{formatCurrency(v.selling_price)}</p>
-                    <p className="text-xs text-muted-foreground line-through">{formatCurrency(v.buying_price)}</p>
                     <p className="text-xs text-muted-foreground mt-1">{v.total_stock} in stock</p>
                   </div>
                 </div>

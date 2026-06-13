@@ -15,8 +15,8 @@ class VariantDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductVariant
         fields = [
-            'id', 'sku', 'barcode', 'qr_code',
-            'buying_price', 'selling_price',
+            'id', 'sku', 'variant_title', 'barcode',
+            'selling_price',
             'min_stock_level', 'max_stock_level',
             'is_deleted',
             'product_id', 'product_name', 'category_id', 'brand_id', 'unit', 'is_active',
@@ -35,7 +35,7 @@ class VariantPOSSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductVariant
         fields = [
-            'id', 'sku', 'barcode', 'selling_price', 'buying_price',
+            'id', 'sku', 'barcode', 'selling_price',
             'min_stock_level', 'product_name', 'category_id', 'brand_id',
             'unit', 'is_active', 'created_at', 'updated_at'
         ]

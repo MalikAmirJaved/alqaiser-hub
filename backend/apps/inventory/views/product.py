@@ -115,9 +115,8 @@ class ProductViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Model
                 company_id=user.company_id,
                 branch_id=user.branch_id,
                 sku=var_data.get('sku') or self._generate_sku(product),
+                variant_title=var_data.get('variantTitle', ''),
                 barcode=var_data.get('barcode', ''),
-                qr_code=var_data.get('qrCode', ''),
-                buying_price=var_data.get('buyingPrice', 0),
                 selling_price=var_data.get('sellingPrice', 0),
                 min_stock_level=var_data.get('minStockLevel', 0),
                 max_stock_level=var_data.get('maxStockLevel', 0),
@@ -151,27 +150,13 @@ class ProductViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Model
                 )
 
             # Stock item (default warehouse)
-            initial_stock = var_data.get('stock', 0)
-            StockItem.objects.create(
-                variant=variant,
-                warehouse=default_warehouse,
-                company_id=user.company_id,
-                branch_id=user.branch_id,
-                quantity_on_hand=initial_stock,
-                created_by=user,
-                updated_by=user,
-            )
-            if initial_stock > 0:
-                InventoryTransaction.objects.create(
-                    transaction_id=uuid.uuid4(),
+            if default_warehouse:
+                StockItem.objects.create(
                     variant=variant,
                     warehouse=default_warehouse,
                     company_id=user.company_id,
-                    quantity_change=initial_stock,
-                    quantity_before=0,
-                    quantity_after=initial_stock,
-                    unit_cost=var_data.get('buyingPrice', 0),
-                    transaction_type='INITIAL',
+                    branch_id=user.branch_id,
+                    quantity_on_hand=0,
                     created_by=user,
                     updated_by=user,
                 )
@@ -217,13 +202,8 @@ class ProductViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Model
         product.updated_by = user
         product.save()
 
-        # Get default warehouse for stock operations (only if needed)
+        # Get default warehouse for stock operations
         default_warehouse = self._get_default_warehouse(user)
-        if not default_warehouse:
-            return Response(
-                {'error': 'No active warehouse found. Cannot update stock.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
 
         # Handle variants: map received variants by UUID
         received_variants = {v.get('id'): v for v in data.get('variants', []) if v.get('id')}
@@ -237,29 +217,16 @@ class ProductViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Model
 
         # Process each variant from request
         for var_data in data.get('variants', []):
-            # Get the current stock (on hand) for this variant if it exists
-            current_stock_item = None
-            current_stock_qty = 0
             if var_data.get('id') and var_data['id'] in existing_variants:
                 variant = existing_variants[var_data['id']]
-                try:
-                    current_stock_item = StockItem.objects.get(
-                        variant=variant,
-                        warehouse=default_warehouse,
-                        company_id=user.company_id
-                    )
-                    current_stock_qty = current_stock_item.quantity_on_hand
-                except StockItem.DoesNotExist:
-                    pass
             else:
                 variant = None
 
             # If variant exists, update its fields
             if variant:
                 variant.sku = var_data.get('sku', variant.sku)
+                variant.variant_title = var_data.get('variantTitle', variant.variant_title)
                 variant.barcode = var_data.get('barcode', variant.barcode)
-                variant.qr_code = var_data.get('qrCode', variant.qr_code)
-                variant.buying_price = var_data.get('buyingPrice', variant.buying_price)
                 variant.selling_price = var_data.get('sellingPrice', variant.selling_price)
                 variant.min_stock_level = var_data.get('minStockLevel', variant.min_stock_level)
                 variant.max_stock_level = var_data.get('maxStockLevel', variant.max_stock_level)
@@ -294,36 +261,6 @@ class ProductViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Model
                             updated_by=user,
                         )
 
-                # Handle stock adjustment if provided via stockChangeAmount
-                if 'stockChangeAmount' in var_data and var_data['stockChangeAmount']:
-                    change = var_data['stockChangeAmount']
-                    self._adjust_stock(
-                        variant,
-                        change,
-                        var_data.get('stockChangeType', 'ADJUSTMENT'),
-                        var_data.get('stockChangeReason', ''),
-                        user,
-                        default_warehouse
-                    )
-                # Also support absolute stock field (only if it differs from current stock)
-                elif 'stock' in var_data and var_data['stock'] is not None:
-                    new_abs = var_data['stock']
-                    # Convert to int if string
-                    try:
-                        new_abs = int(new_abs)
-                    except (ValueError, TypeError):
-                        new_abs = current_stock_qty
-                    if new_abs != current_stock_qty:
-                        change = new_abs - current_stock_qty
-                        self._adjust_stock(
-                            variant,
-                            change,
-                            'ADJUSTMENT',
-                            f'Stock set from {current_stock_qty} to {new_abs} via product update',
-                            user,
-                            default_warehouse
-                        )
-
             else:
                 # Create new variant
                 new_variant = ProductVariant.objects.create(
@@ -331,9 +268,8 @@ class ProductViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Model
                     company_id=user.company_id,
                     branch_id=user.branch_id,
                     sku=var_data.get('sku') or self._generate_sku(product),
+                    variant_title=var_data.get('variantTitle', ''),
                     barcode=var_data.get('barcode', ''),
-                    qr_code=var_data.get('qrCode', ''),
-                    buying_price=var_data.get('buyingPrice', 0),
                     selling_price=var_data.get('sellingPrice', 0),
                     min_stock_level=var_data.get('minStockLevel', 0),
                     max_stock_level=var_data.get('maxStockLevel', 0),
@@ -366,28 +302,14 @@ class ProductViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Model
                         updated_by=user,
                     )
 
-                # Initial stock (if any)
-                initial_stock = var_data.get('stock', 0)
-                StockItem.objects.create(
-                    variant=new_variant,
-                    warehouse=default_warehouse,
-                    company_id=user.company_id,
-                    branch_id=user.branch_id,
-                    quantity_on_hand=initial_stock,
-                    created_by=user,
-                    updated_by=user,
-                )
-                if initial_stock > 0:
-                    InventoryTransaction.objects.create(
-                        transaction_id=uuid.uuid4(),
+                # Stock item (default warehouse)
+                if default_warehouse:
+                    StockItem.objects.create(
                         variant=new_variant,
                         warehouse=default_warehouse,
                         company_id=user.company_id,
-                        quantity_change=initial_stock,
-                        quantity_before=0,
-                        quantity_after=initial_stock,
-                        unit_cost=var_data.get('buyingPrice', 0),
-                        transaction_type='INITIAL',
+                        branch_id=user.branch_id,
+                        quantity_on_hand=0,
                         created_by=user,
                         updated_by=user,
                     )

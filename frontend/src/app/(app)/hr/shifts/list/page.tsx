@@ -139,7 +139,7 @@ export default function ShiftsManagementPage() {
   
   // Departments list
   const departments = useMemo(() => {
-    const depts = new Set(employees.map(e => e.department).filter(Boolean));
+    const depts = new Set(employees.map(e => e.department_name).filter((d): d is string => !!d));
     return Array.from(depts);
   }, [employees]);
   
@@ -622,7 +622,7 @@ export default function ShiftsManagementPage() {
                             <span className="ml-2 text-[10px] bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 px-1.5 py-0.5 rounded-full">Override Today</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">{emp.department || "—"}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{emp.department_name || "—"}</td>
                         <td className="px-4 py-3">
                           {resolved?.template ? (
                             <div className="inline-flex items-center gap-2 px-2 py-1 rounded text-xs" style={{ backgroundColor: `#3b82f620` }}>
@@ -719,7 +719,7 @@ export default function ShiftsManagementPage() {
                         className="rounded border-border"
                       />
                       <span className="text-sm">{emp.first_name} {emp.last_name || ''}</span>
-                      <span className="text-xs text-muted-foreground ml-auto">{emp.department}</span>
+                      <span className="text-xs text-muted-foreground ml-auto">{emp.department_name}</span>
                     </label>
                   ))}
                 </div>
@@ -886,7 +886,7 @@ export default function ShiftsManagementPage() {
                           <div className="font-medium text-sm">
                             {emp.first_name} {emp.last_name || ''}
                           </div>
-                          <div className="text-xs text-muted-foreground">{emp.department}</div>
+                          <div className="text-xs text-muted-foreground">{emp.department_name}</div>
                         </div>
                         <div className="flex gap-1">
                           {isOverride && (

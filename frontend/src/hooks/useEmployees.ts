@@ -70,6 +70,8 @@ export interface ActiveEmployee {
   designation_name?: string;
   email?: string;
   phone: string;
+  default_shift_name?: string;
+  default_shift_id?: string;
 }
 
 // Fetch only active employees (for dropdowns)

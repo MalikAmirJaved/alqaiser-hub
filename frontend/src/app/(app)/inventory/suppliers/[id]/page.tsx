@@ -73,7 +73,7 @@ export default function SupplierDetailPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={supplier.name} subtitle={`Code: ${supplier.code} · Payment Terms: ${supplier.payment_terms || "N/A"}`} />
+      <PageHeader title={supplier.name} subtitle={`Code: ${supplier.code}`} />
 
       {/* Supplier Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

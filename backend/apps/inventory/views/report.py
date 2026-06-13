@@ -441,7 +441,7 @@ class ReportViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Generi
             received = totals['received']
             fulfillment = float(received / ordered * 100) if ordered > 0 else 100.0
 
-            lead_time = max(1.0, 6.0 - float(sup.rating))
+            lead_time = max(1.0, 3.0)
             performance = (fulfillment * 0.6) + ((5.0 - min(5.0, lead_time)) / 5.0 * 100.0 * 0.4)
 
             results.append({
