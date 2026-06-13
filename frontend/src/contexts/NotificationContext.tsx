@@ -182,7 +182,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
 
       await fetchNotifications();
 
-      const wsUrl = apiUrl.replace(/^http/, "ws") + `/ws/notifications/${companyId}/${branchId}/`;
+      const wsUrl = apiUrl.replace(/^http/, "ws") + `/ws/notifications/${companyId}/${branchId || "None"}/`;
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -288,6 +288,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
       pollInterval = setInterval(() => {
         queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
         queryClient.invalidateQueries({ queryKey: ["currentStock"] });
+        queryClient.invalidateQueries({ queryKey: ["companySettings"] });
       }, 30000);
     }
     return () => clearInterval(pollInterval);

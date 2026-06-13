@@ -38,7 +38,17 @@ def get_company_branch(instance):
     company_id = getattr(instance, 'company_id', None)
     branch_id = getattr(instance, 'branch_id', None)
 
-    # Fallback for models that have a foreign key to Company/Branch but not direct IDs
+    meta = getattr(instance, '_meta', None)
+
+    # If the instance itself is a Company, its own id IS the company_id
+    if company_id is None and meta and meta.model_name == 'company' and hasattr(instance, 'id'):
+        company_id = instance.id
+
+    # If the instance itself is a Branch, its own id IS the branch_id
+    if branch_id is None and meta and meta.model_name == 'branch' and hasattr(instance, 'id'):
+        branch_id = instance.id
+
+    # Fallback for models that have a FK to Company/Branch but not direct ID fields
     if company_id is None and hasattr(instance, 'company'):
         company_id = getattr(instance.company, 'id', None)
     if branch_id is None and hasattr(instance, 'branch'):

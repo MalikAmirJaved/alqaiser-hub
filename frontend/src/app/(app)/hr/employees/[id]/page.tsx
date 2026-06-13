@@ -240,8 +240,8 @@ export default function EmployeeDetailPage() {
     employment: (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <SectionCard title="Job Details" icon={Briefcase}>
-          <InfoRow label="Department" value={employee.department} />
-          <InfoRow label="Designation" value={employee.designation} />
+          <InfoRow label="Department" value={employee.department_name} />
+          <InfoRow label="Designation" value={employee.designation_name} />
           <InfoRow
             label="Status"
           >

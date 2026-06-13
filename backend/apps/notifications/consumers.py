@@ -33,10 +33,18 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             if self.company_id else None
         )
 
+        self.fallback_group = (
+            f"notify_c{self.company_id}_bNone"
+            if self.company_id else None
+        )
+
         self.user_group_name = f"notify_u{self.user.id}"
 
         if self.group_name:
             await self.channel_layer.group_add(self.group_name, self.channel_name)
+
+        if self.fallback_group and self.fallback_group != self.group_name:
+            await self.channel_layer.group_add(self.fallback_group, self.channel_name)
 
         await self.channel_layer.group_add(self.user_group_name, self.channel_name)
 
@@ -49,6 +57,12 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         if hasattr(self, "group_name") and self.group_name:
             await self.channel_layer.group_discard(
                 self.group_name,
+                self.channel_name
+            )
+
+        if hasattr(self, "fallback_group") and self.fallback_group and self.fallback_group != getattr(self, "group_name", None):
+            await self.channel_layer.group_discard(
+                self.fallback_group,
                 self.channel_name
             )
 
