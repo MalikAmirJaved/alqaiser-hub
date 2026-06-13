@@ -1,32 +1,77 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useRef } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+} from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { companyContext } from "@/services/companyContextService";
 import { toast } from "sonner";
+import { useApi } from "@/hooks/useApi";
+
+// Map backend entity names to React Query keys for cache invalidation
+const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
+  assets: ["assets", "assetStats"],
+  assetCategories: ["assetCategories", "assetCategoryStats"],
+  employees: ["employees", "employeeStats"],
+  leaves: ["leaves", "leaveStats", "leaveBalances"],
+  shiftTemplates: ["shiftTemplates"],
+  shiftOverrides: ["shiftOverrides", "resolvedShifts", "shiftStatistics"],
+  shiftDateRange: ["shiftDateRange", "resolvedShifts", "shiftStatistics"],
+  payroll: ["payroll", "payrollStats"],
+  recruitment: ["recruitment", "recruitmentStats"],
+  exitRecords: ["exitRecords", "exitMetrics"],
+  policies: ["policies"],
+  compensations: ["compensations"],
+  loans: ["loans"],
+};
 
 interface NotificationContextProps {
   notifications: any[];
   isConnected: boolean;
+  markAsRead: (id: number) => Promise<void>;
+  markAllAsRead: () => Promise<void>;
+  toggleFavourite: (id: number) => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextProps>({
   notifications: [],
   isConnected: false,
+  markAsRead: async () => {},
+  markAllAsRead: async () => {},
+  toggleFavourite: async () => {},
 });
 
 export const useNotifications = () => useContext(NotificationContext);
 
-export const NotificationProvider = ({ children }: { children: React.ReactNode }) => {
+export const NotificationProvider = ({
+  children,
+}: {
+  children: React.ReactNode;
+}) => {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  const fetchNotifications = async () => {
+    try {
+      const data = await api<any[]>("/api/notifications/");
+      setNotifications(data);
+    } catch (e) {
+      console.error("Error fetching notifications", e);
+    }
+  };
 
   useEffect(() => {
     let reconnectTimeout: NodeJS.Timeout;
     let ws: WebSocket;
 
     const connectSocket = async () => {
-      // Ensure context is initialized
       if (!companyContext.initialized) {
         await companyContext.init();
       }
@@ -34,29 +79,54 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
       const companyId = companyContext.getCurrentCompanyId();
       const branchId = companyContext.getCurrentBranchId();
 
-      // Only connect if we have both context ids
       if (!companyId || !branchId) return;
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const wsUrl = apiUrl.replace(/^http/, 'ws') + `/ws/notifications/${companyId}/${branchId}/`;
-      
+      await fetchNotifications();
+
+      const apiUrl =
+        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+      const wsUrl =
+        apiUrl.replace(/^http/, "ws") +
+        `/ws/notifications/${companyId}/${branchId}/`;
+
       ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log("Connected to notification socket");
         setIsConnected(true);
       };
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          setNotifications((prev) => [data, ...prev]);
-          
-          // Show toast notification using Sonner
-          toast(data.title || "New Notification", {
-            description: data.message,
-          });
+
+          // Handle notification messages
+          if (data.type === "notification") {
+            setNotifications((prev) => {
+              const exists = prev.find((n) => n.id === data.id);
+              if (exists) return prev;
+              return [data, ...prev];
+            });
+
+            toast(data.title || "New Notification", {
+              description: data.message,
+            });
+          }
+          // Handle data update messages (cache invalidation)
+          else if (data.type === "data_update") {
+            const { entity, action, record_id } = data;
+            const queryKeys = ENTITY_TO_QUERY_KEY[entity];
+            if (queryKeys) {
+              queryKeys.forEach((key) => {
+                // Invalidate all queries that start with this key
+                queryClient.invalidateQueries({ queryKey: [key] });
+              });
+              console.log(
+                `[Realtime] Invalidated queries for ${entity} (${action})${record_id ? ` id:${record_id}` : ""}`
+              );
+            }
+          }
         } catch (e) {
           console.error("Error parsing websocket message", e);
         }
@@ -64,7 +134,6 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
 
       ws.onclose = () => {
         setIsConnected(false);
-        // Attempt to reconnect after 5 seconds
         reconnectTimeout = setTimeout(connectSocket, 5000);
       };
 
@@ -81,10 +150,82 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         wsRef.current.close();
       }
     };
-  }, []);
+  }, [api, queryClient]);
+
+  const markAsRead = async (id: number) => {
+    try {
+      await api(`/api/notifications/${id}/mark_read/`, {
+        method: "POST",
+      });
+
+      setNotifications((prev) =>
+        prev.map((n) =>
+          n.id === id
+            ? {
+                ...n,
+                is_read: true,
+                read_at: new Date().toISOString(),
+              }
+            : n
+        )
+      );
+    } catch (e) {
+      console.error("Error marking notification as read", e);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    try {
+      await api(`/api/notifications/mark_all_read/`, {
+        method: "POST",
+      });
+
+      setNotifications((prev) =>
+        prev.map((n) => ({
+          ...n,
+          is_read: true,
+          read_at: n.read_at || new Date().toISOString(),
+        }))
+      );
+    } catch (e) {
+      console.error("Error marking all notifications as read", e);
+    }
+  };
+
+  const toggleFavourite = async (id: number) => {
+    try {
+      const res = await api<{ is_favourite: boolean }>(
+        `/api/notifications/${id}/toggle_favourite/`,
+        {
+          method: "POST",
+        }
+      );
+
+      setNotifications((prev) =>
+        prev.map((n) =>
+          n.id === id
+            ? {
+                ...n,
+                is_favourite: res.is_favourite,
+              }
+            : n
+        )
+      );
+    } catch (e) {
+      console.error("Error toggling favourite", e);
+    }
+  };
 
   return (
-    <NotificationContext.Provider value={{ notifications, isConnected }}>
+    <NotificationContext.Provider
+      value={{
+        notifications,
+        isConnected,
+        markAsRead,
+        markAllAsRead,
+        toggleFavourite,
+      }}
+    >
       {children}
     </NotificationContext.Provider>
   );

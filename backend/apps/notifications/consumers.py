@@ -62,3 +62,13 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             'title': title,
             'created_at': created_at,
         }))
+
+    async def data_update(self, event):
+        """Handle data update messages to trigger cache invalidation on frontend"""
+        await self.send(text_data=json.dumps({
+            'type': 'data_update',
+            'entity': event['entity'],       # e.g., 'assets', 'employees'
+            'action': event.get('action'),   # 'create', 'update', 'delete' (optional)
+            'record_id': event.get('record_id'),  # optional, for granular invalidation
+        }))
+
