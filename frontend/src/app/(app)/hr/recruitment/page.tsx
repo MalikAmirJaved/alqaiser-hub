@@ -573,7 +573,6 @@ function CandidateFormModal({
   onSubmit: (d: Partial<RecruitmentRecord>, rounds?: any[]) => void;
   onClose: () => void;
 }) {
-  const [step, setStep] = useState<"basic" | "rounds">("basic");
   const [formData, setFormData] = useState<Partial<RecruitmentRecord>>({
     name: "",
     position: "",
@@ -583,7 +582,13 @@ function CandidateFormModal({
     apply_date: new Date().toISOString().split("T")[0],
     ...initialData,
   });
-  const [rounds, setRounds] = useState<any[]>([]);
+  const [rounds, setRounds] = useState<any[]>(() =>
+    initialData ? [] : [{
+      round_number: 1,
+      round_title: "Round 1",
+      interview_type: "TECHNICAL",
+    }]
+  );
   const [assignedId, setAssignedId] = useState(initialData?.assigned_to_id?.toString() || "");
   const [loading, setLoading] = useState(false);
 
@@ -597,27 +602,13 @@ function CandidateFormModal({
   const update = (field: keyof RecruitmentRecord, value: any) =>
     setFormData(prev => ({ ...prev, [field]: value }));
 
-  const handleNext = () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
     if (!formData.name || !formData.position || !formData.department) {
       toast.error("Please fill in all required fields");
       return;
     }
-    if (rounds.length === 0) {
-      setRounds([{
-        round_number: 1,
-        round_title: "Round 1",
-        interview_type: "TECHNICAL",
-      }]);
-    }
-    setStep("rounds");
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-  if (!isEditing && step === "rounds" && rounds.length === 0) {
-    toast.error("Please add at least one interview round before creating the candidate.");
-    return;
-  }
 
     setLoading(true);
     const assigned = employeeOptions.find(emp => emp.id.toString() === assignedId);
@@ -646,11 +637,7 @@ function CandidateFormModal({
                 {isEditing ? `Edit — ${initialData.name}` : "Add Candidate"}
               </h2>
               {!isEditing && (
-                <div className="flex items-center gap-2 mt-1.5">
-                  <StepIndicator active={step === "basic"} done={step === "rounds"} label="Basic Info" num={1} />
-                  <div className="w-8 h-px bg-border" />
-                  <StepIndicator active={step === "rounds"} done={false} label="Interview Rounds" num={2} />
-                </div>
+                <p className="text-xs text-muted-foreground mt-1">Fill in candidate details and configure interview rounds below.</p>
               )}
             </div>
           </div>
@@ -660,132 +647,125 @@ function CandidateFormModal({
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5">
-          {step === "basic" ? (
-            <div className="space-y-6">
-              {/* Basic Info */}
-              <Section icon={<Users className="w-4 h-4" />} title="Personal Info">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <Field label="Full Name" required>
-                    <input required value={formData.name || ""} onChange={e => update("name", e.target.value)} placeholder="John Smith" className={inputCls} />
-                  </Field>
-                  <Field label="Email">
-                    <input type="email" value={formData.email || ""} onChange={e => update("email", e.target.value)} placeholder="john@example.com" className={inputCls} />
-                  </Field>
-                  <Field label="Phone">
-                    <input type="tel" value={formData.phone || ""} onChange={e => update("phone", e.target.value.replace(/[^0-9+]/g, "").slice(0, 15))} maxLength={20} placeholder="+1 234 567 890" className={inputCls} />
-                  </Field>
-                  <Field label="Source">
-                    <SearchableSelect value={formData.source || ""} onChange={v => update("source", v)} options={SOURCES} placeholder="Where did they apply?" />
-                  </Field>
-                </div>
-              </Section>
+        <div className="px-6 py-5 space-y-6">
+          {/* Basic Info */}
+          <Section icon={<Users className="w-4 h-4" />} title="Personal Info">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Field label="Full Name" required>
+                <input required value={formData.name || ""} onChange={e => update("name", e.target.value)} placeholder="John Smith" className={inputCls} />
+              </Field>
+              <Field label="Email">
+                <input type="email" value={formData.email || ""} onChange={e => update("email", e.target.value)} placeholder="john@example.com" className={inputCls} />
+              </Field>
+              <Field label="Phone">
+                <input type="tel" value={formData.phone || ""} onChange={e => update("phone", e.target.value.replace(/[^0-9+]/g, "").slice(0, 15))} maxLength={20} placeholder="+1 234 567 890" className={inputCls} />
+              </Field>
+              <Field label="Source">
+                <SearchableSelect value={formData.source || ""} onChange={v => update("source", v)} options={SOURCES} placeholder="Where did they apply?" />
+              </Field>
+            </div>
+          </Section>
 
-              {/* Position */}
-              <Section icon={<Briefcase className="w-4 h-4" />} title="Position & Experience">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <Field label="Position" required>
-                    <input required value={formData.position || ""} onChange={e => update("position", e.target.value)} placeholder="e.g. Senior Frontend Engineer" className={inputCls} />
-                  </Field>
-                  <Field label="Department" required>
-                    <SearchableSelect value={formData.department || ""} onChange={v => update("department", v)} options={departmentOptions} placeholder="Select department" />
-                  </Field>
-                  <Field label="Current Company">
-                    <input value={formData.current_company || ""} onChange={e => update("current_company", e.target.value)} placeholder="Previous employer" className={inputCls} />
-                  </Field>
-                  <Field label="Current Position">
-                    <input value={formData.current_position || ""} onChange={e => update("current_position", e.target.value)} placeholder="Current role" className={inputCls} />
-                  </Field>
-                  <Field label="Years of Experience">
-                    <input type="number" step="0.5" min="0" value={formData.years_of_experience || ""} onChange={e => update("years_of_experience", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="e.g. 5" className={inputCls} />
-                  </Field>
-                  <Field label="Notice Period (days)">
-                    <input type="number" min="0" value={formData.notice_period_days || ""} onChange={e => update("notice_period_days", e.target.value ? parseInt(e.target.value) : undefined)} placeholder="e.g. 30" className={inputCls} />
-                  </Field>
-                  <Field label="Expected Salary">
-                    <input type="number" step="1000" min="0" value={formData.expected_salary || ""} onChange={e => update("expected_salary", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="e.g. 80000" className={inputCls} />
-                  </Field>
-                  <Field label="Apply Date">
-                    <input type="date" value={formData.apply_date || ""} onChange={e => update("apply_date", e.target.value)} className={inputCls} />
-                  </Field>
-                </div>
-              </Section>
+          {/* Position */}
+          <Section icon={<Briefcase className="w-4 h-4" />} title="Position & Experience">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Field label="Position" required>
+                <input required value={formData.position || ""} onChange={e => update("position", e.target.value)} placeholder="e.g. Senior Frontend Engineer" className={inputCls} />
+              </Field>
+              <Field label="Department" required>
+                <SearchableSelect value={formData.department || ""} onChange={v => update("department", v)} options={departmentOptions} placeholder="Select department" />
+              </Field>
+              <Field label="Current Company">
+                <input value={formData.current_company || ""} onChange={e => update("current_company", e.target.value)} placeholder="Previous employer" className={inputCls} />
+              </Field>
+              <Field label="Current Position">
+                <input value={formData.current_position || ""} onChange={e => update("current_position", e.target.value)} placeholder="Current role" className={inputCls} />
+              </Field>
+              <Field label="Years of Experience">
+                <input type="number" step="0.5" min="0" value={formData.years_of_experience || ""} onChange={e => update("years_of_experience", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="e.g. 5" className={inputCls} />
+              </Field>
+              <Field label="Notice Period (days)">
+                <input type="number" min="0" value={formData.notice_period_days || ""} onChange={e => update("notice_period_days", e.target.value ? parseInt(e.target.value) : undefined)} placeholder="e.g. 30" className={inputCls} />
+              </Field>
+              <Field label="Expected Salary">
+                <input type="number"  min="0" value={formData.expected_salary || ""} onChange={e => update("expected_salary", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="e.g. 80000" className={inputCls} />
+              </Field>
+              <Field label="Apply Date">
+                <input type="date" value={formData.apply_date || ""} onChange={e => update("apply_date", e.target.value)} className={inputCls} />
+              </Field>
+            </div>
+          </Section>
 
-              {/* Stage (for editing) */}
-              {isEditing && (
-                <Section icon={<FileText className="w-4 h-4" />} title="Pipeline Stage">
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <Field label="Stage">
-                      <SearchableSelect value={formData.stage || ""} onChange={v => update("stage", v)} options={STAGES} placeholder="Select stage" />
-                    </Field>
-                    <Field label="Status">
-                      <SearchableSelect
-                        value={formData.status || ""}
-                        onChange={v => update("status", v)}
-                        options={[{ value: "Active", label: "Active" }, { value: "Closed", label: "Closed" }]}
-                        placeholder="Select status"
-                      />
-                    </Field>
-                  </div>
-                </Section>
-              )}
-
-              {/* Assignment */}
-              <Section icon={<UserCheck className="w-4 h-4" />} title="Assignment">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <Field label="Assigned To">
-                    <SearchableSelect value={assignedId} onChange={setAssignedId} options={employeeOpts} placeholder="Assign to an employee" />
-                  </Field>
-                  <Field label="Resume / Portfolio URL">
-                    <input type="url" value={formData.resume_url || ""} onChange={e => update("resume_url", e.target.value)} placeholder="https://…" className={inputCls} />
-                  </Field>
-                </div>
-                <Field label="Notes">
-                  <textarea
-                    rows={3}
-                    value={formData.notes || ""}
-                    onChange={e => update("notes", e.target.value)}
-                    placeholder="Any additional notes about the candidate…"
-                    className="w-full bg-muted/40 border border-border rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
+          {/* Stage (for editing) */}
+          {isEditing && (
+            <Section icon={<FileText className="w-4 h-4" />} title="Pipeline Stage">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Field label="Stage">
+                  <SearchableSelect value={formData.stage || ""} onChange={v => update("stage", v)} options={STAGES} placeholder="Select stage" />
+                </Field>
+                <Field label="Status">
+                  <SearchableSelect
+                    value={formData.status || ""}
+                    onChange={v => update("status", v)}
+                    options={[{ value: "Active", label: "Active" }, { value: "Closed", label: "Closed" }]}
+                    placeholder="Select status"
                   />
                 </Field>
-              </Section>
+              </div>
+            </Section>
+          )}
+
+          {/* Assignment */}
+          <Section icon={<UserCheck className="w-4 h-4" />} title="Assignment">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Field label="Assigned To">
+                <SearchableSelect value={assignedId} onChange={setAssignedId} options={employeeOpts} placeholder="Assign to an employee" />
+              </Field>
+              <Field label="Resume / Portfolio URL">
+                <input type="url" value={formData.resume_url || ""} onChange={e => update("resume_url", e.target.value)} placeholder="https://…" className={inputCls} />
+              </Field>
             </div>
-          ) : (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Configure the interview rounds for this candidate. You can update round statuses later.</p>
-              <RoundBuilder value={rounds} onChange={setRounds} employees={employeeOptions} />
-            </div>
+            <Field label="Notes">
+              <textarea
+                rows={3}
+                value={formData.notes || ""}
+                onChange={e => update("notes", e.target.value)}
+                placeholder="Any additional notes about the candidate…"
+                className="w-full bg-muted/40 border border-border rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
+              />
+            </Field>
+          </Section>
+
+          {/* Interview Rounds */}
+          {!isEditing && (
+            <section>
+              <div className="flex items-center gap-2 text-sm font-semibold mb-3 text-foreground">
+                <FileText className="w-4 h-4 text-muted-foreground" />
+                Interview Rounds
+              </div>
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">Configure the interview rounds for this candidate. You can update round statuses later.</p>
+                <RoundBuilder value={rounds} onChange={setRounds} employees={employeeOptions} />
+              </div>
+            </section>
           )}
         </div>
 
         {/* Footer */}
         <div className="sticky bottom-0 bg-card border-t border-border px-6 py-4 flex items-center justify-between">
-          <div>
-            {step === "rounds" && !isEditing && (
-              <button type="button" onClick={() => setStep("basic")} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-                <ChevronLeft className="w-4 h-4" /> Back
-              </button>
-            )}
-          </div>
+          <div />
           <div className="flex items-center gap-2">
             <button type="button" onClick={onClose} disabled={loading} className="px-4 h-9 rounded-lg border border-border text-sm hover:bg-muted transition-colors disabled:opacity-50">
               Cancel
             </button>
-            {step === "basic" && !isEditing ? (
-              <button type="button" onClick={handleNext} className="inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
-                Next <ChevronRight className="w-4 h-4" />
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={loading || (!isEditing && step === "rounds" && rounds.length === 0)}
-                className="inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
-              >
-                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                {isEditing ? "Save Changes" : "Create Candidate"}
-              </button>
-            )}
+            <button
+              type="submit"
+              disabled={loading}
+              className="inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {isEditing ? "Save Changes" : "Create Candidate"}
+            </button>
           </div>
         </div>
       </form>
