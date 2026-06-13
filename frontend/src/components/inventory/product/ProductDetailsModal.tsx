@@ -125,11 +125,11 @@ export default function ProductDetailsModal({
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-success/10 rounded-lg p-3">
                   <div className="text-xs text-muted-foreground">Selling Price</div>
-                  <div className="text-2xl font-bold text-success">${product.selling_price?.toFixed(2)}</div>
+                  <div className="text-2xl font-bold text-success">${product.selling_price}</div>
                 </div>
                 <div className="bg-muted/20 rounded-lg p-3">
                   <div className="text-xs text-muted-foreground">Cost Price</div>
-                  <div className="font-medium">${product.cost_price?.toFixed(2)}</div>
+                  <div className="font-medium">${product.cost_price}</div>
                 </div>
               </div>
             </TabsContent>
