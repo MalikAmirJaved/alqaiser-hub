@@ -539,7 +539,7 @@ export default function RecruitmentPage() {
           rounds={existingRounds.length > 0 ? existingRounds : (roundsData || [])}
           candidateName={selectedCandidate.name}
           onClose={() => { setRoundsModalOpen(false); setSelectedCandidate(null); setExistingRounds([]); }}
-          onUpdate={permissions.update ? handleUpdateRounds : undefined}
+          onUpdate={permissions.update_round ? handleUpdateRounds : undefined}
         />
       )}
 
