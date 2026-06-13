@@ -6,7 +6,8 @@ from apps.compsetting.models import Designation
 User = get_user_model()
 
 class UserProfileSerializer(serializers.ModelSerializer):
-    # Accept designation as UUID from frontend (write-only). This overrides the default FK mapping which expects PK.
+    # Accept department and designation as UUID from frontend (write-only). This overrides the default FK mapping which expects PK.
+    department = serializers.UUIDField(write_only=True, required=False)
     designation = serializers.UUIDField(write_only=True, required=False)
 
     branch_id = serializers.UUIDField(source='branch._id', read_only=True)
@@ -24,7 +25,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', '_id', 'username', 'email', 'first_name', 'last_name',
-            'department_id', 'department_name', 'designation', 'phone_number',
+            'department', 'department_id', 'department_name', 'designation', 'phone_number',
             'is_active', 'branch_id', 'branch_name', 'created_at', 'updated_at',
             'password','designation_id', 'designation_name', 'isfrom_employee_id', 'isfrom_employee_name'
         ]
@@ -33,7 +34,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def _get_department(self, department_value):
         """Convert a department UUID string or existing Department instance to a Department instance."""
-        if department_value is None:
+        if department_value is None or department_value == "":
             return None
         if isinstance(department_value, Department):
             return department_value
