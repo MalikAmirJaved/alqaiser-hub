@@ -20,6 +20,7 @@ interface RoundStatusModalProps {
   onClose: () => void;
   onUpdate?: (updates: Array<{ round_id: string; status: string; feedback?: string; rating?: number; interview_date?: string }>) => void;
   candidateName: string;
+  candidateStage: string;
 }
 
 const STATUS_OPTIONS = [
@@ -30,11 +31,12 @@ const STATUS_OPTIONS = [
   { value: "CANCELLED", label: "🚫 Cancelled", color: "bg-orange-500" },
 ];
 
-export function RoundStatusModal({ rounds, onClose, onUpdate, candidateName }: RoundStatusModalProps) {
+export function RoundStatusModal({ rounds, onClose, onUpdate, candidateName, candidateStage }: RoundStatusModalProps) {
   const [roundUpdates, setRoundUpdates] = useState<Record<string, any>>({});
   const [selectedRound, setSelectedRound] = useState<string | null>(null);
 
   const sortedRounds = [...rounds].sort((a, b) => a.round_number - b.round_number);
+  const readOnly = ["Offer", "Hired", "Rejected"].includes(candidateStage);
 
   const updateRoundStatus = (roundId: string, field: string, value: any) => {
     setRoundUpdates(prev => ({
@@ -135,85 +137,93 @@ export function RoundStatusModal({ rounds, onClose, onUpdate, candidateName }: R
                       {/* Expanded Content */}
                       {isSelected && (
                         <div className="p-4 border-t border-border space-y-4">
-                          {/* Status Selection */}
-                          <div className="grid sm:grid-cols-2 gap-3">
-                            <label className="text-sm flex flex-col gap-1">
-                              <span className="text-muted-foreground">Status</span>
-                              <div className="flex flex-wrap gap-2">
-                                {STATUS_OPTIONS.map(opt => (
-                                  <button
-                                    key={opt.value}
-                                    type="button"
-                                    onClick={() => {
-                                      updateRoundStatus(round.id, "status", opt.value);
-                                      // If setting to PASSED/FAILED, also update timestamp
-                                      if (opt.value === "PASSED" || opt.value === "FAILED") {
-                                        updateRoundStatus(round.id, "interview_date", new Date().toISOString());
-                                      }
-                                    }}
-                                    className={`px-3 py-1.5 rounded-md text-sm transition-all ${
-                                      currentStatus === opt.value
-                                        ? `${opt.color} text-white`
-                                        : "bg-muted hover:bg-muted/80"
-                                    }`}
-                                  >
-                                    {opt.label}
-                                  </button>
-                                ))}
+                          {readOnly ? (
+                            <div className="text-sm text-muted-foreground flex items-center gap-2 p-3 bg-muted/30 rounded-md">
+                              <Clock className="w-4 h-4" />
+                              Rounds are locked once candidate reaches Offer stage
+                            </div>
+                          ) : (
+                            <>
+                              {/* Status Selection */}
+                              <div className="grid sm:grid-cols-2 gap-3">
+                                <label className="text-sm flex flex-col gap-1">
+                                  <span className="text-muted-foreground">Status</span>
+                                  <div className="flex flex-wrap gap-2">
+                                    {STATUS_OPTIONS.map(opt => (
+                                      <button
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={() => {
+                                          updateRoundStatus(round.id, "status", opt.value);
+                                          if (opt.value === "PASSED" || opt.value === "FAILED") {
+                                            updateRoundStatus(round.id, "interview_date", new Date().toISOString());
+                                          }
+                                        }}
+                                        className={`px-3 py-1.5 rounded-md text-sm transition-all ${
+                                          currentStatus === opt.value
+                                            ? `${opt.color} text-white`
+                                            : "bg-muted hover:bg-muted/80"
+                                        }`}
+                                      >
+                                        {opt.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </label>
+
+                                <label className="text-sm flex flex-col gap-1">
+                                  <span className="text-muted-foreground flex items-center gap-1">
+                                    <Calendar className="w-3 h-3" /> Interview Date
+                                  </span>
+                                  <DatePicker
+                                    value={roundUpdates[round.id]?.interview_date || round.interview_date}
+                                    onChange={(v) => updateRoundStatus(round.id, "interview_date", v)}
+                                  />
+                                </label>
                               </div>
-                            </label>
 
-                            <label className="text-sm flex flex-col gap-1">
-                              <span className="text-muted-foreground flex items-center gap-1">
-                                <Calendar className="w-3 h-3" /> Interview Date
-                              </span>
-                              <DatePicker
-                                value={roundUpdates[round.id]?.interview_date || round.interview_date}
-                                onChange={(v) => updateRoundStatus(round.id, "interview_date", v)}
-                              />
-                            </label>
-                          </div>
+                              {/* Feedback */}
+                              <label className="text-sm flex flex-col gap-1">
+                                <span className="text-muted-foreground flex items-center gap-1">
+                                  <MessageSquare className="w-3 h-3" /> Feedback
+                                </span>
+                                <textarea
+                                  rows={3}
+                                  value={roundUpdates[round.id]?.feedback !== undefined ? roundUpdates[round.id].feedback : round.feedback || ""}
+                                  onChange={(e) => updateRoundStatus(round.id, "feedback", e.target.value)}
+                                  placeholder="Add detailed feedback about this round..."
+                                  className="bg-muted/40 border border-border rounded-md p-3 outline-none focus:ring-2 focus:ring-ring"
+                                />
+                              </label>
 
-                          {/* Feedback */}
-                          <label className="text-sm flex flex-col gap-1">
-                            <span className="text-muted-foreground flex items-center gap-1">
-                              <MessageSquare className="w-3 h-3" /> Feedback
-                            </span>
-                            <textarea
-                              rows={3}
-                              value={roundUpdates[round.id]?.feedback !== undefined ? roundUpdates[round.id].feedback : round.feedback || ""}
-                              onChange={(e) => updateRoundStatus(round.id, "feedback", e.target.value)}
-                              placeholder="Add detailed feedback about this round..."
-                              className="bg-muted/40 border border-border rounded-md p-3 outline-none focus:ring-2 focus:ring-ring"
-                            />
-                          </label>
+                              {/* Rating */}
+                              <label className="text-sm flex flex-col gap-1">
+                                <span className="text-muted-foreground flex items-center gap-1">
+                                  <Star className="w-3 h-3" /> Rating (1-10)
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="range"
+                                    min="1"
+                                    max="10"
+                                    value={roundUpdates[round.id]?.rating !== undefined ? roundUpdates[round.id].rating : round.rating || 5}
+                                    onChange={(e) => updateRoundStatus(round.id, "rating", parseInt(e.target.value))}
+                                    className="flex-1"
+                                  />
+                                  <span className="w-8 text-center font-medium">
+                                    {roundUpdates[round.id]?.rating !== undefined ? roundUpdates[round.id].rating : round.rating || 5}
+                                  </span>
+                                </div>
+                              </label>
 
-                          {/* Rating */}
-                          <label className="text-sm flex flex-col gap-1">
-                            <span className="text-muted-foreground flex items-center gap-1">
-                              <Star className="w-3 h-3" /> Rating (1-10)
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="range"
-                                min="1"
-                                max="10"
-                                value={roundUpdates[round.id]?.rating !== undefined ? roundUpdates[round.id].rating : round.rating || 5}
-                                onChange={(e) => updateRoundStatus(round.id, "rating", parseInt(e.target.value))}
-                                className="flex-1"
-                              />
-                              <span className="w-8 text-center font-medium">
-                                {roundUpdates[round.id]?.rating !== undefined ? roundUpdates[round.id].rating : round.rating || 5}
-                              </span>
-                            </div>
-                          </label>
-
-                          {/* Warning for cascade rejection */}
-                          {isFailed && round.round_number < sortedRounds.length && (
-                            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-3 text-sm text-yellow-600">
-                              ⚠️ This round is marked as FAILED. All subsequent rounds will be automatically rejected.
-                              You can manually update later rounds if needed.
-                            </div>
+                              {/* Warning for cascade rejection */}
+                              {isFailed && round.round_number < sortedRounds.length && (
+                                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-3 text-sm text-yellow-600">
+                                  ⚠️ This round is marked as FAILED. All subsequent rounds will be automatically rejected.
+                                  You can manually update later rounds if needed.
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       )}
@@ -229,7 +239,7 @@ export function RoundStatusModal({ rounds, onClose, onUpdate, candidateName }: R
           <button onClick={onClose} className="px-4 h-9 rounded-md border border-border hover:bg-muted">
             Cancel
           </button>
-          {onUpdate && (
+          {onUpdate && !readOnly && (
             <button onClick={handleSubmit} className="px-4 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90">
               Save Changes
             </button>

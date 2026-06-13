@@ -126,6 +126,9 @@ export function useCreateEmployee() {
       queryClient.invalidateQueries({ queryKey: ["employeeStats"] });
       // Refresh users so UI reflects new isfrom_employee links when employees are created from users
       queryClient.invalidateQueries({ queryKey: ["users"] });
+      // Refresh recruitment in case this employee was created from a candidate
+      queryClient.invalidateQueries({ queryKey: ["recruitment"] });
+      queryClient.invalidateQueries({ queryKey: ["recruitmentStats"] });
     },
   });
 }

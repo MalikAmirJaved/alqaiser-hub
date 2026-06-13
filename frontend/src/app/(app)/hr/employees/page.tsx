@@ -45,6 +45,7 @@ export default function EmployeesPage() {
       department_id: searchParams.get("department_id") || "",
       designation_id: searchParams.get("designation_id") || "",
       isfrom_user_id: searchParams.get("isfrom_user_id") || null,
+      candidate_id: searchParams.get("candidate_id") || null,
     };
   }, [searchParams, prefill]);
 
@@ -111,6 +112,9 @@ export default function EmployeesPage() {
       const payload = { ...employeeData };
       if (!editingEmployee && storedPrefillData?.isfrom_user_id) {
         payload.isfrom_user_id = storedPrefillData.isfrom_user_id;
+      }
+      if (!editingEmployee && storedPrefillData?.candidate_id) {
+        payload.candidate_id = storedPrefillData.candidate_id;
       }
       if (editingEmployee) {
         await updateEmployee.mutateAsync({

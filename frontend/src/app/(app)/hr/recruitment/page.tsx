@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import {
@@ -67,6 +68,8 @@ interface RecruitmentRecord {
   updated_at: string;
   created_by_name?: string;
   updated_by_name?: string;
+  converted_employee_id?: string;
+  converted_employee_name?: string;
 }
 
 interface InterviewRound {
@@ -137,6 +140,7 @@ function Avatar({ name, size = "sm" }: { name: string; size?: "sm" | "md" }) {
 // MAIN PAGE COMPONENT
 // ==========================================
 export default function RecruitmentPage() {
+  const router = useRouter();
   const permissions = useFeaturePermissions("HR", "recruitment");
   const [query, setQuery] = useState("");
   const [filterDept, setFilterDept] = useState("");
@@ -343,6 +347,7 @@ export default function RecruitmentPage() {
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide hidden lg:table-cell">Assigned To</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide">Stage</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide">Rounds</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">Employee</th>
                 <th className="px-4 py-3 text-right font-medium text-muted-foreground text-xs uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
@@ -359,7 +364,7 @@ export default function RecruitmentPage() {
                 ))
               ) : records.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-16 text-muted-foreground">
+                    <td colSpan={8} className="text-center py-16 text-muted-foreground">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
                         <Users className="w-6 h-6 opacity-40" />
@@ -451,6 +456,18 @@ export default function RecruitmentPage() {
                       </button>
                     </td>
 
+                    {/* Employee Conversion */}
+                    <td className="px-4 py-3.5">
+                      {r.converted_employee_name ? (
+                        <div className="flex items-center gap-2">
+                          <Avatar name={r.converted_employee_name} size="sm" />
+                          <span className="text-sm truncate max-w-[140px]">{r.converted_employee_name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground/50">—</span>
+                      )}
+                    </td>
+
                     {/* Actions */}
                     <td className="px-4 py-3.5 text-right">
                       <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -465,6 +482,28 @@ export default function RecruitmentPage() {
                           >
                             <Link2 className="w-4 h-4" />
                           </a>
+                        )}
+                        {!r.converted_employee_id && (r.stage === "Offer" || r.stage === "Hired") && (
+                          <button
+                            onClick={() => {
+                              const nameParts = (r.name || "").split(" ");
+                              const firstName = nameParts[0] || "";
+                              const lastName = nameParts.slice(1).join(" ");
+                              const params = new URLSearchParams({
+                                prefill: "true",
+                                first_name: firstName,
+                                last_name: lastName,
+                                email: r.email || "",
+                                phone: r.phone || "",
+                                candidate_id: r.id,
+                              });
+                              router.push(`/hr/employees?${params.toString()}`);
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 text-muted-foreground hover:text-green-600 transition-colors"
+                            title="Add to Employee"
+                          >
+                            <Building2 className="w-4 h-4" />
+                          </button>
                         )}
                         {permissions.update && (
                           <button
@@ -538,6 +577,7 @@ export default function RecruitmentPage() {
         <RoundStatusModal
           rounds={existingRounds.length > 0 ? existingRounds : (roundsData || [])}
           candidateName={selectedCandidate.name}
+          candidateStage={selectedCandidate.stage}
           onClose={() => { setRoundsModalOpen(false); setSelectedCandidate(null); setExistingRounds([]); }}
           onUpdate={permissions.update_round ? handleUpdateRounds : undefined}
         />

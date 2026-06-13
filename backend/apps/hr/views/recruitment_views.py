@@ -64,6 +64,8 @@ class RecruitmentCandidateView(CompanyBranchMixin, PermissionRequiredMixin, APIV
             "rejection_date": safe_date(candidate.rejection_date),
             "created_at": safe_date(candidate.created_at),
             "updated_at": safe_date(candidate.updated_at),
+            "converted_employee_id": str(candidate.converted_employee._id) if candidate.converted_employee else None,
+            "converted_employee_name": candidate.converted_employee.full_name if candidate.converted_employee else None,
         }
     
     def get(self, request):
@@ -79,7 +81,7 @@ class RecruitmentCandidateView(CompanyBranchMixin, PermissionRequiredMixin, APIV
         query = RecruitmentCandidate.objects.filter(
             company_id=company_id,
             is_deleted=False
-        ).select_related('assigned_to', 'created_by', 'updated_by')
+        ).select_related('assigned_to', 'converted_employee', 'created_by', 'updated_by')
         
         department = request.query_params.get('department')
         if department:
@@ -696,6 +698,13 @@ class InterviewRoundView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             candidate=candidate
         )
         
+        # Lock rounds once candidate reaches a terminal stage
+        if candidate.stage in ('Offer', 'Hired', 'Rejected'):
+            return Response(
+                {'error': 'Rounds are locked once candidate reaches Offer stage'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         old_status = interview_round.status
         
         updatable_fields = ['status', 'interview_date', 'feedback', 'rating', 'notes', 'meeting_link', 'duration_minutes']
@@ -756,6 +765,12 @@ class InterviewRoundView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             _id=round_id,
             candidate=candidate
         )
+        
+        if candidate.stage in ('Offer', 'Hired', 'Rejected'):
+            return Response(
+                {'error': 'Rounds are locked once candidate reaches Offer stage'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         interview_round.delete()
         return Response({'message': 'Round deleted successfully'})
@@ -863,6 +878,13 @@ class RoundStatusBulkUpdateView(CompanyBranchMixin, PermissionRequiredMixin, API
             company_id=company_id,
             is_deleted=False
         )
+        
+        # Lock rounds once candidate reaches a terminal stage
+        if candidate.stage in ('Offer', 'Hired', 'Rejected'):
+            return Response(
+                {'error': 'Rounds are locked once candidate reaches Offer stage'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         updates = request.data.get('updates', [])
         updated_rounds = []

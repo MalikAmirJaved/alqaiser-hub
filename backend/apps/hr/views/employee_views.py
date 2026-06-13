@@ -11,7 +11,7 @@ import logging
 import json
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
-from apps.hr.models import Employee, EmployeeDefaultShift, EmployeeAssetAssignment, AssetCategory
+from apps.hr.models import Employee, EmployeeDefaultShift, EmployeeAssetAssignment, AssetCategory, RecruitmentCandidate
 from apps.organization.models import Department
 from apps.compsetting.models import Designation   # <-- ADDED
 import traceback
@@ -262,6 +262,18 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 user.save()
         except Exception:
             pass
+
+        # Link to recruitment candidate if provided
+        candidate_id = request.data.get('candidate_id')
+        if candidate_id:
+            try:
+                candidate = RecruitmentCandidate.objects.get(_id=candidate_id, company_id=company_id, is_deleted=False)
+                candidate.converted_employee = employee
+                candidate.stage = 'Hired'
+                candidate.status = 'Closed'
+                candidate.save()
+            except RecruitmentCandidate.DoesNotExist:
+                pass
 
         return Response({
             "message": "Employee created successfully",

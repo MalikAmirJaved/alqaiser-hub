@@ -1110,6 +1110,9 @@ class RecruitmentCandidate(BaseModel):
     rejection_reason = models.TextField(blank=True, null=True)
     rejection_date = models.DateField(blank=True, null=True)
     
+    # Employee conversion
+    converted_employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='converted_from_candidates')
+    
     class Meta:
         db_table = 'hr_recruitment_candidates'
         verbose_name = "Recruitment Candidate"

@@ -38,6 +38,8 @@ export interface RecruitmentCandidate {
   updated_at: string;
   created_by_name?: string;
   updated_by_name?: string;
+  converted_employee_id?: string;
+  converted_employee_name?: string;
 }
 
 export interface RecruitmentStats {
