@@ -545,6 +545,29 @@ When implementing data mutations or real-time features:
 - Use `usePermissions()` hook to sync permission changes with WebSocket.
 - Implement route guards on protected pages using `routePermissions.ts` mapping.
 
+#### **6a. Always Use Dynamic Permissions (NEVER Hardcode)**
+- **NEVER** hardcode `true`/`false` for any permission value — always use the result from `useFeaturePermissions()`:
+  ```typescript
+  // ❌ WRONG
+  const modulePermissions = { view: true, create: true, export: true };
+  <DynamicModulePage exportEnabled={true} ... />
+
+  // ✅ CORRECT
+  const permissions = useFeaturePermissions("MODULE", "resource");
+  const modulePermissions = {
+    view: permissions.view,
+    create: permissions.create,
+    update: permissions.update,
+    delete: permissions.delete,
+    export: permissions.export,
+  };
+  <DynamicModulePage exportEnabled={permissions.export} ... />
+  ```
+- The `"export"` action is defined on every resource in `seed_permissions.py`. Use `permissions.export` instead of `export: true`.
+- For `DynamicModulePage`, always pass `exportEnabled={permissions.export}` — never `exportEnabled` or `exportEnabled={true}`.
+- For inline toolbar Export buttons, wrap with `{permissions.export && <ToolbarButton>Export</ToolbarButton>}`.
+- The resource name in `useFeaturePermissions(MODULE, resource)` must match the exact snake_case code in `seed_permissions.py` (e.g. `"supplier_bill"` not `"supplierbill"`, `"journal_entrie"` not `"journal"`, `"customer_invoice"` not `"customerinvoice"`).
+
 #### **7. API Response Structure**
 All backend API responses should follow this pattern:
 ```json
