@@ -59,7 +59,7 @@ export const routePermissions: Record<string, string> = {
   "/finance/expenses":        "FINANCE:expense:view",
   "/finance/budgets":         "FINANCE:budget:view",
   "/finance/bank-accounts":   "FINANCE:bank_account:view",
-  "/finance/bank-transactions":"FINANCE:bank_account:view",  // same guard
+  "/finance/bank-transactions":"FINANCE:bank_transaction:view",
   "/finance/supplier-bills":  "FINANCE:supplier_bill:view",
   "/finance/payments":        "FINANCE:payment:view",
   "/finance/payroll":         "FINANCE:forecast:view",       // finance payroll — adjust if separate resource added
@@ -137,7 +137,7 @@ export const menuPermissionMapping: Record<string, string | null> = {
   "Expenses":                 "FINANCE:expense:view",
   "Budgets":                  "FINANCE:budget:view",
   "Bank Accounts":            "FINANCE:bank_account:view",
-  "Bank Transaction":         "FINANCE:bank_account:view",
+  "Bank Transaction":         "FINANCE:bank_transaction:view",
   "Payables / Supplier Bills":"FINANCE:supplier_bill:view",
   "Journal Entries":          "FINANCE:journal_entrie:view",
   "Finance Reports":          "FINANCE:finance_reports:view",

@@ -14,7 +14,7 @@ export default function JournalEntryDetailPage() {
     const formatCurrency = useFormatCurrency();
   const { id } = useParams();
   const { data: entry, isLoading } = useJournalEntry(id as string);
-  const permissions = useFeaturePermissions("FINANCE", "journal");
+  const permissions = useFeaturePermissions("FINANCE", "journal_entrie");
 
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!entry) return <div className="p-8 text-center">Journal entry not found</div>;

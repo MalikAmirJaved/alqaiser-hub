@@ -72,7 +72,8 @@ export const PERMISSIONS = {
     report:         ["view"]                                          as const,
     alert:          ["view"]                                          as const,
     customer:       ["view","create","update","delete"]               as const,
-    sales_order:    ["view","complete_sale","hold_sale","return"]     as const,
+    sales_order:    ["view","create","update","delete","complete_sale","hold_sale","return"] as const,
+    vendor:         ["view","create","update","delete"]               as const,
     audit_log:      ["view"]                                          as const,
   },
 
@@ -86,11 +87,12 @@ export const PERMISSIONS = {
     finance_reports:  ["view"]                                        as const,
     budget:           ["view","create","update","delete"]             as const,
     bank_account:     ["view","create","update","delete"]             as const,
-    supplier_bill:    ["view","create","update","delete","pay"]       as const,
-    payment:          ["view","create","update","delete","pay"]       as const,
+    bank_transaction: ["view","create","update","delete"]             as const,
+    supplier_bill:    ["view","pay"]                                  as const,
+    payment:          ["view"]                                        as const,
     tax:              ["view","create","update","delete"]             as const,
     audit_log:        ["view"]                                        as const,
-    forecast:         ["view","recompute_sales","recompute_stock"]    as const,
+    forecast:         ["view","create","recompute_sales","recompute_stock"] as const,
   },
 
   // ── Sales ─────────────────────────────────────────────────────────────────
@@ -115,6 +117,7 @@ export const PERMISSIONS = {
   // ── Settings ──────────────────────────────────────────────────────────────
   SETTINGS: {
     company:     ["view","update"]                       as const,
+    branch:      ["view","create","update","delete"]     as const,
     user:        ["view","create","update","delete"]     as const,
     permissions: ["view","update"]                       as const,
     department:  ["view", "create", "update", "delete"]  as const,
@@ -122,6 +125,11 @@ export const PERMISSIONS = {
     role:        ["view","create","update","delete"]     as const,
     preference:  ["view","update"]                       as const,
     dashboard:   ["view"]                                as const,
+  },
+
+  // ── Notifications ─────────────────────────────────────────────────────────
+  NOTIFICATIONS: {
+    notification: ["view","create","update","delete"]    as const,
   },
 } as const;
 

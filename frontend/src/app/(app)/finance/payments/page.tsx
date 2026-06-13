@@ -28,9 +28,6 @@ export default function PaymentsPage() {
   const permissions = useFeaturePermissions("FINANCE", "payment");
 
   const modulePermissions: ModulePermissions = {
-    create: permissions.create,
-    update: permissions.update,
-    delete: permissions.delete,
     view: permissions.view,
     export: true,
   };

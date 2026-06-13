@@ -27,7 +27,7 @@ export default function JournalEntriesPage() {
     ordering: "-date",
   });
 
-  const permissions = useFeaturePermissions("FINANCE", "journal");
+  const permissions = useFeaturePermissions("FINANCE", "journal_entrie");
   const modulePermissions: ModulePermissions = {
     create: permissions.create,
     update: permissions.update,

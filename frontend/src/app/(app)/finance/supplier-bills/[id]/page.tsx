@@ -17,7 +17,7 @@ export default function SupplierBillDetailPage() {
   const { id } = useParams();
   const router = useRouter();
   const { data: bill, isLoading, refetch } = useSupplierBill(id as string);
-  const permissions = useFeaturePermissions("FINANCE", "supplierbill");
+  const permissions = useFeaturePermissions("FINANCE", "supplier_bill");
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingBill, setEditingBill] = useState<any>(null);
@@ -132,8 +132,7 @@ export default function SupplierBillDetailPage() {
           />
         }
         onPrimaryAction={() => router.push(`/finance/payments/new?bill=${bill.id}`)}
-        onEdit={handleEdit}
-        permissions={{ edit: permissions.update, submit: permissions.create }}
+        permissions={{ view: true }}
         currencyFormatter={formatCurrency}
       />
       <SupplierBillFormModal

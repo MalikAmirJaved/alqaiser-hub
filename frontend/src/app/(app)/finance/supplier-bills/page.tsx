@@ -19,15 +19,11 @@ export default function SupplierBillsPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const { data: bills, isLoading } = useSupplierBills();
-  console.log("bills, ", bills)
 
   const deleteBill = useDeleteSupplierBill();
   const payBill = usePaySupplierBill();
-  const permissions = useFeaturePermissions("FINANCE", "supplierbill");
+  const permissions = useFeaturePermissions("FINANCE", "supplier_bill");
   const modulePermissions: ModulePermissions = {
-    create: permissions.create,
-    update: permissions.update,
-    delete: permissions.delete,
     view: permissions.view,
     export: true,
   };

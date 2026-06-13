@@ -36,7 +36,7 @@ export default function CustomerDetail({ id, moduleCode, onBack }: CustomerDetai
   const api = useApi();
   const deleteCustomer = useDeleteCustomer();
   const updateCustomer = useUpdateCustomer();
-  const permissions = useFeaturePermissions(moduleCode, "customer");
+  const permissions = useFeaturePermissions(moduleCode, moduleCode === "SALES" ? "sales_customer" : "customer");
   const { confirm, Modal: ConfirmModal } = useConfirmationModal();
 
   const [isEditing, setIsEditing] = useState(false);

@@ -27,7 +27,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const { data: invoice, isLoading, refetch } = useCustomerInvoice(id);
   const updateInvoice = useUpdateCustomerInvoice();
   const payInvoice = usePayCustomerInvoice();
-  const permissions = useFeaturePermissions(moduleCode, "customerinvoice");
+  const permissions = useFeaturePermissions(moduleCode, "customer_invoice");
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any>(null);
