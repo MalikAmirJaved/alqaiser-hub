@@ -78,7 +78,7 @@ export default function AssetsList() {
     brand: "",
     category: "",
     sku: "",
-    initialStock: 1,
+    initialStock: 0,
     description: "",
   });
 
@@ -126,7 +126,7 @@ export default function AssetsList() {
         brand: "",
         category: "",
         sku: "",
-        initialStock: 1,
+        initialStock: 0,
         description: "",
       });
       toast.success(editing ? "Asset updated" : "Asset created");
@@ -160,7 +160,7 @@ export default function AssetsList() {
       brand: asset.brand || "",
       category: category,
       sku: asset.serial_number || "",
-      initialStock: asset.total_quantity || 1,
+      initialStock: asset.total_quantity || 0,
       description: description,
     });
     setShowModal(true);
@@ -197,7 +197,7 @@ export default function AssetsList() {
                   brand: "",
                   category: "",
                   sku: "",
-                  initialStock: 1,
+                  initialStock: 0,
                   description: "",
                 });
                 setShowModal(true);
@@ -291,8 +291,8 @@ export default function AssetsList() {
                             "—"
                           )}
                         </TableCell>
-                        <TableCell className="text-right">{totalQty}</TableCell>
-                        <TableCell className="text-right">
+                        <TableCell>{totalQty}</TableCell>
+                        <TableCell>
                           <span className={availableQty > 0 ? "text-success font-medium" : "text-destructive"}>
                             {availableQty}
                           </span>
@@ -391,9 +391,9 @@ export default function AssetsList() {
               <Input
                 id="initialStock"
                 type="number"
-                min="1"
+                min="0"
                 value={form.initialStock}
-                onChange={(e) => setForm({ ...form, initialStock: parseInt(e.target.value) || 1 })}
+                onChange={(e) => setForm({ ...form, initialStock: parseInt(e.target.value) || 0 })}
                 placeholder="Quantity"
               />
               <p className="text-xs text-muted-foreground">Number of identical units (e.g., 5 monitors)</p>
