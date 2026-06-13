@@ -496,6 +496,12 @@ function ExitFormModal({
     }
   }, [finalSettlementMutation]);
 
+  const tryCalculateSettlement = (empId: string, lwd: string) => {
+    if (empId && lwd) {
+      calculateSettlement(empId, lwd);
+    }
+  };
+
   const handleEmployeeSelect = (empId: string) => {
     const emp = employees.find((e: any) => String(e.id) === empId);
     if (emp) {
@@ -503,7 +509,7 @@ function ExitFormModal({
         ...prev,
         employee_id: empId,
       }));
-      calculateSettlement(empId, formData.last_working_day);
+      tryCalculateSettlement(empId, formData.last_working_day);
     }
   };
 
@@ -512,9 +518,7 @@ function ExitFormModal({
       ...prev,
       last_working_day: lwd,
     }));
-    if (formData.employee_id) {
-      calculateSettlement(formData.employee_id, lwd);
-    }
+    tryCalculateSettlement(formData.employee_id, lwd);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
