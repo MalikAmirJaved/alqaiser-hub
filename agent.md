@@ -1008,3 +1008,51 @@ When a purchase order is created via `PurchaseOrderSerializer.create()` with `in
 - `frontend/src/components/inventory/purchase/PurchaseOrderModal.tsx` - Accepts `prefillFromRequest` prop
 - `frontend/src/types/purchase.ts` - Added `request_ids` to `PurchaseOrderPayload`
 - `frontend/src/contexts/NotificationContext.tsx` - Added `asset_purchase_request` entity mapping
+
+---
+
+## 12. Recruitment Round Locking Rules - IMPLEMENTED
+
+### Round Editing Lock Behavior
+
+Interview rounds follow these editing rules:
+
+| Candidate Stage | Rounds Editable? | Notes |
+|---|---|---|
+| `Applied` | ✅ Yes | Rounds can be freely created/updated/deleted |
+| `Screening` | ✅ Yes | Status, feedback, rating, date all editable |
+| `Interview` | ✅ Yes | All round fields are mutable |
+| `Offer` | ❌ No | All rounds locked — status cannot be reverted once offered |
+| `Hired` | ❌ No | Rounds locked (past Offer) |
+| `Rejected` | ✅ Yes | Auto-failed rounds can still be manually overridden |
+
+### Cascade Logic (RoundStatusBulkUpdateView)
+
+When a round is marked `FAILED`, all subsequent `PENDING`/`SCHEDULED` rounds are auto-failed. Since the candidate stage becomes `Rejected` (which is **not** locked), those auto-failed rounds remain manually updatable.
+
+### Backend Validation
+
+All three mutation endpoints reject requests when `candidate.stage in ('Offer', 'Hired')`:
+
+| Endpoint | Method | Lock Gate |
+|---|---|---|
+| `InterviewRoundView.patch` | PATCH | Blocks all field updates |
+| `InterviewRoundView.delete` | DELETE | Blocks round deletion |
+| `RoundStatusBulkUpdateView.post` | POST | Rejects entire bulk batch |
+
+### Frontend (RoundStatusModal)
+
+- Receives `candidateStage` prop
+- Computes `readOnly = candidateStage === "Offer" || candidateStage === "Hired"`
+- When readOnly: hides status buttons, date picker, feedback textarea, rating slider, and Save button; shows "Rounds are locked once candidate reaches Offer stage" message
+
+### Cache Invalidation on Employee Creation
+
+When an employee is created from a candidate (`candidate_id` in payload), `useCreateEmployee.onSuccess` now also invalidates:
+
+```typescript
+queryClient.invalidateQueries({ queryKey: ["recruitment"] });
+queryClient.invalidateQueries({ queryKey: ["recruitmentStats"] });
+```
+
+This ensures the "Add to Employee" (Building2) button disappears from the recruitment table immediately after conversion.
