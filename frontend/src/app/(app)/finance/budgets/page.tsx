@@ -21,7 +21,7 @@ export default function BudgetsPage() {
     update: permissions.update,
     delete: permissions.delete,
     view: permissions.view,
-    export: true,
+    export: permissions.export,
   };
 
   const computeKPIs = (data: any[]) => {
@@ -70,7 +70,7 @@ export default function BudgetsPage() {
           onEdit: setEditingBudget,
           onDelete: (budget) => deleteBudget.mutate(budget.id),
         }}
-        exportEnabled
+        exportEnabled={permissions.export}
       />
       <BudgetFormModal
         open={modalOpen}

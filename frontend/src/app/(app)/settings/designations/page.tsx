@@ -28,7 +28,7 @@ export default function DesignationsPage() {
     update: permissions.update,
     delete: permissions.delete,
     view: permissions.view,
-    export: true,
+    export: permissions.export,
   };
 
   const handleToggleStatus = async (des: Designation, newStatus: boolean) => {
@@ -119,7 +119,7 @@ export default function DesignationsPage() {
           onEdit: handleEdit,
           onDelete: handleDelete,
         }}
-        exportEnabled
+        exportEnabled={permissions.export}
       />
       <DesignationFormModal
         open={modalOpen}

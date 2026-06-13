@@ -26,7 +26,7 @@ export default function ExpensesPage() {
     update: permissions.update,
     delete: permissions.delete,
     view: permissions.view,
-    export: true,
+    export: permissions.export,
   };
 
   const handleRowClick = (expense: any) => {
@@ -204,7 +204,7 @@ export default function ExpensesPage() {
           // No "Post" action for expenses – payment is only via supplier bills
         }}
         onRowClick={handleRowClick}
-        exportEnabled
+        exportEnabled={permissions.export}
         onRowSelect={setSelectedIds}
         batchActions={
           <>

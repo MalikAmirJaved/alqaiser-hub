@@ -32,7 +32,7 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
     update: permissions.update,
     delete: permissions.delete,
     view: permissions.view,
-    export: true,
+    export: permissions.export,
   };
 
   const detailPathPrefix = moduleCode === "FINANCE" ? "/finance/customer-invoices" : "/sales/customer-invoices";
@@ -150,7 +150,7 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
           postLabel: "Pay",
         }}
         onRowClick={handleRowClick}
-        exportEnabled={true}
+        exportEnabled={permissions.export}
         onRowSelect={setSelectedIds}
         batchActions={
           <>

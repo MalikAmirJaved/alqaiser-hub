@@ -33,7 +33,7 @@ export default function JournalEntriesPage() {
     update: permissions.update,
     delete: permissions.delete,
     view: permissions.view,
-    export: true,
+    export: permissions.export,
   };
 
   const handleRowClick = (entry: JournalEntry) => {
@@ -108,7 +108,7 @@ export default function JournalEntriesPage() {
         // No create action for now – journal entries are auto‑created
         onCreate={undefined}
         onRowClick={handleRowClick}
-        exportEnabled
+        exportEnabled={permissions.export}
         // No batch actions for journal entries
       />
     </>

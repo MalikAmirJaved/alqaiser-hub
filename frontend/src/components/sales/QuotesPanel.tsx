@@ -27,7 +27,7 @@ export default function QuotesPanel() {
     update: permissions.update,
     delete: permissions.delete,
     view: permissions.view,
-    export: true,
+    export: permissions.export,
   };
 
   const handleAccept = async (quote: Quote) => {
@@ -133,7 +133,7 @@ export default function QuotesPanel() {
           onDelete: (quote) => deleteQuote.mutate(quote.id),
         }}
         onRowClick={(quote) => router.push(`/sales/quotes/${quote.id}`)}
-        exportEnabled
+        exportEnabled={permissions.export}
         onRowSelect={setSelectedIds}
         batchActions={
           <button

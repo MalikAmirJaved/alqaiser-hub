@@ -25,7 +25,7 @@ export default function SupplierBillsPage() {
   const permissions = useFeaturePermissions("FINANCE", "supplier_bill");
   const modulePermissions: ModulePermissions = {
     view: permissions.view,
-    export: true,
+    export: permissions.export,
   };
 
   const handleRowClick = (bill: any) => {
@@ -113,7 +113,7 @@ export default function SupplierBillsPage() {
           postLabel: "Pay",
         }}
         onRowClick={handleRowClick}
-        exportEnabled={true}
+        exportEnabled={permissions.export}
         onRowSelect={setSelectedIds}
         batchActions={
           <>

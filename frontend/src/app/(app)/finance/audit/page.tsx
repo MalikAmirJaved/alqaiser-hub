@@ -53,8 +53,8 @@ export default function AuditLogsPage() {
       isLoading={isLoading}
       columns={columns}
       getRowId={(log) => log.id}
-      permissions={{ view: true, create: false, update: false, delete: false, export: true }}
-      exportEnabled
+      permissions={{ view: permissions.view }}
+      exportEnabled={permissions.export}
     />
   );
 }

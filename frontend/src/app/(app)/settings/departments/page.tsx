@@ -30,7 +30,7 @@ export default function DepartmentsPage() {
     update: permissions.update,
     delete: permissions.delete,
     view: permissions.view,
-    export: true,
+    export: permissions.export,
   };
 
   const handleToggleStatus = async (dept: Department, newStatus: boolean) => {
@@ -112,7 +112,7 @@ export default function DepartmentsPage() {
           onEdit: handleEdit,
           onDelete: handleDelete,
         }}
-        exportEnabled
+        exportEnabled={permissions.export}
       />
       <DepartmentFormModal
         open={modalOpen}

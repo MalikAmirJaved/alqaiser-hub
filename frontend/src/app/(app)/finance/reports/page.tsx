@@ -453,7 +453,6 @@ export default function FinancialReportsPage() {
           <>
             <ToolbarButton variant="ghost" icon={Calendar}>Schedule</ToolbarButton>
             <ToolbarButton variant="ghost" icon={Printer}>Print</ToolbarButton>
-            <ToolbarButton variant="primary" icon={Download}>Export PDF</ToolbarButton>
           </>
         }
       />

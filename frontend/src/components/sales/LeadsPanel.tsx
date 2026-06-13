@@ -133,7 +133,7 @@ export default function LeadsPanel() {
     update: permissions.update,
     delete: permissions.delete,
     view: permissions.view,
-    export: true,
+    export: permissions.export,
   };
 
   const handleRowClick = (lead: Lead) => {
@@ -294,7 +294,7 @@ export default function LeadsPanel() {
           onDelete: (lead) => deleteLead.mutate(lead.id),
         }}
         onRowClick={handleRowClick}
-        exportEnabled
+        exportEnabled={permissions.export}
         onRowSelect={setSelectedIds}
         batchActions={
           <button

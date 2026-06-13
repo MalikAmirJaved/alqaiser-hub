@@ -184,7 +184,7 @@ export default function ChartOfAccountsPage() {
         actions={
           <>
             <ToolbarButton icon={Upload} variant="ghost">Import</ToolbarButton>
-            <ToolbarButton icon={Download} variant="ghost">Export</ToolbarButton>
+            {permissions.export && <ToolbarButton icon={Download} variant="ghost">Export</ToolbarButton>}
             {permissions.create && (
               <ToolbarButton icon={Plus} variant="primary" onClick={() => { setEditingAccount(null); setModalOpen(true); }}>
                 New Account

@@ -77,7 +77,7 @@ export function DynamicModulePage<T>({
   primaryActionLabel = "New",
   onCreate,
   actions,
-  exportEnabled = true,
+  exportEnabled = false,
   onExport,
   onRowSelect,
   batchActions,

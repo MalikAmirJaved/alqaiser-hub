@@ -29,7 +29,7 @@ export default function PaymentsPage() {
 
   const modulePermissions: ModulePermissions = {
     view: permissions.view,
-    export: true,
+    export: permissions.export,
   };
 
   const handleRowClick = (payment: Payment) => {
@@ -119,7 +119,7 @@ export default function PaymentsPage() {
           onDelete: handleDelete,
         }}
         onRowClick={handleRowClick}
-        exportEnabled
+        exportEnabled={permissions.export}
         onRowSelect={setSelectedIds}
         batchActions={
           <button

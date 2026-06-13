@@ -191,7 +191,6 @@ export default function FinanceDashboardPage() {
         description="Real-time view of revenue, cash, AR/AP, and approvals."
         actions={
           <>
-            <ToolbarButton icon={Download} variant="ghost">Export</ToolbarButton>
             <button
               onClick={refreshAll}
               className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-secondary text-secondary-foreground hover:bg-accent transition"

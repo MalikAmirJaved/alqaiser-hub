@@ -102,7 +102,7 @@ export default function BankAccountsPage() {
           onEdit: handleEdit,
           onDelete: handleDelete,
         }}
-        exportEnabled
+        exportEnabled={permissions.export}
         onRowSelect={setSelectedIds}
         batchActions={
           selectedIds.length > 0 && (
