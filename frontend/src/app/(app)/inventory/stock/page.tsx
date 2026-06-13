@@ -96,7 +96,7 @@ export default function StockManagementPage() {
       <Button variant="ghost" size="sm" onClick={() => setHistoryVariantId(row.variant_id)}>
         <Eye className="w-4 h-4" />
       </Button>
-      {permissions.update && (
+      {permissions.adjust && (
         <Button
           variant="ghost"
           size="sm"
@@ -197,7 +197,7 @@ export default function StockManagementPage() {
       )}
 
       {/* Modals & Drawers */}
-      {selectedVariant && permissions.update && (
+      {selectedVariant && permissions.adjust && (
         <StockAdjustModal
           open={adjustModalOpen}
           onClose={() => {
