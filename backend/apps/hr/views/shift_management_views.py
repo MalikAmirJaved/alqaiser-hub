@@ -135,8 +135,14 @@ class ShiftOverrideView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     permission_resource = 'shift_override'
     """CRUD for shift overrides with UUID support"""
     permission_classes = [IsAuthenticated]
-    
+    def get_permission_action(self):
+        # POST (create) and DELETE use 'schedule' instead of default 'create'/'delete'
+        if self.request.method in ['POST', 'DELETE']:
+            return 'schedule'
+        return super().get_permission_action()   # GET → 'view'
+
     def get(self, request):
+        
         company_id = request.user.company_id
         
         if not company_id:
@@ -277,7 +283,11 @@ class ShiftDateRangeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     permission_resource = 'shift_override'
     """CRUD for date range assignments with UUID support"""
     permission_classes = [IsAuthenticated]
-    
+    def get_permission_action(self):
+        if self.request.method in ['POST', 'PATCH', 'DELETE']:
+            return 'schedule'
+        return super().get_permission_action()
+
     def get(self, request):
         company_id = request.user.company_id
         
@@ -442,11 +452,14 @@ class ShiftDateRangeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
 class BulkShiftAssignmentView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'shift_override'
+    permission_classes = [IsAuthenticated]
 
     def get_permission_action(self):
-        if self.request.method.upper() == 'POST':
-            return 'assign'
+        # All write operations should use 'schedule'
+        if self.request.method == 'POST':
+            return 'schedule'
         return super().get_permission_action()
+
     """Bulk shift assignment for multiple employees with UUID support"""
     permission_classes = [IsAuthenticated]
     
