@@ -18,6 +18,7 @@ import {
   useDeleteRecruitmentCandidate,
 } from "@/hooks/useRecruitment";
 import { useActiveEmployees } from "@/hooks/useEmployees";
+import { useDepartments } from "@/hooks/useDepartments";
 import { toast } from "sonner";
 import { RoundBuilder } from "@/components/recruitment/RoundBuilder";
 import { RoundStatusModal } from "@/components/recruitment/RoundStatusModal";
@@ -81,13 +82,6 @@ interface InterviewRound {
   duration_minutes?: number;
   meeting_link?: string;
 }
-
-const DEPARTMENTS = [
-  { value: "HR", label: "Human Resources" },
-  { value: "INVENTORY", label: "Inventory & Operations" },
-  { value: "FINANCE", label: "Finance & Accounting" },
-  { value: "MONITORING", label: "Monitoring" },
-];
 
 const STAGES = [
   { value: "Applied", label: "Applied" },
@@ -166,6 +160,10 @@ export default function RecruitmentPage() {
 
   const { data: statsData } = useRecruitmentStats();
   const { data: employeesData } = useActiveEmployees();
+  const { data: departments } = useDepartments();
+  const departmentOptions = (departments || [])
+    .filter(d => d.is_active)
+    .map(d => ({ value: d.code, label: d.name }));
 
   const { data: roundsData, refetch: refetchRounds } = useInterviewRounds(
     roundsModalOpen && selectedCandidate?.id ? selectedCandidate.id : undefined
@@ -310,7 +308,7 @@ export default function RecruitmentPage() {
           <SearchableSelect
             value={filterDept}
             onChange={v => { setFilterDept(v); setPage(1); }}
-            options={DEPARTMENTS}
+            options={departmentOptions}
             placeholder="Department"
             className="w-44"
           />
@@ -529,6 +527,7 @@ export default function RecruitmentPage() {
         <CandidateFormModal
           employeeOptions={employees}
           initialData={editingRecord}
+          departmentOptions={departmentOptions}
           onSubmit={handleSave}
           onClose={() => { setModalOpen(false); setEditingRecord(null); }}
         />
@@ -564,11 +563,13 @@ export default function RecruitmentPage() {
 function CandidateFormModal({
   initialData,
   employeeOptions,
+  departmentOptions,
   onSubmit,
   onClose,
 }: {
   initialData: RecruitmentRecord | null;
   employeeOptions: any[];
+  departmentOptions: { value: string; label: string }[];
   onSubmit: (d: Partial<RecruitmentRecord>, rounds?: any[]) => void;
   onClose: () => void;
 }) {
@@ -665,7 +666,7 @@ function CandidateFormModal({
                     <input type="email" value={formData.email || ""} onChange={e => update("email", e.target.value)} placeholder="john@example.com" className={inputCls} />
                   </Field>
                   <Field label="Phone">
-                    <input type="tel" value={formData.phone || ""} onChange={e => update("phone", e.target.value)} placeholder="+1 234 567 890" className={inputCls} />
+                    <input type="tel" value={formData.phone || ""} onChange={e => update("phone", e.target.value.replace(/[^0-9+]/g, "").slice(0, 15))} maxLength={20} placeholder="+1 234 567 890" className={inputCls} />
                   </Field>
                   <Field label="Source">
                     <SearchableSelect value={formData.source || ""} onChange={v => update("source", v)} options={SOURCES} placeholder="Where did they apply?" />
@@ -680,7 +681,7 @@ function CandidateFormModal({
                     <input required value={formData.position || ""} onChange={e => update("position", e.target.value)} placeholder="e.g. Senior Frontend Engineer" className={inputCls} />
                   </Field>
                   <Field label="Department" required>
-                    <SearchableSelect value={formData.department || ""} onChange={v => update("department", v)} options={DEPARTMENTS} placeholder="Select department" />
+                    <SearchableSelect value={formData.department || ""} onChange={v => update("department", v)} options={departmentOptions} placeholder="Select department" />
                   </Field>
                   <Field label="Current Company">
                     <input value={formData.current_company || ""} onChange={e => update("current_company", e.target.value)} placeholder="Previous employer" className={inputCls} />
