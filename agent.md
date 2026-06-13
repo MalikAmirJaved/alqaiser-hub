@@ -22,15 +22,17 @@ graph TD
 All API routes are registered in `backend/config/urls.py`:
 | Prefix | App | Purpose |
 |---|---|---|
+| `/admin/` | django.contrib.admin | Django admin panel |
+| `/health/` | — | Health check endpoint |
 | `/api/accounts/` | accounts | Auth (login, logout, refresh, me) |
 | `/api/hr/` | hr | Employees, payroll, leave, shifts, assets, recruitment, policies, compensation, loans |
 | `/api/inventory/` | inventory | Products, variants, stock, warehouses, purchases, sales, brands, categories, customers, suppliers, transfers, barcode, alerts, audit |
-| `/api/finance/` | finance | Accounts, journal entries, payments, customer invoices, supplier bills, expenses, budgets, bank accounts, payroll, reports |
+| `/api/finance/` | finance | Accounts, journal entries, payments, customer invoices, supplier bills, expenses, budgets, bank accounts, payroll, reports, dashboard, trial balance, P&L, balance sheet |
 | `/api/organization/` | organization | Company, branch, user management |
 | `/api/company/` | compsetting | Company settings, departments, designations |
 | `/api/notifications/` | notifications | WebSocket notifications |
-| `/api/permissions/` | permissions | RBAC (roles, permissions, modules) |
-| `/api/sales/` | sales | Leads, quotes |
+| `/api/permissions/` | permissions | RBAC (roles, permissions, modules, user overrides, role assignment) |
+| `/api/sales/` | sales | Leads, quotes, invoices, dashboard |
 | `/api/forecast/` | forecast | Sales & stock forecasting |
 | `/api/overall/` | overall_dashboard | Unified dashboard KPIs |
 | `/api/audit/` | audit | Audit log viewer |
@@ -175,36 +177,82 @@ backend/
 ├── apps/                          # Django modular apps
 │   ├── accounts/                  # Auth views (login, logout, refresh, me)
 │   ├── audit/                     # Generic audit logging via signals (AuditLog, AuditLogChange)
-│   ├── common/                    # Core abstract classes (BaseModel, CookieJWTAuthentication, CompanyBranchMixin)
+│   ├── common/                    # Core abstract classes & utilities
+│   │   ├── authentication.py      # CookieJWTAuthentication
+│   │   ├── backends.py            # EmailOrUsernameBackend
+│   │   ├── baseauthentication.py  # CompanyBranchMixin
+│   │   ├── basemodel.py           # BaseModel (UUID, tenant cols, soft-delete)
+│   │   ├── middleware.py          # Thread-local request context
+│   │   └── serializer_fields.py   # UUIDForeignRelatedField
 │   ├── compsetting/               # Tenant company setup settings (CompanySettings, Department, Designation)
 │   ├── finance/                   # Chart of accounts, journal entries, ledgers, payments, budgets, payroll
+│   │   ├── mixins.py              # CompanyBranchUserMixin, SoftDeleteMixin
 │   │   ├── models/                # account, bank, budget, customer_invoice, expense, journal, payment, supplier_bill
 │   │   ├── serializers/           # Per-model serializers
 │   │   ├── services/              # document, invoice_payment, payable
-│   │   └── views/                 # Per-model viewsets
-│   ├── forecast/                  # Sales & stock forecasting (models, services, tasks, analytics)
+│   │   ├── signals.py             # WS registry + audit logging signals
+│   │   └── views/                 # Per-model viewsets, dashboard, report (trial balance, P&L, balance sheet), payroll
+│   ├── forecast/                  # Sales & stock forecasting
+│   │   ├── analytics.py           # Forecasting analytics
+│   │   ├── models.py
+│   │   ├── serializers.py
+│   │   ├── services.py            # DemandForecaster, StockForecaster
+│   │   ├── tasks.py               # Celery tasks
+│   │   ├── urls.py
+│   │   └── views.py
 │   ├── hr/                        # Employee directories, shifts, attendance, leaves, payroll, compensation, loans, assets, recruitment, policies, exit mgmt
 │   │   ├── serializers/           # asset, policy, recruitment, shift serializers
 │   │   ├── services/              # assignment, shift services
-│   │   └── views/                 # Per-feature viewsets (employee, leave, payroll, shift, asset, recruitment, policy, exit)
+│   │   └── views/                 # employee, leave, payroll, shift, asset, asset_category, employee_asset, shift_template, recruitment, policy, exit
 │   ├── inventory/                 # Products, variants, warehouses, stocks, transfers, PO/SO, brands, categories, customers, suppliers
-│   │   ├── models/                # Per-model files (product, variant, stock, warehouse, purchase, sales, etc.)
-│   │   ├── serializers/           # Per-model serializers
-│   │   └── views/                 # Per-feature viewsets
+│   │   ├── alert_utils.py         # WebSocket alert creation helper
+│   │   ├── audit.py               # Separate audit engine (ThreadPoolExecutor-based)
+│   │   ├── models/                # Per-model files (product, variant, stock, warehouse, purchase, sales, alert, audit, brand, category, customer, supplier, transfer, transaction, reservation)
+│   │   ├── serializers/           # Per-model serializers (incl. barcode, report, stock_management)
+│   │   ├── signals_audit.py       # Pre-save/post-save/post-delete audit signals for 11 models
+│   │   └── views/                 # Per-feature viewsets (incl. barcode, batch_stock, report)
 │   ├── monitoring/                # AI logging & workforce dashboard metrics
-│   ├── notifications/             # WebSocket notification consumer + models
+│   ├── notifications/             # WebSocket notification subsystem
+│   │   ├── consumers.py           # NotificationConsumer (AsyncWebsocketConsumer)
+│   │   ├── middleware.py          # JWTAuthCookieMiddleware
+│   │   ├── models.py
+│   │   ├── registry.py            # Model registration for auto-broadcast
+│   │   ├── routing.py             # WebSocket URL patterns
+│   │   ├── serializers.py
+│   │   ├── signals.py             # Auto-broadcast on model save/delete
+│   │   ├── urls.py
+│   │   ├── utils.py               # broadcast_data_update, get_company_branch helpers
+│   │   └── views.py
 │   ├── organization/              # Company, Branch, Custom User model + seed_org management command
 │   ├── overall_dashboard/         # Unified KPIs (finance + inventory + sales)
-│   ├── permissions/               # Custom RBAC (Module, Resource, Action, Permission, Role, UserRole, UserPermission) + seed_permissions
-│   └── sales/                     # Leads, Quotes with customer conversion workflow
+│   ├── permissions/               # Custom RBAC (Module, Resource, Action, Permission, Role, UserRole, UserPermission)
+│   │   ├── checks.py              # build_permission_code, check_permission
+│   │   ├── decorators.py          # require_permission_code, require_permission decorators
+│   │   ├── middleware.py          # PermissionMiddleware (attaches helpers to request)
+│   │   ├── mixins.py              # PermissionRequiredMixin
+│   │   ├── models.py
+│   │   ├── services.py            # PermissionService (Redis-backed caching layer)
+│   │   ├── signals.py             # Cache invalidation + WebSocket broadcast signals
+│   │   ├── urls.py
+│   │   ├── views.py
+│   │   └── views_extended.py      # ModulesTreeView, RoleListView, UserRolesView, AssignRoleView, etc.
+│   └── sales/                     # Leads, Quotes, Invoices, Dashboard
+│       ├── models/                # lead, quote
+│       ├── serializers/           # lead, quote, invoice
+│       ├── urls.py
+│       └── views/                 # lead, quote, invoice, dashboard
 
 ├── config/                        # Django project main config
 │   ├── asgi.py                    # Daphne ASGI routing (HTTP + WebSockets)
+│   ├── celery.py                  # Celery app + beat schedule (forecast tasks)
 │   ├── settings.py                # Main settings (SimpleJWT, CACHES, CHANNEL_LAYERS, CORS)
-│   └── urls.py                    # Root URL router mapping to sub-apps
-├── consumers/                     # Independent channel consumer logic (permission_consumer)
+│   ├── urls.py                    # Root URL router mapping to sub-apps
+│   └── wsgi.py                    # Standard Django WSGI
+├── consumers/                     # Independent channel consumer logic
+│   └── permission_consumer.py     # PermissionConsumer
 ├── entrypoint.sh                  # Shell startup scripts (wait-for-db, Daphne run command)
 ├── requirements.txt               # Main python packages list
+├── manage.py                      # Django management utility
 └── Dockerfile                     # Docker container config
 ```
 
@@ -215,55 +263,77 @@ frontend/src/
 │   ├── (app)/                     # Authenticated layout group
 │   │   ├── dashboard/             # Overall ERP dashboard page
 │   │   ├── hr/                    # HR routes (employees, payroll, leave, attendance, shifts, assets, recruitment, compensation, exit, policies, performance)
-│   │   ├── inventory/             # Inventory routes (dashboard, products, stock, warehouses, purchases, suppliers, transfers, barcode, reports, alerts, customers, pos, audit)
+│   │   ├── inventory/             # Inventory routes (dashboard, products, stock, warehouses, purchases, suppliers, transfers, barcode, reports, alerts, customers, pos, audit, brands, categories)
 │   │   ├── sales/                 # Sales routes (dashboard, leads, quotes, customers, customer-invoices)
-│   │   ├── finance/               # Finance routes (dashboard, accounts, expenses, budgets, bank-accounts, supplier-bills, payments, journal-entries, reports, payroll, taxes, audit, forecast)
-│   │   ├── monitoring/            # AI Monitoring routes (dashboard, activity-tracking, inventory-monitoring, workforce-monitoring, alerts-events, reports-insights)
+│   │   ├── finance/               # Finance routes (dashboard, accounts, expenses, budgets, bank-accounts, supplier-bills, payments, journal-entries, reports, payroll, taxes, audit, forecast, assets, forecasting)
+│   │   ├── monitoring/            # AI Monitoring routes (dashboard, activity-tracking, inventory-monitoring, workforce-monitoring, alerts-events, reports-insights, warehouse)
 │   │   ├── settings/              # Settings routes (company, users, departments, designations, permissions, preferences)
 │   │   └── page.tsx               # Root redirect → /dashboard
+│   ├── demo/                      # Demo page
 │   ├── login/                     # Simple username/password login page
 │   ├── unauthorized/              # Standard access-denied route
 │   └── layout.tsx / providers.tsx # Context wrap setup (Redux + React Query Providers)
 ├── components/                    # Sharable React/shadcn UI components
 │   ├── payroll/                   # Payroll, Compensation, Loan forms/tables/modals
 │   ├── leave/                     # Leave form modals
-│   ├── finance/                   # Finance-specific (accounts, bank, budgets, etc.)
-│   ├── inventory/                 # Inventory-specific (brand, category, product, warehouse, etc.)
-│   ├── sales/                     # Sales-specific components
+│   ├── finance/                   # Finance-specific (accounts, bank, budgets, customer-invoices, expenses, payments, supplier-bills)
+│   ├── inventory/                 # Inventory-specific (brand, category, customers, pos, product, purchase, stock, supplier, transfers, warehouse)
+│   ├── sales/                     # Sales-specific components (CustomerCreationModal, LeadFormModal, LeadsPanel, QuoteFormModal, QuotesPanel)
 │   ├── settings/                  # Settings-specific (departments, designations)
-│   ├── HRAssets/                  # HR asset management
+│   ├── HRAssets/                  # HR asset management (AssetCategories, AssetsList, EmployeeAssetsNew)
 │   ├── monitoring/                # Monitoring views
-│   ├── recruitment/               # Recruitment components
-│   ├── reuseable/                 # Reusable (StatsCards, SearchableSelect, etc.)
-│   ├── cards/                     # Shared card components
-│   ├── navbar/                    # Top navigation bar
-│   ├── sidebar/                   # Sidebar navigation
-│   └── ui/                        # shadcn/ui primitives
+│   ├── recruitment/               # Recruitment components (RoundBuilder, RoundStatusModal)
+│   ├── reuseable/                 # Reusable (Checkbox, ConfirmationModal, CurrencySelect, DataTable, DatePicker, DateRangePickerRac, EmployeeMultiSelect, FormModal, FormSelectWithCreate, LocationSelectors, SearchableSelect, StatsCards, TableGridView)
+│   │   └── final/                 # DetailLayout, DynamicModulePage, workflow
+│   ├── cards/                     # Shared card components (StatCard)
+│   ├── Forms/                     # EmployeeForm.jsx, UserForm.tsx
+│   ├── navbar/                    # Top navigation bar (Topbar)
+│   ├── sidebar/                   # Sidebar navigation (Sidebar)
+│   ├── ui/                        # shadcn/ui primitives (49 components)
+│   ├── CrudPage.tsx               # Generic CRUD page component
+│   ├── CustomersPanel.tsx         # Customer panel
+│   ├── EmployeeStatusModal.tsx    # Employee status modal
+│   ├── PageHeader.tsx             # Page header component
+│   ├── PermissionGuard.tsx        # Route guard component
+│   ├── reuseableComponents.tsx    # Extra reusable components
+│   ├── ThemeInitializer.tsx       # Theme initialization
+│   └── UserStatusModal.tsx        # User status modal
 ├── config/                        # Configuration mappings
-│   └── routePermissions.ts        # Maps absolute routes to permission strings + menuPermissionMapping
+│   ├── routePermissions.ts        # Maps absolute routes to permission strings + menuPermissionMapping
+│   ├── menu.js                    # Menu configuration
+│   ├── monitoringFeeds.js         # Monitoring feed configurations
+│   └── schemas.js                 # Form schemas
 ├── contexts/                      # Shared context classes
-│   └── NotificationContext.tsx     # WebSocket notification consumer + React Query cache invalidation
-├── hooks/                         # Global React Hooks
-│   ├── sales/                     # Sales hooks (useLeads, useQuotes, useSalesDashboard)
-│   ├── finance/                   # Finance hooks (useAccounts, useExpenses, useBudgets, useBank, etc.)
+│   ├── NotificationContext.tsx     # WebSocket notification consumer + React Query cache invalidation
+│   └── ConfirmationModalContext.tsx # Confirmation modal state management
+├── hooks/                         # Global React Hooks (60+ total)
+│   ├── sales/                     # useLeads, useQuotes, useSalesDashboard
+│   ├── finance/                   # useAccounts, useAgingReports, useAuditLogs, useBalanceSheet, useBank, useBudgets, useCustomerInvoices, useExpenseReport, useExpenses, useFinanceDashboard, useForecast, useJournalEntries, usePayments, useProfitLoss, useSupplierBills, useTrialBalance
 │   ├── overall/                   # useOverallDashboard
-│   ├── useAuth.ts                 # Accesses auth actions (login, logout)
-│   ├── useApi.ts                  # Axios/fetch hook wrapper
-│   ├── usePermissions.ts          # React query hooks + permissions WebSocket hook
-│   ├── usePayroll.ts              # Payroll, Compensation, Loan hooks
-│   ├── useEmployees.ts            # Employee hook
-│   ├── useDepartments.ts          # Department hook
-│   ├── useDesignations.ts         # Designation hook
-│   ├── useLeaves.ts               # Leave hook
-│   ├── ... (60+ hooks total)
+│   ├── useAlerts.ts / useAllVariants.ts / useApi.ts / useAssetCategories.ts / useAssets.ts / useAudit.ts / useAuditLogs.ts / useAuth.ts / useBarcodes.ts / useBatchStock.ts / useBranches.ts / useBrands.ts / useCategories.ts / useCompanySettings.ts / useCustomers.ts / useDepartments.ts / useDesignations.ts / useEmployeeAssets.ts / useEmployees.ts / useExitManagement.ts / useFeaturePermissions.ts / useFormatCurrency.ts / useGoodsReceipts.ts / useIncomingStock.ts / useInterviewRound.ts / useInventoryDashboard.ts / useLeaves.ts / use-mobile.tsx / usePayroll.ts / usePermissions.ts / usePolicies.ts / useProducts.ts / usePurchaseOrders.ts / useRecruitment.ts / useReports.ts / useSalesOrder.ts / useShiftManagement.ts / useShiftTemplates.ts / useStockManagement.ts / useSuppliers.ts / useTransfers.ts / useUserProfile.ts / useUsers.ts / useWarehouses.ts
 ├── layouts/                       # Layout components
 │   └── AppLayout.tsx              # Main UI Shell. Watches route guards & company setup status
 ├── lib/                           # Utility scripts
-│   └── api.ts                     # Core `apiFetch` wrapper mapping methods to toast notifications
+│   ├── api.ts                     # Core `apiFetch` wrapper mapping methods to toast notifications
+│   ├── notifications.ts           # Notification helper utilities
+│   ├── permissions.ts             # Permission check utilities
+│   ├── productAttributes.ts       # Product attribute helpers
+│   ├── shiftResolver.ts           # Shift scheduling utilities
+│   └── utils.ts                   # General utility functions
+├── seed/                          # System initialization
+│   └── initializeSystem.js        # System bootstrap script
+├── services/                      # Service layer
+│   └── localStorageService.ts     # Local storage persistence service
+├── staticdata/                    # Static reference data
+│   └── finance-data.ts            # Finance seed data constants
 ├── store/                         # Redux Toolkit setup
-│   ├── slices/                    # authSlice, permissionSlice, themeSlice, companySettingsSlice
-│   └── index.ts                   # Store initialization export
+│   ├── index.ts                   # Store initialization export
+│   ├── reset.ts                   # State reset logic
+│   └── slices/                    # authSlice, permissionSlice, themeSlice, companySettingsSlice
 ├── types/                         # Shared typescript types definitions
+│   ├── policy.ts
+│   ├── purchase.ts
+│   └── shifts.ts
 └── styles.css                     # Global styles configuration
 ```
 
@@ -360,8 +430,8 @@ Run the following commands inside `docker-compose exec backend <cmd>` to populat
 
 ### Critical Restrictions
 > [!IMPORTANT]
-> **DO NOT** execute these commands under any circumstances:
-> - `git commit`, `git push`, `git merge`, `git rebase`, or any git command
+> **AI CLI MUST NOT** run any git command under any circumstances. This includes but is not limited to:
+> - `git commit`, `git push`, `git pull`, `git merge`, `git rebase`, `git checkout`, `git branch`, `git add`, `git reset`, `git stash`, `git revert`, `git cherry-pick`, or any other git command
 > - `python manage.py migrate`, `python manage.py makemigrations`, or any Django migration command
 > - Any destructive database operations without explicit user confirmation
 
