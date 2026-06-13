@@ -292,8 +292,8 @@ export function Input({
             "focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-transparent",
             "disabled:opacity-50 disabled:cursor-not-allowed",
             error && "border-[var(--destructive)] focus:ring-[var(--destructive)]",
-            prefix && "pl-9",
-            suffix && "pr-9"
+            prefix ? "pl-9" : false,
+            suffix ? "pr-9" : false
           )}
         />
         {suffix && (
