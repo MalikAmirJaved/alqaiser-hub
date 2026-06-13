@@ -23,6 +23,7 @@ export const routePermissions: Record<string, string> = {
   "/hr/performance":            "HR:performance:view",
   "/hr/recruitment":            "HR:recruitment:view",
   "/hr/exit":                   "HR:exit:view",
+  "/hr/exit/[id]":              "HR:exit:view",
   "/hr/policies":               "HR:policy:view",
   "/hr/compensation":           "HR:compensation:view_compensation",
 

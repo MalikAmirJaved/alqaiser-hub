@@ -1,7 +1,8 @@
-// src/app/(dashboard)/hr/exit-management/page.tsx
+// src/app/(app)/hr/exit/page.tsx
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import StatCard from "@/components/cards/StatCard";
 import SearchableSelect, { SearchableSelectOption } from "@/components/reuseable/SearchableSelect";
@@ -10,7 +11,8 @@ import { Checkbox } from "@/components/reuseable/Checkbox";
 import ConfirmationModal, { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import {
   Search, Plus, RefreshCw, Trash2, Pencil, LogOut, Briefcase,
-  AlertTriangle, Clock, CheckCircle2, X, FileText, ShieldCheck
+  AlertTriangle, Clock, CheckCircle2, X, FileText, ShieldCheck,
+  Eye, Loader2
 } from "lucide-react";
 import {
   useExitRecords,
@@ -19,6 +21,7 @@ import {
   useUpdateExitRecord,
   useDeleteExitRecord,
   useBulkAction,
+  useFinalSettlementPreview,
   ExitRecord,
   ExitChecklistItem
 } from "@/hooks/useExitManagement";
@@ -30,22 +33,22 @@ import { StatsCards } from "@/components/reuseable/StatsCards";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 const EXIT_REASONS: SearchableSelectOption[] = [
-  { value: "RESIGNATION", label: "👋 Resignation" },
-  { value: "TERMINATION", label: "❌ Termination" },
-  { value: "CONTRACT_END", label: "📄 Contract End" },
-  { value: "RETIREMENT", label: "👴 Retirement" },
-  { value: "OTHER", label: "📝 Other" },
+  { value: "RESIGNATION", label: "Resignation" },
+  { value: "TERMINATION", label: "Termination" },
+  { value: "CONTRACT_END", label: "Contract End" },
+  { value: "RETIREMENT", label: "Retirement" },
+  { value: "OTHER", label: "Other" },
 ];
 
-const CLEARANCE_STATUSES: SearchableSelectOption[] = [
+const SETTLEMENT_STATUSES: SearchableSelectOption[] = [
   { value: "PENDING", label: "Pending" },
-  { value: "IN_PROGRESS", label: "In Progress" },
-  { value: "APPROVED", label: "Approved" },
-  { value: "COMPLETED", label: "Completed" },
+  { value: "CONFIRMED", label: "Confirmed" },
+  { value: "REJECTED", label: "Rejected" },
 ];
 
 export default function ExitManagementPage() {
   const formatCurrency = useFormatCurrency();
+  const router = useRouter();
   const permissions = useFeaturePermissions("HR", "exit");
   const api = useApi();
   const { data: employees = [] } = useActiveEmployees();
@@ -53,14 +56,11 @@ export default function ExitManagementPage() {
   const [query, setQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterReason, setFilterReason] = useState("");
-  const [filterClearance, setFilterClearance] = useState("");
+  const [filterSettlement, setFilterSettlement] = useState("");
   const [selectedRecords, setSelectedRecords] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<ExitRecord | null>(null);
-  const [checklistModal, setChecklistModal] = useState(false);
-  const [activeRecord, setActiveRecord] = useState<ExitRecord | null>(null);
-  const [checklistItems, setChecklistItems] = useState<ExitChecklistItem[]>([]);
 
   const { data: recordsData, isLoading, refetch } = useExitRecords();
   const { data: stats } = useExitStats();
@@ -71,15 +71,6 @@ export default function ExitManagementPage() {
 
   const records = recordsData?.data || [];
 
-  const loadChecklist = useCallback(async (recordId: string) => {
-    try {
-      const items = await api<ExitChecklistItem[]>(`/api/hr/exits/checklist/?exit_record_id=${recordId}`);
-      setChecklistItems(items);
-    } catch (error) {
-      toast.error("Failed to load checklist");
-    }
-  }, [api]);
-
   const filteredRecords = useMemo(() => {
     return records.filter(r => {
       const matchesSearch = query === "" ||
@@ -88,10 +79,10 @@ export default function ExitManagementPage() {
         (r.designation?.toLowerCase() || "").includes(query.toLowerCase());
       const matchesStatus = filterStatus === "" || r.status_value === filterStatus;
       const matchesReason = filterReason === "" || r.reason_value === filterReason;
-      const matchesClearance = filterClearance === "" || r.clearance_status_value === filterClearance;
-      return matchesSearch && matchesStatus && matchesReason && matchesClearance;
+      const matchesSettlement = filterSettlement === "" || r.final_settlement_status === filterSettlement;
+      return matchesSearch && matchesStatus && matchesReason && matchesSettlement;
     });
-  }, [records, query, filterStatus, filterReason, filterClearance]);
+  }, [records, query, filterStatus, filterReason, filterSettlement]);
 
   const handleSave = async (data: Partial<ExitRecord>) => {
     try {
@@ -143,19 +134,13 @@ export default function ExitManagementPage() {
     });
   };
 
-  const handleUpdateChecklistItem = async (itemId: string, status: string) => {
+  const handleUpdateSettlementStatus = async (recordId: string, status: string) => {
     try {
-      await api("/api/hr/exits/checklist/", {
-        method: "PATCH",
-        body: JSON.stringify({ id: itemId, status }),
-      });
-      if (activeRecord) {
-        await loadChecklist(activeRecord.id);
-        await refetch();
-      }
-      toast.success("Checklist updated");
+      await updateMutation.mutateAsync({ id: recordId, final_settlement_status: status });
+      toast.success(`Settlement ${status.toLowerCase()}`);
+      await refetch();
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(error.message || "Failed to update status");
     }
   };
 
@@ -247,11 +232,11 @@ export default function ExitManagementPage() {
               className="w-32"
             />
             <SearchableSelect
-              value={filterClearance}
-              onChange={setFilterClearance}
-              options={CLEARANCE_STATUSES}
-              placeholder="Clearance"
-              className="w-40"
+              value={filterSettlement}
+              onChange={setFilterSettlement}
+              options={SETTLEMENT_STATUSES}
+              placeholder="Settlement"
+              className="w-36"
             />
             <SearchableSelect
               value={filterReason}
@@ -304,8 +289,7 @@ export default function ExitManagementPage() {
                   <th className="text-left px-4 py-2.5">Department</th>
                   <th className="text-left px-4 py-2.5">Exit / LWD</th>
                   <th className="text-left px-4 py-2.5">Reason</th>
-                  <th className="text-left px-4 py-2.5">Clearance</th>
-                  <th className="text-left px-4 py-2.5">Progress</th>
+                  <th className="text-left px-4 py-2.5">Settlement Status</th>
                   <th className="text-left px-4 py-2.5">Settlement</th>
                   <th className="px-4 py-2.5 text-right">Actions</th>
                 </tr>
@@ -339,21 +323,29 @@ export default function ExitManagementPage() {
                       </span>
                     </td>
                     <td className="px-4 py-2.5">
-                      <span className="inline-flex px-2 py-0.5 text-[11px] rounded-full border">
-                        {r.clearance_status}
-                      </span>
-                      <div className="flex gap-1 mt-1">
-                        <ShieldCheck className={`w-3 h-3 ${r.clearance_hr ? "text-success" : "text-muted-foreground/40"}`} />
-                        <ShieldCheck className={`w-3 h-3 ${r.clearance_it ? "text-success" : "text-muted-foreground/40"}`} />
-                        <ShieldCheck className={`w-3 h-3 ${r.clearance_finance ? "text-success" : "text-muted-foreground/40"}`} />
-                        <ShieldCheck className={`w-3 h-3 ${r.clearance_admin ? "text-success" : "text-muted-foreground/40"}`} />
-                      </div>
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <div className="w-20 bg-muted rounded-full h-1.5">
-                        <div className="bg-primary h-1.5 rounded-full" style={{ width: `${r.clearance_progress}%` }} />
-                      </div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">{r.clearance_progress}%</div>
+                      {permissions.update_status ? (
+                        <select
+                          value={r.final_settlement_status}
+                          onChange={e => handleUpdateSettlementStatus(r.id, e.target.value)}
+                          className={`text-[11px] font-medium rounded-full px-2 py-1 border-0 outline-none cursor-pointer ${
+                            r.final_settlement_status === 'CONFIRMED' ? 'bg-success/15 text-success' :
+                            r.final_settlement_status === 'REJECTED' ? 'bg-destructive/15 text-destructive' :
+                            'bg-muted text-muted-foreground'
+                          }`}
+                        >
+                          {SETTLEMENT_STATUSES.map(s => (
+                            <option key={s.value} value={s.value}>{s.label}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full font-medium ${
+                          r.final_settlement_status === 'CONFIRMED' ? 'bg-success/15 text-success' :
+                          r.final_settlement_status === 'REJECTED' ? 'bg-destructive/15 text-destructive' :
+                          'bg-muted text-muted-foreground'
+                        }`}>
+                          {r.final_settlement_status}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 text-xs font-medium">
                       {r.final_settlement ? `${formatCurrency(r.final_settlement)}` : "—"}
@@ -361,15 +353,11 @@ export default function ExitManagementPage() {
                     <td className="px-4 py-2.5 text-right whitespace-nowrap">
                       <div className="flex justify-end gap-1">
                         <button
-                          onClick={() => {
-                            setActiveRecord(r);
-                            setChecklistModal(true);
-                            loadChecklist(r.id);
-                          }}
+                          onClick={() => router.push(`/hr/exit/${r.id}`)}
                           className="p-1.5 rounded-md hover:bg-muted"
-                          title="Checklist"
+                          title="View Details"
                         >
-                          <FileText className="w-4 h-4" />
+                          <Eye className="w-4 h-4" />
                         </button>
                         {permissions.update && (
                           <button onClick={() => { setEditingRecord(r); setModalOpen(true); }} className="p-1.5 rounded-md hover:bg-muted">
@@ -387,7 +375,7 @@ export default function ExitManagementPage() {
                 ))}
                 {filteredRecords.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="text-center py-10 text-muted-foreground">No exit records found.</td>
+                    <td colSpan={8} className="text-center py-10 text-muted-foreground">No exit records found.</td>
                   </tr>
                 )}
               </tbody>
@@ -396,13 +384,13 @@ export default function ExitManagementPage() {
         )}
 
         {viewMode === "kanban" && (
-          <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {["PENDING", "IN_PROGRESS", "APPROVED", "COMPLETED"].map(status => {
-              const statusRecords = filteredRecords.filter(r => r.clearance_status_value === status);
+          <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+            {["PENDING", "CONFIRMED", "REJECTED"].map(status => {
+              const statusRecords = filteredRecords.filter(r => r.final_settlement_status === status);
               return (
                 <div key={status} className="bg-muted/20 rounded-lg p-3">
                   <div className="flex justify-between mb-3">
-                    <h3 className="text-sm font-semibold">{status.replace("_", " ")}</h3>
+                    <h3 className="text-sm font-semibold">{status}</h3>
                     <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{statusRecords.length}</span>
                   </div>
                   <div className="space-y-2">
@@ -410,7 +398,7 @@ export default function ExitManagementPage() {
                       <div
                         key={r.id}
                         className="bg-card border border-border rounded-lg p-3 cursor-pointer hover:shadow-md"
-                        onClick={() => { if (permissions.update) { setEditingRecord(r); setModalOpen(true); } }}
+                        onClick={() => router.push(`/hr/exit/${r.id}`)}
                       >
                         <div className="font-medium text-sm">{r.employee_name}</div>
                         <div className="text-xs text-muted-foreground">{r.department}</div>
@@ -440,16 +428,7 @@ export default function ExitManagementPage() {
           employees={employees}
           initialData={editingRecord}
           onSubmit={handleSave}
-          onClose={() => setModalOpen(false)}
-        />
-      )}
-
-      {checklistModal && activeRecord && (
-        <ChecklistModal
-          record={activeRecord}
-          items={checklistItems}
-          onUpdateItem={permissions.update ? handleUpdateChecklistItem : undefined}
-          onClose={() => setChecklistModal(false)}
+          onClose={() => { setModalOpen(false); setEditingRecord(null); }}
         />
       )}
 
@@ -480,14 +459,14 @@ function ExitFormModal({
     last_working_day: initialData?.last_working_day || "",
     reason: initialData?.reason_value || "RESIGNATION",
     notice_served: initialData?.notice_served ?? true,
-    clearance_hr: initialData?.clearance_hr || false,
-    clearance_it: initialData?.clearance_it || false,
-    clearance_finance: initialData?.clearance_finance || false,
-    clearance_admin: initialData?.clearance_admin || false,
     final_settlement: initialData?.final_settlement || 0,
+    final_settlement_status: initialData?.final_settlement_status || "PENDING",
     notes: initialData?.notes || "",
     update_employee_status: true,
   });
+
+  const [calculating, setCalculating] = useState(false);
+  const finalSettlementMutation = useFinalSettlementPreview();
 
   const employeeOpts: SearchableSelectOption[] = employees
     .map((e: any) => ({
@@ -495,13 +474,30 @@ function ExitFormModal({
       label: `${e.first_name} ${e.last_name || ""} (${e.department_name || "N/A"})`
     }));
 
-  const handleEmployeeSelect = (empId: string) => {
+  const selectedEmployee = employees.find((e: any) => String(e.id) === formData.employee_id);
+
+  const handleEmployeeSelect = async (empId: string) => {
     const emp = employees.find((e: any) => String(e.id) === empId);
     if (emp) {
       setFormData(prev => ({
         ...prev,
         employee_id: empId,
       }));
+
+      // Auto-calculate final settlement
+      setCalculating(true);
+      try {
+        const result = await finalSettlementMutation.mutateAsync({ employee_id: empId });
+        setFormData(prev => ({
+          ...prev,
+          employee_id: empId,
+          final_settlement: parseFloat(result.net_salary) || 0,
+        }));
+      } catch (err: any) {
+        toast.error(err.message || "Failed to calculate settlement");
+      } finally {
+        setCalculating(false);
+      }
     }
   };
 
@@ -513,8 +509,6 @@ function ExitFormModal({
     }
     onSubmit(formData);
   };
-
-  const selectedEmployee = employees.find((e: any) => String(e.id) === formData.employee_id);
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4 overflow-y-auto" onClick={onClose}>
@@ -550,7 +544,7 @@ function ExitFormModal({
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground">Designation</span>
                 <input
-                  value={selectedEmployee.designation || ""}
+                  value={selectedEmployee.designation_name || ""}
                   className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none"
                   readOnly
                 />
@@ -596,25 +590,6 @@ function ExitFormModal({
             </select>
           </label>
 
-          <div className="sm:col-span-2 bg-muted/20 p-3 rounded-lg border border-border">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Department Clearances</span>
-            <div className="grid grid-cols-2 gap-3 mt-2">
-              {[
-                { key: 'clearance_hr', label: 'HR' },
-                { key: 'clearance_it', label: 'IT' },
-                { key: 'clearance_finance', label: 'Finance' },
-                { key: 'clearance_admin', label: 'Admin' },
-              ].map(({ key, label }) => (
-                <Checkbox
-                  key={key}
-                  checked={formData[key as keyof typeof formData] as boolean}
-                  onChange={v => setFormData({ ...formData, [key]: v })}
-                  label={label}
-                />
-              ))}
-            </div>
-          </div>
-
           <label className="text-sm flex flex-col gap-1 sm:col-span-2">
             <span className="text-muted-foreground">Final Settlement Amount</span>
             <div className="relative">
@@ -626,7 +601,23 @@ function ExitFormModal({
                 className="bg-muted/40 border border-border rounded-md h-9 pl-10 pr-3 outline-none w-full"
                 placeholder="0.00"
               />
+              {calculating && (
+                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+              )}
             </div>
+          </label>
+
+          <label className="text-sm flex flex-col gap-1">
+            <span className="text-muted-foreground">Settlement Status</span>
+            <select
+              value={formData.final_settlement_status}
+              onChange={e => setFormData({ ...formData, final_settlement_status: e.target.value })}
+              className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none"
+            >
+              <option value="PENDING">Pending</option>
+              <option value="CONFIRMED">Confirmed</option>
+              <option value="REJECTED">Rejected</option>
+            </select>
           </label>
 
           <label className="text-sm flex flex-col gap-1 sm:col-span-2">
@@ -661,94 +652,6 @@ function ExitFormModal({
           </button>
         </div>
       </form>
-    </div>
-  );
-}
-
-// ==========================================
-// CHECKLIST MODAL
-// ==========================================
-function ChecklistModal({
-  record,
-  items,
-  onUpdateItem,
-  onClose,
-}: {
-  record: ExitRecord;
-  items: ExitChecklistItem[];
-  onUpdateItem?: (itemId: string, status: string) => void;
-  onClose: () => void;
-}) {
-  const groupedItems = items.reduce((acc, item) => {
-    if (!acc[item.item_type]) acc[item.item_type] = [];
-    acc[item.item_type].push(item);
-    return acc;
-  }, {} as Record<string, ExitChecklistItem[]>);
-
-  return (
-    <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4 overflow-y-auto" onClick={onClose}>
-      <div className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-3xl max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-card">
-          <div>
-            <h2 className="font-semibold">Exit Checklist</h2>
-            <p className="text-sm text-muted-foreground">{record.employee_name} - {record.department}</p>
-          </div>
-          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-muted">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="p-5 space-y-4">
-          {Object.entries(groupedItems).map(([type, typeItems]) => (
-            <div key={type}>
-              <h3 className="text-sm font-semibold mb-2 text-primary">{type}</h3>
-              <div className="space-y-2">
-                {typeItems.map(item => (
-                  <div key={item.id} className="flex items-center justify-between p-3 bg-muted/20 rounded-lg">
-                    <div className="flex-1">
-                      <div className="text-sm font-medium">{item.item_name}</div>
-                      {item.description && (
-                        <div className="text-xs text-muted-foreground">{item.description}</div>
-                      )}
-                      {item.assigned_to_name && (
-                        <div className="text-xs mt-1">Assigned to: {item.assigned_to_name}</div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {onUpdateItem ? (
-                        <select
-                          value={item.status}
-                          onChange={e => onUpdateItem(item.id, e.target.value)}
-                          className="text-xs bg-muted/40 border border-border rounded px-2 py-1"
-                        >
-                          <option value="PENDING">Pending</option>
-                          <option value="COMPLETED">Completed</option>
-                          <option value="WAIVED">Waived</option>
-                          <option value="NOT_APPLICABLE">N/A</option>
-                        </select>
-                      ) : (
-                        <span className="text-xs">{item.status}</span>
-                      )}
-                      {item.status === "COMPLETED" && (
-                        <CheckCircle2 className="w-4 h-4 text-success" />
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-          {Object.keys(groupedItems).length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">No checklist items yet</div>
-          )}
-        </div>
-
-        <div className="p-4 border-t border-border flex justify-end">
-          <button onClick={onClose} className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted">
-            Close
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

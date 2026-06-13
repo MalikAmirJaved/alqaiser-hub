@@ -1,7 +1,7 @@
 # apps/hr/views/exit_management_views.py
 
 import logging
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from django.db import models
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -14,7 +14,10 @@ from django.db.models import Count, Sum, Avg, Q
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import (
-    ExitRecord, ExitChecklist, Employee
+    ExitRecord, ExitChecklist, Employee,
+    Compensation, EmployeeLoan, LeaveRequest,
+    CompensationSelectedMonth, CompensationMonthRange,
+    LoanSelectedMonth, LoanMonthRange,
 )
 
 logger = logging.getLogger(__name__)
@@ -57,6 +60,7 @@ class BaseExitView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "clearance_status_value": exit_record.clearance_status,
             "clearance_progress": exit_record.clearance_progress,
             "final_settlement": float(exit_record.final_settlement),
+            "final_settlement_status": exit_record.final_settlement_status,
             "notes": exit_record.notes,
             "status": exit_record.get_status_display(),
             "status_value": exit_record.status,
@@ -267,7 +271,8 @@ class ExitRecordView(BaseExitView):
         updatable_fields = [
             'exit_date', 'last_working_day', 'reason', 'notice_served',
             'clearance_hr', 'clearance_it', 'clearance_finance', 'clearance_admin',
-            'clearance_status', 'final_settlement', 'notes', 'status'
+            'clearance_status', 'final_settlement', 'final_settlement_status',
+            'notes', 'status'
         ]
         
         for field in updatable_fields:
@@ -358,6 +363,92 @@ class ExitStatsView(BaseExitView):
         }
         
         return Response(stats)
+
+
+class ExitFinalSettlementView(BaseExitView):
+    """Calculate final settlement amount for an employee"""
+
+    def get_permission_action(self):
+        return 'view'
+
+    def post(self, request):
+        company_id, _ = self._get_company_context(request)
+
+        employee_uuid = request.data.get('employee_id')
+        if not employee_uuid:
+            return Response(
+                {'error': 'employee_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        employee = get_object_or_404(
+            Employee,
+            _id=employee_uuid,
+            company_id=company_id,
+            is_deleted=False
+        )
+
+        base_salary = float(employee.salary or 0)
+
+        # Compensation allowances
+        compensation = Compensation.objects.filter(
+            employee=employee,
+            status='ACTIVE',
+            is_deleted=False
+        ).prefetch_related('selected_months', 'month_range').first()
+        total_compensation = float(compensation.total_allowances) if compensation else 0
+
+        # Active loan remaining amounts
+        active_loans = EmployeeLoan.objects.filter(
+            employee=employee,
+            status='ACTIVE',
+            is_deleted=False
+        )
+        total_loan_deduction = sum(float(l.remaining_amount or 0) for l in active_loans)
+
+        # Approved leave deductions (current month)
+        today = date.today()
+        first_day = date(today.year, today.month, 1)
+        if today.month == 12:
+            last_day = date(today.year + 1, 1, 1) - timedelta(days=1)
+        else:
+            last_day = date(today.year, today.month + 1, 1) - timedelta(days=1)
+
+        daily_rate = base_salary / 30 if base_salary > 0 else 0
+        leave_deduction = 0
+        if daily_rate > 0:
+            approved_leaves = LeaveRequest.objects.filter(
+                employee=employee,
+                status='APPROVED',
+                start_date__lte=last_day,
+                end_date__gte=first_day,
+                is_deleted=False
+            )
+            for leave in approved_leaves:
+                start = max(leave.start_date, first_day)
+                end = min(leave.end_date, last_day)
+                current = start
+                days_on_leave = 0
+                while current <= end:
+                    # Simple weekday check (Mon-Fri)
+                    if current.weekday() < 5:
+                        days_on_leave += 1
+                    current += timedelta(days=1)
+                if leave.is_half_day and days_on_leave == 1:
+                    days_on_leave = 0.5
+                leave_deduction += days_on_leave * daily_rate
+
+        net_salary = base_salary + total_compensation - total_loan_deduction - leave_deduction
+
+        return Response({
+            'employee_id': str(employee._id),
+            'employee_name': employee.full_name,
+            'base_salary': str(base_salary),
+            'compensation': str(total_compensation),
+            'loan_deduction': str(total_loan_deduction),
+            'leave_deduction': str(leave_deduction),
+            'net_salary': str(max(0, net_salary)),
+        })
 
 
 class ExitChecklistView(BaseExitView):

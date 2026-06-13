@@ -46,7 +46,7 @@ export const PERMISSIONS = {
     asset_assignment: ["view","assign","return", "export"]                                         as const,
     performance:      ["view", "export"]                                                           as const,
     recruitment:      ["view","create","update_round", "export"]                                   as const,
-    exit:             ["view","create","update_checklist", "export"]                               as const,
+    exit:             ["view","create","update","update_status", "export"]    as const,
     policy:           ["view","create","update","delete", "export"]                                as const,
     compensation:     [
       "view_compensation","view_loan",

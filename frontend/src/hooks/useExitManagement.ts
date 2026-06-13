@@ -23,6 +23,7 @@ export interface ExitRecord {
   clearance_status_value: string;
   clearance_progress: number;
   final_settlement: number;
+  final_settlement_status: string;
   notes: string;
   status: string;
   status_value: string;
@@ -59,17 +60,43 @@ export interface ExitStats {
   notice_compliance_rate: number;
 }
 
+export interface FinalSettlementPreview {
+  employee_id: string;
+  employee_name: string;
+  base_salary: string;
+  compensation: string;
+  loan_deduction: string;
+  leave_deduction: string;
+  net_salary: string;
+}
+
 // Fetch all exit records
 export function useExitRecords(params?: Record<string, string>) {
   const api = useApi();
   const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
-  
+
   return useQuery<{ data: ExitRecord[]; pagination: any }>({
     queryKey: ["exitRecords", params],
     queryFn: () => api(`/api/hr/exits/${queryString}`),
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
+  });
+}
+
+// Fetch single exit record
+export function useExitRecord(id: string | null) {
+  const api = useApi();
+  return useQuery<ExitRecord>({
+    queryKey: ["exitRecord", id],
+    queryFn: () => api(`/api/hr/exits/?search=${id}`),
+    enabled: !!id,
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    select: (data: any) => {
+      const records = data?.data || [];
+      return records.find((r: ExitRecord) => r.id === id) || records[0];
+    },
   });
 }
 
@@ -82,6 +109,18 @@ export function useExitStats() {
     staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
+  });
+}
+
+// Calculate final settlement for an employee
+export function useFinalSettlementPreview() {
+  const api = useApi();
+  return useMutation<FinalSettlementPreview, Error, { employee_id: string }>({
+    mutationFn: (data) =>
+      api("/api/hr/exits/final-settlement/", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
   });
 }
 

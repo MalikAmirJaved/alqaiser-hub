@@ -1261,7 +1261,13 @@ class ExitRecord(BaseModel):
         ('APPROVED', 'Approved'),
         ('COMPLETED', 'Completed'),
     ]
-    
+
+    SETTLEMENT_STATUS = [
+        ('PENDING', 'Pending'),
+        ('CONFIRMED', 'Confirmed'),
+        ('REJECTED', 'Rejected'),
+    ]
+
     RECORD_STATUS = [
         ('ACTIVE', 'Active'),
         ('CLOSED', 'Closed'),
@@ -1284,8 +1290,9 @@ class ExitRecord(BaseModel):
     clearance_status = models.CharField(max_length=20, choices=CLEARANCE_STATUS, default='PENDING', db_index=True)
     
     final_settlement = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    final_settlement_status = models.CharField(max_length=20, choices=SETTLEMENT_STATUS, default='PENDING', db_index=True)
     notes = models.TextField(blank=True, null=True)
-    
+
     status = models.CharField(max_length=20, choices=RECORD_STATUS, default='ACTIVE', db_index=True)
     
     @property

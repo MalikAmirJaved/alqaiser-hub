@@ -42,6 +42,7 @@ from apps.hr.views.recruitment_views import (
 from apps.hr.views.exit_management_views import (
     ExitRecordView,
     ExitStatsView,
+    ExitFinalSettlementView,
     ExitChecklistView,
     ExitBulkActionView,
 )
@@ -130,6 +131,7 @@ urlpatterns = [
     # Exit Management
     path('exits/', ExitRecordView.as_view(), name='exit-records'),
     path('exits/stats/', ExitStatsView.as_view(), name='exit-stats'),
+    path('exits/final-settlement/', ExitFinalSettlementView.as_view(), name='exit-final-settlement'),
     path('exits/checklist/', ExitChecklistView.as_view(), name='exit-checklist'),
     path('exits/bulk-action/', ExitBulkActionView.as_view(), name='exit-bulk-action'),
 

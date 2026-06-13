@@ -34,7 +34,7 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   shiftDateRange: ["shiftDateRange", "resolvedShifts", "shiftStatistics"],
   payroll: ["payroll", "payrollStats"],
   recruitment: ["recruitment", "recruitmentStats"],
-  exitRecords: ["exitRecords", "exitMetrics"],
+  exitRecords: ["exitRecords", "exitStats"],
   policies: ["policies"],
   compensations: ["compensations"],
   loans: ["loans"],

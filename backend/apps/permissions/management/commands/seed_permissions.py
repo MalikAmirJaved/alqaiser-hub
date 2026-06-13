@@ -48,7 +48,7 @@ RESOURCES_ACTIONS: dict[str, dict[str, list[str]]] = {
         "asset_assignment":     ["view", "assign", "return", "export"],
         "performance":          ["view", "export"],
         "recruitment":          ["view", "create", "update_round", "export"],
-        "exit":                 ["view", "create", "update_checklist", "export"],
+        "exit":                 ["view", "create", "update", "update_status", "export"],
         "policy":               ["view", "create", "update", "delete", "export"],
         "compensation":         [
             "view_compensation", "view_loan",
@@ -161,6 +161,7 @@ ACTION_DISPLAY_NAMES: dict[str, str] = {
     "return":                 "Return",
     "update_round":           "Update Round",
     "update_checklist":       "Update Checklist",
+    "update_status":          "Update Status",
     "view_compensation":      "View Compensation",
     "view_loan":              "View Loan",
     "create_compensation":    "Create Compensation",
