@@ -1056,3 +1056,72 @@ queryClient.invalidateQueries({ queryKey: ["recruitmentStats"] });
 ```
 
 This ensures the "Add to Employee" (Building2) button disappears from the recruitment table immediately after conversion.
+
+---
+
+## 13. Exit Management & Final Settlement - IMPLEMENTED
+
+### Overview
+
+The exit management module handles employee offboarding, clearances, and final settlement calculation. The final settlement uses the same working-day logic as the payroll module (`PayrollView`) for consistency.
+
+### Final Settlement Calculation Logic
+
+The `ExitFinalSettlementView.post` endpoint calculates the final settlement amount using working days.
+
+#### Period Determination
+
+The calculation period is determined by three factors: `joining_date`, `last_working_day`, and whether the month prior to the last working day has been paid via payroll:
+
+| Condition | Period Start | Period End |
+|---|---|---|
+| Join month == LWD month | `joining_date` | `last_working_day` |
+| Previous month **not** paid | `joining_date` | `last_working_day` |
+| Previous month **paid** | 1st of LWD month | `last_working_day` |
+
+The "previous month paid" check looks for a `PayrollRecord` with `net_salary > 0` and `is_cancelled=False` for that employee in the month before LWD's month.
+
+#### Working Day Calculation
+
+- `daily_rate = base_salary / 30` (fixed 30 days per month, same as `PayrollView`)
+- Working days are counted using the company's `WorkingDay` configuration (checking which weekdays are `is_working=True`)
+- Public holidays (`PublicHoliday`) are excluded from working day count
+- `settlement_salary = total_working_days × daily_rate`
+
+#### Deductions & Additions
+
+| Component | Logic | Source |
+|---|---|---|
+| **Compensation** | Month-aware: checks if compensation's frequency covers the LWD month (ONE_TIME/SELECTED_MONTH/MONTH_RANGE) | Same as `PayrollView` |
+| **Loan deduction** | Full `remaining_amount` of all ACTIVE loans | Final settlement clears all outstanding |
+| **Leave deduction** | Counts working days in leave periods within the settlement range, using `_is_working_day()` | Same as `PayrollView` |
+
+`net_settlement = settlement_salary + compensation - loan_deduction - leave_deduction`
+
+### API Endpoint
+
+| Method | URL | Description |
+|---|---|---|
+| POST | `/api/hr/exits/final-settlement/` | Calculate final settlement (accepts `employee_id` + optional `last_working_day` from request body) |
+
+The `last_working_day` parameter is accepted from request body so the API works for **new** exit records (no exit record exists yet). For existing records, it falls back to `exit_record.last_working_day` or `exit_record.exit_date`.
+
+### Employee Status Update Flow
+
+- **On creation**: Employee status is **not** changed (removed "Update employee status" option)
+- **On settlement CONFIRMED**: Employee `employment_status` changes to `RESIGNED` or `TERMINATED` (based on exit reason)
+- **Locked once settled**: Records with `final_settlement_status` = `CONFIRMED` or `REJECTED` cannot be edited (backend returns 400, frontend disables all inputs and hides Save button)
+- The inline settlement status dropdown in the table view is replaced with a static badge for CONFIRMED/REJECTED records
+
+### Frontend Auto-Calculation
+
+The `ExitFormModal` in `frontend/src/app/(app)/hr/exit/page.tsx` triggers the final settlement API **only when both** employee and last working day are selected. The `tryCalculateSettlement` guard ensures neither field alone triggers the call.
+
+### Files Modified
+
+#### Backend:
+- `backend/apps/hr/views/exit_management_views.py` - `ExitFinalSettlementView` rewritten with working-day-based logic; `ExitRecordView.post`/`patch` updated for status flow and lock behavior
+
+#### Frontend:
+- `frontend/src/hooks/useExitManagement.ts` - Updated `FinalSettlementPreview` interface and mutation type
+- `frontend/src/app/(app)/hr/exit/page.tsx` - Auto-calculation on employee+LWD select, lock UI for settled records, removed "Update employee status" checkbox
