@@ -32,6 +32,7 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   policies: ["policies"],
   compensations: ["compensations"],
   loans: ["loans"],
+  inventory_category: ["categories"],
 };
 
 interface NotificationContextProps {
