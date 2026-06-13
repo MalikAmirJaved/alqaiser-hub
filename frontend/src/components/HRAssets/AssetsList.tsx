@@ -16,6 +16,7 @@ import {
   Trash2,
   Save,
   MoreVertical,
+  ShoppingCart,
 } from "lucide-react";
 
 import {
@@ -50,6 +51,7 @@ import {
 import { toast } from "sonner";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { AssetRequestFormModal } from "./AssetRequestFormModal";
 
 // Helper to format date
 const formatDate = (dateStr?: string) => {
@@ -71,6 +73,7 @@ export default function AssetsList() {
 
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [requestForAsset, setRequestForAsset] = useState<any>(null);
 
   // Simplified form state (no warranty field)
   const [form, setForm] = useState({
@@ -316,6 +319,10 @@ export default function AssetsList() {
                                   Edit
                                 </DropdownMenuItem>
                               )}
+                              <DropdownMenuItem onClick={() => setRequestForAsset(asset)}>
+                                <ShoppingCart className="w-4 h-4 mr-2" />
+                                Request
+                              </DropdownMenuItem>
                               {permissions.update && permissions.delete && <DropdownMenuSeparator />}
                               {permissions.delete && (
                                 <DropdownMenuItem
@@ -418,6 +425,19 @@ export default function AssetsList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {requestForAsset && (
+        <AssetRequestFormModal
+          isOpen={!!requestForAsset}
+          onClose={() => setRequestForAsset(null)}
+          asset={{
+            id: requestForAsset.id,
+            name: requestForAsset.name,
+            brand: requestForAsset.brand,
+            serial_number: requestForAsset.serial_number,
+          }}
+        />
+      )}
     </div>
   );
 }

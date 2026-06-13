@@ -14,6 +14,7 @@ import { useCreateGoodsReceipt } from '@/hooks/useGoodsReceipts';
 import { useConfirmationModal } from '@/components/reuseable/ConfirmationModal';
 import { PurchaseOrderModal } from './PurchaseOrderModal';
 import { GoodsReceiptModal } from './GoodsReceiptModal';
+import { AssetRequestsPanel } from './AssetRequestsPanel';
 import type { PurchaseOrder, PurchaseOrderPayload, GoodsReceiptPayload } from '@/types/purchase';
 import PageHeader from '@/components/PageHeader';
 import { StatsCards } from '@/components/reuseable/StatsCards';
@@ -101,10 +102,17 @@ export default function PurchaseOrdersPage() {
   const createReceiptMutation = useCreateGoodsReceipt();
   const { confirm, Modal: ConfirmModal } = useConfirmationModal();
   const permissions = useFeaturePermissions("INVENTORY", "purchase_order");
-
+console.log("permissions:: ", permissions)
   const [modalOpen, setModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<PurchaseOrder | undefined>();
   const [receiptOrder, setReceiptOrder] = useState<PurchaseOrder | null>(null);
+  const [requestPrefill, setRequestPrefill] = useState<{
+    id: string;
+    asset: string;
+    asset_name: string;
+    quantity: number;
+    under_date: string;
+  } | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [supplierFilter, setSupplierFilter] = useState('');
@@ -168,6 +176,18 @@ export default function PurchaseOrdersPage() {
     await createMutation.mutateAsync(data);
     setModalOpen(false);
     setEditingOrder(undefined);
+    setRequestPrefill(null);
+  };
+
+  const handleConfirmRequest = (req: {
+    id: string;
+    asset: string;
+    asset_name: string;
+    quantity: number;
+    under_date: string;
+  }) => {
+    setRequestPrefill(req);
+    setModalOpen(true);
   };
 
   const handleCreateReceipt = async (data: GoodsReceiptPayload) => {
@@ -373,7 +393,7 @@ export default function PurchaseOrdersPage() {
                             }
                           />
                         )}
-                        {permissions.approve && (
+                        {permissions.confirm && (
                           <ActionBtn
                             title="Confirm order"
                             onClick={() => handleConfirm(order)}
@@ -401,7 +421,7 @@ export default function PurchaseOrdersPage() {
                       </>
                     )}
                     {/* Receive */}
-                    {(order.status === 'CONFIRMED' || order.status === 'PARTIALLY_RECEIVED') && permissions.update && (
+                    {(order.status === 'CONFIRMED' || order.status === 'PARTIALLY_RECEIVED') && permissions.confirm && (
                       <ActionBtn
                         title="Receive goods"
                         onClick={() => setReceiptOrder(order)}
@@ -422,13 +442,19 @@ export default function PurchaseOrdersPage() {
         </table>
       </div>
 
+      {/* Asset Requests Panel */}
+      {permissions.create && (
+        <AssetRequestsPanel onConfirmRequest={handleConfirmRequest} />
+      )}
+
       {/* Modals */}
-      {modalOpen && (editingOrder ? permissions.update : permissions.create) && (
+      {modalOpen && (editingOrder || requestPrefill ? permissions.confirm : permissions.create) && (
         <PurchaseOrderModal
           isOpen={modalOpen}
-          onClose={() => { setModalOpen(false); setEditingOrder(undefined); }}
+          onClose={() => { setModalOpen(false); setEditingOrder(undefined); setRequestPrefill(null); }}
           onSubmit={handleCreateOrder}
           initialData={editingOrder}
+          prefillFromRequest={requestPrefill}
           loading={createMutation.isPending}
         />
       )}

@@ -108,6 +108,56 @@ class Asset(BaseModel):
             return None
         return self.warranty_until >= date.today()
 # =========================================================
+# ASSET PURCHASE REQUEST
+# =========================================================
+class AssetPurchaseRequest(BaseModel):
+    """Purchase requests for HR assets - raised from asset library, fulfilled via inventory PO"""
+
+    asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name='purchase_requests')
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='asset_purchase_requests'
+    )
+    employee = models.ForeignKey(
+        'Employee', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='asset_purchase_requests'
+    )
+    quantity = models.PositiveIntegerField()
+    reason = models.TextField()
+    under_date = models.DateField(help_text="Date by which the asset is needed")
+    status = models.CharField(
+        max_length=30,
+        choices=[
+            ('PENDING', 'Pending'),
+            ('APPROVED', 'Approved'),
+            ('PURCHASE_ORDER_CREATED', 'Purchase Order Created'),
+            ('CANCELLED', 'Cancelled'),
+        ],
+        default='PENDING',
+        db_index=True
+    )
+    purchase_order = models.ForeignKey(
+        'inventory.PurchaseOrder', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='asset_purchase_requests'
+    )
+    notes = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = "Asset Purchase Request"
+        verbose_name_plural = "Asset Purchase Requests"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['company_id', 'status']),
+            models.Index(fields=['asset', 'status']),
+            models.Index(fields=['company_id', 'branch_id']),
+            models.Index(fields=['purchase_order']),
+        ]
+
+    def __str__(self):
+        return f"Request for {self.asset.name} x{self.quantity} ({self.get_status_display()})"
+
+
+# =========================================================
 # ASSET CATEGORY (Kit)
 # =========================================================
 class AssetCategory(BaseModel):

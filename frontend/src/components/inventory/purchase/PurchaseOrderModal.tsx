@@ -14,6 +14,13 @@ interface PurchaseOrderModalProps {
   onClose: () => void;
   onSubmit: (data: PurchaseOrderPayload) => Promise<void>;
   initialData?: PurchaseOrder;
+  prefillFromRequest?: {
+    id: string;
+    asset: string;
+    asset_name: string;
+    quantity: number;
+    under_date: string;
+  } | null;
   loading?: boolean;
 }
 
@@ -47,6 +54,7 @@ export function PurchaseOrderModal({
   onClose,
   onSubmit,
   initialData,
+  prefillFromRequest,
   loading,
 }: PurchaseOrderModalProps) {
   const { data: suppliers = [] } = useSuppliers();
@@ -83,7 +91,7 @@ export function PurchaseOrderModal({
     }
   }, [inventoryType, products, assets]);
 
-  // Populate when editing
+  // Populate when editing or pre-filling from request
   useEffect(() => {
     if (initialData) {
       setSupplierId(initialData.supplier ?? '');
@@ -101,8 +109,30 @@ export function PurchaseOrderModal({
           tax_rate: l.tax_rate,
         })) ?? [emptyLine()]
       );
+    } else if (prefillFromRequest) {
+      setSupplierId('');
+      setWarehouseId('');
+      setOrderDate(new Date().toISOString().slice(0, 10));
+      setExpectedDate(prefillFromRequest.under_date || '');
+      setNotes('');
+      setInventoryType('OFFICE_INVENTORY');
+      setLineItems([{
+        id: nextLineId(),
+        selectedId: prefillFromRequest.asset,
+        quantity_ordered: prefillFromRequest.quantity,
+        unit_cost: 0,
+        tax_rate: 0,
+      }]);
+    } else {
+      setSupplierId('');
+      setWarehouseId('');
+      setOrderDate(new Date().toISOString().slice(0, 10));
+      setExpectedDate('');
+      setNotes('');
+      setInventoryType('FOR_SALE');
+      setLineItems([emptyLine()]);
     }
-  }, [initialData]);
+  }, [initialData, prefillFromRequest]);
 
   const { subtotal, totalTax, grandTotal } = useMemo(() => {
     let sub = 0;
@@ -148,6 +178,7 @@ export function PurchaseOrderModal({
           unit_cost: Number(unit_cost),
           tax_rate: Number(tax_rate),
         })),
+      request_ids: prefillFromRequest ? [prefillFromRequest.id] : undefined,
     };
     await onSubmit(payload);
   };

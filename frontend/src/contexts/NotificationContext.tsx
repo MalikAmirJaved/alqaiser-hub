@@ -39,6 +39,9 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   compensations: ["compensations"],
   loans: ["loans"],
 
+  // ---------- HR ----------
+  asset_purchase_request: ["assetPurchaseRequests"],
+
   // ---------- Inventory ----------
   inventory_category: ["inventory_category"],
   inventory_brand: ["inventory_brand"],

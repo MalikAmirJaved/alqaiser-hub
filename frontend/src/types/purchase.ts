@@ -56,6 +56,7 @@ export interface PurchaseOrderPayload {
   expected_delivery_date?: string;
   notes?: string;
   line_items: PurchaseOrderLinePayload[];
+  request_ids?: string[];  // Asset purchase request UUIDs to link and mark as fulfilled
 }
 
 export interface GoodsReceiptLinePayload {

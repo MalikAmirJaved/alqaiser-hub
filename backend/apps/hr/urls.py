@@ -3,6 +3,7 @@ from django.urls import path
 from apps.hr.views.shift_template_views import ShiftTemplateView
 from apps.hr.views.asset_views import AssetView, AssetStatsView
 from apps.hr.views.asset_category_views import AssetCategoryView, AssetCategoryStatsView
+from apps.hr.views.asset_purchase_request_views import AssetPurchaseRequestView
 from apps.hr.views.employee_views import EmployeeView, EmployeeStatsView
 from apps.hr.views.payroll_views import (
     PayrollView, PayrollStatsView, PayrollPreviewView,
@@ -85,6 +86,9 @@ urlpatterns = [
     # Compensations
     path('compensations/', CompensationView.as_view(), name='compensations'),
     path('compensations/<str:pk>/', CompensationView.as_view(), name='compensation-detail'),
+
+    # Asset Purchase Requests
+    path('asset-purchase-requests/', AssetPurchaseRequestView.as_view(), name='asset-purchase-requests'),
 
     # employee assets
     path('employee-assets/assignments/', EmployeeAssetAssignmentView.as_view(), name='employee-asset-assignments'),
