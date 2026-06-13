@@ -5,7 +5,8 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from .models import Category
 from apps.notifications.models import Notification
-from .models import Category, Brand, Warehouse
+from .models import Category, Brand, Warehouse, Product, ProductVariant, Inventory
+
 
 # Helper to create notification
 def create_notification(company_id, branch_id, title, message, notif_type='info'):
@@ -169,3 +170,38 @@ def notify_warehouse_delete(sender, instance, **kwargs):
     
     # Broadcast data update for real-time cache invalidation
     broadcast_data_update(company_id, branch_id, 'inventory_warehouse', 'delete', instance.id)
+
+
+@receiver(post_save, sender=Product)
+def notify_product_change(sender, instance, created, **kwargs):
+    company_id = instance.company_id
+    branch_id = instance.branch_id
+    action = 'create' if created else 'update'
+    create_notification(
+        company_id, branch_id,
+        f"Product {action}d",
+        f"Product '{instance.name}' ({instance.sku}) has been {action}d.",
+        "success" if created else "info"
+    )
+    broadcast_data_update(company_id, branch_id, 'product', action, instance.id)
+
+@receiver(post_delete, sender=Product)
+def notify_product_delete(sender, instance, **kwargs):
+    create_notification(
+        instance.company_id, instance.branch_id,
+        "Product Deleted",
+        f"Product '{instance.name}' ({instance.sku}) has been deleted.",
+        "warning"
+    )
+    broadcast_data_update(instance.company_id, instance.branch_id, 'product', 'delete', instance.id)
+
+@receiver(post_save, sender=Inventory)
+def notify_inventory_change(sender, instance, created, **kwargs):
+    action = 'create' if created else 'update'
+    broadcast_data_update(
+        instance.product.company_id,
+        instance.product.branch_id,
+        'inventory',
+        action,
+        instance.id
+    )

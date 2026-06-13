@@ -1,13 +1,10 @@
 // src/components/inventory/product/AdvancedProductManager.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Package, Layers, DollarSign, Tag, Image as ImageIcon, Settings, Truck, ClipboardList } from "lucide-react";
-import { ls, uid } from "@/services/localStorageService";
-
-// Import sub-components
+import { Package, Layers, DollarSign, Tag, ImageIcon, Truck, ClipboardList } from "lucide-react";
 import ProductBasicInfo from "./ProductBasicInfo";
 import ProductVariantsManager from "./ProductVariantsManager";
 import ProductAttributesManager from "./ProductAttributesManager";
@@ -16,268 +13,166 @@ import ProductInventoryManager from "./ProductInventoryManager";
 import ProductMediaGallery from "./ProductMediaGallery";
 import ProductTagsManager from "./ProductTagsManager";
 
-export default function AdvancedProductManager({ productId, onSave, onCancel }) {
+interface AdvancedProductManagerProps {
+  product: any;                 // existing product or null for create
+  categories: any[];
+  brands: any[];
+  tags: any[];
+  warehouses: any[];
+  onSave: (productData: any) => Promise<void>;
+  onCancel: () => void;
+}
+
+export default function AdvancedProductManager({
+  product,
+  categories,
+  brands,
+  tags,
+  warehouses,
+  onSave,
+  onCancel,
+}: AdvancedProductManagerProps) {
   const [activeTab, setActiveTab] = useState("basic");
-  const [product, setProduct] = useState<any>(null);
-  const [variants, setVariants] = useState<any[]>([]);
-  const [attributes, setAttributes] = useState<any[]>([]);
-  const [inventoryRecords, setInventoryRecords] = useState<any[]>([]);
-  const [tags, setTags] = useState<any[]>([]);
-  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState<any>(() => {
+    if (product) return { ...product };
+    return {
+      sku: generateSKU(),
+      name: "",
+      short_description: "",
+      description: "",
+      category_id: "",
+      brand_id: "",
+      product_type: "simple",
+      unit_of_measure: "PCS",
+      cost_price: 0,
+      selling_price: 0,
+      status: "draft",
+      main_image: "",
+      gallery_images: [],
+      video_url: "",
+      tax_class: "standard",
+      attributes: [],
+      variants: [],
+      inventory: [],
+      tags: [],
+    };
+  });
+
   const [errors, setErrors] = useState<any>({});
-  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [saving, setSaving] = useState(false);
 
-  // Load all data
-  useEffect(() => {
-    setWarehouses(ls.get<any[]>("warehouses", []) || []);
-    
-    if (productId) {
-      const products = ls.get<any[]>("products", []) || [];
-      const found = products.find((p: any) => p.id === productId);
+  function generateSKU() {
+    return `SKU-${Date.now().toString(36).toUpperCase()}`;
+  }
 
-      if (found) {
-        setProduct(found);
-        loadVariants(productId);
-        loadAttributes(productId);
-        loadInventory(productId);
-        loadTags(productId);
-      }
-    } else {
-      // Initialize new product
-      setProduct({
-        id: uid("prod"),
-        sku: generateSKU(),
-        name: "",
-        short_description: "",
-        description: "",
-        category_id: "",
-        brand_id: "",
-        product_type: "simple",
-        unit_of_measure: "PCS",
-        cost_price: 0,
-        selling_price: 0,
-        status: "draft",
-        created_at: new Date().toISOString()
-      });
-      setVariants([]);
-      setAttributes([]);
-      setInventoryRecords([]);
-      setTags([]);
-    }
-  }, [productId]);
-
-  const generateSKU = () => {
-    const timestamp = Date.now().toString(36).toUpperCase();
-    return `SKU-${timestamp}`;
-  };
-
-  const loadVariants = (pid: string) => {
-    const allVariants = ls.get<any[]>("productVariants", []) || [];
-    setVariants(allVariants.filter((v: any) => v.product_id === pid));
-  };
-
-
-  const loadAttributes = (pid: string) => {
-    const allAttributes = ls.get<any[]>("productAttributes", []) || [];
-    setAttributes(allAttributes.filter((a: any) => a.product_id === pid));
-  };
-
-
-  const loadInventory = (pid: string) => {
-    const allInventory = ls.get<any[]>("inventory", []) || [];
-    setInventoryRecords(allInventory.filter((i: any) => i.product_id === pid));
-  };
-
-
-  const loadTags = (pid: string) => {
-    const allProductTags = ls.get<any[]>("productTags", []) || [];
-    const tagIds = allProductTags.filter((pt: any) => pt.product_id === pid).map((pt: any) => pt.tag_id);
-    const allTags = ls.get<any[]>("tags", []) || [];
-    setTags(allTags.filter((t: any) => tagIds.includes(t.id)));
-  };
-
-
-  const validateProduct = () => {
+  const validate = () => {
     const newErrors: any = {};
-
-    if (!product.name) newErrors.name = "Product name is required";
-    if (!product.sku) newErrors.sku = "SKU is required";
-    if (!product.category_id) newErrors.category = "Category is required";
-    if (product.cost_price < 0) newErrors.cost_price = "Cost price cannot be negative";
-    if (product.selling_price < 0) newErrors.selling_price = "Selling price cannot be negative";
-    
+    if (!formData.name) newErrors.name = "Product name required";
+    if (!formData.sku) newErrors.sku = "SKU required";
+    if (!formData.category_id) newErrors.category = "Category required";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSave = async () => {
-    if (!validateProduct()) {
+    if (!validate()) {
       setActiveTab("basic");
       return;
     }
-    
     setSaving(true);
-    
-    // Save product
-    const products = ls.get<any[]>("products", []) || [];
-    if (productId) {
-      const updated = products.map((p: any) => p.id === productId 
-        ? { ...product, updated_at: new Date().toISOString() } 
-        : p
-      );
-      ls.set("products", updated);
-    } else {
-      ls.set("products", [{ ...product, created_at: new Date().toISOString() }, ...products]);
+    try {
+      await onSave(formData);
+    } finally {
+      setSaving(false);
     }
-    
-    // Save variants
-    const allVariants = ls.get<any[]>("productVariants", []) || [];
-    const filteredVariants = allVariants.filter((v: any) => v.product_id !== product.id);
-    ls.set("productVariants", [...filteredVariants, ...variants]);
-    
-    // Save attributes
-    const allAttributes = ls.get<any[]>("productAttributes", []) || [];
-    const filteredAttributes = allAttributes.filter((a: any) => a.product_id !== product.id);
-    ls.set("productAttributes", [...filteredAttributes, ...attributes]);
-    
-    // Save inventory
-    const allInventory = ls.get<any[]>("inventory", []) || [];
-    const filteredInventory = allInventory.filter((i: any) => i.product_id !== product.id);
-    ls.set("inventory", [...filteredInventory, ...inventoryRecords]);
-    
-    // Save tags
-    const allProductTags = ls.get<any[]>("productTags", []) || [];
-    const filteredTags = allProductTags.filter((pt: any) => pt.product_id !== product.id);
-    const newTags = tags.map((tag: any) => ({
-      id: uid("pt"),
-      product_id: product.id,
-      tag_id: tag.id,
-      created_at: new Date().toISOString(),
-      created_by: ls.get<any>("session")?.id
-    }));
-
-    ls.set("productTags", [...filteredTags, ...newTags]);
-    
-    setSaving(false);
-    onSave?.();
   };
 
-  if (!product) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
+  const updateFormData = (updates: any) => setFormData({ ...formData, ...updates });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-6xl bg-card rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
-        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-border">
           <div>
             <h2 className="text-xl font-semibold">
-              {productId ? "Edit Product" : "Create New Product"}
+              {product ? "Edit Product" : "Create New Product"}
             </h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              SKU: {product.sku}
-            </p>
+            <p className="text-sm text-muted-foreground">SKU: {formData.sku}</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={onCancel}>
-              Cancel
-            </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onCancel}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving}>
-              {saving ? "Saving..." : (productId ? "Update Product" : "Create Product")}
+              {saving ? "Saving..." : (product ? "Update" : "Create")}
             </Button>
           </div>
         </div>
 
-        {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
           <TabsList className="px-6 pt-2 border-b border-border justify-start gap-1 bg-transparent flex-wrap h-auto">
-            <TabsTrigger value="basic" className="data-[state=active]:bg-primary/10">
-              <Package className="w-4 h-4 mr-2" /> Basic Info
-            </TabsTrigger>
-            {product.product_type === "variable" && (
-              <TabsTrigger value="variants" className="data-[state=active]:bg-primary/10">
-                <Layers className="w-4 h-4 mr-2" /> Variants
-              </TabsTrigger>
+            <TabsTrigger value="basic"><Package className="w-4 h-4 mr-2" /> Basic Info</TabsTrigger>
+            {formData.product_type === "variable" && (
+              <TabsTrigger value="variants"><Layers className="w-4 h-4 mr-2" /> Variants</TabsTrigger>
             )}
-            <TabsTrigger value="attributes" className="data-[state=active]:bg-primary/10">
-              <ClipboardList className="w-4 h-4 mr-2" /> Attributes
-            </TabsTrigger>
-            <TabsTrigger value="pricing" className="data-[state=active]:bg-primary/10">
-              <DollarSign className="w-4 h-4 mr-2" /> Pricing & Tax
-            </TabsTrigger>
-            <TabsTrigger value="inventory" className="data-[state=active]:bg-primary/10">
-              <Truck className="w-4 h-4 mr-2" /> Inventory
-            </TabsTrigger>
-            <TabsTrigger value="tags" className="data-[state=active]:bg-primary/10">
-              <Tag className="w-4 h-4 mr-2" /> Tags
-            </TabsTrigger>
-            <TabsTrigger value="media" className="data-[state=active]:bg-primary/10">
-              <ImageIcon className="w-4 h-4 mr-2" /> Media
-            </TabsTrigger>
+            <TabsTrigger value="attributes"><ClipboardList className="w-4 h-4 mr-2" /> Attributes</TabsTrigger>
+            <TabsTrigger value="pricing"><DollarSign className="w-4 h-4 mr-2" /> Pricing</TabsTrigger>
+            <TabsTrigger value="inventory"><Truck className="w-4 h-4 mr-2" /> Inventory</TabsTrigger>
+            <TabsTrigger value="tags"><Tag className="w-4 h-4 mr-2" /> Tags</TabsTrigger>
+            <TabsTrigger value="media"><ImageIcon className="w-4 h-4 mr-2" /> Media</TabsTrigger>
           </TabsList>
 
           <div className="flex-1 overflow-y-auto p-6">
-            <TabsContent value="basic" className="m-0">
-              <ProductBasicInfo 
-                product={product}
-                onChange={setProduct}
+            <TabsContent value="basic">
+              <ProductBasicInfo
+                product={formData}
+                categories={categories}
+                brands={brands}
+                onChange={updateFormData}
                 errors={errors}
               />
             </TabsContent>
-
-            <TabsContent value="variants" className="m-0">
+            <TabsContent value="variants">
               <ProductVariantsManager
-                product={product}
-                variants={variants}
-                onChange={setVariants}
+                product={formData}
+                variants={formData.variants || []}
+                onChange={(variants) => updateFormData({ variants })}
               />
             </TabsContent>
-
-            <TabsContent value="attributes" className="m-0">
+            <TabsContent value="attributes">
               <ProductAttributesManager
-                product={product}
-                attributes={attributes}
-                onChange={setAttributes}
+                product={formData}
+                attributes={formData.attributes || []}
+                onChange={(attributes) => updateFormData({ attributes })}
               />
             </TabsContent>
-
-            <TabsContent value="pricing" className="m-0">
+            <TabsContent value="pricing">
               <ProductPricingTax
-                product={product}
-                onChange={setProduct}
+                product={formData}
+                onChange={updateFormData}
               />
             </TabsContent>
-
-            <TabsContent value="inventory" className="m-0">
+            <TabsContent value="inventory">
               <ProductInventoryManager
-                product={product}
-                variants={variants}
-                inventoryRecords={inventoryRecords}
+                product={formData}
+                variants={formData.variants || []}
+                inventoryRecords={formData.inventory || []}
                 warehouses={warehouses}
-                onChange={setInventoryRecords}
+                onChange={(inventory) => updateFormData({ inventory })}
               />
             </TabsContent>
-
-            <TabsContent value="tags" className="m-0">
+            <TabsContent value="tags">
               <ProductTagsManager
-                product={product}
-                tags={tags}
-                onChange={setTags}
+                product={formData}
+                tags={formData.tags || []}
+                allTags={tags}
+                onChange={(tags) => updateFormData({ tags })}
               />
             </TabsContent>
-
-            <TabsContent value="media" className="m-0">
+            <TabsContent value="media">
               <ProductMediaGallery
-                product={product}
-                onChange={setProduct}
+                product={formData}
+                onChange={updateFormData}
               />
             </TabsContent>
-
           </div>
         </Tabs>
       </div>

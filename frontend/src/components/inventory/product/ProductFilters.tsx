@@ -41,7 +41,6 @@ import {
   Clock,
   RefreshCw,
 } from "lucide-react";
-import { ls } from "@/services/localStorageService";
 
 interface ProductFiltersProps {
   filters: {
