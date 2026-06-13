@@ -3,15 +3,18 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
+// ---------- Types ----------
+export interface AssetBasic {
+  id: number;
+  name: string;
+  brand?: string;
+  model?: string;
+  serial_number?: string;
+}
+
 export interface EmployeeAssetAssignment {
   id: number;
-  asset: {
-    id: number;
-    name: string;
-    brand?: string;
-    model?: string;
-    serial_number?: string;
-  };
+  asset: AssetBasic;
   source_type: 'DIRECT' | 'KIT';
   source_kit?: {
     id: number;
@@ -22,13 +25,30 @@ export interface EmployeeAssetAssignment {
   status: string;
 }
 
-export interface AvailableAsset {
+export interface AssignedKit {
   id: number;
   name: string;
-  brand?: string;
-  model?: string;
-  serial_number?: string;
+  description?: string;
+  assets: AssetBasic[];
+}
+
+export interface AssignmentHistoryEntry {
+  id: number;
+  asset_name: string;
+  assigned_date: string;
+  returned_date?: string;
+  status: string;
+}
+
+export interface EmployeeAssignmentsData {
+  active_assignments: EmployeeAssetAssignment[];
+  kits: AssignedKit[];
+  history: AssignmentHistoryEntry[];
+}
+
+export interface AvailableAsset extends AssetBasic {
   is_assigned: boolean;
+  already_assigned_to_employee?: boolean; // used in kits context
 }
 
 export interface AvailableKit {
@@ -39,10 +59,15 @@ export interface AvailableKit {
   assets: (AvailableAsset & { already_assigned_to_employee: boolean })[];
 }
 
-// Fetch employee assignments
+export interface AvailableAssetsData {
+  assets: AvailableAsset[];
+  kits: AvailableKit[];
+}
+
+// ---------- Hooks ----------
 export function useEmployeeAssignments(employeeId?: number) {
   const api = useApi();
-  return useQuery({
+  return useQuery<EmployeeAssignmentsData>({
     queryKey: ["employee-assignments", employeeId],
     queryFn: () => api(`/api/hr/employee-assets/assignments/?employee_id=${employeeId}`),
     enabled: !!employeeId,
@@ -50,18 +75,16 @@ export function useEmployeeAssignments(employeeId?: number) {
   });
 }
 
-// Fetch available assets & kits
 export function useAvailableAssets(employeeId?: number) {
   const api = useApi();
   const queryString = employeeId ? `?employee_id=${employeeId}` : '';
-  return useQuery({
+  return useQuery<AvailableAssetsData>({
     queryKey: ["available-assets", employeeId],
     queryFn: () => api(`/api/hr/employee-assets/available/${queryString}`),
     staleTime: 30 * 1000,
   });
 }
 
-// Assign assets/kits
 export function useAssignAssets() {
   const api = useApi();
   const queryClient = useQueryClient();
@@ -84,7 +107,6 @@ export function useAssignAssets() {
   });
 }
 
-// Return assets
 export function useReturnAssets() {
   const api = useApi();
   const queryClient = useQueryClient();

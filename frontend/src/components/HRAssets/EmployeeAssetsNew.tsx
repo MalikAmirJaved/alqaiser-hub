@@ -6,7 +6,12 @@ import {
   useEmployeeAssignments, 
   useAvailableAssets, 
   useAssignAssets, 
-  useReturnAssets 
+  useReturnAssets,
+  type EmployeeAssignmentsData,
+  type AvailableAssetsData,
+  type EmployeeAssetAssignment,
+  type AvailableKit,
+  type AvailableAsset
 } from "@/hooks/useEmployeeAssets";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -30,25 +35,33 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
+// Define Employee type (adjust according to your actual employee data)
+interface Employee {
+  id: number;
+  first_name: string;
+  last_name: string;
+  employee_id: string;
+  department: string;
+  designation?: string;
+}
+
 export default function EmployeeAssetsNew() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showDetailPanel, setShowDetailPanel] = useState(false);
   
-  // Multi-select state for assignment modal
   const [selectedKitIds, setSelectedKitIds] = useState<Set<number>>(new Set());
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<number>>(new Set());
   const [deselectedKitAssets, setDeselectedKitAssets] = useState<Set<number>>(new Set());
   const [assignmentNotes, setAssignmentNotes] = useState("");
   const [assignmentCondition, setAssignmentCondition] = useState("GOOD");
-  
-  // Selected assignments for return
   const [selectedReturnIds, setSelectedReturnIds] = useState<Set<number>>(new Set());
 
+  // Explicitly type the hook returns
   const { data: employees = [], isLoading: employeesLoading } = useEmployees(
     searchQuery ? { search: searchQuery } : undefined
-  );
+  ) as { data: Employee[]; isLoading: boolean };
   
   const { data: assignmentData, isLoading: assignmentsLoading } = useEmployeeAssignments(
     selectedEmployee?.id
@@ -61,25 +74,22 @@ export default function EmployeeAssetsNew() {
   const assignMutation = useAssignAssets();
   const returnMutation = useReturnAssets();
 
-  // Handle kit selection with auto-expansion
-  const handleKitToggle = (kitId: number, kit: any) => {
+  const handleKitToggle = (kitId: number, kit: AvailableKit) => {
     const newKitIds = new Set(selectedKitIds);
     const newDeselected = new Set(deselectedKitAssets);
     
     if (newKitIds.has(kitId)) {
-      // Deselecting kit - remove its assets unless manually selected
       newKitIds.delete(kitId);
-      kit.assets.forEach((asset: any) => {
+      kit.assets.forEach((asset) => {
         if (!selectedAssetIds.has(asset.id)) {
           newDeselected.delete(asset.id);
         }
       });
     } else {
-      // Selecting kit - add all its available assets
       newKitIds.add(kitId);
-      kit.assets.forEach((asset: any) => {
+      kit.assets.forEach((asset) => {
         if (!asset.already_assigned_to_employee && !asset.is_assigned) {
-          newDeselected.delete(asset.id); // Remove from deselected if present
+          newDeselected.delete(asset.id);
         }
       });
     }
@@ -88,15 +98,13 @@ export default function EmployeeAssetsNew() {
     setDeselectedKitAssets(newDeselected);
   };
 
-  // Get final asset selection (kits expanded - deselected individual assets)
   const finalAssetIds = useMemo(() => {
     const assetIds = new Set<number>(selectedAssetIds);
     
-    // Add kit assets (minus deselected)
     selectedKitIds.forEach(kitId => {
-      const kit = availableData?.kits?.find((k: any) => k.id === kitId);
+      const kit = availableData?.kits?.find((k) => k.id === kitId);
       if (kit) {
-        kit.assets.forEach((asset: any) => {
+        kit.assets.forEach((asset) => {
           if (!asset.already_assigned_to_employee && !asset.is_assigned) {
             if (!deselectedKitAssets.has(asset.id)) {
               assetIds.add(asset.id);
@@ -158,9 +166,14 @@ export default function EmployeeAssetsNew() {
     setAssignmentCondition("GOOD");
   };
 
+  // Helper to check if an asset is already assigned (for modal list)
+  const isAssetAlreadyAssigned = (asset: AvailableAsset) => {
+    return asset.is_assigned === true;
+  };
+
   return (
     <div className="flex h-[calc(100vh-120px)] gap-4 p-4 md:p-6">
-      {/* Left Panel - Employee List */}
+      {/* Left Panel - Employee List (unchanged but typed) */}
       <div className={cn(
         "flex flex-col bg-card rounded-xl border border-border overflow-hidden transition-all",
         showDetailPanel ? "w-1/3 min-w-[300px]" : "w-full"
@@ -216,7 +229,7 @@ export default function EmployeeAssetsNew() {
       {/* Right Panel - Employee Details & Assignments */}
       {showDetailPanel && selectedEmployee && (
         <div className="flex-1 bg-card rounded-xl border border-border overflow-hidden flex flex-col">
-          {/* Header */}
+          {/* Header (unchanged) */}
           <div className="p-4 border-b border-border flex items-center justify-between">
             <div>
               <h2 className="font-semibold text-lg">
@@ -243,7 +256,7 @@ export default function EmployeeAssetsNew() {
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {/* Active Assignments */}
+            {/* Active Assignments Card */}
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -290,7 +303,7 @@ export default function EmployeeAssetsNew() {
                             onChange={(checked) => {
                               if (checked) {
                                 setSelectedReturnIds(
-                                  new Set(assignmentData.active_assignments.map((a: any) => a.id))
+                                  new Set(assignmentData.active_assignments.map((a) => a.id))
                                 );
                               } else {
                                 setSelectedReturnIds(new Set());
@@ -305,7 +318,7 @@ export default function EmployeeAssetsNew() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {assignmentData.active_assignments.map((assignment: any) => (
+                      {assignmentData.active_assignments.map((assignment: EmployeeAssetAssignment) => (
                         <TableRow key={assignment.id}>
                           <TableCell>
                             <Checkbox
@@ -355,22 +368,22 @@ export default function EmployeeAssetsNew() {
               </CardContent>
             </Card>
 
-            {/* Kits Summary */}
-            {assignmentData?.kits?.length > 0 && (
+            {/* Assigned Kits Summary */}
+            {assignmentData?.kits && assignmentData.kits.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">Assigned Kits</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {assignmentData.kits.map((kit: any) => (
+                    {assignmentData.kits.map((kit) => (
                       <div key={kit.id} className="p-3 bg-muted/30 rounded-lg">
                         <div className="flex items-center gap-2 mb-2">
                           <Layers className="w-4 h-4 text-primary" />
                           <span className="font-medium text-sm">{kit.name}</span>
                         </div>
                         <div className="flex flex-wrap gap-1">
-                          {kit.assets.map((asset: any) => (
+                          {kit.assets.map((asset) => (
                             <Badge key={asset.id} variant="outline" className="text-xs">
                               {asset.name}
                             </Badge>
@@ -383,15 +396,15 @@ export default function EmployeeAssetsNew() {
               </Card>
             )}
 
-            {/* History */}
-            {assignmentData?.history?.length > 0 && (
+            {/* Assignment History */}
+            {assignmentData?.history && assignmentData.history.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">Assignment History</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
-                    {assignmentData.history.slice(0, 10).map((h: any) => (
+                    {assignmentData.history.slice(0, 10).map((h) => (
                       <div key={h.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                         <div>
                           <p className="text-sm font-medium">{h.asset_name}</p>
@@ -433,7 +446,7 @@ export default function EmployeeAssetsNew() {
                 </Badge>
               </h3>
               <div className="grid grid-cols-2 gap-3">
-                {availableData?.kits?.map((kit: any) => (
+                {availableData?.kits?.map((kit: AvailableKit) => (
                   <button
                     key={kit.id}
                     onClick={() => handleKitToggle(kit.id, kit)}
@@ -455,7 +468,7 @@ export default function EmployeeAssetsNew() {
                       {kit.asset_count} asset{kit.asset_count !== 1 ? 's' : ''}
                     </p>
                     <div className="flex flex-wrap gap-1">
-                      {kit.assets.map((asset: any) => (
+                      {kit.assets.map((asset) => (
                         <Badge
                           key={asset.id}
                           variant="outline"
@@ -470,14 +483,13 @@ export default function EmployeeAssetsNew() {
                         </Badge>
                       ))}
                     </div>
-                    {/* Deselect individual assets when kit is selected */}
                     {selectedKitIds.has(kit.id) && (
                       <div className="mt-2 pt-2 border-t border-border">
                         <p className="text-xs text-muted-foreground mb-1">Click to deselect:</p>
                         <div className="flex flex-wrap gap-1">
                           {kit.assets
-                            .filter((a: any) => !a.already_assigned_to_employee)
-                            .map((asset: any) => (
+                            .filter((a) => !a.already_assigned_to_employee)
+                            .map((asset) => (
                               <button
                                 key={asset.id}
                                 onClick={(e) => {
@@ -514,14 +526,16 @@ export default function EmployeeAssetsNew() {
                 </Badge>
               </h3>
               <div className="max-h-48 overflow-y-auto border border-border rounded-lg divide-y divide-border">
-                {availableData?.assets?.map((asset: any) => {
+                {availableData?.assets?.map((asset: AvailableAsset) => {
                   const isSelected = selectedAssetIds.has(asset.id) || 
                     finalAssetIds.includes(asset.id);
+                  const alreadyAssigned = isAssetAlreadyAssigned(asset);
                   
                   return (
                     <button
                       key={asset.id}
                       onClick={() => {
+                        if (alreadyAssigned && !isSelected) return;
                         const newSet = new Set(selectedAssetIds);
                         isSelected ? newSet.delete(asset.id) : newSet.add(asset.id);
                         setSelectedAssetIds(newSet);
@@ -529,13 +543,13 @@ export default function EmployeeAssetsNew() {
                       className={cn(
                         "w-full text-left px-3 py-2.5 flex items-center gap-3 hover:bg-muted/50 transition-colors",
                         isSelected && "bg-primary/5",
-                        asset.is_assigned && !isSelected && "opacity-50"
+                        alreadyAssigned && !isSelected && "opacity-50 cursor-not-allowed"
                       )}
                     >
                       <Checkbox
                         checked={isSelected}
                         onChange={() => {}}
-                        disabled={asset.is_assigned && !isSelected}
+                        disabled={alreadyAssigned && !isSelected}
                       />
                       <Package className="w-4 h-4 text-muted-foreground" />
                       <div className="flex-1">
