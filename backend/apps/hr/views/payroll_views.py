@@ -133,6 +133,39 @@ class PayrollView(PermissionRequiredMixin, APIView):
         return total_working_days_on_leave * daily_rate
 
     # ------------------------------------------------------------------
+    # Pro-rated salary helper (mid-month joining) - FIXED: includes joining day
+    # ------------------------------------------------------------------
+    def _get_prorated_days_and_factor(self, employee, year, month):
+        """
+        Returns (prorated_days, factor) for an employee in a given month.
+        Uses fixed 30 days/month. If employee joins in this month:
+            - days = 30 - joining_date.day + 1  (includes joining day)
+            - If joining day is 1 -> days = 30 (full month)
+        Otherwise returns (30, 1.0).
+        """
+        join_date = employee.joining_date
+        if not join_date:
+            return 30, 1.0
+
+        # Not the join month → full month
+        if not (join_date.year == year and join_date.month == month):
+            return 30, 1.0
+
+        days_in_month = self._get_days_in_month(year, month)  # always 30
+        joining_day = join_date.day
+
+        if joining_day == 1:
+            prorated_days = days_in_month
+        else:
+            # Include joining day: e.g., joining 10th -> 30 - 10 + 1 = 21
+            prorated_days = days_in_month - joining_day + 1
+
+        # Safety cap
+        prorated_days = max(0, min(prorated_days, days_in_month))
+        factor = prorated_days / days_in_month
+        return prorated_days, factor
+
+    # ------------------------------------------------------------------
     # Serializers
     # ------------------------------------------------------------------
     def _serialize_payroll(self, payroll):
@@ -330,12 +363,14 @@ class PayrollView(PermissionRequiredMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # ---------- Base salary ----------
-        base_salary = float(employee.salary)
+        # ---------- Pro-rated base salary for mid-month joining ----------
+        original_base_salary = float(employee.salary)
+        prorated_days, proration_factor = self._get_prorated_days_and_factor(employee, year, month)
+        base_salary = original_base_salary * proration_factor
         
-        # ---------- Daily rate based on FIXED 30 days per month ----------
+        # ---------- Daily rate based on FIXED 30 days per month (using original full salary) ----------
         days_in_month = self._get_days_in_month(year, month)  # Returns 30
-        daily_rate = base_salary / days_in_month  # base_salary / 30
+        daily_rate = original_base_salary / days_in_month  # original_base_salary / 30
         
         # ---------- Month boundaries for leave/loan filtering ----------
         first_day, last_day = self._get_month_days(year, month)
@@ -344,18 +379,19 @@ class PayrollView(PermissionRequiredMixin, APIView):
         leave_deduction = self._get_leave_deduction(employee.id, company_id, year, month, daily_rate)
         leave_working_days = leave_deduction / daily_rate if daily_rate > 0 else 0
         
-        # ---------- Compensation allowances (month-aware) ----------
+        # ---------- Compensation allowances (month-aware, pro-rated if join month) ----------
         compensation = Compensation.objects.filter(
             employee=employee,
             status='ACTIVE',
             is_deleted=False
         ).prefetch_related('selected_months', 'month_range').first()
         total_compensation = 0
+        full_month_compensation = 0
         if compensation:
             freq = compensation.frequency_type
             if freq in ('ONE_TIME', 'SELECTED_MONTH'):
                 if compensation.selected_months.filter(month=month, year=year).exists():
-                    total_compensation = float(compensation.total_allowances)
+                    full_month_compensation = float(compensation.total_allowances)
             elif freq == 'MONTH_RANGE':
                 try:
                     mr = compensation.month_range
@@ -363,11 +399,12 @@ class PayrollView(PermissionRequiredMixin, APIView):
                     end = (mr.end_year, mr.end_month)
                     current = (year, month)
                     if start <= current <= end:
-                        total_compensation = float(compensation.total_allowances)
+                        full_month_compensation = float(compensation.total_allowances)
                 except CompensationMonthRange.DoesNotExist:
                     pass
             else:
-                total_compensation = float(compensation.total_allowances)
+                full_month_compensation = float(compensation.total_allowances)
+            total_compensation = full_month_compensation * proration_factor
         
         # ---------- Overtime ----------
         overtime_hours = float(request.data.get('overtime_hours', 0))
@@ -566,6 +603,9 @@ class PayrollView(PermissionRequiredMixin, APIView):
             "id": str(payroll._id),
             "transaction_number": transaction_number,
             "base_salary": str(payroll.base_salary),
+            "original_base_salary": str(original_base_salary),
+            "prorated_days": prorated_days,
+            "proration_factor": str(proration_factor),
             "days_in_month": days_in_month,
             "daily_rate": str(daily_rate),
             "compensation": str(total_compensation),
@@ -721,28 +761,31 @@ class PayrollView(PermissionRequiredMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        base_salary = float(employee.salary)
+        original_base_salary = float(employee.salary)
+        prorated_days, proration_factor = self._get_prorated_days_and_factor(employee, year, month)
+        base_salary = original_base_salary * proration_factor
         
-        # Calculate daily rate based on FIXED 30 days per month
+        # Calculate daily rate based on FIXED 30 days per month (original full salary)
         days_in_month = self._get_days_in_month(year, month)  # Returns 30
-        daily_rate = base_salary / days_in_month  # base_salary / 30
+        daily_rate = original_base_salary / days_in_month
         
         # Leave deduction using working days ONLY (not all calendar days)
         leave_deduction = self._get_leave_deduction(employee.id, company_id, year, month, daily_rate)
         leave_working_days = leave_deduction / daily_rate if daily_rate > 0 else 0
         
-        # Compensation (month-aware)
+        # Compensation (month-aware, pro-rated if join month)
         compensation = Compensation.objects.filter(
             employee=employee,
             status='ACTIVE',
             is_deleted=False
         ).prefetch_related('selected_months', 'month_range').first()
         total_compensation = 0
+        full_month_compensation = 0
         if compensation:
             freq = compensation.frequency_type
             if freq in ('ONE_TIME', 'SELECTED_MONTH'):
                 if compensation.selected_months.filter(month=month, year=year).exists():
-                    total_compensation = float(compensation.total_allowances)
+                    full_month_compensation = float(compensation.total_allowances)
             elif freq == 'MONTH_RANGE':
                 try:
                     mr = compensation.month_range
@@ -750,11 +793,12 @@ class PayrollView(PermissionRequiredMixin, APIView):
                     end = (mr.end_year, mr.end_month)
                     current = (year, month)
                     if start <= current <= end:
-                        total_compensation = float(compensation.total_allowances)
+                        full_month_compensation = float(compensation.total_allowances)
                 except CompensationMonthRange.DoesNotExist:
                     pass
             else:
-                total_compensation = float(compensation.total_allowances)
+                full_month_compensation = float(compensation.total_allowances)
+            total_compensation = full_month_compensation * proration_factor
         
         # Overtime
         overtime_amount = 0
@@ -814,7 +858,10 @@ class PayrollView(PermissionRequiredMixin, APIView):
             'employee_name': employee.full_name,
             'employee_code': employee.employee_id,
             'joining_date': employee.joining_date.isoformat() if employee.joining_date else None,
+            'original_base_salary': original_base_salary,
             'base_salary': base_salary,
+            'prorated_days': prorated_days,
+            'proration_factor': str(proration_factor),
             'daily_rate': daily_rate,
             'days_in_month': days_in_month,
             'compensation': total_compensation,
@@ -829,7 +876,6 @@ class PayrollView(PermissionRequiredMixin, APIView):
             'total_deductions': total_deductions,
             'net_salary': max(0, net_salary)
         })
-
 
 
 class PayrollPreviewView(PayrollView):
