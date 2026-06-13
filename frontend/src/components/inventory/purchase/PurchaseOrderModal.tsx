@@ -8,6 +8,7 @@ import { useProducts } from '@/hooks/useProducts';
 import { useAssets } from '@/hooks/useAssets';          // new import
 import type { PurchaseOrder, PurchaseOrderPayload } from '@/types/purchase';
 import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { toast } from "sonner";
 
 interface PurchaseOrderModalProps {
   isOpen: boolean;
@@ -163,6 +164,14 @@ export function PurchaseOrderModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const selectedLines = lineItems.filter((l) => l.selectedId);
+    const missingCost = selectedLines.find((l) => l.unit_cost <= 0);
+    if (missingCost) {
+      toast.error("Cost price is required for every line item.");
+      return;
+    }
+
     const payload: PurchaseOrderPayload = {
       supplier: supplierId,
       warehouse: warehouseId,

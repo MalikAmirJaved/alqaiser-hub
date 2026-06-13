@@ -602,6 +602,13 @@ function CandidateFormModal({
       toast.error("Please fill in all required fields");
       return;
     }
+    if (rounds.length === 0) {
+      setRounds([{
+        round_number: 1,
+        round_title: "Round 1",
+        interview_type: "TECHNICAL",
+      }]);
+    }
     setStep("rounds");
   };
 
@@ -773,7 +780,7 @@ function CandidateFormModal({
               <button
                 type="submit"
                 disabled={loading || (!isEditing && step === "rounds" && rounds.length === 0)}
-                className="..."
+                className="inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
               >
                 {loading && <Loader2 className="w-4 h-4 animate-spin" />}
                 {isEditing ? "Save Changes" : "Create Candidate"}
