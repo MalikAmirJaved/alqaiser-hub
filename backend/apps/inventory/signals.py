@@ -5,7 +5,7 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from .models import Category
 from apps.notifications.models import Notification
-from .models import Category, Brand
+from .models import Category, Brand, Warehouse
 
 # Helper to create notification
 def create_notification(company_id, branch_id, title, message, notif_type='info'):
@@ -126,3 +126,46 @@ def notify_brand_delete(sender, instance, **kwargs):
     
     # Broadcast data update for real-time cache invalidation
     broadcast_data_update(company_id, branch_id, 'inventory_brand', 'delete', instance.id)
+
+@receiver(post_save, sender=Warehouse)
+def notify_warehouse_change(sender, instance, created, **kwargs):
+    """Create notification when warehouse is created or updated"""
+    company_id = instance.company_id
+    branch_id = instance.branch_id
+    
+    if created:
+        # Create notification for new warehouse
+        create_notification(
+            company_id, branch_id,
+            "New Warehouse Added",
+            f"Warehouse '{instance.warehouse_name}' ({instance.code}) has been added.",
+            "success"
+        )
+    else:
+        # Create notification for warehouse update
+        create_notification(
+            company_id, branch_id,
+            "Warehouse Updated",
+            f"Warehouse '{instance.warehouse_name}' ({instance.code}) details have been updated.",
+            "info"
+        )
+    
+    # Broadcast data update for real-time cache invalidation
+    action = 'create' if created else 'update'
+    broadcast_data_update(company_id, branch_id, 'inventory_warehouse', action, instance.id)
+
+@receiver(post_delete, sender=Warehouse)
+def notify_warehouse_delete(sender, instance, **kwargs):
+    """Create notification when warehouse is deleted"""
+    company_id = instance.company_id
+    branch_id = instance.branch_id
+    
+    create_notification(
+        company_id, branch_id,
+        "Warehouse Deleted",
+        f"Warehouse '{instance.warehouse_name}' ({instance.code}) has been removed.",
+        "warning"
+    )
+    
+    # Broadcast data update for real-time cache invalidation
+    broadcast_data_update(company_id, branch_id, 'inventory_warehouse', 'delete', instance.id)

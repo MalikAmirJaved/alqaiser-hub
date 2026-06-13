@@ -34,6 +34,7 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   loans: ["loans"],
   inventory_category: ["categories"],
   inventory_brand: ["brands"],  
+  inventory_warehouse: ["warehouses", "warehouseStats"],
 };
 
 interface NotificationContextProps {
