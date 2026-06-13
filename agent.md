@@ -887,3 +887,101 @@ Both detail pages show paid/unpaid status per month:
   "status": "ACTIVE"
 }
 ```
+
+---
+
+## 11. Asset Purchase Request Module - IMPLEMENTED
+
+### Overview
+
+The Asset Purchase Request module bridges HR Assets and Inventory Purchase Orders. Users can request new asset purchases from the HR Asset Library, view pending requests in the Inventory Purchase Orders page, and convert them directly into purchase orders.
+
+### Flow
+
+```mermaid
+graph LR
+    HR[HR → Asset Library] -->|Click 'Request'| Form[AssetRequestFormModal]
+    Form -->|POST /api/hr/asset-purchase-requests/| APR[(AssetPurchaseRequest)]
+    APR -->|status=PENDING| Panel[Inventory → Purchases → Requests Panel]
+    Panel -->|Click 'Confirm'| PO[PurchaseOrderModal pre-filled]
+    PO -->|Create PO| PO_DB[(PurchaseOrder)]
+    PO_DB -->|Update status| APR2[(AssetPurchaseRequest → PURCHASE_ORDER_CREATED)]
+```
+
+### AssetPurchaseRequest Model Schema
+
+| Field | Type | Notes |
+|---|---|---|
+| `asset` | FK → Asset | CASCADE delete |
+| `requested_by` | FK → User | SET_NULL, nullable, who submitted the request |
+| `employee` | FK → Employee | SET_NULL, nullable, who the asset is for |
+| `quantity` | PositiveInteger | Number of units needed |
+| `reason` | Text | Why the asset is needed |
+| `under_date` | Date | Date by which the asset is required |
+| `status` | CharField | PENDING / APPROVED / PURCHASE_ORDER_CREATED / CANCELLED |
+| `purchase_order` | FK → inventory.PurchaseOrder | SET_NULL, nullable, linked PO when fulfilled |
+| `notes` | Text | Nullable |
+
+### API Endpoints
+
+| Method | URL | Description |
+|---|---|---|
+| GET | `/api/hr/asset-purchase-requests/?status=&asset_id=` | List requests (filterable by status, asset) |
+| POST | `/api/hr/asset-purchase-requests/` | Create a new request |
+| PATCH | `/api/hr/asset-purchase-requests/` | Update status/notes |
+| DELETE | `/api/hr/asset-purchase-requests/` | Soft-delete a request |
+
+### Integration with Purchase Orders
+
+When a purchase order is created via `PurchaseOrderSerializer.create()` with `inventory_type=OFFICE_INVENTORY`:
+
+1. If `request_ids` are provided in the payload, the corresponding pending `AssetPurchaseRequest` records are updated to `PURCHASE_ORDER_CREATED` and linked to the new PO.
+2. If no `request_ids` are provided, the system auto-matches pending requests by asset UUID from the line items.
+
+### Entity-to-Query-Key Mapping
+
+| Backend Entity | React Query Keys Invalidated |
+|---|---|
+| `asset_purchase_request` | `assetPurchaseRequests` |
+
+### API Response Structure
+
+```json
+{
+  "id": "uuid",
+  "asset": "uuid",
+  "asset_name": "Dell XPS 15",
+  "asset_brand": "Dell",
+  "asset_serial": "SN12345",
+  "requested_by": "uuid",
+  "requested_by_name": "admin",
+  "quantity": 5,
+  "reason": "New team members need laptops",
+  "under_date": "2026-07-01",
+  "status": "PENDING",
+  "purchase_order": null,
+  "purchase_order_id": null,
+  "purchase_order_number": null,
+  "notes": null,
+  "created_at": "2026-06-13T..."
+}
+```
+
+### Files Created/Modified
+
+#### Backend:
+- `backend/apps/hr/models.py` - Added `AssetPurchaseRequest` model (pure relational, no JSON fields)
+- `backend/apps/hr/serializers/asset_purchase_request_serializers.py` - `AssetPurchaseRequestSerializer` with UUID resolution and display fields
+- `backend/apps/hr/views/asset_purchase_request_views.py` - CRUD APIView with company/branch filtering
+- `backend/apps/hr/urls.py` - Route: `asset-purchase-requests/`
+- `backend/apps/inventory/serializers/purchase.py` - Integration to update request status on PO creation
+
+#### Frontend:
+- `frontend/src/hooks/useAssetPurchaseRequests.ts` - React Query hooks (list, create, update, delete)
+- `frontend/src/components/HRAssets/AssetRequestFormModal.tsx` - Modal form (quantity, reason, required-by date)
+- `frontend/src/components/HRAssets/AssetsList.tsx` - Added "Request" dropdown item
+- `frontend/src/components/inventory/purchase/AssetRequestsPanel.tsx` - Panel showing pending requests on PO page
+- `frontend/src/components/inventory/purchase/PurchaseOrdersPage.tsx` - Integrated requests panel + confirm → pre-fill flow
+- `frontend/src/components/inventory/purchase/PurchaseOrderModal.tsx` - Accepts `prefillFromRequest` prop
+- `frontend/src/types/purchase.ts` - Added `request_ids` to `PurchaseOrderPayload`
+- `frontend/src/contexts/NotificationContext.tsx` - Added `asset_purchase_request` entity mapping
