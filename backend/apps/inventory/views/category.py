@@ -1,3 +1,4 @@
+# apps/inventory/views/category.py
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -26,11 +27,60 @@ class CategoryViewSet(viewsets.ModelViewSet):
         
         return queryset
 
-    def perform_create(self, serializer):
+    def create(self, request, *args, **kwargs):
+        """Override create to return custom success message"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # Save with company and branch from user
         serializer.save(
-            company_id=self.request.user.company_id,
-            branch_id=self.request.user.branch_id
+            company_id=request.user.company_id,
+            branch_id=request.user.branch_id
         )
+        
+        # Return custom response with message
+        return Response({
+            'status': 'success',
+            'message': f'Category "{serializer.instance.name}" has been created successfully.',
+            'data': serializer.data
+        }, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        """Override update to return custom success message"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        
+        self.perform_update(serializer)
+        
+        # Return custom response with message
+        return Response({
+            'status': 'success',
+            'message': f'Category "{serializer.instance.name}" has been updated successfully.',
+            'data': serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def destroy(self, request, *args, **kwargs):
+        """Override delete to return custom success message"""
+        instance = self.get_object()
+        category_name = instance.name
+        
+        self.perform_destroy(instance)
+        
+        # Return custom response with message
+        return Response({
+            'status': 'success',
+            'message': f'Category "{category_name}" has been deleted successfully.'
+        }, status=status.HTTP_200_OK)
+
+    def perform_create(self, serializer):
+        # This method is no longer needed as we handle save in create()
+        pass
 
     def perform_update(self, serializer):
+        # This is now called from update() method
         serializer.save()
+
+    def perform_destroy(self, instance):
+        instance.delete()
