@@ -698,8 +698,8 @@ class InterviewRoundView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             candidate=candidate
         )
         
-        # Lock rounds once candidate reaches a terminal stage
-        if candidate.stage in ('Offer', 'Hired', 'Rejected'):
+        # Lock rounds once candidate reaches Offer or Hired stage
+        if candidate.stage in ('Offer', 'Hired'):
             return Response(
                 {'error': 'Rounds are locked once candidate reaches Offer stage'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -766,7 +766,7 @@ class InterviewRoundView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             candidate=candidate
         )
         
-        if candidate.stage in ('Offer', 'Hired', 'Rejected'):
+        if candidate.stage in ('Offer', 'Hired'):
             return Response(
                 {'error': 'Rounds are locked once candidate reaches Offer stage'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -879,8 +879,8 @@ class RoundStatusBulkUpdateView(CompanyBranchMixin, PermissionRequiredMixin, API
             is_deleted=False
         )
         
-        # Lock rounds once candidate reaches a terminal stage
-        if candidate.stage in ('Offer', 'Hired', 'Rejected'):
+        # Lock rounds once candidate reaches Offer or Hired stage
+        if candidate.stage in ('Offer', 'Hired'):
             return Response(
                 {'error': 'Rounds are locked once candidate reaches Offer stage'},
                 status=status.HTTP_400_BAD_REQUEST

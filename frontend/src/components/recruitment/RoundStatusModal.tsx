@@ -36,7 +36,7 @@ export function RoundStatusModal({ rounds, onClose, onUpdate, candidateName, can
   const [selectedRound, setSelectedRound] = useState<string | null>(null);
 
   const sortedRounds = [...rounds].sort((a, b) => a.round_number - b.round_number);
-  const readOnly = ["Offer", "Hired", "Rejected"].includes(candidateStage);
+  const readOnly = candidateStage === "Offer" || candidateStage === "Hired";
 
   const updateRoundStatus = (roundId: string, field: string, value: any) => {
     setRoundUpdates(prev => ({
