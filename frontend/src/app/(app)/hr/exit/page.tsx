@@ -323,7 +323,7 @@ export default function ExitManagementPage() {
                       </span>
                     </td>
                     <td className="px-4 py-2.5">
-                      {permissions.update_status ? (
+                      {permissions.update_status && r.final_settlement_status !== "CONFIRMED" && r.final_settlement_status !== "REJECTED" ? (
                         <select
                           value={r.final_settlement_status}
                           onChange={e => handleUpdateSettlementStatus(r.id, e.target.value)}
@@ -468,6 +468,8 @@ function ExitFormModal({
   const [calculating, setCalculating] = useState(false);
   const finalSettlementMutation = useFinalSettlementPreview();
 
+  const isLocked = initialData?.final_settlement_status === "CONFIRMED" || initialData?.final_settlement_status === "REJECTED";
+
   const employeeOpts: SearchableSelectOption[] = employees
     .map((e: any) => ({
       value: String(e.id),
@@ -534,6 +536,13 @@ function ExitFormModal({
           </button>
         </div>
 
+        {isLocked && (
+          <div className="mx-5 mt-4 px-4 py-2.5 rounded-lg bg-warning/10 border border-warning/30 text-sm flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-warning shrink-0" />
+            <span>This record is <strong>{initialData?.final_settlement_status === "CONFIRMED" ? "Confirmed" : "Rejected"}</strong> and cannot be edited.</span>
+          </div>
+        )}
+
         <div className="p-5 grid sm:grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto">
           <label className="text-sm flex flex-col gap-1 sm:col-span-2">
             <span className="text-muted-foreground">Employee *</span>
@@ -542,6 +551,7 @@ function ExitFormModal({
               onChange={handleEmployeeSelect}
               options={employeeOpts}
               placeholder="Select Employee"
+              disabled={isLocked}
             />
           </label>
 
@@ -573,6 +583,7 @@ function ExitFormModal({
               onChange={v => setFormData({ ...formData, reason: v })}
               options={EXIT_REASONS}
               placeholder="Select Reason"
+              disabled={isLocked}
             />
           </label>
 
@@ -581,6 +592,7 @@ function ExitFormModal({
             <DatePicker
               value={formData.exit_date}
               onChange={v => setFormData({ ...formData, exit_date: v || "" })}
+              disabled={isLocked}
             />
           </label>
 
@@ -589,6 +601,7 @@ function ExitFormModal({
             <DatePicker
               value={formData.last_working_day}
               onChange={v => handleLastWorkingDayChange(v || "")}
+              disabled={isLocked}
             />
           </label>
 
@@ -598,6 +611,7 @@ function ExitFormModal({
               value={formData.notice_served.toString()}
               onChange={e => setFormData({ ...formData, notice_served: e.target.value === "true" })}
               className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none"
+              disabled={isLocked}
             >
               <option value="true">Yes</option>
               <option value="false">No</option>
@@ -614,6 +628,7 @@ function ExitFormModal({
                 onChange={e => setFormData({ ...formData, final_settlement: Number(e.target.value) })}
                 className="bg-muted/40 border border-border rounded-md h-9 pl-10 pr-3 outline-none w-full"
                 placeholder="0.00"
+                disabled={isLocked}
               />
               {calculating && (
                 <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
@@ -627,6 +642,7 @@ function ExitFormModal({
               value={formData.final_settlement_status}
               onChange={e => setFormData({ ...formData, final_settlement_status: e.target.value })}
               className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none"
+              disabled={isLocked}
             >
               <option value="PENDING">Pending</option>
               <option value="CONFIRMED">Confirmed</option>
@@ -642,28 +658,22 @@ function ExitFormModal({
               onChange={e => setFormData({ ...formData, notes: e.target.value })}
               className="bg-muted/40 border border-border rounded-md p-3 outline-none"
               placeholder="Asset return details, final handover notes, etc."
+              disabled={isLocked}
             />
           </label>
 
-          {!initialData && (
-            <label className="sm:col-span-2">
-              <Checkbox
-                checked={formData.update_employee_status}
-                onChange={v => setFormData({ ...formData, update_employee_status: v })}
-                label="Update employee status"
-                description="Automatically update employee status to Resigned/Terminated"
-              />
-            </label>
-          )}
+
         </div>
 
         <div className="p-4 border-t border-border flex justify-end gap-2">
           <button type="button" onClick={onClose} className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted">
-            Cancel
+            {isLocked ? "Close" : "Cancel"}
           </button>
-          <button type="submit" className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90">
-            {initialData ? "Update Record" : "Save Record"}
-          </button>
+          {!isLocked && (
+            <button type="submit" className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90">
+              {initialData ? "Update Record" : "Save Record"}
+            </button>
+          )}
         </div>
       </form>
     </div>

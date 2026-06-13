@@ -183,8 +183,8 @@ class ExitRecordView(BaseExitView):
             branch_id=branch_id,
             employee=employee,
             employee_name=employee.full_name,
-            department=request.data.get('department', employee.department),
-            designation=request.data.get('designation', employee.designation),
+            department=request.data.get('department', employee.department.name if employee.department else ''),
+            designation=request.data.get('designation', employee.designation.name if employee.designation else ''),
             exit_date=exit_date,
             last_working_day=last_working_day,
             reason=request.data['reason'],
@@ -199,10 +199,6 @@ class ExitRecordView(BaseExitView):
             created_by=request.user,
             updated_by=request.user,
         )
-        
-        if request.data.get('update_employee_status', False):
-            employee.employment_status = 'RESIGNED' if exit_record.reason == 'RESIGNATION' else 'TERMINATED'
-            employee.save(update_fields=['employment_status'])
         
         self._create_default_checklist(exit_record, request.user)
         
@@ -269,6 +265,13 @@ class ExitRecordView(BaseExitView):
             is_deleted=False
         )
         
+        # Lock editing once settlement is confirmed or rejected
+        if exit_record.final_settlement_status in ('CONFIRMED', 'REJECTED'):
+            return Response(
+                {'error': 'Exit record is locked. Settlement is already ' + exit_record.final_settlement_status.lower() + '.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         updatable_fields = [
             'exit_date', 'last_working_day', 'reason', 'notice_served',
             'clearance_hr', 'clearance_it', 'clearance_finance', 'clearance_admin',
@@ -285,7 +288,8 @@ class ExitRecordView(BaseExitView):
                 else:
                     setattr(exit_record, field, request.data[field])
         
-        if request.data.get('status') == 'CLOSED' and exit_record.status != 'CLOSED':
+        # Update employee employment status when settlement is confirmed
+        if request.data.get('final_settlement_status') == 'CONFIRMED':
             employee = exit_record.employee
             if employee and employee.employment_status in ['ACTIVE', 'ON_LEAVE']:
                 employee.employment_status = 'RESIGNED' if exit_record.reason == 'RESIGNATION' else 'TERMINATED'
