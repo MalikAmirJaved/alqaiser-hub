@@ -11,6 +11,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { companyContext } from "@/services/companyContextService";
 import { toast } from "sonner";
 import { useApi } from "@/hooks/useApi";
+import {
+  registerServiceWorker,
+  requestNotificationPermission,
+  showDesktopNotification,
+} from "@/lib/notifications";
 
 // Map backend entity names to React Query keys for cache invalidation
 const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
@@ -67,6 +72,12 @@ export const NotificationProvider = ({
     }
   };
 
+  // Register service worker and request permission on mount
+  useEffect(() => {
+    registerServiceWorker();
+    requestNotificationPermission();
+  }, []);
+
   useEffect(() => {
     let reconnectTimeout: NodeJS.Timeout;
     let ws: WebSocket;
@@ -102,29 +113,36 @@ export const NotificationProvider = ({
           const data = JSON.parse(event.data);
 
           // Handle notification messages
-          if (data.type === 'notification') {
-      setNotifications((prev) => {
-        // If the message has an id, prevent duplicates
-        if (data.id && prev.find((n) => n.id === data.id)) return prev;
-        
-        // Convert the WebSocket message into a notification object
-        const newNotif = {
-          id: data.id || Date.now(),           // fallback unique ID
-          title: data.title,
-          message: data.message,
-          is_read: false,
-          read_at: null,
-          is_favourite: false,
-          created_at: data.created_at || new Date().toISOString(),
-          notification_type: data.notification_type,
-        };
-        return [newNotif, ...prev];
-      });
+          if (data.type === "notification") {
+            setNotifications((prev) => {
+              // If the message has an id, prevent duplicates
+              if (data.id && prev.find((n) => n.id === data.id)) return prev;
 
-      toast(data.title || "New Notification", {
-        description: data.message,
-      });
-    }
+              // Convert the WebSocket message into a notification object
+              const newNotif = {
+                id: data.id || Date.now(), // fallback unique ID
+                title: data.title,
+                message: data.message,
+                is_read: false,
+                read_at: null,
+                is_favourite: false,
+                created_at: data.created_at || new Date().toISOString(),
+                notification_type: data.notification_type,
+              };
+              return [newNotif, ...prev];
+            });
+
+            // In‑app toast
+            toast(data.title || "New Notification", {
+              description: data.message,
+            });
+
+            // Desktop/system notification
+            showDesktopNotification(data.title || "New Notification", {
+              body: data.message,
+              data: { notificationId: data.id },
+            });
+          }
           // Handle data update messages (cache invalidation)
           else if (data.type === "data_update") {
             const { entity, action, record_id } = data;
