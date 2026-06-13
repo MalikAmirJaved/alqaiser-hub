@@ -63,10 +63,22 @@ export interface ExitStats {
 export interface FinalSettlementPreview {
   employee_id: string;
   employee_name: string;
+  joining_date: string;
+  last_working_day: string;
+  period_start: string;
+  period_end: string;
+  prev_month_paid: boolean;
+  total_calendar_days: number;
+  non_working_days: number;
+  total_working_days: number;
+  days_in_month: number;
+  daily_rate: string;
   base_salary: string;
+  settlement_salary: string;
   compensation: string;
   loan_deduction: string;
   leave_deduction: string;
+  net_settlement: string;
   net_salary: string;
 }
 
@@ -115,7 +127,7 @@ export function useExitStats() {
 // Calculate final settlement for an employee
 export function useFinalSettlementPreview() {
   const api = useApi();
-  return useMutation<FinalSettlementPreview, Error, { employee_id: string }>({
+  return useMutation<FinalSettlementPreview, Error, { employee_id: string; last_working_day?: string }>({
     mutationFn: (data) =>
       api("/api/hr/exits/final-settlement/", {
         method: "POST",

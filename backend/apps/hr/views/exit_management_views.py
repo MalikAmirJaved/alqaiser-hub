@@ -14,11 +14,12 @@ from django.db.models import Count, Sum, Avg, Q
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import (
-    ExitRecord, ExitChecklist, Employee,
+    ExitRecord, ExitChecklist, Employee, PayrollRecord,
     Compensation, EmployeeLoan, LeaveRequest,
     CompensationSelectedMonth, CompensationMonthRange,
     LoanSelectedMonth, LoanMonthRange,
 )
+from apps.compsetting.models import CompanySettings, WorkingDay, PublicHoliday
 
 logger = logging.getLogger(__name__)
 
@@ -366,10 +367,56 @@ class ExitStatsView(BaseExitView):
 
 
 class ExitFinalSettlementView(BaseExitView):
-    """Calculate final settlement amount for an employee"""
+    """Calculate final settlement amount for an employee
+    Uses same working-day logic as PayrollView for consistency.
+    """
 
     def get_permission_action(self):
         return 'view'
+
+    def _is_working_day(self, company_id, dt):
+        """Check if a specific date is a working day for the company.
+        Mirrors PayrollView._is_working_day logic.
+        """
+        company_settings = CompanySettings.objects.filter(company_id=company_id).first()
+        if not company_settings:
+            return True
+        working_days_set = set(
+            WorkingDay.objects.filter(
+                company_settings=company_settings,
+                is_working=True
+            ).values_list('day', flat=True)
+        )
+        if dt.weekday() not in working_days_set:
+            return False
+        if PublicHoliday.objects.filter(
+            company_id=company_id,
+            date=dt,
+            is_deleted=False
+        ).exists():
+            return False
+        return True
+
+    def _count_working_days_in_range(self, company_id, start_date, end_date):
+        """Count working days in a date range (inclusive)."""
+        working_days = 0
+        current = start_date
+        while current <= end_date:
+            if self._is_working_day(company_id, current):
+                working_days += 1
+            current += timedelta(days=1)
+        return working_days
+
+    def _is_month_paid(self, employee, month, year):
+        """Check if a specific month has been paid via payroll."""
+        return PayrollRecord.objects.filter(
+            employee=employee,
+            month=month,
+            year=year,
+            is_deleted=False,
+            is_cancelled=False,
+            net_salary__gt=0
+        ).exists()
 
     def post(self, request):
         company_id, _ = self._get_company_context(request)
@@ -389,16 +436,86 @@ class ExitFinalSettlementView(BaseExitView):
         )
 
         base_salary = float(employee.salary or 0)
+        join_date = employee.joining_date
 
-        # Compensation allowances
+        # Allow last_working_day from request body (for new exits without record yet),
+        # fall back to active exit record's last_working_day or exit_date
+        lwd = None
+        if request.data.get('last_working_day'):
+            lwd = datetime.strptime(request.data['last_working_day'], '%Y-%m-%d').date()
+        else:
+            exit_record = ExitRecord.objects.filter(
+                employee=employee,
+                is_deleted=False,
+                status='ACTIVE'
+            ).first()
+            if exit_record:
+                lwd = exit_record.last_working_day or exit_record.exit_date
+
+        if not join_date or not lwd:
+            return Response(
+                {'error': 'Employee joining date and last working day are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # ---------- Determine calculation period ----------
+        lwd_month_start = date(lwd.year, lwd.month, 1)
+
+        # Check if the month before last_working_day's month was paid
+        prev_month = lwd_month_start - timedelta(days=1)
+        prev_month_paid = self._is_month_paid(employee, prev_month.month, prev_month.year)
+
+        if join_date.month == lwd.month and join_date.year == lwd.year:
+            # Same month: period from joining_date to last_working_day
+            period_start = join_date
+        elif not prev_month_paid:
+            # Previous month not paid: accumulate from joining_date
+            period_start = join_date
+        else:
+            # Previous month paid: only current month portion
+            period_start = lwd_month_start
+
+        period_end = lwd
+
+        # ---------- Working days & salary calculation ----------
+        total_calendar_days = (period_end - period_start).days + 1
+        total_working_days = self._count_working_days_in_range(
+            company_id, period_start, period_end
+        )
+        non_working_days = total_calendar_days - total_working_days
+
+        # Daily rate uses fixed 30 days per month (same as PayrollView)
+        days_in_month = 30
+        daily_rate = base_salary / days_in_month if base_salary > 0 else 0
+        settlement_salary = total_working_days * daily_rate
+
+        # ---------- Compensation allowances (month-aware, same as PayrollView) ----------
         compensation = Compensation.objects.filter(
             employee=employee,
             status='ACTIVE',
             is_deleted=False
         ).prefetch_related('selected_months', 'month_range').first()
-        total_compensation = float(compensation.total_allowances) if compensation else 0
+        total_compensation = 0
+        if compensation:
+            freq = compensation.frequency_type
+            if freq in ('ONE_TIME', 'SELECTED_MONTH'):
+                if compensation.selected_months.filter(
+                    month=lwd.month,
+                    year=lwd.year
+                ).exists():
+                    total_compensation = float(compensation.total_allowances)
+            elif freq == 'MONTH_RANGE':
+                try:
+                    mr = compensation.month_range
+                    start = (mr.start_year, mr.start_month)
+                    end = (mr.end_year, mr.end_month)
+                    current = (lwd.year, lwd.month)
+                    if start <= current <= end:
+                        total_compensation = float(compensation.total_allowances)
+                except CompensationMonthRange.DoesNotExist:
+                    pass
 
-        # Active loan remaining amounts
+        # ---------- Loan deductions (all remaining outstanding balances) ----------
         active_loans = EmployeeLoan.objects.filter(
             employee=employee,
             status='ACTIVE',
@@ -406,48 +523,48 @@ class ExitFinalSettlementView(BaseExitView):
         )
         total_loan_deduction = sum(float(l.remaining_amount or 0) for l in active_loans)
 
-        # Approved leave deductions (current month)
-        today = date.today()
-        first_day = date(today.year, today.month, 1)
-        if today.month == 12:
-            last_day = date(today.year + 1, 1, 1) - timedelta(days=1)
-        else:
-            last_day = date(today.year, today.month + 1, 1) - timedelta(days=1)
-
-        daily_rate = base_salary / 30 if base_salary > 0 else 0
+        # ---------- Leave deductions (working days in period, uses _is_working_day like PayrollView) ----------
         leave_deduction = 0
         if daily_rate > 0:
             approved_leaves = LeaveRequest.objects.filter(
                 employee=employee,
                 status='APPROVED',
-                start_date__lte=last_day,
-                end_date__gte=first_day,
+                start_date__lte=period_end,
+                end_date__gte=period_start,
                 is_deleted=False
             )
             for leave in approved_leaves:
-                start = max(leave.start_date, first_day)
-                end = min(leave.end_date, last_day)
-                current = start
-                days_on_leave = 0
-                while current <= end:
-                    # Simple weekday check (Mon-Fri)
-                    if current.weekday() < 5:
-                        days_on_leave += 1
-                    current += timedelta(days=1)
-                if leave.is_half_day and days_on_leave == 1:
-                    days_on_leave = 0.5
-                leave_deduction += days_on_leave * daily_rate
+                l_start = max(leave.start_date, period_start)
+                l_end = min(leave.end_date, period_end)
+                leave_working_days = self._count_working_days_in_range(company_id, l_start, l_end)
+                if leave.is_half_day and leave_working_days == 1:
+                    leave_working_days = 0.5
+                leave_deduction += leave_working_days * daily_rate
 
-        net_salary = base_salary + total_compensation - total_loan_deduction - leave_deduction
+        net_settlement = settlement_salary + total_compensation - total_loan_deduction - leave_deduction
+
+        net_settlement_val = max(0, net_settlement)
 
         return Response({
             'employee_id': str(employee._id),
             'employee_name': employee.full_name,
+            'joining_date': join_date.isoformat(),
+            'last_working_day': lwd.isoformat(),
+            'period_start': period_start.isoformat(),
+            'period_end': period_end.isoformat(),
+            'prev_month_paid': prev_month_paid,
+            'total_calendar_days': total_calendar_days,
+            'non_working_days': non_working_days,
+            'total_working_days': total_working_days,
+            'days_in_month': days_in_month,
+            'daily_rate': str(daily_rate),
             'base_salary': str(base_salary),
+            'settlement_salary': str(settlement_salary),
             'compensation': str(total_compensation),
             'loan_deduction': str(total_loan_deduction),
             'leave_deduction': str(leave_deduction),
-            'net_salary': str(max(0, net_salary)),
+            'net_settlement': str(net_settlement_val),
+            'net_salary': str(net_settlement_val),
         })
 
 

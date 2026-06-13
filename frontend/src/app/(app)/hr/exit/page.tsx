@@ -476,28 +476,42 @@ function ExitFormModal({
 
   const selectedEmployee = employees.find((e: any) => String(e.id) === formData.employee_id);
 
-  const handleEmployeeSelect = async (empId: string) => {
+  const calculateSettlement = useCallback(async (empId: string, lwd: string) => {
+    if (!empId) return;
+    setCalculating(true);
+    try {
+      const payload: { employee_id: string; last_working_day?: string } = { employee_id: empId };
+      if (lwd) payload.last_working_day = lwd;
+      const result = await finalSettlementMutation.mutateAsync(payload);
+      setFormData(prev => ({
+        ...prev,
+        final_settlement: parseFloat(result.net_salary) || 0,
+      }));
+    } catch (err: any) {
+      toast.error(err.message || "Failed to calculate settlement");
+    } finally {
+      setCalculating(false);
+    }
+  }, [finalSettlementMutation]);
+
+  const handleEmployeeSelect = (empId: string) => {
     const emp = employees.find((e: any) => String(e.id) === empId);
     if (emp) {
       setFormData(prev => ({
         ...prev,
         employee_id: empId,
       }));
+      calculateSettlement(empId, formData.last_working_day);
+    }
+  };
 
-      // Auto-calculate final settlement
-      setCalculating(true);
-      try {
-        const result = await finalSettlementMutation.mutateAsync({ employee_id: empId });
-        setFormData(prev => ({
-          ...prev,
-          employee_id: empId,
-          final_settlement: parseFloat(result.net_salary) || 0,
-        }));
-      } catch (err: any) {
-        toast.error(err.message || "Failed to calculate settlement");
-      } finally {
-        setCalculating(false);
-      }
+  const handleLastWorkingDayChange = (lwd: string) => {
+    setFormData(prev => ({
+      ...prev,
+      last_working_day: lwd,
+    }));
+    if (formData.employee_id) {
+      calculateSettlement(formData.employee_id, lwd);
     }
   };
 
@@ -574,7 +588,7 @@ function ExitFormModal({
             <span className="text-muted-foreground">Last Working Day</span>
             <DatePicker
               value={formData.last_working_day}
-              onChange={v => setFormData({ ...formData, last_working_day: v || "" })}
+              onChange={v => handleLastWorkingDayChange(v || "")}
             />
           </label>
 
