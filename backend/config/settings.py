@@ -21,6 +21,8 @@ JWT_REFRESH_TIME_EXP_DAYS = env.int("JWT_REFRESH_TIME_EXP_DAYS", default=15)
 
 # ─── Apps ────────────────────────────────────────────────────────────────────
 INSTALLED_APPS = [
+    'daphne',
+    'channels',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -42,6 +44,7 @@ INSTALLED_APPS = [
     'apps.inventory',
     'apps.finance',
     'apps.monitoring',
+    'apps.notifications',
 ]
 
 AUTH_USER_MODEL = 'organization.User'
@@ -76,6 +79,16 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'config.wsgi.application'
+ASGI_APPLICATION = 'config.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [(env('REDIS_HOST', default='redis'), env.int('REDIS_PORT', default=6379))],
+        },
+    },
+}
 
 # ─── Database ─────────────────────────────────────────────────────────────────
 DATABASES = {

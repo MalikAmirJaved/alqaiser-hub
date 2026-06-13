@@ -5,6 +5,7 @@ import "@/styles.css";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
 import { ConfirmationProvider } from "@/contexts/ConfirmationModalContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
 
 const inter = Inter({ subsets: ["latin"], display: "swap", variable: "--font-inter" });
 
@@ -20,7 +21,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ReactQueryProvider>
           <ThemeInitializer />
           <ConfirmationProvider>
-            {children}
+            <NotificationProvider>
+              {children}
+            </NotificationProvider>
             <Toaster
               position="bottom-right"
               richColors

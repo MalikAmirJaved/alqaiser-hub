@@ -18,6 +18,14 @@ services:
     networks:
       - dev_network
 
+  redis:
+    image: redis:7-alpine
+    container_name: alqaiser_redis_dev
+    ports:
+      - "6379:6379"
+    networks:
+      - dev_network
+
   backend:
     build:
       context: ./backend

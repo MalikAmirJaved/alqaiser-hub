@@ -15,6 +15,11 @@ services:
       timeout: 10s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: alqaiser_redis_prod
+    restart: always
+
   backend:
     build:
       context: ./backend
@@ -68,6 +73,7 @@ services:
     depends_on:
       - backend
       - frontend
+      - redis
     restart: always
 
 volumes:
