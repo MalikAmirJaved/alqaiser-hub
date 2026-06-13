@@ -101,10 +101,12 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
 
   const getManagerEmployees = () => {
     return employees.filter(emp =>
-      emp.role !== 'STAFF' ||
-      emp.designation_name?.toLowerCase().includes('manager') ||
-      emp.designation_name?.toLowerCase().includes('lead') ||
-      emp.designation_name?.toLowerCase().includes('director')
+      emp.employment_status === 'ACTIVE' && (
+        emp.role !== 'STAFF' ||
+        emp.designation_name?.toLowerCase().includes('manager') ||
+        emp.designation_name?.toLowerCase().includes('lead') ||
+        emp.designation_name?.toLowerCase().includes('director')
+      )
     );
   };
 

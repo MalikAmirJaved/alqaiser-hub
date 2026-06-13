@@ -17,7 +17,7 @@ import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { toast } from "sonner";
 
 // Import hooks
-import { useEmployees, type Employee } from "@/hooks/useEmployees";
+import { useActiveEmployees, type ActiveEmployee } from "@/hooks/useEmployees";
 import { useShiftTemplates, type ShiftTemplate } from "@/hooks/useShiftTemplates";
 import { 
   useResolvedShifts, 
@@ -71,10 +71,10 @@ export default function ShiftsManagementPage() {
     assignment_type: "OVERRIDE" as "OVERRIDE" | "DATE_RANGE"
   });
   const [historyPage, setHistoryPage] = useState(0);
-  const [selectedEmployeeForHistory, setSelectedEmployeeForHistory] = useState<Employee | null>(null);
+  const [selectedEmployeeForHistory, setSelectedEmployeeForHistory] = useState<ActiveEmployee | null>(null);
 
   // Queries
-  const { data: employees = [], isLoading: employeesLoading } = useEmployees({ employment_status: "ACTIVE" });
+  const { data: employees = [], isLoading: employeesLoading } = useActiveEmployees();
   const { data: templates = [], isLoading: templatesLoading } = useShiftTemplates();
   
   // Filtered employees (moved before useMemo that depends on it)
@@ -82,8 +82,8 @@ export default function ShiftsManagementPage() {
     return employees.filter(e => {
       const fullName = `${e.first_name} ${e.last_name || ''}`.toLowerCase();
       const matchesSearch = fullName.includes(filters.search.toLowerCase()) || 
-                           e.department?.toLowerCase().includes(filters.search.toLowerCase());
-      const matchesDepartment = !filters.department || e.department === filters.department;
+                           e.department_name?.toLowerCase().includes(filters.search.toLowerCase());
+      const matchesDepartment = !filters.department || e.department_name === filters.department;
       return matchesSearch && matchesDepartment;
     });
   }, [employees, filters.search, filters.department]);

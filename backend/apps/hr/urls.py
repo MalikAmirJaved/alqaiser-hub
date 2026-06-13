@@ -4,7 +4,7 @@ from apps.hr.views.shift_template_views import ShiftTemplateView
 from apps.hr.views.asset_views import AssetView, AssetStatsView
 from apps.hr.views.asset_category_views import AssetCategoryView, AssetCategoryStatsView
 from apps.hr.views.asset_purchase_request_views import AssetPurchaseRequestView
-from apps.hr.views.employee_views import EmployeeView, EmployeeStatsView
+from apps.hr.views.employee_views import EmployeeView, EmployeeStatsView, ActiveEmployeesView
 from apps.hr.views.payroll_views import (
     PayrollView, PayrollStatsView, PayrollPreviewView,
     EmployeeLoanView, CompensationView,
@@ -70,6 +70,7 @@ urlpatterns = [
     path('asset-categories/stats/', AssetCategoryStatsView.as_view(), name='asset-category-stats'),
     
     # Employees
+    path('employees/active/', ActiveEmployeesView.as_view(), name='active-employees'),
     path('employees/', EmployeeView.as_view(), name='employees'),
     path('employees/stats/', EmployeeStatsView.as_view(), name='employee-stats'),
     

@@ -46,7 +46,7 @@ export default function CompensationLoanPage({
   const [selectedEmployeeSalary, setSelectedEmployeeSalary] = useState<number>(0);
   const [loanValidationErrors, setLoanValidationErrors] = useState<string[]>([]);
 
-  const { data: employees = [] } = useEmployees();
+  const { data: employees = [] } = useEmployees({ employment_status: "ACTIVE" });
   const { data: compensations = [] } = useCompensations();
   const { data: loans = [] } = useEmployeeLoans();
   const createCompensation = useCreateCompensation();

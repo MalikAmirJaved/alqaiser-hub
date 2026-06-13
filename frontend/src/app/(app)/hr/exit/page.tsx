@@ -22,7 +22,7 @@ import {
   ExitRecord,
   ExitChecklistItem
 } from "@/hooks/useExitManagement";
-import { useEmployees } from "@/hooks/useEmployees";
+import { useActiveEmployees } from "@/hooks/useEmployees";
 import { toast } from "sonner";
 import { useApi } from "@/hooks/useApi";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
@@ -48,7 +48,7 @@ export default function ExitManagementPage() {
   const formatCurrency = useFormatCurrency();
   const permissions = useFeaturePermissions("HR", "exit");
   const api = useApi();
-  const { data: employees = [] } = useEmployees();
+  const { data: employees = [] } = useActiveEmployees();
   const confirmationModal = useConfirmationModal();
   const [query, setQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
@@ -490,10 +490,9 @@ function ExitFormModal({
   });
 
   const employeeOpts: SearchableSelectOption[] = employees
-    .filter((e: any) => e.employment_status === "ACTIVE")
     .map((e: any) => ({
       value: String(e.id),
-      label: `${e.first_name} ${e.last_name || ""} (${e.department || "N/A"})`
+      label: `${e.first_name} ${e.last_name || ""} (${e.department_name || "N/A"})`
     }));
 
   const handleEmployeeSelect = (empId: string) => {
@@ -543,7 +542,7 @@ function ExitFormModal({
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground">Department</span>
                 <input
-                  value={selectedEmployee.department || ""}
+                  value={selectedEmployee.department_name || ""}
                   className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none"
                   readOnly
                 />

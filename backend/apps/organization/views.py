@@ -265,6 +265,20 @@ class UserDetailView(PermissionRequiredMixin, generics.RetrieveUpdateDestroyAPIV
         instance.save()
 
 
+class ActiveUsersView(PermissionRequiredMixin, generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
+    permission_resource = 'user'
+    serializer_class = UserProfileSerializer
+
+    def get_queryset(self):
+        return User.objects.filter(
+            company=self.request.user.company,
+            is_deleted=False,
+            is_active=True
+        )
+
+
 class DepartmentViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'SETTINGS'
     permission_resource = 'department'

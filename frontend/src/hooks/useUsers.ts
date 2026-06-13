@@ -45,6 +45,18 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
+// Fetch only active users (for dropdowns)
+export function useActiveUsers() {
+  const api = useApi();
+  return useQuery<User[]>({
+    queryKey: ["users", "active"],
+    queryFn: () => api("/api/organization/users/active/"),
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+}
+
 // Fetch all users
 export function useUsers() {
   const api = useApi();

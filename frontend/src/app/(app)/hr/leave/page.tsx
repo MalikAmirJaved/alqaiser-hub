@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
 import { useLeaves, useCreateLeaveRequest, useApproveLeave, useLeaveStats, LEAVE_TYPES } from "@/hooks/useLeaves";
-import { useEmployees } from "@/hooks/useEmployees";
+import { useActiveEmployees } from "@/hooks/useEmployees";
 import PageHeader from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatsCards } from "@/components/reuseable/StatsCards";
@@ -68,7 +68,7 @@ const leavePermissions = getPermissions(
 
   // Fetch data with React Query
   const { data: leaves = [], refetch: refetchLeaves, isLoading: leavesLoading } = useLeaves();
-  const { data: employees = [] } = useEmployees();
+  const { data: employees = [] } = useActiveEmployees();
   const { data: stats, refetch: refetchStats } = useLeaveStats();
 
   // Mutations
@@ -273,7 +273,7 @@ const leavePermissions = getPermissions(
       sortable: true,
       render: (_: unknown, row: any) => {
         const employee = employees.find((e: any) => e.id === row.employee_id);
-        return employee?.department || "—";
+        return employee?.department_name || employee?.department || "—";
       }
     },
     { key: "leave_type_display", label: "Leave Type", sortable: true },

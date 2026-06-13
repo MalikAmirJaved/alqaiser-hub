@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     UserContextView, SwitchCompanyView, UserProfileView, 
     BranchCreateView, BranchDetailView, UserListView, 
-    UserDetailView, DepartmentViewSet
+    UserDetailView, ActiveUsersView, DepartmentViewSet
 )
 
 router = DefaultRouter()
@@ -15,6 +15,7 @@ urlpatterns = [
     path('profile/', UserProfileView.as_view(), name='user-profile'),
     path('branches/', BranchCreateView.as_view(), name='branch-create'),
     path('branches/detail/', BranchDetailView.as_view(), name='branch-detail'),
+    path('users/active/', ActiveUsersView.as_view(), name='active-users'),
     path('users/', UserListView.as_view(), name='user-list'),
     path('users/<int:pk>/', UserDetailView.as_view(), name='user-detail'),
     path('', include(router.urls)),

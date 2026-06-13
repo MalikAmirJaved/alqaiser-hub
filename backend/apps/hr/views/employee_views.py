@@ -488,3 +488,46 @@ class EmployeeStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "byDepartment": dept_counts,
             "byStatus": status_counts,
         })
+
+
+class ActiveEmployeesView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'employee'
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        company_id = request.user.company_id
+        if not company_id:
+            return Response(
+                {'error': 'User is not associated with any company'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        employees = Employee.objects.filter(
+            company_id=company_id,
+            is_deleted=False,
+            employment_status='ACTIVE'
+        ).select_related('department', 'designation')
+
+        if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
+            employees = employees.filter(
+                models.Q(branch_id=request.user.branch_id) | models.Q(branch_id__isnull=True)
+            )
+
+        data = []
+        for emp in employees:
+            data.append({
+                'id': str(emp._id),
+                'employee_id': emp.employee_id,
+                'first_name': emp.first_name,
+                'last_name': emp.last_name,
+                'full_name': emp.full_name,
+                'department_id': str(emp.department._id) if emp.department else None,
+                'department_name': emp.department.name if emp.department else None,
+                'designation_id': str(emp.designation._id) if emp.designation else None,
+                'designation_name': emp.designation.name if emp.designation else None,
+                'email': emp.email,
+                'phone': emp.phone,
+            })
+
+        return Response(data)

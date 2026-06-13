@@ -38,7 +38,7 @@ export function RoundBuilder({ onChange, value = [], employees }: RoundBuilderPr
 
   const employeeOptions = employees.map(emp => ({
     value: emp.id.toString(),
-    label: `${emp.first_name} ${emp.last_name || ""} - ${emp.department}`
+    label: `${emp.first_name} ${emp.last_name || ""} - ${emp.department_name || emp.department || ""}`
   }));
 
   const toggleRoundExpand = (roundNum: number) => {

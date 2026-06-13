@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { CountrySelect, StateSelect, CitySelect } from "@/components/reuseable/LocationSelectors";
 import { Checkbox } from "@/components/reuseable/Checkbox";
-import { useEmployees } from "@/hooks/useEmployees";
+import { useActiveEmployees } from "@/hooks/useEmployees";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 interface WarehouseFormData {
@@ -31,7 +31,7 @@ interface WarehouseFormProps {
 }
 
 export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: WarehouseFormProps) {
-  const { data: employees = [] } = useEmployees({ employment_status: "ACTIVE" });
+  const { data: employees = [] } = useActiveEmployees();
 
   const [formData, setFormData] = useState<WarehouseFormData>({
     warehouse_name: "",
@@ -53,7 +53,7 @@ export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: Wa
 
   const employeeOptions = employees.map((emp) => ({
     value: emp.id,
-    label: `${emp.first_name} ${emp.last_name || ""} (${emp.department || "N/A"})`,
+    label: `${emp.first_name} ${emp.last_name || ""} (${emp.department_name || "N/A"})`,
   }));
 
   const handleSubmit = (e: React.FormEvent) => {

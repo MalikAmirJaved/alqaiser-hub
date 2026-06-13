@@ -58,6 +58,32 @@ export interface EmployeeStats {
   byStatus: { employment_status: string; count: number }[];
 }
 
+export interface ActiveEmployee {
+  id: string;
+  employee_id: string;
+  first_name: string;
+  last_name?: string;
+  full_name: string;
+  department_id?: string;
+  department_name?: string;
+  designation_id?: string;
+  designation_name?: string;
+  email?: string;
+  phone: string;
+}
+
+// Fetch only active employees (for dropdowns)
+export function useActiveEmployees() {
+  const api = useApi();
+  return useQuery<ActiveEmployee[]>({
+    queryKey: ["employees", "active"],
+    queryFn: () => api("/api/hr/employees/active/"),
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+}
+
 // Fetch all employees
 export function useEmployees(params?: Record<string, string>) {
   const api = useApi();

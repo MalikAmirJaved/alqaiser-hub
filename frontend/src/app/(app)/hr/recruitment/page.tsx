@@ -17,7 +17,7 @@ import {
   useUpdateRecruitmentCandidate,
   useDeleteRecruitmentCandidate,
 } from "@/hooks/useRecruitment";
-import { useEmployees } from "@/hooks/useEmployees";
+import { useActiveEmployees } from "@/hooks/useEmployees";
 import { toast } from "sonner";
 import { RoundBuilder } from "@/components/recruitment/RoundBuilder";
 import { RoundStatusModal } from "@/components/recruitment/RoundStatusModal";
@@ -165,7 +165,7 @@ export default function RecruitmentPage() {
   });
 
   const { data: statsData } = useRecruitmentStats();
-  const { data: employeesData } = useEmployees({ status: "ACTIVE" });
+  const { data: employeesData } = useActiveEmployees();
 
   const { data: roundsData, refetch: refetchRounds } = useInterviewRounds(
     roundsModalOpen && selectedCandidate?.id ? selectedCandidate.id : undefined
@@ -590,7 +590,7 @@ function CandidateFormModal({
 
   const employeeOpts = employeeOptions.map(e => ({
     value: e.id.toString(),
-    label: `${e.first_name} ${e.last_name || ""} (${e.department})`,
+    label: `${e.first_name} ${e.last_name || ""} (${e.department_name || "N/A"})`,
   }));
 
   const update = (field: keyof RecruitmentRecord, value: any) =>

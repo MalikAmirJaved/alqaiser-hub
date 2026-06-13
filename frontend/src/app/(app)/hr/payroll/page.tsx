@@ -39,7 +39,7 @@ export function PayrollPage({
   const [monthSelectorOpen, setMonthSelectorOpen] = useState(false);
 
   // Fetch data from backend
-  const { data: employees = [], isLoading: employeesLoading } = useEmployees();
+  const { data: employees = [], isLoading: employeesLoading } = useEmployees({ employment_status: "ACTIVE" });
   const { data: payrollRecords = [], isLoading: payrollLoading } = usePayroll({
     month: String(selectedMonth),
     year: String(selectedYear),
@@ -73,11 +73,8 @@ const payrollPermissions = getPermissions(
     );
   };
 
-  // Filter active employees
-  const activeEmployees = employees.filter(e => e.employment_status === "ACTIVE");
-
   // Filter employees by search and status
-  const filteredEmployees = activeEmployees.filter(emp => {
+  const filteredEmployees = employees.filter(emp => {
     const searchTerm = searchQuery.toLowerCase();
     const matchesSearch =
       emp.first_name?.toLowerCase().includes(searchTerm) ||
@@ -121,10 +118,10 @@ const handleRefresh = () => {
     );
   }
 
-  const paidCount = stats?.paidCount || activeEmployees.filter(e => getPaymentStatus(e.id) === "PAID").length;
-  const pendingCount = activeEmployees.length - paidCount;
-  const totalPayroll = stats?.totalPayroll ? parseFloat(stats.totalPayroll) : activeEmployees.reduce((sum, e) => sum + (parseFloat(e.salary) || 0), 0);
-  const avgSalary = stats?.avgSalary ? parseFloat(stats.avgSalary) : (activeEmployees.length > 0 ? totalPayroll / activeEmployees.length : 0);
+  const paidCount = stats?.paidCount || employees.filter(e => getPaymentStatus(e.id) === "PAID").length;
+  const pendingCount = employees.length - paidCount;
+  const totalPayroll = stats?.totalPayroll ? parseFloat(stats.totalPayroll) : employees.reduce((sum, e) => sum + (parseFloat(e.salary) || 0), 0);
+  const avgSalary = stats?.avgSalary ? parseFloat(stats.avgSalary) : (employees.length > 0 ? totalPayroll / employees.length : 0);
 
   return (
     <div>
@@ -164,9 +161,9 @@ const handleRefresh = () => {
       id: "paid-employees",
       label: "Paid Employees",
       value:
-        activeEmployees.length > 0
+        employees.length > 0
           ? `${paidCount} (${Math.round(
-              (paidCount / activeEmployees.length) * 100
+              (paidCount / employees.length) * 100
             )}%)`
           : paidCount,
     },
@@ -310,7 +307,7 @@ const handleRefresh = () => {
         </div>
         <div className="p-3 border-t border-border flex items-center justify-between">
           <div className="text-xs text-muted-foreground">
-            Showing {filteredEmployees.length} of {activeEmployees.length} employees
+            Showing {filteredEmployees.length} of {employees.length} employees
           </div>
           <div className="text-xs text-muted-foreground">
             Total Payroll: {formatCurrency(totalPayroll)}

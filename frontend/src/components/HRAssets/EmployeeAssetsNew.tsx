@@ -84,7 +84,7 @@ export default function EmployeeAssetsNew() {
   const [assetCategoryFilter, setAssetCategoryFilter] = useState<string>("all");
 
   const { data: employees = [], isLoading: employeesLoading } = useEmployees(
-    searchQuery ? { search: searchQuery } : undefined
+    searchQuery ? { search: searchQuery, employment_status: "ACTIVE" } : { employment_status: "ACTIVE" }
   ) as { data: Employee[]; isLoading: boolean };
 
   const { data: assignmentData, isLoading: assignmentsLoading } = useEmployeeAssignments(
