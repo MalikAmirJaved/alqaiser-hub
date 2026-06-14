@@ -43,11 +43,9 @@ export default function UserStatusModal({
       if (onSubmit) {
         await onSubmit(selectedStatus);
       }
-      toast.success("User status updated successfully");
       onOpenChange(false);
       onSuccess?.();
     } catch (error: any) {
-      toast.error(error?.message || "Failed to update user status");
     } finally {
       setIsSubmitting(false);
     }

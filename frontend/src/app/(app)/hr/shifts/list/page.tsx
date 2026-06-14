@@ -250,7 +250,6 @@ export default function ShiftsManagementPage() {
           }
         }
         
-        toast.success(`Scheduled ${selectedEmployees.length} employee(s) for ${dates.length} day(s)`);
       } else {
         // Create date range assignment
         await bulkAssign.mutateAsync({
@@ -261,8 +260,6 @@ export default function ShiftsManagementPage() {
           assignment_type: "DATE_RANGE",
           reason: scheduleFormData.reason
         });
-        
-        toast.success(`Created date range assignment for ${selectedEmployees.length} employee(s)`);
       }
       
       // Refresh data
@@ -274,7 +271,6 @@ export default function ShiftsManagementPage() {
       setScheduleFormData({ template_id: "", date_range: { start: "", end: "" }, reason: "", assignment_type: "OVERRIDE" });
       setSelectedEmployees([]);
     } catch (error: any) {
-      toast.error(error.message || "Failed to schedule shift");
     }
   };
   
@@ -284,11 +280,9 @@ export default function ShiftsManagementPage() {
     
     try {
       await deleteOverride.mutateAsync(overrideId);
-      toast.success("Shift assignment removed");
       refetchShifts();
       refetchOverrides();
     } catch (error: any) {
-      toast.error(error.message || "Failed to remove assignment");
     }
   };
   
@@ -312,11 +306,9 @@ export default function ShiftsManagementPage() {
       for (const override of overridesToDelete) {
         await deleteOverride.mutateAsync(override.id);
       }
-      toast.success(`${overridesToDelete.length} assignment(s) removed`);
       refetchShifts();
       refetchOverrides();
     } catch (error: any) {
-      toast.error(error.message || "Failed to remove assignments");
     }
   };
   
@@ -327,10 +319,8 @@ export default function ShiftsManagementPage() {
     
     try {
       await generateSchedule.mutateAsync({ start_date: startDate, end_date: endDate });
-      toast.success("Shift schedules generated");
       refetchShifts();
     } catch (error: any) {
-      toast.error(error.message || "Failed to generate schedules");
     }
   };
   

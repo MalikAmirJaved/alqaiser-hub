@@ -71,7 +71,7 @@ export const menu = [
       { title: "Alerts", to: "/inventory/alerts", icon: Bell },
       { title: "Customers", to: "/inventory/customers", icon: Users },
       { title: "Selling / POS", to: "/inventory/pos", icon: ScanLine },
-      { title: "Audit Logs", to: "/inventory/audit", icon: FileText },
+      { title: "Inventoy Audit Logs", to: "/inventory/audit", icon: FileText },
     ],
   },
 
@@ -106,7 +106,7 @@ export const menu = [
       { title: "Payments", to: "/finance/payments", icon: Landmark },
       { title: "Finance Payroll", to: "/finance/payroll", icon: Wallet },
       { title: "Taxes", to: "/finance/taxes", icon: Calculator },
-      { title: "Audit Logs", to: "/finance/audit", icon: History },
+      { title: "Finance Audit Logs", to: "/finance/audit", icon: History },
       { title: "Forecast", to: "/finance/forecast", icon: History },
     ],
   },

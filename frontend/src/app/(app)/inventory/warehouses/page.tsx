@@ -3,7 +3,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { toast } from "sonner";
 import { Plus, Search, X } from "lucide-react";
 import { TableView, GridView } from "@/components/reuseable/TableGridView";
 import { StatsCards } from "@/components/reuseable/StatsCards";
@@ -77,11 +76,9 @@ export default function WarehousesPage() {
       onConfirm: async () => {
         try {
           await deleteWarehouse.mutateAsync(warehouse.id);
-          toast.success(`Warehouse "${warehouse.warehouse_name}" deleted successfully`);
           setSelectedWarehouse(null);
           refetch();
         } catch (error: any) {
-          toast.error(error.message || "Failed to delete warehouse");
         }
       },
     });
@@ -91,16 +88,13 @@ export default function WarehousesPage() {
     try {
       if (editingWarehouse) {
         await updateWarehouse.mutateAsync({ id: editingWarehouse.id, ...formData });
-        toast.success(`Warehouse "${formData.warehouse_name}" updated successfully`);
       } else {
         await createWarehouse.mutateAsync(formData);
-        toast.success(`Warehouse "${formData.warehouse_name}" created successfully`);
       }
       setIsFormOpen(false);
       setEditingWarehouse(null);
       refetch();
     } catch (error: any) {
-      toast.error(error.message || `Failed to ${editingWarehouse ? "update" : "create"} warehouse`);
     }
   };
 

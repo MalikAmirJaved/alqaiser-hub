@@ -4,7 +4,6 @@
 import { useState, useEffect } from "react";
 import { useEmployeeLoans, useCompensations, usePayrollPreview, useProcessPayroll, computeTotalMonths } from "@/hooks/usePayroll";
 import { CreditCard, Plus, Minus, X, CheckCircle, Clock, CalendarDays, Loader2 } from "lucide-react";
-import { toast } from "sonner";
 
 export default function PaymentModal({
   formatCurrency,
@@ -103,11 +102,9 @@ export default function PaymentModal({
         overtime_hours: overtimeHours,
         selected_loans: Object.keys(selectedLoanDeductions).filter(id => selectedLoanDeductions[id]),
       });
-      toast.success("Payment processed successfully");
       onSuccess();
       onClose();
     } catch (error: any) {
-      toast.error(error.message || "Failed to process payment");
     }
   };
 

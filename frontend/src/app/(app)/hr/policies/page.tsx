@@ -127,13 +127,9 @@ export default function HRPolicyPage() {
         notes: `Bulk ${bulkAction} action`
       });
       
-      toast.success(`Successfully ${bulkAction}ed ${selectedIds.size} policies`);
       setSelectedIds(new Set());
       setBulkActionOpen(false);
     } catch (error: any) {
-      toast.error(`Failed to ${bulkAction} policies`, {
-        description: error.message
-      });
     }
   };
 
@@ -147,18 +143,13 @@ export default function HRPolicyPage() {
           id: editingRecord.id,
           data: data
         });
-        toast.success("Policy updated successfully");
       } else {
         await createPolicy.mutateAsync(data);
-        toast.success("Policy created successfully");
       }
       
       setModalOpen(false);
       setEditingRecord(null);
     } catch (error: any) {
-      toast.error(isEditing ? "Failed to update policy" : "Failed to create policy", {
-        description: error.message
-      });
     }
   };
 
@@ -171,11 +162,7 @@ export default function HRPolicyPage() {
       onConfirm: async () => {
         try {
           await deletePolicy.mutateAsync(id);
-          toast.success("Policy deleted successfully");
         } catch (error: any) {
-          toast.error("Failed to delete policy", {
-            description: error.message
-          });
         }
       }
     });

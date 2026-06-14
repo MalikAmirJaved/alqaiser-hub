@@ -53,11 +53,9 @@ export default function EmployeeStatusModal({
         employment_status: selectedStatus,
       });
 
-      toast.success("Employee status updated successfully");
       onOpenChange(false);
       onSuccess?.();
     } catch (error: any) {
-      toast.error(error?.message || "Failed to update employee status");
     } finally {
       setIsSubmitting(false);
     }

@@ -48,10 +48,8 @@ export function AssetRequestFormModal({ isOpen, onClose, asset }: AssetRequestFo
         reason: reason.trim(),
         under_date: underDate,
       });
-      toast.success("Purchase request submitted");
       onClose();
     } catch (err: any) {
-      toast.error(err.message || "Failed to submit request");
     }
   };
 

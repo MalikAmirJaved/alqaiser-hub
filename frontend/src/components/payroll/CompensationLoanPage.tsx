@@ -147,10 +147,8 @@ export default function CompensationLoanPage({
             id: editingItem.id,
             ...payload,
           });
-          toast.success("Compensation updated successfully");
         } else {
           await createCompensation.mutateAsync(payload);
-          toast.success("Compensation created successfully");
         }
       } else {
         if (loanValidationErrors.length > 0) {
@@ -183,10 +181,8 @@ export default function CompensationLoanPage({
 
         if (editingItem) {
           await updateLoan.mutateAsync({ id: editingItem.id, ...payload });
-          toast.success("Loan updated successfully");
         } else {
           await createLoan.mutateAsync(payload);
-          toast.success("Loan created successfully");
         }
       }
 
@@ -196,7 +192,6 @@ export default function CompensationLoanPage({
       setSelectedEmployeeSalary(0);
       setLoanValidationErrors([]);
     } catch (error: any) {
-      toast.error(error.message || "Failed to save");
     }
   };
 
@@ -206,23 +201,18 @@ export default function CompensationLoanPage({
     try {
       if (type === "compensation") {
         await deleteCompensation.mutateAsync(id);
-        toast.success("Compensation deleted successfully");
       } else {
         await deleteLoan.mutateAsync(id);
-        toast.success("Loan deleted successfully");
       }
     } catch (error: any) {
-      toast.error(error.message || "Failed to delete");
     }
   };
 
   const handleStatusChange = async (id: string, newStatus: string) => {
     try {
       await updateLoanStatus.mutateAsync({ id, status: newStatus });
-      toast.success(`Loan status updated to ${newStatus}`);
       setStatusDropdownId(null);
     } catch (error: any) {
-      toast.error(error.message || "Failed to update status");
     }
   };
 

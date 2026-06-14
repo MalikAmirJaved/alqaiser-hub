@@ -209,10 +209,8 @@ export default function EmployeeAssetsNew() {
         condition: assignmentCondition,
         notes: assignmentNotes,
       });
-      toast.success("Assets assigned successfully");
       setShowAssignModal(false);
     } catch (error: any) {
-      toast.error(error.message || "Failed to assign assets");
     }
   };
 
@@ -223,10 +221,8 @@ export default function EmployeeAssetsNew() {
         assignment_ids: Array.from(selectedReturnIds),
         condition_on_return: "GOOD",
       });
-      toast.success(`${selectedReturnIds.size} asset(s) returned`);
       setSelectedReturnIds(new Set());
     } catch (error: any) {
-      toast.error(error.message || "Failed to return assets");
     }
   };
 

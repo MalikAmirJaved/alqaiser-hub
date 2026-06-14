@@ -13,7 +13,6 @@ import {
   Wifi, WifiOff, Eye, Edit, Trash2, Plus, RefreshCw,
   CheckSquare, Square, Minus, Crown, Zap
 } from "lucide-react";
-import { toast } from "sonner";
 
 import {
   usePermissionUsers,
@@ -313,20 +312,16 @@ function RolesPanel({
     if (!selectedRoleId) return;
     try {
       await assignRole.mutateAsync({ user_id: userId, role_id: Number(selectedRoleId) });
-      toast.success("Role assigned");
       setShowAdd(false);
       setSelectedRoleId("");
     } catch {
-      toast.error("Failed to assign role");
     }
   };
 
   const handleRemove = async (roleId: number) => {
     try {
       await removeRole.mutateAsync({ userId, roleId });
-      toast.success("Role removed");
     } catch {
-      toast.error("Failed to remove role");
     }
   };
 
@@ -468,10 +463,8 @@ const urlUserId = searchParams.get("userId");
 
     try {
       await bulkSet.mutateAsync({ user_id: selectedUserId, permissions });
-      toast.success(`${permissions.length} permission${permissions.length > 1 ? "s" : ""} updated`);
       setPendingChanges({});
     } catch {
-      toast.error("Failed to save permissions");
     }
   };
 
@@ -740,9 +733,7 @@ const urlUserId = searchParams.get("userId");
                               onClick={async () => {
                                 try {
                                   await removeOverride.mutateAsync({ userId: selectedUserId!, overrideId: ov.id });
-                                  toast.success("Override removed");
                                 } catch {
-                                  toast.error("Failed to remove override");
                                 }
                               }}
                               className="p-1 rounded hover:bg-muted transition-colors"

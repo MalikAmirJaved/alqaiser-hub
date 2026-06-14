@@ -2,7 +2,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { toast } from "sonner";
 import PageHeader from "@/components/PageHeader";
 import { Plus, Grid, List, Download } from "lucide-react";
 import { TableView, GridView, Column } from "@/components/reuseable/TableGridView";
@@ -78,7 +77,6 @@ export default function ProductsPage() {
       message: `Delete "${p.product_name}"? This removes all variants and stock.`,
       onConfirm: async () => {
         await deleteProduct.mutateAsync(p.id);
-        toast.success(`"${p.product_name}" deleted`);
         refetch();
       },
     });
@@ -87,10 +85,8 @@ export default function ProductsPage() {
   const handleSave = async (data: ProductPayload) => {
     if (selectedProduct) {
       await updateProduct.mutateAsync({ id: selectedProduct.id, ...data });
-      toast.success(`"${data.productName}" updated`);
     } else {
       await createProduct.mutateAsync(data);
-      toast.success(`"${data.productName}" created`);
     }
     setShowProductModal(false);
     refetch();

@@ -88,16 +88,13 @@ export default function ExitManagementPage() {
     try {
       if (editingRecord) {
         await updateMutation.mutateAsync({ id: editingRecord.id, ...data });
-        toast.success("Exit record updated");
       } else {
         await createMutation.mutateAsync(data);
-        toast.success("Exit record created");
       }
       await refetch();
       setModalOpen(false);
       setEditingRecord(null);
     } catch (error: any) {
-      toast.error(error.message || "Failed to save");
     }
   };
 
@@ -109,7 +106,6 @@ export default function ExitManagementPage() {
       confirmText: "Delete",
       onConfirm: async () => {
         await deleteMutation.mutateAsync(id);
-        toast.success("Deleted");
         await refetch();
       },
     });
@@ -128,7 +124,6 @@ export default function ExitManagementPage() {
       onConfirm: async () => {
         await bulkActionMutation.mutateAsync({ action, ids: Array.from(selectedRecords) });
         setSelectedRecords(new Set());
-        toast.success(`${action} completed`);
         await refetch();
       },
     });
@@ -137,10 +132,8 @@ export default function ExitManagementPage() {
   const handleUpdateSettlementStatus = async (recordId: string, status: string) => {
     try {
       await updateMutation.mutateAsync({ id: recordId, final_settlement_status: status });
-      toast.success(`Settlement ${status.toLowerCase()}`);
       await refetch();
     } catch (error: any) {
-      toast.error(error.message || "Failed to update status");
     }
   };
 
@@ -490,7 +483,6 @@ function ExitFormModal({
         final_settlement: parseFloat(result.net_salary) || 0,
       }));
     } catch (err: any) {
-      toast.error(err.message || "Failed to calculate settlement");
     } finally {
       setCalculating(false);
     }

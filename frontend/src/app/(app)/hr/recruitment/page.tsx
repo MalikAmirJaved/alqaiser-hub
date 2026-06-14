@@ -203,11 +203,9 @@ export default function RecruitmentPage() {
       if (editingRecord) {
         await updateMutation.mutateAsync({ id: editingRecord.id, ...data });
         savedCandidate = editingRecord;
-        toast.success("Candidate updated");
       } else {
         const result = await createMutation.mutateAsync(data as any);
         savedCandidate = result;
-        toast.success("Candidate added");
       }
       if (rounds && rounds.length > 0 && savedCandidate?.id) {
         await createRoundsMutation.mutateAsync({
@@ -220,13 +218,11 @@ export default function RecruitmentPage() {
             notes: r.notes,
           })),
         });
-        toast.success(`${rounds.length} rounds created`);
       }
       setModalOpen(false);
       setEditingRecord(null);
       refetch();
     } catch (error: any) {
-      toast.error(error.message || "Failed to save");
     }
   };
 
@@ -234,11 +230,9 @@ export default function RecruitmentPage() {
     if (!deleteTarget) return;
     try {
       await deleteMutation.mutateAsync(deleteTarget.id);
-      toast.success("Candidate removed");
       setDeleteTarget(null);
       refetch();
     } catch (error: any) {
-      toast.error(error.message || "Failed to delete");
     }
   };
 
@@ -251,11 +245,9 @@ export default function RecruitmentPage() {
     if (!selectedCandidate) return;
     try {
       await updateRoundsMutation.mutateAsync({ candidateId: selectedCandidate.id, updates });
-      toast.success("Rounds updated");
       await refetchRounds();
       refetch();
     } catch (error: any) {
-      toast.error(error.message || "Failed to update rounds");
     }
   };
 

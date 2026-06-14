@@ -11,7 +11,6 @@ import { StatsCards } from "@/components/reuseable/StatsCards";
 import { TableView, GridView } from "@/components/reuseable/TableGridView";
 import { Plus, Pencil, Trash2, Search, Download, Shield, Clock, LayoutGrid, LayoutList, Building2, Briefcase, Award, Phone, Key, ToggleRight } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useConfirmation } from "@/contexts/ConfirmationModalContext";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -130,7 +129,6 @@ export default function EmployeesPage() {
       setStoredPrefillData(null);
       setSelectedRows(new Set());
     } catch (error: any) {
-      toast.error(error.message || "Failed to save employee");
     }
   };
 
@@ -144,9 +142,7 @@ export default function EmployeesPage() {
         try {
           await deleteEmployee.mutateAsync(employee.id);
           setSelectedRows(new Set());
-          toast.success(`${employee.first_name} ${employee.last_name || ''} deleted successfully`);
         } catch (error: any) {
-          toast.error(error.message || "Failed to delete employee");
         }
       },
     });
@@ -164,9 +160,7 @@ export default function EmployeesPage() {
         try {
           await Promise.all(selectedEmployees.map(emp => deleteEmployee.mutateAsync(emp.id)));
           setSelectedRows(new Set());
-          toast.success(`${selectedEmployees.length} employee(s) deleted successfully`);
         } catch (error: any) {
-          toast.error(error.message || "Failed to delete employees");
         }
       },
     });

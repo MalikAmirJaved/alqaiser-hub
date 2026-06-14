@@ -122,7 +122,7 @@ export const menuPermissionMapping: Record<string, string | null> = {
   "Alerts":               "INVENTORY:alert:view",
   "Customers":            "INVENTORY:customer:view",
   "Selling / POS":        "INVENTORY:sales_order:view",
-  "Audit Logs":           "INVENTORY:audit_log:view",
+  "Inventoy Audit Logs":  "INVENTORY:audit_log:view",
 
   // Sales
   "Sales Dashboard":    "SALES:dashboard:view",
@@ -146,6 +146,7 @@ export const menuPermissionMapping: Record<string, string | null> = {
   "Finance Payroll":          "FINANCE:forecast:view",
   "Taxes":                    "FINANCE:tax:view",
   "Forecast":                 "FINANCE:forecast:view",
+  "Finance Audit Logs":       "FINANCE:audit_log:view",
 
   // AI Monitoring
   "Live Dashboard":       "AI_MONITORING:live_dashboard:view",

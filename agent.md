@@ -463,6 +463,11 @@ Run the following commands inside `docker-compose exec backend <cmd>` to populat
 - The `apiFetch` function automatically shows:
   - ✅ **Success toast** for POST, PUT, PATCH, DELETE operations with `message` or `detail` in response.
   - ❌ **Error toast** for failed requests.
+- **DO NOT** add manual `toast.success()` or `toast.error()` calls for API responses in components — `apiFetch` already handles this. Adding duplicate toasts causes the same message to appear twice.
+- **ONLY** use manual `toast` calls for **frontend-only validation** scenarios:
+  - Form field validation errors (e.g., "Please fill in all required fields")
+  - Client-side input validation (e.g., "End date cannot be before start date")
+  - Confirmation feedback not tied to an API call (e.g., "Copied to clipboard")
 - All backend responses should include `message` or `detail` fields for user feedback.
 - Example API response:
   ```json
@@ -471,6 +476,25 @@ Run the following commands inside `docker-compose exec backend <cmd>` to populat
     "message": "Employee created successfully",
     "detail": "Employee John Doe added to the system"
   }
+  ```
+- Example of frontend-only toast usage (ALLOWED):
+  ```typescript
+  // ✅ CORRECT - frontend validation, no API call
+  if (!formData.name) {
+    toast.error("Please enter a name");
+    return;
+  }
+  ```
+- Example of redundant toast (FORBIDDEN):
+  ```typescript
+  // ❌ WRONG - apiFetch already shows toast for this API call
+  const { mutate } = useMutation({
+    mutationFn: (data) => api("/api/hr/employees/", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => {
+      toast.success("Employee created"); // REDUNDANT - apiFetch already shows this
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+    }
+  });
   ```
 
 #### **3. WebSocket Integration & Real-Time Updates**

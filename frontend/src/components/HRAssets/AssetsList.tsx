@@ -132,18 +132,14 @@ export default function AssetsList() {
         initialStock: 0,
         description: "",
       });
-      toast.success(editing ? "Asset updated" : "Asset created");
     } catch (error: any) {
-      toast.error(error.message || "Failed to save asset");
     }
   };
 
   const handleDelete = async (id: string) => {
     try {
       await deleteAsset.mutateAsync(id);
-      toast.success("Asset deleted");
     } catch (error: any) {
-      toast.error(error.message || "Failed to delete asset");
     }
   };
 

@@ -6,7 +6,6 @@ import PageHeader from "@/components/PageHeader";
 import { Plus, Pencil, Trash2, Search, UserPlus, ToggleRight } from "lucide-react";
 import UserForm from "@/components/Forms/UserForm";
 import UserStatusModal from "@/components/UserStatusModal";
-import { toast } from "sonner";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 export default function UsersPage() {
@@ -61,16 +60,12 @@ export default function UsersPage() {
     try {
       if (editingUser) {
         await updateUser.mutateAsync({ id: editingUser.id, data: userData });
-        toast.success("User updated");
       } else {
         const payload = { ...userData };
         if (storedPrefill?.isfrom_employee_id) {
           payload.isfrom_employee_id = storedPrefill.isfrom_employee_id;
         }
         const newUser = await createUser.mutateAsync(payload);
-        toast.success(
-          `User created. ${storedPrefill ? "Login access granted." : "Set permissions if needed."}`
-        );
           router.push(`/settings/permissions?userId=${newUser.id}`);
         
       }
@@ -78,7 +73,6 @@ export default function UsersPage() {
       setEditingUser(null);
       setStoredPrefill(null);
     } catch (error: any) {
-      toast.error(error.message || "Operation failed");
     }
   };
 
@@ -86,9 +80,7 @@ export default function UsersPage() {
     if (!confirm(`Delete user "${user.username}"?`)) return;
     try {
       await deleteUser.mutateAsync(user.id);
-      toast.success("User deleted");
     } catch (error: any) {
-      toast.error(error.message || "Delete failed");
     }
   };
 

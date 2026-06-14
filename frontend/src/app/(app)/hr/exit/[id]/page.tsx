@@ -6,7 +6,6 @@ import { useExitRecord, useUpdateExitRecord } from "@/hooks/useExitManagement";
 import { useActiveEmployees } from "@/hooks/useEmployees";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { toast } from "sonner";
 import { useState } from "react";
 import {
   ArrowLeft,
@@ -95,10 +94,8 @@ export default function ExitDetailPage() {
         final_settlement_status: statusForm.final_settlement_status,
         notes: statusForm.notes || record.notes,
       });
-      toast.success("Status updated successfully");
       setEditingStatus(false);
     } catch (err: any) {
-      toast.error(err.message || "Failed to update status");
     }
   };
 
