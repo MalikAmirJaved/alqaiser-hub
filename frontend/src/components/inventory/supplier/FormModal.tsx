@@ -17,6 +17,8 @@ interface FormField {
   step?: string;
   min?: number;
   max?: number;
+  minLength?: number;
+  maxLength?: number;
   placeholder?: string;
   options?: { value: string; label: string }[];
 }
@@ -145,6 +147,8 @@ export function FormModal({ open, onClose, title, fields, initialData, onSubmit,
             required: field.required ? `${field.label} is required` : false,
             min: field.min ? { value: field.min, message: `Minimum value is ${field.min}` } : undefined,
             max: field.max ? { value: field.max, message: `Maximum value is ${field.max}` } : undefined,
+            minLength: field.minLength ? { value: field.minLength, message: `${field.label} must be at least ${field.minLength} characters` } : undefined,
+            maxLength: field.maxLength ? { value: field.maxLength, message: `${field.label} must not exceed ${field.maxLength} characters` } : undefined,
           })}
           className={cn(hasError && "border-destructive")}
         />

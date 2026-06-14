@@ -36,7 +36,7 @@ const formFields = [
   { name: "name", label: "Name", type: "text", required: true, placeholder: "Company name" },
   { name: "contact_person", label: "Contact Person", type: "text", placeholder: "Full name" },
   { name: "email", label: "Email", type: "email", placeholder: "contact@company.com" },
-  { name: "phone", label: "Phone", type: "tel", placeholder: "+1 234 567 8900" },
+  { name: "phone", label: "Phone", type: "tel", minLength: 7, maxLength: 20, placeholder: "+1 234 567 8900" },
   { name: "address_line", label: "Address Line", type: "textarea", placeholder: "Street address" },
   { name: "country", label: "Country", type: "text", placeholder: "Country" },
   { name: "state", label: "State", type: "text", placeholder: "State/Province" },
