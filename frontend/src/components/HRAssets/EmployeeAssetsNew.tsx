@@ -142,6 +142,12 @@ export default function EmployeeAssetsNew() {
       // Deselect kit – nothing else needed; assets may remain selected individually (they were removed when kit was selected)
       newKitIds.delete(kitId);
     } else {
+      // Check kit stock
+      const totalAvailable = kit.assets.reduce((sum, a) => sum + (a.available_quantity || 0), 0);
+      if (totalAvailable <= 0) {
+        toast.error(`"${kit.name}" has no stock available`);
+        return;
+      }
       // Select kit – remove its assets from direct selections (to prevent double assignment)
       const newQuantities = { ...selectedAssetQuantities };
       kit.assets.forEach(asset => {
