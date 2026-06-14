@@ -1387,16 +1387,19 @@ class Policy(BaseModel):
 
     # Classification
     category = models.CharField(max_length=50, choices=Category.choices, db_index=True)
-    department = models.CharField(max_length=100, default="ALL", db_index=True)
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='policies'
+    )
     employee_type = models.CharField(max_length=20, choices=EmployeeType.choices, default='ALL', db_index=True)
 
     # Status
     status = models.CharField(max_length=20, choices=PolicyStatus.choices, default='DRAFT', db_index=True)
 
     # Dates
-    effective_date = models.DateField()
-    review_date = models.DateField(null=True, blank=True)
-    expiry_date = models.DateField(null=True, blank=True)
     approval_date = models.DateField(null=True, blank=True)
 
     # Content
@@ -1423,23 +1426,10 @@ class Policy(BaseModel):
             models.Index(fields=['company_id', 'department']),
             models.Index(fields=['company_id', 'employee_type']),
             models.Index(fields=['code']),
-            models.Index(fields=['effective_date']),
         ]
         constraints = [
             models.UniqueConstraint(fields=['company_id', 'code'], name='unique_company_policy_code')
         ]
-
-    @property
-    def is_expired(self):
-        if self.expiry_date:
-            return self.expiry_date < timezone.now().date()
-        return False
-
-    @property
-    def needs_review(self):
-        if self.review_date:
-            return self.review_date <= timezone.now().date()
-        return False
 
 
 # =========================================================
@@ -1476,7 +1466,6 @@ class PolicyVersion(BaseModel):
     content = models.TextField()
     document_url = models.URLField(max_length=500, null=True, blank=True)
     change_summary = models.TextField(null=True, blank=True)
-    effective_date = models.DateField()
     
     changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='policy_changes')
 

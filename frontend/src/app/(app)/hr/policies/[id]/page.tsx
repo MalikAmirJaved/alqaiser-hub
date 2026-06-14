@@ -7,7 +7,7 @@ import { useApi } from "@/hooks/useApi";
 import PageHeader from "@/components/PageHeader";
 import { 
   ArrowLeft, FileText, Users, Clock, CheckCircle, 
-  AlertCircle, Download, Eye, Calendar, User
+  AlertCircle, Download, User
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -16,13 +16,11 @@ interface PolicyDetail {
   code: string;
   title: string;
   category: string;
-  department: string;
+  department: string | null;
+  department_name?: string;
   employee_type: string;
   version: string;
   status: string;
-  effective_date: string;
-  review_date?: string;
-  expiry_date?: string;
   requires_acknowledgment: boolean;
   acknowledgment_deadline?: number;
   document_url?: string;
@@ -48,7 +46,6 @@ interface PolicyDetail {
     id: number;
     version: string;
     change_summary?: string;
-    effective_date: string;
     changed_by_name?: string;
     created_at: string;
   }>;
@@ -189,8 +186,9 @@ export default function PolicyDetailPage() {
                         <p className="text-xs text-muted-foreground mt-1">{version.change_summary}</p>
                       )}
                       <div className="text-[11px] text-muted-foreground mt-1">
-                        Effective: {new Date(version.effective_date).toLocaleDateString()}
-                        {version.changed_by_name && ` · By: ${version.changed_by_name}`}
+                        {version.changed_by_name && `By: ${version.changed_by_name}`}
+                        {version.changed_by_name && ' · '}
+                        {new Date(version.created_at).toLocaleDateString()}
                       </div>
                     </div>
                   </div>
@@ -212,28 +210,12 @@ export default function PolicyDetailPage() {
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Department</label>
-                <p className="text-sm">{policy.department}</p>
+                <p className="text-sm">{policy.department_name || 'All'}</p>
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Employee Type</label>
                 <p className="text-sm">{policy.employee_type}</p>
               </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Effective Date</label>
-                <p className="text-sm">{new Date(policy.effective_date).toLocaleDateString()}</p>
-              </div>
-              {policy.review_date && (
-                <div>
-                  <label className="text-xs text-muted-foreground">Review Date</label>
-                  <p className="text-sm">{new Date(policy.review_date).toLocaleDateString()}</p>
-                </div>
-              )}
-              {policy.expiry_date && (
-                <div>
-                  <label className="text-xs text-muted-foreground">Expiry Date</label>
-                  <p className="text-sm">{new Date(policy.expiry_date).toLocaleDateString()}</p>
-                </div>
-              )}
             </div>
           </div>
 

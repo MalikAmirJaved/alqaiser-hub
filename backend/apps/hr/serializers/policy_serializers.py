@@ -13,7 +13,7 @@ class PolicyVersionSerializer(serializers.ModelSerializer):
         model = PolicyVersion
         fields = [
             'id', 'version', 'content', 'document_url', 
-            'change_summary', 'effective_date', 'changed_by_name',
+            'change_summary', 'changed_by_name',
             'created_at'
         ]
         read_only_fields = ['id', 'created_at', 'changed_by_name']
@@ -48,17 +48,24 @@ class PolicyAcknowledgmentSerializer(serializers.ModelSerializer):
 class PolicyListSerializer(serializers.ModelSerializer):
     """Compact serializer for policy lists"""
     
+    id = serializers.UUIDField(source='_id', read_only=True)
     acknowledgment_stats = serializers.SerializerMethodField()
+    department_name = serializers.SerializerMethodField()
     
     class Meta:
         model = Policy
         fields = [
-            'id', 'code', 'title', 'category', 'department',
-            'employee_type', 'version', 'status', 'effective_date',
-            'review_date', 'expiry_date', 'requires_acknowledgment',
+            'id', 'code', 'title', 'category', 'department', 'department_name',
+            'employee_type', 'version', 'status',
+            'requires_acknowledgment',
             'acknowledgment_deadline', 'document_url', 'created_at',
             'acknowledgment_stats'
         ]
+    
+    def get_department_name(self, obj):
+        if obj.department:
+            return obj.department.name
+        return 'All'
     
     def get_acknowledgment_stats(self, obj):
         if not obj.requires_acknowledgment:
@@ -73,19 +80,20 @@ class PolicyListSerializer(serializers.ModelSerializer):
 class PolicyDetailSerializer(serializers.ModelSerializer):
     """Detailed serializer for single policy view"""
     
+    id = serializers.UUIDField(source='_id', read_only=True)
     approved_by_name = serializers.SerializerMethodField()
     created_by_name = serializers.SerializerMethodField()
     updated_by_name = serializers.SerializerMethodField()
     acknowledgments = PolicyAcknowledgmentSerializer(many=True, read_only=True)
     versions = PolicyVersionSerializer(many=True, read_only=True)
     acknowledgment_stats = serializers.SerializerMethodField()
+    department_name = serializers.SerializerMethodField()
     
     class Meta:
         model = Policy
         fields = [
-            'id', 'code', 'title', 'category', 'department',
+            'id', 'code', 'title', 'category', 'department', 'department_name',
             'employee_type', 'version', 'status',
-            'effective_date', 'review_date', 'expiry_date',
             'approval_date', 'requires_acknowledgment',
             'acknowledgment_deadline', 'document_url', 'content',
             'change_summary', 'approved_by', 'approved_by_name',
@@ -94,6 +102,11 @@ class PolicyDetailSerializer(serializers.ModelSerializer):
             'acknowledgments', 'versions', 'acknowledgment_stats',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_department_name(self, obj):
+        if obj.department:
+            return obj.department.name
+        return 'All'
     
     def get_approved_by_name(self, obj):
         if obj.approved_by:
@@ -114,7 +127,6 @@ class PolicyDetailSerializer(serializers.ModelSerializer):
         if not obj.requires_acknowledgment:
             return None
         
-        # Get total employees who should acknowledge
         from apps.hr.models import Employee
         total_employees = Employee.objects.filter(
             company=obj.company,
@@ -141,7 +153,6 @@ class PolicyCreateUpdateSerializer(serializers.ModelSerializer):
         fields = [
             'code', 'title', 'category', 'department',
             'employee_type', 'version', 'status',
-            'effective_date', 'review_date', 'expiry_date',
             'requires_acknowledgment', 'acknowledgment_deadline',
             'document_url', 'content', 'change_summary',
             'approved_by', 'approval_date'
@@ -152,7 +163,6 @@ class PolicyCreateUpdateSerializer(serializers.ModelSerializer):
         company = self.context['request'].user.company_id
         instance = self.instance
         
-        # Check for duplicates excluding current instance
         queryset = Policy.objects.filter(company_id=company, code=value)
         if instance:
             queryset = queryset.exclude(pk=instance.pk)
@@ -164,21 +174,10 @@ class PolicyCreateUpdateSerializer(serializers.ModelSerializer):
     
     def validate(self, data):
         """Cross-field validation"""
-        if data.get('status') == 'PUBLISHED' and not data.get('effective_date'):
-            raise serializers.ValidationError({
-                'effective_date': 'Effective date is required for published policies.'
-            })
-        
         if data.get('requires_acknowledgment') and not data.get('acknowledgment_deadline'):
             raise serializers.ValidationError({
                 'acknowledgment_deadline': 'Acknowledgment deadline is required when acknowledgment is required.'
             })
-        
-        if data.get('expiry_date') and data.get('effective_date'):
-            if data['expiry_date'] <= data['effective_date']:
-                raise serializers.ValidationError({
-                    'expiry_date': 'Expiry date must be after effective date.'
-                })
         
         return data
     
@@ -193,14 +192,12 @@ class PolicyCreateUpdateSerializer(serializers.ModelSerializer):
             **validated_data
         )
         
-        # Create initial version - remove company_id, created_by, updated_by
         PolicyVersion.objects.create(
             policy=policy,
             version=policy.version,
             content=policy.content,
             document_url=policy.document_url,
             change_summary="Initial version created",
-            effective_date=policy.effective_date,
             changed_by=self.context['request'].user,
         )
         
@@ -211,13 +208,11 @@ class PolicyCreateUpdateSerializer(serializers.ModelSerializer):
         """Update policy with version tracking"""
         old_version = instance.version
         
-        # Update instance
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         
         instance.updated_by = self.context['request'].user
         
-        # Create new version if version changed
         if 'version' in validated_data and validated_data['version'] != old_version:
             PolicyVersion.objects.create(
                 company_id=instance.company_id,
@@ -226,7 +221,6 @@ class PolicyCreateUpdateSerializer(serializers.ModelSerializer):
                 content=instance.content,
                 document_url=instance.document_url,
                 change_summary=validated_data.get('change_summary', ''),
-                effective_date=instance.effective_date,
                 changed_by=self.context['request'].user,
                 created_by=self.context['request'].user,
                 updated_by=self.context['request'].user,

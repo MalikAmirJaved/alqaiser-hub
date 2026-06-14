@@ -11,13 +11,11 @@ export interface PolicyRecord {
   code: string;
   title: string;
   category: string;
-  department: string;
+  department: string | null;
+  department_name?: string;
   employee_type: string;
   version: string;
   status: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "PUBLISHED" | "ARCHIVED" | "REVOKED";
-  effective_date: string;
-  review_date?: string;
-  expiry_date?: string;
   requires_acknowledgment: boolean;
   acknowledgment_deadline?: number;
   document_url?: string;
@@ -55,7 +53,6 @@ export interface PolicyDetail extends PolicyRecord {
     content: string;
     document_url?: string;
     change_summary?: string;
-    effective_date: string;
     changed_by_name?: string;
     created_at: string;
   }>;
@@ -70,8 +67,6 @@ export interface PolicyStats {
   archivedPolicies: number;
   policiesRequiringAck: number;
   totalAcknowledgments: number;
-  expiringSoon: number;
-  overdueReview: number;
   statusDistribution: Record<string, number>;
   categoryDistribution: Array<{ category: string; count: number }>;
   departmentDistribution: Array<{ department: string; count: number }>;
@@ -85,8 +80,6 @@ export interface PolicyFilters {
   department?: string;
   employeeType?: string;
   requiresAcknowledgment?: string;
-  dateFrom?: string;
-  dateTo?: string;
   sortBy?: string;
   page?: number;
   pageSize?: number;
@@ -96,13 +89,10 @@ export interface PolicyFormData {
   code: string;
   title: string;
   category: string;
-  department: string;
+  department: string | null;
   employee_type: string;
   version: string;
   status: PolicyRecord['status'];
-  effective_date: string;
-  review_date?: string;
-  expiry_date?: string;
   requires_acknowledgment: boolean;
   acknowledgment_deadline?: number;
   document_url?: string;
@@ -235,7 +225,7 @@ export function usePolicyCategories() {
   return useQuery<PolicyCategory[]>({
     queryKey: ["policyCategories"],
     queryFn: () => api("/api/hr/policies/categories/"),
-    staleTime: 60 * 1000, // Categories change less frequently
+    staleTime: 60 * 1000,
     gcTime: 10 * 60 * 1000,
     retry: 2,
   });
@@ -382,7 +372,6 @@ export function useCreatePolicyCategory() {
 
 /**
  * Convenience hook that bundles all policy operations together
- * Similar to useCompanySettings pattern
  */
 export function usePolicyOperations() {
   const queries = {
@@ -407,7 +396,6 @@ export function usePolicyOperations() {
     queries,
     mutations,
     
-    // Convenience loading states
     isCreating: mutations.createPolicy.isPending,
     isUpdating: mutations.updatePolicy.isPending,
     isDeleting: mutations.deletePolicy.isPending,

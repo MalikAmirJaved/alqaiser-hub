@@ -175,6 +175,7 @@ function VariantCard({
   const [imgUrl, setImgUrl] = useState("");
   const [addingImg, setAddingImg] = useState(false);
   const { CurrencyCode } = useCompanySettings();
+  const { generateCode, validateCode } = useAutoCode("account");
 
   const images: string[] = watch(`variants.${index}.images`) || [];
   const sku: string = watch(`variants.${index}.sku`) || `Variant ${index + 1}`;
