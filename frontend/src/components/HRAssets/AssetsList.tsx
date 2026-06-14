@@ -102,21 +102,21 @@ export default function AssetsList() {
           id: editing.id,
           name: form.name,
           brand: form.brand,
-          serialNumber: form.sku,
+          serial_number: form.sku,
           description: finalDescription,
-          isActive: true,
+          is_active: true,
         });
       } else {
         await createAsset.mutateAsync({
           name: form.name,
           brand: form.brand || undefined,
-          serialNumber: form.sku || undefined,
-          totalQuantity: form.initialStock,
-          availableQuantity: form.initialStock,
+          serial_number: form.sku || undefined,
+          total_quantity: form.initialStock,
+          available_quantity: form.initialStock,
           description: finalDescription,
-          isActive: true,
-          purchaseDate: new Date().toISOString().split("T")[0],
-          purchasePrice: 0,
+          is_active: true,
+          purchase_date: new Date().toISOString().split("T")[0],
+          purchase_price: 0,
         });
       }
 

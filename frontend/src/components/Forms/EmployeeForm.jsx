@@ -38,7 +38,6 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
     emergency_contact_name: "",
     emergency_contact_phone: "",
     emergency_contact_relation: "",
-    role: "STAFF",
     department_id: "",
     designation_id: "",               // <-- changed from designation
     employment_type: "FULL_TIME",
@@ -101,7 +100,6 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
   const getManagerEmployees = () => {
     return employees.filter(emp =>
       emp.employment_status === 'ACTIVE' && (
-        emp.role !== 'STAFF' ||
         emp.designation_name?.toLowerCase().includes('manager') ||
         emp.designation_name?.toLowerCase().includes('lead') ||
         emp.designation_name?.toLowerCase().includes('director')
@@ -148,7 +146,6 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
         emergency_contact_name: formData.emergency_contact_name,
         emergency_contact_phone: formData.emergency_contact_phone,
         emergency_contact_relation: formData.emergency_contact_relation,
-        role: formData.role,
         department_id: formData.department_id || null,
         designation_id: formData.designation_id || null,
         employment_type: formData.employment_type,
@@ -272,30 +269,26 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 <Briefcase className="w-4 h-4" />
                 Employment Information
               </h3>
-
               <div className="grid grid-cols-2 gap-3">
+
                 <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground text-xs">Role</span>
-                  <SearchableSelect value={formData.role} onChange={(val) => handleChange("role", val)} options={[{ value: "STAFF", label: "Staff" }, { value: "BRANCH_ADMIN", label: "Branch Admin" }, { value: "COMPANY_ADMIN", label: "Company Admin" }]} placeholder="Select Role" />
-                </label>
+                    <span className="text-muted-foreground text-xs">Department *</span>
+                    <SearchableSelect value={formData.department_id} onChange={(val) => handleChange("department_id", val)} options={departmentOptions} required placeholder="Select Department" onAddNew={() => setDeptModalOpen(true)} addNewLabel="+ New Department" />
+                  </label>
+
                 <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground text-xs">Department *</span>
-                  <SearchableSelect value={formData.department_id} onChange={(val) => handleChange("department_id", val)} options={departmentOptions} required placeholder="Select Department" onAddNew={() => setDeptModalOpen(true)} addNewLabel="+ New Department" />
+                  <span className="text-muted-foreground text-xs">Designation</span>
+                  <SearchableSelect
+                    value={formData.designation_id}
+                    onChange={(val) => handleChange("designation_id", val)}
+                    options={designationOptions}
+                    disabled={!formData.department_id}
+                    placeholder="Select Designation"
+                    onAddNew={() => setDesigModalOpen(true)}
+                    addNewLabel="+ New Designation"
+                  />
                 </label>
               </div>
-
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground text-xs">Designation</span>
-                <SearchableSelect
-                  value={formData.designation_id}
-                  onChange={(val) => handleChange("designation_id", val)}
-                  options={designationOptions}
-                  disabled={!formData.department_id}
-                  placeholder="Select Designation"
-                  onAddNew={() => setDesigModalOpen(true)}
-                  addNewLabel="+ New Designation"
-                />
-              </label>
 
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-sm flex flex-col gap-1">

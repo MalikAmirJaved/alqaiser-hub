@@ -209,7 +209,7 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             emergency_contact_name=request.data.get('emergency_contact_name'),
             emergency_contact_phone=request.data.get('emergency_contact_phone'),
             emergency_contact_relation=request.data.get('emergency_contact_relation'),
-            role=request.data.get('role', 'STAFF'),
+            role='STAFF',
             department=department,
             designation=designation,
             employment_type=request.data.get('employment_type', 'FULL_TIME'),
@@ -358,7 +358,7 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 'gender', 'marital_status', 'phone', 'email', 'personal_email',
                 'address_line', 'country', 'state', 'city', 'postal_code',
                 'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation',
-                'role', 'employment_type', 'employment_status',
+                'employment_type', 'employment_status',
                 'work_location', 'bank_name', 'bank_account_number', 'bank_iban',
                 'probation_days',
             ]
