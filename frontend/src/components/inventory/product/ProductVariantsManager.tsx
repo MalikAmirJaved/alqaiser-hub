@@ -17,7 +17,7 @@ interface Variant {
   attribute_combination: Record<string, string>;
   cost_price: number;
   selling_price: number;
-  special_price?: number;
+  special_price?: number | null;
   main_image?: string;
   status: string;
 }
@@ -26,9 +26,10 @@ interface ProductVariantsManagerProps {
   product: any;
   variants: Variant[];
   onChange: (variants: Variant[]) => void;
+  errors?: Record<string, string>;
 }
 
-export default function ProductVariantsManager({ product, variants, onChange }: ProductVariantsManagerProps) {
+export default function ProductVariantsManager({ product, variants, onChange, errors = {} }: ProductVariantsManagerProps) {
   const [attributeDefinitions] = useState<Record<string, string[]>>({
     Color: ["Red", "Blue", "Green", "Black", "White"],
     Size: ["XS", "S", "M", "L", "XL"],
@@ -52,8 +53,8 @@ export default function ProductVariantsManager({ product, variants, onChange }: 
         newVariants.push({
           sku: variantSKU,
           attribute_combination: combo,
-          cost_price: product.cost_price || 0,
-          selling_price: product.selling_price || 0,
+          cost_price: 0,
+          selling_price: 0,
           status: "active",
         });
       }
@@ -125,10 +126,11 @@ export default function ProductVariantsManager({ product, variants, onChange }: 
       <div className="space-y-3">
         <div className="flex justify-between items-center">
           <div><h3 className="font-medium">Product Variants</h3><p className="text-xs text-muted-foreground">{variants.length} variant(s)</p></div>
-          <Button size="sm" variant="outline" onClick={() => onChange([...variants, { sku: `${product.sku}-VAR${variants.length+1}`, attribute_combination: {}, cost_price: product.cost_price, selling_price: product.selling_price, status: "active" }])}>
+          <Button size="sm" variant="outline" onClick={() => onChange([...variants, { sku: `${product.sku}-VAR${variants.length+1}`, attribute_combination: {}, cost_price: 0, selling_price: 0, status: "active" }])}>
             <Plus className="w-4 h-4 mr-1" /> Add Manual
           </Button>
         </div>
+        {errors.variants && <p className="text-xs text-destructive">{errors.variants}</p>}
         {variants.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg"><Package className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>No variants yet</p></div>
         ) : (
@@ -140,7 +142,7 @@ export default function ProductVariantsManager({ product, variants, onChange }: 
                   <div><div className="font-medium">{Object.keys(variant.attribute_combination).length ? getVariantDisplayName(variant) : `Variant ${idx+1}`}</div><div className="text-xs font-mono text-muted-foreground">SKU: {variant.sku}</div></div>
                 </div>
                 <div className="flex items-center gap-4">
-                  <div className="text-right"><div className="font-medium text-success">${variant.selling_price?.toFixed(2)}</div><div className="text-xs text-muted-foreground line-through">${variant.cost_price?.toFixed(2)}</div></div>
+                  <div className="text-right"><div className="font-medium text-success">${variant.selling_price}</div><div className="text-xs text-muted-foreground line-through">${variant.cost_price}</div></div>
                   <Badge variant={variant.status === "active" ? "default" : "secondary"}>{variant.status}</Badge>
                   <div className="flex gap-1">
                     <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); duplicateVariant(idx); }} className="h-8 w-8"><Copy className="w-3.5 h-3.5" /></Button>
@@ -150,11 +152,11 @@ export default function ProductVariantsManager({ product, variants, onChange }: 
               </div>
               {expandedVariant === String(idx) && (
                 <div className="border-t p-4 bg-muted/5">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <div><Label className="text-xs">SKU</Label><Input value={variant.sku} onChange={(e) => updateVariant(idx, { sku: e.target.value.toUpperCase() })} className="mt-1 h-8" /></div>
                     <div><Label className="text-xs">Barcode</Label><Input value={variant.barcode || ""} onChange={(e) => updateVariant(idx, { barcode: e.target.value })} className="mt-1 h-8" /></div>
                     <div><Label className="text-xs">Cost Price</Label><Input type="number" step="0.01" value={variant.cost_price} onChange={(e) => updateVariant(idx, { cost_price: parseFloat(e.target.value) || 0 })} className="mt-1 h-8" /></div>
-                    <div><Label className="text-xs">Selling Price</Label><Input type="number" step="0.01" value={variant.selling_price} onChange={(e) => updateVariant(idx, { selling_price: parseFloat(e.target.value) || 0 })} className="mt-1 h-8" /></div>
+                    <div><Label className="text-xs">Selling Price <span className="text-destructive">*</span></Label><Input type="number" step="0.01" value={variant.selling_price} onChange={(e) => updateVariant(idx, { selling_price: parseFloat(e.target.value) || 0 })} className={`mt-1 h-8 ${errors[`variant_${idx}_price`] ? "border-destructive" : ""}`} /></div>
                     <div><Label className="text-xs">Status</Label><select value={variant.status} onChange={(e) => updateVariant(idx, { status: e.target.value })} className="w-full mt-1 h-8 rounded-md border border-border bg-background px-2"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
                   </div>
                 </div>

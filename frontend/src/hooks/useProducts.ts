@@ -6,7 +6,30 @@ import { useApi } from "@/hooks/useApi";
 export interface Tag {
   id: string;
   name: string;
+  slug?: string;
   color?: string;
+  group?: { id: string; name: string } | null;
+}
+
+export interface ProductVariant {
+  id?: number;
+  sku: string;
+  barcode?: string;
+  attribute_combination: Record<string, string>;
+  cost_price: number;
+  selling_price: number;
+  special_price?: number | null;
+  main_image?: string;
+  status: string;
+}
+
+export interface ProductAttribute {
+  id?: number;
+  attribute_name: string;
+  attribute_value: string;
+  attribute_group?: string;
+  is_filterable: boolean;
+  display_order: number;
 }
 
 export interface Product {
@@ -20,37 +43,19 @@ export interface Product {
   brand_id: string;
   product_type: string;
   unit_of_measure: string;
-  cost_price: number;
-  selling_price: number;
-  special_price: number | null;
-  special_price_from: string | null;
-  special_price_to: string | null;
-  msrp: number | null;
   tax_class: string;
-  tax_rate: number | null;
   main_image: string;
   gallery_images: string[];
   video_url: string;
   status: string;
   created_at: string;
   updated_at: string;
-  variants: any[];
-  attributes: any[];
-  tags: any[];
-  inventory: any[];
+  variants: ProductVariant[];
+  attributes: ProductAttribute[];
+  tags: Tag[];
 }
 
-export interface ProductStats {
-  total_products: number;
-  active_products: number;
-  draft_products: number;
-  archived_products: number;
-  total_stock: number;
-  total_reserved: number;
-  total_inventory_value: number;
-}
-
-// Fetch all products
+// Remove stats – will be moved to separate module
 export function useProducts(filters?: Record<string, any>) {
   const api = useApi();
   let url = "/api/inventory/products/";
@@ -70,7 +75,6 @@ export function useProducts(filters?: Record<string, any>) {
   });
 }
 
-// Fetch single product
 export function useProduct(id: number | null) {
   const api = useApi();
   return useQuery<Product>({
@@ -80,46 +84,31 @@ export function useProduct(id: number | null) {
   });
 }
 
-// Stats
-export function useProductStats() {
-  const api = useApi();
-  return useQuery<ProductStats>({
-    queryKey: ["productStats"],
-    queryFn: () => api("/api/inventory/products/stats/"),
-    staleTime: 60 * 1000,
-  });
-}
-
-// Create
 export function useCreateProduct() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Omit<Product, "id" | "created_at" | "updated_at">) =>
+    mutationFn: (data: any) =>
       api("/api/inventory/products/", { method: "POST", body: JSON.stringify(data) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
-      queryClient.invalidateQueries({ queryKey: ["productStats"] });
     },
   });
 }
 
-// Update
 export function useUpdateProduct() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: Partial<Product> & { id: number }) =>
+    mutationFn: ({ id, ...data }: { id: number } & any) =>
       api(`/api/inventory/products/${id}/`, { method: "PATCH", body: JSON.stringify(data) }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["product", variables.id] });
-      queryClient.invalidateQueries({ queryKey: ["productStats"] });
     },
   });
 }
 
-// Delete
 export function useDeleteProduct() {
   const api = useApi();
   const queryClient = useQueryClient();
@@ -127,15 +116,13 @@ export function useDeleteProduct() {
     mutationFn: (id: number) => api(`/api/inventory/products/${id}/`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
-      queryClient.invalidateQueries({ queryKey: ["productStats"] });
     },
   });
 }
 
-// Tags
+// Tags remain for listing, but product creation/update uses tag_input
 export function useTags() {
   const api = useApi();
-
   return useQuery<Tag[]>({
     queryKey: ["tags"],
     queryFn: () => api("/api/inventory/tags/"),

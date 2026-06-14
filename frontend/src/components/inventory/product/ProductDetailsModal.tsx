@@ -183,7 +183,7 @@ export default function ProductDetailsModal({
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="font-medium text-success">${variant.selling_price?.toFixed(2)}</div>
+                            <div className="font-medium text-success">${variant.selling_price}</div>
                             <div className="text-sm text-muted-foreground">Stock: {variantStock}</div>
                           </div>
                         </div>

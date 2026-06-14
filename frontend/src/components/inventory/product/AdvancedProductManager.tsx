@@ -1,24 +1,22 @@
 // src/components/inventory/product/AdvancedProductManager.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Package, Layers, DollarSign, Tag, ImageIcon, Truck, ClipboardList } from "lucide-react";
+import { Package, Layers, Tag, ImageIcon, ClipboardList } from "lucide-react";
 import ProductBasicInfo from "./ProductBasicInfo";
 import ProductVariantsManager from "./ProductVariantsManager";
 import ProductAttributesManager from "./ProductAttributesManager";
-import ProductPricingTax from "./ProductPricingTax";
-import ProductInventoryManager from "./ProductInventoryManager";
 import ProductMediaGallery from "./ProductMediaGallery";
 import ProductTagsManager from "./ProductTagsManager";
 
 interface AdvancedProductManagerProps {
-  product: any;                 // existing product or null for create
+  product: any;
   categories: any[];
   brands: any[];
   tags: any[];
-  warehouses: any[];
+  warehouses?: any[]; // kept for future, not used in form
   onSave: (productData: any) => Promise<void>;
   onCancel: () => void;
 }
@@ -28,13 +26,22 @@ export default function AdvancedProductManager({
   categories,
   brands,
   tags,
-  warehouses,
   onSave,
   onCancel,
 }: AdvancedProductManagerProps) {
   const [activeTab, setActiveTab] = useState("basic");
   const [formData, setFormData] = useState<any>(() => {
-    if (product) return { ...product };
+    if (product) {
+      // Convert existing tags to tag_input format (list of {name, group?})
+      const tagInput = (product.tags || []).map((t: any) => ({
+        name: t.name,
+        group: t.group?.name || undefined,
+      }));
+      return {
+        ...product,
+        tag_input: tagInput,
+      };
+    }
     return {
       sku: generateSKU(),
       name: "",
@@ -44,17 +51,14 @@ export default function AdvancedProductManager({
       brand_id: "",
       product_type: "simple",
       unit_of_measure: "PCS",
-      cost_price: 0,
-      selling_price: 0,
-      status: "draft",
+      tax_class: "standard",
       main_image: "",
       gallery_images: [],
       video_url: "",
-      tax_class: "standard",
+      status: "draft",
       attributes: [],
       variants: [],
-      inventory: [],
-      tags: [],
+      tag_input: [], // array of {name, group?}
     };
   });
 
@@ -70,6 +74,25 @@ export default function AdvancedProductManager({
     if (!formData.name) newErrors.name = "Product name required";
     if (!formData.sku) newErrors.sku = "SKU required";
     if (!formData.category_id) newErrors.category = "Category required";
+    // Validate variants have prices if product_type is variable
+    if (formData.product_type === "variable" && (!formData.variants || formData.variants.length === 0)) {
+      newErrors.variants = "At least one variant required for variable product";
+    }
+    if (formData.product_type === "variable") {
+      for (let i = 0; i < formData.variants.length; i++) {
+        const v = formData.variants[i];
+        if (!v.selling_price || v.selling_price <= 0) {
+          newErrors[`variant_${i}_price`] = `Variant ${i+1} selling price required`;
+        }
+      }
+    } else if (formData.product_type === "simple") {
+      // For simple products, ensure exactly one variant with price
+      if (!formData.variants || formData.variants.length === 0) {
+        newErrors.variants = "Simple product must have one variant with price";
+      } else if (!formData.variants[0].selling_price || formData.variants[0].selling_price <= 0) {
+        newErrors.variants = "Selling price required for the product variant";
+      }
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -81,7 +104,23 @@ export default function AdvancedProductManager({
     }
     setSaving(true);
     try {
-      await onSave(formData);
+      // Prepare data for backend
+      const payload = { ...formData };
+      // Remove any id fields from nested objects (backend will recreate)
+      if (payload.variants) {
+        payload.variants = payload.variants.map((v: any) => {
+          const { id, ...rest } = v;
+          return rest;
+        });
+      }
+      if (payload.attributes) {
+        payload.attributes = payload.attributes.map((a: any) => {
+          const { id, ...rest } = a;
+          return rest;
+        });
+      }
+      // tag_input already in correct format
+      await onSave(payload);
     } finally {
       setSaving(false);
     }
@@ -110,12 +149,8 @@ export default function AdvancedProductManager({
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
           <TabsList className="px-6 pt-2 border-b border-border justify-start gap-1 bg-transparent flex-wrap h-auto">
             <TabsTrigger value="basic"><Package className="w-4 h-4 mr-2" /> Basic Info</TabsTrigger>
-            {formData.product_type === "variable" && (
-              <TabsTrigger value="variants"><Layers className="w-4 h-4 mr-2" /> Variants</TabsTrigger>
-            )}
+            <TabsTrigger value="variants"><Layers className="w-4 h-4 mr-2" /> Variants</TabsTrigger>
             <TabsTrigger value="attributes"><ClipboardList className="w-4 h-4 mr-2" /> Attributes</TabsTrigger>
-            <TabsTrigger value="pricing"><DollarSign className="w-4 h-4 mr-2" /> Pricing</TabsTrigger>
-            <TabsTrigger value="inventory"><Truck className="w-4 h-4 mr-2" /> Inventory</TabsTrigger>
             <TabsTrigger value="tags"><Tag className="w-4 h-4 mr-2" /> Tags</TabsTrigger>
             <TabsTrigger value="media"><ImageIcon className="w-4 h-4 mr-2" /> Media</TabsTrigger>
           </TabsList>
@@ -135,6 +170,7 @@ export default function AdvancedProductManager({
                 product={formData}
                 variants={formData.variants || []}
                 onChange={(variants) => updateFormData({ variants })}
+                errors={errors}
               />
             </TabsContent>
             <TabsContent value="attributes">
@@ -144,27 +180,12 @@ export default function AdvancedProductManager({
                 onChange={(attributes) => updateFormData({ attributes })}
               />
             </TabsContent>
-            <TabsContent value="pricing">
-              <ProductPricingTax
-                product={formData}
-                onChange={updateFormData}
-              />
-            </TabsContent>
-            <TabsContent value="inventory">
-              <ProductInventoryManager
-                product={formData}
-                variants={formData.variants || []}
-                inventoryRecords={formData.inventory || []}
-                warehouses={warehouses}
-                onChange={(inventory) => updateFormData({ inventory })}
-              />
-            </TabsContent>
             <TabsContent value="tags">
               <ProductTagsManager
                 product={formData}
-                tags={formData.tags || []}
+                tagInput={formData.tag_input || []}
                 allTags={tags}
-                onChange={(tags) => updateFormData({ tags })}
+                onChange={(tagInput) => updateFormData({ tag_input: tagInput })}
               />
             </TabsContent>
             <TabsContent value="media">

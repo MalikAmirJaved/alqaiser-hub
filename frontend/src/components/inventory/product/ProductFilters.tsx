@@ -21,7 +21,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
 import {
   Accordion,
   AccordionContent,
@@ -31,12 +30,8 @@ import {
 import {
   Filter,
   X,
-  ChevronDown,
-  Tag,
   Package,
   Layers,
-  DollarSign,
-  TrendingUp,
   Star,
   Clock,
   RefreshCw,
@@ -47,10 +42,6 @@ interface ProductFiltersProps {
     category: string;
     brand: string;
     status: string;
-    minPrice: string;
-    maxPrice: string;
-    stockStatus: string;
-    tags: string[];
     productType: string;
     sortBy: string;
     sortOrder: string;
@@ -58,7 +49,7 @@ interface ProductFiltersProps {
   onChange: (filters: any) => void;
   categories: any[];
   brands: any[];
-  tags?: any[];
+  tags?: any[]; // kept for future use, not used in filters
 }
 
 export default function ProductFilters({
@@ -69,10 +60,6 @@ export default function ProductFilters({
   tags = [],
 }: ProductFiltersProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [priceRange, setPriceRange] = useState<[number, number]>([
-    parseInt(filters.minPrice) || 0,
-    parseInt(filters.maxPrice) || 100000,
-  ]);
   const [activeFilterCount, setActiveFilterCount] = useState(0);
 
   // Count active filters
@@ -81,11 +68,7 @@ export default function ProductFilters({
     if (filters.category) count++;
     if (filters.brand) count++;
     if (filters.status) count++;
-    if (filters.minPrice) count++;
-    if (filters.maxPrice) count++;
-    if (filters.stockStatus) count++;
     if (filters.productType) count++;
-    if (filters.tags.length > 0) count += filters.tags.length;
     setActiveFilterCount(count);
   }, [filters]);
 
@@ -94,7 +77,7 @@ export default function ProductFilters({
   };
 
   const clearFilter = (key: string) => {
-    onChange({ ...filters, [key]: key === "tags" ? [] : "" });
+    onChange({ ...filters, [key]: "" });
   };
 
   const clearAllFilters = () => {
@@ -102,58 +85,25 @@ export default function ProductFilters({
       category: "",
       brand: "",
       status: "",
-      minPrice: "",
-      maxPrice: "",
-      stockStatus: "",
-      tags: [],
       productType: "",
       sortBy: "",
       sortOrder: "asc",
     });
-    setPriceRange([0, 100000]);
-  };
-
-  const toggleTag = (tagId: string) => {
-    const currentTags = filters.tags;
-    if (currentTags.includes(tagId)) {
-      updateFilter("tags", currentTags.filter((id: string) => id !== tagId));
-    } else {
-      updateFilter("tags", [...currentTags, tagId]);
-    }
-  };
-
-  const handlePriceRangeChange = (values: number[]) => {
-    setPriceRange([values[0], values[1]]);
-  };
-
-  const applyPriceRange = () => {
-    updateFilter("minPrice", priceRange[0].toString());
-    updateFilter("maxPrice", priceRange[1].toString());
   };
 
   const sortOptions = [
     { value: "name_asc", label: "Name (A-Z)" },
     { value: "name_desc", label: "Name (Z-A)" },
-    { value: "price_asc", label: "Price (Low to High)" },
-    { value: "price_desc", label: "Price (High to Low)" },
-    { value: "stock_asc", label: "Stock (Low to High)" },
-    { value: "stock_desc", label: "Stock (High to Low)" },
     { value: "created_desc", label: "Newest First" },
     { value: "created_asc", label: "Oldest First" },
   ];
 
   const productTypes = [
-    { value: "simple", label: "Simple Products", icon: Package },
-    { value: "variable", label: "Variable Products", icon: Layers },
-    { value: "bundle", label: "Bundle Products", icon: Package },
-    { value: "digital", label: "Digital Products", icon: Package },
-    { value: "service", label: "Services", icon: Package },
-  ];
-
-  const stockStatuses = [
-    { value: "in", label: "In Stock", color: "text-success" },
-    { value: "low", label: "Low Stock (<10)", color: "text-warning" },
-    { value: "out", label: "Out of Stock", color: "text-destructive" },
+    { value: "simple", label: "Simple Products" },
+    { value: "variable", label: "Variable Products" },
+    { value: "bundle", label: "Bundle Products" },
+    { value: "digital", label: "Digital Products" },
+    { value: "service", label: "Services" },
   ];
 
   const statuses = [
@@ -215,15 +165,6 @@ export default function ProductFilters({
           </Badge>
         )}
         
-        {filters.stockStatus && (
-          <Badge variant="secondary" className="gap-1 px-2 py-1">
-            Stock: {stockStatuses.find(s => s.value === filters.stockStatus)?.label}
-            <button onClick={() => clearFilter("stockStatus")} className="ml-1 hover:text-destructive">
-              <X className="w-3 h-3" />
-            </button>
-          </Badge>
-        )}
-        
         {filters.productType && (
           <Badge variant="secondary" className="gap-1 px-2 py-1">
             Type: {productTypes.find(t => t.value === filters.productType)?.label}
@@ -232,36 +173,6 @@ export default function ProductFilters({
             </button>
           </Badge>
         )}
-        
-        {(filters.minPrice || filters.maxPrice) && (
-          <Badge variant="secondary" className="gap-1 px-2 py-1">
-            Price: ${filters.minPrice || 0} - ${filters.maxPrice || "∞"}
-            <button onClick={() => {
-              clearFilter("minPrice");
-              clearFilter("maxPrice");
-              setPriceRange([0, 100000]);
-            }} className="ml-1 hover:text-destructive">
-              <X className="w-3 h-3" />
-            </button>
-          </Badge>
-        )}
-        
-        {filters.tags.map((tagId: string) => {
-          const tag = tags.find(t => t.id === tagId);
-          return tag ? (
-            <Badge
-              key={tagId}
-              style={{ backgroundColor: tag.color ? `${tag.color}20` : undefined }}
-              className="gap-1 px-2 py-1"
-            >
-              <Tag className="w-3 h-3" style={{ color: tag.color }} />
-              {tag.name}
-              <button onClick={() => toggleTag(tagId)} className="ml-1 hover:text-destructive">
-                <X className="w-3 h-3" />
-              </button>
-            </Badge>
-          ) : null;
-        })}
         
         {activeFilterCount > 0 && (
           <Button
@@ -291,7 +202,7 @@ export default function ProductFilters({
             <SheetHeader>
               <SheetTitle>Filter Products</SheetTitle>
               <SheetDescription>
-                Refine your product list with advanced filters
+                Refine your product list
               </SheetDescription>
             </SheetHeader>
 
@@ -382,83 +293,6 @@ export default function ProductFilters({
                 </AccordionItem>
               </Accordion>
 
-              {/* Price Range Filter */}
-              <Accordion type="single" collapsible>
-                <AccordionItem value="price">
-                  <AccordionTrigger className="text-sm font-medium">
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="w-4 h-4" />
-                      Price Range
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-4">
-                      <div className="pt-2">
-                        <Slider
-                          value={priceRange}
-                          min={0}
-                          max={100000}
-                          step={100}
-                          onValueChange={handlePriceRangeChange}
-                          className="my-4"
-                        />
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Min</span>
-                          <span className="text-muted-foreground">Max</span>
-                        </div>
-                        <div className="flex gap-2 mt-1">
-                          <Input
-                            type="number"
-                            value={priceRange[0]}
-                            onChange={(e) => setPriceRange([parseInt(e.target.value) || 0, priceRange[1]])}
-                            className="h-8 text-sm"
-                          />
-                          <span className="text-muted-foreground">to</span>
-                          <Input
-                            type="number"
-                            value={priceRange[1]}
-                            onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value) || 100000])}
-                            className="h-8 text-sm"
-                          />
-                        </div>
-                      </div>
-                      <Button onClick={applyPriceRange} size="sm" className="w-full">
-                        Apply Price Range
-                      </Button>
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-
-              {/* Stock Status Filter */}
-              <Accordion type="single" collapsible>
-                <AccordionItem value="stock">
-                  <AccordionTrigger className="text-sm font-medium">
-                    <div className="flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4" />
-                      Stock Status
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-2">
-                      {stockStatuses.map((status) => (
-                        <button
-                          key={status.value}
-                          onClick={() => updateFilter("stockStatus", status.value)}
-                          className={`w-full text-left px-2 py-1.5 text-sm rounded-md transition-colors ${
-                            filters.stockStatus === status.value
-                              ? "bg-primary/10 text-primary"
-                              : "hover:bg-muted"
-                          }`}
-                        >
-                          <span className={status.color}>{status.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-
               {/* Product Type Filter */}
               <Accordion type="single" collapsible>
                 <AccordionItem value="type">
@@ -517,42 +351,6 @@ export default function ProductFilters({
                 </AccordionItem>
               </Accordion>
 
-              {/* Tags Filter */}
-              {tags.length > 0 && (
-                <Accordion type="single" collapsible>
-                  <AccordionItem value="tags">
-                    <AccordionTrigger className="text-sm font-medium">
-                      <div className="flex items-center gap-2">
-                        <Tag className="w-4 h-4" />
-                        Tags
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <div className="flex flex-wrap gap-2">
-                        {tags.map((tag) => (
-                          <button
-                            key={tag.id}
-                            onClick={() => toggleTag(tag.id)}
-                            className={`px-2 py-1 text-xs rounded-full transition-colors flex items-center gap-1 ${
-                              filters.tags.includes(tag.id)
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-muted/40 hover:bg-muted"
-                            }`}
-                            style={
-                              filters.tags.includes(tag.id) && tag.color
-                                ? { backgroundColor: tag.color, color: "#fff" }
-                                : undefined
-                            }
-                          >
-                            {tag.name}
-                          </button>
-                        ))}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-              )}
-
               {/* Date Filter */}
               <Accordion type="single" collapsible>
                 <AccordionItem value="date">
@@ -595,7 +393,7 @@ export default function ProductFilters({
         </Sheet>
       </div>
 
-      {/* Filter Summary Bar - shows when filters are active */}
+      {/* Filter Summary Bar */}
       {activeFilterCount > 0 && (
         <div className="text-xs text-muted-foreground flex items-center gap-2 px-1">
           <Filter className="w-3 h-3" />

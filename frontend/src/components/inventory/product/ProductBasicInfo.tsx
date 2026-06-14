@@ -96,6 +96,19 @@ export default function ProductBasicInfo({ product, categories, brands, onChange
       </div>
 
       <div className="space-y-1.5">
+        <Label className="text-sm font-medium">Tax Class</Label>
+        <Select value={product.tax_class || "standard"} onValueChange={(val) => updateField("tax_class", val)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="standard">Standard Rate</SelectItem>
+            <SelectItem value="reduced">Reduced Rate</SelectItem>
+            <SelectItem value="zero">Zero Rate (Tax Exempt)</SelectItem>
+            <SelectItem value="exempt">Exempt (No Tax)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-1.5">
         <Label className="text-sm font-medium">Status</Label>
         <Select value={product.status || "draft"} onValueChange={(val) => updateField("status", val)}>
           <SelectTrigger><SelectValue /></SelectTrigger>
