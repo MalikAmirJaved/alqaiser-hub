@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { X, Plus, Trash2, Info, Package, Building2, Check, Layers, ChevronDown, RotateCw } from 'lucide-react';
+import { X, Plus, Trash2, Info, Package, Building2, Check, Layers, ChevronDown } from 'lucide-react';
 import { useSuppliers, useCreateSupplier } from '@/hooks/useSuppliers';
 import { useWarehouses, useCreateWarehouse } from '@/hooks/useWarehouses';
 import { useProducts, useCreateProduct, useUpdateProduct } from '@/hooks/useProducts';
@@ -12,6 +12,7 @@ import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { toast } from "sonner";
 import SearchableSelect from '@/components/reuseable/SearchableSelect';
 import ProductForm from '@/components/inventory/product/ProductForm';
+import VariantCard from '@/components/inventory/product/VariantCard';
 import { FormModal } from '@/components/inventory/supplier/FormModal';
 import { useAutoCode } from '@/hooks/useAutoCode';
 import { useQueryClient } from '@tanstack/react-query';
@@ -730,12 +731,11 @@ export function PurchaseOrderModal({
       {showVariantForm && variantFormProductId && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-lg bg-card rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <VariantFormModal
-              productId={variantFormProductId}
-              productName={products.find((p) => p.id === variantFormProductId)?.product_name || ''}
+            <VariantCard
+              standalone
               onSubmit={handleCreateVariant}
               onCancel={() => { setShowVariantForm(false); setVariantFormProductId(null); }}
-              isLoading={updateProduct.isPending}
+              loading={updateProduct.isPending}
             />
           </div>
         </div>
@@ -1138,229 +1138,6 @@ function AssetLineItems({
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-// ── Variant Form Modal ──
-function VariantFormModal({
-  productId,
-  productName,
-  onSubmit,
-  onCancel,
-  isLoading,
-}: {
-  productId: string;
-  productName: string;
-  onSubmit: (data: VariantFormData) => Promise<void>;
-  onCancel: () => void;
-  isLoading: boolean;
-}) {
-  const { generateCode } = useAutoCode("variant");
-  const [sku, setSku] = useState('');
-  const [variantTitle, setVariantTitle] = useState('');
-  const [barcode, setBarcode] = useState('');
-  const [sellingPrice, setSellingPrice] = useState(0);
-  const [minStock, setMinStock] = useState(0);
-  const [maxStock, setMaxStock] = useState(0);
-  const [attributes, setAttributes] = useState<{ key: string; value: string }[]>([]);
-  const [generating, setGenerating] = useState(false);
-
-  const handleGenerateSku = async () => {
-    setGenerating(true);
-    try {
-      const code = await generateCode();
-      setSku(code);
-    } catch {
-      const base = productName.replace(/\s+/g, '-').toUpperCase() || 'PROD';
-      setSku(`${base}-VAR${Date.now()}`);
-    }
-    setGenerating(false);
-  };
-
-  const addAttribute = () => setAttributes((prev) => [...prev, { key: '', value: '' }]);
-  const updateAttribute = (i: number, field: 'key' | 'value', val: string) =>
-    setAttributes((prev) => prev.map((a, idx) => (idx === i ? { ...a, [field]: val } : a)));
-  const removeAttribute = (i: number) =>
-    setAttributes((prev) => prev.filter((_, idx) => idx !== i));
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!sku.trim()) {
-      toast.error("SKU is required.");
-      return;
-    }
-    if (sellingPrice <= 0) {
-      toast.error("Selling price must be greater than 0.");
-      return;
-    }
-    await onSubmit({
-      sku: sku.trim(),
-      variantTitle: variantTitle.trim(),
-      barcode: barcode.trim(),
-      sellingPrice,
-      minStockLevel: minStock,
-      maxStockLevel: maxStock,
-      attributes: attributes.filter((a) => a.key && a.value),
-    });
-  };
-
-  return (
-    <div className="p-5">
-      <div className="flex items-center justify-between pb-4 border-b border-border mb-4">
-        <div>
-          <h3 className="text-base font-medium">New Variant</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">for {productName}</p>
-        </div>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex items-center justify-center w-7 h-7 rounded-md border border-border text-muted-foreground hover:bg-muted transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="SKU" required>
-            <div className="flex gap-1.5">
-              <input
-                type="text"
-                value={sku}
-                onChange={(e) => setSku(e.target.value)}
-                required
-                placeholder="e.g., PROD-BLK-001"
-                className="field-input font-mono text-xs flex-1"
-              />
-              <button
-                type="button"
-                onClick={handleGenerateSku}
-                disabled={generating}
-                className="flex items-center justify-center w-9 h-9 rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-primary transition-colors shrink-0"
-                title="Generate SKU"
-              >
-                <RotateCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
-              </button>
-            </div>
-          </Field>
-
-          <Field label="Variant Title">
-            <input
-              type="text"
-              value={variantTitle}
-              onChange={(e) => setVariantTitle(e.target.value)}
-              placeholder="e.g., Black, Large"
-              className="field-input"
-            />
-          </Field>
-
-          <Field label="Barcode">
-            <input
-              type="text"
-              value={barcode}
-              onChange={(e) => setBarcode(e.target.value)}
-              placeholder="Optional barcode"
-              className="field-input"
-            />
-          </Field>
-
-          <Field label="Selling Price" required>
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              value={sellingPrice || ''}
-              onChange={(e) => setSellingPrice(parseFloat(e.target.value) || 0)}
-              required
-              placeholder="0.00"
-              className="field-input"
-            />
-          </Field>
-
-          <Field label="Min Stock Level">
-            <input
-              type="number"
-              min="0"
-              value={minStock}
-              onChange={(e) => setMinStock(parseInt(e.target.value) || 0)}
-              className="field-input"
-            />
-          </Field>
-
-          <Field label="Max Stock Level">
-            <input
-              type="number"
-              min="0"
-              value={maxStock}
-              onChange={(e) => setMaxStock(parseInt(e.target.value) || 0)}
-              className="field-input"
-            />
-          </Field>
-        </div>
-
-        {/* Attributes */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Attributes</label>
-            <button
-              type="button"
-              onClick={addAttribute}
-              className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 font-medium"
-            >
-              <Plus className="w-3 h-3" /> Add Attribute
-            </button>
-          </div>
-          {attributes.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No attributes added yet</p>
-          ) : (
-            <div className="space-y-2">
-              {attributes.map((attr, i) => (
-                <div key={i} className="flex gap-2 items-center">
-                  <input
-                    type="text"
-                    value={attr.key}
-                    onChange={(e) => updateAttribute(i, 'key', e.target.value)}
-                    placeholder="Key"
-                    className="field-input text-xs flex-1"
-                  />
-                  <input
-                    type="text"
-                    value={attr.value}
-                    onChange={(e) => updateAttribute(i, 'value', e.target.value)}
-                    placeholder="Value"
-                    className="field-input text-xs flex-1"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeAttribute(i)}
-                    className="flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-600 transition-colors shrink-0"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="flex justify-end gap-2 pt-4 border-t border-border">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-4 py-2 text-sm border border-border rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="px-4 py-2 text-sm font-medium rounded-lg bg-foreground text-background hover:opacity-85 disabled:opacity-50 transition-opacity"
-          >
-            {isLoading ? 'Creating…' : 'Create Variant'}
-          </button>
-        </div>
-      </form>
     </div>
   );
 }

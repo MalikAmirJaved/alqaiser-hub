@@ -14,13 +14,21 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Controller } from "react-hook-form";
+import { useForm, useFieldArray, Controller } from "react-hook-form";
 import FormField from "@/components/reuseable/FormField";
 import AttributeSelector from "./Attributeselector";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { useAutoCode } from "@/hooks/useAutoCode";
+import { toast } from "sonner";
 
-interface VariantCardProps {
+interface VariantCardStandaloneProps {
+  standalone: true;
+  onSubmit: (data: VariantFormData) => Promise<void>;
+  onCancel: () => void;
+  loading?: boolean;
+}
+
+interface VariantCardFieldArrayProps {
   index: number;
   control: any;
   register: any;
@@ -32,7 +40,20 @@ interface VariantCardProps {
   onDuplicate: () => void;
 }
 
-export default function VariantCard({
+export type VariantFormData = {
+  sku: string;
+  variantTitle: string;
+  barcode: string;
+  sellingPrice: number;
+  minStockLevel: number;
+  maxStockLevel: number;
+  attributes: { key: string; value: string }[];
+  images: string[];
+};
+
+type VariantCardProps = VariantCardStandaloneProps | VariantCardFieldArrayProps;
+
+function InternalVariantCard({
   index,
   control,
   register,
@@ -42,7 +63,8 @@ export default function VariantCard({
   isEditing,
   onRemove,
   onDuplicate,
-}: VariantCardProps) {
+  standalone,
+}: VariantCardFieldArrayProps & { standalone?: boolean }) {
   const [expanded, setExpanded] = useState(index === 0);
   const [imgUrl, setImgUrl] = useState("");
   const [addingImg, setAddingImg] = useState(false);
@@ -75,7 +97,6 @@ export default function VariantCard({
     <div
       className={`border rounded-2xl overflow-hidden transition-all ${expanded ? "border-primary/40 shadow-sm" : "border-border"}`}
     >
-      {/* Header */}
       <div
         className="flex items-center justify-between px-5 py-4 cursor-pointer select-none hover:bg-muted/20 transition-colors"
         onClick={() => setExpanded(!expanded)}
@@ -90,28 +111,26 @@ export default function VariantCard({
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDuplicate();
-            }}
-            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            title="Duplicate"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onRemove();
-            }}
-            className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-            title="Remove"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {!standalone && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
+                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                title="Duplicate"
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onRemove(); }}
+                className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                title="Remove"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
           {expanded ? (
             <ChevronUp className="w-4 h-4 text-muted-foreground" />
           ) : (
@@ -122,7 +141,6 @@ export default function VariantCard({
 
       {expanded && (
         <div className="px-5 pb-5 space-y-6 border-t border-border/60">
-          {/* Identification */}
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-4 mb-3">
               Identification
@@ -163,7 +181,6 @@ export default function VariantCard({
             </div>
           </div>
 
-          {/* Pricing & Stock */}
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
               Pricing & Stock
@@ -207,7 +224,6 @@ export default function VariantCard({
             </div>
           </div>
 
-          {/* Attributes */}
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
               Attributes
@@ -221,7 +237,6 @@ export default function VariantCard({
             />
           </div>
 
-          {/* Images */}
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
               Images
@@ -259,10 +274,7 @@ export default function VariantCard({
                     type="button"
                     size="sm"
                     variant="ghost"
-                    onClick={() => {
-                      setAddingImg(false);
-                      setImgUrl("");
-                    }}
+                    onClick={() => { setAddingImg(false); setImgUrl(""); }}
                   >
                     <X className="w-3.5 h-3.5" />
                   </Button>
@@ -281,6 +293,118 @@ export default function VariantCard({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+export default function VariantCard(props: VariantCardProps) {
+  const { standalone } = props as any;
+
+  if (!standalone) {
+    const p = props as VariantCardFieldArrayProps;
+    return <InternalVariantCard {...p} standalone={false} />;
+  }
+
+  // ── Standalone mode ──
+  return <StandaloneVariantCard {...(props as VariantCardStandaloneProps)} />;
+}
+
+function StandaloneVariantCard({
+  onSubmit,
+  onCancel,
+  loading,
+}: VariantCardStandaloneProps) {
+  const { CurrencyCode } = useCompanySettings();
+  const { generateCode, validateCode } = useAutoCode("product_variant");
+
+  const {
+    register,
+    control,
+    handleSubmit: formHandleSubmit,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm({
+    defaultValues: {
+      variants: [{
+        sku: "",
+        variantTitle: "",
+        barcode: "",
+        sellingPrice: 0,
+        minStockLevel: 0,
+        maxStockLevel: 0,
+        attributes: [] as { key: string; value: string }[],
+        images: [] as string[],
+      }],
+    },
+  });
+
+  const { fields } = useFieldArray({ control, name: "variants" });
+
+  const onFormSubmit = async (data: any) => {
+    const v = data.variants[0];
+    if (!v.sku.trim()) {
+      toast.error("SKU is required.");
+      return;
+    }
+    if (v.sellingPrice <= 0) {
+      toast.error("Selling price must be greater than 0.");
+      return;
+    }
+    await onSubmit(v);
+  };
+
+  return (
+    <div className="p-5">
+      <div className="flex items-center justify-between pb-4 border-b border-border mb-4">
+        <div>
+          <h3 className="text-base font-medium">New Variant</h3>
+        </div>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex items-center justify-center w-7 h-7 rounded-md border border-border text-muted-foreground hover:bg-muted transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <form onSubmit={formHandleSubmit(onFormSubmit)}>
+        <div className="space-y-3">
+          {fields.map((field, i) => (
+            <InternalVariantCard
+              key={field.id}
+              index={i}
+              control={control}
+              register={register}
+              errors={errors}
+              watch={watch}
+              setValue={setValue}
+              isEditing={false}
+              onRemove={() => {}}
+              onDuplicate={() => {}}
+              standalone
+            />
+          ))}
+        </div>
+
+        <div className="flex justify-end gap-2 pt-4 border-t border-border mt-4">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 text-sm border border-border rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-foreground text-background hover:opacity-85 disabled:opacity-50 transition-opacity"
+          >
+            {loading ? "Creating…" : "Create Variant"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
