@@ -36,6 +36,7 @@ All API routes are registered in `backend/config/urls.py`:
 | `/api/forecast/` | forecast | Sales & stock forecasting |
 | `/api/overall/` | overall_dashboard | Unified dashboard KPIs |
 | `/api/audit/` | audit | Audit log viewer |
+| `/api/common/` | common | Code generation & validation (`generate-code/`, `validate-code/`) |
 
 ### Core Technologies
 *   **Frontend**: Next.js 14+ (App Router), React, Redux Toolkit (global client state), TanStack Query (server cache/queries), Tailwind CSS, shadcn/ui.
@@ -183,7 +184,9 @@ backend/
 │   │   ├── baseauthentication.py  # CompanyBranchMixin
 │   │   ├── basemodel.py           # BaseModel (UUID, tenant cols, soft-delete)
 │   │   ├── middleware.py          # Thread-local request context
-│   │   └── serializer_fields.py   # UUIDForeignRelatedField
+│   │   ├── serializer_fields.py   # UUIDForeignRelatedField
+│   │   ├── views.py               # GenerateCodeView, ValidateCodeView (Redis atomic code gen)
+│   │   └── urls.py                # /api/common/generate-code/, /api/common/validate-code/
 │   ├── compsetting/               # Tenant company setup settings (CompanySettings, Department, Designation)
 │   ├── finance/                   # Chart of accounts, journal entries, ledgers, payments, budgets, payroll
 │   │   ├── mixins.py              # CompanyBranchUserMixin, SoftDeleteMixin
@@ -310,7 +313,7 @@ frontend/src/
 │   ├── sales/                     # useLeads, useQuotes, useSalesDashboard
 │   ├── finance/                   # useAccounts, useAgingReports, useAuditLogs, useBalanceSheet, useBank, useBudgets, useCustomerInvoices, useExpenseReport, useExpenses, useFinanceDashboard, useForecast, useJournalEntries, usePayments, useProfitLoss, useSupplierBills, useTrialBalance
 │   ├── overall/                   # useOverallDashboard
-│   ├── useAlerts.ts / useAllVariants.ts / useApi.ts / useAssetCategories.ts / useAssets.ts / useAudit.ts / useAuditLogs.ts / useAuth.ts / useBarcodes.ts / useBatchStock.ts / useBranches.ts / useBrands.ts / useCategories.ts / useCompanySettings.ts / useCustomers.ts / useDepartments.ts / useDesignations.ts / useEmployeeAssets.ts / useEmployees.ts / useExitManagement.ts / useFeaturePermissions.ts / useFormatCurrency.ts / useGoodsReceipts.ts / useIncomingStock.ts / useInterviewRound.ts / useInventoryDashboard.ts / useLeaves.ts / use-mobile.tsx / usePayroll.ts / usePermissions.ts / usePolicies.ts / useProducts.ts / usePurchaseOrders.ts / useRecruitment.ts / useReports.ts / useSalesOrder.ts / useShiftManagement.ts / useShiftTemplates.ts / useStockManagement.ts / useSuppliers.ts / useTransfers.ts / useUserProfile.ts / useUsers.ts / useWarehouses.ts
+│   ├── useAlerts.ts / useAllVariants.ts / useApi.ts / useAutoCode.ts / useAssetCategories.ts / useAssets.ts / useAudit.ts / useAuditLogs.ts / useAuth.ts / useBarcodes.ts / useBatchStock.ts / useBranches.ts / useBrands.ts / useCategories.ts / useCompanySettings.ts / useCustomers.ts / useDepartments.ts / useDesignations.ts / useEmployeeAssets.ts / useEmployees.ts / useExitManagement.ts / useFeaturePermissions.ts / useFormatCurrency.ts / useGoodsReceipts.ts / useIncomingStock.ts / useInterviewRound.ts / useInventoryDashboard.ts / useLeaves.ts / use-mobile.tsx / usePayroll.ts / usePermissions.ts / usePolicies.ts / useProducts.ts / usePurchaseOrders.ts / useRecruitment.ts / useReports.ts / useSalesOrder.ts / useShiftManagement.ts / useShiftTemplates.ts / useStockManagement.ts / useSuppliers.ts / useTransfers.ts / useUserProfile.ts / useUsers.ts / useWarehouses.ts
 ├── layouts/                       # Layout components
 │   └── AppLayout.tsx              # Main UI Shell. Watches route guards & company setup status
 ├── lib/                           # Utility scripts
@@ -722,7 +725,16 @@ When a form contains a dropdown/select for a related entity (e.g., Department or
   ```
 - This ensures proper REST semantics and enables URL-based caching and idempotency.
 
-#### **16. Leave Form Date Validation (Frontend & Backend)**
+#### **16. Auto Code Generation (ALWAYS use for code/ID fields)**
+- **NEVER** hardcode or client-side generate codes/IDs (e.g., `EMP-${counter}`, `BRN-001`).
+- Use the `useAutoCode(entity)` hook for all code/ID form fields:
+  - `generateCode()` — call on modal open to populate field with a unique code
+  - `validateCode(code)` — call on blur to check DB uniqueness, shows toast if taken
+- Backend: When adding a new model with a code field, register it in `CODE_REGISTRY` in `apps/common/views.py` with its app, model, field name, and default prefix.
+- The system uses **Redis atomic `INCR`** for concurrency safety — two users opening the same form simultaneously get different codes.
+- Always add a regenerate button (RotateCw icon) next to the code input for manual re-generation.
+
+#### **17. Leave Form Date Validation (Frontend & Backend)**
 When implementing or updating Leave forms and APIs, enforce the following rules to prevent invalid date ranges and incorrect leave applications:
 
 - Frontend: The leave period picker must prevent or validate selection where the end date is before the start date. Forms should show a clear error (e.g., "End date cannot be before start date") and block submission until corrected. Use the shared DateRangePicker components and validate onChange and before submit.
@@ -1275,3 +1287,96 @@ if (totalAvailable <= 0) {
 await updateAsset.mutateAsync(data);
 toast.success("Asset updated"); // REDUNDANT
 ```
+
+---
+
+## 16. Auto Code Generation System - IMPLEMENTED
+
+### Overview
+
+A generic system that auto-generates unique codes/IDs on modal open and validates uniqueness on blur. Uses **Redis atomic `INCR`** for concurrency safety — two users opening the same form simultaneously get different codes.
+
+### Backend
+
+**File:** `backend/apps/common/views.py` — `GenerateCodeView` + `ValidateCodeView`
+
+**Endpoints:**
+| Method | URL | Purpose |
+|---|---|---|
+| POST | `/api/common/generate-code/` | Generate unique code `{PREFIX}-{NNNN}` |
+| POST | `/api/common/validate-code/` | Check if code is available |
+
+**Generate request:** `{ "entity": "brand", "prefix": "BRN" }` → `{ "code": "BRN-0001" }`
+**Validate request:** `{ "entity": "brand", "code": "BRN-0001", "exclude_id": "uuid" }` → `{ "available": true }`
+
+**How it works:**
+1. `cache.incr(code_counter:{entity})` — atomic Redis increment
+2. On first call (key missing), `_init_counter()` queries DB for max existing `{PREFIX}-{NNNN}` value and seeds Redis
+3. Double-checks DB for uniqueness and keeps incrementing if collision found
+
+**Entity Registry** (`CODE_REGISTRY`):
+
+| Entity | Model | Field | Prefix |
+|---|---|---|---|
+| `brand` | inventory.Brand | `code` | BRN |
+| `category` | inventory.Category | `code` | CAT |
+| `warehouse` | inventory.Warehouse | `code` | WRH |
+| `supplier` | inventory.Supplier | `code` | SUP |
+| `customer` | inventory.Customer | `customer_code` | CUS |
+| `product_variant` | inventory.ProductVariant | `sku` | VAR |
+| `purchase_order` | inventory.PurchaseOrder | `order_number` | PO |
+| `sales_order` | inventory.SalesOrder | `order_number` | SO |
+| `transfer` | inventory.StockTransfer | `transfer_number` | TRF |
+| `department` | organization.Department | `code` | DEPT |
+| `account` | finance.Account | `code` | ACC |
+| `employee` | hr.Employee | `employee_id` | EMP |
+| `policy` | hr.Policy | `code` | POL |
+| `customer_invoice` | finance.CustomerInvoice | `invoice_number` | INV |
+| `supplier_bill` | finance.SupplierBill | `bill_number` | BILL |
+| `expense` | finance.Expense | `expense_number` | EXP |
+| `bank_account` | finance.BankAccount | `account_number` | BA |
+
+### Frontend Hook
+
+**File:** `frontend/src/hooks/useAutoCode.ts`
+
+```typescript
+const { generateCode, validateCode } = useAutoCode("brand", "BRN");
+
+// Auto-generate on modal open
+useEffect(() => {
+  if (isOpen && !initialData) {
+    generateCode().then(code => setForm(prev => ({ ...prev, code })));
+  }
+}, [isOpen]);
+
+// Validate on blur (shows toast if taken)
+onBlur={() => validateCode(form.code)}
+// Manual regenerate button
+<button onClick={() => generateCode().then(code => setForm(prev => ({ ...prev, code })))}>
+```
+
+### Forms Using Auto-Code (16 components)
+
+**Inventory:**
+- `BrandFormModal.tsx` — code
+- `CategoryFormModal.tsx` — code
+- `WarehouseForm.tsx` — code
+- `CustomerForm.tsx` — customer_code
+- `ProductForm.tsx` — sku (first variant)
+- `FormModal.tsx` (supplier) — code (generic, via `onGenerateCode`/`onValidateCode` props)
+
+**Finance:**
+- `AccountFormModal.tsx` — code
+- `CustomerInvoiceFormModal.tsx` — invoice_number
+- `SupplierBillFormModal.tsx` — bill_number
+- `ExpenseFormModal.tsx` — expense_number
+- `BankAccountFormModal.tsx` — account_number
+
+**HR / Settings:**
+- `EmployeeForm.jsx` — employee_id
+- `DepartmentFormModal.tsx` — code
+
+**Generic (CrudPage):**
+- `CrudPage.tsx` — `case "code":` renders font-mono uppercase input
+- `schemas.js` — 18 fields changed from `type: "text"` to `type: "code"`
