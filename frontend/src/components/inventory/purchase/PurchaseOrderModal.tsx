@@ -416,7 +416,7 @@ export function PurchaseOrderModal({
 
     const payload: PurchaseOrderPayload = {
       supplier: supplierId,
-      warehouse: warehouseId,
+      ...(inventoryType === 'FOR_SALE' ? { warehouse: warehouseId } : {}),
       inventory_type: inventoryType,
       order_date: orderDate || undefined,
       expected_delivery_date: expectedDate || undefined,

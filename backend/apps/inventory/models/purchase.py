@@ -37,8 +37,10 @@ class PurchaseOrder(BaseModel):
     warehouse = models.ForeignKey(
         'Warehouse',
         on_delete=models.PROTECT,
+        null=True,
+        blank=True,
         related_name='purchase_orders',
-        help_text="Destination warehouse for received goods"
+        help_text="Destination warehouse for received goods (not required for office inventory)"
     )
     status = models.CharField(
         max_length=20,

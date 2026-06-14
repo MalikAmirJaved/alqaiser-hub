@@ -67,7 +67,7 @@ class PurchaseOrderLineSerializer(serializers.ModelSerializer):
 
 class PurchaseOrderSerializer(serializers.ModelSerializer):
     supplier = UUIDForeignRelatedField(queryset=Supplier.objects.all())
-    warehouse = UUIDForeignRelatedField(queryset=Warehouse.objects.all())
+    warehouse = UUIDForeignRelatedField(queryset=Warehouse.objects.all(), required=False, allow_null=True)
     supplier_name = serializers.CharField(source='supplier.name', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.warehouse_name', read_only=True)
     lines = PurchaseOrderLineSerializer(many=True, read_only=True)

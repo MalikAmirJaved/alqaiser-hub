@@ -50,7 +50,7 @@ export interface PurchaseOrderLinePayload {
 
 export interface PurchaseOrderPayload {
   supplier: string;
-  warehouse: string;
+  warehouse?: string;
   inventory_type: 'FOR_SALE' | 'OFFICE_INVENTORY';
   order_date?: string;
   expected_delivery_date?: string;
