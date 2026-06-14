@@ -89,7 +89,7 @@ export function LeaveFormModal({
 
   const employeeOptions = employees.map((e: any) => ({
     value: e.id,
-    label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""} (${e.department_name || e.department || ""})`
+    label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""} (${e.department_name || ""})`
   }));
 
   const leaveTypeOptions = LEAVE_TYPES.map((t) => ({

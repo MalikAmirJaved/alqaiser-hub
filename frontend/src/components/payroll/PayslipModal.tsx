@@ -55,11 +55,11 @@ export default function PayslipModal({
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Department</div>
-                <div className="font-medium">{employee?.department || "—"}</div>
+                <div className="font-medium">{employee?.department_name || "—"}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Designation</div>
-                <div className="font-medium">{employee?.designation || "—"}</div>
+                <div className="font-medium">{employee?.designation_name || "—"}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Joining Date</div>

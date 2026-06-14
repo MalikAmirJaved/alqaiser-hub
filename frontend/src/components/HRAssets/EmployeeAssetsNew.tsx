@@ -1,7 +1,7 @@
 // components/HRAssets/EmployeeAssetsNew.tsx
 "use client";
 import { useState, useMemo, useEffect } from "react";
-import { useEmployees } from "@/hooks/useEmployees";
+import { useActiveEmployees } from "@/hooks/useEmployees";
 import {
   useEmployeeAssignments,
   useAvailableAssets,
@@ -59,10 +59,10 @@ import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 interface Employee {
   id: string;
   first_name: string;
-  last_name: string;
+  last_name?: string;
   employee_id: string;
-  department: string;
-  designation?: string;
+  department_name?: string;
+  designation_name?: string;
 }
 
 export default function EmployeeAssetsNew() {
@@ -83,9 +83,7 @@ export default function EmployeeAssetsNew() {
   // Category filter for assets
   const [assetCategoryFilter, setAssetCategoryFilter] = useState<string>("all");
 
-  const { data: employees = [], isLoading: employeesLoading } = useEmployees(
-    searchQuery ? { search: searchQuery, employment_status: "ACTIVE" } : { employment_status: "ACTIVE" }
-  ) as { data: Employee[]; isLoading: boolean };
+  const { data: employees = [], isLoading: employeesLoading } = useActiveEmployees()
 
   const { data: assignmentData, isLoading: assignmentsLoading } = useEmployeeAssignments(
     selectedEmployee?.id
@@ -287,7 +285,7 @@ export default function EmployeeAssetsNew() {
                         {emp.first_name} {emp.last_name}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {emp.department} • {emp.designation || "N/A"}
+                        {emp.department_name} • {emp.designation_name || "N/A"}
                       </p>
                     </div>
                   </div>
@@ -308,7 +306,7 @@ export default function EmployeeAssetsNew() {
                 {selectedEmployee.first_name} {selectedEmployee.last_name}
               </h2>
               <p className="text-sm text-muted-foreground">
-                {selectedEmployee.employee_id} • {selectedEmployee.department}
+                {selectedEmployee.employee_id} • {selectedEmployee.department_name}
               </p>
             </div>
             <div className="flex gap-2">

@@ -9,7 +9,7 @@ import { X, Users, Building2, Briefcase, UserCog, Clock } from "lucide-react";
 import { useShiftTemplates } from "@/hooks/useShiftTemplates";
 import { useAssetCategories } from "@/hooks/useAssetCategories";
 import { useDesignations } from "@/hooks/useDesignations";
-import { useEmployees } from "@/hooks/useEmployees";
+import { useActiveEmployees } from "@/hooks/useEmployees";
 import { LocationGroup } from "../reuseable/LocationSelectors";
 import SearchableSelect from "../reuseable/SearchableSelect";
 import { DatePicker } from "@/components/reuseable/DatePicker";
@@ -71,7 +71,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
 
   const { data: shiftTemplates = [] } = useShiftTemplates();
   const { data: assetCategories = [] } = useAssetCategories();
-  const { data: employees = [] } = useEmployees();
+  const { data: employees = [] } = useActiveEmployees();
 
   // Load initial data
   useEffect(() => {

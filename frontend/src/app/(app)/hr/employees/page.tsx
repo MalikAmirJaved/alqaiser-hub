@@ -195,8 +195,8 @@ export default function EmployeesPage() {
       emp.employee_id,
       emp.first_name,
       emp.last_name || "",
-      emp.department,
-      emp.designation || "",
+      emp.department_name || "",
+      emp.designation_name || "",
       emp.employment_type,
       emp.employment_status,
       emp.phone,
@@ -234,7 +234,7 @@ export default function EmployeesPage() {
     {
       id: "departments",
       label: "Departments",
-      value: stats?.departments || new Set(employees.map(e => e.department)).size
+      value: stats?.departments || new Set(employees.map(e => e.department_name)).size
     },
     {
       id: "default-shift",
@@ -268,7 +268,7 @@ export default function EmployeesPage() {
       key: "designation_name",
       label: "Designation",
       sortable: true,
-      sortAccessor: (row) => (row.designation ?? "").toLowerCase()
+      sortAccessor: (row) => (row.designation_name ?? "").toLowerCase()
     },
     {
       key: "employment_type",
@@ -462,7 +462,7 @@ export default function EmployeesPage() {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-muted font-medium">
                 <Building2 className="w-3 h-3 text-muted-foreground" />
-                {employee.department}
+                {employee.department_name}
               </span>
               {employee.employment_type && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-muted/50 text-muted-foreground">
@@ -472,10 +472,10 @@ export default function EmployeesPage() {
               )}
             </div>
 
-            {employee.designation && (
+            {employee.designation_name && (
               <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                 <Award className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="truncate">{employee.designation}</span>
+                <span className="truncate">{employee.designation_name}</span>
               </p>
             )}
 

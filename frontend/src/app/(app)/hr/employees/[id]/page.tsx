@@ -638,7 +638,7 @@ export default function EmployeeDetailPage() {
               </div>
               <div className="mb-1">
                 <h1 className="text-xl font-bold leading-tight">{fullName}</h1>
-                <p className="text-sm text-muted-foreground">{employee.designation || employee.department}</p>
+                <p className="text-sm text-muted-foreground">{employee.designation_name || employee.department_name}</p>
                 <p className="text-xs font-mono text-muted-foreground">{employee.employee_id}</p>
               </div>
             </div>
@@ -666,7 +666,7 @@ export default function EmployeeDetailPage() {
               {
                 icon: Building2,
                 label: "Department",
-                value: employee.department,
+                value: employee.department_name,
               },
               {
                 icon: Calendar,

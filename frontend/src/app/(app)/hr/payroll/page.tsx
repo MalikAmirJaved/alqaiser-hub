@@ -1,7 +1,7 @@
 // src/app/(app)/hr/payroll/page.tsx
 "use client";
 import { useState, useEffect } from "react";
-import { useEmployees } from "@/hooks/useEmployees";
+import { useActiveEmployees } from "@/hooks/useEmployees";
 import { usePayroll, usePayrollStats } from "@/hooks/usePayroll";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import PageHeader from "@/components/PageHeader";
@@ -39,7 +39,7 @@ export function PayrollPage({
   const [monthSelectorOpen, setMonthSelectorOpen] = useState(false);
 
   // Fetch data from backend
-  const { data: employees = [], isLoading: employeesLoading } = useEmployees({ employment_status: "ACTIVE" });
+  const { data: employees = [], isLoading: employeesLoading } = useActiveEmployees();
   const { data: payrollRecords = [], isLoading: payrollLoading } = usePayroll({
     month: String(selectedMonth),
     year: String(selectedYear),
@@ -79,8 +79,8 @@ const payrollPermissions = getPermissions(
     const matchesSearch =
       emp.first_name?.toLowerCase().includes(searchTerm) ||
       emp.last_name?.toLowerCase().includes(searchTerm) ||
-      emp.department?.toLowerCase().includes(searchTerm) ||
-      emp.designation?.toLowerCase().includes(searchTerm) ||
+      emp.department_name?.toLowerCase().includes(searchTerm) ||
+      emp.designation_name?.toLowerCase().includes(searchTerm) ||
       emp.employee_id?.toLowerCase().includes(searchTerm);
     
     const status = getPaymentStatus(emp.id);
@@ -239,7 +239,7 @@ const handleRefresh = () => {
                   <tr key={employee.id} className="border-t border-border hover:bg-muted/30">
                     <td className="px-4 py-3">
                       <div className="font-medium">{employee.first_name} {employee.last_name || ""}</div>
-                      <div className="text-xs text-muted-foreground">{employee.designation || employee.department || ""}</div>
+                      <div className="text-xs text-muted-foreground">{employee.designation_name || employee.department_name || ""}</div>
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-xs font-mono text-primary">

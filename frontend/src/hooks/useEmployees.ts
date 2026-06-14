@@ -25,8 +25,10 @@ export interface Employee {
   emergency_contact_phone?: string;
   emergency_contact_relation?: string;
   role: 'STAFF' | 'BRANCH_ADMIN' | 'COMPANY_ADMIN';
-  department: string;
-  designation?: string;
+  department_id?: string;
+  department_name?: string;
+  designation_id?: string;
+  designation_name?: string;
   employment_type: 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'INTERN';
   employment_status: 'ACTIVE' | 'ON_LEAVE' | 'SUSPENDED' | 'TERMINATED' | 'RESIGNED';
   joining_date: string;
@@ -37,13 +39,12 @@ export interface Employee {
   reporting_manager_name?: string;
   default_shift_id?: string;
   default_shift_name?: string;
-  asset_category_id?: string;
   bank_name?: string;
-  // Link to a User if this employee was used to create a user account
-  isfrom_user_id?: string;
   bank_account_number?: string;
   bank_iban?: string;
   salary: string;
+  isfrom_user_id?: string;
+  isfrom_user_email?: string;
   createdAt?: string;
   updatedAt?: string;
 }
