@@ -203,7 +203,7 @@ backend/
 │   ├── hr/                        # Employee directories, shifts, attendance, leaves, payroll, compensation, loans, assets, recruitment, policies, exit mgmt
 │   │   ├── serializers/           # asset, policy, recruitment, shift serializers
 │   │   ├── services/              # assignment, shift services
-│   │   └── views/                 # employee, leave, payroll, shift, asset, asset_category, employee_asset, shift_template, recruitment, policy, exit
+│   │   └── views/                 # employee, leave, payroll, shift, asset, asset_category, employee_asset, shift_template, recruitment, policy, exit (includes serialize_employee() helper)
 │   ├── inventory/                 # Products, variants, warehouses, stocks, transfers, PO/SO, brands, categories, customers, suppliers
 │   │   ├── alert_utils.py         # WebSocket alert creation helper
 │   │   ├── audit.py               # Separate audit engine (ThreadPoolExecutor-based)
@@ -352,6 +352,20 @@ When creating models, make sure to:
     ```
 4.  Audit logging is automatic via signals (no manual action needed) — models with `_id` UUID fields are tracked by `apps/audit/signals.py`.
 5.  For real-time cache invalidation, send WebSocket `data_update` events from your views after mutations (see rule #4 above).
+
+### Employee API Serialization
+
+Both the **all employees** (`GET /api/hr/employees/`) and **active employees** (`GET /api/hr/employees/active/`) endpoints use the same shared `serialize_employee()` function defined in `backend/apps/hr/views/employee_views.py`. This function returns a full employee record with 37 fields including department/designation details, reporting manager, default shift resolution, and bank info.
+
+**Key details:**
+- `serialize_employee()` is a module-level function (not a view method) — reusable across views.
+- Both endpoints use `select_related('default_shift', 'reporting_manager', 'department', 'designation')`.
+- The active employees endpoint filters by `employment_status='ACTIVE'` and returns the same shape as all employees.
+- Frontend TypeScript interfaces `Employee` and `ActiveEmployee` (in `useEmployees.ts`) both match this serialization shape with fields like `department_id`, `department_name`, `designation_id`, `designation_name`.
+
+**Frontend usage:**
+- `useEmployees()` → `GET /api/hr/employees/` → `Employee[]`
+- `useActiveEmployees()` → `GET /api/hr/employees/active/` → `ActiveEmployee[]`
 
 ### Creating a New Django App
 1. Create the app under `backend/apps/` with `python manage.py startapp <name> backend/apps/<name>`.
