@@ -54,9 +54,16 @@ export const ProductCard = memo(function ProductCard({
       }`}
     >
       <div className="flex items-start justify-between gap-1">
-        <p className="text-sm font-medium leading-tight line-clamp-2 text-foreground">
-          {variant.product_name}
-        </p>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium leading-tight line-clamp-2 text-foreground">
+            {variant.product_name}
+          </p>
+          {variant.variant_title && (
+            <p className="text-xs text-muted-foreground/70 mt-0.5 truncate">
+              {variant.variant_title}
+            </p>
+          )}
+        </div>
         <div className="flex-shrink-0 mt-0.5">
           {variant.is_active ? (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-success/20 text-success">
@@ -74,6 +81,23 @@ export const ProductCard = memo(function ProductCard({
       
       {variant.barcode && (
         <p className="text-xs text-muted-foreground truncate">BC: {variant.barcode}</p>
+      )}
+
+      {/* Attributes */}
+      {variant.attributes && variant.attributes.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {variant.attributes.slice(0, 4).map((attr, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-accent/50 text-[10px] font-medium text-muted-foreground border border-border/50"
+            >
+              {attr.key}: <span className="text-foreground ml-0.5">{attr.value}</span>
+            </span>
+          ))}
+          {variant.attributes.length > 4 && (
+            <span className="text-[10px] text-muted-foreground">+{variant.attributes.length - 4}</span>
+          )}
+        </div>
       )}
 
       {/* Stock Information */}

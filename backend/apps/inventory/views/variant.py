@@ -48,7 +48,7 @@ class VariantViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ReadO
         qs = ProductVariant.objects.filter(
             company_id=company_id,
             is_deleted=False
-        ).select_related('product', 'product__category', 'product__brand')
+        ).select_related('product', 'product__category', 'product__brand').prefetch_related('variant_attributes')
 
         # Filter by product ID
         product_id = self.request.query_params.get('product_id')

@@ -1,6 +1,6 @@
 # apps/inventory/serializers/variant.py
 from rest_framework import serializers
-from apps.inventory.models import ProductVariant
+from apps.inventory.models import ProductVariant, VariantAttribute
 
 
 class VariantDetailSerializer(serializers.ModelSerializer):
@@ -11,6 +11,7 @@ class VariantDetailSerializer(serializers.ModelSerializer):
     brand_id = serializers.UUIDField(source='product.brand._id', read_only=True, allow_null=True)
     unit = serializers.CharField(source='product.unit', read_only=True)
     is_active = serializers.BooleanField(source='product.is_active', read_only=True)
+    attributes = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductVariant
@@ -18,9 +19,19 @@ class VariantDetailSerializer(serializers.ModelSerializer):
             'id', 'sku', 'variant_title', 'barcode',
             'selling_price',
             'min_stock_level', 'max_stock_level',
-            'is_deleted',
+            'is_deleted', 'attributes',
             'product_id', 'product_name', 'category_id', 'brand_id', 'unit', 'is_active',
             'created_at', 'updated_at'
+        ]
+
+    def get_attributes(self, obj):
+        qs = obj.variant_attributes.filter(is_deleted=False)
+        return [
+            {
+                'key': attr.attribute_key,
+                'value': attr.attribute_value,
+            }
+            for attr in qs
         ]
 
 class VariantPOSSerializer(serializers.ModelSerializer):
