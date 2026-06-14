@@ -201,9 +201,9 @@ backend/
 │   │   ├── urls.py
 │   │   └── views.py
 │   ├── hr/                        # Employee directories, shifts, attendance, leaves, payroll, compensation, loans, assets, recruitment, policies, exit mgmt
-│   │   ├── serializers/           # asset, policy, recruitment, shift serializers
-│   │   ├── services/              # assignment, shift services
-│   │   └── views/                 # employee, leave, payroll, shift, asset, asset_category, employee_asset, shift_template, recruitment, policy, exit (includes serialize_employee() helper)
+│   │   ├── serializers/           # asset, asset_purchase_request, policy, recruitment, shift serializers
+│   │   ├── services/              # assignment (AssetAssignmentService), shift services
+│   │   └── views/                 # employee, leave, payroll, shift, asset, asset_category, employee_asset, asset_purchase_request, shift_template, recruitment, policy, exit
 │   ├── inventory/                 # Products, variants, warehouses, stocks, transfers, PO/SO, brands, categories, customers, suppliers
 │   │   ├── alert_utils.py         # WebSocket alert creation helper
 │   │   ├── audit.py               # Separate audit engine (ThreadPoolExecutor-based)
@@ -1163,3 +1163,115 @@ The `ExitFormModal` in `frontend/src/app/(app)/hr/exit/page.tsx` triggers the fi
 #### Frontend:
 - `frontend/src/hooks/useExitManagement.ts` - Updated `FinalSettlementPreview` interface and mutation type
 - `frontend/src/app/(app)/hr/exit/page.tsx` - Auto-calculation on employee+LWD select, lock UI for settled records, removed "Update employee status" checkbox
+
+---
+
+## 14. HR Asset Management - IMPLEMENTED
+
+### Overview
+
+HR Asset Management covers the full lifecycle of hardware/equipment assignment to employees: asset library (CRUD), kit-based bundling, direct/kit assignment, returns, and purchase requests. Permission checks enforce granular RBAC on every endpoint.
+
+### Permission Resources (HR Module)
+
+| Resource | Actions | View File |
+|---|---|---|
+| `emp_asset` | view, create, update, delete, export | `asset_views.py`, `asset_category_views.py`, `employee_asset_views.py` (AvailableAssetsView) |
+| `asset_kit` | view, create, update, delete, export | `asset_category_views.py` |
+| `asset_assignment` | view, assign, return, export | `employee_asset_views.py` (EmployeeAssetAssignmentView, BulkAssignmentView) |
+
+### APIView Permission Pattern
+
+Since HR asset views use plain `APIView` (not `ViewSet`), they must override `get_permission_action()` to map HTTP methods to the correct action code. The `PermissionRequiredMixin` defaults POST→`create`, but `asset_assignment` resource uses `assign`/`return` actions instead:
+
+```python
+class EmployeeAssetAssignmentView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'asset_assignment'
+
+    def get_permission_action(self):
+        method = self.request.method.upper()
+        if method == 'GET':    return 'view'
+        elif method == 'POST':  return 'assign'
+        elif method == 'PATCH':
+            action = self.request.data.get('action', 'return')
+            return 'return' if action == 'return' else 'update'
+        elif method == 'DELETE': return 'delete'
+        return 'view'
+```
+
+### Kit Stock Validation (Frontend)
+
+When assigning assets, kits with zero total `available_quantity` are blocked at the UI level. The `handleKitToggle` function sums `available_quantity` across all kit assets and shows a toast error if zero:
+
+```typescript
+const totalAvailable = kit.assets.reduce((sum, a) => sum + (a.available_quantity || 0), 0);
+if (totalAvailable <= 0) {
+  toast.error(`"${kit.name}" has no stock available`);
+  return;
+}
+```
+
+### Asset Form Rules
+
+- **Create mode**: Shows all fields (name, brand, category, SKU, initial stock, description).
+- **Update mode**: Hides the "Initial Stock" field — stock changes are managed through the assignment system, not the edit form.
+- **SKU field**: Sends `serialNumber` (camelCase) to match the backend PATCH handler's expected key. The backend maps it to `serial_number` (snake_case) internally.
+
+### Frontend Mutation Key Convention
+
+Backend PATCH endpoints expect **camelCase** keys (e.g., `serialNumber`, `totalQuantity`, `isActive`). Frontend mutation payloads must use camelCase, not snake_case. The `useUpdateAsset` hook uses `Record<string, any>` instead of `Partial<Asset>` to accommodate this:
+
+```typescript
+// ✅ CORRECT - camelCase keys matching backend expectations
+await updateAsset.mutateAsync({
+  id: editing.id,
+  name: form.name,
+  brand: form.brand,
+  serialNumber: form.sku,
+  description: finalDescription,
+  isActive: true,
+});
+
+// ❌ WRONG - snake_case keys will be ignored by backend
+await updateAsset.mutateAsync({
+  id: editing.id,
+  serial_number: form.sku,  // Backend looks for 'serialNumber', not 'serial_number'
+});
+```
+
+### Files Modified
+
+#### Backend:
+- `backend/apps/hr/views/employee_asset_views.py` - Added `get_permission_action()` overrides to `EmployeeAssetAssignmentView`, `AvailableAssetsView`, `BulkAssignmentView`; fixed `permission_resource` from `'asset'` to `'emp_asset'`
+- `backend/apps/hr/views/employee_views.py` - `serialize_employee()` shared by all/active endpoints; PATCH creates `EmployeeDefaultShift` history on `default_shift_id` change
+
+#### Frontend:
+- `frontend/src/components/HRAssets/AssetsList.tsx` - Hidden Initial Stock on update, fixed SKU field name to `serialNumber`, removed `|| undefined` to allow clearing optional fields
+- `frontend/src/components/HRAssets/EmployeeAssetsNew.tsx` - Added kit stock validation toast, updated `Employee` interface to use `department_id`/`department_name`/`designation_id`/`designation_name`
+- `frontend/src/hooks/useAssets.ts` - Changed `useUpdateAsset` type from `Partial<Asset>` to `Record<string, any>`
+- `frontend/src/hooks/useEmployees.ts` - Updated `Employee`/`ActiveEmployee` interfaces to match `serialize_employee()` output
+- `frontend/src/hooks/useEmployeeAssets.ts` - Added `available_quantity` to `AssetBasic` type
+
+---
+
+## 15. Frontend Validation Toast Rule
+
+Manual `toast` calls are only permitted for **client-side validation** — never for API response feedback (handled by `apiFetch`):
+
+```typescript
+// ✅ ALLOWED - frontend validation, no API call
+if (!form.sku && required) {
+  toast.error("SKU is required");
+  return;
+}
+const totalAvailable = kit.assets.reduce((sum, a) => sum + a.available_quantity, 0);
+if (totalAvailable <= 0) {
+  toast.error(`"${kit.name}" has no stock available`);
+  return;
+}
+
+// ❌ FORBIDDEN - apiFetch already shows toast for this
+await updateAsset.mutateAsync(data);
+toast.success("Asset updated"); // REDUNDANT
+```
