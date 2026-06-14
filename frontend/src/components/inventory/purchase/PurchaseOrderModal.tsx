@@ -730,7 +730,7 @@ export function PurchaseOrderModal({
       {/* ── Create Variant modal ── */}
       {showVariantForm && variantFormProductId && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-lg bg-card rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-xl bg-card rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
             <VariantCard
               standalone
               onSubmit={handleCreateVariant}

@@ -235,7 +235,7 @@ class ProductViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Model
 
                 # Replace attributes
                 if 'attributes' in var_data:
-                    variant.variant_attributes.all().update(is_deleted=True)
+                    variant.variant_attributes.all().delete()
                     for attr in var_data['attributes']:
                         VariantAttribute.objects.create(
                             variant=variant,
@@ -248,7 +248,7 @@ class ProductViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Model
                         )
                 # Replace images
                 if 'images' in var_data:
-                    variant.variant_images.all().update(is_deleted=True)
+                    variant.variant_images.all().delete()
                     for idx, url in enumerate(var_data['images']):
                         VariantImage.objects.create(
                             variant=variant,

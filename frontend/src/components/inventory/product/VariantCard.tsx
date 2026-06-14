@@ -1,7 +1,7 @@
 // src/components/inventory/product/VariantCard.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Layers,
   Copy,
@@ -340,6 +340,10 @@ function StandaloneVariantCard({
   });
 
   const { fields } = useFieldArray({ control, name: "variants" });
+
+  useEffect(() => {
+    generateCode().then(code => setValue("variants.0.sku", code)).catch(() => {});
+  }, []);
 
   const onFormSubmit = async (data: any) => {
     const v = data.variants[0];
