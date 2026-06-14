@@ -72,8 +72,8 @@ def sync_sales_order_to_invoice(order, user):
         invoice.payment_method = order.payment_method
         invoice.bank_account = order.bank_account
         invoice.save(update_fields=['amount', 'payment_method', 'bank_account'])
-        # recreate lines to keep them in sync
-        invoice.lines.all().delete()
+        # soft-delete old lines and recreate to keep them in sync
+        invoice.lines.all().update(is_deleted=True)
         for line in order.lines.all():
             CustomerInvoiceLine.objects.create(
                 customer_invoice=invoice,

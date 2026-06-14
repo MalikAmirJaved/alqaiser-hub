@@ -1239,7 +1239,7 @@ class EmployeeLoanView(PermissionRequiredMixin, APIView):
                         {'error': f'Sum of deductions ({deductions_sum:.2f}) must equal total payable amount ({total_payable_val:.2f})'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
-            loan.selected_months.all().delete()
+            loan.selected_months.all().update(is_deleted=True)
             for sm in request.data['selected_months']:
                 LoanSelectedMonth.objects.create(
                     loan=loan,
@@ -1255,7 +1255,8 @@ class EmployeeLoanView(PermissionRequiredMixin, APIView):
         # Update month range if provided
         if 'month_range' in request.data:
             try:
-                loan.month_range.delete()
+                loan.month_range.is_deleted = True
+                loan.month_range.save(update_fields=["is_deleted"])
             except (LoanMonthRange.DoesNotExist, AttributeError):
                 pass
             mr_data = request.data['month_range']
@@ -1635,7 +1636,7 @@ class CompensationView(PermissionRequiredMixin, APIView):
         
         # Update selected months if provided
         if 'selected_months' in request.data:
-            compensation.selected_months.all().delete()
+            compensation.selected_months.all().update(is_deleted=True)
             for sm in request.data['selected_months']:
                 CompensationSelectedMonth.objects.create(
                     compensation=compensation,
@@ -1650,7 +1651,8 @@ class CompensationView(PermissionRequiredMixin, APIView):
         # Update month range if provided
         if 'month_range' in request.data:
             try:
-                compensation.month_range.delete()
+                compensation.month_range.is_deleted = True
+                compensation.month_range.save(update_fields=["is_deleted"])
             except (CompensationMonthRange.DoesNotExist, AttributeError):
                 pass
             mr_data = request.data['month_range']

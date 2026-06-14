@@ -67,7 +67,9 @@ class CategoryViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Mode
         instance = self.get_object()
         category_name = instance.name
 
-        self.perform_destroy(instance)
+        instance.is_deleted = True
+        instance.deleted_by = request.user
+        instance.save(update_fields=["is_deleted", "deleted_by"])
 
         return Response({
             'status': 'success',

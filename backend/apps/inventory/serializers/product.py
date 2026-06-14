@@ -94,14 +94,14 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         instance.save()
 
         if attributes_data is not None:
-            instance.variant_attributes.all().delete()
+            instance.variant_attributes.all().update(is_deleted=True)
             self._create_attributes(
                 instance, attributes_data,
                 instance.company_id, instance.branch_id
             )
 
         if images_data is not None:
-            instance.variant_images.all().delete()
+            instance.variant_images.all().update(is_deleted=True)
             self._create_images(
                 instance, images_data,
                 instance.company_id, instance.branch_id

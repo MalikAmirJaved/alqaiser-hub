@@ -438,7 +438,9 @@ class ShiftDateRangeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 company_id=company_id
             )
             
-            assignment.delete()
+            assignment.is_deleted = True
+            assignment.deleted_by = request.user
+            assignment.save(update_fields=["is_deleted", "deleted_by"])
             
             return Response({'message': 'Assignment deleted successfully'})
             

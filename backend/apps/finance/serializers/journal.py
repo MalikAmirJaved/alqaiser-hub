@@ -43,7 +43,7 @@ class JournalEntrySerializer(serializers.ModelSerializer):
         lines_data = validated_data.pop('lines', None)
         instance = super().update(instance, validated_data)
         if lines_data is not None:
-            instance.lines.all().delete()
+            instance.lines.all().update(is_deleted=True)
             for line_data in lines_data:
                 JournalLine.objects.create(journal_entry=instance, **line_data)
         total_debit = sum(line.debit for line in instance.lines.all())

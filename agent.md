@@ -1290,6 +1290,33 @@ toast.success("Asset updated"); // REDUNDANT
 
 ---
 
+#### **18. NEVER Hard Delete — Always Soft Delete for BaseModel Records**
+- **All records inheriting `BaseModel` MUST use soft delete** — set `is_deleted=True` instead of calling `.delete()`.
+- For ViewSet `destroy` methods, replace `self.perform_destroy(instance)` with:
+  ```python
+  instance.is_deleted = True
+  instance.deleted_by = request.user
+  instance.save(update_fields=["is_deleted", "deleted_by"])
+  ```
+- For queryset-level deletes, use `.update(is_deleted=True)` instead of `.delete()`.
+- For instance-level `.delete()` calls on BaseModel records, use:
+  ```python
+  obj.is_deleted = True
+  obj.deleted_by = request.user
+  obj.save(update_fields=["is_deleted", "deleted_by"])
+  ```
+- Models NOT inheriting `BaseModel` (e.g., `Branch`, `Role`, `UserPermission`, `InterviewRound`, `EmployeeShiftSchedule`, permissions join tables) do NOT have `is_deleted` — handle their deletion case-by-case.
+- `CompanyBranchMixin.get_queryset()` already filters `is_deleted=False`, so soft-deleted records are automatically excluded from list views.
+- The audit `pre_delete` signal logs field values before deletion — for soft deletes, this signal does NOT fire (no actual DB delete occurs). Audit logs for soft deletes must be added manually if needed.
+- **Exceptions** (keep hard delete):
+  - `entry.delete()` in `JournalSerializer.create()` on validation failure (entry was never valid)
+  - `EmployeeShiftSchedule.objects.filter(...).delete()` in schedule regeneration (non-BaseModel cache table)
+  - `seed_permissions.py` bulk resets (seed/management commands)
+  - `InterviewRound` DELETE (non-BaseModel)
+  - `Branch` DELETE in organization.views (non-BaseModel)
+
+---
+
 ## 16. Auto Code Generation System - IMPLEMENTED
 
 ### Overview
