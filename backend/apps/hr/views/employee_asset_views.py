@@ -21,6 +21,19 @@ class EmployeeAssetAssignmentView(CompanyBranchMixin, PermissionRequiredMixin, A
     permission_resource = 'asset_assignment'
     """Main assignment CRUD endpoint with UUID support"""
     permission_classes = [IsAuthenticated]
+
+    def get_permission_action(self):
+        method = self.request.method.upper()
+        if method == 'GET':
+            return 'view'
+        elif method == 'POST':
+            return 'assign'
+        elif method == 'PATCH':
+            action = self.request.data.get('action', 'return')
+            return 'return' if action == 'return' else 'update'
+        elif method == 'DELETE':
+            return 'delete'
+        return 'view'
     
     def get(self, request):
         """Get assignments for an employee"""
@@ -176,7 +189,11 @@ class EmployeeAssetAssignmentView(CompanyBranchMixin, PermissionRequiredMixin, A
 class AvailableAssetsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'emp_asset'
+    """List available assets not assigned to any active employee"""
     permission_classes = [IsAuthenticated]
+
+    def get_permission_action(self):
+        return 'view'
     
     def get(self, request):
         company_id = request.user.company_id
