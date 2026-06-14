@@ -149,12 +149,9 @@ function InternalVariantCard({
               <FormField label="SKU" required error={errors?.variants?.[index]?.sku?.message}>
                 <div className="flex gap-2">
                   <Input
-                    {...register(`variants.${index}.sku`)}
-                    onChange={(e) => {
-                      const el = e.target;
-                      el.value = el.value.toUpperCase();
-                      register(`variants.${index}.sku`).onChange(e);
-                    }}
+                    {...register(`variants.${index}.sku`, {
+                      setValueAs: (v: string) => v?.toUpperCase() || "",
+                    })}
                     onBlur={(e) => validateCode(e.target.value)}
                     placeholder="e.g. PROD-RED-M"
                     className="font-mono text-sm flex-1"

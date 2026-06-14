@@ -40,6 +40,7 @@ export default function BarcodesPage() {
     selectedBarcode,
     setSelectedBarcode,
   ] = useState<BarcodeItem | null>(null);
+  const [barcodeType, setBarcodeType] = useState<"sku" | "barcode">("barcode");
 
   const barcodeRef =
     useRef<HTMLDivElement>(null);
@@ -98,6 +99,7 @@ export default function BarcodesPage() {
     row: BarcodeItem
   ) => {
     setSelectedBarcode(row);
+    setBarcodeType(row.barcode && row.barcode.trim() !== "" ? "barcode" : "sku");
   };
 
   // =========================
@@ -256,11 +258,12 @@ export default function BarcodesPage() {
 
         pdf.setFontSize(12);
 
-        pdf.text(
-          `SKU: ${selectedBarcode.sku}`,
-          15,
-          35
-        );
+        const barcodeLabel =
+          barcodeType === "barcode"
+            ? `Barcode: ${selectedBarcode.barcode}`
+            : `SKU: ${selectedBarcode.sku}`;
+
+        pdf.text(barcodeLabel, 15, 35);
 
         pdf.addImage(
           imgData,
@@ -272,7 +275,7 @@ export default function BarcodesPage() {
         );
 
         pdf.save(
-          `${selectedBarcode.sku}-barcode.pdf`
+          `${selectedBarcode.sku}-${barcodeType}-barcode.pdf`
         );
 
         URL.revokeObjectURL(url);
@@ -310,18 +313,17 @@ export default function BarcodesPage() {
     {
       key: "actions",
       label: "",
-      render: (_, row) =>
-        row.barcode ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              handleOpenBarcode(row)
-            }
-          >
-            <BarcodeIcon className="h-4 w-4" />
-          </Button>
-        ) : null,
+      render: (_, row) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() =>
+            handleOpenBarcode(row)
+          }
+        >
+          <BarcodeIcon className="h-4 w-4" />
+        </Button>
+      ),
     },
   ];
 
@@ -387,6 +389,41 @@ export default function BarcodesPage() {
 
           {selectedBarcode && (
             <div className="space-y-6">
+              {/* Barcode Type Toggle */}
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-sm text-muted-foreground mr-1">
+                  Generate from:
+                </span>
+                <div className="inline-flex rounded-lg border border-border overflow-hidden">
+                  <button
+                    type="button"
+                    className={`px-4 py-1.5 text-sm font-medium transition-colors ${
+                      barcodeType === "sku"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-transparent text-muted-foreground hover:bg-accent"
+                    }`}
+                    onClick={() => setBarcodeType("sku")}
+                  >
+                    SKU
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      !selectedBarcode.barcode ||
+                      selectedBarcode.barcode.trim() === ""
+                    }
+                    className={`px-4 py-1.5 text-sm font-medium transition-colors ${
+                      barcodeType === "barcode"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-transparent text-muted-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed"
+                    }`}
+                    onClick={() => setBarcodeType("barcode")}
+                  >
+                    Barcode
+                  </button>
+                </div>
+              </div>
+
               {/* Barcode Panel */}
               <div
                 id="barcode-pdf"
@@ -410,16 +447,26 @@ export default function BarcodesPage() {
                   className="
                     text-sm
                     text-muted-foreground
-                    mb-4
+                    mb-2
                   "
                 >
                   SKU: {selectedBarcode.sku}
                 </p>
 
+                {barcodeType === "barcode" &&
+                  selectedBarcode.barcode && (
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Barcode: {selectedBarcode.barcode}
+                    </p>
+                  )}
+
                 <div className="w-full overflow-x-auto flex justify-center">
                   <Barcode
                     value={
+                      barcodeType === "barcode" &&
                       selectedBarcode.barcode
+                        ? selectedBarcode.barcode
+                        : selectedBarcode.sku
                     }
                     width={2}
                     height={80}

@@ -1,6 +1,6 @@
 // frontend/src/components/inventory/warehouse/WarehouseForm.tsx
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,10 @@ interface WarehouseFormProps {
   onSubmit: (data: WarehouseFormData) => void;
   onCancel: () => void;
   isLoading?: boolean;
+}
+
+function FieldWrapper({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return <div className={`space-y-2 ${className}`}>{children}</div>;
 }
 
 export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: WarehouseFormProps) {
@@ -82,10 +86,6 @@ export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: Wa
     }
     onSubmit(formData);
   };
-
-  const FieldWrapper = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-    <div className={`space-y-2 ${className}`}>{children}</div>
-  );
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">

@@ -1,7 +1,7 @@
 // components/HRAssets/AssetForm.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,10 @@ interface AssetFormProps {
   onSubmit: (data: AssetFormData) => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
+}
+
+function FieldWrapper({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return <div className={`space-y-2 ${className}`}>{children}</div>;
 }
 
 export function AssetForm({ initialData, onSubmit, onCancel, isLoading }: AssetFormProps) {
@@ -63,10 +67,6 @@ export function AssetForm({ initialData, onSubmit, onCancel, isLoading }: AssetF
     }
     await onSubmit(formData);
   };
-
-  const FieldWrapper = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-    <div className={`space-y-2 ${className}`}>{children}</div>
-  );
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 py-2">
