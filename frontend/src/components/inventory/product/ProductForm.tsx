@@ -175,7 +175,7 @@ function VariantCard({
   const [imgUrl, setImgUrl] = useState("");
   const [addingImg, setAddingImg] = useState(false);
   const { CurrencyCode } = useCompanySettings();
-  const { generateCode, validateCode } = useAutoCode("account");
+  const { generateCode, validateCode } = useAutoCode("product_variant");
 
   const images: string[] = watch(`variants.${index}.images`) || [];
   const sku: string = watch(`variants.${index}.sku`) || `Variant ${index + 1}`;
@@ -270,16 +270,14 @@ function VariantCard({
                     placeholder="e.g. PROD-RED-M"
                     className="font-mono text-sm flex-1"
                   />
-                  {index === 0 && (
-                    <button
-                      type="button"
-                      onClick={() => generateCode().then(code => setValue('variants.0.sku', code)).catch(() => {})}
-                      className="h-9 w-9 flex items-center justify-center rounded-md border border-border hover:bg-muted transition flex-shrink-0"
-                      title="Generate new code"
-                    >
-                      <RotateCw className="w-4 h-4" />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => generateCode().then(code => setValue(`variants.${index}.sku`, code)).catch(() => {})}
+                    className="h-9 w-9 flex items-center justify-center rounded-md border border-border hover:bg-muted transition flex-shrink-0"
+                    title="Generate new code"
+                  >
+                    <RotateCw className="w-4 h-4" />
+                  </button>
                 </div>
               </Field>
               <Field label="Variant Title">
@@ -520,10 +518,16 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
   const productName = watch("productName");
 
-  const addVariant = () => {
-    const base = productName.replace(/\s+/g, "-").toUpperCase() || "PROD";
+  const addVariant = async () => {
+    let code = "";
+    try {
+      code = await generateCode();
+    } catch {
+      const base = productName.replace(/\s+/g, "-").toUpperCase() || "PROD";
+      code = `${base}-VAR${fields.length + 1}`;
+    }
     append({
-      sku: `${base}-VAR${fields.length + 1}`,
+      sku: code,
       variantTitle: "",
       barcode: "",
       sellingPrice: 0,

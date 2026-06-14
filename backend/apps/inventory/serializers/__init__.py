@@ -33,5 +33,4 @@ __all__ = [
     "CustomerSerializer", "SalesOrderSerializer",
     "SalesReturnSerializer", "VariantDetailSerializer","VariantPOSSerializer","OverallSummarySerializer", "StockItemReportSerializer",
     "AuditFieldChangeSerializer", "AuditLogSerializer", "AlertSerializer", "BarcodeSerializer",
-
 ]

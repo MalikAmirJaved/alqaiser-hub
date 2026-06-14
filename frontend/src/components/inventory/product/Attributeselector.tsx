@@ -4,7 +4,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { X, Plus, Tag } from "lucide-react";
 import { ATTRIBUTE_SUGGESTIONS, COMMON_ATTRIBUTE_KEYS } from "@/lib/productAttributes";
-import { useAttributes } from "@/hooks/useAttributes";
+import { useAttributes, useCreateAttribute } from "@/hooks/useAttributes";
 
 interface Attribute {
   key: string;
@@ -33,6 +33,8 @@ function AttributeValueDropdown({
   const ref = useRef<HTMLDivElement>(null);
 
   const { data: apiAttributes } = useAttributes();
+  const createAttribute = useCreateAttribute();
+
   const apiValues = useMemo(() => {
     const group = apiAttributes?.find((g) => g.key === attrKey);
     return group?.values || [];
@@ -69,6 +71,18 @@ function AttributeValueDropdown({
     onChange(v);
     setQuery(v);
     setOpen(false);
+  };
+
+  const handleCreate = async () => {
+    if (!attrKey || !query) return;
+    try {
+      await createAttribute.mutateAsync({
+        attribute_key: attrKey,
+        attribute_value: query,
+      });
+    } catch {
+    }
+    select(query);
   };
 
   return (
@@ -114,7 +128,7 @@ function AttributeValueDropdown({
               <div className="border-t border-border p-1">
                 <button
                   type="button"
-                  onMouseDown={() => select(query)}
+                  onMouseDown={handleCreate}
                   className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-success/10 text-success flex items-center gap-2 font-medium"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -148,6 +162,7 @@ function KeyDropdown({
   const ref = useRef<HTMLDivElement>(null);
 
   const { data: apiAttributes } = useAttributes();
+  const createAttribute = useCreateAttribute();
 
   const allKeys = useMemo(() => {
     const staticKeys = [...COMMON_ATTRIBUTE_KEYS];
@@ -179,6 +194,18 @@ function KeyDropdown({
     onChange(v);
     setQuery(v);
     setOpen(false);
+  };
+
+  const handleCreateKey = async () => {
+    if (!query) return;
+    select(query);
+    try {
+      await createAttribute.mutateAsync({
+        attribute_key: query,
+        attribute_value: "",
+      });
+    } catch {
+    }
   };
 
   return (
@@ -219,7 +246,7 @@ function KeyDropdown({
             {query && !exactMatch && !usedKeys.includes(query) && (
               <button
                 type="button"
-                onMouseDown={() => select(query)}
+                onMouseDown={handleCreateKey}
                 className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-success/10 text-success flex items-center gap-2 font-medium border-t border-border mt-1 pt-2"
               >
                 <Plus className="w-3.5 h-3.5" />
