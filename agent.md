@@ -1407,3 +1407,83 @@ onBlur={() => validateCode(form.code)}
 **Generic (CrudPage):**
 - `CrudPage.tsx` — `case "code":` renders font-mono uppercase input
 - `schemas.js` — 18 fields changed from `type: "text"` to `type: "code"`
+
+---
+
+## 17. VariantAttribute Catalog & SKU Auto-Generation — IMPLEMENTED
+
+### Overview
+
+Two issues were fixed in the product variant creation flow:
+1. **SKU was not auto-generated via API** for new variants — it was generated client-side without backend uniqueness validation
+2. **Custom attribute keys/values were not persisted to the DB immediately** — they only reached the database when the entire product form was submitted, so subsequent variants couldn't see them in autocomplete
+
+### Changes to `VariantAttribute` Model
+
+**File:** `backend/apps/inventory/models/variant_attribute.py`
+
+| Change | Before | After |
+|---|---|---|
+| `variant` FK | `null=False` (required) | `null=True, blank=True` — allows standalone catalog entries |
+| `unique_together` | `[['variant', 'attribute_key']]` | Kept the same (prevents duplicate keys per variant) |
+| New constraint | — | `UniqueConstraint(company_id, branch_id, attribute_key, attribute_value, condition=variant__isnull=True)` — prevents duplicate catalog entries per tenant |
+
+### Backend — AttributeViewSet
+
+**File:** `backend/apps/inventory/views/attribute.py`
+
+Added `create()` method to the existing viewset:
+
+| Method | URL | Purpose |
+|---|---|---|
+| GET | `/api/inventory/attributes/` | List all unique attribute key-value pairs (aggregated from both variant-linked `VariantAttribute` records AND standalone catalog entries with `variant=None`) |
+| POST | `/api/inventory/attributes/` | Create a standalone catalog attribute entry (`variant=None`) via `get_or_create` — idempotent |
+
+The `create()` handler:
+- Accepts `{ "attribute_key": "Size", "attribute_value": "M" }`
+- Creates a `VariantAttribute` record with `variant=None`
+- Returns `201 Created` if new, `200 OK` if already exists
+- Uses `get_or_create` scoped to `(company_id, branch_id, attribute_key, attribute_value, variant=None)` — no duplicates per tenant
+
+### Frontend — useAttributes Hook
+
+**File:** `frontend/src/hooks/useAttributes.ts`
+
+Added `useCreateAttribute()` mutation:
+- POSTs to `/api/inventory/attributes/`
+- On success, invalidates `["inventory_attributes"]` query key — all `AttributeSelector` instances across all variants automatically refetch
+
+### Frontend — AttributeSelector
+
+**File:** `frontend/src/components/inventory/product/AttributeSelector.tsx`
+
+Both `KeyDropdown` and `AttributeValueDropdown` now call `useCreateAttribute().mutateAsync()` when the user clicks "Create" for a custom key or value:
+1. Persists the attribute to DB immediately (as a standalone `VariantAttribute` with `variant=None`)
+2. React Query cache is invalidated, refetching the updated attribute list
+3. The newly created option is selected in the dropdown
+
+This means:
+- **First variant**: enter custom key/value → immediately persisted → cache refreshed
+- **Second variant**: the same key/value appears in autocomplete suggestions (sourced from DB)
+- Both static suggestions (`lib/productAttributes.ts`) AND DB entries are shown together
+
+### Frontend — ProductForm SKU Fix
+
+**File:** `frontend/src/components/inventory/product/ProductForm.tsx`
+
+| Bug | Fix |
+|---|---|
+| `VariantCard` used `useAutoCode("account")` — generated account codes instead of variant SKUs | Changed to `useAutoCode("product_variant")` |
+| Generate button only rendered for `index === 0` | Generate button now renders for **all** variants |
+| `addVariant()` generated SKU client-side: `{productName}-VAR{n}` | `addVariant()` now calls `generateCode()` API first; falls back to client-side if API is unavailable |
+
+### DB Migration Required
+
+Run after pulling changes:
+```bash
+docker-compose exec backend python manage.py makemigrations
+docker-compose exec backend python manage.py migrate
+```
+This will:
+1. Alter `inventory_variant_attributes.variant_id` to allow NULL
+2. Add the partial unique constraint `unique_catalog_attribute` for catalog entries
