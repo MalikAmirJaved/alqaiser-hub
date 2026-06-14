@@ -19,71 +19,72 @@ import traceback
 logger = logging.getLogger(__name__)
 
 
+def serialize_employee(employee):
+    """Serialize employee with UUID as id, department and designation as objects."""
+    today = date.today()
+    active_default_shift = employee.default_shifts.filter(
+        effective_from__lte=today, is_deleted=False
+    ).filter(
+        models.Q(effective_to__isnull=True) | models.Q(effective_to__gte=today)
+    ).select_related('template').first()
+
+    reporting_manager_id = None
+    reporting_manager_name = None
+    if employee.reporting_manager_id and employee.reporting_manager:
+        reporting_manager_id = str(employee.reporting_manager._id)
+        reporting_manager_name = employee.reporting_manager.full_name
+
+    return {
+        "id": str(employee._id),
+        "employee_id": employee.employee_id,
+        "first_name": employee.first_name,
+        "last_name": employee.last_name,
+        "father_name": employee.father_name,
+        "cnic": employee.cnic,
+        "date_of_birth": employee.date_of_birth.isoformat() if employee.date_of_birth else None,
+        "gender": employee.gender,
+        "marital_status": employee.marital_status,
+        "phone": employee.phone,
+        "email": employee.email,
+        "personal_email": employee.personal_email,
+        "address_line": employee.address_line,
+        "country": employee.country,
+        "state": employee.state,
+        "city": employee.city,
+        "postal_code": employee.postal_code,
+        "emergency_contact_name": employee.emergency_contact_name,
+        "emergency_contact_phone": employee.emergency_contact_phone,
+        "emergency_contact_relation": employee.emergency_contact_relation,
+        "role": employee.role,
+        "department_id": str(employee.department._id) if employee.department else None,
+        "department_name": employee.department.name if employee.department else None,
+        "designation_id": str(employee.designation._id) if employee.designation else None,
+        "designation_name": employee.designation.name if employee.designation else None,
+        "employment_type": employee.employment_type,
+        "employment_status": employee.employment_status,
+        "joining_date": employee.joining_date.isoformat() if employee.joining_date else None,
+        "confirmation_date": employee.confirmation_date.isoformat() if employee.confirmation_date else None,
+        "probation_days": employee.probation_days,
+        "work_location": employee.work_location,
+        "reporting_manager_id": reporting_manager_id,
+        "reporting_manager_name": reporting_manager_name,
+        "default_shift_id": str(active_default_shift.template._id) if active_default_shift and active_default_shift.template else (str(employee.default_shift._id) if employee.default_shift else None),
+        "default_shift_name": active_default_shift.template.name if active_default_shift and active_default_shift.template else (employee.default_shift.name if employee.default_shift else None),
+        "bank_name": employee.bank_name,
+        "bank_account_number": employee.bank_account_number,
+        "bank_iban": employee.bank_iban,
+        "salary": str(employee.salary),
+        "isfrom_user_id": str(employee.isfrom_user._id) if getattr(employee, 'isfrom_user', None) else None,
+        "isfrom_user_email": employee.isfrom_user.email if getattr(employee, 'isfrom_user', None) else None,
+        "createdAt": employee.created_at.isoformat() if employee.created_at else None,
+        "updatedAt": employee.updated_at.isoformat() if employee.updated_at else None,
+    }
+
+
 class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'employee'
     permission_classes = [IsAuthenticated]
-
-    def _serialize_employee(self, employee):
-        """Serialize employee with UUID as id, department and designation as objects."""
-        today = date.today()
-        active_default_shift = employee.default_shifts.filter(
-            effective_from__lte=today, is_deleted=False
-        ).filter(
-            models.Q(effective_to__isnull=True) | models.Q(effective_to__gte=today)
-        ).select_related('template').first()
-
-        reporting_manager_id = None
-        reporting_manager_name = None
-        if employee.reporting_manager_id and employee.reporting_manager:
-            reporting_manager_id = str(employee.reporting_manager._id)
-            reporting_manager_name = employee.reporting_manager.full_name
-
-        return {
-            "id": str(employee._id),
-            "employee_id": employee.employee_id,
-            "first_name": employee.first_name,
-            "last_name": employee.last_name,
-            "father_name": employee.father_name,
-            "cnic": employee.cnic,
-            "date_of_birth": employee.date_of_birth.isoformat() if employee.date_of_birth else None,
-            "gender": employee.gender,
-            "marital_status": employee.marital_status,
-            "phone": employee.phone,
-            "email": employee.email,
-            "personal_email": employee.personal_email,
-            "address_line": employee.address_line,
-            "country": employee.country,
-            "state": employee.state,
-            "city": employee.city,
-            "postal_code": employee.postal_code,
-            "emergency_contact_name": employee.emergency_contact_name,
-            "emergency_contact_phone": employee.emergency_contact_phone,
-            "emergency_contact_relation": employee.emergency_contact_relation,
-            "role": employee.role,
-            "department_id": str(employee.department._id) if employee.department else None,
-            "department_name": employee.department.name if employee.department else None,
-            "designation_id": str(employee.designation._id) if employee.designation else None,
-            "designation_name": employee.designation.name if employee.designation else None,
-            "employment_type": employee.employment_type,
-            "employment_status": employee.employment_status,
-            "joining_date": employee.joining_date.isoformat() if employee.joining_date else None,
-            "confirmation_date": employee.confirmation_date.isoformat() if employee.confirmation_date else None,
-            "probation_days": employee.probation_days,
-            "work_location": employee.work_location,
-            "reporting_manager_id": reporting_manager_id,
-            "reporting_manager_name": reporting_manager_name,
-            "default_shift_id": str(active_default_shift.template._id) if active_default_shift and active_default_shift.template else (str(employee.default_shift._id) if employee.default_shift else None),
-            "default_shift_name": active_default_shift.template.name if active_default_shift and active_default_shift.template else (employee.default_shift.name if employee.default_shift else None),
-            "bank_name": employee.bank_name,
-            "bank_account_number": employee.bank_account_number,
-            "bank_iban": employee.bank_iban,
-            "salary": str(employee.salary),
-            "isfrom_user_id": str(employee.isfrom_user._id) if getattr(employee, 'isfrom_user', None) else None,
-            "isfrom_user_email": employee.isfrom_user.email if getattr(employee, 'isfrom_user', None) else None,
-            "createdAt": employee.created_at.isoformat() if employee.created_at else None,
-            "updatedAt": employee.updated_at.isoformat() if employee.updated_at else None,
-        }
 
     def get(self, request):
         company_id = request.user.company_id
@@ -125,7 +126,7 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             query = query.filter(employment_type=employment_type)
 
         employees = query.order_by('first_name', 'last_name')
-        return Response([self._serialize_employee(e) for e in employees])
+        return Response([serialize_employee(e) for e in employees])
 
 
     def post(self, request):
@@ -277,7 +278,7 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
 
         return Response({
             "message": "Employee created successfully",
-            "employee": self._serialize_employee(employee),
+            "employee": serialize_employee(employee),
         }, status=status.HTTP_201_CREATED)
 
     def _assign_assets_from_category(self, employee, category_uuid, user):
@@ -426,7 +427,7 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
 
             return Response({
                 "message": "Employee updated successfully",
-                "employee": self._serialize_employee(employee),
+                "employee": serialize_employee(employee),
             })
 
         except Exception as e:
@@ -519,27 +520,13 @@ class ActiveEmployeesView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             company_id=company_id,
             is_deleted=False,
             employment_status='ACTIVE'
-        ).select_related('department', 'designation')
+        ).select_related('default_shift', 'reporting_manager', 'department', 'designation')
 
         if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
             employees = employees.filter(
                 models.Q(branch_id=request.user.branch_id) | models.Q(branch_id__isnull=True)
             )
 
-        data = []
-        for emp in employees:
-            data.append({
-                'id': str(emp._id),
-                'employee_id': emp.employee_id,
-                'first_name': emp.first_name,
-                'last_name': emp.last_name,
-                'full_name': emp.full_name,
-                'department_id': str(emp.department._id) if emp.department else None,
-                'department_name': emp.department.name if emp.department else None,
-                'designation_id': str(emp.designation._id) if emp.designation else None,
-                'designation_name': emp.designation.name if emp.designation else None,
-                'email': emp.email,
-                'phone': emp.phone,
-            })
+        data = [serialize_employee(emp) for emp in employees]
 
         return Response(data)
