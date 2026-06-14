@@ -2,25 +2,23 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useExitRecord, useUpdateExitRecord } from "@/hooks/useExitManagement";
-import { useActiveEmployees } from "@/hooks/useEmployees";
-import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { useExitRecord, useUpdateExitRecord, useExitEmployeeAssets, useReturnExitAsset } from "@/hooks/useExitManagement";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useState } from "react";
 import {
   ArrowLeft,
   LogOut,
-  User,
-  Building2,
   Calendar,
   FileText,
   CheckCircle2,
   XCircle,
-  DollarSign,
   Clock,
   Info,
-  Loader2
+  Loader2,
+  RotateCcw,
+  X,
 } from "lucide-react";
+import { toast } from "sonner";
 
 const SectionCard = ({ title, icon: Icon, children }: any) => (
   <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -50,22 +48,39 @@ const fmtDate = (val?: string | null) => {
   }
 };
 
+const STATUS_STYLES: Record<string, string> = {
+  PENDING: "bg-muted text-muted-foreground",
+  CONFIRMED: "bg-success/15 text-success",
+  REJECTED: "bg-destructive/15 text-destructive",
+};
+
+const CONDITION_OPTIONS = [
+  { value: "GOOD", label: "Good" },
+  { value: "FAIR", label: "Fair" },
+  { value: "POOR", label: "Poor" },
+  { value: "DAMAGED", label: "Damaged" },
+];
+
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+
 export default function ExitDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = params?.id as string;
-  const formatCurrency = useFormatCurrency();
   const permissions = useFeaturePermissions("HR", "exit");
-  const { data: employees = [] } = useActiveEmployees();
   const updateMutation = useUpdateExitRecord();
+  const formatCurrency = useFormatCurrency();
 
   const { data: record, isLoading, error } = useExitRecord(id);
+  const { data: assets = [], isLoading: assetsLoading } = useExitEmployeeAssets(id);
+  const returnAssetMutation = useReturnExitAsset();
 
   const [editingStatus, setEditingStatus] = useState(false);
-  const [statusForm, setStatusForm] = useState({
-    final_settlement_status: "",
-    notes: "",
-  });
+  const [statusForm, setStatusForm] = useState({ status: "", notes: "" });
+
+  const [returningId, setReturningId] = useState<string | null>(null);
+  const [conditionMap, setConditionMap] = useState<Record<string, string>>({});
+  const [notesMap, setNotesMap] = useState<Record<string, string>>({});
 
   if (isLoading) {
     return (
@@ -91,21 +106,32 @@ export default function ExitDetailPage() {
     try {
       await updateMutation.mutateAsync({
         id: record.id,
-        final_settlement_status: statusForm.final_settlement_status,
-        notes: statusForm.notes || record.notes,
+        status: statusForm.status,
+        settlement_notes: statusForm.notes || record.settlement_notes,
       });
       setEditingStatus(false);
     } catch (err: any) {
     }
   };
 
-  const statusColor = (status: string) => {
-    switch (status) {
-      case "CONFIRMED": return "bg-success/15 text-success";
-      case "REJECTED": return "bg-destructive/15 text-destructive";
-      default: return "bg-muted text-muted-foreground";
+  const handleReturnAsset = async (asset: any) => {
+    setReturningId(asset.id);
+    try {
+      await returnAssetMutation.mutateAsync({
+        exitId: id,
+        assignment_id: asset.id,
+        condition_on_return: conditionMap[asset.id] || "GOOD",
+        return_notes: notesMap[asset.id] || "",
+      });
+      toast.success(`"${asset.asset_name}" returned successfully`);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to return asset");
+    } finally {
+      setReturningId(null);
     }
   };
+
+  const canEdit = record.status_value === "PENDING";
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -120,27 +146,18 @@ export default function ExitDetailPage() {
           </button>
           <div>
             <h1 className="text-xl font-bold text-foreground">Exit Record Detail</h1>
-            <p className="text-sm text-muted-foreground">{record.employee_name} &middot; {record.department}</p>
+            <p className="text-sm text-muted-foreground">{record.employee_name}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${
-            record.status_value === 'ACTIVE' ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground'
-          }`}>
-            {record.status}
-          </span>
-          <span className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${statusColor(record.final_settlement_status)}`}>
-            {record.final_settlement_status}
-          </span>
-        </div>
+        <span className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${STATUS_STYLES[record.status_value] || 'bg-muted text-muted-foreground'}`}>
+          {record.status}
+        </span>
       </div>
 
       {/* Exit Information */}
       <SectionCard title="Exit Information" icon={LogOut}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
           <InfoRow label="Employee" value={record.employee_name} />
-          <InfoRow label="Department" value={record.department} />
-          <InfoRow label="Designation" value={record.designation} />
           <InfoRow label="Exit Reason" value={record.reason} />
           <InfoRow label="Exit Date" value={fmtDate(record.exit_date)} />
           <InfoRow label="Last Working Day" value={fmtDate(record.last_working_day)} />
@@ -155,30 +172,13 @@ export default function ExitDetailPage() {
               </span>
             )
           } />
-          <InfoRow label="Record Status" value={
-            <span className={`inline-flex px-2 py-0.5 text-xs rounded-full font-medium ${
-              record.status_value === 'ACTIVE' ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground'
-            }`}>
-              {record.status}
-            </span>
-          } />
+          <InfoRow label="Final Settlement" value={formatCurrency(record.final_settlement)} />
         </div>
-      </SectionCard>
-
-      {/* Final Settlement */}
-      <SectionCard title="Final Settlement" icon={DollarSign}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
-          <InfoRow label="Settlement Amount" value={
-            <span className="text-lg font-bold text-primary">
-              {record.final_settlement ? formatCurrency(record.final_settlement) : "—"}
-            </span>
-          } />
-          <InfoRow label="Settlement Status" value={
-            <span className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${statusColor(record.final_settlement_status)}`}>
-              {record.final_settlement_status}
-            </span>
-          } />
-        </div>
+        {record.settlement_notes && (
+          <div className="mt-4 pt-4 border-t border-border">
+            <InfoRow label="Settlement Notes" value={record.settlement_notes} />
+          </div>
+        )}
         {record.notes && (
           <div className="mt-4 pt-4 border-t border-border">
             <InfoRow label="Notes" value={record.notes} />
@@ -186,63 +186,23 @@ export default function ExitDetailPage() {
         )}
       </SectionCard>
 
-      {/* Department Clearances */}
-      <SectionCard title="Department Clearances" icon={CheckCircle2}>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-          {[
-            { label: "HR", cleared: record.clearance_hr },
-            { label: "IT", cleared: record.clearance_it },
-            { label: "Finance", cleared: record.clearance_finance },
-            { label: "Admin", cleared: record.clearance_admin },
-          ].map(({ label, cleared }) => (
-            <div
-              key={label}
-              className={`flex flex-col items-center gap-2 p-3 rounded-xl border ${
-                cleared
-                  ? "bg-success/10 border-success/20"
-                  : "bg-muted/40 border-border"
-              }`}
-            >
-              {cleared ? (
-                <CheckCircle2 className="w-6 h-6 text-success" />
-              ) : (
-                <XCircle className="w-6 h-6 text-muted-foreground" />
-              )}
-              <span className="text-xs font-medium">{label}</span>
-            </div>
-          ))}
-        </div>
-        <div>
-          <div className="flex justify-between text-xs text-muted-foreground mb-1">
-            <span>Overall clearance</span>
-            <span>{record.clearance_progress ?? 0}%</span>
-          </div>
-          <div className="h-2 bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full bg-success rounded-full transition-all"
-              style={{ width: `${record.clearance_progress ?? 0}%` }}
-            />
-          </div>
-        </div>
-      </SectionCard>
-
-      {/* Update Settlement Status (inline) */}
-      {permissions.update_status && (
-        <SectionCard title="Update Settlement Status" icon={Clock}>
+      {/* Update Status */}
+      {permissions.update_status && canEdit && (
+        <SectionCard title="Update Status" icon={Clock}>
           <div className="space-y-4">
             <label className="text-sm flex flex-col gap-1">
               <span className="text-muted-foreground">Status</span>
               <select
-                value={editingStatus ? statusForm.final_settlement_status : record.final_settlement_status}
+                value={editingStatus ? statusForm.status : record.status_value}
                 onChange={e => {
                   if (!editingStatus) {
                     setEditingStatus(true);
                     setStatusForm({
-                      final_settlement_status: e.target.value,
-                      notes: record.notes || "",
+                      status: e.target.value,
+                      notes: record.settlement_notes || "",
                     });
                   } else {
-                    setStatusForm(prev => ({ ...prev, final_settlement_status: e.target.value }));
+                    setStatusForm(prev => ({ ...prev, status: e.target.value }));
                   }
                 }}
                 className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none"
@@ -284,6 +244,71 @@ export default function ExitDetailPage() {
               </>
             )}
           </div>
+        </SectionCard>
+      )}
+
+      {/* Asset Return Section (only for CONFIRMED exits) */}
+      {record.status_value === "CONFIRMED" && (
+        <SectionCard title="Asset Return" icon={RotateCcw}>
+          {assetsLoading ? (
+            <div className="flex justify-center py-4">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : assets.length === 0 ? (
+            <p className="text-center text-muted-foreground py-4">No assets allocated to this employee.</p>
+          ) : (
+            <div className="space-y-4">
+              {assets.map((asset: any) => (
+                <div key={asset.id} className="border border-border rounded-xl p-4 space-y-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="font-medium text-sm">{asset.asset_name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {[asset.asset_brand, asset.asset_serial].filter(Boolean).join(" · ") || "—"}
+                      </div>
+                    </div>
+                    <span className="text-xs bg-muted px-2 py-0.5 rounded-full">Qty: {asset.quantity}</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="text-xs flex flex-col gap-1">
+                      <span className="text-muted-foreground">Condition</span>
+                      <select
+                        value={conditionMap[asset.id] || "GOOD"}
+                        onChange={e => setConditionMap((p: any) => ({ ...p, [asset.id]: e.target.value }))}
+                        className="bg-muted/40 border border-border rounded-md h-8 px-2 text-xs outline-none"
+                      >
+                        {CONDITION_OPTIONS.map((o: any) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="text-xs flex flex-col gap-1">
+                      <span className="text-muted-foreground">Notes</span>
+                      <input
+                        value={notesMap[asset.id] || ""}
+                        onChange={e => setNotesMap((p: any) => ({ ...p, [asset.id]: e.target.value }))}
+                        className="bg-muted/40 border border-border rounded-md h-8 px-2 text-xs outline-none"
+                        placeholder="Optional notes"
+                      />
+                    </label>
+                  </div>
+
+                  <button
+                    onClick={() => handleReturnAsset(asset)}
+                    disabled={returningId === asset.id}
+                    className="w-full h-8 rounded-md bg-primary text-primary-foreground text-xs hover:opacity-90 inline-flex items-center justify-center gap-1"
+                  >
+                    {returningId === asset.id ? (
+                      <><Loader2 className="w-3 h-3 animate-spin" /> Returning...</>
+                    ) : (
+                      <><RotateCcw className="w-3 h-3" /> Return Asset</>
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </SectionCard>
       )}
 

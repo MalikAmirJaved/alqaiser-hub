@@ -18,6 +18,7 @@ from apps.hr.models import (
     Compensation, EmployeeLoan, LeaveRequest,
     CompensationSelectedMonth, CompensationMonthRange,
     LoanSelectedMonth, LoanMonthRange,
+    EmployeeAssetAssignment, Asset
 )
 from apps.compsetting.models import CompanySettings, WorkingDay, PublicHoliday
 
@@ -46,22 +47,13 @@ class BaseExitView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "id": str(exit_record._id),
             "employee_id": str(exit_record.employee._id) if exit_record.employee else None,
             "employee_name": exit_record.employee_name,
-            "department": exit_record.department,
-            "designation": exit_record.designation,
             "exit_date": exit_record.exit_date.isoformat() if exit_record.exit_date else None,
             "last_working_day": exit_record.last_working_day.isoformat() if exit_record.last_working_day else None,
             "reason": exit_record.get_reason_display(),
             "reason_value": exit_record.reason,
             "notice_served": exit_record.notice_served,
-            "clearance_hr": exit_record.clearance_hr,
-            "clearance_it": exit_record.clearance_it,
-            "clearance_finance": exit_record.clearance_finance,
-            "clearance_admin": exit_record.clearance_admin,
-            "clearance_status": exit_record.get_clearance_status_display(),
-            "clearance_status_value": exit_record.clearance_status,
-            "clearance_progress": exit_record.clearance_progress,
-            "final_settlement": float(exit_record.final_settlement),
-            "final_settlement_status": exit_record.final_settlement_status,
+            "final_settlement": float(exit_record.final_settlement or 0),
+            "settlement_notes": exit_record.settlement_notes,
             "notes": exit_record.notes,
             "status": exit_record.get_status_display(),
             "status_value": exit_record.status,
@@ -89,26 +81,18 @@ class ExitRecordView(BaseExitView):
         if search:
             query = query.filter(
                 Q(employee_name__icontains=search) |
-                Q(department__icontains=search) |
-                Q(designation__icontains=search) |
                 Q(notes__icontains=search)
             )
         
         status_filter = request.query_params.get('status')
-        clearance_filter = request.query_params.get('clearance_status')
         reason_filter = request.query_params.get('reason')
-        department_filter = request.query_params.get('department')
         date_from = request.query_params.get('date_from')
         date_to = request.query_params.get('date_to')
         
         if status_filter:
             query = query.filter(status=status_filter)
-        if clearance_filter:
-            query = query.filter(clearance_status=clearance_filter)
         if reason_filter:
             query = query.filter(reason=reason_filter)
-        if department_filter:
-            query = query.filter(department=department_filter)
         if date_from:
             query = query.filter(exit_date__gte=date_from)
         if date_to:
@@ -117,8 +101,7 @@ class ExitRecordView(BaseExitView):
         order_by = request.query_params.get('order_by', '-created_at')
         allowed_order_fields = [
             'created_at', '-created_at', 'exit_date', '-exit_date',
-            'employee_name', '-employee_name', 'department', '-department',
-            'clearance_status', '-clearance_status'
+            'employee_name', '-employee_name',
         ]
         if order_by in allowed_order_fields:
             query = query.order_by(order_by)
@@ -163,13 +146,13 @@ class ExitRecordView(BaseExitView):
         
         existing_exit = ExitRecord.objects.filter(
             employee=employee,
-            status='ACTIVE',
+            status='PENDING',
             is_deleted=False
         ).first()
         
         if existing_exit:
             return Response(
-                {'error': 'Employee already has an active exit record'},
+                {'error': 'Employee already has a pending exit record'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -182,19 +165,13 @@ class ExitRecordView(BaseExitView):
             branch_id=branch_id,
             employee=employee,
             employee_name=employee.full_name,
-            department=request.data.get('department', employee.department.name if employee.department else ''),
-            designation=request.data.get('designation', employee.designation.name if employee.designation else ''),
             exit_date=exit_date,
             last_working_day=last_working_day,
             reason=request.data['reason'],
             notice_served=request.data.get('notice_served', True),
-            clearance_hr=request.data.get('clearance_hr', False),
-            clearance_it=request.data.get('clearance_it', False),
-            clearance_finance=request.data.get('clearance_finance', False),
-            clearance_admin=request.data.get('clearance_admin', False),
             final_settlement=request.data.get('final_settlement', 0),
+            settlement_notes=request.data.get('settlement_notes', ''),
             notes=request.data.get('notes', ''),
-            status='ACTIVE',
             created_by=request.user,
             updated_by=request.user,
         )
@@ -264,33 +241,29 @@ class ExitRecordView(BaseExitView):
             is_deleted=False
         )
         
-        # Lock editing once settlement is confirmed or rejected
-        if exit_record.final_settlement_status in ('CONFIRMED', 'REJECTED'):
+        # Lock editing once status is confirmed or rejected
+        if exit_record.status in ('CONFIRMED', 'REJECTED'):
             return Response(
-                {'error': 'Exit record is locked. Settlement is already ' + exit_record.final_settlement_status.lower() + '.'},
+                {'error': f'Exit record is locked. Status is already {exit_record.status.lower()}.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         updatable_fields = [
             'exit_date', 'last_working_day', 'reason', 'notice_served',
-            'clearance_hr', 'clearance_it', 'clearance_finance', 'clearance_admin',
-            'clearance_status', 'final_settlement', 'final_settlement_status',
-            'notes', 'status'
+            'final_settlement', 'settlement_notes', 'notes', 'status'
         ]
         
         for field in updatable_fields:
             if field in request.data:
                 if field in ['exit_date', 'last_working_day'] and request.data[field]:
                     setattr(exit_record, field, datetime.strptime(request.data[field], '%Y-%m-%d').date())
-                elif field == 'final_settlement':
-                    setattr(exit_record, field, float(request.data[field]))
                 else:
                     setattr(exit_record, field, request.data[field])
         
-        # Update employee employment status when settlement is confirmed
-        if request.data.get('final_settlement_status') == 'CONFIRMED':
+        # Update employee employment status when exit is confirmed
+        if request.data.get('status') == 'CONFIRMED':
             employee = exit_record.employee
-            if employee and employee.employment_status in ['ACTIVE', 'ON_LEAVE']:
+            if employee and employee.employment_status not in ['RESIGNED', 'TERMINATED']:
                 employee.employment_status = 'RESIGNED' if exit_record.reason == 'RESIGNATION' else 'TERMINATED'
                 employee.save(update_fields=['employment_status'])
         
@@ -350,19 +323,13 @@ class ExitStatsView(BaseExitView):
         
         stats = {
             "total_exits": base_query.count(),
-            "active_exits": base_query.filter(status='ACTIVE').count(),
-            "closed_exits": base_query.filter(status='CLOSED').count(),
-            "pending_clearance": base_query.filter(clearance_status='PENDING').count(),
-            "in_progress_clearance": base_query.filter(clearance_status='IN_PROGRESS').count(),
-            "completed_clearance": base_query.filter(clearance_status='COMPLETED').count(),
-            "avg_settlement": float(base_query.aggregate(Avg('final_settlement'))['final_settlement__avg'] or 0),
-            "total_settlement": float(base_query.aggregate(Sum('final_settlement'))['final_settlement__sum'] or 0),
+            "pending_exits": base_query.filter(status='PENDING').count(),
+            "confirmed_exits": base_query.filter(status='CONFIRMED').count(),
+            "rejected_exits": base_query.filter(status='REJECTED').count(),
             "by_reason": list(base_query.values('reason').annotate(count=Count('id')).order_by('-count')),
-            "by_department": list(base_query.values('department').annotate(count=Count('id')).order_by('-count')),
             "monthly_trend": list(monthly_query.annotate(
                 month=models.functions.ExtractMonth('exit_date')
             ).values('month').annotate(count=Count('id')).order_by('month')),
-            "clearance_completion_rate": round((base_query.filter(clearance_status='COMPLETED').count() / base_query.count() * 100) if base_query.count() > 0 else 0, 2),
             "notice_compliance_rate": round((base_query.filter(notice_served=True).count() / base_query.count() * 100) if base_query.count() > 0 else 0, 2),
         }
         
@@ -371,16 +338,13 @@ class ExitStatsView(BaseExitView):
 
 class ExitFinalSettlementView(BaseExitView):
     """Calculate final settlement amount for an employee
-    Uses same working-day logic as PayrollView for consistency.
+    Uses same calendar-day proration logic as PayrollView for consistency.
     """
 
     def get_permission_action(self):
         return 'view'
 
     def _is_working_day(self, company_id, dt):
-        """Check if a specific date is a working day for the company.
-        Mirrors PayrollView._is_working_day logic.
-        """
         company_settings = CompanySettings.objects.filter(company_id=company_id).first()
         if not company_settings:
             return True
@@ -401,7 +365,6 @@ class ExitFinalSettlementView(BaseExitView):
         return True
 
     def _count_working_days_in_range(self, company_id, start_date, end_date):
-        """Count working days in a date range (inclusive)."""
         working_days = 0
         current = start_date
         while current <= end_date:
@@ -411,7 +374,6 @@ class ExitFinalSettlementView(BaseExitView):
         return working_days
 
     def _is_month_paid(self, employee, month, year):
-        """Check if a specific month has been paid via payroll."""
         return PayrollRecord.objects.filter(
             employee=employee,
             month=month,
@@ -438,11 +400,9 @@ class ExitFinalSettlementView(BaseExitView):
             is_deleted=False
         )
 
-        base_salary = float(employee.salary or 0)
+        original_base_salary = float(employee.salary or 0)
         join_date = employee.joining_date
 
-        # Allow last_working_day from request body (for new exits without record yet),
-        # fall back to active exit record's last_working_day or exit_date
         lwd = None
         if request.data.get('last_working_day'):
             lwd = datetime.strptime(request.data['last_working_day'], '%Y-%m-%d').date()
@@ -450,7 +410,7 @@ class ExitFinalSettlementView(BaseExitView):
             exit_record = ExitRecord.objects.filter(
                 employee=employee,
                 is_deleted=False,
-                status='ACTIVE'
+                status='PENDING'
             ).first()
             if exit_record:
                 lwd = exit_record.last_working_day or exit_record.exit_date
@@ -461,64 +421,90 @@ class ExitFinalSettlementView(BaseExitView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # ---------- Determine calculation period ----------
         lwd_month_start = date(lwd.year, lwd.month, 1)
 
-        # Check if the month before last_working_day's month was paid
         prev_month = lwd_month_start - timedelta(days=1)
         prev_month_paid = self._is_month_paid(employee, prev_month.month, prev_month.year)
 
         if join_date.month == lwd.month and join_date.year == lwd.year:
-            # Same month: period from joining_date to last_working_day
             period_start = join_date
         elif not prev_month_paid:
-            # Previous month not paid: accumulate from joining_date
             period_start = join_date
         else:
-            # Previous month paid: only current month portion
             period_start = lwd_month_start
 
         period_end = lwd
 
-        # ---------- Working days & salary calculation ----------
-        total_calendar_days = (period_end - period_start).days + 1
-        total_working_days = self._count_working_days_in_range(
-            company_id, period_start, period_end
-        )
-        non_working_days = total_calendar_days - total_working_days
-
-        # Daily rate uses fixed 30 days per month (same as PayrollView)
+        # ---- PayrollView-style: iterate per unpaid month ----
         days_in_month = 30
-        daily_rate = base_salary / days_in_month if base_salary > 0 else 0
-        settlement_salary = total_working_days * daily_rate
+        daily_rate = original_base_salary / days_in_month if original_base_salary > 0 else 0
 
-        # ---------- Compensation allowances (month-aware, same as PayrollView) ----------
         compensation = Compensation.objects.filter(
             employee=employee,
             status='ACTIVE',
             is_deleted=False
         ).prefetch_related('selected_months', 'month_range').first()
-        total_compensation = 0
-        if compensation:
-            freq = compensation.frequency_type
-            if freq in ('ONE_TIME', 'SELECTED_MONTH'):
-                if compensation.selected_months.filter(
-                    month=lwd.month,
-                    year=lwd.year
-                ).exists():
-                    total_compensation = float(compensation.total_allowances)
-            elif freq == 'MONTH_RANGE':
-                try:
-                    mr = compensation.month_range
-                    start = (mr.start_year, mr.start_month)
-                    end = (mr.end_year, mr.end_month)
-                    current = (lwd.year, lwd.month)
-                    if start <= current <= end:
-                        total_compensation = float(compensation.total_allowances)
-                except CompensationMonthRange.DoesNotExist:
-                    pass
 
-        # ---------- Loan deductions (all remaining outstanding balances) ----------
+        total_base_salary = 0
+        total_compensation = 0
+        total_leave_deduction = 0
+
+        cursor = date(period_start.year, period_start.month, 1)
+        while cursor <= period_end:
+            month = cursor.month
+            year = cursor.year
+
+            month_start = max(period_start, cursor)
+            if month == 12:
+                month_end = min(period_end, date(year, 12, 31))
+            else:
+                month_end = min(period_end, date(year, month + 1, 1) - timedelta(days=1))
+
+            calendar_days = (month_end - month_start).days + 1
+            prorated_days = min(calendar_days, days_in_month)
+            proration_factor = prorated_days / days_in_month
+
+            total_base_salary += original_base_salary * proration_factor
+
+            if compensation:
+                freq = compensation.frequency_type
+                full_month_comp = 0
+                if freq in ('ONE_TIME', 'SELECTED_MONTH'):
+                    if compensation.selected_months.filter(month=month, year=year).exists():
+                        full_month_comp = float(compensation.total_allowances)
+                elif freq == 'MONTH_RANGE':
+                    try:
+                        mr = compensation.month_range
+                        if (mr.start_year, mr.start_month) <= (year, month) <= (mr.end_year, mr.end_month):
+                            full_month_comp = float(compensation.total_allowances)
+                    except CompensationMonthRange.DoesNotExist:
+                        pass
+                else:
+                    full_month_comp = float(compensation.total_allowances)
+                total_compensation += full_month_comp * proration_factor
+
+            if daily_rate > 0:
+                approved_leaves = LeaveRequest.objects.filter(
+                    employee=employee,
+                    status='APPROVED',
+                    start_date__lte=month_end,
+                    end_date__gte=month_start,
+                    is_deleted=False
+                )
+                for leave in approved_leaves:
+                    l_start = max(leave.start_date, month_start)
+                    l_end = min(leave.end_date, month_end)
+                    leave_working_days = self._count_working_days_in_range(company_id, l_start, l_end)
+                    if leave.is_half_day and leave_working_days == 1:
+                        leave_working_days = 0.5
+                    total_leave_deduction += leave_working_days * daily_rate
+
+            if month == 12:
+                cursor = date(year + 1, 1, 1)
+            else:
+                cursor = date(year, month + 1, 1)
+
+        # ---- Loan deductions (total remaining) ----
         active_loans = EmployeeLoan.objects.filter(
             employee=employee,
             status='ACTIVE',
@@ -526,26 +512,7 @@ class ExitFinalSettlementView(BaseExitView):
         )
         total_loan_deduction = sum(float(l.remaining_amount or 0) for l in active_loans)
 
-        # ---------- Leave deductions (working days in period, uses _is_working_day like PayrollView) ----------
-        leave_deduction = 0
-        if daily_rate > 0:
-            approved_leaves = LeaveRequest.objects.filter(
-                employee=employee,
-                status='APPROVED',
-                start_date__lte=period_end,
-                end_date__gte=period_start,
-                is_deleted=False
-            )
-            for leave in approved_leaves:
-                l_start = max(leave.start_date, period_start)
-                l_end = min(leave.end_date, period_end)
-                leave_working_days = self._count_working_days_in_range(company_id, l_start, l_end)
-                if leave.is_half_day and leave_working_days == 1:
-                    leave_working_days = 0.5
-                leave_deduction += leave_working_days * daily_rate
-
-        net_settlement = settlement_salary + total_compensation - total_loan_deduction - leave_deduction
-
+        net_settlement = total_base_salary + total_compensation - total_leave_deduction - total_loan_deduction
         net_settlement_val = max(0, net_settlement)
 
         return Response({
@@ -556,16 +523,13 @@ class ExitFinalSettlementView(BaseExitView):
             'period_start': period_start.isoformat(),
             'period_end': period_end.isoformat(),
             'prev_month_paid': prev_month_paid,
-            'total_calendar_days': total_calendar_days,
-            'non_working_days': non_working_days,
-            'total_working_days': total_working_days,
             'days_in_month': days_in_month,
             'daily_rate': str(daily_rate),
-            'base_salary': str(base_salary),
-            'settlement_salary': str(settlement_salary),
+            'original_base_salary': str(original_base_salary),
+            'base_salary': str(total_base_salary),
             'compensation': str(total_compensation),
+            'leave_deduction': str(total_leave_deduction),
             'loan_deduction': str(total_loan_deduction),
-            'leave_deduction': str(leave_deduction),
             'net_settlement': str(net_settlement_val),
             'net_salary': str(net_settlement_val),
         })
@@ -654,39 +618,16 @@ class ExitChecklistView(BaseExitView):
         checklist_item.updated_by = request.user
         checklist_item.save()
         
-        exit_record = checklist_item.exit_record
-        self._update_exit_clearance_status(exit_record)
-        
         return Response({
             "message": "Checklist item updated successfully",
             "item_id": str(checklist_item._id),
             "status": checklist_item.status
         })
-    
-    def _update_exit_clearance_status(self, exit_record):
-        """Update exit record clearance based on checklist progress"""
-        checklist_items = ExitChecklist.objects.filter(
-            exit_record=exit_record,
-            is_deleted=False
-        )
-        
-        total_items = checklist_items.count()
-        if total_items == 0:
-            return
-        
-        for clearance_type in ['HR', 'IT', 'FINANCE', 'ADMIN']:
-            type_items = checklist_items.filter(item_type=clearance_type)
-            type_completed = type_items.filter(status='COMPLETED').count()
-            is_cleared = type_items.count() > 0 and type_completed == type_items.count()
-            setattr(exit_record, f'clearance_{clearance_type.lower()}', is_cleared)
-        
-        exit_record.save()
 
 
 class ExitBulkActionView(BaseExitView):
     """Bulk actions for exit records with UUID support"""
     
-
     def post(self, request):
         """Perform bulk actions"""
         company_id, _ = self._get_company_context(request)
@@ -706,19 +647,19 @@ class ExitBulkActionView(BaseExitView):
             is_deleted=False
         )
         
-        if action == 'CLOSE':
+        if action == 'CONFIRM':
             records.update(
-                status='CLOSED',
+                status='CONFIRMED',
                 updated_by=request.user
             )
-            message = f'Successfully closed {records.count()} exit records'
+            message = f'Successfully confirmed {records.count()} exit records'
         
-        elif action == 'REOPEN':
+        elif action == 'REJECT':
             records.update(
-                status='ACTIVE',
+                status='REJECTED',
                 updated_by=request.user
             )
-            message = f'Successfully reopened {records.count()} exit records'
+            message = f'Successfully rejected {records.count()} exit records'
         
         elif action == 'DELETE':
             records.update(
@@ -737,4 +678,109 @@ class ExitBulkActionView(BaseExitView):
         return Response({
             'message': message,
             'affected_count': records.count()
+        })
+
+
+class ExitEmployeeAssetsView(BaseExitView):
+    """View and return assets allocated to the employee of an exit record"""
+
+    def get_permission_action(self):
+        return 'view'
+
+    def get(self, request, exit_id):
+        """Get all ACTIVE asset assignments for this exit's employee"""
+        company_id, _ = self._get_company_context(request)
+        
+        exit_record = get_object_or_404(
+            ExitRecord,
+            _id=exit_id,
+            company_id=company_id,
+            is_deleted=False
+        )
+        
+        assignments = EmployeeAssetAssignment.objects.filter(
+            employee=exit_record.employee,
+            status='ACTIVE',
+            is_deleted=False,
+            company_id=company_id
+        ).select_related('asset')
+        
+        return Response([
+            {
+                "id": str(a._id),
+                "asset_id": str(a.asset._id),
+                "asset_name": a.asset.name,
+                "asset_brand": a.asset.brand,
+                "asset_serial": a.asset.serial_number,
+                "quantity": a.quantity,
+                "assigned_date": a.assigned_date.isoformat() if a.assigned_date else None,
+                "condition_on_assignment": a.condition_on_assignment,
+                "notes": a.notes,
+            }
+            for a in assignments
+        ])
+
+
+class ExitReturnAssetView(BaseExitView):
+    """Return a single asset assignment from an exit record"""
+
+    def get_permission_action(self):
+        return 'update'
+
+    def post(self, request, exit_id):
+        """Return a specific asset assignment"""
+        company_id, _ = self._get_company_context(request)
+        
+        exit_record = get_object_or_404(
+            ExitRecord,
+            _id=exit_id,
+            company_id=company_id,
+            is_deleted=False
+        )
+        
+        if exit_record.status != 'CONFIRMED':
+            return Response(
+                {'error': 'Asset return is only allowed for confirmed exit records'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        assignment_id = request.data.get('assignment_id')
+        if not assignment_id:
+            return Response(
+                {'error': 'assignment_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        assignment = get_object_or_404(
+            EmployeeAssetAssignment,
+            _id=assignment_id,
+            employee=exit_record.employee,
+            status='ACTIVE',
+            company_id=company_id,
+            is_deleted=False
+        )
+        
+        condition_on_return = request.data.get('condition_on_return', 'GOOD')
+        return_notes = request.data.get('return_notes', '')
+        returned_date = request.data.get('returned_date', date.today().isoformat())
+        
+        if isinstance(returned_date, str):
+            returned_date = datetime.strptime(returned_date, '%Y-%m-%d').date()
+        
+        assignment.status = 'RETURNED'
+        assignment.returned_date = returned_date
+        assignment.condition_on_return = condition_on_return
+        assignment.return_notes = return_notes
+        assignment.updated_by = request.user
+        assignment.save()
+        
+        # Restore asset quantity
+        asset = assignment.asset
+        asset.available_quantity += assignment.quantity
+        asset.is_assigned = False
+        asset.save(update_fields=['available_quantity', 'is_assigned'])
+        
+        return Response({
+            "message": f'Asset "{asset.name}" returned successfully',
+            "assignment_id": str(assignment._id),
         })

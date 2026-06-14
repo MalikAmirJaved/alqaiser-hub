@@ -569,42 +569,11 @@ export default function EmployeeDetailPage() {
                   <XCircle className="w-4 h-4 text-destructive" />
                 )}
               </InfoRow>
-              <InfoRow label="Final Settlement" value={formatCurrency(exitRecord.final_settlement)} />
+              {exitRecord.final_settlement != null && (
+                <InfoRow label="Final Settlement" value={"AED " + Number(exitRecord.final_settlement || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} />
+              )}
+              {exitRecord.settlement_notes && <InfoRow label="Settlement Notes" value={exitRecord.settlement_notes} />}
               {exitRecord.notes && <InfoRow label="Notes" value={exitRecord.notes} />}
-            </SectionCard>
-
-            <SectionCard title="Clearance Status" icon={CheckCircle2}>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                {[
-                  { label: "HR", cleared: exitRecord.clearance_hr },
-                  { label: "IT", cleared: exitRecord.clearance_it },
-                  { label: "Finance", cleared: exitRecord.clearance_finance },
-                  { label: "Admin", cleared: exitRecord.clearance_admin },
-                ].map(({ label, cleared }) => (
-                  <div key={label} className={cn(
-                    "flex flex-col items-center gap-2 p-3 rounded-xl border",
-                    cleared ? "bg-success/10 border-success/20" : "bg-muted/40 border-border"
-                  )}>
-                    {cleared
-                      ? <CheckCircle2 className="w-6 h-6 text-success" />
-                      : <XCircle className="w-6 h-6 text-muted-foreground" />
-                    }
-                    <span className="text-xs font-medium">{label}</span>
-                  </div>
-                ))}
-              </div>
-              <div>
-                <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                  <span>Overall clearance</span>
-                  <span>{exitRecord.clearance_progress ?? 0}%</span>
-                </div>
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-success rounded-full transition-all"
-                    style={{ width: `${exitRecord.clearance_progress ?? 0}%` }}
-                  />
-                </div>
-              </div>
             </SectionCard>
           </>
         )}

@@ -1255,57 +1255,25 @@ class ExitRecord(BaseModel):
         ('OTHER', 'Other'),
     ]
     
-    CLEARANCE_STATUS = [
-        ('PENDING', 'Pending'),
-        ('IN_PROGRESS', 'In Progress'),
-        ('APPROVED', 'Approved'),
-        ('COMPLETED', 'Completed'),
-    ]
-
     SETTLEMENT_STATUS = [
         ('PENDING', 'Pending'),
         ('CONFIRMED', 'Confirmed'),
         ('REJECTED', 'Rejected'),
     ]
 
-    RECORD_STATUS = [
-        ('ACTIVE', 'Active'),
-        ('CLOSED', 'Closed'),
-    ]
-    
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='exit_records')
     employee_name = models.CharField(max_length=255, blank=True, db_index=True)
-    department = models.CharField(max_length=100, db_index=True)
-    designation = models.CharField(max_length=100, blank=True, null=True)
     
     exit_date = models.DateField(db_index=True)
     last_working_day = models.DateField(null=True, blank=True)
     reason = models.CharField(max_length=50, choices=EXIT_REASONS, default='RESIGNATION', db_index=True)
     notice_served = models.BooleanField(default=True)
     
-    clearance_hr = models.BooleanField(default=False, verbose_name="HR Clearance")
-    clearance_it = models.BooleanField(default=False, verbose_name="IT Clearance")
-    clearance_finance = models.BooleanField(default=False, verbose_name="Finance Clearance")
-    clearance_admin = models.BooleanField(default=False, verbose_name="Admin Clearance")
-    clearance_status = models.CharField(max_length=20, choices=CLEARANCE_STATUS, default='PENDING', db_index=True)
-    
     final_settlement = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    final_settlement_status = models.CharField(max_length=20, choices=SETTLEMENT_STATUS, default='PENDING', db_index=True)
+    settlement_notes = models.TextField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
 
-    status = models.CharField(max_length=20, choices=RECORD_STATUS, default='ACTIVE', db_index=True)
-    
-    @property
-    def clearance_progress(self):
-        """Calculate clearance progress percentage based on four department clearances."""
-        total = 4
-        completed = sum([
-            self.clearance_hr,
-            self.clearance_it,
-            self.clearance_finance,
-            self.clearance_admin
-        ])
-        return int((completed / total) * 100) if total > 0 else 0
+    status = models.CharField(max_length=20, choices=SETTLEMENT_STATUS, default='PENDING', db_index=True)
     
     class Meta:
         db_table = 'hr_exit_records'
@@ -1315,19 +1283,15 @@ class ExitRecord(BaseModel):
         indexes = [
             models.Index(fields=['company_id', 'is_deleted']),
             models.Index(fields=['company_id', 'status']),
-            models.Index(fields=['company_id', 'clearance_status']),
             models.Index(fields=['company_id', 'reason']),
             models.Index(fields=['employee', 'status']),
-            models.Index(fields=['department', 'status']),
             models.Index(fields=['exit_date']),
             models.Index(fields=['last_working_day']),
-            models.Index(fields=['company_id', 'clearance_status', 'status'], name='exit_clearance_status_idx'),
-            models.Index(fields=['company_id', 'department', 'reason'], name='exit_dept_reason_idx'),
         ]
         constraints = [
             models.UniqueConstraint(
                 fields=['employee'],
-                condition=models.Q(status='ACTIVE', is_deleted=False),
+                condition=models.Q(status='PENDING', is_deleted=False),
                 name='unique_active_exit_per_employee'
             )
         ]
