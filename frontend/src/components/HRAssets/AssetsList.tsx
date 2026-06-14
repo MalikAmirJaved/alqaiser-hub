@@ -101,24 +101,22 @@ export default function AssetsList() {
         await updateAsset.mutateAsync({
           id: editing.id,
           name: form.name,
-          brand: form.brand || undefined,
-          serial_number: form.sku || undefined,
-          total_quantity: form.initialStock,
-          available_quantity: form.initialStock,
+          brand: form.brand,
+          serialNumber: form.sku,
           description: finalDescription,
-          is_active: true,
+          isActive: true,
         });
       } else {
         await createAsset.mutateAsync({
           name: form.name,
           brand: form.brand || undefined,
-          serial_number: form.sku || undefined,
-          total_quantity: form.initialStock,
-          available_quantity: form.initialStock,
+          serialNumber: form.sku || undefined,
+          totalQuantity: form.initialStock,
+          availableQuantity: form.initialStock,
           description: finalDescription,
-          is_active: true,
-          purchase_date: new Date().toISOString().split("T")[0],
-          purchase_price: 0,
+          isActive: true,
+          purchaseDate: new Date().toISOString().split("T")[0],
+          purchasePrice: 0,
         });
       }
 
@@ -389,18 +387,20 @@ export default function AssetsList() {
                 placeholder="Unique identifier"
               />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="initialStock">Initial Stock</Label>
-              <Input
-                id="initialStock"
-                type="number"
-                min="0"
-                value={form.initialStock}
-                onChange={(e) => setForm({ ...form, initialStock: parseInt(e.target.value) || 0 })}
-                placeholder="Quantity"
-              />
-              <p className="text-xs text-muted-foreground">Number of identical units (e.g., 5 monitors)</p>
-            </div>
+            {!editing && (
+              <div className="grid gap-2">
+                <Label htmlFor="initialStock">Initial Stock</Label>
+                <Input
+                  id="initialStock"
+                  type="number"
+                  min="0"
+                  value={form.initialStock}
+                  onChange={(e) => setForm({ ...form, initialStock: parseInt(e.target.value) || 0 })}
+                  placeholder="Quantity"
+                />
+                <p className="text-xs text-muted-foreground">Number of identical units (e.g., 5 monitors)</p>
+              </div>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="description">Description</Label>
               <Textarea

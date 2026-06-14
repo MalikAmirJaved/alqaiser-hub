@@ -95,7 +95,7 @@ export function useUpdateAsset() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (asset: Partial<Asset> & { id: string }) =>
+    mutationFn: (asset: Record<string, any> & { id: string }) =>
       api("/api/hr/assets/", {
         method: "PATCH",
         body: JSON.stringify(asset),
