@@ -3,10 +3,9 @@ from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
-from .models import Category
 from apps.notifications.models import Notification
-from .models import Category, Brand, Warehouse, Product, ProductVariant, Inventory,Supplier
-
+from .models import Category, Brand, Warehouse, Supplier
+from .models import Product, ProductVariant, StockItem, InventoryTransaction
 
 # Helper to create notification
 def create_notification(company_id, branch_id, title, message, notif_type='info'):
@@ -172,41 +171,6 @@ def notify_warehouse_delete(sender, instance, **kwargs):
     broadcast_data_update(company_id, branch_id, 'inventory_warehouse', 'delete', instance.id)
 
 
-@receiver(post_save, sender=Product)
-def notify_product_change(sender, instance, created, **kwargs):
-    company_id = instance.company_id
-    branch_id = instance.branch_id
-    action = 'create' if created else 'update'
-    create_notification(
-        company_id, branch_id,
-        f"Product {action}d",
-        f"Product '{instance.name}' ({instance.sku}) has been {action}d.",
-        "success" if created else "info"
-    )
-    broadcast_data_update(company_id, branch_id, 'product', action, instance.id)
-
-@receiver(post_delete, sender=Product)
-def notify_product_delete(sender, instance, **kwargs):
-    create_notification(
-        instance.company_id, instance.branch_id,
-        "Product Deleted",
-        f"Product '{instance.name}' ({instance.sku}) has been deleted.",
-        "warning"
-    )
-    broadcast_data_update(instance.company_id, instance.branch_id, 'product', 'delete', instance.id)
-
-@receiver(post_save, sender=Inventory)
-def notify_inventory_change(sender, instance, created, **kwargs):
-    action = 'create' if created else 'update'
-    broadcast_data_update(
-        instance.product.company_id,
-        instance.product.branch_id,
-        'inventory',
-        action,
-        instance.id
-    )
-
-
 @receiver(post_save, sender=Supplier)
 def notify_supplier_change(sender, instance, created, **kwargs):
     company_id = instance.company_id
@@ -233,3 +197,61 @@ def notify_supplier_delete(sender, instance, **kwargs):
         "warning"
     )
     broadcast_data_update(company_id, branch_id, f'{instance.partner_type}', 'delete', instance.id)
+
+
+@receiver(post_save, sender=Product)
+def notify_product_change(sender, instance, created, **kwargs):
+    action = 'create' if created else 'update'
+    create_notification(
+        instance.company_id, instance.branch_id,
+        f"Product {action}d",
+        f"Product '{instance.product_name}' has been {action}d.",
+        "success" if created else "info"
+    )
+    broadcast_data_update(instance.company_id, instance.branch_id, 'product', action, instance.id)
+
+@receiver(post_delete, sender=Product)
+def notify_product_delete(sender, instance, **kwargs):
+    create_notification(
+        instance.company_id, instance.branch_id,
+        "Product Deleted",
+        f"Product '{instance.product_name}' has been deleted.",
+        "warning"
+    )
+    broadcast_data_update(instance.company_id, instance.branch_id, 'product', 'delete', instance.id)
+
+@receiver(post_save, sender=ProductVariant)
+def notify_variant_change(sender, instance, created, **kwargs):
+    action = 'create' if created else 'update'
+    create_notification(
+        instance.company_id, instance.branch_id,
+        f"Variant {action}d",
+        f"Variant '{instance.sku}' of product '{instance.product.product_name}' has been {action}d.",
+        "info"
+    )
+    broadcast_data_update(instance.company_id, instance.branch_id, 'variant', action, instance.id)
+
+@receiver(post_save, sender=StockItem)
+def check_low_stock(sender, instance, **kwargs):
+    """Send alert if stock falls below reorder point."""
+    variant = instance.variant
+    if instance.quantity_on_hand <= variant.min_stock_level:
+        create_notification(
+            instance.company_id, instance.branch_id,
+            "Low Stock Alert",
+            f"Variant '{variant.sku}' has only {instance.quantity_on_hand} units left (min: {variant.min_stock_level}).",
+            "warning"
+        )
+        broadcast_data_update(instance.company_id, instance.branch_id, 'low_stock', 'alert', variant.id)
+
+@receiver(post_save, sender=InventoryTransaction)
+def log_transaction_notification(sender, instance, created, **kwargs):
+    if created:
+        # Optionally send notification for significant stock changes (e.g., >100 units)
+        if abs(instance.quantity_change) > 100:
+            create_notification(
+                instance.company_id, None,  # branch unknown, maybe store in transaction
+                "Bulk Stock Movement",
+                f"{instance.get_transaction_type_display()}: {abs(instance.quantity_change)} units of {instance.variant.sku}",
+                "info"
+            )

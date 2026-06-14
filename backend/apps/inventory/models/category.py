@@ -1,15 +1,10 @@
 from django.db import models
+from apps.common.basemodel import BaseModel
 
-class Category(models.Model):
-    company_id = models.IntegerField(db_index=True)
-    branch_id = models.IntegerField(db_index=True)
-
+class Category(BaseModel):
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=50)
     description = models.TextField(blank=True)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "inventory_categories"

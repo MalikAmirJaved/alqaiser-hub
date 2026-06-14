@@ -1,144 +1,140 @@
 from rest_framework import serializers
-from django.utils.text import slugify
-from django.db.models import Q
+from django.db import models
 from apps.inventory.models import (
-    Product, ProductVariant, ProductAttribute, Tag, TagGroup, ProductTag
+    Product, ProductVariant, StockItem, Category, Brand,
+    VariantAttribute, VariantImage
 )
+from apps.inventory.serializers.variant_attribute import VariantAttributeSerializer
+from apps.inventory.serializers.variant_image import VariantImageSerializer
+
 
 class ProductVariantSerializer(serializers.ModelSerializer):
+    # Read-only nested representations
+    variant_attributes = VariantAttributeSerializer(many=True, read_only=True)
+    variant_images = VariantImageSerializer(many=True, read_only=True)
+
+    # Write-only fields: accept list of dicts (attributes) and list of URLs (images)
+    attributes = serializers.ListField(
+        child=serializers.DictField(), write_only=True, required=False
+    )
+    images = serializers.ListField(
+        child=serializers.CharField(), write_only=True, required=False
+    )
+
+    # Stock aggregated across warehouses (read-only)
+    total_stock = serializers.SerializerMethodField()
+    stock_by_warehouse = serializers.SerializerMethodField()
+
     class Meta:
         model = ProductVariant
         fields = [
-            'id', 'sku', 'barcode', 'attribute_combination',
-            'cost_price', 'selling_price', 'special_price',
-            'main_image', 'status', 'created_at', 'updated_at'
+            'id', 'sku', 'barcode', 'qr_code', 'buying_price', 'selling_price',
+            'min_stock_level', 'max_stock_level', 'is_deleted',
+            'variant_attributes', 'variant_images',   # read-only nested
+            'attributes', 'images',                   # write-only
+            'total_stock', 'stock_by_warehouse',
+            'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
+    def get_total_stock(self, obj):
+        return obj.stock_items.aggregate(total=models.Sum('quantity_on_hand'))['total'] or 0
 
-class ProductAttributeSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ProductAttribute
-        fields = ['id', 'attribute_name', 'attribute_value', 'attribute_group', 'is_filterable', 'display_order']
-
-
-class TagGroupSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TagGroup
-        fields = ['id', 'name', 'slug', 'description']
-
-
-class TagSerializer(serializers.ModelSerializer):
-    group = TagGroupSerializer(read_only=True)
-    group_id = serializers.PrimaryKeyRelatedField(
-        source='group', queryset=TagGroup.objects.all(), write_only=True, required=False
-    )
-
-    class Meta:
-        model = Tag
-        fields = ['id', 'name', 'slug', 'color', 'description', 'is_active', 'group', 'group_id']
-
-
-class ProductSerializer(serializers.ModelSerializer):
-    variants = ProductVariantSerializer(many=True, required=False)
-    attributes = ProductAttributeSerializer(many=True, required=False)
-    tags = serializers.SerializerMethodField()
-    # Accept tags as a list of strings or objects with name/group
-    tag_input = serializers.ListField(child=serializers.DictField(), write_only=True, required=False)
-
-    class Meta:
-        model = Product
-        fields = [
-            'id', 'sku', 'barcode', 'name', 'short_description', 'description',
-            'category_id', 'brand_id', 'product_type', 'unit_of_measure',
-            'tax_class',
-            'main_image', 'gallery_images', 'video_url', 'status',
-            'created_at', 'updated_at', 'variants', 'attributes', 'tags', 'tag_input'
+    def get_stock_by_warehouse(self, obj):
+        return [
+            {
+                'warehouse_id': s.warehouse_id,
+                'warehouse_name': s.warehouse.warehouse_name,
+                'quantity_on_hand': s.quantity_on_hand,
+                'quantity_reserved': s.quantity_reserved
+            }
+            for s in obj.stock_items.select_related('warehouse')
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
 
-    def get_tags(self, obj):
-        tags = Tag.objects.filter(producttag__product=obj)
-        return TagSerializer(tags, many=True).data
-
-    def _handle_tags(self, product, tag_input):
-        """Create or retrieve tags from input list of {name, group?}."""
-        # Clear existing tags (optional: you could merge, but replacing is simpler)
-        ProductTag.objects.filter(product=product).delete()
-
-        for tag_item in tag_input:
-            name = tag_item.get('name', '').strip()
-            if not name:
-                continue
-            group_name = tag_item.get('group', '').strip() or None
-            slug = slugify(name)
-
-            # Get or create tag group
-            group = None
-            if group_name:
-                group_slug = slugify(group_name)
-                group, _ = TagGroup.objects.get_or_create(
-                    company_id=product.company_id,
-                    branch_id=product.branch_id,
-                    slug=group_slug,
-                    defaults={'name': group_name}
-                )
-
-            # Get or create tag
-            tag, created = Tag.objects.get_or_create(
-                company_id=product.company_id,
-                branch_id=product.branch_id,
-                slug=slug,
-                defaults={
-                    'name': name,
-                    'group': group,
-                }
+    def _create_attributes(self, variant, attributes_data, company_id, branch_id):
+        """Helper to create VariantAttribute records."""
+        for attr in attributes_data:
+            VariantAttribute.objects.create(
+                variant=variant,
+                company_id=company_id,
+                branch_id=branch_id,
+                attribute_key=attr.get('key', ''),
+                attribute_value=attr.get('value', '')
             )
-            # If tag existed but group is missing, update it
-            if not created and group and tag.group != group:
-                tag.group = group
-                tag.save(update_fields=['group'])
 
-            ProductTag.objects.get_or_create(product=product, tag=tag)
+    def _create_images(self, variant, images_data, company_id, branch_id):
+        """Helper to create VariantImage records."""
+        for idx, url in enumerate(images_data):
+            VariantImage.objects.create(
+                variant=variant,
+                company_id=company_id,
+                branch_id=branch_id,
+                image_url=url,
+                sort_order=idx,
+                is_primary=(idx == 0)
+            )
 
     def create(self, validated_data):
-        variants_data = validated_data.pop('variants', [])
         attributes_data = validated_data.pop('attributes', [])
-        tag_input = validated_data.pop('tag_input', [])
+        images_data = validated_data.pop('images', [])
+        company_id = validated_data.get('company_id')
+        branch_id = validated_data.get('branch_id')
 
-        product = Product.objects.create(**validated_data)
+        variant = ProductVariant.objects.create(**validated_data)
 
-        for variant_data in variants_data:
-            ProductVariant.objects.create(product=product, **variant_data)
+        if attributes_data:
+            self._create_attributes(variant, attributes_data, company_id, branch_id)
+        if images_data:
+            self._create_images(variant, images_data, company_id, branch_id)
 
-        for attr_data in attributes_data:
-            ProductAttribute.objects.create(product=product, **attr_data)
-
-        self._handle_tags(product, tag_input)
-
-        return product
+        return variant
 
     def update(self, instance, validated_data):
-        variants_data = validated_data.pop('variants', [])
-        attributes_data = validated_data.pop('attributes', [])
-        tag_input = validated_data.pop('tag_input', [])
+        attributes_data = validated_data.pop('attributes', None)
+        images_data = validated_data.pop('images', None)
 
-        # Update product fields
+        # Update simple fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
-        # Replace variants
-        instance.variants.all().delete()
-        for variant_data in variants_data:
-            ProductVariant.objects.create(product=instance, **variant_data)
+        # Replace attributes if provided
+        if attributes_data is not None:
+            instance.variant_attributes.all().delete()
+            self._create_attributes(
+                instance, attributes_data,
+                instance.company_id, instance.branch_id
+            )
 
-        # Replace attributes
-        instance.attributes.all().delete()
-        for attr_data in attributes_data:
-            ProductAttribute.objects.create(product=instance, **attr_data)
-
-        # Replace tags
-        self._handle_tags(instance, tag_input)
+        # Replace images if provided
+        if images_data is not None:
+            instance.variant_images.all().delete()
+            self._create_images(
+                instance, images_data,
+                instance.company_id, instance.branch_id
+            )
 
         return instance
+
+
+class ProductSerializer(serializers.ModelSerializer):
+    category_id = serializers.PrimaryKeyRelatedField(
+        source='category', queryset=Category.objects.all(), allow_null=True
+    )
+    brand_id = serializers.PrimaryKeyRelatedField(
+        source='brand', queryset=Brand.objects.all(), allow_null=True
+    )
+    variants = ProductVariantSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Product
+        fields = [
+            'id', 'product_name', 'description', 'category_id', 'brand_id',
+            'unit', 'storage_requirement', 'tax_rate', 'status', 'is_active',
+            'variants', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def create(self, validated_data):
+        # company_id / branch_id are set in the viewset
+        return super().create(validated_data)

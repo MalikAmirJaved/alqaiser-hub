@@ -1,10 +1,11 @@
 from .category import CategoryViewSet
 from .brand import BrandViewSet
 from .warehouse import WarehouseViewSet
-from .product import ProductViewSet, TagViewSet, TagGroupViewSet
+from .product import ProductViewSet
 from .supplier import BaseSupplierViewSet, SupplierViewSet, VendorViewSet
+from .stock_management import StockManagementViewSet
 
 __all__ = [
     "CategoryViewSet", "BrandViewSet", "WarehouseViewSet",
-    "ProductViewSet", "TagViewSet", "TagGroupViewSet", "BaseSupplierViewSet", "SupplierViewSet","VendorViewSet"
+    "BaseSupplierViewSet", "SupplierViewSet","VendorViewSet","ProductViewSet","StockManagementViewSet"
 ]
