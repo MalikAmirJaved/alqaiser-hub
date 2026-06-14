@@ -88,11 +88,11 @@ class StockManagementViewSet(CompanyBranchMixin, viewsets.GenericViewSet):
     def current_stock(self, request):
         queryset = self.get_queryset()
 
-        variant_id = request.query_params.get('variant_id')
+        variant_id = request.query_params.get('variant___id')
         if variant_id:
             queryset = queryset.filter(variant_id=variant_id)
 
-        warehouse_id = request.query_params.get('warehouse_id')
+        warehouse_id = request.query_params.get('warehouse___id')
         if warehouse_id:
             queryset = queryset.filter(warehouse_id=warehouse_id)
 
