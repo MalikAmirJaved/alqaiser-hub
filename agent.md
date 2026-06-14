@@ -1290,7 +1290,32 @@ toast.success("Asset updated"); // REDUNDANT
 
 ---
 
-#### **18. NEVER Hard Delete — Always Soft Delete for BaseModel Records**
+#### **18. ALWAYS Include message/detail/error in Backend Responses**
+- **Every** backend API response for mutating endpoints (POST, PUT, PATCH, DELETE) **MUST** include a top-level `message` or `detail` key for success responses, and an `error`, `detail`, or `message` key for error responses.
+- The frontend `apiFetch` wrapper in `@frontend/src/lib/api.ts` uses these keys to show toast notifications:
+  - **Success**: Looks for `response.message || response.detail` → shows success toast
+  - **Error**: Looks for `errorBody.detail || errorBody.message || errorBody.error` → shows error toast
+  - **Fallback**: If none found, shows generic "Request failed with status {status}"
+- A **custom DRF exception handler** is configured at `backend/apps/common/exceptions.py` that automatically wraps all DRF `ValidationError` responses (from `raise_exception=True`) with a `detail` key. This covers the majority of validation error cases.
+- For views that return `serializer.errors` directly, always use `serializer.is_valid(raise_exception=True)` instead so the custom exception handler can wrap the errors properly.
+- Example success response:
+  ```python
+  return Response({
+      'status': 'success',
+      'message': 'Brand created successfully',
+      'data': serializer.data
+  }, status=status.HTTP_201_CREATED)
+  ```
+- Example error response:
+  ```python
+  return Response(
+      {'error': 'User is not associated with any company'},
+      status=status.HTTP_400_BAD_REQUEST
+  )
+  ```
+- **When creating new views**, always override `create()`, `update()`, and `destroy()` methods (not just `perform_create`/`perform_update`) to wrap responses with `message`/`detail` keys.
+
+#### **19. NEVER Hard Delete — Always Soft Delete for BaseModel Records**
 - **All records inheriting `BaseModel` MUST use soft delete** — set `is_deleted=True` instead of calling `.delete()`.
 - For ViewSet `destroy` methods, replace `self.perform_destroy(instance)` with:
   ```python
