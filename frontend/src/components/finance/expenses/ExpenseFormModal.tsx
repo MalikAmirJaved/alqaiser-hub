@@ -2,9 +2,10 @@
 
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { X } from "lucide-react";
+import { X, RotateCw } from "lucide-react";
 import { useCreateExpense, useUpdateExpense, expenseCategoryOptions } from "@/hooks/finance/useExpenses";
-import { useSuppliers } from "@/hooks/useSuppliers";  // adjust import path as needed
+import { useSuppliers } from "@/hooks/useSuppliers";
+import { useAutoCode } from "@/hooks/useAutoCode";
 
 interface ExpenseFormData {
   expense_number: string;
@@ -43,6 +44,7 @@ export default function ExpenseFormModal({
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();
   const { data: suppliers, isLoading: suppliersLoading } = useSuppliers();
+  const { generateCode, validateCode } = useAutoCode("expense");
 
   const supplierValue = watch("supplier");
   const payImmediately = watch("pay_immediately");
@@ -59,8 +61,9 @@ export default function ExpenseFormModal({
       setValue("pay_immediately", false);
     } else {
       reset();
+      generateCode().then(code => setValue("expense_number", code)).catch(() => {});
     }
-  }, [initialData, setValue, reset]);
+  }, [initialData, setValue, reset, open]);
 
   const onSubmit = async (data: ExpenseFormData) => {
     const payload = {
@@ -92,7 +95,17 @@ export default function ExpenseFormModal({
         <form onSubmit={handleSubmit(onSubmit)} className="p-4 space-y-4">
           <div>
             <label className="block text-sm mb-1">Expense Number *</label>
-            <input {...register("expense_number", { required: true })} className="w-full px-3 py-2 border border-border rounded-md bg-background" />
+            <div className="flex gap-2">
+              <input {...register("expense_number", { required: true })} onBlur={(e) => validateCode(e.target.value)} className="flex-1 px-3 py-2 border border-border rounded-md bg-background font-mono" />
+              <button
+                type="button"
+                onClick={() => generateCode().then(code => setValue("expense_number", code)).catch(() => {})}
+                className="h-9 w-9 flex items-center justify-center rounded-md border border-border hover:bg-muted transition flex-shrink-0"
+                title="Generate new code"
+              >
+                <RotateCw className="w-4 h-4" />
+              </button>
+            </div>
           </div>
           <div>
             <label className="block text-sm mb-1">Category *</label>

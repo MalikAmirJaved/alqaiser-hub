@@ -1,4 +1,5 @@
 import { useForm } from "react-hook-form";
+import { RotateCw } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,10 +29,12 @@ interface FormModalProps {
   initialData: Record<string, any>;
   onSubmit: (data: any) => Promise<void>;
   isSubmitting: boolean;
+  onGenerateCode?: () => Promise<string>;
+  onValidateCode?: (code: string) => Promise<boolean>;
 }
 
-export function FormModal({ open, onClose, title, fields, initialData, onSubmit, isSubmitting }: FormModalProps) {
-  const { register, handleSubmit, setValue, reset, watch, formState: { errors } } = useForm({ 
+export function FormModal({ open, onClose, title, fields, initialData, onSubmit, isSubmitting, onGenerateCode, onValidateCode }: FormModalProps) {
+  const { register, handleSubmit, setValue, getValues, reset, watch, formState: { errors } } = useForm({ 
     defaultValues: initialData,
     mode: "onChange"
   });
@@ -79,6 +82,41 @@ useEffect(() => {
       );
     }
     
+    if (field.type === "code") {
+      return (
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <Input
+              type="text"
+              placeholder={field.placeholder}
+              className={cn("font-mono flex-1", hasError && "border-destructive")}
+              {...register(field.name, { 
+                required: field.required ? `${field.label} is required` : false,
+                onBlur: onValidateCode ? () => {
+                  const val = watch(field.name);
+                  if (val) onValidateCode(val);
+                } : undefined,
+              })}
+            />
+            {onGenerateCode && (
+              <button
+                type="button"
+                onClick={async () => {
+                  const code = await onGenerateCode();
+                  setValue(field.name, code);
+                }}
+                className="h-9 w-9 flex items-center justify-center rounded-md border border-border hover:bg-muted transition flex-shrink-0"
+                title="Generate new code"
+              >
+                <RotateCw className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          {hasError && <p className="text-xs text-destructive">{errorMessage}</p>}
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-2">
         <Input

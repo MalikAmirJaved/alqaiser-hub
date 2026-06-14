@@ -1,7 +1,7 @@
 // components/finance/CustomerInvoiceFormModal.tsx
 import { useEffect, useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
-import { X, Plus, Trash2, Search } from "lucide-react";
+import { X, Plus, Trash2, Search, RotateCw } from "lucide-react";
 import {
   useCreateCustomerInvoice,
   useUpdateCustomerInvoice,
@@ -11,6 +11,7 @@ import { useCustomers } from "@/hooks/useCustomers";
 import { useAllVariantsSimple } from "@/hooks/useAllVariants";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { useAutoCode } from "@/hooks/useAutoCode";
 
 interface InvoiceLine {
   variant: string;
@@ -48,6 +49,7 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
   const { data: variants = [] } = useAllVariantsSimple({ active_only: true });
   const createInvoice = useCreateCustomerInvoice();
   const updateInvoice = useUpdateCustomerInvoice();
+  const { generateCode, validateCode } = useAutoCode("customer_invoice");
 
   const { register, control, handleSubmit, reset, setValue, watch } = useForm<CustomerInvoiceFormData>({
     defaultValues: {
@@ -119,6 +121,7 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
         lines: [],
       });
       setNewCustomerInfo(null);
+      generateCode().then(code => setValue("invoice_number", code)).catch(() => {});
     }
   }, [initialData, setValue, reset, open]);
 
@@ -202,11 +205,22 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Invoice Number *</label>
-                <input
-                  {...register("invoice_number", { required: true })}
-                  className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-                  placeholder="e.g., INV-2024-001"
-                />
+                <div className="flex gap-2">
+                  <input
+                    {...register("invoice_number", { required: true })}
+                    onBlur={(e) => validateCode(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-border rounded-md bg-background text-sm font-mono"
+                    placeholder="e.g., INV-2024-001"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => generateCode().then(code => setValue("invoice_number", code)).catch(() => {})}
+                    className="h-9 w-9 flex items-center justify-center rounded-md border border-border hover:bg-muted transition flex-shrink-0"
+                    title="Generate new code"
+                  >
+                    <RotateCw className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Customer *</label>

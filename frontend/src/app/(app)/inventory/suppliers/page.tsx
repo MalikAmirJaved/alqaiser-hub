@@ -14,6 +14,7 @@ import { Edit, Trash2 } from "lucide-react";
 import { useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier, type Supplier } from "@/hooks/useSuppliers";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useRouter } from 'next/navigation';
+import { useAutoCode } from "@/hooks/useAutoCode";
 
 // Helper to render status badge
 const StatusBadge = ({ status }: { status: string }) => {
@@ -31,7 +32,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 // Form fields configuration (only supplier-specific)
 const formFields = [
-  { name: "code", label: "Code", type: "text", required: true, placeholder: "e.g., SUP-001" },
+  { name: "code", label: "Code", type: "code", required: true, placeholder: "e.g., SUP-001" },
   { name: "name", label: "Name", type: "text", required: true, placeholder: "Company name" },
   { name: "contact_person", label: "Contact Person", type: "text", placeholder: "Full name" },
   { name: "email", label: "Email", type: "email", placeholder: "contact@company.com" },
@@ -60,6 +61,8 @@ export default function SuppliersPage() {
   const [editingItem, setEditingItem] = useState<Supplier | null>(null);
   const { confirm, Modal: ConfirmationModal } = useConfirmationModal();
   const router = useRouter();
+
+  const { generateCode, validateCode } = useAutoCode("supplier");
 
   // Suppliers hooks
   const { data: suppliers, isLoading: suppliersLoading } = useSuppliers();
@@ -120,7 +123,10 @@ export default function SuppliersPage() {
 
   const handleAdd = () => {
     setEditingItem(null);
-    setModalOpen(true);
+    generateCode().then(code => {
+      setEditingItem({ code } as any);
+      setModalOpen(true);
+    }).catch(() => setModalOpen(true));
   };
 
   const handleEdit = (item: Supplier) => {
@@ -237,6 +243,8 @@ export default function SuppliersPage() {
         initialData={editingItem || {}}
         onSubmit={handleFormSubmit}
         isSubmitting={createSupplier.isPending || updateSupplier.isPending}
+        onGenerateCode={generateCode}
+        onValidateCode={validateCode}
       />
       
       <ConfirmationModal />

@@ -1,7 +1,7 @@
 // src/components/inventory/product/ProductForm.tsx
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -29,6 +29,7 @@ import {
   ChevronDown,
   ChevronUp,
   Image as ImageIcon,
+  RotateCw,
 } from "lucide-react";
 import type { Product, ProductPayload, ProductVariantPayload } from "@/hooks/useProducts";
 import { useCategories, Category } from "@/hooks/useCategories";
@@ -38,6 +39,7 @@ import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import CategoryFormModal from "@/components/inventory/category/CategoryFormModal";
 import BrandFormModal from "@/components/inventory/brand/BrandFormModal";
+import { useAutoCode } from "@/hooks/useAutoCode";
 
 // ──────────────────────────────────────────
 // Zod schema
@@ -255,16 +257,29 @@ function VariantCard({
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Field label="SKU" required error={errors?.variants?.[index]?.sku?.message}>
-                <Input
-                  {...register(`variants.${index}.sku`)}
-                  onChange={(e) => {
-                    const el = e.target;
-                    el.value = el.value.toUpperCase();
-                    register(`variants.${index}.sku`).onChange(e);
-                  }}
-                  placeholder="e.g. PROD-RED-M"
-                  className="font-mono text-sm"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    {...register(`variants.${index}.sku`)}
+                    onChange={(e) => {
+                      const el = e.target;
+                      el.value = el.value.toUpperCase();
+                      register(`variants.${index}.sku`).onChange(e);
+                    }}
+                    onBlur={(e) => validateCode(e.target.value)}
+                    placeholder="e.g. PROD-RED-M"
+                    className="font-mono text-sm flex-1"
+                  />
+                  {index === 0 && (
+                    <button
+                      type="button"
+                      onClick={() => generateCode().then(code => setValue('variants.0.sku', code)).catch(() => {})}
+                      className="h-9 w-9 flex items-center justify-center rounded-md border border-border hover:bg-muted transition flex-shrink-0"
+                      title="Generate new code"
+                    >
+                      <RotateCw className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </Field>
               <Field label="Variant Title">
                 <Input
@@ -415,6 +430,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const [step, setStep] = useState(0);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showBrandModal, setShowBrandModal] = useState(false);
+  const { generateCode, validateCode } = useAutoCode("product_variant");
 
   const categoryOptions = useMemo(
     () =>
@@ -494,6 +510,12 @@ const ProductForm: React.FC<ProductFormProps> = ({
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "variants" });
+
+  useEffect(() => {
+    if (!isEditing && fields.length > 0 && !fields[0]?.sku) {
+      generateCode().then(code => setValue("variants.0.sku", code)).catch(() => {});
+    }
+  }, []);
 
   const productName = watch("productName");
 

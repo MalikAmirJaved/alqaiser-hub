@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { RotateCw } from "lucide-react";
 import { CountrySelect, StateSelect, CitySelect } from "@/components/reuseable/LocationSelectors";
 import { Checkbox } from "@/components/reuseable/Checkbox";
 import { useActiveEmployees } from "@/hooks/useEmployees";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import { useAutoCode } from "@/hooks/useAutoCode";
 
 interface WarehouseFormData {
   id?: string;
@@ -50,6 +52,13 @@ export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: Wa
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const { generateCode, validateCode } = useAutoCode("warehouse");
+
+  useEffect(() => {
+    if (!initialData?.id && !formData.code) {
+      generateCode().then(code => setFormData(prev => ({ ...prev, code }))).catch(() => {});
+    }
+  }, []);
 
   const employeeOptions = employees.map((emp) => ({
     value: emp.id,
@@ -91,12 +100,23 @@ export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: Wa
         <div>
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground text-xs">Code *</span>
-            <input
-              type="text"
-              value={formData.code}
-              onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-              className={cn(inputClassName, errors.code && "border-destructive")}
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={formData.code}
+                onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+                onBlur={() => validateCode(formData.code)}
+                className={cn(inputClassName, errors.code && "border-destructive")}
+              />
+              <button
+                type="button"
+                onClick={() => generateCode().then(code => setFormData(prev => ({ ...prev, code }))).catch(() => {})}
+                className="h-9 w-9 flex items-center justify-center rounded-md border border-border hover:bg-muted transition flex-shrink-0"
+                title="Generate new code"
+              >
+                <RotateCw className="w-4 h-4" />
+              </button>
+            </div>
             {errors.code && <span className="text-xs text-destructive">{errors.code}</span>}
           </label>
         </div>

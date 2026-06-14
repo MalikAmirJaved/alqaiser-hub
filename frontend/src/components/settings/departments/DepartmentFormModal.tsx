@@ -4,8 +4,9 @@
 
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { X } from "lucide-react";
+import { X, RotateCw } from "lucide-react";
 import { useCreateDepartment, useUpdateDepartment, type Department } from "@/hooks/useDepartments";
+import { useAutoCode } from "@/hooks/useAutoCode";
 
 interface DepartmentFormData {
   name: string;
@@ -35,6 +36,7 @@ export default function DepartmentFormModal({
   });
   const createDepartment = useCreateDepartment();
   const updateDepartment = useUpdateDepartment();
+  const { generateCode, validateCode } = useAutoCode("department");
 
   useEffect(() => {
     if (initialData) {
@@ -49,6 +51,7 @@ export default function DepartmentFormModal({
         description: "",
         is_active: true,
       });
+      generateCode().then(code => setValue("code", code)).catch(() => {});
     }
   }, [initialData, setValue, reset, open]);
 
@@ -85,11 +88,22 @@ export default function DepartmentFormModal({
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Code *</label>
-            <input
-              {...register("code", { required: true })}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm font-mono"
-              placeholder="e.g., HR"
-            />
+            <div className="flex gap-2">
+              <input
+                {...register("code", { required: true })}
+                onBlur={(e) => validateCode(e.target.value)}
+                className="flex-1 px-3 py-2 border border-border rounded-md bg-background text-sm font-mono"
+                placeholder="e.g., HR"
+              />
+              <button
+                type="button"
+                onClick={() => generateCode().then(code => setValue("code", code)).catch(() => {})}
+                className="h-9 w-9 flex items-center justify-center rounded-md border border-border hover:bg-muted transition flex-shrink-0"
+                title="Generate new code"
+              >
+                <RotateCw className="w-4 h-4" />
+              </button>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Description</label>

@@ -2,13 +2,14 @@
 
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { X } from "lucide-react";
+import { X, RotateCw } from "lucide-react";
 import {
   useCreateSupplierBill,
   useUpdateSupplierBill,
   type SupplierBill,
 } from "@/hooks/finance/useSupplierBills";
 import { useSuppliers } from "@/hooks/useSuppliers";
+import { useAutoCode } from "@/hooks/useAutoCode";
 
 interface SupplierBillFormData {
   bill_number: string;
@@ -47,6 +48,7 @@ export default function SupplierBillFormModal({ open, onClose, initialData, onSu
   const createBill = useCreateSupplierBill();
   const updateBill = useUpdateSupplierBill();
   const { data: suppliers } = useSuppliers();
+  const { generateCode, validateCode } = useAutoCode("supplier_bill");
 
   useEffect(() => {
     if (initialData) {
@@ -67,6 +69,7 @@ export default function SupplierBillFormModal({ open, onClose, initialData, onSu
         amount: 0,
         notes: "",
       });
+      generateCode().then(code => setValue("bill_number", code)).catch(() => {});
     }
   }, [initialData, setValue, reset]);
 
@@ -98,11 +101,22 @@ export default function SupplierBillFormModal({ open, onClose, initialData, onSu
           {/* ... existing form fields ... */}
           <div>
             <label className="block text-sm font-medium mb-1">Bill Number *</label>
-            <input
-              {...register("bill_number", { required: true })}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-              placeholder="e.g., BILL-2024-001"
-            />
+            <div className="flex gap-2">
+              <input
+                {...register("bill_number", { required: true })}
+                onBlur={(e) => validateCode(e.target.value)}
+                className="flex-1 px-3 py-2 border border-border rounded-md bg-background text-sm font-mono"
+                placeholder="e.g., BILL-2024-001"
+              />
+              <button
+                type="button"
+                onClick={() => generateCode().then(code => setValue("bill_number", code)).catch(() => {})}
+                className="h-9 w-9 flex items-center justify-center rounded-md border border-border hover:bg-muted transition flex-shrink-0"
+                title="Generate new code"
+              >
+                <RotateCw className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           <div>

@@ -58,7 +58,7 @@ export const schemas = {
     idPrefix: "wh",
     fields: [
       { key: "name", label: "Name", type: "text", required: true },
-      { key: "code", label: "Code", type: "text", required: true },
+      { key: "code", label: "Code", type: "code", required: true },
       { key: "address_line", label: "Street Address", type: "textarea" },
       { key: "country", label: "Country", type: "country" },
       { key: "state", label: "State/Region", type: "state" },
@@ -107,7 +107,7 @@ export const schemas = {
     statusField: "status",
     fields: [
       { key: "name", label: "Name", type: "text", required: true },
-      { key: "code", label: "Supplier Code", type: "text" },
+      { key: "code", label: "Supplier Code", type: "code" },
       { key: "contact", label: "Contact Person", type: "text" },
       { key: "email", label: "Email", type: "text" },
       { key: "phone", label: "Phone", type: "text" },
@@ -126,7 +126,7 @@ export const schemas = {
     idPrefix: "so",
     statusField: "status",
     fields: [
-      { key: "code", label: "Order Code", type: "text", required: true },
+      { key: "code", label: "Order Code", type: "code", required: true },
       { key: "customer_id", label: "Customer", type: "text", required: true },
       { key: "order_date", label: "Order Date", type: "date", required: true },
       { key: "delivery_date", label: "Delivery Date", type: "date" },
@@ -175,7 +175,7 @@ export const schemas = {
     idPrefix: "tr",
     statusField: "status",
     fields: [
-      { key: "code", label: "Transfer Code", type: "text", required: true },
+      { key: "code", label: "Transfer Code", type: "code", required: true },
       { key: "from", label: "From Warehouse", type: "text", required: true },
       { key: "to", label: "To Warehouse", type: "text", required: true },
       { key: "date", label: "Date", type: "date", required: true },
@@ -197,7 +197,7 @@ export const schemas = {
     idPrefix: "bc",
     fields: [
       { key: "product_id", label: "Product", type: "text", required: true },
-      { key: "code", label: "Code", type: "text", required: true },
+      { key: "code", label: "Code", type: "code", required: true },
       { key: "type", label: "Type", type: "select", options: ["EAN13", "QR", "CODE128", "CUSTOM"] },
       { key: "printed_at", label: "Printed At", type: "date" },
       { key: "company_id", label: "Company", type: "text", required: true, hidden: true },
@@ -214,7 +214,7 @@ export const schemas = {
     idPrefix: "rcp",
     statusField: "payment",
     fields: [
-      { key: "code", label: "Receipt Code", type: "text", required: true },
+      { key: "code", label: "Receipt Code", type: "code", required: true },
       { key: "cashier", label: "Cashier", type: "text", required: true },
       { key: "date", label: "Date", type: "date", required: true },
       { key: "subtotal", label: "Subtotal", type: "number" },
@@ -281,7 +281,7 @@ export const schemas = {
     idPrefix: "emp",
     statusField: "employment_status",
     fields: [
-      { key: "employee_id", label: "Employee Id", type: "text", required: true },
+      { key: "employee_id", label: "Employee Id", type: "code", required: true },
       { key: "first_name", label: "First Name", type: "text", required: true },
       { key: "last_name", label: "Last Name", type: "text" },
       { key: "father_name", label: "Father Name", type: "text", required: true },
@@ -357,7 +357,7 @@ export const schemas = {
     statusField: "status",
     fields: [
       { key: "name", label: "Leave Type", type: "text", required: true },
-      { key: "code", label: "Code", type: "text", required: true },
+      { key: "code", label: "Code", type: "code", required: true },
       { key: "max_days_per_year", label: "Max Days/Year", type: "number", required: true },
       { key: "is_paid", label: "Paid Leave", type: "select", options: ["true", "false"], required: true },
       { key: "requires_document", label: "Requires Proof", type: "select", options: ["true", "false"] },
@@ -515,7 +515,7 @@ export const schemas = {
     idPrefix: "pol",
     statusField: "status",
     fields: [
-      { key: "code", label: "Policy Code", type: "text", required: true, placeholder: "e.g., HR-POL-001" },
+      { key: "code", label: "Policy Code", type: "code", required: true, placeholder: "e.g., HR-POL-001" },
       { key: "title", label: "Policy Title", type: "text", required: true },
       { key: "category", label: "Category", type: "select", options: ["Employment", "Code of Conduct", "Leave & Attendance", "Compensation & Benefits", "Health & Safety", "IT & Data Security", "Remote Work", "Performance", "Disciplinary", "Other"], required: true },
       { key: "department", label: "Applicable Department", type: "select", options: ["ALL", "HR", "FINANCE", "INVENTORY", "ENGINEERING", "SALES"] },
@@ -626,7 +626,7 @@ export const schemas = {
     idPrefix: "acc",
     statusField: "is_active",
     fields: [
-      { key: "account_code", label: "Account Code", type: "text", required: true },
+      { key: "account_code", label: "Account Code", type: "code", required: true },
       { key: "account_name", label: "Account Name", type: "text", required: true },
       { key: "parent_id", label: "Parent Account", type: "text" },
       { key: "account_type", label: "Type", type: "select", options: ["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE"], required: true },
@@ -652,7 +652,7 @@ export const schemas = {
     idPrefix: "inv",
     statusField: "status",
     fields: [
-      { key: "invoice_number", label: "Invoice #", type: "text", required: true },
+      { key: "invoice_number", label: "Invoice #", type: "code", required: true },
       { key: "invoice_type", label: "Type", type: "select", options: ["SALES", "PURCHASE", "CREDIT_NOTE", "DEBIT_NOTE"], required: true },
       { key: "invoice_date", label: "Invoice Date", type: "date", required: true },
       { key: "due_date", label: "Due Date", type: "date", required: true },
@@ -893,7 +893,7 @@ export const schemas = {
     fields: [
       { key: "employee_id", label: "Employee ID", type: "text", hidden: true },
       { key: "employee_name", label: "Employee Name", type: "text" },
-      { key: "employee_code", label: "Employee Code", type: "text" },
+      { key: "employee_code", label: "Employee Code", type: "code" },
       { key: "department", label: "Department", type: "text" },
       { key: "designation", label: "Designation", type: "text" },
       { key: "month", label: "Month", type: "number", required: true },
@@ -982,7 +982,7 @@ export const schemas = {
     statusField: "is_active",
     fields: [
       { key: "name", label: "Department Name", type: "text", required: true },
-      { key: "code", label: "Department Code", type: "text", required: true },
+      { key: "code", label: "Department Code", type: "code", required: true },
       { key: "head_id", label: "Department Head", type: "text" },
       { key: "description", label: "Description", type: "textarea" },
       { key: "is_active", label: "Status", type: "select", options: ["true", "false"] },
@@ -1181,7 +1181,7 @@ products: {
   
   fields: [
     // Core Product Info
-    { key: "sku", label: "SKU", type: "text", required: true, section: "Basic Information" },
+    { key: "sku", label: "SKU", type: "code", required: true, section: "Basic Information" },
     { key: "barcode", label: "Barcode/EAN", type: "text", section: "Basic Information" },
     { key: "name", label: "Product Name", type: "text", required: true, section: "Basic Information" },
     { key: "category_id", label: "Category", type: "searchable_select", required: true, section: "Basic Information" },
@@ -1273,7 +1273,7 @@ attributeGroups: {
   
   fields: [
     { key: "name", label: "Group Name", type: "text", required: true },
-    { key: "code", label: "Group Code", type: "text", required: true },
+      { key: "code", label: "Group Code", type: "code", required: true },
     { key: "description", label: "Description", type: "textarea" },
     { key: "display_order", label: "Display Order", type: "number" },
     { key: "is_active", label: "Status", type: "select", options: ["true", "false"] },
@@ -1301,7 +1301,7 @@ productVariants: {
   
   fields: [
     { key: "product_id", label: "Parent Product", type: "searchable_select", required: true },
-    { key: "sku", label: "SKU", type: "text", required: true },
+      { key: "sku", label: "SKU", type: "code", required: true },
     { key: "barcode", label: "Barcode", type: "text" },
     { key: "attribute_combination", label: "Attribute Combination", type: "json", required: true, description: 'e.g., {"size": "Large", "color": "Red"}' },
     { key: "cost_price", label: "Cost Price", type: "number", required: true },
@@ -1424,7 +1424,7 @@ brands: {
 
   fields: [
     { key: "name", label: "Brand Name", type: "text", required: true },
-    { key: "code", label: "Brand Code", type: "text", required: true },
+      { key: "code", label: "Brand Code", type: "code", required: true },
     { key: "country_of_origin", label: "Country", type: "country" },
     { key: "description", label: "Description", type: "textarea" },
     { key: "status", label: "Status", type: "select", options: ["active", "inactive", "discontinued"] },
@@ -1457,7 +1457,7 @@ categories: {
 
   fields: [
     { key: "name", label: "Category Name", type: "text", required: true },
-    { key: "code", label: "Category Code", type: "text", required: true },
+      { key: "code", label: "Category Code", type: "code", required: true },
     { key: "description", label: "Description", type: "textarea" },
     { key: "status", type: "select", options: ["active", "inactive"] },
 

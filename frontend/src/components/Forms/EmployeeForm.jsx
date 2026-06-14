@@ -5,7 +5,7 @@
 // ============================================
 
 import { useEffect, useState } from "react";
-import { X, Users, Building2, Briefcase, UserCog, Clock } from "lucide-react";
+import { X, Users, Building2, Briefcase, UserCog, Clock, RotateCw } from "lucide-react";
 import { useShiftTemplates } from "@/hooks/useShiftTemplates";
 import { useAssetCategories } from "@/hooks/useAssetCategories";
 import { useDesignations } from "@/hooks/useDesignations";
@@ -16,6 +16,7 @@ import { DatePicker } from "@/components/reuseable/DatePicker";
 import { useDepartments } from "@/hooks/useDepartments";
 import DepartmentFormModal from "@/components/settings/departments/DepartmentFormModal";
 import DesignationFormModal from "@/components/settings/designations/DesignationFormModal";
+import { useAutoCode } from "@/hooks/useAutoCode";
 
 export default function EmployeeForm({ initialData = null, onSubmit, onCancel }) {
   const [formData, setFormData] = useState({
@@ -56,6 +57,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
     old_default_shift_id: "",
   });
   const [loading, setLoading] = useState(false);
+  const { generateCode, validateCode } = useAutoCode("employee");
   const [deptModalOpen, setDeptModalOpen] = useState(false);
   const [desigModalOpen, setDesigModalOpen] = useState(false);
   // Departments
@@ -84,18 +86,9 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
         salary: initialData.salary ? Number(initialData.salary) : (initialData.expected_salary ? Number(initialData.expected_salary) : null),
       });
     } else {
-      generateEmployeeId();
+      generateCode().then(code => setFormData(prev => ({ ...prev, employee_id: code }))).catch(() => {});
     }
   }, [initialData]);
-
-  const generateEmployeeId = () => {
-    const nextNumber = employees.length + 1;
-    const paddedNumber = nextNumber.toString().padStart(3, "0");
-    setFormData(prev => ({
-      ...prev,
-      employee_id: `EMP-${paddedNumber}`,
-    }));
-  };
 
   const getManagerEmployees = () => {
     return employees.filter(emp =>
@@ -199,7 +192,12 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
               </h3>
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs">Employee ID</span>
-                <input type="text" disabled value={formData.employee_id} className="bg-muted/40 border border-border rounded-md h-9 px-2 font-mono text-xs cursor-not-allowed" />
+                <div className="flex gap-2">
+                  <input type="text" value={formData.employee_id} onChange={(e) => handleChange("employee_id", e.target.value)} onBlur={() => validateCode(formData.employee_id)} className="flex-1 bg-muted/40 border border-border rounded-md h-9 px-2 font-mono text-xs outline-none focus:ring-2 focus:ring-ring" />
+                  <button type="button" onClick={() => generateCode().then(code => setFormData(prev => ({ ...prev, employee_id: code }))).catch(() => {})} className="h-9 w-9 flex items-center justify-center rounded-md border border-border hover:bg-muted transition flex-shrink-0" title="Generate new code">
+                    <RotateCw className="w-4 h-4" />
+                  </button>
+                </div>
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-sm flex flex-col gap-1">
