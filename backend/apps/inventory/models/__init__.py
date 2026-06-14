@@ -1,10 +1,13 @@
 from .category import Category
 from .brand import Brand
 from .warehouse import Warehouse
-from .product import Product, ProductVariant, ProductAttribute, Tag, ProductTag, Inventory
+from .product import (
+    Product, ProductVariant, ProductAttribute,
+    Tag, TagGroup, ProductTag, Inventory
+)
 
 __all__ = [
     "Category", "Brand", "Warehouse",
     "Product", "ProductVariant", "ProductAttribute",
-    "Tag", "ProductTag", "Inventory"
+    "Tag", "TagGroup", "ProductTag", "Inventory"
 ]

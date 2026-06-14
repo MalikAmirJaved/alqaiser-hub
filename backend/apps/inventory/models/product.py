@@ -1,6 +1,5 @@
-# apps/inventory/models/product.py
 from django.db import models
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils.text import slugify
 
 class Product(models.Model):
     PRODUCT_TYPES = [
@@ -40,18 +39,11 @@ class Product(models.Model):
     product_type = models.CharField(max_length=20, choices=PRODUCT_TYPES, default='simple')
     unit_of_measure = models.CharField(max_length=10, choices=UNIT_CHOICES, default='PCS')
 
-    cost_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    selling_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    special_price = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
-    special_price_from = models.DateField(blank=True, null=True)
-    special_price_to = models.DateField(blank=True, null=True)
-    msrp = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
-
     tax_class = models.CharField(max_length=20, choices=TAX_CLASS_CHOICES, default='standard')
-    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
 
+    # Media
     main_image = models.URLField(blank=True)
-    gallery_images = models.JSONField(default=list)  # list of image URLs
+    gallery_images = models.JSONField(default=list)
     video_url = models.URLField(blank=True)
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
@@ -73,22 +65,28 @@ class Product(models.Model):
     def __str__(self):
         return f"{self.sku} - {self.name}"
 
+
 class ProductVariant(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variants')
     sku = models.CharField(max_length=100, unique=True)
     barcode = models.CharField(max_length=100, blank=True)
     attribute_combination = models.JSONField(default=dict)  # e.g., {"Color": "Red", "Size": "M"}
+
+    # Pricing – each variant has its own price
     cost_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     selling_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     special_price = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+
     main_image = models.URLField(blank=True)
     status = models.CharField(max_length=20, choices=Product.STATUS_CHOICES, default='active')
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'inventory_product_variants'
         indexes = [models.Index(fields=['sku'])]
+
 
 class ProductAttribute(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='attributes')
@@ -102,22 +100,56 @@ class ProductAttribute(models.Model):
         db_table = 'inventory_product_attributes'
         ordering = ['display_order']
 
+
+class TagGroup(models.Model):
+    """Organises tags into groups (e.g., Size, Color, Season)."""
+    company_id = models.IntegerField(db_index=True)
+    branch_id = models.IntegerField(db_index=True)
+    name = models.CharField(max_length=100)
+    slug = models.SlugField()
+    description = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'inventory_tag_groups'
+        unique_together = [['company_id', 'branch_id', 'slug']]
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
 class Tag(models.Model):
     company_id = models.IntegerField(db_index=True)
     branch_id = models.IntegerField(db_index=True)
-    name = models.CharField(max_length=100, unique=True)
-    slug = models.SlugField(unique=True)
-    color = models.CharField(max_length=7, blank=True)  # hex color
+    name = models.CharField(max_length=100)
+    slug = models.SlugField()
+    color = models.CharField(max_length=7, blank=True)
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+    group = models.ForeignKey(TagGroup, on_delete=models.SET_NULL, blank=True, null=True, related_name='tags')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = 'inventory_tags'
-        indexes = [models.Index(fields=['company_id', 'branch_id'])]
+        unique_together = [['company_id', 'branch_id', 'slug']]
+        indexes = [
+            models.Index(fields=['company_id', 'branch_id']),
+            models.Index(fields=['slug']),
+            models.Index(fields=['group', 'name']),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
+
 
 class ProductTag(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
@@ -127,7 +159,13 @@ class ProductTag(models.Model):
     class Meta:
         db_table = 'inventory_product_tags'
         unique_together = [['product', 'tag']]
+        indexes = [
+            models.Index(fields=['product', 'tag']),
+            models.Index(fields=['tag']),
+        ]
 
+
+# Inventory model – kept for future stock management module
 class Inventory(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='inventory_records')
     variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE, blank=True, null=True, related_name='inventory_records')
