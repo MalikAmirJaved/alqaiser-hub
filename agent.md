@@ -1477,6 +1477,20 @@ This means:
 | Generate button only rendered for `index === 0` | Generate button now renders for **all** variants |
 | `addVariant()` generated SKU client-side: `{productName}-VAR{n}` | `addVariant()` now calls `generateCode()` API first; falls back to client-side if API is unavailable |
 
+### Files Modified
+
+#### Backend:
+- `backend/apps/inventory/models/variant_attribute.py` — Made `variant` FK `null=True, blank=True`; added `UniqueConstraint(company_id, branch_id, attribute_key, attribute_value, condition=variant__isnull=True)` for catalog dedup
+- `backend/apps/inventory/views/attribute.py` — Added `create()` method to `AttributeViewSet` for persisting standalone catalog entries via POST
+
+#### Frontend:
+- `frontend/src/hooks/useAttributes.ts` — Added `useCreateAttribute()` mutation (POSTs to `/api/inventory/attributes/`, invalidates `inventory_attributes` cache)
+- `frontend/src/components/inventory/product/ProductForm.tsx` — Fixed `useAutoCode("account")` → `"product_variant"`; generate button now renders for all variants; `addVariant()` calls `generateCode()` API
+- `frontend/src/components/inventory/product/AttributeSelector.tsx` — Both `KeyDropdown` and `AttributeValueDropdown` call `useCreateAttribute().mutateAsync()` to persist custom keys/values immediately
+
+#### Docs:
+- `agent.md` — Added section 17 documenting the variant attribute catalog system and SKU auto-generation fixes
+
 ### DB Migration Required
 
 Run after pulling changes:
