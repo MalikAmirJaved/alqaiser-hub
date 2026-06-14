@@ -515,8 +515,8 @@ function ExitFormModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.employee_id || !formData.exit_date) {
-      toast.error("Employee and Exit Date are required.");
+    if (!formData.employee_id || !formData.exit_date || !formData.last_working_day || !formData.reason) {
+      toast.error("Employee, Exit Date, Last Working Day and reason are required.");
       return;
     }
     onSubmit(formData);

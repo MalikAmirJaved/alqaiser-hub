@@ -145,7 +145,7 @@ class ExitRecordView(BaseExitView):
         """Create new exit record"""
         company_id, branch_id = self._get_company_context(request)
         
-        required_fields = ['employee_id', 'exit_date', 'reason']
+        required_fields = ['employee_id', 'exit_date', 'last_working_day', 'reason']
         for field in required_fields:
             if not request.data.get(field):
                 return Response(
@@ -174,9 +174,8 @@ class ExitRecordView(BaseExitView):
             )
         
         exit_date = datetime.strptime(request.data['exit_date'], '%Y-%m-%d').date()
-        last_working_day = None
-        if request.data.get('last_working_day'):
-            last_working_day = datetime.strptime(request.data['last_working_day'], '%Y-%m-%d').date()
+        last_working_day = datetime.strptime(request.data['last_working_day'], '%Y-%m-%d').date()
+        
         
         exit_record = ExitRecord.objects.create(
             company_id=company_id,
