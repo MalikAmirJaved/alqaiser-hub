@@ -140,7 +140,7 @@ const columns = [
       </Link>
       {row.status === "PENDING" && (
         <>
-          {permissions?.approve && (
+          {permissions?.confirm && (
             <Button
               variant="ghost"
               size="icon"
@@ -152,20 +152,6 @@ const columns = [
               title="Confirm Transfer"
             >
               <CheckCircle className="h-4 w-4" />
-            </Button>
-          )}
-          {permissions?.delete && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-red-600"
-              onClick={() => {
-                setSelectedTransfer(row);
-                setConfirmAction("cancel");
-              }}
-              title="Cancel Transfer"
-            >
-              <XCircle className="h-4 w-4" />
             </Button>
           )}
         </>

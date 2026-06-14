@@ -14,6 +14,8 @@ import SearchableSelect from '@/components/reuseable/SearchableSelect';
 import ProductForm from '@/components/inventory/product/ProductForm';
 import VariantCard from '@/components/inventory/product/VariantCard';
 import { FormModal } from '@/components/inventory/supplier/FormModal';
+import { WarehouseForm } from '@/components/inventory/warehouse/WarehouseForm';
+import { AssetForm } from '@/components/HRAssets/AssetForm';
 import { useAutoCode } from '@/hooks/useAutoCode';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -75,22 +77,24 @@ const supplierFormFields = [
   { name: "contact_person", label: "Contact Person", type: "text" as const, placeholder: "Full name" },
   { name: "email", label: "Email", type: "email" as const, placeholder: "contact@company.com" },
   { name: "phone", label: "Phone", type: "tel" as const, placeholder: "+1 234 567 8900" },
-];
-
-const warehouseFormFields = [
-  { name: "code", label: "Code", type: "code" as const, required: true, placeholder: "e.g., WH-001" },
-  { name: "warehouse_name", label: "Warehouse Name", type: "text" as const, required: true, placeholder: "Main Warehouse" },
+  { name: "address_line", label: "Address Line", type: "textarea" as const, placeholder: "Street address" },
   { name: "country", label: "Country", type: "text" as const, placeholder: "Country" },
   { name: "state", label: "State", type: "text" as const, placeholder: "State/Province" },
   { name: "city", label: "City", type: "text" as const, placeholder: "City" },
+  { name: "postal_code", label: "Postal Code", type: "text" as const, placeholder: "Postal code" },
+  {
+    name: "status",
+    label: "Status",
+    type: "select" as const,
+    options: [
+      { value: "active", label: "Active" },
+      { value: "inactive", label: "Inactive" },
+      { value: "suspended", label: "Suspended" },
+    ],
+  },
 ];
 
-const assetFormFields = [
-  { name: "name", label: "Asset Name", type: "text" as const, required: true, placeholder: "e.g., Office Chair" },
-  { name: "brand", label: "Brand", type: "text" as const, placeholder: "Brand name" },
-  { name: "serial_number", label: "Serial Number", type: "text" as const, placeholder: "SN-001" },
-  { name: "description", label: "Description", type: "textarea" as const, placeholder: "Optional description" },
-];
+
 
 export function PurchaseOrderModal({
   isOpen,
@@ -112,7 +116,6 @@ export function PurchaseOrderModal({
   const createWarehouse = useCreateWarehouse();
   const createAsset = useCreateAsset();
   const { generateCode: genSupplierCode } = useAutoCode("supplier");
-  const { generateCode: genWarehouseCode } = useAutoCode("warehouse");
 
   const [supplierId, setSupplierId] = useState('');
   const [warehouseId, setWarehouseId] = useState('');
@@ -378,8 +381,15 @@ export function PurchaseOrderModal({
   };
 
   const handleCreateAsset = async (data: any) => {
+    const finalDescription = data.category
+      ? `Category: ${data.category}\n${data.description || ""}`
+      : data.description || "";
+
     await createAsset.mutateAsync({
-      ...data,
+      name: data.name,
+      brand: data.brand || undefined,
+      serial_number: data.sku || undefined,
+      description: finalDescription,
       is_active: true,
       purchase_date: new Date().toISOString().split("T")[0],
       purchase_price: 0,
@@ -754,27 +764,38 @@ export function PurchaseOrderModal({
       />
 
       {/* ── Create Warehouse modal ── */}
-      <FormModal
-        open={showWarehouseForm}
-        onClose={() => setShowWarehouseForm(false)}
-        title="Add New Warehouse"
-        fields={warehouseFormFields}
-        initialData={{}}
-        onSubmit={handleCreateWarehouse}
-        isSubmitting={createWarehouse.isPending}
-        onGenerateCode={genWarehouseCode}
-      />
+      {showWarehouseForm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto border bg-background p-6 shadow-lg sm:rounded-lg">
+            <div className="flex flex-col space-y-1.5 pb-4 border-b border-border mb-6">
+              <h2 className="text-lg font-semibold leading-none tracking-tight">Add New Warehouse</h2>
+              <p className="text-sm text-muted-foreground">Fill in the details below. Fields marked with * are required.</p>
+            </div>
+            <WarehouseForm
+              onSubmit={handleCreateWarehouse}
+              onCancel={() => setShowWarehouseForm(false)}
+              isLoading={createWarehouse.isPending}
+            />
+          </div>
+        </div>
+      )}
 
       {/* ── Create Asset modal ── */}
-      <FormModal
-        open={showAssetForm}
-        onClose={() => setShowAssetForm(false)}
-        title="Add New Asset"
-        fields={assetFormFields}
-        initialData={{}}
-        onSubmit={handleCreateAsset}
-        isSubmitting={createAsset.isPending}
-      />
+      {showAssetForm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto border bg-background p-6 shadow-lg sm:rounded-lg">
+            <div className="flex flex-col space-y-1.5 pb-4 border-b border-border mb-6">
+              <h2 className="text-lg font-semibold leading-none tracking-tight">Add New Asset</h2>
+              <p className="text-sm text-muted-foreground">Fill in the details below. Fields marked with * are required.</p>
+            </div>
+            <AssetForm
+              onSubmit={handleCreateAsset}
+              onCancel={() => setShowAssetForm(false)}
+              isLoading={createAsset.isPending}
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 }
