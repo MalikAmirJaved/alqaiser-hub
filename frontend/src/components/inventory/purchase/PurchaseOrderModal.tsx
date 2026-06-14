@@ -1,15 +1,19 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { X, Plus, Trash2, Info, Package, Building2, Check, Layers, ChevronDown } from 'lucide-react';
+import {
+  X, Plus, Trash2, Info, Package, Building2, Check, Layers,
+  ChevronDown, ShoppingCart, Warehouse, CalendarDays, FileText,
+  Tag, AlertCircle,
+} from 'lucide-react';
 import { useSuppliers, useCreateSupplier } from '@/hooks/useSuppliers';
 import { useWarehouses, useCreateWarehouse } from '@/hooks/useWarehouses';
 import { useProducts, useCreateProduct, useUpdateProduct } from '@/hooks/useProducts';
 import { useAssets, useCreateAsset } from '@/hooks/useAssets';
 import type { PurchaseOrder, PurchaseOrderPayload } from '@/types/purchase';
 import type { Product, ProductVariant, ProductPayload } from '@/hooks/useProducts';
-import { useCompanySettings } from "@/hooks/useCompanySettings";
-import { toast } from "sonner";
+import { useCompanySettings } from '@/hooks/useCompanySettings';
+import { toast } from 'sonner';
 import SearchableSelect from '@/components/reuseable/SearchableSelect';
 import ProductForm from '@/components/inventory/product/ProductForm';
 import VariantCard from '@/components/inventory/product/VariantCard';
@@ -19,6 +23,7 @@ import { AssetForm } from '@/components/HRAssets/AssetForm';
 import { useAutoCode } from '@/hooks/useAutoCode';
 import { useQueryClient } from '@tanstack/react-query';
 
+/* ─── Types ─────────────────────────────────────────────── */
 interface PurchaseOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -60,6 +65,7 @@ interface VariantFormData {
   attributes: { key: string; value: string }[];
 }
 
+/* ─── Helpers ────────────────────────────────────────────── */
 let _lineId = 1;
 const nextLineId = () => _lineId++;
 
@@ -67,35 +73,34 @@ function emptyLine(): LineItem {
   return { id: nextLineId(), selectedId: '', quantity_ordered: 1, unit_cost: 0, tax_rate: 0 };
 }
 
-function fmtCurrency(n: number, currencySymbol = '$') {
-  return `${currencySymbol}${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function fmtCurrency(n: number, sym = '$') {
+  return `${sym}${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 const supplierFormFields = [
-  { name: "code", label: "Code", type: "code" as const, required: true, placeholder: "e.g., SUP-001" },
-  { name: "name", label: "Name", type: "text" as const, required: true, placeholder: "Company name" },
-  { name: "contact_person", label: "Contact Person", type: "text" as const, placeholder: "Full name" },
-  { name: "email", label: "Email", type: "email" as const, placeholder: "contact@company.com" },
-  { name: "phone", label: "Phone", type: "tel" as const, placeholder: "+1 234 567 8900" },
-  { name: "address_line", label: "Address Line", type: "textarea" as const, placeholder: "Street address" },
-  { name: "country", label: "Country", type: "text" as const, placeholder: "Country" },
-  { name: "state", label: "State", type: "text" as const, placeholder: "State/Province" },
-  { name: "city", label: "City", type: "text" as const, placeholder: "City" },
-  { name: "postal_code", label: "Postal Code", type: "text" as const, placeholder: "Postal code" },
+  { name: 'code', label: 'Code', type: 'code' as const, required: true, placeholder: 'e.g., SUP-001' },
+  { name: 'name', label: 'Name', type: 'text' as const, required: true, placeholder: 'Company name' },
+  { name: 'contact_person', label: 'Contact Person', type: 'text' as const, placeholder: 'Full name' },
+  { name: 'email', label: 'Email', type: 'email' as const, placeholder: 'contact@company.com' },
+  { name: 'phone', label: 'Phone', type: 'tel' as const, placeholder: '+1 234 567 8900' },
+  { name: 'address_line', label: 'Address Line', type: 'textarea' as const, placeholder: 'Street address' },
+  { name: 'country', label: 'Country', type: 'text' as const, placeholder: 'Country' },
+  { name: 'state', label: 'State', type: 'text' as const, placeholder: 'State/Province' },
+  { name: 'city', label: 'City', type: 'text' as const, placeholder: 'City' },
+  { name: 'postal_code', label: 'Postal Code', type: 'text' as const, placeholder: 'Postal code' },
   {
-    name: "status",
-    label: "Status",
-    type: "select" as const,
+    name: 'status',
+    label: 'Status',
+    type: 'select' as const,
     options: [
-      { value: "active", label: "Active" },
-      { value: "inactive", label: "Inactive" },
-      { value: "suspended", label: "Suspended" },
+      { value: 'active', label: 'Active' },
+      { value: 'inactive', label: 'Inactive' },
+      { value: 'suspended', label: 'Suspended' },
     ],
   },
 ];
 
-
-
+/* ─── Main Modal ─────────────────────────────────────────── */
 export function PurchaseOrderModal({
   isOpen,
   onClose,
@@ -115,7 +120,7 @@ export function PurchaseOrderModal({
   const createSupplier = useCreateSupplier();
   const createWarehouse = useCreateWarehouse();
   const createAsset = useCreateAsset();
-  const { generateCode: genSupplierCode } = useAutoCode("supplier");
+  const { generateCode: genSupplierCode } = useAutoCode('supplier');
 
   const [supplierId, setSupplierId] = useState('');
   const [warehouseId, setWarehouseId] = useState('');
@@ -145,15 +150,14 @@ export function PurchaseOrderModal({
           id: v.id,
           label: `${v.sku} — ${p.product_name}`,
           buying_price: v.buying_price || 0,
-        }))
+        })),
       );
-    } else {
-      return assets.map((a) => ({
-        id: a.id,
-        label: `${a.name} ${a.brand ? `(${a.brand})` : ''} ${a.serial_number ? `- SN: ${a.serial_number}` : ''}`,
-        buying_price: a.purchase_price || 0,
-      }));
     }
+    return assets.map((a) => ({
+      id: a.id,
+      label: `${a.name}${a.brand ? ` (${a.brand})` : ''}${a.serial_number ? ` · SN: ${a.serial_number}` : ''}`,
+      buying_price: a.purchase_price || 0,
+    }));
   }, [inventoryType, products, assets]);
 
   const initialDerivedRef = useRef(false);
@@ -166,7 +170,7 @@ export function PurchaseOrderModal({
       setExpectedDate(initialData.expected_delivery_date?.slice(0, 10) ?? '');
       setNotes(initialData.notes ?? '');
       setInventoryType(initialData.inventory_type ?? 'FOR_SALE');
-      const loadedLines: LineItem[] =
+      const loaded: LineItem[] =
         initialData.lines?.map((l) => ({
           id: nextLineId(),
           selectedId: l.variant || l.asset || '',
@@ -174,7 +178,7 @@ export function PurchaseOrderModal({
           unit_cost: l.unit_cost,
           tax_rate: l.tax_rate,
         })) ?? [];
-      setLineItems(loadedLines.length > 0 ? loadedLines : [emptyLine()]);
+      setLineItems(loaded.length > 0 ? loaded : [emptyLine()]);
       initialDerivedRef.current = false;
     } else if (prefillFromRequest) {
       setSupplierId('');
@@ -211,9 +215,7 @@ export function PurchaseOrderModal({
       const p = products.find((prod) => prod.variants.some((v) => v.id === line.variant));
       if (p) pIds.add(p.id);
     }
-    if (pIds.size > 0) {
-      setSelectedProductIds(Array.from(pIds));
-    }
+    if (pIds.size > 0) setSelectedProductIds(Array.from(pIds));
   }, [initialData, products]);
 
   const handleTypeChange = (type: InventoryType) => {
@@ -223,8 +225,7 @@ export function PurchaseOrderModal({
   };
 
   const handleAddProduct = (productId: string) => {
-    if (!productId) return;
-    if (selectedProductIds.includes(productId)) return;
+    if (!productId || selectedProductIds.includes(productId)) return;
     const product = products.find((p) => p.id === productId);
     if (!product) return;
     setSelectedProductIds((prev) => [...prev, productId]);
@@ -237,9 +238,7 @@ export function PurchaseOrderModal({
     }));
     setLineItems((prev) => {
       const active = prev.filter((l) => l.selectedId);
-      return active.length === 0 && newLines.length === 0
-        ? [emptyLine()]
-        : [...active, ...newLines];
+      return active.length === 0 && newLines.length === 0 ? [emptyLine()] : [...active, ...newLines];
     });
   };
 
@@ -256,9 +255,7 @@ export function PurchaseOrderModal({
 
   const toggleCollapseProduct = (productId: string) => {
     setCollapsedProductIds((prev) =>
-      prev.includes(productId)
-        ? prev.filter((id) => id !== productId)
-        : [...prev, productId]
+      prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId],
     );
   };
 
@@ -272,13 +269,7 @@ export function PurchaseOrderModal({
       const variant = findVariant(variantId);
       if (!variant) return prev;
       const filtered = prev.filter((l) => l.selectedId !== '');
-      return [...filtered, {
-        id: nextLineId(),
-        selectedId: variantId,
-        quantity_ordered: 1,
-        unit_cost: variant.buying_price || 0,
-        tax_rate: 0,
-      }];
+      return [...filtered, { id: nextLineId(), selectedId: variantId, quantity_ordered: 1, unit_cost: variant.buying_price || 0, tax_rate: 0 }];
     });
   };
 
@@ -287,17 +278,15 @@ export function PurchaseOrderModal({
       const v = p.variants.find((v) => v.id === variantId);
       if (v) return v;
     }
-    return undefined;
   };
 
   const { subtotal, totalTax, grandTotal } = useMemo(() => {
-    let sub = 0;
-    let tax = 0;
+    let sub = 0, tax = 0;
     lineItems.forEach((l) => {
       if (!l.selectedId) return;
-      const lineAmt = l.quantity_ordered * l.unit_cost;
-      sub += lineAmt;
-      tax += lineAmt * (l.tax_rate / 100);
+      const amt = l.quantity_ordered * l.unit_cost;
+      sub += amt;
+      tax += amt * (l.tax_rate / 100);
     });
     return { subtotal: sub, totalTax: tax, grandTotal: sub + tax };
   }, [lineItems]);
@@ -307,11 +296,9 @@ export function PurchaseOrderModal({
   };
 
   const handleSelectChange = (id: number, selectedId: string) => {
-    const selected = variantOptions.find(opt => opt.id === selectedId);
+    const selected = variantOptions.find((opt) => opt.id === selectedId);
     updateLine(id, 'selectedId', selectedId as any);
-    if (selected && selected.buying_price > 0) {
-      updateLine(id, 'unit_cost', selected.buying_price as any);
-    }
+    if (selected && selected.buying_price > 0) updateLine(id, 'unit_cost', selected.buying_price as any);
   };
 
   const addLine = () => setLineItems((prev) => [...prev, emptyLine()]);
@@ -322,8 +309,7 @@ export function PurchaseOrderModal({
     const result = await createProduct.mutateAsync(data);
     setShowCreateProduct(false);
     await refetchProducts();
-    const newProductId = result.data.id;
-    setSelectedProductIds((prev) => [...prev, newProductId]);
+    setSelectedProductIds((prev) => [...prev, result.data.id]);
   };
 
   const handleCreateVariant = async (data: VariantFormData) => {
@@ -342,24 +328,11 @@ export function PurchaseOrderModal({
       is_active: product.is_active,
       variants: [
         ...product.variants.map((v) => ({
-          id: v.id,
-          sku: v.sku,
-          variantTitle: v.variant_title,
-          barcode: v.barcode,
-          sellingPrice: v.selling_price,
-          minStockLevel: v.min_stock_level,
-          maxStockLevel: v.max_stock_level,
+          id: v.id, sku: v.sku, variantTitle: v.variant_title, barcode: v.barcode,
+          sellingPrice: v.selling_price, minStockLevel: v.min_stock_level, maxStockLevel: v.max_stock_level,
           attributes: v.variant_attributes?.map((a) => ({ key: a.attribute_key, value: a.attribute_value })),
         })),
-        {
-          sku: data.sku,
-          variantTitle: data.variantTitle,
-          barcode: data.barcode,
-          sellingPrice: data.sellingPrice,
-          minStockLevel: data.minStockLevel,
-          maxStockLevel: data.maxStockLevel,
-          attributes: data.attributes,
-        },
+        { sku: data.sku, variantTitle: data.variantTitle, barcode: data.barcode, sellingPrice: data.sellingPrice, minStockLevel: data.minStockLevel, maxStockLevel: data.maxStockLevel, attributes: data.attributes },
       ],
     };
     await updateProduct.mutateAsync({ id: variantFormProductId, ...payload });
@@ -371,49 +344,34 @@ export function PurchaseOrderModal({
   const handleCreateSupplier = async (data: any) => {
     await createSupplier.mutateAsync(data);
     setShowSupplierForm(false);
-    await queryClient.invalidateQueries({ queryKey: ["inventory_supplier"] });
+    await queryClient.invalidateQueries({ queryKey: ['inventory_supplier'] });
   };
 
   const handleCreateWarehouse = async (data: any) => {
     await createWarehouse.mutateAsync(data);
     setShowWarehouseForm(false);
-    await queryClient.invalidateQueries({ queryKey: ["inventory_warehouse"] });
+    await queryClient.invalidateQueries({ queryKey: ['inventory_warehouse'] });
   };
 
   const handleCreateAsset = async (data: any) => {
     const finalDescription = data.category
-      ? `Category: ${data.category}\n${data.description || ""}`
-      : data.description || "";
-
+      ? `Category: ${data.category}\n${data.description || ''}`
+      : data.description || '';
     await createAsset.mutateAsync({
-      name: data.name,
-      brand: data.brand || undefined,
-      serial_number: data.sku || undefined,
-      description: finalDescription,
-      is_active: true,
-      purchase_date: new Date().toISOString().split("T")[0],
-      purchase_price: 0,
-      total_quantity: 1,
-      available_quantity: 1,
+      name: data.name, brand: data.brand || undefined, serial_number: data.sku || undefined,
+      description: finalDescription, is_active: true,
+      purchase_date: new Date().toISOString().split('T')[0],
+      purchase_price: 0, total_quantity: 1, available_quantity: 1,
     });
     setShowAssetForm(false);
-    await queryClient.invalidateQueries({ queryKey: ["assets"] });
+    await queryClient.invalidateQueries({ queryKey: ['assets'] });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     const selectedLines = lineItems.filter((l) => l.selectedId);
-    if (selectedLines.length === 0) {
-      toast.error("Add at least one line item.");
-      return;
-    }
-    const missingCost = selectedLines.find((l) => l.unit_cost <= 0);
-    if (missingCost) {
-      toast.error("Cost price is required for every line item.");
-      return;
-    }
-
+    if (selectedLines.length === 0) return void toast.error('Add at least one line item.');
+    if (selectedLines.find((l) => l.unit_cost <= 0)) return void toast.error('Unit cost is required for every item.');
     const payload: PurchaseOrderPayload = {
       supplier: supplierId,
       ...(inventoryType === 'FOR_SALE' ? { warehouse: warehouseId } : {}),
@@ -421,13 +379,12 @@ export function PurchaseOrderModal({
       order_date: orderDate || undefined,
       expected_delivery_date: expectedDate || undefined,
       notes: notes || undefined,
-      line_items: selectedLines
-        .map(({ selectedId, quantity_ordered, unit_cost, tax_rate }) => ({
-          ...(inventoryType === 'FOR_SALE' ? { variant: selectedId } : { asset: selectedId }),
-          quantity_ordered: Number(quantity_ordered),
-          unit_cost: Number(unit_cost),
-          tax_rate: Number(tax_rate),
-        })),
+      line_items: selectedLines.map(({ selectedId, quantity_ordered, unit_cost, tax_rate }) => ({
+        ...(inventoryType === 'FOR_SALE' ? { variant: selectedId } : { asset: selectedId }),
+        quantity_ordered: Number(quantity_ordered),
+        unit_cost: Number(unit_cost),
+        tax_rate: Number(tax_rate),
+      })),
       request_ids: prefillFromRequest ? [prefillFromRequest.id] : undefined,
     };
     await onSubmit(payload);
@@ -436,103 +393,79 @@ export function PurchaseOrderModal({
   if (!isOpen) return null;
 
   const activeLineIds = new Set(lineItems.filter((l) => l.selectedId).map((l) => l.selectedId));
+  const sym = CurrencyCode();
+  const hasLines = lineItems.some((l) => l.selectedId);
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-        <div className="bg-card w-full max-w-4xl max-h-[90vh] flex flex-col rounded-xl border border-border shadow-2xl">
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
-            <div>
-              <h2 className="text-base font-medium">
-                {initialData ? 'Edit Purchase Order' : 'New Purchase Order'}
-              </h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {initialData
-                  ? `Editing ${initialData.order_number}`
-                  : 'Order will be saved as Draft'}
-              </p>
+      <div className="po-overlay">
+        <div className="po-modal">
+
+          {/* ── Header ── */}
+          <div className="po-header">
+            <div className="po-header-left">
+              <div className="po-header-icon">
+                <ShoppingCart className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="po-title">
+                  {initialData ? 'Edit Purchase Order' : 'New Purchase Order'}
+                </h2>
+                <p className="po-subtitle">
+                  {initialData ? `Editing ${initialData.order_number}` : 'Saved as draft — confirm after review'}
+                </p>
+              </div>
             </div>
-            <button
-              onClick={onClose}
-              className="flex items-center justify-center w-7 h-7 rounded-md border border-border text-muted-foreground hover:bg-muted transition-colors"
-            >
+            <button onClick={onClose} className="po-close-btn" aria-label="Close">
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Scrollable body */}
-          <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
-            <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
+          {/* ── Body ── */}
+          <form onSubmit={handleSubmit} className="po-body-form">
+            <div className="po-scroll-area">
 
-              {/* ── Inventory Type (always on top) ── */}
-              <section>
-                <SectionLabel>Inventory Type</SectionLabel>
-                <div className="flex gap-6 mt-1">
-                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border-2 transition-colors"
-                    style={{
-                      borderColor: inventoryType === 'FOR_SALE' ? 'var(--color-primary)' : undefined,
-                      background: inventoryType === 'FOR_SALE' ? 'rgba(var(--color-primary-rgb), 0.05)' : undefined,
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="inventoryType"
-                      value="FOR_SALE"
-                      checked={inventoryType === 'FOR_SALE'}
-                      onChange={() => handleTypeChange('FOR_SALE')}
-                      className="w-4 h-4"
-                    />
-                    <div className="flex items-center gap-2">
-                      <Package className="w-5 h-5 text-blue-500" />
-                      <div>
-                        <p className="text-sm font-medium">For Sale (Stock)</p>
-                        <p className="text-xs text-muted-foreground">Items for resale — stock tracked</p>
-                      </div>
-                    </div>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border-2 transition-colors"
-                    style={{
-                      borderColor: inventoryType === 'OFFICE_INVENTORY' ? 'var(--color-primary)' : undefined,
-                      background: inventoryType === 'OFFICE_INVENTORY' ? 'rgba(var(--color-primary-rgb), 0.05)' : undefined,
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="inventoryType"
-                      value="OFFICE_INVENTORY"
-                      checked={inventoryType === 'OFFICE_INVENTORY'}
-                      onChange={() => handleTypeChange('OFFICE_INVENTORY')}
-                      className="w-4 h-4"
-                    />
-                    <div className="flex items-center gap-2">
-                      <Building2 className="w-5 h-5 text-purple-500" />
-                      <div>
-                        <p className="text-sm font-medium">Office Inventory (Asset)</p>
-                        <p className="text-xs text-muted-foreground">For internal use — added to HR Assets</p>
-                      </div>
-                    </div>
-                  </label>
+              {/* ── Step 1: Order Type ── */}
+              <div className="po-section">
+                <SectionHeader step={1} title="Order Type" />
+                <div className="po-type-grid">
+                  <TypeCard
+                    value="FOR_SALE"
+                    selected={inventoryType === 'FOR_SALE'}
+                    onSelect={() => handleTypeChange('FOR_SALE')}
+                    icon={<Package className="w-5 h-5 text-blue-500" />}
+                    title="Stock for Sale"
+                    description="Resale items — tracked in inventory"
+                  />
+                  <TypeCard
+                    value="OFFICE_INVENTORY"
+                    selected={inventoryType === 'OFFICE_INVENTORY'}
+                    onSelect={() => handleTypeChange('OFFICE_INVENTORY')}
+                    icon={<Building2 className="w-5 h-5 text-violet-500" />}
+                    title="Office Asset"
+                    description="Internal use — logged in HR Assets"
+                  />
                 </div>
                 {inventoryType === 'OFFICE_INVENTORY' && (
-                  <p className="text-xs text-info mt-2 flex items-center gap-1.5">
-                    <Info className="w-3 h-3" />
-                    Office inventory will be added to HR Assets and Finance Expenses upon receipt
-                  </p>
+                  <div className="po-info-banner">
+                    <Info className="w-3.5 h-3.5 shrink-0" />
+                    Added to HR Assets and Finance Expenses upon receipt
+                  </div>
                 )}
-              </section>
+              </div>
 
-              {/* ── Order details ── */}
-              <section>
-                <SectionLabel>Order Details</SectionLabel>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Supplier" required>
-                    <div className="flex gap-1.5">
+              {/* ── Step 2: Order Details ── */}
+              <div className="po-section">
+                <SectionHeader step={2} title="Order Details" />
+                <div className="po-fields-grid">
+                  {/* Supplier */}
+                  <FieldGroup label="Supplier" required icon={<Tag className="w-3.5 h-3.5" />}>
+                    <div className="po-input-row">
                       <select
                         value={supplierId}
                         onChange={(e) => setSupplierId(e.target.value)}
                         required
-                        className="field-input flex-1"
+                        className="po-select"
                       >
                         <option value="">Select supplier…</option>
                         {suppliers.map((s) => (
@@ -542,22 +475,23 @@ export function PurchaseOrderModal({
                       <button
                         type="button"
                         onClick={() => setShowSupplierForm(true)}
-                        className="flex items-center justify-center w-9 h-9 rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-primary transition-colors shrink-0"
-                        title="Create new supplier"
+                        className="po-add-btn"
+                        title="Add new supplier"
                       >
                         <Plus className="w-4 h-4" />
                       </button>
                     </div>
-                  </Field>
+                  </FieldGroup>
 
+                  {/* Warehouse (FOR_SALE only) */}
                   {inventoryType === 'FOR_SALE' && (
-                    <Field label="Destination warehouse" required>
-                      <div className="flex gap-1.5">
+                    <FieldGroup label="Destination Warehouse" required icon={<Warehouse className="w-3.5 h-3.5" />}>
+                      <div className="po-input-row">
                         <select
                           value={warehouseId}
                           onChange={(e) => setWarehouseId(e.target.value)}
                           required
-                          className="field-input flex-1"
+                          className="po-select"
                         >
                           <option value="">Select warehouse…</option>
                           {warehouses.map((w) => (
@@ -567,48 +501,52 @@ export function PurchaseOrderModal({
                         <button
                           type="button"
                           onClick={() => setShowWarehouseForm(true)}
-                          className="flex items-center justify-center w-9 h-9 rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-primary transition-colors shrink-0"
-                          title="Create new warehouse"
+                          className="po-add-btn"
+                          title="Add new warehouse"
                         >
                           <Plus className="w-4 h-4" />
                         </button>
                       </div>
-                    </Field>
+                    </FieldGroup>
                   )}
 
-                  <Field label="Order date">
+                  {/* Dates */}
+                  <FieldGroup label="Order Date" icon={<CalendarDays className="w-3.5 h-3.5" />}>
                     <input
                       type="date"
                       value={orderDate}
                       onChange={(e) => setOrderDate(e.target.value)}
-                      className="field-input"
+                      className="po-input"
                     />
-                  </Field>
+                  </FieldGroup>
 
-                  <Field label="Expected delivery">
+                  <FieldGroup label="Expected Delivery" icon={<CalendarDays className="w-3.5 h-3.5" />}>
                     <input
                       type="date"
                       value={expectedDate}
                       onChange={(e) => setExpectedDate(e.target.value)}
-                      className="field-input"
+                      className="po-input"
                     />
-                  </Field>
+                  </FieldGroup>
                 </div>
 
-                <Field label="Notes" className="mt-3">
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    rows={2}
-                    placeholder="Optional notes for this order…"
-                    className="field-input resize-none"
-                  />
-                </Field>
-              </section>
+                {/* Notes full width */}
+                <div className="mt-3">
+                  <FieldGroup label="Notes" icon={<FileText className="w-3.5 h-3.5" />}>
+                    <textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      rows={2}
+                      placeholder="Any special instructions or delivery notes…"
+                      className="po-input po-textarea"
+                    />
+                  </FieldGroup>
+                </div>
+              </div>
 
-              {/* ── Line items ── */}
-              <section>
-                <SectionLabel>Line Items</SectionLabel>
+              {/* ── Step 3: Line Items ── */}
+              <div className="po-section">
+                <SectionHeader step={3} title="Line Items" />
 
                 {inventoryType === 'FOR_SALE' ? (
                   <ProductVariantSelector
@@ -621,7 +559,7 @@ export function PurchaseOrderModal({
                     onToggleVariant={toggleVariant}
                     onUpdateLine={updateLine}
                     onRemoveLine={removeLine}
-                    currencySymbol={CurrencyCode()}
+                    currencySymbol={sym}
                     onCreateProduct={() => setShowCreateProduct(true)}
                     onCreateVariant={(productId) => { setVariantFormProductId(productId); setShowVariantForm(true); }}
                     collapsedProductIds={collapsedProductIds}
@@ -635,49 +573,42 @@ export function PurchaseOrderModal({
                     onChange={updateLine}
                     onRemove={removeLine}
                     onAdd={addLine}
-                    currencySymbol={CurrencyCode()}
+                    currencySymbol={sym}
                     onCreateAsset={() => setShowAssetForm(true)}
                   />
                 )}
 
-                {(inventoryType === 'OFFICE_INVENTORY' ? lineItems.some((l) => l.selectedId) : lineItems.filter(l => l.selectedId).length > 0) && (
-                  <div className="mt-4 bg-muted/40 rounded-lg px-4 py-3 space-y-1.5 text-sm">
-                    <div className="flex justify-between text-muted-foreground">
+                {/* Order summary */}
+                {hasLines && (
+                  <div className="po-summary">
+                    <div className="po-summary-row">
                       <span>Subtotal</span>
-                      <span>{fmtCurrency(subtotal, CurrencyCode())}</span>
+                      <span className="tabular-nums">{fmtCurrency(subtotal, sym)}</span>
                     </div>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Est. tax</span>
-                      <span>{fmtCurrency(totalTax, CurrencyCode())}</span>
+                    <div className="po-summary-row">
+                      <span>Tax</span>
+                      <span className="tabular-nums">{fmtCurrency(totalTax, sym)}</span>
                     </div>
-                    <div className="flex justify-between font-medium text-base pt-2 border-t border-border">
-                      <span>Order total</span>
-                      <span>{fmtCurrency(grandTotal, CurrencyCode())}</span>
+                    <div className="po-summary-total">
+                      <span>Total</span>
+                      <span className="tabular-nums">{fmtCurrency(grandTotal, sym)}</span>
                     </div>
                   </div>
                 )}
-              </section>
+              </div>
             </div>
 
-            {/* Footer */}
-            <div className="flex items-center justify-between px-5 py-3.5 border-t border-border bg-muted/30 flex-shrink-0">
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Info className="w-3.5 h-3.5" />
-                Saved as Draft — confirm after review
+            {/* ── Footer ── */}
+            <div className="po-footer">
+              <p className="po-footer-hint">
+                <Info className="w-3.5 h-3.5 shrink-0" />
+                Saved as draft until you confirm
               </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-4 py-2 text-sm border border-border rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                >
+              <div className="po-footer-actions">
+                <button type="button" onClick={onClose} className="po-btn-cancel">
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-4 py-2 text-sm font-medium rounded-lg bg-foreground text-background hover:opacity-85 disabled:opacity-50 transition-opacity"
-                >
+                <button type="submit" disabled={loading} className="po-btn-submit">
                   {loading ? 'Saving…' : initialData ? 'Update Order' : 'Create Order'}
                 </button>
               </div>
@@ -685,114 +616,460 @@ export function PurchaseOrderModal({
           </form>
         </div>
 
+        {/* ── Inline Styles ── */}
         <style>{`
-          .field-input {
+          /* Layout */
+          .po-overlay {
+            position: fixed; inset: 0; z-index: 50;
+            display: flex; align-items: center; justify-content: center;
+            padding: 1rem;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+          }
+          .po-modal {
+            background: var(--color-card);
+            width: 100%; max-width: 780px;
+            max-height: 92dvh;
+            display: flex; flex-direction: column;
+            border-radius: 14px;
+            border: 1px solid var(--color-border);
+            box-shadow: 0 24px 64px rgba(0,0,0,0.35);
+            overflow: hidden;
+          }
+
+          /* Header */
+          .po-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--color-border);
+            background: var(--color-card);
+            flex-shrink: 0;
+          }
+          .po-header-left { display: flex; align-items: center; gap: 12px; }
+          .po-header-icon {
+            width: 34px; height: 34px; border-radius: 8px;
+            background: var(--color-primary); color: var(--color-primary-foreground);
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+          }
+          .po-title { font-size: 15px; font-weight: 600; line-height: 1.3; }
+          .po-subtitle { font-size: 12px; color: var(--color-muted-foreground); margin-top: 1px; }
+          .po-close-btn {
+            width: 30px; height: 30px; border-radius: 7px;
+            border: 1px solid var(--color-border);
+            background: transparent; color: var(--color-muted-foreground);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: background 0.15s, color 0.15s;
+            flex-shrink: 0;
+          }
+          .po-close-btn:hover { background: var(--color-muted); color: var(--color-foreground); }
+
+          /* Body */
+          .po-body-form { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+          .po-scroll-area { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 0; }
+
+          /* Sections */
+          .po-section {
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--color-border);
+          }
+          .po-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+
+          /* Section Header with step number */
+          .po-section-header {
+            display: flex; align-items: center; gap: 10px;
+            margin-bottom: 14px;
+          }
+          .po-step-badge {
+            width: 22px; height: 22px; border-radius: 50%;
+            background: var(--color-primary);
+            color: var(--color-primary-foreground);
+            font-size: 11px; font-weight: 700;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+          }
+          .po-section-title {
+            font-size: 12px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.06em;
+            color: var(--color-foreground);
+          }
+
+          /* Type selector */
+          .po-type-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+          }
+          .po-type-card {
+            display: flex; align-items: flex-start; gap: 12px;
+            padding: 14px 16px;
+            border: 2px solid var(--color-border);
+            border-radius: 10px;
+            cursor: pointer; transition: border-color 0.15s, background 0.15s;
+            background: var(--color-background);
+            text-align: left;
+          }
+          .po-type-card:hover { border-color: var(--color-border-strong); }
+          .po-type-card.selected {
+            border-color: var(--color-primary);
+            background: color-mix(in oklab, var(--color-primary) 8%, var(--color-card));
+          }
+          .po-type-radio { display: none; }
+          .po-type-check {
+            width: 18px; height: 18px; border-radius: 50%;
+            border: 2px solid var(--color-border);
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; margin-top: 2px;
+            transition: border-color 0.15s, background 0.15s;
+          }
+          .po-type-card.selected .po-type-check {
+            border-color: var(--color-primary);
+            background: var(--color-primary);
+          }
+          .po-type-icon { flex-shrink: 0; }
+          .po-type-label { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+          .po-type-desc { font-size: 11px; color: var(--color-muted-foreground); line-height: 1.4; }
+
+          /* Info banner */
+          .po-info-banner {
+            margin-top: 10px;
+            display: flex; align-items: center; gap: 7px;
+            padding: 8px 12px;
+            background: color-mix(in oklab, var(--color-info) 10%, transparent);
+            border: 1px solid color-mix(in oklab, var(--color-info) 25%, transparent);
+            border-radius: 8px;
+            font-size: 12px;
+            color: var(--color-info);
+          }
+
+          /* Fields grid */
+          .po-fields-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+          }
+
+          /* Field group */
+          .po-field-group { display: flex; flex-direction: column; gap: 5px; }
+          .po-field-label {
+            display: flex; align-items: center; gap: 5px;
+            font-size: 11px; font-weight: 600;
+            color: var(--color-muted-foreground);
+            text-transform: uppercase; letter-spacing: 0.04em;
+          }
+          .po-field-label-icon { color: var(--color-muted-foreground); opacity: 0.7; }
+          .po-required { color: #ef4444; margin-left: 1px; }
+
+          /* Inputs */
+          .po-input, .po-select {
             width: 100%;
-            padding: 7px 10px;
+            padding: 8px 11px;
             font-size: 13px;
             border: 1px solid var(--color-border);
-            border-radius: 6px;
+            border-radius: 7px;
             background: var(--color-background);
             color: var(--color-foreground);
             outline: none;
             font-family: inherit;
-            transition: border-color 0.15s;
+            transition: border-color 0.15s, box-shadow 0.15s;
           }
-          .field-input:focus {
+          .po-input:focus, .po-select:focus {
             border-color: var(--color-ring);
+            box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-ring) 15%, transparent);
           }
-          .field-input::placeholder {
-            color: var(--color-muted-foreground);
-          }
-          .field-input:disabled {
-            background: var(--color-muted);
-            opacity: 0.7;
-            cursor: not-allowed;
-          }
-          select.field-input {
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+          .po-input::placeholder { color: var(--color-muted-foreground); opacity: 0.7; }
+          .po-textarea { resize: none; min-height: 60px; }
+          .po-select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
             background-repeat: no-repeat;
             background-position: right 10px center;
             background-size: 14px;
-            padding-right: 32px;
+            padding-right: 34px;
             appearance: none;
           }
-          input[type="date"].field-input {
-            color-scheme: dark;
+          input[type="date"].po-input { color-scheme: dark; }
+          .po-input:disabled, .po-select:disabled {
+            background: var(--color-muted); opacity: 0.6; cursor: not-allowed;
+          }
+
+          /* Input with add button */
+          .po-input-row { display: flex; gap: 6px; }
+          .po-input-row .po-select { flex: 1; }
+          .po-add-btn {
+            width: 36px; height: 36px; border-radius: 7px;
+            border: 1px solid var(--color-border);
+            background: var(--color-background);
+            color: var(--color-muted-foreground);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
+            flex-shrink: 0;
+          }
+          .po-add-btn:hover {
+            background: var(--color-muted);
+            color: var(--color-primary);
+            border-color: var(--color-primary);
+          }
+
+          /* Line items */
+          .po-line-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 10px;
+          }
+          .po-line-hint { font-size: 12px; color: var(--color-muted-foreground); }
+          .po-line-actions { display: flex; gap: 6px; }
+          .po-btn-sm {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 5px 10px; font-size: 12px; font-weight: 500;
+            border: 1px solid var(--color-border); border-radius: 6px;
+            color: var(--color-muted-foreground);
+            background: transparent;
+            cursor: pointer; transition: background 0.15s, color 0.15s;
+          }
+          .po-btn-sm:hover { background: var(--color-muted); color: var(--color-primary); }
+
+          /* Asset rows */
+          .po-asset-col-header {
+            display: grid;
+            grid-template-columns: 1fr 72px 104px 78px 32px;
+            gap: 8px;
+            padding: 0 4px;
+            margin-bottom: 6px;
+          }
+          .po-asset-col-label {
+            font-size: 10px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.06em; color: var(--color-muted-foreground);
+          }
+          .po-asset-row {
+            display: grid;
+            grid-template-columns: 1fr 72px 104px 78px 32px;
+            gap: 8px;
+            align-items: center;
+            background: var(--color-muted)/20;
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 8px 10px;
+            margin-bottom: 6px;
+          }
+          .po-input-prefix {
+            position: relative;
+          }
+          .po-prefix-sym {
+            position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+            font-size: 12px; color: var(--color-muted-foreground); pointer-events: none;
+          }
+          .po-input-prefix .po-input { padding-left: 20px; }
+          .po-input-suffix { position: relative; }
+          .po-suffix-sym {
+            position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
+            font-size: 12px; color: var(--color-muted-foreground); pointer-events: none;
+          }
+          .po-input-suffix .po-input { padding-right: 22px; }
+
+          .po-remove-btn {
+            width: 28px; height: 28px; border-radius: 6px; border: none;
+            background: transparent; color: var(--color-muted-foreground);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: background 0.15s, color 0.15s;
+          }
+          .po-remove-btn:hover { background: rgba(239,68,68,0.1); color: #ef4444; }
+          .po-remove-btn:disabled { opacity: 0.3; pointer-events: none; }
+
+          /* Empty state */
+          .po-empty {
+            border: 2px dashed var(--color-border);
+            border-radius: 10px;
+            padding: 36px 16px;
+            text-align: center;
+            color: var(--color-muted-foreground);
+          }
+          .po-empty-icon { margin: 0 auto 10px; opacity: 0.35; }
+          .po-empty-title { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+          .po-empty-sub { font-size: 12px; opacity: 0.7; }
+
+          /* Product card */
+          .po-product-card {
+            border: 1px solid var(--color-border);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 10px;
+          }
+          .po-product-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 14px;
+            background: var(--color-muted)/30;
+            cursor: pointer; user-select: none;
+            gap: 8px;
+          }
+          .po-product-header:hover { background: var(--color-muted)/50; }
+          .po-product-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+          .po-product-name { font-size: 13px; font-weight: 600; truncate; }
+          .po-product-meta { font-size: 11px; color: var(--color-muted-foreground); white-space: nowrap; }
+          .po-product-selected { color: var(--color-primary); font-weight: 600; }
+          .po-product-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+          .po-product-action-btn {
+            font-size: 11px; font-weight: 500; background: none; border: none;
+            cursor: pointer; transition: color 0.15s; padding: 2px 0;
+          }
+          .po-product-action-btn.primary { color: var(--color-primary); }
+          .po-product-action-btn.primary:hover { opacity: 0.75; }
+          .po-product-action-btn.danger { color: var(--color-muted-foreground); }
+          .po-product-action-btn.danger:hover { color: #ef4444; }
+
+          /* Variant row */
+          .po-variant-row {
+            display: flex; align-items: flex-start; gap: 10px;
+            padding: 10px 14px;
+            border-top: 1px solid var(--color-border);
+            transition: background 0.12s;
+          }
+          .po-variant-row.active { background: color-mix(in oklab, var(--color-primary) 5%, transparent); }
+          .po-variant-row:hover:not(.active) { background: var(--color-muted)/20; }
+          .po-variant-checkbox {
+            width: 18px; height: 18px; border-radius: 5px;
+            border: 2px solid var(--color-border);
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; margin-top: 2px; cursor: pointer;
+            transition: border-color 0.15s, background 0.15s;
+            background: transparent;
+          }
+          .po-variant-checkbox.checked {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: var(--color-primary-foreground);
+          }
+          .po-variant-sku {
+            font-family: var(--font-mono); font-size: 11px;
+            font-weight: 700; color: var(--color-foreground);
+          }
+          .po-variant-title { font-size: 12px; color: var(--color-muted-foreground); }
+          .po-variant-attrs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+          .po-attr-chip {
+            font-size: 10px; font-weight: 500;
+            padding: 1px 6px; border-radius: 4px;
+            background: var(--color-muted); color: var(--color-muted-foreground);
+          }
+          .po-variant-stats {
+            display: flex; gap: 12px; margin-top: 4px;
+            font-size: 11px; color: var(--color-muted-foreground);
+          }
+          .po-variant-inline-fields {
+            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
+            margin-top: 10px; margin-left: 28px;
+          }
+          .po-inline-label {
+            font-size: 10px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.04em;
+            color: var(--color-muted-foreground);
+            margin-bottom: 3px;
+          }
+
+          /* Order summary */
+          .po-summary {
+            margin-top: 14px;
+            border: 1px solid var(--color-border);
+            border-radius: 10px;
+            overflow: hidden;
+          }
+          .po-summary-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 9px 14px;
+            font-size: 13px;
+            color: var(--color-muted-foreground);
+            border-bottom: 1px solid var(--color-border);
+          }
+          .po-summary-total {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 11px 14px;
+            font-size: 14px; font-weight: 700;
+            background: var(--color-muted)/30;
+            color: var(--color-foreground);
+          }
+
+          /* Footer */
+          .po-footer {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 20px;
+            border-top: 1px solid var(--color-border);
+            background: var(--color-muted)/20;
+            flex-shrink: 0;
+            gap: 12px;
+          }
+          .po-footer-hint {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 11px; color: var(--color-muted-foreground);
+          }
+          .po-footer-actions { display: flex; gap: 8px; flex-shrink: 0; }
+          .po-btn-cancel {
+            padding: 8px 16px; font-size: 13px; font-weight: 500;
+            border: 1px solid var(--color-border); border-radius: 8px;
+            color: var(--color-muted-foreground); background: transparent;
+            cursor: pointer; transition: background 0.15s, color 0.15s;
+          }
+          .po-btn-cancel:hover { background: var(--color-muted); color: var(--color-foreground); }
+          .po-btn-submit {
+            padding: 8px 20px; font-size: 13px; font-weight: 600;
+            border: none; border-radius: 8px;
+            background: var(--color-primary); color: var(--color-primary-foreground);
+            cursor: pointer; transition: opacity 0.15s;
+          }
+          .po-btn-submit:hover { opacity: 0.88; }
+          .po-btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+          /* ── Mobile ── */
+          @media (max-width: 600px) {
+            .po-overlay { padding: 0; align-items: flex-end; }
+            .po-modal {
+              max-width: 100%; border-radius: 16px 16px 0 0;
+              max-height: 96dvh;
+            }
+            .po-type-grid { grid-template-columns: 1fr; }
+            .po-fields-grid { grid-template-columns: 1fr; }
+            .po-asset-col-header { display: none; }
+            .po-asset-row {
+              grid-template-columns: 1fr 1fr;
+              grid-template-rows: auto auto;
+            }
+            .po-asset-row > .po-select { grid-column: 1 / -1; }
+            .po-footer { flex-direction: column; align-items: stretch; }
+            .po-footer-actions { justify-content: flex-end; }
+            .po-footer-hint { display: none; }
+            .po-variant-inline-fields { grid-template-columns: 1fr 1fr; }
           }
         `}</style>
       </div>
 
-      {/* ── Create Product modal ── */}
+      {/* ── Sub-modals ── */}
       {showCreateProduct && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-4xl bg-card rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <ProductForm
-              onSubmit={handleCreateProductSubmit}
-              isLoading={createProduct.isPending}
-              isEditing={false}
-              onCancel={() => setShowCreateProduct(false)}
-            />
+            <ProductForm onSubmit={handleCreateProductSubmit} isLoading={createProduct.isPending} isEditing={false} onCancel={() => setShowCreateProduct(false)} />
           </div>
         </div>
       )}
-
-      {/* ── Create Variant modal ── */}
       {showVariantForm && variantFormProductId && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-xl bg-card rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <VariantCard
-              standalone
-              onSubmit={handleCreateVariant}
-              onCancel={() => { setShowVariantForm(false); setVariantFormProductId(null); }}
-              loading={updateProduct.isPending}
-            />
+            <VariantCard standalone onSubmit={handleCreateVariant} onCancel={() => { setShowVariantForm(false); setVariantFormProductId(null); }} loading={updateProduct.isPending} />
           </div>
         </div>
       )}
-
-      {/* ── Create Supplier modal ── */}
-      <FormModal
-        open={showSupplierForm}
-        onClose={() => setShowSupplierForm(false)}
-        title="Add New Supplier"
-        fields={supplierFormFields}
-        initialData={{}}
-        onSubmit={handleCreateSupplier}
-        isSubmitting={createSupplier.isPending}
-        onGenerateCode={genSupplierCode}
-      />
-
-      {/* ── Create Warehouse modal ── */}
+      <FormModal open={showSupplierForm} onClose={() => setShowSupplierForm(false)} title="Add New Supplier" fields={supplierFormFields} initialData={{}} onSubmit={handleCreateSupplier} isSubmitting={createSupplier.isPending} onGenerateCode={genSupplierCode} />
       {showWarehouseForm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto border bg-background p-6 shadow-lg sm:rounded-lg">
             <div className="flex flex-col space-y-1.5 pb-4 border-b border-border mb-6">
-              <h2 className="text-lg font-semibold leading-none tracking-tight">Add New Warehouse</h2>
-              <p className="text-sm text-muted-foreground">Fill in the details below. Fields marked with * are required.</p>
+              <h2 className="text-lg font-semibold">Add New Warehouse</h2>
+              <p className="text-sm text-muted-foreground">Fields marked * are required.</p>
             </div>
-            <WarehouseForm
-              onSubmit={handleCreateWarehouse}
-              onCancel={() => setShowWarehouseForm(false)}
-              isLoading={createWarehouse.isPending}
-            />
+            <WarehouseForm onSubmit={handleCreateWarehouse} onCancel={() => setShowWarehouseForm(false)} isLoading={createWarehouse.isPending} />
           </div>
         </div>
       )}
-
-      {/* ── Create Asset modal ── */}
       {showAssetForm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto border bg-background p-6 shadow-lg sm:rounded-lg">
             <div className="flex flex-col space-y-1.5 pb-4 border-b border-border mb-6">
-              <h2 className="text-lg font-semibold leading-none tracking-tight">Add New Asset</h2>
-              <p className="text-sm text-muted-foreground">Fill in the details below. Fields marked with * are required.</p>
+              <h2 className="text-lg font-semibold">Add New Asset</h2>
+              <p className="text-sm text-muted-foreground">Fields marked * are required.</p>
             </div>
-            <AssetForm
-              onSubmit={handleCreateAsset}
-              onCancel={() => setShowAssetForm(false)}
-              isLoading={createAsset.isPending}
-            />
+            <AssetForm onSubmit={handleCreateAsset} onCancel={() => setShowAssetForm(false)} isLoading={createAsset.isPending} />
           </div>
         </div>
       )}
@@ -800,22 +1077,160 @@ export function PurchaseOrderModal({
   );
 }
 
-// ── Product & Variant Selector (FOR_SALE) ──
+/* ─── Sub-components ──────────────────────────────────────── */
+
+function SectionHeader({ step, title }: { step: number; title: string }) {
+  return (
+    <div className="po-section-header">
+      <div className="po-step-badge">{step}</div>
+      <span className="po-section-title">{title}</span>
+    </div>
+  );
+}
+
+function TypeCard({
+  value, selected, onSelect, icon, title, description,
+}: {
+  value: string; selected: boolean; onSelect: () => void;
+  icon: React.ReactNode; title: string; description: string;
+}) {
+  return (
+    <label className={`po-type-card ${selected ? 'selected' : ''}`}>
+      <input type="radio" name="inventoryType" value={value} checked={selected} onChange={onSelect} className="po-type-radio" />
+      <div className="po-type-check">
+        {selected && <Check className="w-2.5 h-2.5 text-white" />}
+      </div>
+      <div className="po-type-icon">{icon}</div>
+      <div>
+        <p className="po-type-label">{title}</p>
+        <p className="po-type-desc">{description}</p>
+      </div>
+    </label>
+  );
+}
+
+function FieldGroup({
+  label, required, icon, children,
+}: {
+  label: string; required?: boolean; icon?: React.ReactNode; children: React.ReactNode;
+}) {
+  return (
+    <div className="po-field-group">
+      <label className="po-field-label">
+        {icon && <span className="po-field-label-icon">{icon}</span>}
+        {label}
+        {required && <span className="po-required">*</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+/* ── Asset Line Items ─────────────────────────────────────── */
+function AssetLineItems({
+  lineItems, options, onSelectChange, onChange, onRemove, onAdd, currencySymbol, onCreateAsset,
+}: {
+  lineItems: LineItem[];
+  options: SelectOption[];
+  onSelectChange: (id: number, selectedId: string) => void;
+  onChange: <K extends keyof LineItem>(id: number, field: K, value: LineItem[K]) => void;
+  onRemove: (id: number) => void;
+  onAdd: () => void;
+  currencySymbol: string;
+  onCreateAsset: () => void;
+}) {
+  return (
+    <div>
+      <div className="po-line-header">
+        <span className="po-line-hint">Select assets to order</span>
+        <div className="po-line-actions">
+          <button type="button" onClick={onCreateAsset} className="po-btn-sm">
+            <Plus className="w-3.5 h-3.5" /> New Asset
+          </button>
+          <button type="button" onClick={onAdd} className="po-btn-sm">
+            <Plus className="w-3.5 h-3.5" /> Add Row
+          </button>
+        </div>
+      </div>
+
+      {lineItems.length === 0 ? (
+        <div className="po-empty">
+          <Package className="po-empty-icon w-8 h-8 mx-auto" />
+          <p className="po-empty-title">No items added yet</p>
+        </div>
+      ) : (
+        <>
+          <div className="po-asset-col-header">
+            <span className="po-asset-col-label">Asset</span>
+            <span className="po-asset-col-label" style={{ textAlign: 'right' }}>Qty</span>
+            <span className="po-asset-col-label" style={{ textAlign: 'right' }}>Unit Cost</span>
+            <span className="po-asset-col-label" style={{ textAlign: 'right' }}>Tax %</span>
+            <span />
+          </div>
+          {lineItems.map((line) => (
+            <div key={line.id} className="po-asset-row">
+              <select
+                value={line.selectedId}
+                onChange={(e) => onSelectChange(line.id, e.target.value)}
+                className="po-select"
+              >
+                <option value="">Select asset…</option>
+                {options.map((opt) => (
+                  <option key={opt.id} value={opt.id}>{opt.label}</option>
+                ))}
+              </select>
+
+              <input
+                type="number" min="1"
+                value={line.quantity_ordered}
+                onChange={(e) => onChange(line.id, 'quantity_ordered', parseInt(e.target.value) || 0)}
+                className="po-input"
+                style={{ textAlign: 'right' }}
+              />
+
+              <div className="po-input-prefix">
+                <span className="po-prefix-sym">{currencySymbol}</span>
+                <input
+                  type="number" step="0.01" min="0"
+                  value={line.unit_cost}
+                  onChange={(e) => onChange(line.id, 'unit_cost', parseFloat(e.target.value) || 0)}
+                  className="po-input"
+                  style={{ textAlign: 'right', paddingLeft: '20px' }}
+                />
+              </div>
+
+              <div className="po-input-suffix">
+                <input
+                  type="number" step="0.1" min="0" max="100"
+                  value={line.tax_rate}
+                  onChange={(e) => onChange(line.id, 'tax_rate', parseFloat(e.target.value) || 0)}
+                  className="po-input"
+                  style={{ textAlign: 'right', paddingRight: '22px' }}
+                />
+                <span className="po-suffix-sym">%</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onRemove(line.id)}
+                disabled={lineItems.length <= 1}
+                className="po-remove-btn"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ── Product Variant Selector ─────────────────────────────── */
 function ProductVariantSelector({
-  products,
-  selectedProducts,
-  onAddProduct,
-  onRemoveProduct,
-  lineItems,
-  activeLineIds,
-  onToggleVariant,
-  onUpdateLine,
-  onRemoveLine,
-  currencySymbol,
-  onCreateProduct,
-  onCreateVariant,
-  collapsedProductIds,
-  onToggleCollapse,
+  products, selectedProducts, onAddProduct, onRemoveProduct,
+  lineItems, activeLineIds, onToggleVariant, onUpdateLine, onRemoveLine,
+  currencySymbol, onCreateProduct, onCreateVariant, collapsedProductIds, onToggleCollapse,
 }: {
   products: Product[];
   selectedProducts: Product[];
@@ -839,193 +1254,164 @@ function ProductVariantSelector({
 
   return (
     <div className="space-y-3">
-      {/* Product search + multi-select */}
-      <div className="max-w-md">
-        <label className="text-xs font-medium text-muted-foreground mb-1 block">Add Products</label>
+      {/* Product search */}
+      <div>
+        <div className="po-line-header">
+          <span className="po-line-hint">Search and add products</span>
+          <button type="button" onClick={onCreateProduct} className="po-btn-sm">
+            <Plus className="w-3.5 h-3.5" /> New Product
+          </button>
+        </div>
         <SearchableSelect
           value=""
           onChange={onAddProduct}
           options={productOptions}
-          placeholder="Search and add a product…"
+          placeholder="Search products…"
           onAddNew={onCreateProduct}
           addNewLabel="+ Create New Product"
         />
       </div>
 
       {selectedProducts.length === 0 ? (
-        <div className="border border-dashed border-border rounded-lg py-10 text-center text-muted-foreground">
-          <Layers className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
-          <p className="text-sm">Add products to include their variants</p>
-          <p className="text-xs mt-1 text-muted-foreground/60">All variants will be pre-filled — just toggle the ones you need</p>
+        <div className="po-empty">
+          <Layers className="po-empty-icon w-8 h-8 mx-auto" />
+          <p className="po-empty-title">No products added yet</p>
+          <p className="po-empty-sub">Search above to add a product and select its variants</p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div>
           {selectedProducts.map((product) => {
             const isCollapsed = collapsedProductIds.includes(product.id);
             const selectedCount = product.variants.filter((v) => activeLineIds.has(v.id)).length;
             return (
-              <div key={product.id} className="border border-border rounded-lg">
-                {/* Product header - clickable to toggle collapse */}
-                <div
-                  className="px-3 py-2 bg-muted/30 flex items-center justify-between cursor-pointer select-none"
-                  onClick={() => onToggleCollapse(product.id)}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
+              <div key={product.id} className="po-product-card">
+                <div className="po-product-header" onClick={() => onToggleCollapse(product.id)}>
+                  <div className="po-product-header-left">
                     <ChevronDown
-                      className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
+                      className="w-4 h-4 text-muted-foreground shrink-0 transition-transform"
+                      style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}
                     />
                     <Package className="w-4 h-4 text-primary shrink-0" />
-                    <span className="text-sm font-medium truncate">{product.product_name}</span>
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {product.variants.length} variants
+                    <span className="po-product-name truncate">{product.product_name}</span>
+                    <span className="po-product-meta">
+                      {product.variants.length} variant{product.variants.length !== 1 ? 's' : ''}
                       {selectedCount > 0 && (
-                        <span className="ml-1.5 text-primary font-medium">· {selectedCount} selected</span>
+                        <span className="po-product-selected"> · {selectedCount} selected</span>
                       )}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <div className="po-product-actions" onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
                       onClick={() => onCreateVariant(product.id)}
-                      className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors font-medium"
+                      className="po-product-action-btn primary"
                     >
-                      <Plus className="w-3 h-3" /> Variant
+                      + Variant
                     </button>
                     <button
                       type="button"
                       onClick={() => onRemoveProduct(product.id)}
-                      className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                      className="po-product-action-btn danger"
                     >
                       Remove
                     </button>
                   </div>
                 </div>
 
-                {/* Collapsible variant list */}
                 {!isCollapsed && (
                   product.variants.length === 0 ? (
-                    <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-                      No variants found for this product
+                    <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+                      No variants for this product
                     </div>
                   ) : (
-                    <div className="divide-y divide-border">
-                      {product.variants.map((variant) => {
-                        const isActive = activeLineIds.has(variant.id);
-                        const lineItem = lineItems.find((l) => l.selectedId === variant.id);
-                        return (
-                          <div
-                            key={variant.id}
-                            className={`px-3 py-2.5 transition-colors ${isActive ? 'bg-primary/5' : 'hover:bg-muted/20'}`}
+                    product.variants.map((variant) => {
+                      const isActive = activeLineIds.has(variant.id);
+                      const lineItem = lineItems.find((l) => l.selectedId === variant.id);
+                      return (
+                        <div key={variant.id} className={`po-variant-row ${isActive ? 'active' : ''}`}>
+                          <button
+                            type="button"
+                            onClick={() => onToggleVariant(variant.id)}
+                            className={`po-variant-checkbox ${isActive ? 'checked' : ''}`}
                           >
-                            <div className="flex items-start gap-3">
-                              {/* Checkbox */}
-                              <button
-                                type="button"
-                                onClick={() => onToggleVariant(variant.id)}
-                                className={`mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
-                                  isActive
-                                    ? 'bg-primary border-primary text-primary-foreground'
-                                    : 'border-muted-foreground/30 hover:border-primary'
-                                }`}
-                              >
-                                {isActive && <Check className="w-3 h-3" />}
-                              </button>
+                            {isActive && <Check className="w-2.5 h-2.5" />}
+                          </button>
 
-                              {/* Variant info */}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-mono text-xs font-semibold">{variant.sku}</span>
-                                  {variant.variant_title && (
-                                    <span className="text-xs text-muted-foreground">— {variant.variant_title}</span>
-                                  )}
-                                </div>
-
-                                {/* Attributes */}
-                                {variant.variant_attributes && variant.variant_attributes.length > 0 && (
-                                  <div className="flex flex-wrap gap-1 mt-1">
-                                    {variant.variant_attributes.map((attr) => (
-                                      <span
-                                        key={attr.id}
-                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground"
-                                      >
-                                        {attr.attribute_key}: {attr.attribute_value}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {/* Stock info */}
-                                <div className="flex items-center gap-3 mt-1">
-                                  <span className="text-[11px] text-muted-foreground">
-                                    Stock: <span className={`font-medium ${variant.total_stock > 0 ? 'text-success' : 'text-destructive'}`}>
-                                      {variant.total_stock}
-                                    </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="po-variant-sku">{variant.sku}</span>
+                              {variant.variant_title && (
+                                <span className="po-variant-title">— {variant.variant_title}</span>
+                              )}
+                            </div>
+                            {variant.variant_attributes && variant.variant_attributes.length > 0 && (
+                              <div className="po-variant-attrs">
+                                {variant.variant_attributes.map((attr) => (
+                                  <span key={attr.id} className="po-attr-chip">
+                                    {attr.attribute_key}: {attr.attribute_value}
                                   </span>
-                                  <span className="text-[11px] text-muted-foreground">
-                                    Price: <span className="font-medium">{currencySymbol}{(variant.buying_price || 0).toFixed(2)}</span>
-                                  </span>
-                                </div>
+                                ))}
                               </div>
+                            )}
+                            <div className="po-variant-stats">
+                              <span>
+                                Stock:{' '}
+                                <span style={{ color: variant.total_stock > 0 ? 'var(--color-success)' : 'var(--color-destructive)', fontWeight: 600 }}>
+                                  {variant.total_stock}
+                                </span>
+                              </span>
+                              <span>
+                                Buy price:{' '}
+                                <span style={{ fontWeight: 600, color: 'var(--color-foreground)' }}>
+                                  {currencySymbol}{(variant.buying_price || 0).toFixed(2)}
+                                </span>
+                              </span>
                             </div>
 
-                            {/* Inline fields when active */}
                             {isActive && lineItem && (
-                              <div className="mt-2 ml-8 grid grid-cols-3 gap-2">
+                              <div className="po-variant-inline-fields">
                                 <div>
-                                  <label className="text-[10px] text-muted-foreground font-medium">Qty</label>
+                                  <p className="po-inline-label">Qty</p>
                                   <input
-                                    type="number"
-                                    min="1"
+                                    type="number" min="1"
                                     value={lineItem.quantity_ordered}
-                                    onChange={(e) => onUpdateLine(lineItem.id, 'quantity_ordered' as const, parseInt(e.target.value) || 0)}
-                                    className="field-input text-xs text-right tabular-nums"
+                                    onChange={(e) => onUpdateLine(lineItem.id, 'quantity_ordered', parseInt(e.target.value) || 0)}
+                                    className="po-input"
+                                    style={{ textAlign: 'right' }}
                                   />
                                 </div>
                                 <div>
-                                  <label className="text-[10px] text-muted-foreground font-medium">Unit Cost</label>
-                                  <div className="relative">
-                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">{currencySymbol}</span>
+                                  <p className="po-inline-label">Unit Cost</p>
+                                  <div className="po-input-prefix">
+                                    <span className="po-prefix-sym">{currencySymbol}</span>
                                     <input
-                                      type="number"
-                                      step="0.01"
-                                      min="0"
+                                      type="number" step="0.01" min="0"
                                       value={lineItem.unit_cost}
-                                      onChange={(e) => onUpdateLine(lineItem.id, 'unit_cost' as const, parseFloat(e.target.value) || 0)}
-                                      className="field-input text-xs text-right tabular-nums pl-4"
+                                      onChange={(e) => onUpdateLine(lineItem.id, 'unit_cost', parseFloat(e.target.value) || 0)}
+                                      className="po-input"
+                                      style={{ textAlign: 'right', paddingLeft: '20px' }}
                                     />
                                   </div>
                                 </div>
-                                <div className="flex items-end gap-1">
-                                  <div className="flex-1">
-                                    <label className="text-[10px] text-muted-foreground font-medium">Tax %</label>
-                                    <div className="relative">
-                                      <input
-                                        type="number"
-                                        step="0.1"
-                                        min="0"
-                                        max="100"
-                                        value={lineItem.tax_rate}
-                                        onChange={(e) => onUpdateLine(lineItem.id, 'tax_rate' as const, parseFloat(e.target.value) || 0)}
-                                        className="field-input text-xs text-right tabular-nums pr-5"
-                                      />
-                                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">%</span>
-                                    </div>
+                                <div>
+                                  <p className="po-inline-label">Tax %</p>
+                                  <div className="po-input-suffix">
+                                    <input
+                                      type="number" step="0.1" min="0" max="100"
+                                      value={lineItem.tax_rate}
+                                      onChange={(e) => onUpdateLine(lineItem.id, 'tax_rate', parseFloat(e.target.value) || 0)}
+                                      className="po-input"
+                                      style={{ textAlign: 'right', paddingRight: '22px' }}
+                                    />
+                                    <span className="po-suffix-sym">%</span>
                                   </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => onRemoveLine(lineItem.id)}
-                                    disabled={lineItems.filter(l => l.selectedId).length <= 1}
-                                    className="flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-600 disabled:opacity-30 transition-colors mb-0"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
                                 </div>
                               </div>
                             )}
                           </div>
-                        );
-                      })}
-                    </div>
+                        </div>
+                      );
+                    })
                   )
                 )}
               </div>
@@ -1033,152 +1419,6 @@ function ProductVariantSelector({
           })}
         </div>
       )}
-    </div>
-  );
-}
-
-// ── Asset line items (OFFICE_INVENTORY) ──
-function AssetLineItems({
-  lineItems,
-  options,
-  onSelectChange,
-  onChange,
-  onRemove,
-  onAdd,
-  currencySymbol,
-  onCreateAsset,
-}: {
-  lineItems: LineItem[];
-  options: SelectOption[];
-  onSelectChange: (id: number, selectedId: string) => void;
-  onChange: <K extends keyof LineItem>(id: number, field: K, value: LineItem[K]) => void;
-  onRemove: (id: number) => void;
-  onAdd: () => void;
-  currencySymbol: string;
-  onCreateAsset: () => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">Select assets to order</span>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={onCreateAsset}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-border rounded-md text-muted-foreground hover:bg-muted hover:text-primary transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" /> New Asset
-          </button>
-          <button
-            type="button"
-            onClick={onAdd}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-border rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" /> Add item
-          </button>
-        </div>
-      </div>
-
-      {lineItems.length === 0 ? (
-        <div className="border border-dashed border-border rounded-lg py-10 text-center text-muted-foreground">
-          <Package className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
-          <p className="text-sm">No items added yet</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <div
-            className="grid gap-2 px-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
-            style={{ gridTemplateColumns: '1fr 72px 100px 80px 28px' }}
-          >
-            <span>Asset</span>
-            <span className="text-right">Qty</span>
-            <span className="text-right">Unit cost</span>
-            <span className="text-right">Tax %</span>
-            <span />
-          </div>
-          {lineItems.map((line) => (
-            <div
-              key={line.id}
-              className="grid gap-2 items-center bg-muted/30 border border-border rounded-lg px-3 py-2.5"
-              style={{ gridTemplateColumns: '1fr 72px 100px 80px 28px' }}
-            >
-              <select
-                value={line.selectedId}
-                onChange={(e) => onSelectChange(line.id, e.target.value)}
-                className="field-input text-xs"
-              >
-                <option value="">Select asset…</option>
-                {options.map((opt) => (
-                  <option key={opt.id} value={opt.id}>{opt.label}</option>
-                ))}
-              </select>
-
-              <input
-                type="number"
-                min="1"
-                value={line.quantity_ordered}
-                onChange={(e) => onChange(line.id, 'quantity_ordered', parseInt(e.target.value) || 0)}
-                className="field-input text-xs text-right tabular-nums"
-              />
-
-              <div className="relative">
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">{currencySymbol}</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={line.unit_cost}
-                  onChange={(e) => onChange(line.id, 'unit_cost', parseFloat(e.target.value) || 0)}
-                  className="field-input text-xs text-right tabular-nums pl-5"
-                />
-              </div>
-
-              <div className="relative">
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="100"
-                  value={line.tax_rate}
-                  onChange={(e) => onChange(line.id, 'tax_rate', parseFloat(e.target.value) || 0)}
-                  className="field-input text-xs text-right tabular-nums pr-5"
-                />
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => onRemove(line.id)}
-                disabled={lineItems.length <= 1}
-                title="Remove line"
-                className="flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-600 disabled:opacity-30 transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Shared sub-components ──
-function SectionLabel({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return (
-    <p className={`text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-3 pb-2 border-b border-border ${className}`}>
-      {children}
-    </p>
-  );
-}
-
-function Field({ label, required, children, className = '' }: { label: string; required?: boolean; children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`flex flex-col gap-1 ${className}`}>
-      <label className="text-xs font-medium text-muted-foreground">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
-      </label>
-      {children}
     </div>
   );
 }

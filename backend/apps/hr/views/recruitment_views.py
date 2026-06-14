@@ -802,58 +802,55 @@ class RoundBulkCreateView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         candidate.interview_rounds.all().delete()
         
         serializer = RoundBulkCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        rounds_data = serializer.validated_data['rounds']
+        created_rounds = []
         
-        if serializer.is_valid():
-            rounds_data = serializer.validated_data['rounds']
-            created_rounds = []
+        for round_data in rounds_data:
+            interviewer_uuid = round_data.get('interviewer_id')
+            interviewer = None
+            if interviewer_uuid:
+                interviewer = get_object_or_404(Employee, _id=interviewer_uuid, company_id=company_id, is_deleted=False)
             
-            for round_data in rounds_data:
-                interviewer_uuid = round_data.get('interviewer_id')
-                interviewer = None
-                if interviewer_uuid:
-                    interviewer = get_object_or_404(Employee, _id=interviewer_uuid, company_id=company_id, is_deleted=False)
-                
-                interview_round = InterviewRound.objects.create(
-                    candidate=candidate,
-                    round_number=round_data['round_number'],
-                    round_title=round_data['round_title'],
-                    interview_type=round_data.get('interview_type', 'TECHNICAL'),
-                    status='PENDING',
-                    interviewer=interviewer,
-                    interviewer_name=interviewer.full_name if interviewer else None,
-                    duration_minutes=round_data.get('duration_minutes'),
-                    notes=round_data.get('notes', '')
-                )
-                created_rounds.append(interview_round)
-            
-            if candidate.stage != 'Interview':
-                candidate.stage = 'Interview'
-                candidate.save()
-            
-            RecruitmentActivityLog.objects.create(
-                company_id=company_id,
+            interview_round = InterviewRound.objects.create(
                 candidate=candidate,
-                action='INTERVIEW_SCHEDULED',
-                new_value=f"Created {len(created_rounds)} interview rounds",
-                metadata={'rounds_count': len(created_rounds)},
-                performed_by=request.user,
-                ip_address=request.META.get('REMOTE_ADDR'),
-                user_agent=request.META.get('HTTP_USER_AGENT')
+                round_number=round_data['round_number'],
+                round_title=round_data['round_title'],
+                interview_type=round_data.get('interview_type', 'TECHNICAL'),
+                status='PENDING',
+                interviewer=interviewer,
+                interviewer_name=interviewer.full_name if interviewer else None,
+                duration_minutes=round_data.get('duration_minutes'),
+                notes=round_data.get('notes', '')
             )
-            
-            return Response({
-                'message': f'Successfully created {len(created_rounds)} rounds',
-                'rounds': [
-                    {
-                        "id": str(r._id),
-                        "round_number": r.round_number,
-                        "round_title": r.round_title,
-                    }
-                    for r in created_rounds
-                ]
-            }, status=status.HTTP_201_CREATED)
+            created_rounds.append(interview_round)
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if candidate.stage != 'Interview':
+            candidate.stage = 'Interview'
+            candidate.save()
+        
+        RecruitmentActivityLog.objects.create(
+            company_id=company_id,
+            candidate=candidate,
+            action='INTERVIEW_SCHEDULED',
+            new_value=f"Created {len(created_rounds)} interview rounds",
+            metadata={'rounds_count': len(created_rounds)},
+            performed_by=request.user,
+            ip_address=request.META.get('REMOTE_ADDR'),
+            user_agent=request.META.get('HTTP_USER_AGENT')
+        )
+        
+        return Response({
+            'message': f'Successfully created {len(created_rounds)} rounds',
+            'rounds': [
+                {
+                    "id": str(r._id),
+                    "round_number": r.round_number,
+                    "round_title": r.round_title,
+                }
+                for r in created_rounds
+            ]
+        }, status=status.HTTP_201_CREATED)
 
 
 class RoundStatusBulkUpdateView(CompanyBranchMixin, PermissionRequiredMixin, APIView):

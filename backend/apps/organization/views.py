@@ -209,12 +209,14 @@ class UserProfileView(PermissionRequiredMixin, APIView):
             user.set_password(password)
 
         serializer = UserProfileSerializer(user, data=data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            if password:
-                user.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        if password:
+            user.save()
+        return Response({
+            'message': 'Profile updated successfully',
+            'data': serializer.data
+        })
 
 
 class UserListView(PermissionRequiredMixin, generics.ListCreateAPIView):

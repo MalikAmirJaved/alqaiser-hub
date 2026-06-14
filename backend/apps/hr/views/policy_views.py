@@ -152,13 +152,13 @@ class PolicyView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             data=request.data,
             context={'request': request}
         )
-        
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+        serializer.is_valid(raise_exception=True)
         policy = serializer.save()
         detail_serializer = PolicyDetailSerializer(policy)
-        return Response(detail_serializer.data, status=status.HTTP_201_CREATED)
+        return Response({
+            'message': f'Policy "{policy.title}" created successfully',
+            'data': detail_serializer.data
+        }, status=status.HTTP_201_CREATED)
     
 
     def patch(self, request, pk=None):
@@ -180,13 +180,13 @@ class PolicyView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             partial=True,
             context={'request': request}
         )
-        
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+        serializer.is_valid(raise_exception=True)
         updated_policy = serializer.save()
         detail_serializer = PolicyDetailSerializer(updated_policy)
-        return Response(detail_serializer.data)
+        return Response({
+            'message': f'Policy "{updated_policy.title}" updated successfully',
+            'data': detail_serializer.data
+        })
     
 
     def delete(self, request, pk=None):
@@ -354,16 +354,16 @@ class PolicyAcknowledgmentView(CompanyBranchMixin, PermissionRequiredMixin, APIV
             data=data,
             context={'request': request}
         )
-        
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+        serializer.is_valid(raise_exception=True)
         acknowledgment = serializer.save()
         
         response_data = PolicyAcknowledgmentSerializer(acknowledgment).data
         response_data['id'] = str(acknowledgment._id)
         
-        return Response(response_data, status=status.HTTP_201_CREATED)
+        return Response({
+            'message': 'Policy acknowledged successfully',
+            'data': response_data
+        }, status=status.HTTP_201_CREATED)
 
 
 class PolicyBulkActionView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
@@ -568,8 +568,7 @@ class PolicyCategoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             )
         
         serializer = PolicyCategorySerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
         
         category = serializer.save(
             company_id=company_id,
@@ -580,7 +579,10 @@ class PolicyCategoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         response_data = serializer.data
         response_data['id'] = str(category._id)
         
-        return Response(response_data, status=status.HTTP_201_CREATED)
+        return Response({
+            'message': 'Category created successfully',
+            'data': response_data
+        }, status=status.HTTP_201_CREATED)
     
 
     def patch(self, request):
@@ -608,14 +610,16 @@ class PolicyCategoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         )
         
         serializer = PolicyCategorySerializer(category, data=request.data, partial=True)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
         
         updated_category = serializer.save(updated_by=request.user)
         response_data = serializer.data
         response_data['id'] = str(updated_category._id)
         
-        return Response(response_data)
+        return Response({
+            'message': 'Category updated successfully',
+            'data': response_data
+        })
     
 
     def delete(self, request):

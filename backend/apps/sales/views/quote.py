@@ -23,6 +23,38 @@ class QuoteViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelVi
             qs = qs.filter(status=status_param)
         return qs.order_by('-created_at')
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response({
+            'status': 'success',
+            'message': 'Quote created successfully',
+            'data': serializer.data
+        }, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response({
+            'status': 'success',
+            'message': 'Quote updated successfully',
+            'data': serializer.data
+        })
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.is_deleted = True
+        instance.deleted_by = request.user
+        instance.save(update_fields=['is_deleted', 'deleted_by'])
+        return Response({
+            'status': 'success',
+            'message': 'Quote deleted successfully'
+        })
+
     @action(detail=True, methods=['post'])
     def accept(self, request, _id=None):
         """
