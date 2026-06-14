@@ -151,7 +151,7 @@ export default function ProductsPage() {
       sortable: true,
       render: (val) => {
         const price = Number(val || 0);
-        return price > 0 ? `$${price.toFixed(2)}` : "—";
+        return price > 0 ? `$${price}` : "—";
       },
     },
     {
@@ -190,7 +190,7 @@ export default function ProductsPage() {
         </div>
         <p className="text-xs text-muted-foreground">{product.sku}</p>
         <div className="flex justify-between items-center pt-2">
-          <span className="text-lg font-bold text-primary">${product.display_price?.toFixed(2) || "0.00"}</span>
+          <span className="text-lg font-bold text-primary">${product.display_price || "0.00"}</span>
         </div>
         <div className="flex justify-end gap-2 pt-2 border-t border-border">
           <button onClick={(e) => { e.stopPropagation(); handleEdit(product); }} className="px-3 py-1 text-xs rounded-md border hover:bg-muted">Edit</button>
@@ -201,7 +201,7 @@ export default function ProductsPage() {
   );
 
   return (
-    <div className="space-y-5 p-6">
+    <div className="space-y-5">
       <PageHeader
         title="Product Management"
         subtitle="Manage products, variants, attributes, and tags"

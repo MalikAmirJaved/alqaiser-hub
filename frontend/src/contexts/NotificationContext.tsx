@@ -38,7 +38,8 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   product: ["products", "productStats"],
   inventory: ["inventory", "productInventory"],
   tags: ["tags"],
-
+  supplier: ["suppliers", "supplierStats"],
+  vendor: ["vendors", "vendorStats"],
 };
 
 interface NotificationContextProps {

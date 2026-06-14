@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
-export interface Supplier {
+export interface Supplier extends Record<string, unknown> {
   id: number;
   name: string;
   code: string;
@@ -22,14 +22,16 @@ export interface Supplier {
   status: "active" | "inactive" | "suspended";
   created_at: string;
   updated_at: string;
+  partner_type?: string;
 }
+
 
 // Fetch all suppliers
 export function useSuppliers() {
   const api = useApi();
   return useQuery<Supplier[]>({
     queryKey: ["suppliers"],
-    queryFn: () => api("/api/suppliers/"),
+    queryFn: () => api("/api/inventory/suppliers/"),
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
@@ -43,7 +45,7 @@ export function useCreateSupplier() {
 
   return useMutation({
     mutationFn: (data: Omit<Supplier, "id" | "created_at" | "updated_at">) =>
-      api("/api/suppliers/", {
+      api("/api/inventory/suppliers/", {
         method: "POST",
         body: JSON.stringify(data),
       }),
@@ -60,7 +62,7 @@ export function useUpdateSupplier() {
 
   return useMutation({
     mutationFn: ({ id, ...data }: Partial<Supplier> & { id: number }) =>
-      api(`/api/suppliers/${id}/`, {
+      api(`/api/inventory/suppliers/${id}/`, {
         method: "PATCH",
         body: JSON.stringify(data),
       }),
@@ -77,7 +79,7 @@ export function useDeleteSupplier() {
 
   return useMutation({
     mutationFn: (id: number) =>
-      api(`/api/suppliers/${id}/`, {
+      api(`/api/inventory/suppliers/${id}/`, {
         method: "DELETE",
       }),
     onSuccess: () => {
