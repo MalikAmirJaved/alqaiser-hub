@@ -5,7 +5,7 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from .models import Category
 from apps.notifications.models import Notification
-from .models import Category, Brand, Warehouse, Product, ProductVariant, Inventory
+from .models import Category, Brand, Warehouse, Product, ProductVariant, Inventory,Supplier
 
 
 # Helper to create notification
@@ -205,3 +205,31 @@ def notify_inventory_change(sender, instance, created, **kwargs):
         action,
         instance.id
     )
+
+
+@receiver(post_save, sender=Supplier)
+def notify_supplier_change(sender, instance, created, **kwargs):
+    company_id = instance.company_id
+    branch_id = instance.branch_id
+    action = 'create' if created else 'update'
+    partner_type = instance.get_partner_type_display()
+    create_notification(
+        company_id, branch_id,
+        f"{partner_type} {action}d",
+        f"{partner_type} '{instance.name}' ({instance.code}) has been {action}d.",
+        "success" if created else "info"
+    )
+    broadcast_data_update(company_id, branch_id, f'{instance.partner_type}', action, instance.id)
+
+@receiver(post_delete, sender=Supplier)
+def notify_supplier_delete(sender, instance, **kwargs):
+    company_id = instance.company_id
+    branch_id = instance.branch_id
+    partner_type = instance.get_partner_type_display()
+    create_notification(
+        company_id, branch_id,
+        f"{partner_type} Deleted",
+        f"{partner_type} '{instance.name}' ({instance.code}) has been deleted.",
+        "warning"
+    )
+    broadcast_data_update(company_id, branch_id, f'{instance.partner_type}', 'delete', instance.id)

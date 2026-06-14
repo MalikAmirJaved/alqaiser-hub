@@ -5,7 +5,7 @@ from .product import (
     ProductSerializer, ProductVariantSerializer, ProductAttributeSerializer,
     TagSerializer, TagGroupSerializer
 )
-
+from .supplier import SupplierSerializer
 __all__ = [
     "CategorySerializer", "BrandSerializer", "WarehouseSerializer",
     "ProductSerializer", "ProductVariantSerializer", "ProductAttributeSerializer",

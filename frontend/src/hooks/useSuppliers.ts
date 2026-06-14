@@ -1,0 +1,87 @@
+// src/hooks/useSuppliers.ts
+"use client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useApi } from "@/hooks/useApi";
+
+export interface Supplier {
+  id: number;
+  name: string;
+  code: string;
+  contact_person: string;
+  email: string;
+  phone: string;
+  address_line: string;
+  country: string;
+  state: string;
+  city: string;
+  postal_code: string;
+  payment_terms: string;
+  credit_limit: number;
+  balance: number;
+  rating: number;
+  status: "active" | "inactive" | "suspended";
+  created_at: string;
+  updated_at: string;
+}
+
+// Fetch all suppliers
+export function useSuppliers() {
+  const api = useApi();
+  return useQuery<Supplier[]>({
+    queryKey: ["suppliers"],
+    queryFn: () => api("/api/suppliers/"),
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+}
+
+// Create supplier
+export function useCreateSupplier() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: Omit<Supplier, "id" | "created_at" | "updated_at">) =>
+      api("/api/suppliers/", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+    },
+  });
+}
+
+// Update supplier
+export function useUpdateSupplier() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, ...data }: Partial<Supplier> & { id: number }) =>
+      api(`/api/suppliers/${id}/`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+    },
+  });
+}
+
+// Delete supplier
+export function useDeleteSupplier() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: number) =>
+      api(`/api/suppliers/${id}/`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+    },
+  });
+}

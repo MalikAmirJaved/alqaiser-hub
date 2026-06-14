@@ -5,9 +5,10 @@ from .product import (
     Product, ProductVariant, ProductAttribute,
     Tag, TagGroup, ProductTag, Inventory
 )
-
+from .supplier import Supplier
 __all__ = [
     "Category", "Brand", "Warehouse",
     "Product", "ProductVariant", "ProductAttribute",
-    "Tag", "TagGroup", "ProductTag", "Inventory"
+    "Tag", "TagGroup", "ProductTag", "Inventory",
+    "Supplier"
 ]
