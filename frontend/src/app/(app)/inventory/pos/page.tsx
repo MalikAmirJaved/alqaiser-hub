@@ -132,7 +132,6 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
   const finalCart = overrideCart || cart;
   if (finalCart.length === 0) return;
   
-  // Capture customer ID before any state changes
   const customerId = selectedCustomer?.id ?? null;
   const warehouseId = selectedWarehouse?.id;
   
@@ -143,7 +142,7 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
       await completeOrder({ orderId: activeDraftId, line_items: updatedLineItems });
     } else {
       await createSalesOrder({
-        customer: customerId,  // Use captured ID
+        customer: customerId,
         warehouse: warehouseId,
         order_date: new Date().toISOString().split("T")[0],
         notes: notesWithPayments,
@@ -166,7 +165,6 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
     if (finalCart.length === 0) return;
     try {
       if (activeDraftId) {
-        // Update existing draft via debounced effect
         return;
       }
       await createSalesOrder({
@@ -198,44 +196,45 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
   }, [cancelOrder, refetchDrafts, activeDraftId, clearCart]);
 
   const handleCartChange = useCallback((newCart: CartLine[]) => {
-    // Cart already updated via onUpdateCart, this is just for tracking
   }, []);
 
   const panelLabels: Record<ActivePanel, string> = {
-    search: "Products",
-    held: `On Hold (${draftOrders.length})`,
+    search: "Product Catalog",
+    held: "Held Orders",
     return: "Returns",
-    sales: "Sales History",
+    sales: "Recent Sales",
   };
 
   const panelIcons: Record<ActivePanel, React.ReactNode> = {
-    search: <SearchIcon />,
-    held: <PauseIcon />,
-    return: <ReturnIcon />,
-    sales: <ListIcon />,
+    search: <CatalogIcon size={16} />,
+    held: <PauseIcon size={16} />,
+    return: <ReturnIcon size={16} />,
+    sales: <HistoryIcon size={16} />,
   };
 
   return (
-    <div className="flex h-full overflow-hidden relative">
-      {/* Left — product + panels */}
-      <div className="flex flex-col overflow-hidden h-full flex-1 min-w-0 border-r border-border">
-        {/* Top bar */}
-        <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-card/80 backdrop-blur-sm">
-          <nav className="flex gap-0.5 bg-muted/70 rounded-xl p-1 flex-1">
+    <div className="flex h-full overflow-hidden bg-background">
+      {/* Left — content panel */}
+      <div className="flex flex-col overflow-hidden h-full flex-1 min-w-0 border-r border-border/60">
+        {/* Modern Nav Header */}
+        <div className="flex items-center justify-between gap-4 px-6 py-3 border-b border-border bg-card/40 backdrop-blur-md">
+          <nav className="flex items-center gap-1 bg-muted/50 p-1 rounded-2xl border border-border/40">
             {(["search", "held", "return", "sales"] as ActivePanel[]).map(p => (
               <button
                 key={p}
                 onClick={() => setActivePanel(p)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150
+                className={`relative flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-300
                   ${activePanel === p
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                    ? "bg-card text-primary shadow-lg shadow-black/5 border border-border/50 scale-[1.02]"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/80"
                   }`}
               >
-                <span className="opacity-70">{panelIcons[p]}</span>
+                <span className={`${activePanel === p ? "text-primary" : "text-muted-foreground/60"}`}>
+                  {panelIcons[p]}
+                </span>
                 {panelLabels[p]}
                 {p === "held" && draftOrders.length > 0 && (
-                  <span className="ml-0.5 min-w-[18px] h-[18px] rounded-full bg-warning text-warning-foreground text-[10px] font-semibold flex items-center justify-center px-1">
+                  <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-warning px-1 text-[9px] font-black text-warning-foreground ring-2 ring-background">
                     {draftOrders.length}
                   </span>
                 )}
@@ -243,122 +242,140 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
             ))}
           </nav>
 
-          <div className="flex items-center gap-2 bg-muted/60 rounded-lg px-3 py-1.5 border border-border/50">
-            <WarehouseIcon />
-            <select
-              value={selectedWarehouse?.id ?? ""}
-              onChange={(e) => setSelectedWarehouse(warehouses.find(w => String(w.id) === e.target.value) ?? null)}
-              className="bg-transparent text-xs font-medium outline-none text-foreground max-w-[140px] cursor-pointer"
-            >
-              {warehouses.map(w => <option key={w.id} value={w.id}>{w.warehouse_name}</option>)}
-            </select>
+          <div className="flex items-center gap-3 bg-muted/40 rounded-xl px-4 py-2 border border-border/50 hover:bg-muted/60 transition-colors cursor-pointer group">
+            <WarehouseIcon className="text-muted-foreground group-hover:text-primary transition-colors" />
+            <div className="flex flex-col">
+              <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider leading-none mb-1">Station</span>
+              <select
+                value={selectedWarehouse?.id ?? ""}
+                onChange={(e) => setSelectedWarehouse(warehouses.find(w => String(w.id) === e.target.value) ?? null)}
+                className="bg-transparent text-xs font-black outline-none text-foreground cursor-pointer appearance-none pr-4"
+              >
+                {warehouses.map(w => <option key={w.id} value={w.id}>{w.warehouse_name}</option>)}
+              </select>
+            </div>
           </div>
         </div>
 
-        {/* Panel content */}
-        <div className="flex-1 h-full overflow-y-auto">
-          {activePanel === "search" && (
-            <ProductSearchPanel
-              onAddToCart={(v: VariantDetailWithStock) => {
-                const availableStock = v.stock?.available ?? 0;
-                
-                if (availableStock <= 0) {
-                  alert(`"${v.product_name}" is out of stock.`);
-                  return;
-                }
-
-                setCart(prev => {
-                  const existing = prev.find(l => l.variant.id === v.id);
-                  const currentQty = existing ? existing.qty : 0;
-                  const newQty = currentQty + 1;
+        {/* Dynamic Content Panel */}
+        <div className="flex-1 h-full overflow-hidden relative">
+          <div className="absolute inset-0 overflow-y-auto">
+            {activePanel === "search" && (
+              <ProductSearchPanel
+                onAddToCart={(v: VariantDetailWithStock) => {
+                  const availableStock = v.stock?.available ?? 0;
                   
-                  if (newQty > availableStock) {
-                    alert(`Cannot add more than ${availableStock} items. Only ${availableStock} in stock.`);
-                    return prev;
+                  if (availableStock <= 0) {
+                    alert(`"${v.product_name}" is out of stock.`);
+                    return;
                   }
 
-                  if (existing) {
-                    return prev.map(l =>
-                      l.variant.id === v.id ? { ...l, qty: newQty } : l
-                    );
-                  }
-                  return [...prev, {
-                    variant: v,
-                    qty: 1,
-                    unitPrice: Number(v.selling_price),
-                    discountPct: 0,
-                    discountFixed: 0,
-                    taxRate: 0,
-                    notes: "",
-                    salesOrderLineId: undefined
-                  }];
-                });
-              }}
-              warehouseId={selectedWarehouse?.id}
-            />
-          )}
+                  setCart(prev => {
+                    const existing = prev.find(l => l.variant.id === v.id);
+                    const currentQty = existing ? existing.qty : 0;
+                    const newQty = currentQty + 1;
+                    
+                    if (newQty > availableStock) {
+                      alert(`Cannot add more than ${availableStock} items. Only ${availableStock} in stock.`);
+                      return prev;
+                    }
 
-          {activePanel === "held" && (
-            <div className="p-4 space-y-2">
-              {draftOrders.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-3">
-                  <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-                    <PauseIcon size={22} />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm font-medium">No held orders</p>
-                    <p className="text-xs text-muted-foreground mt-1">Save a draft to hold an order for later</p>
-                  </div>
+                    if (existing) {
+                      return prev.map(l =>
+                        l.variant.id === v.id ? { ...l, qty: newQty } : l
+                      );
+                    }
+                    return [...prev, {
+                      variant: v,
+                      qty: 1,
+                      unitPrice: Number(v.selling_price),
+                      discountPct: 0,
+                      discountFixed: 0,
+                      taxRate: 0,
+                      notes: "",
+                      salesOrderLineId: undefined
+                    }];
+                  });
+                }}
+                warehouseId={selectedWarehouse?.id}
+              />
+            )}
+
+            {activePanel === "held" && (
+              <div className="p-8 max-w-4xl mx-auto space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-xl font-black text-foreground">Held Transactions</h2>
+                  <span className="text-xs font-bold text-muted-foreground bg-muted px-3 py-1 rounded-full uppercase tracking-widest">
+                    {draftOrders.length} Orders
+                  </span>
                 </div>
-              ) : (
-                draftOrders.map(order => (
-                  <div key={order.id} className="bg-card border border-border rounded-xl p-4 hover:border-border/80 transition-colors">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-warning/15 text-warning text-xs font-medium">
-                            DRAFT
-                          </span>
-                          <p className="text-sm font-semibold text-foreground">{order.order_number}</p>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {order.customer_name || "Walk-in Customer"}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {order.lines?.length || 0} item{(order.lines?.length || 0) !== 1 ? "s" : ""} · {new Date(order.order_date).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div className="flex gap-2 flex-shrink-0">
-                        <button
-                          onClick={() => loadDraftOrder(order)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:opacity-90 transition-opacity"
-                        >
-                          <PlayIcon size={12} /> Resume
-                        </button>
-                        {permissions.delete && (
-                          <button
-                            onClick={() => handleCancelDraft(order.id)}
-                            disabled={isCancelling}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-destructive/10 text-destructive rounded-lg text-xs font-medium hover:bg-destructive/20 transition-colors disabled:opacity-50"
-                          >
-                            <XIcon size={12} /> Cancel
-                          </button>
-                        )}
-                      </div>
+                {draftOrders.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 bg-muted/20 rounded-[32px] border border-dashed border-border/60">
+                    <div className="w-20 h-20 rounded-[28px] bg-muted/50 flex items-center justify-center text-muted-foreground mb-4">
+                      <PauseIcon size={32} />
                     </div>
+                    <p className="text-base font-bold text-foreground">No held orders</p>
+                    <p className="text-sm text-muted-foreground mt-1">Pending transactions will appear here</p>
                   </div>
-                ))
-              )}
-            </div>
-          )}
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {draftOrders.map(order => (
+                      <div key={order.id} className="group bg-card border border-border rounded-[24px] p-5 hover:border-primary/40 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300">
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-black text-warning uppercase tracking-widest bg-warning/10 px-2 py-0.5 rounded-md w-fit">
+                              Draft
+                            </span>
+                            <p className="text-base font-black text-foreground group-hover:text-primary transition-colors">{order.order_number}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs font-bold text-muted-foreground">{new Date(order.order_date).toLocaleDateString()}</p>
+                            <p className="text-[10px] font-bold text-muted-foreground/60 uppercase">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-3 mb-6 p-3 bg-muted/30 rounded-xl">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-black">
+                            {(order.customer_name || "W").charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold truncate">{order.customer_name || "Walk-in Customer"}</p>
+                            <p className="text-[10px] font-medium text-muted-foreground">{order.lines?.length || 0} Products</p>
+                          </div>
+                        </div>
 
-          {activePanel === "return" && <ReturnPanel warehouses={warehouses} />}
-          {activePanel === "sales" && <SalesListPanel />}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => loadDraftOrder(order)}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl text-xs font-black hover:opacity-90 transition-all active:scale-[0.97]"
+                          >
+                            <PlayIcon size={14} /> Resume Order
+                          </button>
+                          {permissions.delete && (
+                            <button
+                              onClick={() => handleCancelDraft(order.id)}
+                              disabled={isCancelling}
+                              className="w-10 flex items-center justify-center bg-destructive/10 text-destructive rounded-xl hover:bg-destructive hover:text-destructive-foreground transition-all disabled:opacity-50"
+                            >
+                              <XIcon size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activePanel === "return" && <ReturnPanel warehouses={warehouses} />}
+            {activePanel === "sales" && <SalesListPanel />}
+          </div>
         </div>
       </div>
 
-      {/* Right — cart */}
-      <div className="w-[360px] flex-shrink-0 flex flex-col">
+      {/* Right — checkout panel */}
+      <div className="w-[400px] flex-shrink-0 flex flex-col bg-card/30 backdrop-blur-sm relative z-10 shadow-2xl shadow-black/10">
         <CartPanel
           cart={cart}
           onUpdateCart={setCart}
@@ -382,53 +399,52 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
 }
 
 // Icons
-function SearchIcon({ size = 14 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8" />
-    <path d="m21 21-4.35-4.35" />
+function CatalogIcon({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="7" height="7" />
+    <rect x="14" y="3" width="7" height="7" />
+    <rect x="14" y="14" width="7" height="7" />
+    <rect x="3" y="14" width="7" height="7" />
+  </svg>;
+}
+
+function HistoryIcon({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+    <path d="M3 3v5h5" />
+    <path d="M12 7v5l4 2" />
   </svg>;
 }
 
 function PauseIcon({ size = 14 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <rect x="6" y="4" width="4" height="16" />
     <rect x="14" y="4" width="4" height="16" />
   </svg>;
 }
 
 function ReturnIcon({ size = 14 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="1 4 1 10 7 10" />
     <path d="M3.51 15a9 9 0 1 0 .49-3.84" />
   </svg>;
 }
 
-function ListIcon({ size = 14 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="8" y1="6" x2="21" y2="6" />
-    <line x1="8" y1="12" x2="21" y2="12" />
-    <line x1="8" y1="18" x2="21" y2="18" />
-    <line x1="3" y1="6" x2="3.01" y2="6" />
-    <line x1="3" y1="12" x2="3.01" y2="12" />
-    <line x1="3" y1="18" x2="3.01" y2="18" />
-  </svg>;
-}
-
-function WarehouseIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+function WarehouseIcon({ className = "" }: { className?: string }) {
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
     <polyline points="9 22 9 12 15 12 15 22" />
   </svg>;
 }
 
 function PlayIcon({ size = 14 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <polygon points="5 3 19 12 5 21 5 3" />
   </svg>;
 }
 
 function XIcon({ size = 14 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M18 6 6 18M6 6l12 12" />
   </svg>;
 }

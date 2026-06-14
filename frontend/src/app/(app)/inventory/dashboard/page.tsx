@@ -159,18 +159,11 @@ export default function InventoryDashboard() {
     Purchases: item.purchase_amount,
   })) || [];
 
-  // Stock turnover rate (mock - based on movement)
+  // Stock turnover rate (based on actual movement data)
   const stockTurnoverData = movementData.slice(-6).map(item => ({
     month: item.date,
     turnover: item.Outgoing / (item.Incoming || 1),
   }));
-
-  // Warehouse distribution (mock - replace with actual data)
-  const warehouseData = [
-    { name: "Main Warehouse", value: summary?.total_stock_value ? summary.total_stock_value * 0.6 : 0 },
-    { name: "Secondary WH", value: summary?.total_stock_value ? summary.total_stock_value * 0.25 : 0 },
-    { name: "Retail Store", value: summary?.total_stock_value ? summary.total_stock_value * 0.15 : 0 },
-  ];
 
   return (
     <>
@@ -191,25 +184,21 @@ export default function InventoryDashboard() {
           <Kpi
             label="Total Variants"
             value={String(summary?.total_variants ?? 0)}
-            delta={8.2}
             accent="primary"
           />
           <Kpi
             label="Stock Value"
             value={formatCurrency(summary?.total_stock_value ?? 0)}
-            delta={12.5}
             accent="success"
           />
           <Kpi
             label="Low Stock Items"
             value={String(summary?.low_stock_count ?? 0)}
-            delta={-5.3}
             accent="warning"
           />
           <Kpi
             label="Warehouses"
             value={String(summary?.total_warehouses ?? 0)}
-            delta={0}
             accent="info"
           />
         </div>
@@ -219,25 +208,21 @@ export default function InventoryDashboard() {
           <Kpi
             label="Total Sales (YTD)"
             value={formatCurrency(summary?.total_sales_amount ?? 0)}
-            delta={18.7}
             accent="primary"
           />
           <Kpi
             label="Total Purchases (YTD)"
             value={formatCurrency(summary?.total_purchase_amount ?? 0)}
-            delta={-2.4}
             accent="info"
           />
           <Kpi
             label="Gross Margin"
             value={`${summary?.total_sales_amount && summary?.total_purchase_amount ? (((summary.total_sales_amount - summary.total_purchase_amount) / summary.total_sales_amount) * 100).toFixed(1) : "0"}%`}
-            delta={3.2}
             accent="success"
           />
           <Kpi
             label="Stock Turnover"
             value={`${stockTurnoverData.length > 0 ? (stockTurnoverData.reduce((sum, item) => sum + item.turnover, 0) / stockTurnoverData.length).toFixed(1) : "0"}`}
-            delta={0.5}
             accent="warning"
           />
         </div>
