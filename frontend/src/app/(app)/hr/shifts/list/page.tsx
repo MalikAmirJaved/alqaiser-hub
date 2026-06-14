@@ -17,7 +17,7 @@ import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { toast } from "sonner";
 
 // Import hooks
-import { useActiveEmployees, type ActiveEmployee } from "@/hooks/useEmployees";
+import { useActiveEmployees, useUpdateEmployee, type ActiveEmployee } from "@/hooks/useEmployees";
 import { useShiftTemplates, type ShiftTemplate } from "@/hooks/useShiftTemplates";
 import { 
   useResolvedShifts, 
@@ -72,6 +72,7 @@ export default function ShiftsManagementPage() {
   });
   const [historyPage, setHistoryPage] = useState(0);
   const [selectedEmployeeForHistory, setSelectedEmployeeForHistory] = useState<ActiveEmployee | null>(null);
+  const [setDefaultModal, setSetDefaultModal] = useState<{ employee: ActiveEmployee; templateId: string } | null>(null);
 
   // Queries
   const { data: employees = [], isLoading: employeesLoading } = useActiveEmployees();
@@ -136,6 +137,7 @@ export default function ShiftsManagementPage() {
   const deleteOverride = useDeleteShiftOverride();
   const bulkAssign = useBulkShiftAssignment();
   const generateSchedule = useGenerateShiftSchedule();
+  const updateEmployee = useUpdateEmployee();
   
   // Departments list
   const departments = useMemo(() => {
@@ -320,6 +322,20 @@ export default function ShiftsManagementPage() {
     try {
       await generateSchedule.mutateAsync({ start_date: startDate, end_date: endDate });
       refetchShifts();
+    } catch (error: any) {
+    }
+  };
+  
+  // Handle set default shift
+  const handleSetDefaultShift = async () => {
+    if (!setDefaultModal) return;
+    try {
+      await updateEmployee.mutateAsync({
+        id:setDefaultModal.employee.id,
+        default_shift_id: setDefaultModal.templateId || undefined,
+      });
+      refetchShifts();
+      setSetDefaultModal(null);
     } catch (error: any) {
     }
   };
@@ -630,6 +646,15 @@ export default function ShiftsManagementPage() {
                           {emp.default_shift_name ? "From hire date" : "—"}
                         </td>
                         <td className="px-4 py-3 text-right space-x-2">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              setSetDefaultModal({ employee: emp, templateId: emp.default_shift_id || "" });
+                            }}
+                          >
+                            <Settings className="w-3.5 h-3.5 mr-1.5"/> Set Default
+                          </Button>
                           <Button 
                             size="sm" 
                             variant="outline"
@@ -1039,6 +1064,56 @@ export default function ShiftsManagementPage() {
             
             <div className="p-4 border-t border-border flex justify-end">
               <Button onClick={() => setShowHistoryModal(false)}>Close</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* SET DEFAULT SHIFT MODAL */}
+      {setDefaultModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4">
+          <div className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-md">
+            <div className="p-4 border-b border-border flex justify-between items-center">
+              <h2 className="font-semibold flex items-center gap-2">
+                <Settings className="w-4 h-4 text-primary" /> Set Default Shift
+              </h2>
+              <button onClick={() => setSetDefaultModal(null)} className="p-1.5 hover:bg-muted rounded">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="p-4 space-y-4">
+              <div className="bg-muted/40 rounded-lg p-3">
+                <div className="text-xs text-muted-foreground mb-1">Employee</div>
+                <div className="font-medium">
+                  {setDefaultModal.employee.first_name} {setDefaultModal.employee.last_name || ''}
+                </div>
+                <div className="text-xs text-muted-foreground">{setDefaultModal.employee.department_name}</div>
+              </div>
+              
+              <div>
+                <label className="text-sm text-muted-foreground mb-1 block">Select Default Shift Template</label>
+                <SearchableSelect 
+                  value={setDefaultModal.templateId} 
+                  onChange={(v) => setSetDefaultModal({ ...setDefaultModal, templateId: v })} 
+                  options={templates.filter(t => t.is_active).map(t => ({value: t.id, label: `${t.name} (${t.startTime} - ${t.endTime})`}))} 
+                  placeholder="Select shift template"
+                />
+              </div>
+              
+              <p className="text-xs text-muted-foreground">
+                This will set the employee's permanent default shift. Existing overrides for today are not affected.
+              </p>
+            </div>
+            
+            <div className="p-4 border-t border-border flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setSetDefaultModal(null)}>Cancel</Button>
+              <Button 
+                onClick={handleSetDefaultShift}
+                disabled={updateEmployee.isPending}
+              >
+                {updateEmployee.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Save Default
+              </Button>
             </div>
           </div>
         </div>

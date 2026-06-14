@@ -388,11 +388,39 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 value = request.data['default_shift_id']
                 from apps.hr.models import ShiftTemplate
                 if value:
-                    employee.default_shift = get_object_or_404(
+                    new_template = get_object_or_404(
                         ShiftTemplate, _id=value, company_id=company_id, is_deleted=False
+                    )
+                    employee.default_shift = new_template
+
+                    today = date.today()
+
+                    # Close out any currently active EmployeeDefaultShift record
+                    EmployeeDefaultShift.objects.filter(
+                        employee=employee,
+                        effective_to__isnull=True,
+                        is_deleted=False,
+                    ).update(effective_to=today)
+
+                    # Create new history record
+                    EmployeeDefaultShift.objects.create(
+                        company_id=company_id,
+                        branch_id=employee.branch_id,
+                        employee=employee,
+                        template=new_template,
+                        effective_from=today,
+                        created_by=request.user,
+                        updated_by=request.user,
                     )
                 else:
                     employee.default_shift = None
+
+                    # Close out any active default shift record
+                    EmployeeDefaultShift.objects.filter(
+                        employee=employee,
+                        effective_to__isnull=True,
+                        is_deleted=False,
+                    ).update(effective_to=date.today())
 
             # ---------- Date fields (handle empty string / None) ----------
             if 'date_of_birth' in request.data:
