@@ -31,7 +31,7 @@ export function CountrySelect({ value, onChange, required = false, className = "
   useEffect(() => {
     if (countries.length > 0 && companyCountry && !value && onChange) {
       const matched = countries.find(
-        c => c.value === companyCountry
+        c => c.value === companyCountry || c.value.toLowerCase() === companyCountry.toLowerCase() || c.label.toLowerCase().includes(companyCountry.toLowerCase())
       );
       if (matched) {
         onChange(matched.value);

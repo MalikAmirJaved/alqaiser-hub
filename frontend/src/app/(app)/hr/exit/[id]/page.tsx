@@ -2,7 +2,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useExitRecord, useUpdateExitRecord, useExitEmployeeAssets, useReturnExitAsset } from "@/hooks/useExitManagement";
+import { useExitRecord, useUpdateExitRecord, useClearExitDues, useExitEmployeeAssets, useReturnExitAsset } from "@/hooks/useExitManagement";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useState } from "react";
 import {
@@ -17,6 +17,8 @@ import {
   Loader2,
   RotateCcw,
   X,
+  AlertTriangle,
+  DollarSign,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -69,10 +71,12 @@ export default function ExitDetailPage() {
   const id = params?.id as string;
   const permissions = useFeaturePermissions("HR", "exit");
   const updateMutation = useUpdateExitRecord();
+  const clearDuesMutation = useClearExitDues();
   const formatCurrency = useFormatCurrency();
 
   const { data: record, isLoading, error } = useExitRecord(id);
   const { data: assets = [], isLoading: assetsLoading } = useExitEmployeeAssets(id);
+  console.log("record:: ", record)
   const returnAssetMutation = useReturnExitAsset();
 
   const [editingStatus, setEditingStatus] = useState(false);
@@ -185,6 +189,43 @@ export default function ExitDetailPage() {
           </div>
         )}
       </SectionCard>
+
+      {/* Clear Dues (when settlement negative) */}
+      {record.status_value === "CONFIRMED" && record.final_settlement < 0 && (
+        <SectionCard title="Clear Employee Dues" icon={AlertTriangle}>
+          <div className="space-y-4">
+            <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+              <div>
+                <div className="text-sm font-semibold text-destructive">
+                  Employee Owes {formatCurrency(Math.abs(record.final_settlement))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  The employee must return this amount to the company. Click below to record
+                  the payment and clear the dues — a finance receipt will be created.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                if (window.confirm(
+                  `Record that the employee has returned ${formatCurrency(Math.abs(record.final_settlement))}? This will create a finance receipt.`
+                )) {
+                  clearDuesMutation.mutateAsync(record.id);
+                }
+              }}
+              disabled={clearDuesMutation.isPending}
+              className="w-full h-9 rounded-md bg-destructive text-destructive-foreground text-sm hover:opacity-90 inline-flex items-center justify-center gap-2"
+            >
+              {clearDuesMutation.isPending ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
+              ) : (
+                <><DollarSign className="w-4 h-4" /> Clear Dues — Record Payment Received</>
+              )}
+            </button>
+          </div>
+        </SectionCard>
+      )}
 
       {/* Update Status */}
       {permissions.update_status && canEdit && (

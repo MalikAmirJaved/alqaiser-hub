@@ -11,7 +11,7 @@ import ConfirmationModal, { useConfirmationModal } from "@/components/reuseable/
 import {
   Search, Plus, RefreshCw, Trash2, Pencil, LogOut, Briefcase,
   AlertTriangle, Clock, CheckCircle2, X, FileText, ShieldCheck,
-  Eye, Loader2, RotateCcw
+  Eye, Loader2, RotateCcw, DollarSign
 } from "lucide-react";
 import {
   useExitRecords,
@@ -20,6 +20,7 @@ import {
   useUpdateExitRecord,
   useDeleteExitRecord,
   useBulkAction,
+  useClearExitDues,
   useFinalSettlementPreview,
   useExitEmployeeAssets,
   useReturnExitAsset,
@@ -83,6 +84,7 @@ export default function ExitManagementPage() {
   const updateMutation = useUpdateExitRecord();
   const deleteMutation = useDeleteExitRecord();
   const bulkActionMutation = useBulkAction();
+  const clearDuesMutation = useClearExitDues();
 
   const records = recordsData?.data || [];
 
@@ -355,6 +357,26 @@ export default function ExitManagementPage() {
                             title="Return Assets"
                           >
                             <RotateCcw className="w-4 h-4" />
+                          </button>
+                        )}
+                        {r.status_value === "CONFIRMED" && r.final_settlement < 0 && (
+                          <button
+                            onClick={() => {
+                              confirmationModal.confirm({
+                                title: "Clear Employee Dues",
+                                message: `This will record that the employee has returned ${formatCurrency(Math.abs(r.final_settlement))} to the company and create a finance receipt. Continue?`,
+                                type: "warning",
+                                confirmText: "Clear Dues",
+                                onConfirm: async () => {
+                                  await clearDuesMutation.mutateAsync(r.id);
+                                  await refetch();
+                                },
+                              });
+                            }}
+                            className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
+                            title="Clear Dues (Employee Owes)"
+                          >
+                            <DollarSign className="w-4 h-4" />
                           </button>
                         )}
                         {permissions.update && (

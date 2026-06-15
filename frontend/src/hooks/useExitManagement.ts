@@ -101,13 +101,13 @@ export function useExitRecord(id: string | null) {
   const api = useApi();
   return useQuery<ExitRecord>({
     queryKey: ["exitRecord", id],
-    queryFn: () => api(`/api/hr/exits/?search=${id}`),
+    queryFn: () => api(`/api/hr/exits/?pk=${id}`),
     enabled: !!id,
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     select: (data: any) => {
       const records = data?.data || [];
-      return records.find((r: ExitRecord) => r.id === id) || records[0];
+      return records.find((r: ExitRecord) => r.id === id) || records[0] || null;
     },
   });
 }
@@ -214,6 +214,25 @@ export function useReturnExitAsset() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["exitEmployeeAssets"] });
       queryClient.invalidateQueries({ queryKey: ["exitRecords"] });
+    },
+  });
+}
+
+// Clear negative dues (employee owes company)
+export function useClearExitDues() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (exitId: string) =>
+      api("/api/hr/exits/clear-dues/", {
+        method: "POST",
+        body: JSON.stringify({ exit_id: exitId }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["exitRecords"] });
+      queryClient.invalidateQueries({ queryKey: ["exitStats"] });
+      queryClient.invalidateQueries({ queryKey: ["exitRecord"] });
     },
   });
 }

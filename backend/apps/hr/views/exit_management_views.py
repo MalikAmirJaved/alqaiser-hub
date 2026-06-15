@@ -89,6 +89,11 @@ class ExitRecordView(BaseExitView):
                 Q(notes__icontains=search)
             )
         
+        # Support direct UUID lookup for detail page
+        pk = request.query_params.get('pk')
+        if pk:
+            query = query.filter(_id=pk)
+        
         status_filter = request.query_params.get('status')
         reason_filter = request.query_params.get('reason')
         date_from = request.query_params.get('date_from')
@@ -377,7 +382,7 @@ class ExitRecordView(BaseExitView):
 
     def patch(self, request):
         """Update exit record using UUID"""
-        company_id, _ = self._get_company_context(request)
+        company_id, branch_id = self._get_company_context(request)
         
         exit_uuid = request.data.get('id')
         if not exit_uuid:
@@ -860,6 +865,83 @@ class ExitBulkActionView(BaseExitView):
             'message': message,
             'affected_count': records.count()
         })
+
+
+class ExitClearDuesView(BaseExitView):
+    """Clear negative settlement (employee owes company) by creating a finance receipt"""
+
+    def get_permission_action(self):
+        return 'update'
+
+    @db_transaction.atomic
+    def post(self, request):
+        company_id, branch_id = self._get_company_context(request)
+
+        exit_uuid = request.data.get('exit_id')
+        if not exit_uuid:
+            return Response(
+                {'error': 'exit_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        exit_record = get_object_or_404(
+            ExitRecord,
+            _id=exit_uuid,
+            company_id=company_id,
+            is_deleted=False
+        )
+
+        # Validate: must be CONFIRMED and have negative settlement
+        if exit_record.status != 'CONFIRMED':
+            return Response(
+                {'error': 'Only CONFIRMED exit records can have dues cleared'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if exit_record.final_settlement >= 0:
+            return Response(
+                {'error': 'No negative settlement to clear'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        amount_due = abs(exit_record.final_settlement)
+        employee = exit_record.employee
+
+        # ── Create a finance RECEIPT payment (employee returned money to company) ──
+        from django.contrib.contenttypes.models import ContentType
+        from apps.finance.models import Payment
+
+        ct = ContentType.objects.get_for_model(ExitRecord, for_concrete_model=False)
+        payment = Payment.objects.create(
+            company_id=company_id,
+            branch_id=branch_id,
+            content_type=ct,
+            object_id=exit_record.pk,
+            payment_type='RECEIPT',
+            payment_method='BANK_TRANSFER',
+            amount=Decimal(str(amount_due)),
+            payment_date=date.today(),
+            reference_number=f'DUES-{exit_record._id}'[:50],
+            notes=f'Employee dues recovery - {employee.full_name if employee else exit_record.employee_name} - Exit {exit_record._id}',
+            status='CONFIRMED',
+            created_by=request.user,
+            updated_by=request.user,
+        )
+
+        # ── Update exit record ──
+        old_notes = exit_record.settlement_notes or ''
+        exit_record.final_settlement = 0
+        exit_record.settlement_notes = (
+            f'{old_notes} | Dues cleared: {amount_due:.2f} received on {date.today().isoformat()}'
+        )
+        exit_record.updated_by = request.user
+        exit_record.save(update_fields=['final_settlement', 'settlement_notes', 'updated_by'])
+
+        return Response({
+            'message': f'Dues of {amount_due:.2f} cleared successfully',
+            'payment_id': str(payment._id),
+            'transaction_number': payment.reference_number,
+        }, status=status.HTTP_200_OK)
 
 
 class ExitEmployeeAssetsView(BaseExitView):
