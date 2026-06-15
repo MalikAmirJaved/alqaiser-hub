@@ -34,6 +34,7 @@ class LeaveRequestView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "employee_name": leave.employee.full_name,
             "leave_type": leave.leave_type,
             "leave_type_display": leave.get_leave_type_display(),
+            "leave_sub_type": leave.leave_sub_type,
             "start_date": leave.start_date.isoformat(),
             "end_date": leave.end_date.isoformat(),
             "total_days": float(leave.total_days),
@@ -172,14 +173,19 @@ class LeaveRequestView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             )
         
         # Create leave request
+        leave_sub_type = request.data.get('leave_sub_type', 'FULL_DAY')
+        if leave_sub_type not in ['SHORT', 'HALF', 'FULL_DAY']:
+            leave_sub_type = 'FULL_DAY'
+        
         leave_request = LeaveRequest.objects.create(
             company_id=company_id,
             branch_id=employee.branch_id or request.user.branch_id,
             employee=employee,
             leave_type=request.data['leave_type'],
+            leave_sub_type=leave_sub_type,
             start_date=start_date,
             end_date=end_date,
-            is_half_day=request.data.get('is_half_day', False),
+            is_half_day=(leave_sub_type == 'HALF'),
             reason=request.data['reason'],
             emergency_contact=request.data.get('emergency_contact', ''),
             status='PENDING',
@@ -224,7 +230,7 @@ class LeaveRequestView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             )
         
         # Update allowed fields
-        updatable_fields = ['reason', 'emergency_contact', 'leave_type', 'is_half_day']
+        updatable_fields = ['reason', 'emergency_contact', 'leave_type', 'leave_sub_type', 'is_half_day']
         for field in updatable_fields:
             if field in request.data:
                 setattr(leave_request, field, request.data[field])

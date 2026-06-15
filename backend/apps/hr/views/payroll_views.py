@@ -213,6 +213,9 @@ class PayrollView(PermissionRequiredMixin, APIView):
         
         latest_payment = get_latest_confirmed_payment(payroll)
         payment_status = 'CANCELLED' if payroll.is_cancelled else payroll.payment_status
+        # For $0 net salary with a confirmed payment (carryover case), treat as PAID
+        if payroll.net_salary == 0 and latest_payment:
+            payment_status = 'PAID'
 
         return {
             "id": str(payroll._id),
@@ -351,13 +354,17 @@ class PayrollView(PermissionRequiredMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Check for existing payroll
-        if PayrollRecord.objects.filter(
+        # Check for existing payroll — allow if it's an advance (will be updated)
+        existing_payroll = PayrollRecord.objects.filter(
             employee=employee,
             month=month,
             year=year,
             is_deleted=False
-        ).exists():
+        ).first()
+
+        is_advance_reprocess = existing_payroll and existing_payroll.transaction_type == 'ADVANCE'
+
+        if existing_payroll and not is_advance_reprocess:
             return Response(
                 {'error': 'Payroll already processed for this employee this month'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -423,16 +430,46 @@ class PayrollView(PermissionRequiredMixin, APIView):
         loan_deductions = 0
         processed_loans = []
         
+        # Auto-deduct PAID advance loans for this month
+        advance_loans = EmployeeLoan.objects.filter(
+            employee=employee,
+            loan_type='SALARY_ADVANCE',
+            status='PAID',
+            advance_for_month=month,
+            advance_for_year=year,
+            is_deleted=False
+        ).prefetch_related('selected_months')
+        for advance in advance_loans:
+            deduction_amount = float(advance.remaining_amount or advance.total_payable)
+            if deduction_amount <= 0:
+                continue
+            loan_deductions += deduction_amount
+            processed_loans.append({
+                'loan': advance,
+                'principal': deduction_amount,
+                'interest': 0,
+                'total': deduction_amount
+            })
+            advance.remaining_amount = 0
+            advance.paid_amount = float(advance.paid_amount) + deduction_amount
+            advance.paid_months += 1
+            advance.status = 'RETURNED'
+            advance.save()
+        
         selected_loan_uuids = request.data.get('selected_loans', [])
         if selected_loan_uuids:
             active_loans = EmployeeLoan.objects.filter(
                 employee=employee,
                 _id__in=selected_loan_uuids,
-                status='ACTIVE',
+                status='PAID',
                 is_deleted=False
             ).prefetch_related('selected_months', 'month_range')
             
             for loan in active_loans:
+                # Skip salary advances (handled by auto-deduction above)
+                if loan.loan_type == 'SALARY_ADVANCE':
+                    continue
+                
                 deduction_amount = 0
                 if loan.frequency_type == 'SELECTED_MONTH':
                     selected = loan.selected_months.filter(month=month, year=year).first()
@@ -452,6 +489,8 @@ class PayrollView(PermissionRequiredMixin, APIView):
                     selected = loan.selected_months.filter(month=month, year=year).first()
                     if selected:
                         deduction_amount = float(selected.deduction)
+                    else:
+                        deduction_amount = float(loan.remaining_amount or loan.total_payable)
                 
                 if deduction_amount <= 0:
                     continue
@@ -473,7 +512,7 @@ class PayrollView(PermissionRequiredMixin, APIView):
                 loan.remaining_amount = max(0, float(loan.remaining_amount) - deduction_amount)
                 loan.paid_months += 1
                 if loan.remaining_amount <= 0:
-                    loan.status = 'PAID'
+                    loan.status = 'RETURNED'
                     loan.remaining_amount = 0
                 loan.save()
         
@@ -482,31 +521,61 @@ class PayrollView(PermissionRequiredMixin, APIView):
         # ---------- Net salary ----------
         net_salary = base_salary + total_compensation + overtime_amount + bonus - total_deductions
         
+        # ---------- Carryover: if net_salary < 0, create advance for user-picked month ----------
+        carryover_amount = 0
+        carryover_month = None
+        carryover_year = None
+        if net_salary < 0:
+            carryover_amount = abs(net_salary)
+            # User-picked carryover month (default: next month)
+            carryover_month = int(request.data.get('carryover_month', (month % 12) + 1))
+            carryover_year = int(request.data.get('carryover_year', year + (1 if month == 12 else 0)))
+            net_salary = 0  # Set current month net to 0
+        
         payment_method = request.data.get('payment_method', 'BANK_TRANSFER')
         transaction_number = request.data.get('transaction_number') or \
             f"PAY-{year}{str(month).zfill(2)}-{employee.employee_id}"
 
-        payroll = PayrollRecord.objects.create(
-            company_id=company_id,
-            branch_id=branch_id,
-            employee=employee,
-            month=month,
-            year=year,
-            base_salary=base_salary,
-            bonus=bonus,
-            deductions=total_deductions,
-            net_salary=net_salary,
-            total_compensation=total_compensation,
-            total_loan_deduction=loan_deductions,
-            total_leave_deduction=leave_deduction,
-            transaction_type=request.data.get('transaction_type', 'SALARY'),
-            custom_note=request.data.get('custom_note'),
-            processed_at=timezone.now(),
-            created_by=request.user,
-            updated_by=request.user,
-        )
-        
-        # ---------- Create relational child records ----------
+        if is_advance_reprocess:
+            # Update existing advance PayrollRecord with full payroll calculation
+            payroll = existing_payroll
+            payroll.base_salary = base_salary
+            payroll.bonus = bonus
+            payroll.deductions = total_deductions
+            payroll.net_salary = net_salary
+            payroll.total_compensation = total_compensation
+            payroll.total_loan_deduction = loan_deductions
+            payroll.total_leave_deduction = leave_deduction
+            payroll.transaction_type = request.data.get('transaction_type', 'SALARY')
+            payroll.custom_note = request.data.get('custom_note')
+            payroll.processed_at = timezone.now()
+            payroll.updated_by = request.user
+            payroll.save()
+            # Clear old child records from the advance before recreating below
+            payroll.payroll_compensations.all().delete()
+            payroll.payroll_loan_deductions.all().delete()
+            payroll.payroll_leave_deductions.all().delete()
+        else:
+            payroll = PayrollRecord.objects.create(
+                company_id=company_id,
+                branch_id=branch_id,
+                employee=employee,
+                month=month,
+                year=year,
+                base_salary=base_salary,
+                bonus=bonus,
+                deductions=total_deductions,
+                net_salary=net_salary,
+                total_compensation=total_compensation,
+                total_loan_deduction=loan_deductions,
+                total_leave_deduction=leave_deduction,
+                transaction_type=request.data.get('transaction_type', 'SALARY'),
+                custom_note=request.data.get('custom_note'),
+                processed_at=timezone.now(),
+                created_by=request.user,
+                updated_by=request.user,
+            )        
+        # Create relational child records for all cases (new + reprocess)
         # PayrollCompensation
         if compensation and total_compensation > 0:
             PayrollCompensation.objects.create(
@@ -534,7 +603,7 @@ class PayrollView(PermissionRequiredMixin, APIView):
                     updated_by=request.user,
                 )
         
-        # PayrollLeaveDeduction - attribute per-leave working days
+        # PayrollLeaveDeduction
         if leave_deduction > 0:
             approved_leaves = LeaveRequest.objects.filter(
                 employee=employee,
@@ -566,25 +635,61 @@ class PayrollView(PermissionRequiredMixin, APIView):
                         created_by=request.user,
                         updated_by=request.user,
                     )
-
-        # Create a payment record (marks as paid) but skip journal entry creation
-        if net_salary > 0:
-            payment = create_payment_for(
-                payroll,
-                amount=Decimal(str(net_salary)),
-                payment_date=date.today(),
-                user=request.user,
-                payment_method=payment_method,
-                reference_number=transaction_number,
-                notes=request.data.get('custom_note', ''),
-                auto_confirm=False,
+        
+        # Create a payment record (marks as paid) — even $0 for carryover case
+        # For advance reprocess, create additional payment for the extra net salary
+        payment = create_payment_for(
+            payroll,
+            amount=Decimal(str(net_salary)),
+            payment_date=date.today(),
+            user=request.user,
+            payment_method=payment_method,
+            reference_number=transaction_number,
+            notes=request.data.get('custom_note', ''),
+            auto_confirm=False,
+        )
+        # Mark as confirmed without creating journal entries
+        payment.status = 'CONFIRMED'
+        payment.save(update_fields=['status', 'updated_at'])
+        
+        # ---------- Carryover advance: if net was negative, create advance for user-picked month ----------
+        carryover_loan = None
+        if carryover_amount > 0:
+            carryover_transaction_number = f"ADV-CO-{carryover_year}{str(carryover_month).zfill(2)}-{employee.employee_id}"
+            carryover_loan = EmployeeLoan.objects.create(
+                company_id=company_id,
+                branch_id=branch_id,
+                employee=employee,
+                loan_type='SALARY_ADVANCE',
+                principal_amount=carryover_amount,
+                remaining_amount=carryover_amount,
+                paid_amount=0,
+                paid_months=0,
+                interest_rate=0,
+                total_payable=carryover_amount,
+                frequency_type='ONE_TIME',
+                status='PAID',
+                purpose=f'Carryover advance for {month}/{year} (leave/loan deduction exceeded salary)',
+                advance_for_month=carryover_month,
+                advance_for_year=carryover_year,
+                transaction_number=carryover_transaction_number,
+                approved_by=request.user,
+                approved_at=timezone.now(),
+                created_by=request.user,
+                updated_by=request.user,
             )
-            # Mark as confirmed without creating journal entries
-            payment.status = 'CONFIRMED'
-            payment.save(update_fields=['status', 'updated_at'])
+            LoanSelectedMonth.objects.create(
+                loan=carryover_loan,
+                month=carryover_month,
+                year=carryover_year,
+                deduction=carryover_amount,
+                company_id=company_id,
+                branch_id=branch_id,
+                created_by=request.user,
+                updated_by=request.user,
+            )
         
-        
-        return Response({
+        response_data = {
             "message": "Payment processed successfully",
             "id": str(payroll._id),
             "transaction_number": transaction_number,
@@ -603,7 +708,19 @@ class PayrollView(PermissionRequiredMixin, APIView):
             "net_salary": str(payroll.net_salary),
             "payment_status": payroll.payment_status,
             "status": payroll.payment_status,
-        }, status=status.HTTP_201_CREATED)
+        }
+        if carryover_loan:
+            response_data["carryover_loan_id"] = str(carryover_loan._id)
+            response_data["carryover_loan_transaction"] = carryover_loan.transaction_number
+            response_data["carryover_month"] = carryover_month
+            response_data["carryover_year"] = carryover_year
+            response_data["carryover_amount"] = str(carryover_amount)
+            response_data["message"] = (
+                f"Payment processed. Salary capped at 0. Carryover of {carryover_amount:.2f} "
+                f"moved to {carryover_month}/{carryover_year} as {carryover_loan.transaction_number}."
+            )
+        
+        return Response(response_data, status=status.HTTP_201_CREATED)
     
     # ------------------------------------------------------------------
     # DELETE - Soft delete payroll record
@@ -721,17 +838,43 @@ class PayrollView(PermissionRequiredMixin, APIView):
             overtime_rate = float(compensation.overtime_rate or 0)
             overtime_amount = overtime_hours * overtime_rate
         
-        # Loan deductions
+        # Loan deductions (auto-deduct advance loans + manual selection)
         loan_deductions = 0
         loan_details = []
+        
+        # Auto-deduct PAID advance loans for this month
+        advance_loans = EmployeeLoan.objects.filter(
+            employee=employee,
+            loan_type='SALARY_ADVANCE',
+            status='PAID',
+            advance_for_month=month,
+            advance_for_year=year,
+            is_deleted=False
+        )
+        for advance in advance_loans:
+            deduction_amount = float(advance.remaining_amount or advance.total_payable)
+            if deduction_amount > 0:
+                loan_deductions += deduction_amount
+                loan_details.append({
+                    'loan_id': str(advance._id),
+                    'loan_type': 'Salary Advance',
+                    'principal': deduction_amount,
+                    'interest': 0,
+                    'total': deduction_amount
+                })
+        
         if selected_loan_uuids:
             active_loans = EmployeeLoan.objects.filter(
                 employee=employee,
                 _id__in=selected_loan_uuids,
-                status='ACTIVE',
+                status='PAID',
                 is_deleted=False
             ).prefetch_related('selected_months', 'month_range')
             for loan in active_loans:
+                # Skip salary advances (handled by auto-deduction above)
+                if loan.loan_type == 'SALARY_ADVANCE':
+                    continue
+                
                 deduction_amount = 0
                 if loan.frequency_type == 'SELECTED_MONTH':
                     selected = loan.selected_months.filter(month=month, year=year).first()
@@ -751,6 +894,8 @@ class PayrollView(PermissionRequiredMixin, APIView):
                     selected = loan.selected_months.filter(month=month, year=year).first()
                     if selected:
                         deduction_amount = float(selected.deduction)
+                    else:
+                        deduction_amount = float(loan.remaining_amount or loan.total_payable)
                 
                 interest_amount = 0
                 if float(loan.interest_rate) > 0 and deduction_amount > 0:
@@ -768,7 +913,11 @@ class PayrollView(PermissionRequiredMixin, APIView):
         total_deductions = leave_deduction + loan_deductions + custom_deductions
         net_salary = base_salary + total_compensation + overtime_amount + bonus - total_deductions
         
-        return Response({
+        carryover_amount = abs(min(0, net_salary))
+        suggested_carryover_month = (month % 12) + 1
+        suggested_carryover_year = year + (1 if month == 12 else 0)
+
+        response_data = {
             'employee_id': str(employee._id),
             'employee_name': employee.full_name,
             'employee_code': employee.employee_id,
@@ -789,8 +938,16 @@ class PayrollView(PermissionRequiredMixin, APIView):
             'loan_details': loan_details,
             'custom_deductions': custom_deductions,
             'total_deductions': total_deductions,
-            'net_salary': max(0, net_salary)
-        })
+            'net_salary': net_salary,
+        }
+
+        if carryover_amount > 0:
+            response_data['carryover_amount'] = carryover_amount
+            response_data['carryover_required'] = True
+            response_data['suggested_carryover_month'] = suggested_carryover_month
+            response_data['suggested_carryover_year'] = suggested_carryover_year
+
+        return Response(response_data)
 
 
 class PayrollPreviewView(PayrollView):
@@ -912,6 +1069,8 @@ class EmployeeLoanView(PermissionRequiredMixin, APIView):
             "transaction_number": loan.transaction_number,
             "approved_at": loan.approved_at.isoformat() if loan.approved_at else None,
             "notes": loan.notes,
+            "advance_for_month": loan.advance_for_month,
+            "advance_for_year": loan.advance_for_year,
             "created_at": loan.created_at.isoformat() if loan.created_at else None,
         }
     
@@ -1053,7 +1212,7 @@ class EmployeeLoanView(PermissionRequiredMixin, APIView):
             interest_rate=interest_rate,
             total_payable=total_payable,
             frequency_type=frequency_type,
-            status='PENDING',
+            status='PAID',
             purpose=request.data.get('purpose'),
             notes=request.data.get('notes'),
             transaction_number=transaction_number,
@@ -1255,9 +1414,9 @@ class LoanStatusUpdateView(PermissionRequiredMixin, APIView):
                 {'error': 'id and status are required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        if new_status not in ['PENDING', 'ACTIVE', 'PAID', 'CANCELLED']:
+        if new_status not in ['PAID', 'RETURNED']:
             return Response(
-                {'error': 'Invalid status'},
+                {'error': 'Invalid status. Only PAID and RETURNED are supported.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         loan = get_object_or_404(
@@ -1268,12 +1427,7 @@ class LoanStatusUpdateView(PermissionRequiredMixin, APIView):
         )
         old_status = loan.status
         loan.status = new_status
-        if new_status == 'ACTIVE':
-            loan.approved_by = request.user
-            loan.approved_at = timezone.now()
-        elif new_status == 'CANCELLED':
-            loan.remaining_amount = 0
-        elif new_status == 'PAID':
+        if new_status == 'RETURNED':
             loan.remaining_amount = 0
             loan.paid_amount = float(loan.total_payable)
         loan.updated_by = request.user
@@ -1617,3 +1771,169 @@ class CompensationView(PermissionRequiredMixin, APIView):
         compensation.deleted_by = request.user
         compensation.save()
         return Response({'message': 'Compensation deleted successfully'})
+
+
+class PayrollAdvanceView(PermissionRequiredMixin, APIView):
+    """Process advance salary - creates a SALARY_ADVANCE loan for a future month"""
+    permission_module = 'HR'
+    permission_resource = 'payroll'
+    permission_classes = [IsAuthenticated]
+
+    def get_permission_action(self):
+        return 'pay_salary'
+
+    @transaction.atomic
+    def post(self, request):
+        company_id = request.user.company_id
+        branch_id = request.user.branch_id
+
+        if not company_id:
+            return Response(
+                {'error': 'User is not associated with any company'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        employee_uuid = request.data.get('employee_id')
+        month = int(request.data.get('month', date.today().month))
+        year = int(request.data.get('year', date.today().year))
+
+        if not employee_uuid:
+            return Response(
+                {'error': 'employee_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate that this is not a past month (current month IS allowed as advance)
+        today = date.today()
+        if year < today.year or (year == today.year and month < today.month):
+            return Response(
+                {'error': 'Advance salary is only for current or future months. Use regular payroll for past months.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        employee = get_object_or_404(
+            Employee,
+            _id=employee_uuid,
+            company_id=company_id,
+            is_deleted=False
+        )
+
+        # Check if advance already exists for this employee/month/year
+        if EmployeeLoan.objects.filter(
+            employee=employee,
+            loan_type='SALARY_ADVANCE',
+            advance_for_month=month,
+            advance_for_year=year,
+            is_deleted=False
+        ).exclude(status='RETURNED').exists():
+            return Response(
+                {'error': f'Advance salary already processed for {employee.full_name} for {month}/{year}.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Calculate advance amount
+        base_salary = float(employee.salary)
+        bonus = float(request.data.get('bonus', 0))
+        custom_deductions = float(request.data.get('deductions', 0))
+
+        # Compensation is NOT included in advance salary
+        total_compensation = 0
+
+        net_amount = base_salary + bonus - custom_deductions
+        net_amount = max(0, net_amount)
+
+        if net_amount <= 0:
+            return Response(
+                {'error': 'Advance amount must be greater than zero'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        transaction_number = f"ADV-{year}{str(month).zfill(2)}-{employee.employee_id}"
+
+        # Create the SALARY_ADVANCE loan
+        loan = EmployeeLoan.objects.create(
+            company_id=company_id,
+            branch_id=branch_id,
+            employee=employee,
+            loan_type='SALARY_ADVANCE',
+            principal_amount=net_amount,
+            remaining_amount=net_amount,
+            paid_amount=0,
+            paid_months=0,
+            interest_rate=0,
+            total_payable=net_amount,
+            frequency_type='ONE_TIME',
+            status='PAID',
+            purpose=f'Advance salary for {month}/{year}',
+            advance_for_month=month,
+            advance_for_year=year,
+            transaction_number=transaction_number,
+            approved_by=request.user,
+            approved_at=timezone.now(),
+            created_by=request.user,
+            updated_by=request.user,
+        )
+
+        # Create LoanSelectedMonth for the advance month
+        LoanSelectedMonth.objects.create(
+            loan=loan,
+            month=month,
+            year=year,
+            deduction=net_amount,
+            company_id=company_id,
+            branch_id=branch_id,
+            created_by=request.user,
+            updated_by=request.user,
+        )
+
+        # ALSO create a PayrollRecord for the advance month (marks as paid + sends to finance)
+        # Use existing record if one already exists (e.g. from a previous partial processing)
+        advance_payroll, created = PayrollRecord.objects.update_or_create(
+            employee=employee,
+            month=month,
+            year=year,
+            is_deleted=False,
+            defaults={
+                'company_id': company_id,
+                'branch_id': branch_id,
+                'base_salary': base_salary,
+                'bonus': bonus,
+                'deductions': custom_deductions,
+                'net_salary': net_amount,
+                'total_compensation': 0,
+                'total_loan_deduction': 0,
+                'total_leave_deduction': 0,
+                'transaction_type': 'ADVANCE',
+                'custom_note': f'Advance salary - {loan.transaction_number}',
+                'processed_at': timezone.now(),
+                'created_by': request.user,
+                'updated_by': request.user,
+            }
+        )
+
+        # Create a confirmed payment linked to the payroll record → goes to finance
+        payment = create_payment_for(
+            advance_payroll,
+            amount=Decimal(str(net_amount)),
+            payment_date=date.today(),
+            user=request.user,
+            payment_method='BANK_TRANSFER',
+            reference_number=transaction_number,
+            notes=f'Advance salary for {month}/{year}',
+            auto_confirm=False,
+        )
+        payment.status = 'CONFIRMED'
+        payment.save(update_fields=['status', 'updated_at'])
+
+        return Response({
+            "message": f"Advance salary of {net_amount:.2f} processed for {employee.full_name} for {month}/{year}",
+            "id": str(loan._id),
+            "employee_name": employee.full_name,
+            "advance_amount": str(net_amount),
+            "month": month,
+            "year": year,
+            "transaction_number": transaction_number,
+            "loan_type": "SALARY_ADVANCE",
+            "status": loan.status,
+            "payroll_id": str(advance_payroll._id),
+        }, status=status.HTTP_201_CREATED)

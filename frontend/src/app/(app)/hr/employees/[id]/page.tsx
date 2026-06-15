@@ -69,9 +69,9 @@ const statusColors: Record<string, string> = {
   APPROVED: "bg-success/15 text-success border-success/20",
   REJECTED: "bg-destructive/15 text-destructive border-destructive/20",
   CANCELLED: "bg-muted text-muted-foreground border-border",
-  PAID: "bg-success/15 text-success border-success/20",
+  PAID: "bg-blue-500/15 text-blue-600 border-blue-500/30",
+  RETURNED: "bg-green-500/15 text-green-600 border-green-500/30",
   UNPAID: "bg-warning/15 text-warning border-warning/20",
-  ACTIVE_LOAN: "bg-info/15 text-info border-info/20",
 };
 
 const badge = (label: string, cls?: string) => (
@@ -381,7 +381,7 @@ export default function EmployeeDetailPage() {
                       <p className="font-semibold text-sm">{loan.loan_type_display || loan.loan_type}</p>
                       <p className="text-xs text-muted-foreground">Since {fmtDate(loan.start_date)}</p>
                     </div>
-                    {badge(loan.status, statusColors[loan.status] || statusColors.ACTIVE_LOAN)}
+                    {badge(loan.status, statusColors[loan.status] || "bg-info/15 text-info border-info/20")}
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                     {[

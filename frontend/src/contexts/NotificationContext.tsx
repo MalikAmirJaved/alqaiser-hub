@@ -19,6 +19,7 @@ import {
 import { useSelector } from "react-redux";
 import { RootState, store } from "@/store";
 import { loadCompanySettings } from "@/store/slices/companySettingsSlice";
+import { setUnauthenticated } from "@/store/slices/authSlice";
 
 // ----------------------------------------------------------------------
 // Map backend entity names to React Query keys for cache invalidation
@@ -142,6 +143,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const user = useSelector((state: RootState) => state.auth.user);
+  const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
 
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -166,6 +168,13 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
   // WebSocket connection with exponential backoff
   const connectSocket = useCallback(
     async (retryCount = 0) => {
+      if (!isAuthenticated || !user) {
+        console.warn(
+          "[NotificationContext] User not authenticated – skipping WebSocket connection."
+        );
+        return;
+      }
+
       const companyId = user?.companyId;
       const branchId = user?.branchId;
       if (!companyId || !branchId) {
@@ -261,6 +270,12 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         setIsConnected(false);
         if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
 
+        if (event.code === 4403 || event.code === 1008) {
+          console.warn("[NotificationContext] Auth rejected – clearing session.");
+          store.dispatch(setUnauthenticated());
+          return;
+        }
+
         const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
         reconnectTimeoutRef.current = setTimeout(() => {
           connectSocket(retryCount + 1);
@@ -272,7 +287,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         ws.close(); // trigger reconnect
       };
     },
-    [api, fetchNotifications, queryClient, user?.companyId, user?.branchId]
+    [api, fetchNotifications, queryClient, user?.companyId, user?.branchId, isAuthenticated]
   );
 
   useEffect(() => {

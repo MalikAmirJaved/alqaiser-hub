@@ -106,6 +106,8 @@ export interface EmployeeLoan {
   transaction_number?: string;
   approved_at?: string;
   notes?: string;
+  advance_for_month?: number;
+  advance_for_year?: number;
   created_at?: string;
   total_months?: number;
 }
@@ -164,6 +166,7 @@ export interface PayrollPreview {
   employee_name: string;
   employee_code: string;
   joining_date: string | null;
+  original_base_salary?: number;
   base_salary: number;
   compensation: number;
   overtime_hours: number;
@@ -182,6 +185,11 @@ export interface PayrollPreview {
   custom_deductions: number;
   total_deductions: number;
   net_salary: number;
+  // Carryover fields when deductions exceed salary
+  carryover_amount?: number;
+  carryover_required?: boolean;
+  suggested_carryover_month?: number;
+  suggested_carryover_year?: number;
 }
 
 
@@ -225,6 +233,20 @@ export function useProcessPayroll(module: PayrollApiBase = "hr") {
   const base = payrollBase(module);
   return useMutation({
     mutationFn: (data: any) => api(`${base}/`, { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payroll"] });
+      queryClient.invalidateQueries({ queryKey: ["payrollStats"] });
+      queryClient.invalidateQueries({ queryKey: ["employeeLoans"] });
+    },
+  });
+}
+
+export function useProcessPayrollAdvance(module: PayrollApiBase = "hr") {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  const base = payrollBase(module);
+  return useMutation({
+    mutationFn: (data: any) => api(`${base}/advance/`, { method: "POST", body: JSON.stringify(data) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payroll"] });
       queryClient.invalidateQueries({ queryKey: ["payrollStats"] });

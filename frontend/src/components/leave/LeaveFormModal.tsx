@@ -4,6 +4,7 @@
 import { useState } from "react";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { DateRangePickerRac } from "@/components/reuseable/DateRangePickerRac";
+import { DatePicker } from "@/components/reuseable/DatePicker";
 import { X, CalendarDays } from "lucide-react";
 import { LEAVE_TYPES } from "@/hooks/useLeaves";
 
@@ -25,6 +26,7 @@ export function LeaveFormModal({
   const [formData, setFormData] = useState({
     employee_id: "",
     leave_type: "CASUAL",
+    leave_sub_type: "FULL_DAY" as "SHORT" | "HALF" | "FULL_DAY",
     start_date: "",
     end_date: "",
     is_half_day: false,
@@ -34,12 +36,15 @@ export function LeaveFormModal({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const calculateTotalDays = (startDate: string, endDate: string, isHalfDay: boolean) => {
+  const calculateTotalDays = (startDate: string, endDate: string, isHalfDay: boolean, subType: string) => {
     if (!startDate) return 0;
     const start = new Date(startDate);
     const end = endDate ? new Date(endDate) : start;
     const diffTime = Math.abs(end.getTime() - start.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    
+    if (subType === 'HALF' && diffDays === 1) return 0.5;
+    if (subType === 'SHORT') return 1;
     return isHalfDay && diffDays === 1 ? 0.5 : diffDays;
   };
 
@@ -52,7 +57,7 @@ export function LeaveFormModal({
     if (!formData.reason) newErrors.reason = "Please provide a reason";
 
     // Validate date ordering: end date must not be before start date
-    if (formData.start_date && formData.end_date) {
+    if (formData.start_date && formData.end_date && formData.leave_sub_type === 'FULL_DAY') {
       try {
         const s = new Date(formData.start_date);
         const e = new Date(formData.end_date);
@@ -70,11 +75,18 @@ export function LeaveFormModal({
 
   const handleSubmit = () => {
     if (validateForm()) {
-      onSubmit(formData);
+      // Auto-set end_date = start_date for SHORT and HALF
+      const payload = {
+        ...formData,
+        end_date: formData.leave_sub_type !== 'FULL_DAY' ? formData.start_date : formData.end_date,
+        is_half_day: formData.leave_sub_type === 'HALF',
+      };
+      onSubmit(payload);
       if (!isSubmitting) {
         setFormData({
           employee_id: "",
           leave_type: "CASUAL",
+          leave_sub_type: "FULL_DAY",
           start_date: "",
           end_date: "",
           is_half_day: false,
@@ -98,7 +110,7 @@ export function LeaveFormModal({
   }));
 
   const calculatedDays = formData.start_date
-    ? calculateTotalDays(formData.start_date, formData.end_date || formData.start_date, formData.is_half_day)
+    ? calculateTotalDays(formData.start_date, formData.end_date || formData.start_date, formData.is_half_day, formData.leave_sub_type)
     : 0;
 
   return (
@@ -146,32 +158,67 @@ export function LeaveFormModal({
             </label>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-4">
-            <label className="text-sm flex flex-col gap-1.5">
-              <span className="text-muted-foreground">Half Day?</span>
-              <select
-                value={formData.is_half_day ? "true" : "false"}
-                onChange={(e) => setFormData({ ...formData, is_half_day: e.target.value === "true" })}
-                className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="false">No (Full Day)</option>
-                <option value="true">Yes (Half Day)</option>
-              </select>
-            </label>
+          {/* Leave Sub Type Selection */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm text-muted-foreground">Period Type <span className="text-red-500">*</span></span>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { value: 'SHORT', label: 'Short Leave', desc: 'Full day, short period' },
+                { value: 'HALF', label: 'Half Leave', desc: 'Half day only' },
+                { value: 'FULL_DAY', label: 'Date Range', desc: 'Multi-day range' },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    setFormData({
+                      ...formData,
+                      leave_sub_type: option.value as 'SHORT' | 'HALF' | 'FULL_DAY',
+                      start_date: '',
+                      end_date: '',
+                    });
+                  }}
+                  className={`relative flex flex-col items-center gap-1 p-3 rounded-lg border-2 transition-all ${
+                    formData.leave_sub_type === option.value
+                      ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+                      : 'border-border hover:border-primary/50 hover:bg-muted/30'
+                  }`}
+                >
+                  <span className={`text-xs font-semibold ${
+                    formData.leave_sub_type === option.value ? 'text-primary' : 'text-foreground'
+                  }`}>
+                    {option.label}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">{option.desc}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="grid sm:grid-cols-2 gap-4">
             <label className="text-sm flex flex-col gap-1.5">
-              <span className="text-muted-foreground">Leave Period <span className="text-red-500">*</span></span>
-              <DateRangePickerRac
-                startDate={formData.start_date}
-                endDate={formData.end_date}
-                onChange={(start, end) => {
-                  setFormData({ ...formData, start_date: start || "", end_date: end || "" });
-                }}
-                placeholder="Select leave period"
-                required
-              />
+              <span className="text-muted-foreground">
+                {formData.leave_sub_type === 'FULL_DAY' ? 'Leave Period' : 'Leave Date'} <span className="text-red-500">*</span>
+              </span>
+              {formData.leave_sub_type === 'FULL_DAY' ? (
+                <DateRangePickerRac
+                  startDate={formData.start_date}
+                  endDate={formData.end_date}
+                  onChange={(start, end) => {
+                    setFormData({ ...formData, start_date: start || "", end_date: end || "" });
+                  }}
+                  placeholder="Select date range"
+                  required
+                />
+              ) : (
+                <DatePicker
+                  value={formData.start_date}
+                  onChange={(val) => {
+                    setFormData({ ...formData, start_date: val || "", end_date: val || "" });
+                  }}
+                  placeholder={formData.leave_sub_type === 'SHORT' ? 'Select short leave date' : 'Select half leave date'}
+                />
+              )}
               {errors.start_date && (
                 <p className="text-xs text-red-500 mt-1">{errors.start_date}</p>
               )}

@@ -1516,6 +1516,68 @@ This means:
 #### Docs:
 - `agent.md` — Added section 17 documenting the variant attribute catalog system and SKU auto-generation fixes
 
+---
+
+## 18. Employee Salary Detail Page - IMPLEMENTED
+
+### Overview
+
+A comprehensive employee salary detail page at `/hr/salary/[id]` that shows all salary-related information for an employee from joining to current. Accessible directly via URL `/hr/salary/{employee_id}`.
+
+**Route:** `/hr/salary/[id]`
+**Permission:** `HR:payroll:view` (added to `routePermissions.ts`)
+**File:** `frontend/src/app/(app)/hr/salary/[id]/page.tsx`
+
+### Data Sources
+
+| Hook | API Endpoint | Data Used |
+|---|---|---|
+| `useEmployees()` | `GET /api/hr/employees/` | Employee info (name, department, salary, joining date, etc.) |
+| `usePayroll({ employee_id })` | `GET /api/hr/payroll/?employee_id=` | All payroll records for the employee |
+| `useEmployeeLoans({ employee_id })` | `GET /api/hr/loans/?employee_id=` | All loans (personal + salary advances) |
+| `useCompensations({ employee_id })` | `GET /api/hr/compensations/?employee_id=` | All compensation records |
+| `useLeaves({ employee_id })` | `GET /api/hr/leaves/?employee_id=` | All leave requests |
+
+### Page Sections
+
+| Section | Content |
+|---|---|
+| **Summary Stats Cards** | 6 cards: Total Gross Paid, Total Deductions, Net Paid Out, Loans Outstanding, Advances Created, Payroll Cycles |
+| **Salary Overview** | Detailed financial breakdown with Money Flow visualization (Gross → Deductions → Net) |
+| **Compensation Structure** | Active compensation details, allowances breakdown grid, frequency schedule, and a **Compensation Payment Status** table showing each month with PAID/PENDING badge + totals |
+| **Payroll History** | Full month-by-month table with columns: Period, Type, Base, Comp, Bonus, Loan Ded., Leave Ded., Other Ded., Net, Status + running totals row |
+| **Loans** | Each personal loan card with principal/remaining/paid grid, progress bar, interest rate; total portfolio summary |
+| **Salary Advances** | Each advance card with month info, active/deducted status, amount/remaining/deducted grid; total advances summary |
+| **Leave Summary** | Stats cards (total leaves, days, deducted amount, avg/day) + recent leaves table |
+| **Monthly Timeline** | Visual timeline of all payroll events sorted descending (latest 24 months) with gross/deductions/net per month |
+| **Metadata** | Employee info footer (ID, department, designation, joining date, salary, bank) |
+
+### Computed Summary Stats
+
+All computed client-side from fetched data:
+- `totalBasePaid`, `totalCompensationPaid`, `totalBonus` — sum of all payroll records
+- `totalDeductions`, `totalLoanDeduction`, `totalLeaveDeduction` — breakdown of deductions
+- `totalNetPaid` — sum of net_salary across all payroll records
+- `totalLoanPrincipal`, `totalLoanRemaining`, `totalLoanPaid` — loan portfolio stats
+- `totalAdvanceAmount`, `totalAdvanceOutstanding`, `totalAdvanceDeducted` — advance stats
+- `totalLeaveDays` — sum of approved leave days
+
+### Design Patterns
+
+- Uses same `SectionCard`, `InfoRow`, `badge`, `EmptyState`, `ProgressBar` components as existing detail pages
+- Currency formatting via `Intl.NumberFormat` (matches existing pattern)
+- Responsive grid layouts for stat cards and allowance breakdowns
+- `sortedPayroll.slice(0, 24)` limits timeline to latest 24 months for performance
+- Follows existing color/badge conventions (`statusColors` map)
+
+### Files Changed
+
+#### Created:
+- `frontend/src/app/(app)/hr/salary/[id]/page.tsx` — New comprehensive salary detail page
+
+#### Modified:
+- `frontend/src/config/routePermissions.ts` — Added `/hr/salary` → `HR:payroll:view`
+
 ### DB Migration Required
 
 Run after pulling changes:

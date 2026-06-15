@@ -6,7 +6,7 @@ from apps.hr.views.asset_category_views import AssetCategoryView, AssetCategoryS
 from apps.hr.views.asset_purchase_request_views import AssetPurchaseRequestView
 from apps.hr.views.employee_views import EmployeeView, EmployeeStatsView, ActiveEmployeesView
 from apps.hr.views.payroll_views import (
-    PayrollView, PayrollStatsView, PayrollPreviewView,
+    PayrollView, PayrollStatsView, PayrollPreviewView, PayrollAdvanceView,
     EmployeeLoanView, CompensationView,
     LoanStatusUpdateView 
 )
@@ -49,6 +49,8 @@ from apps.hr.views.exit_management_views import (
     ExitReturnAssetView,
 )
 
+from apps.hr.views.promotion_views import PromotionView
+
 from apps.hr.views.policy_views import (
     PolicyView,
     PolicyStatsView,
@@ -77,10 +79,15 @@ urlpatterns = [
     path('employees/', EmployeeView.as_view(), name='employees'),
     path('employees/stats/', EmployeeStatsView.as_view(), name='employee-stats'),
     
+    # Promotions
+    path('promotions/', PromotionView.as_view(), name='promotions'),
+    path('promotions/<str:pk>/', PromotionView.as_view(), name='promotion-detail'),
+
     # Payroll
     path('payroll/', PayrollView.as_view(), name='payroll'),
     path('payroll/stats/', PayrollStatsView.as_view(), name='payroll-stats'),
     path('payroll/preview/', PayrollPreviewView.as_view(), name='payroll-preview'),
+    path('payroll/advance/', PayrollAdvanceView.as_view(), name='payroll-advance'),
 
     # Loans (with individual update/delete support)
     path('loans/', EmployeeLoanView.as_view(), name='employee-loans'),

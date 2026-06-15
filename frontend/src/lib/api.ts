@@ -9,6 +9,44 @@ interface ErrorResponse {
   error?: string;
 }
 
+const TOKEN_ERROR_PATTERNS = [
+  "token",
+  "token not valid",
+  "not valid for any token",
+  "not yet valid",
+  "token is expired",
+  "token has expired",
+  "invalid token",
+  "authentication credentials",
+  "unauthenticated",
+];
+
+function isTokenError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return TOKEN_ERROR_PATTERNS.some((p) => lower.includes(p));
+}
+
+let isClearingSession = false;
+
+async function clearSessionCookies(): Promise<void> {
+  if (isClearingSession) return;
+  isClearingSession = true;
+  try {
+    await fetch(`${BASE_URL}/api/accounts/logout/`, {
+      method: "POST",
+      credentials: "include",
+    });
+  } catch {
+    // force-clear via expired cookie
+    document.cookie =
+      "access_token=; path=/; max-age=0; SameSite=Lax";
+    document.cookie =
+      "refresh_token=; path=/; max-age=0; SameSite=Lax";
+  } finally {
+    isClearingSession = false;
+  }
+}
+
 export async function apiFetch<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -16,7 +54,11 @@ export async function apiFetch<T>(
   const method = options.method?.toUpperCase() || "GET";
 
   // APIs where toast should be disabled
-  const disableToastEndpoints = ["/api/accounts/token/refresh/", "/api/inventory/stock/batch-stock/", "/api/accounts/login/"];
+  const disableToastEndpoints = [
+    "/api/accounts/token/refresh/",
+    "/api/inventory/stock/batch-stock/",
+    "/api/accounts/login/",
+  ];
 
   const shouldShowToast = !disableToastEndpoints.includes(endpoint);
 
@@ -35,13 +77,25 @@ export async function apiFetch<T>(
 
       try {
         errorBody = await res.json();
-      } catch { }
+      } catch {}
 
       const errorMessage =
         errorBody.detail ||
         errorBody.message ||
         errorBody.error ||
         `Request failed with status ${res.status}`;
+
+      // ── Token error → clear cookies, show toast, redirect ──
+      if (res.status === 401 && isTokenError(errorMessage)) {
+        toast.error("Session expired. Please try again.", {
+          duration: 5000,
+        });
+        await clearSessionCookies();
+        localStorage.removeItem("isAuthenticated");
+        sessionStorage.clear();
+        window.location.href = "/login";
+        throw new Error(errorMessage);
+      }
 
       const error = new Error(errorMessage) as any;
       error.status = res.status;
@@ -60,20 +114,19 @@ export async function apiFetch<T>(
     }
 
     const data = await res.json();
-if(data?.message || data?.detail){
-  // Success toast
-  if (
-    shouldShowToast &&
-    ["POST", "PUT", "PATCH", "DELETE"].includes(method)
-  ) {
-    const successMessage = data?.message || data?.detail
-    toast.success(successMessage, {
-      description: data?.detail || "",
-      duration: 4000,
-    });
-  }
-  
-}
+    if (data?.message || data?.detail) {
+      // Success toast
+      if (
+        shouldShowToast &&
+        ["POST", "PUT", "PATCH", "DELETE"].includes(method)
+      ) {
+        const successMessage = data?.message || data?.detail;
+        toast.success(successMessage, {
+          description: data?.detail || "",
+          duration: 4000,
+        });
+      }
+    }
 
     return data;
   } catch (error: any) {

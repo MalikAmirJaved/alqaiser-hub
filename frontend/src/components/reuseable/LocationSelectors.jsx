@@ -11,19 +11,33 @@ import {
   State, 
   City 
 } from "country-state-city";
+import { useSelector } from "react-redux";
 import SearchableSelect from "./SearchableSelect";
 
 /**
  * Country Selector Component
+ * Auto-selects country from company settings if no value is provided.
  * Usage: <CountrySelect value={country} onChange={setCountry} />
  */
 export function CountrySelect({ value, onChange, required = false, className = "", placeholder = "Select Country" }) {
   const [countries, setCountries] = useState([]);
+  const companyCountry = useSelector((state) => state.companySettings?.data?.country);
 
   useEffect(() => {
     const allCountries = Country.getAllCountries();
     setCountries(allCountries.map(c => ({ value: c.isoCode, label: `${c.flag} ${c.name}` })));
   }, []);
+
+  useEffect(() => {
+    if (countries.length > 0 && companyCountry && !value && onChange) {
+      const matched = countries.find(
+        c => c.value === companyCountry
+      );
+      if (matched) {
+        onChange(matched.value);
+      }
+    }
+  }, [countries, companyCountry, value, onChange]);
 
   return (
     <SearchableSelect

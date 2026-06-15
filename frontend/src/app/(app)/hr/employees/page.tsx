@@ -9,7 +9,7 @@ import EmployeeForm from "@/components/Forms/EmployeeForm";
 import EmployeeStatusModal from "@/components/EmployeeStatusModal";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { TableView, GridView } from "@/components/reuseable/TableGridView";
-import { Plus, Pencil, Trash2, Search, Download, Shield, Clock, LayoutGrid, LayoutList, Building2, Briefcase, Award, Phone, Key, ToggleRight } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Download, Shield, Clock, LayoutGrid, LayoutList, Building2, Briefcase, Award, Phone, Key, ToggleRight, TrendingUp } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { useConfirmation } from "@/contexts/ConfirmationModalContext";
@@ -17,6 +17,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { getPermissions } from "@/lib/permissions";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import PromotionModal from "@/components/payroll/PromotionModal";
 
 
 export default function EmployeesPage() {
@@ -30,6 +32,9 @@ export default function EmployeesPage() {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [storedPrefillData, setStoredPrefillData] = useState<any>(null);
+  const [promotionModalOpen, setPromotionModalOpen] = useState(false);
+  const [selectedForPromotion, setSelectedForPromotion] = useState<any>(null);
+  const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefill = searchParams.get("prefill");
@@ -320,17 +325,32 @@ export default function EmployeesPage() {
     }
   ];
 
+  const openPromotionModal = (employee: any) => {
+    setSelectedForPromotion(employee);
+    setPromotionModalOpen(true);
+  };
+
   const renderActions = (row, idx) => (
     <>
       {employeePermissions.update && (
-        <button
-          onClick={() => openStatusModal(row)}
-          className="p-1.5 rounded-md hover:bg-blue-100 text-blue-600 transition-colors"
-          title="Change Employment Status"
-          aria-label="Change Status"
-        >
-          <ToggleRight className="w-4 h-4" />
-        </button>
+        <>
+          <button
+            onClick={() => openStatusModal(row)}
+            className="p-1.5 rounded-md hover:bg-blue-100 text-blue-600 transition-colors"
+            title="Change Employment Status"
+            aria-label="Change Status"
+          >
+            <ToggleRight className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => openPromotionModal(row)}
+            className="p-1.5 rounded-md hover:bg-success/15 text-success transition-colors"
+            title="Promotion"
+            aria-label="Promotion"
+          >
+            <TrendingUp className="w-4 h-4" />
+          </button>
+        </>
       )}
       {!userExistsForEmployee(row) && (
         <button
@@ -637,6 +657,19 @@ export default function EmployeesPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {selectedForPromotion && (
+        <PromotionModal
+          employee={selectedForPromotion}
+          isOpen={promotionModalOpen}
+          onClose={() => {
+            setPromotionModalOpen(false);
+            setSelectedForPromotion(null);
+          }}
+          onSuccess={() => {}}
+          formatCurrency={formatCurrency}
+        />
       )}
 
       {(modalOpen && (editingEmployee ? employeePermissions.update : employeePermissions.create)) && (

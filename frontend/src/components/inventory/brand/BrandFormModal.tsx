@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { CountrySelect } from "@/components/reuseable/LocationSelectors";
 import { useCreateBrand, useUpdateBrand, Brand } from "@/hooks/useBrands";
 import { useAutoCode } from "@/hooks/useAutoCode";
+import { useSelector } from "react-redux";
 
 interface Props {
   isOpen: boolean;
@@ -14,12 +15,13 @@ interface Props {
 }
 
 export default function BrandFormModal({ isOpen, onClose, initialData }: Props) {
-  const [form, setForm] = useState({ 
+  const companyCountry = useSelector((state: any) => state.companySettings?.data?.country || "");
+  const [form, setForm] = useState(() => ({ 
     name: "", 
     code: "", 
     description: "", 
     country_of_origin: "" 
-  });
+  }));
   
   const createBrand = useCreateBrand();
   const updateBrand = useUpdateBrand();
@@ -39,6 +41,12 @@ export default function BrandFormModal({ isOpen, onClose, initialData }: Props) 
       generateCode().then(code => setForm(prev => ({ ...prev, code }))).catch(() => {});
     }
   }, [initialData, isOpen]);
+
+  useEffect(() => {
+    if (!initialData && companyCountry && !form.country_of_origin) {
+      setForm(prev => ({ ...prev, country_of_origin: companyCountry }));
+    }
+  }, [companyCountry, initialData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

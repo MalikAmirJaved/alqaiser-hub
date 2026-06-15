@@ -54,10 +54,8 @@ const fmtDate = (val?: string | null) => {
 
 const StatusBadge = ({ status }: { status: string }) => {
   const colors: Record<string, string> = {
-    ACTIVE: "bg-success/15 text-success border-success/20",
-    PENDING: "bg-warning/15 text-warning border-warning/20",
     PAID: "bg-blue-500/15 text-blue-600 border-blue-500/30",
-    CANCELLED: "bg-destructive/15 text-destructive border-destructive/20",
+    RETURNED: "bg-green-500/15 text-green-600 border-green-500/30",
   };
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${colors[status] || "bg-muted text-muted-foreground border-border"}`}>

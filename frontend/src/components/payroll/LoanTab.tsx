@@ -27,10 +27,8 @@ export default function LoanTab({
     const router = useRouter();
     const getStatusColor = (status: string) => {
         switch (status) {
-            case "ACTIVE": return "bg-green-500/15 text-green-600 border-green-500/30";
             case "PAID": return "bg-blue-500/15 text-blue-600 border-blue-500/30";
-            case "PENDING": return "bg-yellow-500/15 text-yellow-600 border-yellow-500/30";
-            case "CANCELLED": return "bg-red-500/15 text-red-600 border-red-500/30";
+            case "RETURNED": return "bg-green-500/15 text-green-600 border-green-500/30";
             default: return "bg-gray-500/15 text-gray-600 border-gray-500/30";
         }
     };
@@ -134,7 +132,7 @@ export default function LoanTab({
                                                 <MoreHorizontal className="w-3 h-3" />
                                             </button>
                                             {statusDropdownId === item.id && (
-                                                <div className="absolute top-full mt-1 left-0 bg-popover border border-border rounded-lg shadow-lg z-[9999] py-1 min-w-[120px] animate-in fade-in zoom-in-95 duration-100">                        {['PENDING', 'ACTIVE', 'PAID', 'CANCELLED'].map(status => (
+                                                <div className="absolute top-full mt-1 left-0 bg-popover border border-border rounded-lg shadow-lg z-[9999] py-1 min-w-[120px] animate-in fade-in zoom-in-95 duration-100">                        {['PAID', 'RETURNED'].map(status => (
                                                     <button
                                                         key={status}
                                                         onClick={() => onStatusChange(item.id, status)}

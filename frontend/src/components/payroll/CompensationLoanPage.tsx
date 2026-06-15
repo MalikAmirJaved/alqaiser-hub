@@ -316,10 +316,8 @@ export default function CompensationLoanPage({
                 className="h-10 border rounded-lg px-3"
               >
                 <option value="all">All</option>
-                <option value="ACTIVE">Active</option>
-                <option value="PENDING">Pending</option>
                 <option value="PAID">Paid</option>
-                <option value="CANCELLED">Cancelled</option>
+                <option value="RETURNED">Returned</option>
               </select>
             )}
           </div>

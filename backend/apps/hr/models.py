@@ -325,6 +325,39 @@ class Employee(BaseModel):
 
 
 # =========================================================
+# EMPLOYEE PROMOTION
+# =========================================================
+class EmployeePromotion(BaseModel):
+    """Employee salary promotion history"""
+    
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='promotions')
+    previous_salary = models.DecimalField(max_digits=12, decimal_places=2)
+    new_salary = models.DecimalField(max_digits=12, decimal_places=2)
+    effective_date = models.DateField()
+    notes = models.TextField(blank=True, null=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_promotions'
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        verbose_name = "Employee Promotion"
+        verbose_name_plural = "Employee Promotions"
+        ordering = ['-effective_date', '-created_at']
+        indexes = [
+            models.Index(fields=['employee', 'effective_date']),
+            models.Index(fields=['company_id', 'effective_date']),
+        ]
+    
+    def __str__(self):
+        return f"{self.employee} - {self.previous_salary} -> {self.new_salary}"
+
+
+# =========================================================
 # EMPLOYEE ASSET ASSIGNMENT
 # =========================================================
 class EmployeeAssetAssignment(BaseModel):
@@ -562,13 +595,10 @@ class EmployeeLoan(BaseModel):
     status = models.CharField(
         max_length=20,
         choices=[
-            ('PENDING', 'Pending'),
-            ('ACTIVE', 'Active'),
             ('PAID', 'Paid'),
-            ('DEFAULTED', 'Defaulted'),
-            ('CANCELLED', 'Cancelled'),
+            ('RETURNED', 'Returned'),
         ],
-        default='PENDING'
+        default='PAID'
     )
     
     # Additional Info
@@ -584,6 +614,10 @@ class EmployeeLoan(BaseModel):
     notes = models.TextField(blank=True, null=True)
     transaction_number = models.CharField(max_length=100, blank=True, null=True)
     
+    # Advance Salary fields - tracks which future month this advance is for
+    advance_for_month = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Future month this advance is for (1-12)")
+    advance_for_year = models.PositiveIntegerField(null=True, blank=True, help_text="Future year this advance is for")
+    
     class Meta:
         verbose_name = "Employee Loan"
         verbose_name_plural = "Employee Loans"
@@ -592,6 +626,14 @@ class EmployeeLoan(BaseModel):
             models.Index(fields=['employee', 'status']),
             models.Index(fields=['company_id', 'status']),
             models.Index(fields=['frequency_type']),
+            models.Index(fields=['advance_for_month', 'advance_for_year']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['employee', 'advance_for_month', 'advance_for_year'],
+                name='unique_employee_advance_for_month',
+                condition=models.Q(advance_for_month__isnull=False),
+            ),
         ]
 
 
@@ -981,6 +1023,19 @@ class LeaveRequest(BaseModel):
     
     # Leave Details
     leave_type = models.CharField(max_length=20, choices=LEAVE_TYPE_CHOICES, default='CASUAL')
+    
+    # Leave Period Type: SHORT (single day full), HALF (single day half), FULL_DAY (date range)
+    leave_sub_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('SHORT', 'Short Leave'),
+            ('HALF', 'Half Leave'),
+            ('FULL_DAY', 'Date Range'),
+        ],
+        default='FULL_DAY',
+        help_text="Leave period type"
+    )
+    
     start_date = models.DateField()
     end_date = models.DateField()
     is_half_day = models.BooleanField(default=False)
@@ -1021,8 +1076,14 @@ class LeaveRequest(BaseModel):
         return f"{self.employee.full_name} - {self.get_leave_type_display()} ({self.start_date} to {self.end_date})"
     
     def save(self, *args, **kwargs):
-        """Auto-calculate total days before saving"""
+        """Auto-calculate total days and sync is_half_day before saving"""
         if self.start_date and self.end_date:
+            # Sync is_half_day based on leave_sub_type
+            if self.leave_sub_type == 'HALF':
+                self.is_half_day = True
+            elif self.leave_sub_type == 'SHORT':
+                self.is_half_day = False
+            
             delta = (self.end_date - self.start_date).days + 1
             self.total_days = delta - 0.5 if self.is_half_day and delta == 1 else float(delta)
         super().save(*args, **kwargs)

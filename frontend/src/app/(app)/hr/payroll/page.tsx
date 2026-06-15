@@ -2,13 +2,14 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useActiveEmployees } from "@/hooks/useEmployees";
-import { usePayroll, usePayrollStats } from "@/hooks/usePayroll";
+import { usePayroll, usePayrollStats, useEmployeeLoans, useCompensations } from "@/hooks/usePayroll";
+import { useLeaves } from "@/hooks/useLeaves";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import PageHeader from "@/components/PageHeader";
 import PaymentModal from "@/components/payroll/PaymentModal";
 import PayslipModal from "@/components/payroll/PayslipModal";
 import MonthSelectorModal from "@/components/payroll/MonthSelectorModal";
-import { Search, Filter, Eye, CreditCard, Calendar, RefreshCw } from "lucide-react";
+import { Search, Filter, Eye, CreditCard, Calendar, RefreshCw, Info } from "lucide-react";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { getPermissions } from "@/lib/permissions";
 import { useSelector } from "react-redux";
@@ -34,12 +35,20 @@ export function PayrollPage({
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [payslipModalOpen, setPayslipModalOpen] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth() + 1;
+  const currentYear = currentDate.getFullYear();
+  const defaultPrevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+  const defaultPrevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+  const [selectedMonth, setSelectedMonth] = useState(defaultPrevMonth);
+  const [selectedYear, setSelectedYear] = useState(defaultPrevYear);
   const [monthSelectorOpen, setMonthSelectorOpen] = useState(false);
 
   // Fetch data from backend
   const { data: employees = [], isLoading: employeesLoading } = useActiveEmployees();
+  const { data: allLoans = [] } = useEmployeeLoans();
+  const { data: compensations = [] } = useCompensations();
+  const { data: leaves = [] } = useLeaves();
   const { data: payrollRecords = [], isLoading: payrollLoading } = usePayroll({
     month: String(selectedMonth),
     year: String(selectedYear),
@@ -73,8 +82,78 @@ const payrollPermissions = getPermissions(
     );
   };
 
-  // Filter employees by search and status
+  // Get advance loan for this employee/month (PAID = not yet returned)
+  const getAdvanceLoan = (employeeId: string) => {
+    return allLoans.find(
+      l => l.employee_id === employeeId
+        && l.loan_type === "SALARY_ADVANCE"
+        && l.advance_for_month === selectedMonth
+        && l.advance_for_year === selectedYear
+        && l.status === "PAID"
+    );
+  };
+
+  // Helper: check if an active compensation applies to the selected month
+  const compensationAppliesToMonth = (comp: any): boolean => {
+    if (comp.status !== 'ACTIVE') return false;
+    const freq = comp.frequency_type;
+    if (freq === 'ONE_TIME' || freq === 'SELECTED_MONTH') {
+      return comp.selected_months?.some(
+        (sm: any) => sm.month === selectedMonth && sm.year === selectedYear
+      ) ?? false;
+    }
+    if (freq === 'MONTH_RANGE') {
+      const mr = comp.month_range;
+      if (!mr) return false;
+      const startVal = mr.start_year * 12 + mr.start_month;
+      const endVal = mr.end_year * 12 + mr.end_month;
+      const curVal = selectedYear * 12 + selectedMonth;
+      return curVal >= startVal && curVal <= endVal;
+    }
+    return true; // OTHER/MONTHLY — always applies
+  };
+
+  // Helper: does an advance payroll have outstanding items (comp/leave/loans) to process?
+  const hasAdvanceItems = (employeeId: string): boolean => {
+    const payrollRecord = getPayrollRecord(employeeId);
+    if (!payrollRecord || payrollRecord.transaction_type !== 'ADVANCE') return false;
+
+    // Check if compensation applies to this month
+    const empComp = compensations.find(c => c.employee_id === employeeId && c.status === 'ACTIVE');
+    if (empComp && compensationAppliesToMonth(empComp)) return true;
+
+    // Check other active (non-advance) loans
+    const empLoans = allLoans.filter(
+      l => l.employee_id === employeeId && l.status === 'PAID' && l.loan_type !== 'SALARY_ADVANCE'
+    );
+    if (empLoans.length > 0) return true;
+
+    // Check approved leaves overlapping this month
+    const hasLeave = leaves.some(l => {
+      if (l.employee_id !== employeeId || l.status !== 'APPROVED') return false;
+      const startDate = new Date(l.start_date);
+      const endDate = new Date(l.end_date);
+      const monthStart = new Date(selectedYear, selectedMonth - 1, 1);
+      const monthEnd = new Date(selectedYear, selectedMonth, 0);
+      return startDate <= monthEnd && endDate >= monthStart;
+    });
+    if (hasLeave) return true;
+
+    return false;
+  };
+
+  // Filter employees by search, status, and joining date
   const filteredEmployees = employees.filter(emp => {
+    // Exclude employees who haven't joined by the selected month
+    if (emp.joining_date) {
+      const joinDate = new Date(emp.joining_date);
+      const joinMonth = joinDate.getMonth() + 1;
+      const joinYear = joinDate.getFullYear();
+      if (joinYear > selectedYear || (joinYear === selectedYear && joinMonth > selectedMonth)) {
+        return false;
+      }
+    }
+
     const searchTerm = searchQuery.toLowerCase();
     const matchesSearch =
       emp.first_name?.toLowerCase().includes(searchTerm) ||
@@ -180,6 +259,19 @@ const handleRefresh = () => {
   ]}
 />
 
+      {/* Advance Salary Banner */}
+      {(selectedYear > currentYear || (selectedYear === currentYear && selectedMonth >= currentMonth)) && (
+        <div className="bg-amber/10 border border-amber/30 rounded-xl p-4 mb-4 flex items-center gap-3">
+          <Info className="w-5 h-5 text-amber shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber">Future Month - Advance Salary</p>
+            <p className="text-xs text-muted-foreground">
+              Click <strong>Process Payment</strong> on any employee to create a Salary Advance loan. The advance will be auto-deducted when regular payroll runs for this month.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Employee Payment Table */}
       <div className="bg-card border border-border rounded-2xl shadow-sm">
         <div className="p-3 border-b border-border">
@@ -240,6 +332,16 @@ const handleRefresh = () => {
                     <td className="px-4 py-3">
                       <div className="font-medium">{employee.first_name} {employee.last_name || ""}</div>
                       <div className="text-xs text-muted-foreground">{employee.designation_name || employee.department_name || ""}</div>
+                      {(() => {
+                        const advance = getAdvanceLoan(employee.id);
+                        return advance ? (
+                          <div className="flex items-center gap-1 mt-1">
+                            <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] rounded-full bg-amber/10 text-amber border border-amber/30">
+                              Advance: {formatCurrency(parseFloat(advance.remaining_amount || advance.total_payable))}
+                            </span>
+                          </div>
+                        ) : null;
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-xs font-mono text-primary">
@@ -285,7 +387,7 @@ const handleRefresh = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {(!isPaid && payrollPermissions.pay_salary) && (
+                        {((!isPaid || hasAdvanceItems(employee.id)) && payrollPermissions.pay_salary) && (
                           <button
                             onClick={() => {
                               setSelectedEmployee(employee);

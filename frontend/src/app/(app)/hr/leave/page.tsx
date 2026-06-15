@@ -36,6 +36,7 @@ import {
 interface LeaveFormData {
   employee_id: string;
   leave_type: string;
+  leave_sub_type: 'SHORT' | 'HALF' | 'FULL_DAY';
   start_date: string;
   end_date: string;
   is_half_day: boolean;
@@ -49,7 +50,7 @@ export default function LeaveManagementPage() {
   const { user } = useAuth();
   const api = useApi();
 
-  const [activeTab, setActiveTab] = useState("my-leaves");
+  const [activeTab, setActiveTab] = useState("all-leaves");
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [isApplyOpen, setIsApplyOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -99,6 +100,7 @@ const leavePermissions = getPermissions(
       await createLeave.mutateAsync({
         employee_id: formData.employee_id,
         leave_type: formData.leave_type,
+        leave_sub_type: formData.leave_sub_type,
         start_date: formData.start_date,
         end_date: formData.end_date || formData.start_date,
         is_half_day: formData.is_half_day,
@@ -199,7 +201,10 @@ const leavePermissions = getPermissions(
       label: "Days", 
       sortable: true,
       render: (value: unknown, row: any) => (
-        <span>{String(value)}{row.is_half_day && " (Half)"}</span>
+        <span>
+          {String(value)}
+          {row.leave_sub_type === 'SHORT' ? ' (Short)' : row.leave_sub_type === 'HALF' ? ' (Half)' : row.is_half_day ? ' (Half)' : ''}
+        </span>
       )
     },
     { 

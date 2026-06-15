@@ -28,7 +28,7 @@ export default function PayslipModal({
   );
 
   const activeCompensation = compensations.find(c => c.status === "ACTIVE");
-  const activeLoans = loans.filter(l => l.status === "ACTIVE");
+  const activeLoans = loans.filter(l => l.status === "PAID");
 
   if (!isOpen) return null;
 

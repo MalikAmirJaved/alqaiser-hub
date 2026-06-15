@@ -6,6 +6,7 @@ import { useApi } from "@/hooks/useApi";
 export type CreateLeaveRequestData = {
   employee_id: string;
   leave_type: string;
+  leave_sub_type: 'SHORT' | 'HALF' | 'FULL_DAY';
   start_date: string;
   end_date?: string;
   is_half_day: boolean;
