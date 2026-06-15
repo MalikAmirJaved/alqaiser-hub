@@ -24,7 +24,8 @@ import {
   useExitEmployeeAssets,
   useReturnExitAsset,
   ExitRecord,
-  ExitEmployeeAsset
+  ExitEmployeeAsset,
+  FinalSettlementPreview
 } from "@/hooks/useExitManagement";
 import { useActiveEmployees } from "@/hooks/useEmployees";
 import { toast } from "sonner";
@@ -518,6 +519,7 @@ function ExitFormModal({
   });
 
   const [settlementPreview, setSettlementPreview] = useState<number | null>(initialData?.final_settlement ?? null);
+  const [settlementDetail, setSettlementDetail] = useState<FinalSettlementPreview | null>(null);
   const [calculating, setCalculating] = useState(false);
   const finalSettlementMutation = useFinalSettlementPreview();
 
@@ -552,6 +554,7 @@ function ExitFormModal({
       });
       const net = parseFloat(result.net_settlement || result.net_salary || "0");
       setSettlementPreview(net);
+      setSettlementDetail(result);
       toast.success("Settlement calculated");
     } catch {
       toast.error("Failed to calculate settlement");
@@ -688,9 +691,40 @@ function ExitFormModal({
                   {calculating ? "Calculating..." : "Calculate"}
                 </button>
               </div>
-              {settlementPreview !== null ? (
-                <div className="text-lg font-semibold text-primary">
-                  {formatCurrency(settlementPreview)}
+              {settlementPreview !== null && settlementDetail ? (
+                <div className="space-y-3">
+                  {/* Breakdown grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    <div className="bg-muted/30 rounded-lg p-2.5">
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Base Salary</div>
+                      <div className="text-sm font-semibold">{formatCurrency(parseFloat(settlementDetail.base_salary || "0"))}</div>
+                    </div>
+                    <div className="bg-muted/30 rounded-lg p-2.5">
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Compensation</div>
+                      <div className="text-sm font-semibold text-success">+{formatCurrency(parseFloat(settlementDetail.compensation || "0"))}</div>
+                    </div>
+                    <div className="bg-muted/30 rounded-lg p-2.5">
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Leave Deduction</div>
+                      <div className="text-sm font-semibold text-destructive">-{formatCurrency(parseFloat(settlementDetail.leave_deduction || "0"))}</div>
+                    </div>
+                    <div className="bg-muted/30 rounded-lg p-2.5">
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Loan Deduction</div>
+                      <div className="text-sm font-semibold text-destructive">-{formatCurrency(parseFloat(settlementDetail.loan_deduction || "0"))}</div>
+                    </div>
+                    <div className="bg-muted/30 rounded-lg p-2.5">
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Advance Deduction</div>
+                      <div className="text-sm font-semibold text-destructive">-{formatCurrency(parseFloat(settlementDetail.advance_deduction || "0"))}</div>
+                    </div>
+                    <div className="bg-primary/5 border border-primary/20 rounded-lg p-2.5">
+                      <div className="text-[10px] text-primary uppercase tracking-wider font-medium">= Net Settlement</div>
+                      <div className="text-sm font-bold text-primary">{formatCurrency(settlementPreview)}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                    <span>Daily Rate: {formatCurrency(parseFloat(settlementDetail.daily_rate || "0"), 2)}</span>
+                    <span className="text-muted-foreground/40">|</span>
+                    <span>Period: {settlementDetail.period_start} → {settlementDetail.period_end}</span>
+                  </div>
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground">

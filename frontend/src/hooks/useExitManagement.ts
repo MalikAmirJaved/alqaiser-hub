@@ -70,11 +70,13 @@ export interface FinalSettlementPreview {
   total_working_days: number;
   days_in_month: number;
   daily_rate: string;
+  original_base_salary: string;
   base_salary: string;
   settlement_salary: string;
   compensation: string;
   loan_deduction: string;
   leave_deduction: string;
+  advance_deduction: string;
   net_settlement: string;
   net_salary: string;
 }

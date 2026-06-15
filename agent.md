@@ -1143,10 +1143,11 @@ The "previous month paid" check looks for a `PayrollRecord` with `net_salary > 0
 | Component | Logic | Source |
 |---|---|---|
 | **Compensation** | Month-aware: checks if compensation's frequency covers the LWD month (ONE_TIME/SELECTED_MONTH/MONTH_RANGE) | Same as `PayrollView` |
-| **Loan deduction** | Full `remaining_amount` of all ACTIVE loans | Final settlement clears all outstanding |
+| **Loan deduction** | Full `remaining_amount` of all PAID personal loans (excludes SALARY_ADVANCE) | Final settlement clears all outstanding |
 | **Leave deduction** | Counts working days in leave periods within the settlement range, using `_is_working_day()` | Same as `PayrollView` |
+| **Advance deduction** | Full `remaining_amount` of all PAID salary advances | Outstanding advances deducted from final payout |
 
-`net_settlement = settlement_salary + compensation - loan_deduction - leave_deduction`
+`net_settlement = base_salary + compensation - leave_deduction - loan_deduction - advance_deduction`
 
 ### API Endpoint
 
@@ -1156,12 +1157,39 @@ The "previous month paid" check looks for a `PayrollRecord` with `net_salary > 0
 
 The `last_working_day` parameter is accepted from request body so the API works for **new** exit records (no exit record exists yet). For existing records, it falls back to `exit_record.last_working_day` or `exit_record.exit_date`.
 
+### Settlement Application on CONFIRMED (`_apply_final_settlement`)
+
+When an exit record status changes to `CONFIRMED`, the `_apply_final_settlement` method runs inside an atomic transaction with these side effects:
+
+| # | Action | Details |
+|---|---|---|
+| 1 | **Deactivate compensation** | Sets active `Compensation.status` → `INACTIVE` |
+| 2 | **Cancel future leaves** | Cancels all PENDING/APPROVED leaves with `start_date > LWD` |
+| 3 | **Settle personal loans** | Sets all PAID personal loans → `RETURNED`, `remaining_amount=0`, `paid_amount=total_payable` |
+| 4 | **Settle salary advances** | Sets all PAID salary advances → `RETURNED`, `remaining_amount=0`, `paid_amount=total_payable` |
+| 5 | **Create final PayrollRecord** | Creates/updates `PayrollRecord` with `transaction_type='FINAL_SETTLEMENT'` and the calculated settlement amount |
+| 6 | **Create CONFIRMED payment** | Creates a `CONFIRMED` payment linked to the PayrollRecord → goes to Finance |
+
+The settlement notes on the exit record are updated with a summary: `'Settlement: {amount} | Loans settled: {total} | Advances settled: {total} | Payroll: {transaction_number}'`
+
 ### Employee Status Update Flow
 
 - **On creation**: Employee status is **not** changed (removed "Update employee status" option)
 - **On settlement CONFIRMED**: Employee `employment_status` changes to `RESIGNED` or `TERMINATED` (based on exit reason)
 - **Locked once settled**: Records with `final_settlement_status` = `CONFIRMED` or `REJECTED` cannot be edited (backend returns 400, frontend disables all inputs and hides Save button)
 - The inline settlement status dropdown in the table view is replaced with a static badge for CONFIRMED/REJECTED records
+
+### Frontend Settlement Breakdown
+
+The `ExitFormModal` shows a detailed breakdown grid when calculating settlement:
+- **Base Salary** — prorated base salary for the settlement period
+- **Compensation** (green, +) — prorated compensation allowances
+- **Leave Deduction** (red, -) — working day-based leave deductions
+- **Loan Deduction** (red, -) — outstanding personal loans to settle
+- **Advance Deduction** (red, -) — outstanding salary advances to settle
+- **Net Settlement** (highlighted, =) — final payable amount
+
+A footer shows the daily rate and settlement period range.
 
 ### Frontend Auto-Calculation
 

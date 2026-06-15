@@ -13,13 +13,18 @@ from django.db.models import Count, Sum, Avg, Q
 
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
+from decimal import Decimal
+from django.db import transaction as db_transaction
+
 from apps.hr.models import (
     ExitRecord, ExitChecklist, Employee, PayrollRecord,
     Compensation, EmployeeLoan, LeaveRequest,
     CompensationSelectedMonth, CompensationMonthRange,
     LoanSelectedMonth, LoanMonthRange,
+    PayrollLoanDeduction,
     EmployeeAssetAssignment, Asset
 )
+from apps.finance.services.payable import create_payment_for
 from apps.compsetting.models import CompanySettings, WorkingDay, PublicHoliday
 
 logger = logging.getLogger(__name__)
@@ -221,6 +226,144 @@ class ExitRecordView(BaseExitView):
         
         if checklist_items:
             ExitChecklist.objects.bulk_create(checklist_items)
+
+    @db_transaction.atomic
+    def _apply_final_settlement(self, employee, company_id, branch_id, exit_record, user):
+        """
+        Apply final settlement side effects when exit is CONFIRMED:
+        - Deactivate active compensation
+        - Cancel pending/approved leaves after LWD
+        - Settle all outstanding personal loans (mark as RETURNED)
+        - Settle all outstanding salary advances (mark as RETURNED)
+        - Create a final PayrollRecord with CONFIRMED payment
+        - Update exit_record.final_settlement with calculated amount
+        """
+        result = {}
+        lwd = exit_record.last_working_day or exit_record.exit_date
+        month = lwd.month
+        year = lwd.year
+
+        # ── 1. Deactivate compensation ──
+        active_comp = Compensation.objects.filter(
+            employee=employee,
+            status='ACTIVE',
+            is_deleted=False
+        ).first()
+        if active_comp:
+            active_comp.status = 'INACTIVE'
+            active_comp.updated_by = user
+            active_comp.save(update_fields=['status', 'updated_by'])
+            result['compensation_deactivated'] = str(active_comp._id)
+
+        # ── 2. Cancel pending/approved leaves after LWD ──
+        cancelled_leaves = LeaveRequest.objects.filter(
+            employee=employee,
+            status__in=['PENDING', 'APPROVED'],
+            start_date__gt=lwd,
+            is_deleted=False
+        )
+        cancelled_count = cancelled_leaves.count()
+        cancelled_leaves.update(
+            status='CANCELLED',
+            updated_by=user,
+        )
+        result['leaves_cancelled'] = cancelled_count
+
+        # ── 3. Settle all outstanding personal loans ──
+        outstanding_loans = EmployeeLoan.objects.filter(
+            employee=employee,
+            status='PAID',
+            is_deleted=False
+        ).exclude(loan_type='SALARY_ADVANCE')
+        total_loan_settled = 0
+        for loan in outstanding_loans:
+            remaining = float(loan.remaining_amount or 0)
+            if remaining > 0:
+                total_loan_settled += remaining
+            loan.remaining_amount = 0
+            loan.paid_amount = float(loan.total_payable)
+            loan.status = 'RETURNED'
+            loan.updated_by = user
+            loan.save(update_fields=['remaining_amount', 'paid_amount', 'status', 'updated_by'])
+        result['loans_settled'] = outstanding_loans.count()
+        result['loan_settlement_amount'] = total_loan_settled
+
+        # ── 4. Settle all outstanding salary advances ──
+        outstanding_advances = EmployeeLoan.objects.filter(
+            employee=employee,
+            loan_type='SALARY_ADVANCE',
+            status='PAID',
+            is_deleted=False
+        )
+        total_advance_settled = 0
+        for adv in outstanding_advances:
+            remaining = float(adv.remaining_amount or 0)
+            if remaining > 0:
+                total_advance_settled += remaining
+            adv.remaining_amount = 0
+            adv.paid_amount = float(adv.total_payable)
+            adv.status = 'RETURNED'
+            adv.updated_by = user
+            adv.save(update_fields=['remaining_amount', 'paid_amount', 'status', 'updated_by'])
+        result['advances_settled'] = outstanding_advances.count()
+        result['advance_settlement_amount'] = total_advance_settled
+
+        # ── 5. Create final PayrollRecord with CONFIRMED payment ──
+        settlement_amount = exit_record.final_settlement or 0
+        transaction_number = f"EXIT-{year}{str(month).zfill(2)}-{employee.employee_id}"
+
+        final_payroll, created = PayrollRecord.objects.update_or_create(
+            employee=employee,
+            month=month,
+            year=year,
+            is_deleted=False,
+            defaults={
+                'company_id': company_id,
+                'branch_id': branch_id,
+                'base_salary': Decimal(str(settlement_amount)),
+                'bonus': 0,
+                'deductions': Decimal(str(total_loan_settled + total_advance_settled)),
+                'net_salary': Decimal(str(settlement_amount)),
+                'total_compensation': Decimal(str(settlement_amount)),
+                'total_loan_deduction': Decimal(str(total_loan_settled + total_advance_settled)),
+                'total_leave_deduction': 0,
+                'transaction_type': 'FINAL_SETTLEMENT',
+                'custom_note': f'Exit settlement - {exit_record.get_reason_display()}',
+                'processed_at': timezone.now(),
+                'created_by': user,
+                'updated_by': user,
+            }
+        )
+        result['payroll_id'] = str(final_payroll._id)
+        result['payroll_created'] = created
+
+        # ── 6. Create CONFIRMED payment → goes to finance ──
+        payment = create_payment_for(
+            final_payroll,
+            amount=Decimal(str(settlement_amount)),
+            payment_date=date.today(),
+            user=user,
+            payment_method='BANK_TRANSFER',
+            reference_number=transaction_number,
+            notes=f'Exit settlement for {employee.full_name} - {exit_record.get_reason_display()}',
+            auto_confirm=False,
+        )
+        payment.status = 'CONFIRMED'
+        payment.save(update_fields=['status', 'updated_at'])
+        result['payment_id'] = str(payment._id)
+        result['transaction_number'] = transaction_number
+
+        # Update exit record with calculated settlement
+        exit_record.final_settlement = settlement_amount
+        exit_record.settlement_notes = (
+            f'Settlement: {settlement_amount:.2f} | '
+            f'Loans settled: {total_loan_settled:.2f} | '
+            f'Advances settled: {total_advance_settled:.2f} '
+            f'| Payroll: {final_payroll.transaction_number}'
+        )
+        exit_record.save(update_fields=['final_settlement', 'settlement_notes'])
+
+        return result
     
 
     def patch(self, request):
@@ -260,20 +403,38 @@ class ExitRecordView(BaseExitView):
                 else:
                     setattr(exit_record, field, request.data[field])
         
-        # Update employee employment status when exit is confirmed
+        # Apply final settlement side effects when exit is confirmed
         if request.data.get('status') == 'CONFIRMED':
             employee = exit_record.employee
             if employee and employee.employment_status not in ['RESIGNED', 'TERMINATED']:
                 employee.employment_status = 'RESIGNED' if exit_record.reason == 'RESIGNATION' else 'TERMINATED'
                 employee.save(update_fields=['employment_status'])
-        
+
+            # Apply settlement: deactivate comp, cancel leaves, settle loans, create payroll
+            try:
+                settlement_result = self._apply_final_settlement(
+                    employee, company_id, branch_id, exit_record, request.user
+                )
+            except Exception as e:
+                logger.error(f"Failed to apply final settlement for {employee.full_name}: {e}", exc_info=True)
+                return Response(
+                    {'error': f'Exit confirmed but settlement application failed: {str(e)}'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        else:
+            settlement_result = None
+
         exit_record.updated_by = request.user
         exit_record.save()
-        
-        return Response({
+
+        response_data = {
             "message": "Exit record updated successfully",
             "exit_record": self._serialize_exit_record(exit_record)
-        })
+        }
+        if settlement_result:
+            response_data["settlement"] = settlement_result
+
+        return Response(response_data)
     
 
     def delete(self, request):
@@ -504,15 +665,24 @@ class ExitFinalSettlementView(BaseExitView):
             else:
                 cursor = date(year, month + 1, 1)
 
-        # ---- Loan deductions (total remaining) ----
+    # ---- Loan deductions (all outstanding: personal loans, NOT salary advances) ----
         active_loans = EmployeeLoan.objects.filter(
             employee=employee,
-            status='ACTIVE',
+            status='PAID',
             is_deleted=False
-        )
+        ).exclude(loan_type='SALARY_ADVANCE')
         total_loan_deduction = sum(float(l.remaining_amount or 0) for l in active_loans)
 
-        net_settlement = total_base_salary + total_compensation - total_leave_deduction - total_loan_deduction
+        # Salary advances outstanding (status='PAID' = not yet returned/deducted)
+        advance_loans = EmployeeLoan.objects.filter(
+            employee=employee,
+            loan_type='SALARY_ADVANCE',
+            status='PAID',
+            is_deleted=False
+        )
+        total_advance_outstanding = sum(float(l.remaining_amount or 0) for l in advance_loans)
+
+        net_settlement = total_base_salary + total_compensation - total_leave_deduction - total_loan_deduction - total_advance_outstanding
         net_settlement_val = max(0, net_settlement)
 
         return Response({
@@ -530,6 +700,7 @@ class ExitFinalSettlementView(BaseExitView):
             'compensation': str(total_compensation),
             'leave_deduction': str(total_leave_deduction),
             'loan_deduction': str(total_loan_deduction),
+            'advance_deduction': str(total_advance_outstanding),
             'net_settlement': str(net_settlement_val),
             'net_salary': str(net_settlement_val),
         })
