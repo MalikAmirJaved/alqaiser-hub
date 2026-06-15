@@ -20,8 +20,8 @@ from apps.hr.models import (
 from apps.compsetting.models import CompanySettings, WorkingDay, PublicHoliday
 from apps.finance.services.payable import (
     annotate_total_paid,
-    create_payment_for,
     get_latest_confirmed_payment,
+    create_payment_for,
 )
 
 logger = logging.getLogger(__name__)
@@ -482,10 +482,9 @@ class PayrollView(PermissionRequiredMixin, APIView):
         # ---------- Net salary ----------
         net_salary = base_salary + total_compensation + overtime_amount + bonus - total_deductions
         
+        payment_method = request.data.get('payment_method', 'BANK_TRANSFER')
         transaction_number = request.data.get('transaction_number') or \
             f"PAY-{year}{str(month).zfill(2)}-{employee.employee_id}"
-        payment_method = request.data.get('payment_method', 'BANK_TRANSFER')
-        pay_immediately = request.data.get('pay_immediately', True)
 
         payroll = PayrollRecord.objects.create(
             company_id=company_id,
@@ -567,37 +566,24 @@ class PayrollView(PermissionRequiredMixin, APIView):
                         created_by=request.user,
                         updated_by=request.user,
                     )
+
+        # Create a payment record (marks as paid) but skip journal entry creation
+        if net_salary > 0:
+            payment = create_payment_for(
+                payroll,
+                amount=Decimal(str(net_salary)),
+                payment_date=date.today(),
+                user=request.user,
+                payment_method=payment_method,
+                reference_number=transaction_number,
+                notes=request.data.get('custom_note', ''),
+                auto_confirm=False,
+            )
+            # Mark as confirmed without creating journal entries
+            payment.status = 'CONFIRMED'
+            payment.save(update_fields=['status', 'updated_at'])
         
-        if pay_immediately and net_salary > 0:
-            bank_account = None
-            bank_account_uuid = request.data.get('bank_account_id')
-            if bank_account_uuid:
-                from apps.finance.models import BankAccount
-                try:
-                    bank_account = BankAccount.objects.get(
-                        _id=bank_account_uuid,
-                        company_id=company_id,
-                    )
-                except BankAccount.DoesNotExist:
-                    return Response(
-                        {'error': 'Bank account not found'},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
-            try:
-                create_payment_for(
-                    payroll,
-                    amount=Decimal(str(net_salary)),
-                    payment_date=timezone.now().date(),
-                    payment_method=payment_method,
-                    reference_number=transaction_number,
-                    bank_account=bank_account,
-                    user=request.user,
-                    auto_confirm=True,
-                )
-            except ValueError as exc:
-                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-
+        
         return Response({
             "message": "Payment processed successfully",
             "id": str(payroll._id),
@@ -618,77 +604,6 @@ class PayrollView(PermissionRequiredMixin, APIView):
             "payment_status": payroll.payment_status,
             "status": payroll.payment_status,
         }, status=status.HTTP_201_CREATED)
-    
-    # ------------------------------------------------------------------
-    # PATCH - Update payroll record
-    # ------------------------------------------------------------------
-
-    @transaction.atomic
-    def patch(self, request, pk=None):
-        company_id = request.user.company_id
-        if not company_id:
-            return Response(
-                {'error': 'User is not associated with any company'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        payroll_uuid = pk or request.data.get('id')
-        if not payroll_uuid:
-            return Response(
-                {'error': 'id (UUID) is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        payroll = get_object_or_404(
-            PayrollRecord,
-            _id=payroll_uuid,
-            company_id=company_id,
-            is_deleted=False
-        )
-        if 'custom_note' in request.data:
-            payroll.custom_note = request.data['custom_note']
-
-        new_status = request.data.get('status')
-        if new_status == 'CANCELLED':
-            payroll.is_cancelled = True
-        elif new_status == 'PAID' and payroll.payment_status != 'PAID':
-            payment_method = request.data.get('payment_method', 'BANK_TRANSFER')
-            reference_number = request.data.get(
-                'transaction_number',
-                f"PAY-{payroll.year}{str(payroll.month).zfill(2)}-{payroll.employee.employee_id}",
-            )
-            bank_account = None
-            bank_account_uuid = request.data.get('bank_account_id')
-            if bank_account_uuid:
-                from apps.finance.models import BankAccount
-                try:
-                    bank_account = BankAccount.objects.get(
-                        _id=bank_account_uuid,
-                        company_id=company_id,
-                    )
-                except BankAccount.DoesNotExist:
-                    return Response(
-                        {'error': 'Bank account not found'},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-            try:
-                create_payment_for(
-                    payroll,
-                    amount=payroll.outstanding,
-                    payment_date=timezone.now().date(),
-                    payment_method=payment_method,
-                    reference_number=reference_number,
-                    bank_account=bank_account,
-                    user=request.user,
-                    auto_confirm=True,
-                )
-            except ValueError as exc:
-                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-
-        payroll.updated_by = request.user
-        payroll.save()
-        return Response({
-            "message": "Payroll updated successfully",
-            "payroll": self._serialize_payroll(payroll)
-        })
     
     # ------------------------------------------------------------------
     # DELETE - Soft delete payroll record

@@ -3,12 +3,15 @@
 # ============================================================
 # Create file: backend/apps/inventory/views/purchase.py
 
+from datetime import date
+import time, random
+import uuid
+
+from decimal import Decimal
+from django.db.models import F
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from django.db.models import F
-import uuid
-from decimal import Decimal
 
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
@@ -16,13 +19,13 @@ from apps.inventory.models import (
     PurchaseOrder, PurchaseOrderLine, GoodsReceipt, GoodsReceiptLine,
     StockItem, InventoryTransaction, ProductVariant
 )
-
 from apps.inventory.serializers.purchase import (
     PurchaseOrderSerializer,
     GoodsReceiptSerializer,
 )
-from apps.finance.models import SupplierBill
-from apps.hr.services.assignment_service import create_or_update_asset_from_receipt_line, create_expense_from_receipt_line
+from apps.finance.models import SupplierBill, Expense
+from apps.hr.services.assignment_service import create_or_update_asset_from_receipt_line
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -60,6 +63,35 @@ class PurchaseOrderViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets
             return Response({'error': 'Only draft orders can be confirmed'}, status=400)
         po.status = 'CONFIRMED'
         po.save()
+
+        # For OFFICE_INVENTORY purchase orders, create a finance expense record
+        if po.inventory_type == 'OFFICE_INVENTORY':
+            line_details = []
+            for line in po.lines.all():
+                asset_name = line.asset.name if line.asset else None
+                variant_name = line.variant.product.product_name if line.variant else None
+                line_details.append(
+                    f"{asset_name or variant_name or 'Item'} x{line.quantity_ordered} @ {line.unit_cost}"
+                )
+            description = f"Office inventory purchase: {po.order_number} from {po.supplier.name}"
+            if line_details:
+                description += f" ({'; '.join(line_details[:3])})"
+
+            Expense.objects.create(
+                expense_number=f"EXP-PO-{int(time.time())}-{random.randint(1000, 9999)}",
+                company_id=po.company_id,
+                branch_id=po.branch_id,
+                expense_date=po.order_date or date.today(),
+                amount=po.total_amount,
+                category='OFFICE_SUPPLIES',
+                description=description,
+                notes=f"Auto-created from purchase order {po.order_number}\nVendor: {po.supplier.name}",
+                supplier=po.supplier,
+                created_by=request.user,
+                updated_by=request.user,
+            )
+            logger.info(f"Created expense for OFFICE_INVENTORY PO {po.order_number} (amount: {po.total_amount})")
+
         return Response({'status': 'success', 'message': 'Order confirmed'})
 
     @action(detail=True, methods=['post'])
@@ -119,13 +151,11 @@ class GoodsReceiptViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
         Process a goods receipt:
         - Update stock (for FOR_SALE) or HR assets (for OFFICE_INVENTORY)
         - Create a supplier bill for the total received amount
-        - Create expenses for OFFICE_INVENTORY lines linked to that bill
+        - Expenses for OFFICE_INVENTORY are already created when the PO is confirmed.
         """
         po = goods_receipt.purchase_order
         inventory_type = po.inventory_type
 
-        # Stores receipt lines for OFFICE_INVENTORY (to create expenses after the bill is created)
-        office_lines = []
         total_bill_amount = Decimal('0.00')
 
         # ============ FIRST PASS: Process all lines and accumulate bill amount ============
@@ -209,8 +239,6 @@ class GoodsReceiptViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
                     po_line.status = 'PARTIALLY_RECEIVED'
                 po_line.save(update_fields=['status'])
 
-                # --- Store the line for expense creation after the bill is created ---
-                office_lines.append(line)
                 total_bill_amount += total_line
 
         # ============ UPDATE PURCHASE ORDER STATUS ============
@@ -240,15 +268,6 @@ class GoodsReceiptViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
             )
             logger.info(f"Created supplier bill {supplier_bill.bill_number} (ID: {supplier_bill._id}) for amount {total_bill_amount}")
 
-        # ============ SECOND PASS: Create expenses for OFFICE_INVENTORY lines (linked to the bill) ============
-        for line in office_lines:
-            if not supplier_bill:
-                # This should never happen because total_bill_amount > 0 implies supplier_bill exists
-                logger.error(f"No supplier bill available for goods receipt {goods_receipt.receipt_number} despite total amount > 0")
-                continue
-
-            expense = create_expense_from_receipt_line(
-                line, goods_receipt, user,
-                supplier_bill=supplier_bill   # Link the expense to the bill
-            )
-            logger.info(f"Created expense {expense.expense_number} linked to bill {supplier_bill.bill_number}")
+        # ============ NOTE: Expenses for OFFICE_INVENTORY are already created on PO confirm ============
+        # (see PurchaseOrderViewSet.confirm()). The goods receipt only updates assets/stock
+        # and creates the supplier bill. No additional expense is created here.
