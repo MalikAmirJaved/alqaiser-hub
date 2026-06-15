@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { usePayroll } from "@/hooks/usePayroll";
 import { useEmployeeLoans } from "@/hooks/usePayroll";
 import { useCompensations } from "@/hooks/usePayroll";
-import { X, Receipt } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { X, Receipt, ExternalLink } from "lucide-react";
 
 export default function PayslipModal({ 
   employee, 
@@ -27,6 +28,7 @@ export default function PayslipModal({
     isOpen && employee ? { employee_id: String(employee.id) } : undefined
   );
 
+  const router = useRouter();
   const activeCompensation = compensations.find(c => c.status === "ACTIVE");
   const activeLoans = loans.filter(l => l.status === "PAID");
 
@@ -40,9 +42,21 @@ export default function PayslipModal({
             <Receipt className="w-5 h-5 text-primary" />
             Payslip - {employee?.first_name} {employee?.last_name || ""}
           </h2>
-          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-muted">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                onClose();
+                router.push(`payroll/${employee.id}`);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm bg-primary/10 hover:bg-primary/20 text-primary"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Full Detail
+            </button>
+            <button onClick={onClose} className="p-1.5 rounded-md hover:bg-muted">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <div className="p-5">
