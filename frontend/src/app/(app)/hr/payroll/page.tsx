@@ -9,6 +9,7 @@ import PageHeader from "@/components/PageHeader";
 import PaymentModal from "@/components/payroll/PaymentModal";
 import PayslipModal from "@/components/payroll/PayslipModal";
 import MonthSelectorModal from "@/components/payroll/MonthSelectorModal";
+import { useRouter } from "next/navigation";
 import { Search, Filter, Eye, CreditCard, Calendar, RefreshCw, Info } from "lucide-react";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { getPermissions } from "@/lib/permissions";
@@ -29,6 +30,7 @@ export function PayrollPage({
   title?: string;
   permissionModule?: "HR" | "FINANCE";
 }) {
+  const router = useRouter();
   const formatCurrency = useFormatCurrency();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -330,8 +332,13 @@ const handleRefresh = () => {
                 return (
                   <tr key={employee.id} className="border-t border-border hover:bg-muted/30">
                     <td className="px-4 py-3">
-                      <div className="font-medium">{employee.first_name} {employee.last_name || ""}</div>
-                      <div className="text-xs text-muted-foreground">{employee.designation_name || employee.department_name || ""}</div>
+                      <button
+                        onClick={() => router.push(`payroll/${employee.id}`)}
+                        className="text-left hover:underline"
+                      >
+                        <div className="font-medium">{employee.first_name} {employee.last_name || ""}</div>
+                        <div className="text-xs text-muted-foreground">{employee.designation_name || employee.department_name || ""}</div>
+                      </button>
                       {(() => {
                         const advance = getAdvanceLoan(employee.id);
                         return advance ? (
