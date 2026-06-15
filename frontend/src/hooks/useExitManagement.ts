@@ -79,6 +79,7 @@ export interface FinalSettlementPreview {
   advance_deduction: string;
   net_settlement: string;
   net_salary: string;
+  net_settlement_raw: string;
 }
 
 // Fetch all exit records

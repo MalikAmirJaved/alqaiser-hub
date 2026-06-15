@@ -1,7 +1,7 @@
 // src/app/(app)/hr/exit/page.tsx
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import SearchableSelect, { SearchableSelectOption } from "@/components/reuseable/SearchableSelect";
@@ -328,7 +328,13 @@ export default function ExitManagementPage() {
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-xs font-mono">
-                      {formatCurrency(r.final_settlement)}
+                      {r.final_settlement < 0 ? (
+                        <span className="text-destructive font-bold" title="Employee owes company">
+                          -{formatCurrency(Math.abs(r.final_settlement))}
+                        </span>
+                      ) : (
+                        formatCurrency(r.final_settlement)
+                      )}
                     </td>
                     <td className="px-4 py-2.5 text-xs text-muted-foreground max-w-[200px] truncate">
                       {r.settlement_notes || "—"}
@@ -524,6 +530,21 @@ function ExitFormModal({
   const finalSettlementMutation = useFinalSettlementPreview();
 
   const isLocked = initialData?.status_value === "CONFIRMED" || initialData?.status_value === "REJECTED";
+  const isEditMode = !!initialData;
+
+  // ── Auto-fetch settlement when both employee + LWD are selected ──
+  useEffect(() => {
+    if (isLocked) return;
+    if (!formData.employee_id || !formData.last_working_day) return;
+    // In edit mode with existing settlement, skip auto-fetch (user can click button)
+    if (isEditMode && initialData?.final_settlement) return;
+    // Debounce: wait 300ms after both fields are set
+    const timer = setTimeout(() => {
+      handleCalculateSettlement();
+    }, 300);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.employee_id, formData.last_working_day]);
 
   const blockedEmployeeIds = new Set(
     exitRecords
@@ -552,8 +573,9 @@ function ExitFormModal({
         employee_id: formData.employee_id,
         last_working_day: formData.last_working_day,
       });
-      const net = parseFloat(result.net_settlement || result.net_salary || "0");
-      setSettlementPreview(net);
+      // Use net_settlement_raw (may be negative) so preview shows true amount
+      const raw = parseFloat(result.net_settlement_raw || result.net_settlement || result.net_salary || "0");
+      setSettlementPreview(raw);
       setSettlementDetail(result);
       toast.success("Settlement calculated");
     } catch {
@@ -715,11 +737,34 @@ function ExitFormModal({
                       <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Advance Deduction</div>
                       <div className="text-sm font-semibold text-destructive">-{formatCurrency(parseFloat(settlementDetail.advance_deduction || "0"))}</div>
                     </div>
-                    <div className="bg-primary/5 border border-primary/20 rounded-lg p-2.5">
-                      <div className="text-[10px] text-primary uppercase tracking-wider font-medium">= Net Settlement</div>
-                      <div className="text-sm font-bold text-primary">{formatCurrency(settlementPreview)}</div>
-                    </div>
+                    {settlementPreview >= 0 ? (
+                      <div className="bg-primary/5 border border-primary/20 rounded-lg p-2.5">
+                        <div className="text-[10px] text-primary uppercase tracking-wider font-medium">= Net Settlement</div>
+                        <div className="text-sm font-bold text-primary">{formatCurrency(settlementPreview)}</div>
+                      </div>
+                    ) : (
+                      <div className="bg-destructive/5 border border-destructive/30 rounded-lg p-2.5">
+                        <div className="text-[10px] text-destructive uppercase tracking-wider font-medium">= Net Settlement</div>
+                        <div className="text-sm font-bold text-destructive">-{formatCurrency(Math.abs(settlementPreview))}</div>
+                      </div>
+                    )}
                   </div>
+
+                  {/* Employee owes company card */}
+                  {settlementPreview < 0 && (
+                    <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 flex items-start gap-3">
+                      <AlertTriangle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+                      <div>
+                        <div className="text-sm font-semibold text-destructive">Employee Owes Company</div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          The deductions (leave + loan + advance) exceed the salary payable. 
+                          The employee must return{' '}
+                          <span className="font-bold text-destructive">{formatCurrency(Math.abs(settlementPreview))}</span> to the company.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                     <span>Daily Rate: {formatCurrency(parseFloat(settlementDetail.daily_rate || "0"), 2)}</span>
                     <span className="text-muted-foreground/40">|</span>

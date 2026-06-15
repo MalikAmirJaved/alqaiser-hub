@@ -308,59 +308,68 @@ class ExitRecordView(BaseExitView):
         result['advances_settled'] = outstanding_advances.count()
         result['advance_settlement_amount'] = total_advance_settled
 
-        # ── 5. Create final PayrollRecord with CONFIRMED payment ──
+        # ── 5. Create final PayrollRecord with CONFIRMED payment (only if settlement > 0) ──
         settlement_amount = exit_record.final_settlement or 0
         transaction_number = f"EXIT-{year}{str(month).zfill(2)}-{employee.employee_id}"
 
-        final_payroll, created = PayrollRecord.objects.update_or_create(
-            employee=employee,
-            month=month,
-            year=year,
-            is_deleted=False,
-            defaults={
-                'company_id': company_id,
-                'branch_id': branch_id,
-                'base_salary': Decimal(str(settlement_amount)),
-                'bonus': 0,
-                'deductions': Decimal(str(total_loan_settled + total_advance_settled)),
-                'net_salary': Decimal(str(settlement_amount)),
-                'total_compensation': Decimal(str(settlement_amount)),
-                'total_loan_deduction': Decimal(str(total_loan_settled + total_advance_settled)),
-                'total_leave_deduction': 0,
-                'transaction_type': 'FINAL_SETTLEMENT',
-                'custom_note': f'Exit settlement - {exit_record.get_reason_display()}',
-                'processed_at': timezone.now(),
-                'created_by': user,
-                'updated_by': user,
-            }
-        )
-        result['payroll_id'] = str(final_payroll._id)
-        result['payroll_created'] = created
+        if settlement_amount > 0:
+            final_payroll, created = PayrollRecord.objects.update_or_create(
+                employee=employee,
+                month=month,
+                year=year,
+                is_deleted=False,
+                defaults={
+                    'company_id': company_id,
+                    'branch_id': branch_id,
+                    'base_salary': Decimal(str(settlement_amount)),
+                    'bonus': 0,
+                    'deductions': Decimal(str(total_loan_settled + total_advance_settled)),
+                    'net_salary': Decimal(str(settlement_amount)),
+                    'total_compensation': 0,
+                    'total_loan_deduction': Decimal(str(total_loan_settled + total_advance_settled)),
+                    'total_leave_deduction': 0,
+                    'transaction_type': 'FINAL_SETTLEMENT',
+                    'custom_note': f'Exit settlement - {exit_record.get_reason_display()}',
+                    'processed_at': timezone.now(),
+                    'created_by': user,
+                    'updated_by': user,
+                }
+            )
+            result['payroll_id'] = str(final_payroll._id)
+            result['payroll_created'] = created
 
-        # ── 6. Create CONFIRMED payment → goes to finance ──
-        payment = create_payment_for(
-            final_payroll,
-            amount=Decimal(str(settlement_amount)),
-            payment_date=date.today(),
-            user=user,
-            payment_method='BANK_TRANSFER',
-            reference_number=transaction_number,
-            notes=f'Exit settlement for {employee.full_name} - {exit_record.get_reason_display()}',
-            auto_confirm=False,
-        )
-        payment.status = 'CONFIRMED'
-        payment.save(update_fields=['status', 'updated_at'])
-        result['payment_id'] = str(payment._id)
-        result['transaction_number'] = transaction_number
+            # ── 6. Create CONFIRMED payment → goes to finance ──
+            payment = create_payment_for(
+                final_payroll,
+                amount=Decimal(str(settlement_amount)),
+                payment_date=date.today(),
+                user=user,
+                payment_method='BANK_TRANSFER',
+                reference_number=transaction_number,
+                notes=f'Exit settlement for {employee.full_name} - {exit_record.get_reason_display()}',
+                auto_confirm=False,
+            )
+            payment.status = 'CONFIRMED'
+            payment.save(update_fields=['status', 'updated_at'])
+            result['payment_id'] = str(payment._id)
+            result['transaction_number'] = transaction_number
+
+            result['settlement_note'] = (
+                f'Settlement: {settlement_amount:.2f} | '
+                f'Loans settled: {total_loan_settled:.2f} | '
+                f'Advances settled: {total_advance_settled:.2f} '
+                f'| Payroll: {final_payroll.transaction_number}'
+            )
+        else:
+            result['settlement_note'] = (
+                f'No payout — employee owes company {abs(settlement_amount):.2f} | '
+                f'Loans settled: {total_loan_settled:.2f} | '
+                f'Advances settled: {total_advance_settled:.2f}'
+            )
 
         # Update exit record with calculated settlement
         exit_record.final_settlement = settlement_amount
-        exit_record.settlement_notes = (
-            f'Settlement: {settlement_amount:.2f} | '
-            f'Loans settled: {total_loan_settled:.2f} | '
-            f'Advances settled: {total_advance_settled:.2f} '
-            f'| Payroll: {final_payroll.transaction_number}'
-        )
+        exit_record.settlement_notes = result.get('settlement_note', '')
         exit_record.save(update_fields=['final_settlement', 'settlement_notes'])
 
         return result
@@ -683,7 +692,7 @@ class ExitFinalSettlementView(BaseExitView):
         total_advance_outstanding = sum(float(l.remaining_amount or 0) for l in advance_loans)
 
         net_settlement = total_base_salary + total_compensation - total_leave_deduction - total_loan_deduction - total_advance_outstanding
-        net_settlement_val = max(0, net_settlement)
+        net_settlement_payable = max(0, net_settlement)
 
         return Response({
             'employee_id': str(employee._id),
@@ -701,8 +710,9 @@ class ExitFinalSettlementView(BaseExitView):
             'leave_deduction': str(total_leave_deduction),
             'loan_deduction': str(total_loan_deduction),
             'advance_deduction': str(total_advance_outstanding),
-            'net_settlement': str(net_settlement_val),
-            'net_salary': str(net_settlement_val),
+            'net_settlement': str(net_settlement_payable),
+            'net_salary': str(net_settlement_payable),
+            'net_settlement_raw': str(net_settlement),  # may be negative — employee owes company
         })
 
 
