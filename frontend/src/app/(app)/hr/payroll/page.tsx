@@ -218,6 +218,12 @@ const handleRefresh = () => {
   const totalPayroll = stats?.totalPayroll ? parseFloat(stats.totalPayroll) : employees.reduce((sum, e) => sum + (parseFloat(e.salary) || 0), 0);
   const avgSalary = stats?.avgSalary ? parseFloat(stats.avgSalary) : (employees.length > 0 ? totalPayroll / employees.length : 0);
 
+  const overallPayable = employees.reduce((sum, employee) => {
+    if (getPaymentStatus(employee.id) === "PAID") return sum;
+    const record = getPayrollRecord(employee.id);
+    return sum + parseFloat(record?.net_salary || employee.salary || "0");
+  }, 0);
+
   return (
     <div>
       <PageHeader
@@ -271,6 +277,11 @@ const handleRefresh = () => {
       id: "avg-salary",
       label: "Avg. Salary",
       value: `${formatCurrency(avgSalary)}`,
+    },
+    {
+      id: "overall-payable",
+      label: "Overall Payable",
+      value: `${formatCurrency(overallPayable)}`,
     },
   ]}
 />

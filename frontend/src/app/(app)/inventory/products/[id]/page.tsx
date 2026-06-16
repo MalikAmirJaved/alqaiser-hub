@@ -7,7 +7,7 @@ import { useProduct, useUpdateProduct, useDeleteProduct } from "@/hooks/useProdu
 import { useCategories } from "@/hooks/useCategories";
 import { useBrands } from "@/hooks/useBrands";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { ConfirmationModal, useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
+import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { format } from "date-fns";
 
@@ -234,7 +234,7 @@ export default function ProductDetailPage() {
         }
       />
 
-      <ConfirmationModal />
+      <deleteConfirm.Modal />
     </>
   );
 }
