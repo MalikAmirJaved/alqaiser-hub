@@ -5,6 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.finance.models import CustomerInvoice, CustomerInvoiceLine
 from apps.finance.services.invoice_payment import pay_customer_invoice
 from apps.permissions.mixins import PermissionRequiredMixin

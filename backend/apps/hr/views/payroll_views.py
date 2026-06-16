@@ -1380,27 +1380,24 @@ class EmployeeLoanView(PermissionRequiredMixin, APIView):
         
         # Update month range if provided
         if 'month_range' in request.data:
-            try:
-                loan.month_range.is_deleted = True
-                loan.month_range.save(update_fields=["is_deleted"])
-            except (LoanMonthRange.DoesNotExist, AttributeError):
-                pass
             mr_data = request.data['month_range']
             total_months_count = (mr_data['end_year'] - mr_data['start_year']) * 12 + \
                                  (mr_data['end_month'] - mr_data['start_month']) + 1
             tp = float(loan.total_payable)
             deduction_per_month = tp / total_months_count if total_months_count > 0 else tp
-            LoanMonthRange.objects.create(
+            LoanMonthRange.objects.update_or_create(
                 loan=loan,
-                start_month=mr_data['start_month'],
-                start_year=mr_data['start_year'],
-                end_month=mr_data['end_month'],
-                end_year=mr_data['end_year'],
-                deduction=deduction_per_month,
-                company_id=company_id,
-                branch_id=loan.branch_id,
-                created_by=request.user,
-                updated_by=request.user,
+                defaults={
+                    'start_month': mr_data['start_month'],
+                    'start_year': mr_data['start_year'],
+                    'end_month': mr_data['end_month'],
+                    'end_year': mr_data['end_year'],
+                    'deduction': deduction_per_month,
+                    'company_id': company_id,
+                    'branch_id': loan.branch_id,
+                    'created_by': request.user,
+                    'updated_by': request.user,
+                }
             )
         
         loan.updated_by = request.user
@@ -1671,27 +1668,24 @@ class LoanPayView(PermissionRequiredMixin, APIView):
         
         # Update month range if provided
         if 'month_range' in request.data and request.data['month_range'] is not None:
-            try:
-                loan.month_range.is_deleted = True
-                loan.month_range.save(update_fields=["is_deleted"])
-            except (LoanMonthRange.DoesNotExist, AttributeError):
-                pass
             mr_data = request.data['month_range']
             total_months_count = (mr_data['end_year'] - mr_data['start_year']) * 12 + \
                                  (mr_data['end_month'] - mr_data['start_month']) + 1
             tp = float(loan.total_payable)
             deduction_per_month = tp / total_months_count if total_months_count > 0 else tp
-            LoanMonthRange.objects.create(
+            LoanMonthRange.objects.update_or_create(
                 loan=loan,
-                start_month=mr_data['start_month'],
-                start_year=mr_data['start_year'],
-                end_month=mr_data['end_month'],
-                end_year=mr_data['end_year'],
-                deduction=deduction_per_month,
-                company_id=company_id,
-                branch_id=branch_id or loan.branch_id,
-                created_by=request.user,
-                updated_by=request.user,
+                defaults={
+                    'start_month': mr_data['start_month'],
+                    'start_year': mr_data['start_year'],
+                    'end_month': mr_data['end_month'],
+                    'end_year': mr_data['end_year'],
+                    'deduction': deduction_per_month,
+                    'company_id': company_id,
+                    'branch_id': branch_id or loan.branch_id,
+                    'created_by': request.user,
+                    'updated_by': request.user,
+                }
             )
         
         # Mark loan as PAID
@@ -1993,22 +1987,19 @@ class CompensationView(PermissionRequiredMixin, APIView):
         
         # Update month range if provided
         if 'month_range' in request.data and request.data['month_range'] is not None:
-            try:
-                loan.month_range.is_deleted = True
-                loan.month_range.save(update_fields=["is_deleted"])
-            except (LoanMonthRange.DoesNotExist, AttributeError):
-                pass
             mr_data = request.data['month_range']
-            CompensationMonthRange.objects.create(
+            CompensationMonthRange.objects.update_or_create(
                 compensation=compensation,
-                start_month=mr_data['start_month'],
-                start_year=mr_data['start_year'],
-                end_month=mr_data['end_month'],
-                end_year=mr_data['end_year'],
-                company_id=company_id,
-                branch_id=compensation.branch_id,
-                created_by=request.user,
-                updated_by=request.user,
+                defaults={
+                    'start_month': mr_data['start_month'],
+                    'start_year': mr_data['start_year'],
+                    'end_month': mr_data['end_month'],
+                    'end_year': mr_data['end_year'],
+                    'company_id': company_id,
+                    'branch_id': compensation.branch_id,
+                    'created_by': request.user,
+                    'updated_by': request.user,
+                }
             )
         
         compensation.updated_by = request.user
