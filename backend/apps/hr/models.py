@@ -458,13 +458,8 @@ class Compensation(BaseModel):
     education_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     other_allowances = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     
-    # Employer Contributions
-    employer_pf = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    employer_eobi = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    
     # Additional
     overtime_rate = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    bonus_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     
     # Frequency Type
     frequency_type = models.CharField(
@@ -480,8 +475,13 @@ class Compensation(BaseModel):
     # Status & Dates
     status = models.CharField(
         max_length=20,
-        choices=[('ACTIVE', 'Active'), ('INACTIVE', 'Inactive')],
-        default='ACTIVE'
+        choices=[
+            ('PENDING', 'Pending'),
+            ('CONFIRM', 'Confirmed'),
+            ('REJECT', 'Rejected'),
+            ('FULLYPAID', 'Fully Paid'),
+        ],
+        default='PENDING'
     )
     review_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True, null=True)
@@ -510,7 +510,7 @@ class Compensation(BaseModel):
     
     @property
     def total_ctc(self):
-        return self.total_allowances + self.employer_pf + self.employer_eobi
+        return self.total_allowances
     
     @property
     def total_monthly(self):

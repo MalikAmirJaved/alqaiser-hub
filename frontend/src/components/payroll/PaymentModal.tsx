@@ -57,7 +57,7 @@ export default function PaymentModal({
   const processPayrollAdvance = useProcessPayrollAdvance(apiModule);
 
   const activeCompensation = compensations.find(
-    c => c.employee_id === employee?.id && c.status === "ACTIVE"
+    c => c.employee_id === employee?.id && c.status === "CONFIRM"
   );
   const activeLoans = allLoans.filter(l => {
     if (l.employee_id !== employee?.id || l.approval !== "CONFIRM" || l.status !== "PAID" || l.loan_type === "SALARY_ADVANCE") return false;

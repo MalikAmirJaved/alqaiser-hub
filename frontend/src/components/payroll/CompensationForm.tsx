@@ -363,57 +363,6 @@ export default function CompensationForm({ formData, setFormData, employeeOption
         </div>
       </div>
 
-      {/* Employer Contributions */}
-      <div className="space-y-3 bg-muted/30 rounded-lg p-4 border border-border">
-        <h3 className="text-sm font-semibold text-foreground">Employer Contributions</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label className="text-sm text-muted-foreground font-medium">Employer PF</label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">
-                {CurrencyCode()}
-              </span>
-              <input
-                type="number"
-                value={formData.employer_pf || ""}
-                onChange={(e) => setFormData({ ...formData, employer_pf: Number(e.target.value) })}
-                placeholder="0.00"
-                className="w-full bg-background border border-border rounded-lg h-10 pl-12 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-ring"
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm text-muted-foreground font-medium">Employer EOBI</label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">
-                {CurrencyCode()}
-              </span>
-              <input
-                type="number"
-                value={formData.employer_eobi || ""}
-                onChange={(e) => setFormData({ ...formData, employer_eobi: Number(e.target.value) })}
-                placeholder="0.00"
-                className="w-full bg-background border border-border rounded-lg h-10 pl-12 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-ring"
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm text-muted-foreground font-medium">Bonus Percentage (%)</label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">%</span>
-              <input
-                type="number"
-                value={formData.bonus_percentage || ""}
-                onChange={(e) => setFormData({ ...formData, bonus_percentage: Number(e.target.value) })}
-                placeholder="0"
-                step="0.1"
-                className="w-full bg-background border border-border rounded-lg h-10 pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-ring"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Notes */}
       <div className="space-y-2">
         <label className="text-sm font-medium flex items-center gap-2 text-foreground">

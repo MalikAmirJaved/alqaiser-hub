@@ -390,7 +390,7 @@ class PayrollView(PermissionRequiredMixin, APIView):
         # ---------- Compensation allowances (month-aware, pro-rated if join month) ----------
         compensation = Compensation.objects.filter(
             employee=employee,
-            status='ACTIVE',
+            status='CONFIRM',
             is_deleted=False
         ).prefetch_related('selected_months', 'month_range').first()
         total_compensation = 0
@@ -608,6 +608,20 @@ class PayrollView(PermissionRequiredMixin, APIView):
                 created_by=request.user,
                 updated_by=request.user,
             )
+            # Auto-update to FULLYPAID when all selected months are paid
+            if compensation.status == 'CONFIRM':
+                all_selected_months = compensation.selected_months.all()
+                paid_months_set = set(
+                    PayrollCompensation.objects.filter(compensation=compensation)
+                    .values_list('payroll__month', 'payroll__year')
+                    .distinct()
+                )
+                if all_selected_months.exists() and all(
+                    (sm.month, sm.year) in paid_months_set
+                    for sm in all_selected_months
+                ):
+                    compensation.status = 'FULLYPAID'
+                    compensation.save(update_fields=['status', 'updated_at'])
         
         # PayrollLoanDeduction
         for loan_data in processed_loans:
@@ -832,7 +846,7 @@ class PayrollView(PermissionRequiredMixin, APIView):
         # Compensation (month-aware, pro-rated if join month)
         compensation = Compensation.objects.filter(
             employee=employee,
-            status='ACTIVE',
+            status='CONFIRM',
             is_deleted=False
         ).prefetch_related('selected_months', 'month_range').first()
         total_compensation = 0
@@ -1758,10 +1772,7 @@ class CompensationView(PermissionRequiredMixin, APIView):
             "utilities_allowance": str(comp.utilities_allowance),
             "education_allowance": str(comp.education_allowance),
             "other_allowances": str(comp.other_allowances),
-            "employer_pf": str(comp.employer_pf),
-            "employer_eobi": str(comp.employer_eobi),
             "overtime_rate": str(comp.overtime_rate),
-            "bonus_percentage": str(comp.bonus_percentage),
             "total_allowances": str(comp.total_allowances),
             "total_ctc": str(comp.total_ctc),
             "total_monthly": str(comp.total_monthly),
@@ -1829,7 +1840,7 @@ class CompensationView(PermissionRequiredMixin, APIView):
         employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
         existing_compensation = Compensation.objects.filter(
             employee=employee,
-            status='ACTIVE',
+            status__in=['PENDING', 'CONFIRM'],
             is_deleted=False
         ).first()
         if existing_compensation:
@@ -1897,12 +1908,9 @@ class CompensationView(PermissionRequiredMixin, APIView):
             utilities_allowance=request.data.get('utilities_allowance', 0),
             education_allowance=request.data.get('education_allowance', 0),
             other_allowances=request.data.get('other_allowances', 0),
-            employer_pf=request.data.get('employer_pf', 0),
-            employer_eobi=request.data.get('employer_eobi', 0),
             overtime_rate=request.data.get('overtime_rate', 0),
-            bonus_percentage=request.data.get('bonus_percentage', 0),
             frequency_type=frequency_type,
-            status='ACTIVE',
+            status='PENDING',
             review_date=request.data.get('review_date'),
             notes=request.data.get('notes'),
             created_by=request.user,
@@ -1964,7 +1972,7 @@ class CompensationView(PermissionRequiredMixin, APIView):
             'house_rent_allowance', 'medical_allowance',
             'transport_allowance', 'phone_allowance',
             'utilities_allowance', 'education_allowance', 'other_allowances',
-            'employer_pf', 'employer_eobi', 'overtime_rate', 'bonus_percentage',
+            'overtime_rate',
             'frequency_type', 'status', 'review_date', 'notes'
         ]
         for field in updatable_fields:
@@ -2031,11 +2039,63 @@ class CompensationView(PermissionRequiredMixin, APIView):
             is_deleted=False
         )
         compensation.is_deleted = True
-        compensation.status = 'INACTIVE'
         compensation.deleted_at = timezone.now()
         compensation.deleted_by = request.user
         compensation.save()
         return Response({'message': 'Compensation deleted successfully'})
+
+
+class CompensationStatusUpdateView(PermissionRequiredMixin, APIView):
+    """Update compensation status (CONFIRM/REJECT)"""
+    permission_module = 'HR'
+    permission_resource = 'compensation'
+    permission_classes = [IsAuthenticated]
+
+    def get_permission_action(self):
+        return 'update_compensation_status'
+
+    @transaction.atomic
+    def post(self, request):
+        company_id = request.user.company_id
+        if not company_id:
+            return Response(
+                {'error': 'User is not associated with any company'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        comp_uuid = request.data.get('id')
+        new_status = request.data.get('status')
+        if not comp_uuid or not new_status:
+            return Response(
+                {'error': 'id and status are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if new_status not in ['CONFIRM', 'REJECT']:
+            return Response(
+                {'error': 'Invalid status. Use CONFIRM or REJECT.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        compensation = get_object_or_404(
+            Compensation,
+            _id=comp_uuid,
+            company_id=company_id,
+            is_deleted=False
+        )
+        if compensation.status != 'PENDING':
+            return Response(
+                {'error': f'Compensation has already been {compensation.status.lower()}ed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        old_status = compensation.status
+        compensation.status = new_status
+        compensation.updated_by = request.user
+        compensation.save()
+        return Response({
+            "message": f"Compensation status changed from {old_status} to {new_status}",
+            "compensation": {
+                "id": str(compensation._id),
+                "status": compensation.status,
+            }
+        })
 
 
 class PayrollAdvanceView(PermissionRequiredMixin, APIView):

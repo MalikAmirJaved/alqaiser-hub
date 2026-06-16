@@ -251,13 +251,12 @@ class ExitRecordView(BaseExitView):
         # ── 1. Deactivate compensation ──
         active_comp = Compensation.objects.filter(
             employee=employee,
-            status='ACTIVE',
+            status='CONFIRM',
             is_deleted=False
         ).first()
         if active_comp:
-            active_comp.status = 'INACTIVE'
             active_comp.updated_by = user
-            active_comp.save(update_fields=['status', 'updated_by'])
+            active_comp.save(update_fields=['updated_by'])
             result['compensation_deactivated'] = str(active_comp._id)
 
         # ── 2. Cancel pending/approved leaves after LWD ──
@@ -637,7 +636,7 @@ class ExitFinalSettlementView(BaseExitView):
 
         compensation = Compensation.objects.filter(
             employee=employee,
-            status='ACTIVE',
+            status='CONFIRM',
             is_deleted=False
         ).prefetch_related('selected_months', 'month_range').first()
 

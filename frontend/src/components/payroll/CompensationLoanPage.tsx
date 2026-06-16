@@ -8,6 +8,7 @@ import {
   useCreateCompensation,
   useUpdateCompensation,
   useDeleteCompensation,
+  useUpdateCompensationStatus,
   useEmployeeLoans,
   useCreateEmployeeLoan,
   useApproveLoan,
@@ -58,6 +59,7 @@ export default function CompensationLoanPage({
   const createCompensation = useCreateCompensation();
   const updateCompensation = useUpdateCompensation();
   const deleteCompensation = useDeleteCompensation();
+  const updateCompensationStatus = useUpdateCompensationStatus();
   const createLoan = useCreateEmployeeLoan();
   const approveLoan = useApproveLoan();
   const payLoan = usePayLoan();
@@ -82,7 +84,7 @@ export default function CompensationLoanPage({
   // -----------------------------
   const employeesWithCompensation = useMemo(() => {
     return compensations
-      .filter((c) => c.status === "ACTIVE")
+      .filter((c) => c.status === "CONFIRM" || c.status === "PENDING")
       .map((c) => c.employee_id);
   }, [compensations]);
 
@@ -125,10 +127,7 @@ export default function CompensationLoanPage({
           utilities_allowance: formData.utilities_allowance || 0,
           education_allowance: formData.education_allowance || 0,
           other_allowances: formData.other_allowances || 0,
-          employer_pf: formData.employer_pf || 0,
-          employer_eobi: formData.employer_eobi || 0,
           overtime_rate: formData.overtime_rate || 0,
-          bonus_percentage: formData.bonus_percentage || 0,
           frequency_type: formData.frequency_type,
           review_date: formData.review_date,
           notes: formData.notes,
@@ -202,6 +201,22 @@ export default function CompensationLoanPage({
     try {
       await deleteCompensation.mutateAsync(id);
     } catch (error: any) {
+    }
+  };
+
+  const handleConfirmCompensation = async (id: string) => {
+    try {
+      await updateCompensationStatus.mutateAsync({ id, status: 'CONFIRM' });
+    } catch (error: any) {
+      toast.error("Failed to confirm compensation");
+    }
+  };
+
+  const handleRejectCompensation = async (id: string) => {
+    try {
+      await updateCompensationStatus.mutateAsync({ id, status: 'REJECT' });
+    } catch (error: any) {
+      toast.error("Failed to reject compensation");
     }
   };
 
@@ -381,6 +396,16 @@ export default function CompensationLoanPage({
             onDelete={
               permissions.delete_compensation
                 ? (id) => handleDeleteCompensation(id)
+                : undefined
+            }
+            onConfirm={
+              permissions.update_compensation_status
+                ? (id) => handleConfirmCompensation(id)
+                : undefined
+            }
+            onReject={
+              permissions.update_compensation_status
+                ? (id) => handleRejectCompensation(id)
                 : undefined
             }
           />

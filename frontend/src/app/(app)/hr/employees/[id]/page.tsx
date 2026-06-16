@@ -309,8 +309,6 @@ export default function EmployeeDetailPage() {
                 { label: "Utilities", val: latestCompensation.utilities_allowance },
                 { label: "Education", val: latestCompensation.education_allowance },
                 { label: "Others", val: latestCompensation.other_allowances },
-                { label: "Employer PF", val: latestCompensation.employer_pf },
-                { label: "Employer EOBI", val: latestCompensation.employer_eobi },
                 { label: "Total Allowances", val: latestCompensation.total_allowances },
               ].map(({ label, val }) => (
                 <div key={label} className="bg-muted/40 rounded-lg p-3">

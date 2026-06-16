@@ -29,7 +29,7 @@ export default function PayslipModal({
   );
 
   const router = useRouter();
-  const activeCompensation = compensations.find(c => c.status === "ACTIVE");
+  const activeCompensation = compensations.find(c => c.status === "CONFIRM");
   const activeLoans = loans.filter(l => l.approval === "CONFIRM" && l.status === "PAID");
 
   if (!isOpen) return null;

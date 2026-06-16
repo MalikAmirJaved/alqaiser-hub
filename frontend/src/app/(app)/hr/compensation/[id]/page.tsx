@@ -101,9 +101,13 @@ export default function CompensationDetailPage() {
           <InfoRow label="Base Salary" value={fmtCurrency(comp.basic_salary)} />
           <InfoRow label="Status">
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border ${
-              comp.status === "ACTIVE"
+              comp.status === "CONFIRM"
                 ? "bg-success/15 text-success border-success/20"
-                : "bg-muted text-muted-foreground border-border"
+                : comp.status === "PENDING"
+                ? "bg-yellow-500/15 text-yellow-600 border-yellow-500/20"
+                : comp.status === "REJECT"
+                ? "bg-red-500/15 text-red-600 border-red-500/20"
+                : "bg-green-500/15 text-green-600 border-green-500/20"
             }`}>
               {comp.status}
             </span>
@@ -179,30 +183,12 @@ export default function CompensationDetailPage() {
         </div>
       </SectionCard>
 
-      {/* Employer Contributions */}
-      <SectionCard title="Employer Contributions" icon={Building2}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
-          <InfoRow label="Employer PF" value={fmtCurrency(comp.employer_pf)} />
-          <InfoRow label="Employer EOBI" value={fmtCurrency(comp.employer_eobi)} />
-          <div className="col-span-1 md:col-span-2 pt-2 mt-2 border-t border-border">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold">Total CTC</span>
-              <span className="text-lg font-bold text-primary">{fmtCurrency(comp.total_ctc)}</span>
-            </div>
-          </div>
-        </div>
-      </SectionCard>
-
       {/* Summary */}
       <SectionCard title="Summary" icon={BarChart3}>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-muted/40 rounded-lg p-4 text-center">
             <p className="text-xs text-muted-foreground mb-1">Total Allowances</p>
             <p className="text-lg font-bold">{fmtCurrency(comp.total_allowances)}</p>
-          </div>
-          <div className="bg-muted/40 rounded-lg p-4 text-center">
-            <p className="text-xs text-muted-foreground mb-1">Total CTC</p>
-            <p className="text-lg font-bold">{fmtCurrency(comp.total_ctc)}</p>
           </div>
           <div className="bg-primary/10 rounded-lg p-4 text-center">
             <p className="text-xs text-muted-foreground mb-1">Monthly Total</p>
@@ -215,7 +201,6 @@ export default function CompensationDetailPage() {
       <SectionCard title="Notes & Metadata" icon={FileText}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
           <InfoRow label="Overtime Rate (per hour)" value={fmtCurrency(comp.overtime_rate)} />
-          <InfoRow label="Bonus Percentage" value={comp.bonus_percentage ? `${comp.bonus_percentage}%` : "—"} />
           {comp.review_date && <InfoRow label="Review Date" value={new Date(comp.review_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })} />}
           <InfoRow label="Created At" value={comp.created_at ? new Date(comp.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "—"} />
         </div>

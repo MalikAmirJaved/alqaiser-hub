@@ -99,7 +99,7 @@ const payrollPermissions = getPermissions(
 
   // Helper: check if an active compensation applies to the selected month
   const compensationAppliesToMonth = (comp: any): boolean => {
-    if (comp.status !== 'ACTIVE') return false;
+    if (comp.status !== 'CONFIRM') return false;
     const freq = comp.frequency_type;
     if (freq === 'ONE_TIME' || freq === 'SELECTED_MONTH') {
       return comp.selected_months?.some(
@@ -123,7 +123,7 @@ const payrollPermissions = getPermissions(
     if (!payrollRecord || payrollRecord.transaction_type !== 'ADVANCE') return false;
 
     // Check if compensation applies to this month
-    const empComp = compensations.find(c => c.employee_id === employeeId && c.status === 'ACTIVE');
+    const empComp = compensations.find(c => c.employee_id === employeeId && c.status === 'CONFIRM');
     if (empComp && compensationAppliesToMonth(empComp)) return true;
 
     // Check paid non-advance loans that apply to this month

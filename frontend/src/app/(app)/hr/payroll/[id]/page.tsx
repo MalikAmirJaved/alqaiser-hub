@@ -148,7 +148,7 @@ export default function EmployeeSalaryDetailPage() {
   const { data: compensations = [] } = useCompensations(id ? { employee_id: id } : undefined);
   const { data: leaves = [] } = useLeaves(id ? { employee_id: id } : undefined);
 
-  const activeCompensation = compensations.find((c) => c.status === "ACTIVE");
+  const activeCompensation = compensations.find((c) => c.status === "CONFIRM");
   const isLoading = empLoading || payrollLoading;
 
   // ── Computed Summary Stats ──────────────────────────────────────
@@ -308,8 +308,6 @@ export default function EmployeeSalaryDetailPage() {
                   { label: "Utilities", val: activeCompensation.utilities_allowance },
                   { label: "Education", val: activeCompensation.education_allowance },
                   { label: "Others", val: activeCompensation.other_allowances },
-                  { label: "Employer PF", val: activeCompensation.employer_pf },
-                  { label: "Employer EOBI", val: activeCompensation.employer_eobi },
                 ].map(({ label, val }) => (
                   <div key={label} className="bg-background rounded-lg px-3 py-2 border border-border">
                     <p className="text-[10px] text-muted-foreground">{label}</p>

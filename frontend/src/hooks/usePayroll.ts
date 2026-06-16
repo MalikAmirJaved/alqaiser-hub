@@ -150,17 +150,14 @@ export interface Compensation {
   utilities_allowance: string;
   education_allowance: string;
   other_allowances: string;
-  employer_pf: string;
-  employer_eobi: string;
   overtime_rate: string;
-  bonus_percentage: string;
   total_allowances: string;
   total_ctc: string;
   total_monthly: string;
   frequency_type: 'ONE_TIME' | 'SELECTED_MONTH' | 'MONTH_RANGE';
   selected_months: SelectedMonth[];
   month_range: MonthRange | null;
-  status: string;
+  status: 'PENDING' | 'CONFIRM' | 'REJECT' | 'FULLYPAID';
   paid_months_set?: Array<[number, number]>;
   review_date?: string;
   notes?: string;
@@ -384,6 +381,18 @@ export function useDeleteCompensation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["compensations"] });
       queryClient.invalidateQueries({ queryKey: ["employees"] });
+    },
+  });
+}
+
+export function useUpdateCompensationStatus() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: string; status: string }) =>
+      api("/api/hr/compensations/status/", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["compensations"] });
     },
   });
 }
