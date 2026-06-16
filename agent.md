@@ -1616,3 +1616,238 @@ docker-compose exec backend python manage.py migrate
 This will:
 1. Alter `inventory_variant_attributes.variant_id` to allow NULL
 2. Add the partial unique constraint `unique_catalog_attribute` for catalog entries
+
+---
+
+## 19. Supplier Form — Location Selectors & Add Modal Fix — IMPLEMENTED
+
+### Overview
+
+Two issues fixed in the supplier management flow:
+1. **"Add Supplier" button opened the Edit modal** instead of the Add modal
+2. **Country/State/City fields were plain text inputs** instead of searchable dropdowns
+
+### Bug Fix: Add Supplier Opening Edit Modal
+
+**File:** `frontend/src/app/(app)/inventory/suppliers/page.tsx`
+
+The `handleAdd()` function was calling `generateCode()` and setting `editingItem` to `{ code }` (a truthy object) before opening the modal. This caused the FormModal's conditional logic (`editingItem ? "Edit Supplier" : "Add New Supplier"`) to detect "edit" mode.
+
+**Fix:** Removed the premature `generateCode()` call from `handleAdd()`. The FormModal already handles auto-code-generation internally via its own `useEffect` hook.
+
+```typescript
+// Before (broken)
+const handleAdd = () => {
+  setEditingItem(null);
+  generateCode().then(code => {
+    setEditingItem({ code } as any);
+    setModalOpen(true);
+  }).catch(() => setModalOpen(true));
+};
+
+// After (fixed)
+const handleAdd = () => {
+  setEditingItem(null);
+  setModalOpen(true);
+};
+```
+
+### Location Selectors in Supplier Form
+
+**Files:**
+- `frontend/src/components/inventory/supplier/FormModal.tsx` — Added `type: "location-group"` field support
+- `frontend/src/app/(app)/inventory/suppliers/page.tsx` — Replaced text fields with location-group
+
+The supplier FormModal now supports a `location-group` field type that renders the `<LocationGroup />` component from `LocationSelectors.jsx`. This connects Country/State/City searchable dropdowns with react-hook-form via `watch()`/`setValue()`.
+
+Field config in `page.tsx`:
+```typescript
+{
+  name: "location",
+  label: "Location",
+  type: "location-group",
+  fields: {
+    country: "country",
+    state: "state",
+    city: "city",
+  },
+}
+```
+
+The `FormField` interface was extended with `fields?: Record<string, string>` for group mappings. The `location-group` type is treated as a full-width field (like `textarea`).
+
+### Files Modified
+
+#### Frontend:
+- `frontend/src/components/inventory/supplier/FormModal.tsx` — Imported `LocationGroup`; added `fields` to `FormField` interface; added `location-group` rendering in `renderField()` with react-hook-form bridge; updated `isFullWidthField()` to include `location-group`
+- `frontend/src/app/(app)/inventory/suppliers/page.tsx` — Fixed `handleAdd()` (removed premature `generateCode`); replaced 3 text fields with single `location-group` config
+
+---
+
+## 20. Company Profile — Searchable Currency Select — IMPLEMENTED
+
+### Overview
+
+Replaced the hardcoded 7-option currency `<select>` dropdown in the Financial & Localization modal with a searchable `<CurrencySelect />` component populated from the `currency-codes` npm library (~150 world currencies).
+
+### Change
+
+**File:** `frontend/src/app/(app)/settings/company/page.tsx`
+
+```typescript
+// Before — 7 hardcoded options
+<select className={selectCls} value={draft.currency} onChange={...}>
+  <option value="USD">USD ($)</option>
+  <option value="PKR">PKR (₨)</option>
+  ... (7 total)
+</select>
+
+// After — searchable dropdown with all world currencies
+<CurrencySelect
+  value={draft.currency}
+  onChange={(val) => setDraftField("currency", val)}
+  required
+/>
+```
+
+Added import: `import CurrencySelect from "@/components/reuseable/CurrencySelect";`
+
+### Files Modified
+
+#### Frontend:
+- `frontend/src/app/(app)/settings/company/page.tsx` — Added `CurrencySelect` import; replaced static `<select>` with `<CurrencySelect>` component
+
+---
+
+## 21. Inventory Detail Pages (Warehouse & Product) — Finance-Style Layout — IMPLEMENTED
+
+### Overview
+
+Replaced popup/side-panel detail views for warehouses and products with full-page detail routes using the same `DetailLayout` component as the Finance module.
+
+### Warehouse Detail Page
+
+**New file:** `frontend/src/app/(app)/inventory/warehouses/[id]/page.tsx`
+
+| Prop | Value |
+|---|---|
+| breadcrumbs | `["Inventory", "Warehouses", warehouse.code]` |
+| status | `"Active"` / `"Inactive"` |
+| summary | Stock Items count, Responsible employee, Status, Created date |
+| tabs | **Overview**, **Stock Items** (paginated), **Transaction History** (paginated), **Related** |
+| sidebar | `StandardSidebar` with full metadata |
+
+**Modified:** `frontend/src/app/(app)/inventory/warehouses/page.tsx` — Removed `WarehouseDetail` sidebar component, changed `handleRowClick` to `router.push(\`/inventory/warehouses/${row.id}\`)`
+
+### Product Detail Page
+
+**New file:** `frontend/src/app/(app)/inventory/products/[id]/page.tsx`
+
+| Prop | Value |
+|---|---|
+| breadcrumbs | `["Inventory", "Products", product.product_name]` |
+| status | Product status (`active`, `draft`, etc.) |
+| summary | Total Stock, Reserved, Available, Price Range |
+| tabs | **Details**, **Variants** (cards), **Stock** (warehouse entries) |
+| sidebar | `StandardSidebar` with full metadata |
+
+**Modified:** `frontend/src/app/(app)/inventory/products/page.tsx` — Removed `ProductDetailsModal` popup, changed `handleViewDetails` to `router.push(\`/inventory/products/${p.id}\`)`
+
+### Pattern
+
+All inventory detail pages now follow the same pattern as the Finance module:
+- Use `DetailLayout` from `@/components/reuseable/final/DetailLayout`
+- Use `StandardSidebar` for metadata sidebar
+- Include edit/delete functionality
+- Use `useFeaturePermissions` for permission gating
+
+### Files Modified
+
+#### Created:
+- `frontend/src/app/(app)/inventory/warehouses/[id]/page.tsx`
+- `frontend/src/app/(app)/inventory/products/[id]/page.tsx`
+
+#### Modified:
+- `frontend/src/app/(app)/inventory/warehouses/page.tsx` — Removed sidebar popup, added router navigation
+- `frontend/src/app/(app)/inventory/products/page.tsx` — Removed modal popup, added router navigation
+
+---
+
+## 22. Payroll — Process Payment Button Logic — IMPLEMENTED
+
+### Overview
+
+The "Process Payment" button visibility now depends on whether the selected month is current/future or a past month:
+
+```typescript
+{(selectedYear > currentYear || (selectedYear === currentYear && selectedMonth >= currentMonth)
+  ? !getAdvanceLoan(employee.id) && !isPaid  // Current/Future
+  : !isPaid || hasAdvanceItems(employee.id)   // Past
+) && payrollPermissions.pay_salary && (
+  <button ...>Process Payment</button>
+)}
+```
+
+| Month Type | Condition | Behavior |
+|---|---|---|
+| **Current/Future** (selected >= today) | `!getAdvanceLoan && !isPaid` | Hidden if advance salary exists |
+| **Past** (selected < today) | `!isPaid \|\| hasAdvanceItems` | Shown if unpaid OR has pending items (leaves/compensations/loans not covered by advance) |
+
+### Files Modified
+
+#### Frontend:
+- `frontend/src/app/(app)/hr/payroll/page.tsx` — Updated Process Payment button visibility condition
+
+---
+
+## 23. Exit Management — Final Settlement Calculation Fix — IMPLEMENTED
+
+### Overview
+
+Fixed a critical bug where the final settlement calculation included salary for months already paid via regular payroll, resulting in inflated base salary and incorrect net settlement.
+
+### The Bug
+
+When LWD was in July and June hadn't been processed via regular payroll:
+- **Old logic**: Only checked the month immediately before LWD. If unpaid, jumped ALL the way back to `join_date`, including every month since joining.
+- **Example**: Employee joined May 15, salary 30,000. Old calc included May 15–31 (16 days) + June (30 days) + July 1 (1 day) = 47,000 base salary. But May was already paid!
+
+### The Fix
+
+**File:** `backend/apps/hr/views/exit_management_views.py`
+
+#### Change 1 — Period start calculation
+Walk backwards from LWD month to find the most recent PAID month. Start from the month after it:
+
+```python
+last_paid_month_end = None
+cursor_check = lwd_month_start
+while cursor_check >= date(join_date.year, join_date.month, 1):
+    m, y = cursor_check.month, cursor_check.year
+    if self._is_month_paid(employee, m, y):
+        last_paid_month_end = date(y + (1 if m == 12 else 0), 1 if m == 12 else m + 1, 1)
+        break
+    cursor_check = date(y - (1 if m == 1 else 0), 12 if m == 1 else m - 1, 1)
+
+period_start = max(join_date, last_paid_month_end) if last_paid_month_end else join_date
+```
+
+#### Change 2 — Loop skip check
+Added `self._is_month_paid()` check inside the per-month loop to skip already-paid months.
+
+#### Change 3 — Bug fixes
+- Fixed `prev_month_paid` NameError (line 741) — variable was removed but still referenced in response dict
+- Fixed `final_payroll.transaction_number` AttributeError (line 369) — `PayrollRecord` has no `transaction_number` field; should use local variable `transaction_number`
+
+### Example (Joined May 15, LWD July 1, salary 30,000)
+
+| Scenario | Period | Base Salary | Net Settlement |
+|---|---|---|---|
+| May paid, June unpaid | June 1 → July 1 | 31,000 | 500 ✓ |
+| May & June paid | July 1 only | 1,000 | -29,500 ✓ |
+| Nothing paid | May 15 → July 1 | 47,000 | 16,500 ✓ |
+
+### Files Modified
+
+#### Backend:
+- `backend/apps/hr/views/exit_management_views.py` — Rewrote `period_start` with walk-backwards logic; added paid-month skip in loop; fixed `prev_month_paid` NameError; fixed `final_payroll.transaction_number` AttributeError
