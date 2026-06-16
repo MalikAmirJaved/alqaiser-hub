@@ -126,8 +126,8 @@ const columns = [
   {
     key: "planned_date",
     label: "Planned Date",
-    render: (row: any) =>
-      row.planned_date ? format(new Date(row.planned_date), "dd MMM yyyy") : "-",
+    render: (value: any) =>
+      value ? format(new Date(value), "dd MMM yyyy") : "-",
   },
 ];
 

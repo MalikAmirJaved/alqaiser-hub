@@ -32,7 +32,7 @@ export default function VariantsStep({
   productName,
   onBack,
 }: VariantsStepProps) {
-  const { fields, append, remove } = useFieldArray({ control, name: "variants" });
+  const { fields, prepend, remove } = useFieldArray({ control, name: "variants" });
   const { generateCode } = useAutoCode("product_variant");
 
   const addVariant = async () => {
@@ -43,7 +43,7 @@ export default function VariantsStep({
       const base = productName.replace(/\s+/g, "-").toUpperCase() || "PROD";
       code = `${base}-VAR${fields.length + 1}`;
     }
-    append({
+    prepend({
       sku: code,
       variantTitle: "",
       barcode: "",
@@ -63,7 +63,7 @@ export default function VariantsStep({
     } catch {
       code = vals.sku + "-COPY";
     }
-    append({ ...vals, sku: code, id: undefined });
+    prepend({ ...vals, sku: code, id: undefined });
   };
 
   return (
