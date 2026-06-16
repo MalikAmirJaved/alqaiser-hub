@@ -24,6 +24,11 @@ import CompensationTab from "./CompensationTab";
 import LoanTab from "./LoanTab";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
 interface CompensationLoanPageProps {
   formatCurrency: (amount: number) => string;
 }
@@ -282,17 +287,17 @@ export default function CompensationLoanPage({
           </TabsList>
 
           {canCreate && (
-            <button
+            <Button
               onClick={() =>
                 openAddModal(
                   activeTab === "compensation" ? "compensation" : "loan"
                 )
               }
-              className="inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity shadow-sm"
+              size="sm"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4 mr-2" />
               Add {activeTab === "compensation" ? "Compensation" : "Loan"}
-            </button>
+            </Button>
           )}
         </div>
 
@@ -300,25 +305,26 @@ export default function CompensationLoanPage({
         <div className="bg-card border rounded-xl p-4 mb-3">
           <div className="flex gap-3">
             <div className="relative flex-1">
-              <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
-              <input
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
+              <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 h-10 border rounded-lg"
+                className="pl-9"
                 placeholder="Search employee..."
               />
             </div>
 
             {activeTab === "loans" && (
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="h-10 border rounded-lg px-3"
-              >
-                <option value="all">All</option>
-                <option value="PAID">Paid</option>
-                <option value="RETURNED">Returned</option>
-              </select>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="PAID">Paid</SelectItem>
+                  <SelectItem value="RETURNED">Returned</SelectItem>
+                </SelectContent>
+              </Select>
             )}
           </div>
         </div>
@@ -368,23 +374,15 @@ export default function CompensationLoanPage({
 
       {/* Modal */}
       {showModal && canUpdateModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-card rounded-xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-lg">
-            {/* Header */}
-            <div className="px-6 py-4 border-b flex justify-between items-center flex-shrink-0 bg-gradient-to-r from-primary/5 to-transparent">
-              <h2 className="text-lg font-semibold">
+        <Dialog open={showModal} onOpenChange={setShowModal}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+            <DialogHeader className="px-6 py-4 border-b bg-gradient-to-r from-primary/5 to-transparent pr-12">
+              <DialogTitle>
                 {editingItem ? "Edit" : "Add"}{" "}
                 {modalType === "compensation" ? "Compensation" : "Loan"}
-              </h2>
-              <button 
-                onClick={() => setShowModal(false)}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                ✕
-              </button>
-            </div>
+              </DialogTitle>
+            </DialogHeader>
 
-            {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-6">
               {modalType === "compensation" ? (
                 <CompensationForm
@@ -416,23 +414,16 @@ export default function CompensationLoanPage({
               )}
             </div>
 
-            {/* Footer */}
-            <div className="px-6 py-4 border-t flex justify-end gap-3 flex-shrink-0 bg-muted/30">
-              <button 
-                onClick={() => setShowModal(false)}
-                className="px-4 py-2 rounded-lg border border-border hover:bg-muted transition-colors text-sm font-medium"
-              >
+            <div className="px-6 py-4 border-t flex justify-end gap-3 bg-muted/30">
+              <Button variant="outline" onClick={() => setShowModal(false)}>
                 Cancel
-              </button>
-              <button 
-                onClick={handleSave}
-                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-medium"
-              >
+              </Button>
+              <Button onClick={handleSave}>
                 {editingItem ? "Update" : "Save"}
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {statusDropdownId && (
