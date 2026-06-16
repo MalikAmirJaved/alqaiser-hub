@@ -331,7 +331,7 @@ export default function EmployeeAssetsNew() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base">Active Assignments</CardTitle>
-                  {selectedReturnIds.size > 0 && permissions.update && (
+                  {selectedReturnIds.size > 0 && permissions.return && (
                     <Button
                       variant="destructive"
                       size="sm"
