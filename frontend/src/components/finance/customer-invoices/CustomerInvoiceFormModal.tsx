@@ -12,6 +12,7 @@ import { useAllVariantsSimple } from "@/hooks/useAllVariants";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useAutoCode } from "@/hooks/useAutoCode";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 interface InvoiceLine {
   variant: string;
@@ -225,22 +226,22 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
               <div>
                 <label className="block text-sm font-medium mb-1">Customer *</label>
                 <div className="flex gap-2">
-                  <select
-                    {...register("customer", { required: !newCustomerInfo })}
-                    disabled={!!newCustomerInfo}
-                    className="flex-1 px-3 py-2 border border-border rounded-md bg-background text-sm"
-                  >
-                    <option value="">Select customer</option>
-                    {customers.map((cust) => (
-                      <option key={cust.id} value={cust.id}>
-                        {cust.name} ({cust.customer_code})
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex-1">
+                    <SearchableSelect
+                      value={watch("customer") || ""}
+                      onChange={(val) => setValue("customer", val)}
+                      options={customers.map((cust) => ({
+                        value: cust.id,
+                        label: `${cust.name} (${cust.customer_code})`,
+                      }))}
+                      placeholder="Select customer"
+                      required={!newCustomerInfo}
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={() => setShowCustomerModal(true)}
-                    className="p-2 rounded-md border border-border hover:bg-muted text-primary"
+                    className="p-2 rounded-md border border-border hover:bg-muted text-primary shrink-0"
                     title="Add New Customer"
                   >
                     <Plus className="w-4 h-4" />
@@ -325,19 +326,12 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
                         return (
                           <tr key={field.id} className="border-t border-border">
                             <td className="px-3 py-2">
-                              <select
+                              <SearchableSelect
                                 value={currentLine.variant || ""}
-                                onChange={(e) => updateLine(idx, "variant", e.target.value)}
-                                className="w-full bg-transparent focus:outline-none"
-                                required
-                              >
-                                <option value="">Select variant</option>
-                                {variants.map((v) => (
-                                  <option key={v.id} value={v.id}>
-                                    {v.product_name} ({v.sku})
-                                  </option>
-                                ))}
-                              </select>
+                                onChange={(val) => updateLine(idx, "variant", val)}
+                                options={variants.map((v) => ({ value: v.id, label: `${v.product_name} (${v.sku})` }))}
+                                placeholder="Select variant"
+                              />
                             </td>
                             <td className="px-3 py-2">
                               <input

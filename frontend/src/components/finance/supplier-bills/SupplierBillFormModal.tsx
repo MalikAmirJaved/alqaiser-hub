@@ -10,6 +10,7 @@ import {
 } from "@/hooks/finance/useSupplierBills";
 import { useSuppliers } from "@/hooks/useSuppliers";
 import { useAutoCode } from "@/hooks/useAutoCode";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 interface SupplierBillFormData {
   bill_number: string;
@@ -34,7 +35,7 @@ const toNumber = (value: number | string | undefined): number => {
 };
 
 export default function SupplierBillFormModal({ open, onClose, initialData, onSuccess }: Props) {
-  const { register, handleSubmit, reset, setValue } = useForm<SupplierBillFormData>({
+  const { register, handleSubmit, reset, setValue, watch } = useForm<SupplierBillFormData>({
     defaultValues: {
       bill_number: "",
       supplier: "",
@@ -121,17 +122,13 @@ export default function SupplierBillFormModal({ open, onClose, initialData, onSu
 
           <div>
             <label className="block text-sm font-medium mb-1">Supplier *</label>
-            <select
-              {...register("supplier", { required: true })}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-            >
-              <option value="">Select supplier</option>
-              {suppliers?.map((sup) => (
-                <option key={sup.id} value={sup.id}>
-                  {sup.name} ({sup.code})
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={watch("supplier") || ""}
+              onChange={(val) => setValue("supplier", val)}
+              options={(suppliers || []).map((s) => ({ value: s.id, label: `${s.name} (${s.code})` }))}
+              placeholder="Select supplier"
+              required
+            />
           </div>
 
           <div>

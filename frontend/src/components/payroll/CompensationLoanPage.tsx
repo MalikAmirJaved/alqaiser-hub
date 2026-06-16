@@ -25,8 +25,8 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 interface CompensationLoanPageProps {
   formatCurrency: (amount: number) => string;
@@ -353,16 +353,17 @@ export default function CompensationLoanPage({
             </div>
 
             {activeTab === "loans" && (
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="All Statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="PAID">Paid</SelectItem>
-                  <SelectItem value="RETURNED">Returned</SelectItem>
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={statusFilter}
+                onChange={setStatusFilter}
+                options={[
+                  { value: "all", label: "All" },
+                  { value: "PAID", label: "Paid" },
+                  { value: "RETURNED", label: "Returned" },
+                ]}
+                placeholder="All Statuses"
+                className="w-[140px]"
+              />
             )}
           </div>
         </div>

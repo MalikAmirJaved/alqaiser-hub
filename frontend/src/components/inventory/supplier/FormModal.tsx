@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef } from "react";
 import { LocationGroup } from "@/components/reuseable/LocationSelectors";
@@ -71,18 +71,12 @@ export function FormModal({ open, onClose, title, fields, initialData, onSubmit,
     if (field.type === "select" && field.options) {
       return (
         <div className="space-y-2">
-          <Select onValueChange={(val) => setValue(field.name, val)} defaultValue={initialData[field.name]}>
-            <SelectTrigger className={cn(hasError && "border-destructive")}>
-              <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
-            </SelectTrigger>
-            <SelectContent>
-              {field.options.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={watch(field.name) || initialData[field.name] || ""}
+            onChange={(val) => setValue(field.name, val)}
+            options={field.options}
+            placeholder={`Select ${field.label.toLowerCase()}`}
+          />
           {hasError && <p className="text-xs text-destructive">{errorMessage}</p>}
         </div>
       );

@@ -14,6 +14,7 @@ import {
   type AvailableAsset,
 } from "@/hooks/useEmployeeAssets";
 import PageHeader from "@/components/PageHeader";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -579,16 +580,14 @@ export default function EmployeeAssetsNew() {
                   </Badge>
                 </h3>
                 {availableCategories.length > 0 && (
-                  <select
+                  <SearchableSelect
                     value={assetCategoryFilter}
-                    onChange={(e) => setAssetCategoryFilter(e.target.value)}
-                    className="text-xs border border-border rounded-md px-2 py-1 bg-background"
-                  >
-                    <option value="all">All Categories</option>
-                    {availableCategories.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => setAssetCategoryFilter(val)}
+                    options={[
+                      { value: "all", label: "All Categories" },
+                      ...availableCategories.map(cat => ({ value: cat, label: cat }))
+                    ]}
+                  />
                 )}
               </div>
 
@@ -666,16 +665,17 @@ export default function EmployeeAssetsNew() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-xs text-muted-foreground">Condition</label>
-                <select
+                <SearchableSelect
                   value={assignmentCondition}
-                  onChange={(e) => setAssignmentCondition(e.target.value)}
-                  className="w-full mt-1 bg-muted/40 border border-border rounded-md h-9 px-2 text-sm"
-                >
-                  <option value="NEW">New</option>
-                  <option value="GOOD">Good</option>
-                  <option value="FAIR">Fair</option>
-                  <option value="POOR">Poor</option>
-                </select>
+                  onChange={(val) => setAssignmentCondition(val)}
+                  options={[
+                    { value: "NEW", label: "New" },
+                    { value: "GOOD", label: "Good" },
+                    { value: "FAIR", label: "Fair" },
+                    { value: "POOR", label: "Poor" },
+                  ]}
+                  placeholder="Select condition"
+                />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Notes</label>

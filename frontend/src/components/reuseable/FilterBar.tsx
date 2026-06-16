@@ -125,36 +125,22 @@ export default function FilterBar({ fields, filters, onChange }: FilterBarProps)
               );
             }
 
-            if (field.type === "select" || field.type === "status") {
+            if (field.type === "select" || field.type === "status" || field.type === "boolean") {
+              const boolOptions = field.type === "boolean" 
+                ? [{ value: "true", label: "Active" }, { value: "false", label: "Inactive" }]
+                : [];
               return (
-                <select
-                  key={field.name}
-                  value={filters[field.name] || ""}
-                  onChange={(e) => updateFilter(field.name, e.target.value)}
-                  className="h-9 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring min-w-[120px]"
-                >
-                  <option value="">All {field.label}</option>
-                  {field.options?.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              );
-            }
-
-            if (field.type === "boolean") {
-              return (
-                <select
-                  key={field.name}
-                  value={filters[field.name] || ""}
-                  onChange={(e) => updateFilter(field.name, e.target.value)}
-                  className="h-9 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring min-w-[120px]"
-                >
-                  <option value="">All {field.label}</option>
-                  <option value="true">Active</option>
-                  <option value="false">Inactive</option>
-                </select>
+                <div key={field.name} className="w-48">
+                  <SearchableSelect
+                    value={filters[field.name] || ""}
+                    onChange={(val) => updateFilter(field.name, val)}
+                    options={[
+                      { value: "", label: `All ${field.label}` },
+                      ...(boolOptions.length > 0 ? boolOptions : (field.options || [])),
+                    ]}
+                    placeholder={`All ${field.label}`}
+                  />
+                </div>
               );
             }
 

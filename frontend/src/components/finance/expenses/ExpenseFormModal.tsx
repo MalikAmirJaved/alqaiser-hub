@@ -6,6 +6,7 @@ import { X, RotateCw } from "lucide-react";
 import { useCreateExpense, useUpdateExpense, expenseCategoryOptions } from "@/hooks/finance/useExpenses";
 import { useSuppliers } from "@/hooks/useSuppliers";
 import { useAutoCode } from "@/hooks/useAutoCode";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 interface ExpenseFormData {
   expense_number: string;
@@ -109,11 +110,12 @@ export default function ExpenseFormModal({
           </div>
           <div>
             <label className="block text-sm mb-1">Category *</label>
-            <select {...register("category", { required: true })} className="w-full px-3 py-2 border border-border rounded-md bg-background">
-              {expenseCategoryOptions.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={watch("category") || "OTHER"}
+              onChange={(val) => setValue("category", val)}
+              options={expenseCategoryOptions}
+              placeholder="Select category"
+            />
           </div>
           <div>
             <label className="block text-sm mb-1">Date *</label>
@@ -135,12 +137,15 @@ export default function ExpenseFormModal({
           {/* Supplier / Vendor field */}
           <div>
             <label className="block text-sm mb-1">Vendor (Supplier)</label>
-            <select {...register("supplier")} className="w-full px-3 py-2 border border-border rounded-md bg-background" disabled={suppliersLoading}>
-              <option value="">-- None (manual expense) --</option>
-              {suppliers?.map((s: any) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={watch("supplier") || ""}
+              onChange={(val) => setValue("supplier", val)}
+              options={[
+                { value: "", label: "-- None (manual expense) --" },
+                ...(suppliers || []).map((s: any) => ({ value: s.id, label: s.name })),
+              ]}
+              placeholder="-- None (manual expense) --"
+            />
             <p className="text-xs text-muted-foreground mt-1">
               If a vendor is selected, a Supplier Bill will be auto‑created and linked to this expense.
             </p>

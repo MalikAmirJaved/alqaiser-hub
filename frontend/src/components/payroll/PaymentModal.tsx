@@ -4,6 +4,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useEmployeeLoans, useCompensations, usePayrollPreview, useProcessPayroll, useProcessPayrollAdvance, computeTotalMonths } from "@/hooks/usePayroll";
 import { CreditCard, Plus, Minus, X, CheckCircle, Clock, CalendarDays, Loader2, Sparkles } from "lucide-react";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 export default function PaymentModal({
   formatCurrency,
@@ -332,16 +333,17 @@ export default function PaymentModal({
             <div className="grid grid-cols-2 gap-2">
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs">Payment Method</span>
-                <select
+                <SearchableSelect
                   value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="bg-card border border-border rounded-md h-8 px-2 text-sm"
-                >
-                  <option value="BANK_TRANSFER">Bank Transfer</option>
-                  <option value="CASH">Cash</option>
-                  <option value="CHEQUE">Cheque</option>
-                  <option value="WALLET">Digital Wallet</option>
-                </select>
+                  onChange={(val) => setPaymentMethod(val)}
+                  options={[
+                    { value: "BANK_TRANSFER", label: "Bank Transfer" },
+                    { value: "CASH", label: "Cash" },
+                    { value: "CHEQUE", label: "Cheque" },
+                    { value: "WALLET", label: "Digital Wallet" },
+                  ]}
+                  placeholder="Select method"
+                />
               </label>
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs">Transaction Reference</span>
@@ -501,29 +503,27 @@ export default function PaymentModal({
                     <div className="grid grid-cols-2 gap-2">
                       <label className="text-xs flex flex-col gap-1">
                         <span className="text-muted-foreground">Deduct in Month</span>
-                        <select
-                          value={carryoverMonth}
-                          onChange={(e) => setCarryoverMonth(Number(e.target.value))}
-                          className="bg-card border border-border rounded-md h-8 px-2 text-sm"
-                        >
-                          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                            <option key={m} value={m}>
-                              {new Date(2000, m - 1).toLocaleString('default', { month: 'long' })}
-                            </option>
-                          ))}
-                        </select>
+                        <SearchableSelect
+                          value={String(carryoverMonth)}
+                          onChange={(val) => setCarryoverMonth(Number(val))}
+                          options={Array.from({ length: 12 }, (_, i) => ({
+                            value: String(i + 1),
+                            label: new Date(2000, i).toLocaleString('default', { month: 'long' })
+                          }))}
+                          placeholder="Month"
+                        />
                       </label>
                       <label className="text-xs flex flex-col gap-1">
                         <span className="text-muted-foreground">Year</span>
-                        <select
-                          value={carryoverYear}
-                          onChange={(e) => setCarryoverYear(Number(e.target.value))}
-                          className="bg-card border border-border rounded-md h-8 px-2 text-sm"
-                        >
-                          {Array.from({ length: 5 }, (_, i) => selectedYear + i).map((y) => (
-                            <option key={y} value={y}>{y}</option>
-                          ))}
-                        </select>
+                        <SearchableSelect
+                          value={String(carryoverYear)}
+                          onChange={(val) => setCarryoverYear(Number(val))}
+                          options={Array.from({ length: 5 }, (_, i) => ({
+                            value: String(selectedYear + i),
+                            label: String(selectedYear + i)
+                          }))}
+                          placeholder="Year"
+                        />
                       </label>
                     </div>
                     <p className="text-xs text-muted-foreground">

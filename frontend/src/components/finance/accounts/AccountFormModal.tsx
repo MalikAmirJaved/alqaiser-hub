@@ -4,8 +4,9 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { X, RotateCw } from "lucide-react";
-import { useCreateAccount, useUpdateAccount,accountTypeLabels, type Account, useAccounts } from "@/hooks/finance/useAccounts";
+import { useCreateAccount, useUpdateAccount, accountTypeLabels, type Account, useAccounts } from "@/hooks/finance/useAccounts";
 import { useAutoCode } from "@/hooks/useAutoCode";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 interface AccountFormData {
   code: string;
@@ -142,31 +143,28 @@ export default function AccountFormModal({ open, onClose, initialData, onSuccess
 
           <div>
             <label className="block text-sm font-medium mb-1">Type *</label>
-            <select
-              {...register("account_type", { required: "Type is required" })}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-            >
-              {accountTypeOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={watch("account_type") || "ASSET"}
+              onChange={(val) => setValue("account_type", val as any)}
+              options={accountTypeOptions}
+              placeholder="Select type"
+            />
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-1">Parent Account</label>
-            <select
-              {...register("parent")}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-            >
-              <option value="">None (Root Account)</option>
-              {parentOptions?.map((acc) => (
-                <option key={acc.id} value={acc.id}>
-                  {acc.code} - {acc.name} ({accountTypeLabels[acc.account_type]})
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={watch("parent") || ""}
+              onChange={(val) => setValue("parent", val || null)}
+              options={[
+                { value: "", label: "None (Root Account)" },
+                ...(parentOptions || []).map((acc) => ({
+                  value: acc.id,
+                  label: `${acc.code} - ${acc.name} (${accountTypeLabels[acc.account_type]})`,
+                })),
+              ]}
+              placeholder="None (Root Account)"
+            />
             <p className="text-xs text-muted-foreground mt-1">Select a parent account to create hierarchy</p>
           </div>
 

@@ -697,15 +697,16 @@ function ExitFormModal({
 
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground">Notice Period Served?</span>
-            <select
+            <SearchableSelect
               value={formData.notice_served.toString()}
-              onChange={e => setFormData({ ...formData, notice_served: e.target.value === "true" })}
-              className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none"
+              onChange={val => setFormData({ ...formData, notice_served: val === "true" })}
+              options={[
+                { value: "true", label: "Yes" },
+                { value: "false", label: "No" },
+              ]}
+              placeholder="Select option"
               disabled={isLocked}
-            >
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-            </select>
+            />
           </label>
 
           <label className="text-sm flex flex-col gap-1 sm:col-span-2">

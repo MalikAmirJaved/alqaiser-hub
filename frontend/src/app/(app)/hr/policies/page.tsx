@@ -650,14 +650,15 @@ function PolicyFormModal({
               </label>
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground">Require Acknowledgment?</span>
-                <select 
+                <SearchableSelect 
                   value={formData.requires_acknowledgment ? "true" : "false"} 
-                  onChange={e => setFormData({...formData, requires_acknowledgment: e.target.value === "true"})} 
-                  className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="false">No</option>
-                  <option value="true">Yes</option>
-                </select>
+                  onChange={val => setFormData({...formData, requires_acknowledgment: val === "true"})} 
+                  options={[
+                    { value: "false", label: "No" },
+                    { value: "true", label: "Yes" },
+                  ]}
+                  placeholder="Select"
+                />
               </label>
               {formData.requires_acknowledgment && (
                 <label className="text-sm flex flex-col gap-1">

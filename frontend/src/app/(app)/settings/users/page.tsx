@@ -16,6 +16,8 @@ export default function UsersPage() {
   const permissions = useFeaturePermissions("SETTINGS", "user");
 
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
   const [modalOpen, setModalOpen] = useState(false);
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [selectedUserForStatus, setSelectedUserForStatus] = useState<any>(null);
@@ -105,6 +107,9 @@ export default function UsersPage() {
     Object.keys(filters).length > 0 ? filters : undefined
   );
 
+  // Reset to page 1 when filters change
+  useEffect(() => { setPage(1); }, [filters]);
+
   // Only is_active is client-side (backend doesn't support server-side status filter for users)
   const isActiveFilter = filters.is_active;
   const filteredUsers = isActiveFilter
@@ -114,6 +119,11 @@ export default function UsersPage() {
         return true;
       })
     : users;
+
+  // Paginate
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const paginatedUsers = filteredUsers.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
@@ -179,7 +189,7 @@ export default function UsersPage() {
                   </td>
                 </tr>
               )}
-              {filteredUsers.map((user) => (
+              {paginatedUsers.map((user) => (
                 <tr key={user.id} className="border-t border-border hover:bg-muted/30">
                   <td className="px-4 py-2.5 font-mono text-xs">{user.username}</td>
                   <td className="px-4 py-2.5 font-medium">
@@ -267,6 +277,30 @@ export default function UsersPage() {
             </tbody>
           </table>
         </div>
+        {filteredUsers.length > pageSize && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border text-xs text-muted-foreground">
+            <span>
+              {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filteredUsers.length)} of {filteredUsers.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <span>Page {safePage} of {totalPages}</span>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={safePage <= 1}
+                className="px-2.5 py-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setPage(p => p + 1)}
+                disabled={safePage >= totalPages}
+                className="px-2.5 py-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* User Form Modal */}

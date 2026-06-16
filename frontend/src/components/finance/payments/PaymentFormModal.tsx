@@ -7,7 +7,7 @@ import { useCustomerInvoices } from "@/hooks/finance/useCustomerInvoices";
 import { useBankAccounts } from "@/hooks/finance/useBank";
 import { Modal, ModalContent, ModalHeader, ModalFooter } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
@@ -96,13 +96,15 @@ export default function PaymentFormModal({ open, onClose, initialData, onSuccess
         <div className="space-y-4 py-4">
           <div>
             <Label>Type</Label>
-            <Select value={paymentType} onValueChange={(v: "RECEIPT" | "PAYMENT") => setPaymentType(v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="RECEIPT">Receipt (Customer Payment)</SelectItem>
-                <SelectItem value="PAYMENT">Payment (Supplier Payment)</SelectItem>
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={paymentType}
+              onChange={(v: any) => setPaymentType(v)}
+              options={[
+                { value: "RECEIPT", label: "Receipt (Customer Payment)" },
+                { value: "PAYMENT", label: "Payment (Supplier Payment)" },
+              ]}
+              placeholder="Select type"
+            />
           </div>
           <div>
             <Label>Amount</Label>
@@ -114,53 +116,49 @@ export default function PaymentFormModal({ open, onClose, initialData, onSuccess
           </div>
           <div>
             <Label>Method</Label>
-            <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="CASH">Cash</SelectItem>
-                <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
-                <SelectItem value="CHEQUE">Cheque</SelectItem>
-                <SelectItem value="CREDIT_CARD">Credit Card</SelectItem>
-                <SelectItem value="OTHER">Other</SelectItem>
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={paymentMethod}
+              onChange={setPaymentMethod}
+              options={[
+                { value: "CASH", label: "Cash" },
+                { value: "BANK_TRANSFER", label: "Bank Transfer" },
+                { value: "CHEQUE", label: "Cheque" },
+                { value: "CREDIT_CARD", label: "Credit Card" },
+                { value: "OTHER", label: "Other" },
+              ]}
+              placeholder="Select method"
+            />
           </div>
           {paymentType === "RECEIPT" && (
             <div>
               <Label>Customer Invoice</Label>
-              <Select value={customerInvoiceId} onValueChange={setCustomerInvoiceId}>
-                <SelectTrigger><SelectValue placeholder="Select invoice" /></SelectTrigger>
-                <SelectContent>
-                  {customerInvoices?.map((inv) => (
-                    <SelectItem key={inv.id} value={inv.id}>{inv.invoice_number} - {formatCurrency(Number(inv.outstanding))}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={customerInvoiceId}
+                onChange={setCustomerInvoiceId}
+                options={(customerInvoices || []).map((inv) => ({ value: inv.id, label: `${inv.invoice_number} - ${formatCurrency(Number(inv.outstanding))}` }))}
+                placeholder="Select invoice"
+              />
             </div>
           )}
           {paymentType === "PAYMENT" && (
             <div>
               <Label>Supplier Bill</Label>
-              <Select value={supplierBillId} onValueChange={setSupplierBillId}>
-                <SelectTrigger><SelectValue placeholder="Select bill" /></SelectTrigger>
-                <SelectContent>
-                  {supplierBills?.map((bill) => (
-                    <SelectItem key={bill.id} value={bill.id}>{bill.bill_number} - {formatCurrency(bill.outstanding)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={supplierBillId}
+                onChange={setSupplierBillId}
+                options={(supplierBills || []).map((bill) => ({ value: bill.id, label: `${bill.bill_number} - ${formatCurrency(bill.outstanding)}` }))}
+                placeholder="Select bill"
+              />
             </div>
           )}
           <div>
             <Label>Bank Account</Label>
-            <Select value={bankAccountId} onValueChange={setBankAccountId}>
-              <SelectTrigger><SelectValue placeholder="Select bank account" /></SelectTrigger>
-              <SelectContent>
-                {bankAccounts?.map((acc) => (
-                  <SelectItem key={acc.id} value={acc.id}>{acc.account_name} ({acc.bank_name})</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={bankAccountId}
+              onChange={setBankAccountId}
+              options={(bankAccounts || []).map((acc) => ({ value: acc.id, label: `${acc.account_name} (${acc.bank_name})` }))}
+              placeholder="Select bank account"
+            />
           </div>
           <div>
             <Label>Reference Number (optional)</Label>

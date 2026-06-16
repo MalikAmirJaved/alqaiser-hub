@@ -461,17 +461,12 @@ export function PurchaseOrderModal({
                   {/* Supplier */}
                   <FieldGroup label="Supplier" required icon={<Tag className="w-3.5 h-3.5" />}>
                     <div className="po-input-row">
-                      <select
+                      <SearchableSelect
                         value={supplierId}
-                        onChange={(e) => setSupplierId(e.target.value)}
-                        required
-                        className="po-select"
-                      >
-                        <option value="">Select supplier…</option>
-                        {suppliers.map((s) => (
-                          <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
-                      </select>
+                        onChange={(val) => setSupplierId(val)}
+                        options={suppliers.map((s) => ({ value: s.id, label: s.name }))}
+                        placeholder="Select supplier…"
+                      />
                       <button
                         type="button"
                         onClick={() => setShowSupplierForm(true)}
@@ -487,17 +482,12 @@ export function PurchaseOrderModal({
                   {inventoryType === 'FOR_SALE' && (
                     <FieldGroup label="Destination Warehouse" required icon={<Warehouse className="w-3.5 h-3.5" />}>
                       <div className="po-input-row">
-                        <select
+                        <SearchableSelect
                           value={warehouseId}
-                          onChange={(e) => setWarehouseId(e.target.value)}
-                          required
-                          className="po-select"
-                        >
-                          <option value="">Select warehouse…</option>
-                          {warehouses.map((w) => (
-                            <option key={w.id} value={w.id}>{w.warehouse_name}</option>
-                          ))}
-                        </select>
+                          onChange={(val) => setWarehouseId(val)}
+                          options={warehouses.map((w) => ({ value: w.id, label: w.warehouse_name }))}
+                          placeholder="Select warehouse…"
+                        />
                         <button
                           type="button"
                           onClick={() => setShowWarehouseForm(true)}
@@ -1169,16 +1159,12 @@ function AssetLineItems({
           </div>
           {lineItems.map((line) => (
             <div key={line.id} className="po-asset-row">
-              <select
+              <SearchableSelect
                 value={line.selectedId}
-                onChange={(e) => onSelectChange(line.id, e.target.value)}
-                className="po-select"
-              >
-                <option value="">Select asset…</option>
-                {options.map((opt) => (
-                  <option key={opt.id} value={opt.id}>{opt.label}</option>
-                ))}
-              </select>
+                onChange={(val) => onSelectChange(line.id, val)}
+                options={options.map((opt) => ({ value: opt.id, label: opt.label }))}
+                placeholder="Select asset…"
+              />
 
               <input
                 type="number" min="1"

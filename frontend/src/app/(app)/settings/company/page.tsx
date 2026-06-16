@@ -11,6 +11,7 @@ import {
 import { LocationGroup } from "@/components/reuseable/LocationSelectors";
 import CurrencySelect from "@/components/reuseable/CurrencySelect";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 interface WorkingDayDisplay {
   id?: number;
@@ -609,17 +610,22 @@ export default function CompanyProfile() {
         <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-4">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block">Timezone</span>
           <Field label="Timezone">
-            <select className={selectCls} value={draft.timezone} onChange={(e) => setDraftField("timezone", e.target.value)}>
-              <option value="UTC">UTC</option>
-              <option value="America/New_York">Eastern Time (US)</option>
-              <option value="America/Chicago">Central Time (US)</option>
-              <option value="America/Denver">Mountain Time (US)</option>
-              <option value="America/Los_Angeles">Pacific Time (US)</option>
-              <option value="Europe/London">London (GMT)</option>
-              <option value="Asia/Dubai">Dubai (GST)</option>
-              <option value="Asia/Karachi">Karachi (PKT)</option>
-              <option value="Asia/Kolkata">Mumbai (IST)</option>
-            </select>
+            <SearchableSelect
+              value={draft.timezone}
+              onChange={(val) => setDraftField("timezone", val)}
+              options={[
+                { value: "UTC", label: "UTC" },
+                { value: "America/New_York", label: "Eastern Time (US)" },
+                { value: "America/Chicago", label: "Central Time (US)" },
+                { value: "America/Denver", label: "Mountain Time (US)" },
+                { value: "America/Los_Angeles", label: "Pacific Time (US)" },
+                { value: "Europe/London", label: "London (GMT)" },
+                { value: "Asia/Dubai", label: "Dubai (GST)" },
+                { value: "Asia/Karachi", label: "Karachi (PKT)" },
+                { value: "Asia/Kolkata", label: "Mumbai (IST)" },
+              ]}
+              placeholder="Select timezone"
+            />
           </Field>
         </div>
       </Modal>

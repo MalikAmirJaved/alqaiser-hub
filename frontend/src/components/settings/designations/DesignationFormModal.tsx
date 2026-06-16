@@ -6,6 +6,7 @@ import { X, Plus } from "lucide-react";
 import { useCreateDesignation, useUpdateDesignation, type Designation } from "@/hooks/useDesignations";
 import DepartmentFormModal from "@/components/settings/departments/DepartmentFormModal";
 import { useDepartments } from "@/hooks/useDepartments";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 interface DesignationFormData {
   name: string;
@@ -30,7 +31,7 @@ export default function DesignationFormModal({
   const [deptModalOpen, setDeptModalOpen] = useState(false);
   const { refetch: refetchDepartments } = useDepartments();
 
-  const { register, handleSubmit, reset, setValue } = useForm<DesignationFormData>({
+  const { register, handleSubmit, reset, setValue, watch } = useForm<DesignationFormData>({
     defaultValues: {
       name: "",
       department: "",
@@ -100,16 +101,12 @@ export default function DesignationFormModal({
                 <Plus className="w-3 h-3" /> Add New
               </button>
             </label>
-            <select
-              {...register("department")}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-            >
-              <option value="">Select Department</option>
-              <option value="ALL">All Departments</option>
-              {departmentOptions.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={watch("department") || ""}
+              onChange={(val) => setValue("department", val)}
+              options={[{ value: "ALL", label: "All Departments" }, ...departmentOptions]}
+              placeholder="Select Department"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Description</label>

@@ -30,6 +30,7 @@ import {
 } from "@/hooks/usePermissions";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useSearchParams } from "next/navigation";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const ACTION_COLORS: Record<string, string> = {
@@ -362,16 +363,12 @@ function RolesPanel({
         )
       ) : canAssign ? (
         <div className="flex gap-2">
-          <select
-            value={selectedRoleId}
-            onChange={e => setSelectedRoleId(Number(e.target.value) as any)}
-            className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="">Select role…</option>
-            {availableRoles.map(r => (
-              <option key={r.id} value={r.id}>{r.name}</option>
-            ))}
-          </select>
+          <SearchableSelect
+            value={selectedRoleId ? String(selectedRoleId) : ""}
+            onChange={val => setSelectedRoleId(Number(val) as any)}
+            options={availableRoles.map(r => ({ value: String(r.id), label: r.name }))}
+            placeholder="Select role…"
+          />
           <button
             onClick={handleAssign}
             disabled={!selectedRoleId || assignRole.isPending}

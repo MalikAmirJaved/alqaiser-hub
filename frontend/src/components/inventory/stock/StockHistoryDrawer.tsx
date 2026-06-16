@@ -7,7 +7,7 @@ import { TableView, Column } from "@/components/reuseable/TableGridView";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { Loader2, X } from "lucide-react";
 
 interface StockHistoryDrawerProps {
@@ -95,21 +95,21 @@ const columns: Column<any>[] = [
             </div>
             <div className="w-44">
               <Label className="text-xs">Transaction Type</Label>
-              <Select value={txnType} onValueChange={setTxnType}>
-                <SelectTrigger className="h-8">
-                  <SelectValue placeholder="All" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="PURCHASE_RECEIPT">Purchase Receipt</SelectItem>
-                  <SelectItem value="SALE_SHIPMENT">Sale Shipment</SelectItem>
-                  <SelectItem value="RETURN_IN">Return In</SelectItem>
-                  <SelectItem value="ADJUSTMENT">Adjustment</SelectItem>
-                  <SelectItem value="DAMAGE">Damage</SelectItem>
-                  <SelectItem value="TRANSFER_IN">Transfer In</SelectItem>
-                  <SelectItem value="TRANSFER_OUT">Transfer Out</SelectItem>
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={txnType}
+                onChange={setTxnType}
+                options={[
+                  { value: "all", label: "All" },
+                  { value: "PURCHASE_RECEIPT", label: "Purchase Receipt" },
+                  { value: "SALE_SHIPMENT", label: "Sale Shipment" },
+                  { value: "RETURN_IN", label: "Return In" },
+                  { value: "ADJUSTMENT", label: "Adjustment" },
+                  { value: "DAMAGE", label: "Damage" },
+                  { value: "TRANSFER_IN", label: "Transfer In" },
+                  { value: "TRANSFER_OUT", label: "Transfer Out" },
+                ]}
+                placeholder="All"
+              />
             </div>
             <Button variant="ghost" size="sm" onClick={() => { setStartDate(""); setEndDate(""); setTxnType("all"); }} className="h-8">
               Clear

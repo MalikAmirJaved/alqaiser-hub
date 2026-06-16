@@ -2,11 +2,11 @@
 // FILE: src/components/reuseable/TableGridView.tsx
 // ============================================
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "./Checkbox";
 import InboxIcon from "./InboxIcon";
-import { Plus } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 
 export interface Column<T = Record<string, unknown>> {
   key: string;
@@ -28,6 +28,7 @@ export function TableView<T extends Record<string, unknown>>({
   emptyMessage = "No data found",
   className,
   stickyHeader = true,
+  defaultPageSize = 20,
 }: {
   columns: Column<T>[];
   data: T[];
@@ -39,9 +40,14 @@ export function TableView<T extends Record<string, unknown>>({
   emptyMessage?: string;
   className?: string;
   stickyHeader?: boolean;
+  defaultPageSize?: number;
 }) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [page, setPage] = useState(1);
+
+  // Reset page when data changes
+  useEffect(() => { setPage(1); }, [data]);
 
   function handleSort(key: string) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -76,6 +82,11 @@ export function TableView<T extends Record<string, unknown>>({
     });
   }, [data, sortKey, sortDir]);
 
+  // Paginate after sorting
+  const totalPages = Math.max(1, Math.ceil(sortedData.length / defaultPageSize));
+  const safePage = Math.min(page, totalPages);
+  const paginatedData = sortedData.slice((safePage - 1) * defaultPageSize, safePage * defaultPageSize);
+
   // Get the original index for a sorted item
   const getOriginalIndex = (sortedIndex: number) => {
     if (!sortKey) return sortedIndex;
@@ -83,35 +94,35 @@ export function TableView<T extends Record<string, unknown>>({
     return data.findIndex(item => item === sortedItem);
   };
 
-  // Handle header checkbox selection (selects all visible items)
+  // Handle header checkbox selection (selects all visible items on current page)
   const handleSelectAll = (checked: boolean) => {
     if (!onRowSelect) return;
 
     const newSelected = new Set(selectedRows);
 
-    sortedData.forEach((_, sortedIdx) => {
-      const originalIdx = getOriginalIndex(sortedIdx);
+    paginatedData.forEach((_, sortedIdx) => {
+      const globalIdx = getOriginalIndex((safePage - 1) * defaultPageSize + sortedIdx);
 
       if (checked) {
-        newSelected.add(originalIdx);
+        newSelected.add(globalIdx);
       } else {
-        newSelected.delete(originalIdx);
+        newSelected.delete(globalIdx);
       }
     });
 
     onRowSelect(newSelected);
   };
 
-  // Check if all visible items are selected
-  const isAllSelected = sortedData.length > 0 && sortedData.every((_, sortedIdx) => {
-    const originalIdx = getOriginalIndex(sortedIdx);
-    return selectedRows?.has(originalIdx);
+  // Check if all visible items on current page are selected
+  const isAllSelected = paginatedData.length > 0 && paginatedData.every((_, pgIdx) => {
+    const globalIdx = getOriginalIndex((safePage - 1) * defaultPageSize + pgIdx);
+    return selectedRows?.has(globalIdx);
   });
 
-  // Check if some items are selected (for indeterminate state)
-  const isIndeterminate = !isAllSelected && sortedData.some((_, sortedIdx) => {
-    const originalIdx = getOriginalIndex(sortedIdx);
-    return selectedRows?.has(originalIdx);
+  // Check if some items on current page are selected
+  const isIndeterminate = !isAllSelected && paginatedData.some((_, pgIdx) => {
+    const globalIdx = getOriginalIndex((safePage - 1) * defaultPageSize + pgIdx);
+    return selectedRows?.has(globalIdx);
   });
 
   return (
@@ -168,15 +179,15 @@ export function TableView<T extends Record<string, unknown>>({
                   {actions && <td className="px-4 py-3"><div className="h-4 w-16 rounded bg-[var(--muted)] animate-pulse ml-auto" /></td>}
                 </tr>
               ))
-            ) : sortedData.length === 0 ? (
+            ) : paginatedData.length === 0 ? (
               <tr>
                 <td colSpan={columns.length + (onRowSelect ? 1 : 0) + (actions ? 1 : 0)} className="px-4 py-12 text-center text-[var(--muted-foreground)]">
                   {emptyMessage}
                 </td>
               </tr>
             ) : (
-              sortedData.map((row, sortedIdx) => {
-                const originalIdx = getOriginalIndex(sortedIdx);
+              paginatedData.map((row, pgIdx) => {
+                const originalIdx = getOriginalIndex((safePage - 1) * defaultPageSize + pgIdx);
                 const isSelected = selectedRows?.has(originalIdx) ?? false;
 
                 return (
@@ -226,6 +237,30 @@ export function TableView<T extends Record<string, unknown>>({
           </tbody>
         </table>
       </div>
+      {sortedData.length > defaultPageSize && (
+        <div className="flex items-center justify-between px-4 py-3 border-t border-border text-xs text-muted-foreground">
+          <span>
+            {(safePage - 1) * defaultPageSize + 1}–{Math.min(safePage * defaultPageSize, sortedData.length)} of {sortedData.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <span>Page {safePage} of {totalPages}</span>
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={safePage <= 1}
+              className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setPage(p => p + 1)}
+              disabled={safePage >= totalPages}
+              className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

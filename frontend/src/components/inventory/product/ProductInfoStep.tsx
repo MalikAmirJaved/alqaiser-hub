@@ -7,13 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Controller } from "react-hook-form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
 import { Switch } from "@/components/ui/switch";
 import FormField from "@/components/reuseable/FormField";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
@@ -111,26 +105,20 @@ export default function ProductInfoStep({
               control={control}
               name="unit"
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[
-                      ["PIECE", "Piece"],
-                      ["KG", "Kilogram"],
-                      ["GRAM", "Gram"],
-                      ["LITER", "Liter"],
-                      ["ML", "Milliliter"],
-                      ["PACK", "Pack"],
-                      ["DOZEN", "Dozen"],
-                    ].map(([v, l]) => (
-                      <SelectItem key={v} value={v}>
-                        {l}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={field.value || ""}
+                  onChange={(v) => field.onChange(v)}
+                  options={[
+                    { value: "PIECE", label: "Piece" },
+                    { value: "KG", label: "Kilogram" },
+                    { value: "GRAM", label: "Gram" },
+                    { value: "LITER", label: "Liter" },
+                    { value: "ML", label: "Milliliter" },
+                    { value: "PACK", label: "Pack" },
+                    { value: "DOZEN", label: "Dozen" },
+                  ]}
+                  placeholder="Select unit"
+                />
               )}
             />
           </FormField>
@@ -139,16 +127,16 @@ export default function ProductInfoStep({
               control={control}
               name="storageRequirement"
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="AMBIENT">Ambient</SelectItem>
-                    <SelectItem value="REFRIGERATED">Refrigerated</SelectItem>
-                    <SelectItem value="FROZEN">Frozen</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={field.value || ""}
+                  onChange={(v) => field.onChange(v)}
+                  options={[
+                    { value: "AMBIENT", label: "Ambient" },
+                    { value: "REFRIGERATED", label: "Refrigerated" },
+                    { value: "FROZEN", label: "Frozen" },
+                  ]}
+                  placeholder="Select storage"
+                />
               )}
             />
           </FormField>
@@ -170,17 +158,17 @@ export default function ProductInfoStep({
               control={control}
               name="status"
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="discontinued">Discontinued</SelectItem>
-                    <SelectItem value="archived">Archived</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={field.value || ""}
+                  onChange={(v) => field.onChange(v)}
+                  options={[
+                    { value: "draft", label: "Draft" },
+                    { value: "active", label: "Active" },
+                    { value: "discontinued", label: "Discontinued" },
+                    { value: "archived", label: "Archived" },
+                  ]}
+                  placeholder="Select status"
+                />
               )}
             />
           </FormField>

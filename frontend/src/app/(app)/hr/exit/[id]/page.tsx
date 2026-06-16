@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useExitRecord, useUpdateExitRecord, useClearExitDues, useExitEmployeeAssets, useReturnExitAsset } from "@/hooks/useExitManagement";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useState } from "react";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import {
   ArrowLeft,
   LogOut,
@@ -233,25 +234,26 @@ export default function ExitDetailPage() {
           <div className="space-y-4">
             <label className="text-sm flex flex-col gap-1">
               <span className="text-muted-foreground">Status</span>
-              <select
+              <SearchableSelect
                 value={editingStatus ? statusForm.status : record.status_value}
-                onChange={e => {
+                onChange={val => {
                   if (!editingStatus) {
                     setEditingStatus(true);
                     setStatusForm({
-                      status: e.target.value,
+                      status: val,
                       notes: record.settlement_notes || "",
                     });
                   } else {
-                    setStatusForm(prev => ({ ...prev, status: e.target.value }));
+                    setStatusForm(prev => ({ ...prev, status: val }));
                   }
                 }}
-                className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none"
-              >
-                <option value="PENDING">Pending</option>
-                <option value="CONFIRMED">Confirm</option>
-                <option value="REJECTED">Reject</option>
-              </select>
+                options={[
+                  { value: "PENDING", label: "Pending" },
+                  { value: "CONFIRMED", label: "Confirm" },
+                  { value: "REJECTED", label: "Reject" },
+                ]}
+                placeholder="Status"
+              />
             </label>
 
             {editingStatus && (
@@ -314,15 +316,12 @@ export default function ExitDetailPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <label className="text-xs flex flex-col gap-1">
                       <span className="text-muted-foreground">Condition</span>
-                      <select
+                      <SearchableSelect
                         value={conditionMap[asset.id] || "GOOD"}
-                        onChange={e => setConditionMap((p: any) => ({ ...p, [asset.id]: e.target.value }))}
-                        className="bg-muted/40 border border-border rounded-md h-8 px-2 text-xs outline-none"
-                      >
-                        {CONDITION_OPTIONS.map((o: any) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
+                        onChange={val => setConditionMap((p: any) => ({ ...p, [asset.id]: val }))}
+                        options={CONDITION_OPTIONS}
+                        placeholder="Condition"
+                      />
                     </label>
                     <label className="text-xs flex flex-col gap-1">
                       <span className="text-muted-foreground">Notes</span>

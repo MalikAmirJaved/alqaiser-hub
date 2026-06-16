@@ -11,7 +11,7 @@ import { useWarehouses } from "@/hooks/useWarehouses";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
@@ -135,28 +135,15 @@ export default function CreateTransferForm({ onSuccess, onCancel }: CreateTransf
           name="product_id"
           control={control}
           render={({ field }) => (
-            <Select
-              onValueChange={(value) => {
+            <SearchableSelect
+              value={field.value || ""}
+              onChange={(value) => {
                 field.onChange(value);
                 handleProductChange(value);
               }}
-              value={field.value}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select product" />
-              </SelectTrigger>
-              <SelectContent>
-                {productsLoading ? (
-                  <div className="p-2 text-center">Loading...</div>
-                ) : (
-                  products.map((product) => (
-                    <SelectItem key={product.id} value={product.id}>
-                      {product.product_name}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+              options={products.map((product) => ({ value: product.id, label: product.product_name }))}
+              placeholder="Select product"
+            />
           )}
         />
         {errors.product_id && <p className="text-sm text-red-500">{errors.product_id.message}</p>}
@@ -168,25 +155,16 @@ export default function CreateTransferForm({ onSuccess, onCancel }: CreateTransf
           name="variant_id"
           control={control}
           render={({ field }) => (
-            <Select
-              onValueChange={(value) => {
+            <SearchableSelect
+              value={field.value || ""}
+              onChange={(value) => {
                 field.onChange(value);
                 handleVariantChange(value);
               }}
-              value={field.value}
+              options={productVariants.map((variant) => ({ value: variant.id, label: `${variant.sku} - ${variant.variant_title}` }))}
+              placeholder={selectedProductId ? "Select variant" : "Select product first"}
               disabled={!selectedProductId}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={selectedProductId ? "Select variant" : "Select product first"} />
-              </SelectTrigger>
-              <SelectContent>
-                {productVariants.map((variant) => (
-                  <SelectItem key={variant.id} value={variant.id}>
-                    {variant.sku} - {variant.variant_title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           )}
         />
         {errors.variant_id && <p className="text-sm text-red-500">{errors.variant_id.message}</p>}
@@ -198,25 +176,16 @@ export default function CreateTransferForm({ onSuccess, onCancel }: CreateTransf
           name="source_warehouse_id"
           control={control}
           render={({ field }) => (
-            <Select
-              onValueChange={(value) => {
+            <SearchableSelect
+              value={field.value || ""}
+              onChange={(value) => {
                 field.onChange(value);
                 handleSourceChange(value);
               }}
-              value={field.value}
+              options={sourceWarehouses.map((sw) => ({ value: sw.warehouse_id, label: `${sw.warehouse_name} — Stock: ${sw.quantity_on_hand}` }))}
+              placeholder={selectedVariantId ? "Select source warehouse" : "Select variant first"}
               disabled={!selectedVariantId}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={selectedVariantId ? "Select source warehouse" : "Select variant first"} />
-              </SelectTrigger>
-              <SelectContent>
-                {sourceWarehouses.map((sw) => (
-                  <SelectItem key={sw.warehouse_id} value={sw.warehouse_id}>
-                    {sw.warehouse_name} — Stock: {sw.quantity_on_hand}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           )}
         />
         {errors.source_warehouse_id && <p className="text-sm text-red-500">{errors.source_warehouse_id.message}</p>}
@@ -228,18 +197,13 @@ export default function CreateTransferForm({ onSuccess, onCancel }: CreateTransf
           name="destination_warehouse_id"
           control={control}
           render={({ field }) => (
-            <Select onValueChange={field.onChange} value={field.value} disabled={!selectedSourceId}>
-              <SelectTrigger>
-                <SelectValue placeholder={selectedSourceId ? "Select destination warehouse" : "Select source first"} />
-              </SelectTrigger>
-              <SelectContent>
-                {destinationWarehouses.map((sw) => (
-                  <SelectItem key={sw.warehouse_id} value={sw.warehouse_id}>
-                    {sw.warehouse_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={field.value || ""}
+              onChange={field.onChange}
+              options={destinationWarehouses.map((sw) => ({ value: sw.warehouse_id, label: sw.warehouse_name }))}
+              placeholder={selectedSourceId ? "Select destination warehouse" : "Select source first"}
+              disabled={!selectedSourceId}
+            />
           )}
         />
         {errors.destination_warehouse_id && <p className="text-sm text-red-500">{errors.destination_warehouse_id.message}</p>}
