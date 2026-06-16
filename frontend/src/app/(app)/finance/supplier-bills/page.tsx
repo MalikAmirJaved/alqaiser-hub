@@ -25,9 +25,7 @@ export default function SupplierBillsPage() {
   const permissions = useFeaturePermissions("FINANCE", "supplier_bill");
   const modulePermissions: ModulePermissions = {
     view: permissions.view,
-    create: permissions.create,
-    update: permissions.update,
-    delete: permissions.delete,
+    update: permissions.pay,
     export: permissions.export,
   };
 

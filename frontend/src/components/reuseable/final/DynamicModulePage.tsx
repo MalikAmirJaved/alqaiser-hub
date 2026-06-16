@@ -26,9 +26,9 @@ export interface Kpi {
 }
 
 export interface ModulePermissions {
-  create: boolean;
+  create?: boolean;
   update: boolean;
-  delete: boolean;
+  delete?: boolean;
   view: boolean;
   export?: boolean;
 }
