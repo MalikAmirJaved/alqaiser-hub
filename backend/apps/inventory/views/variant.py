@@ -5,6 +5,7 @@ from rest_framework.decorators import action
 from django.db.models import Q
 from django.core.cache import cache
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import ProductVariant
 from apps.inventory.serializers.variant import VariantDetailSerializer, VariantPOSSerializer
@@ -12,7 +13,7 @@ from django.db.models import F
 from apps.inventory.models import PurchaseOrderLine
 
 
-class VariantViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ReadOnlyModelViewSet):
+class VariantViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ReadOnlyModelViewSet):
     permission_module = 'INVENTORY'
     permission_resource = 'product'
     """
@@ -22,6 +23,11 @@ class VariantViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ReadO
     """
     lookup_field = '_id'
     lookup_value_regex = '[0-9a-f-]+'
+    filter_fields = {
+        'search': ['sku', 'product__product_name', 'barcode'],
+        'product_id': 'product___id',
+        'active_only': 'product__is_active',
+    }
 
     def get_serializer_class(self):
         """Return lightweight serializer for POS requests"""

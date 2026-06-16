@@ -2,12 +2,13 @@
 
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import { TableView, GridView } from "@/components/reuseable/TableGridView";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { ConfirmationModal, useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
+import FilterBar, { FilterField } from "@/components/reuseable/FilterBar";
 import { WarehouseForm } from "@/components/inventory/warehouse/WarehouseForm";
 import {
   useWarehouses,
@@ -27,28 +28,24 @@ export default function WarehousesPage() {
   const router = useRouter();
   const permissions = useFeaturePermissions("INVENTORY", "warehouse");
   const [viewMode, setViewMode] = useState<ViewMode>("table");
-  const [searchTerm, setSearchTerm] = useState("");
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null);
 
-  const { data: warehouses = [], isLoading, refetch } = useWarehouses({ search: searchTerm });
+  const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
+    { name: "is_active", label: "Status", type: "boolean" },
+  ];
+
+  const { data: warehouses = [], isLoading, refetch } = useWarehouses({
+    search: filters.search || undefined,
+    is_active: filters.is_active ? filters.is_active === 'true' : undefined,
+  });
   const { data: stats, isLoading: statsLoading } = useWarehouseStats();
   const createWarehouse = useCreateWarehouse();
   const updateWarehouse = useUpdateWarehouse();
   const deleteWarehouse = useDeleteWarehouse();
   const deleteConfirm = useConfirmationModal();
-
-  const filteredWarehouses = useMemo(() => {
-    if (!searchTerm) return warehouses;
-    const term = searchTerm.toLowerCase();
-    return warehouses.filter(
-      (w) =>
-        w.warehouse_name.toLowerCase().includes(term) ||
-        w.code.toLowerCase().includes(term) ||
-        w.city.toLowerCase().includes(term) ||
-        w.employee_name?.toLowerCase().includes(term)
-    );
-  }, [warehouses, searchTerm]);
 
   const statsData = stats
     ? [
@@ -234,54 +231,35 @@ export default function WarehousesPage() {
 
       {!statsLoading && statsData.length > 0 && <StatsCards stats={statsData} />}
 
-      <div className="flex items-center justify-between gap-4 mb-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search warehouses..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 h-9 rounded-md border border-border bg-muted/40 text-sm outline-none focus:ring-2 focus:ring-ring"
-          />
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2"
-            >
-              <X className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-            </button>
-          )}
-        </div>
+      <FilterBar fields={filterFields} filters={filters} onChange={setFilters} />
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setViewMode("table")}
-            className={`p-2 rounded-md transition-colors ${
-              viewMode === "table" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
-            }`}
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setViewMode("grid")}
-            className={`p-2 rounded-md transition-colors ${
-              viewMode === "grid" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
-            }`}
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-            </svg>
-          </button>
-        </div>
+      <div className="flex items-center justify-end gap-2 mb-4">
+        <button
+          onClick={() => setViewMode("table")}
+          className={`p-2 rounded-md transition-colors ${
+            viewMode === "table" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
+          }`}
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <button
+          onClick={() => setViewMode("grid")}
+          className={`p-2 rounded-md transition-colors ${
+            viewMode === "grid" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
+          }`}
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+          </svg>
+        </button>
       </div>
 
       {viewMode === "table" ? (
         <TableView
           columns={columns as any}
-          data={filteredWarehouses as any}
+          data={warehouses as any}
           loading={isLoading}
           onRowClick={handleRowClick as any}
           actions={actions as any}
@@ -289,7 +267,7 @@ export default function WarehousesPage() {
         />
       ) : (
         <GridView
-          data={filteredWarehouses as any}
+          data={warehouses as any}
           renderCard={renderCard as any}
           loading={isLoading}
           emptyMessage="No warehouses found"

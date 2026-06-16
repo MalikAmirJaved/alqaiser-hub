@@ -28,14 +28,27 @@ interface PaginatedResponse<T> {
 }
 
 // Fetch all customers (paginated)
-export function useCustomers(search?: string) {
+// Backward compatible: accepts string (search) or object (filters)
+export function useCustomers(filters?: Record<string, string> | string) {
   const api = useApi();
-  const url = search
-    ? `/api/inventory/customers/?search=${encodeURIComponent(search)}`
-    : "/api/inventory/customers/";
+  
+  // Support old string-based usage
+  if (typeof filters === 'string') {
+    filters = { search: filters };
+  }
+  if (!filters) {
+    filters = {};
+  }
+  
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, val]) => {
+    if (val) params.append(key, val);
+  });
+  const queryString = params.toString();
+  const url = `/api/inventory/customers/${queryString ? `?${queryString}` : ""}`;
 
   return useQuery<PaginatedResponse<Customer>, Error, Customer[]>({
-    queryKey: ["customers", search],
+    queryKey: ["customers", filters],
     queryFn: () => api<PaginatedResponse<Customer>>(url),
     select: (data) => data.results,
     staleTime: 30 * 1000,

@@ -1,17 +1,24 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models.customer import Customer
 from apps.inventory.serializers.customer import CustomerSerializer
 import uuid
 
-class CustomerViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+class CustomerViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'INVENTORY'
     permission_resource = 'customer'
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
     lookup_field = '_id'
+    filter_fields = {
+        'search': ['name', 'customer_code', 'email', 'phone', 'contact_person'],
+        'is_active': 'is_active',
+        'country': 'country__icontains',
+        'city': 'city__icontains',
+    }
 
     def generate_customer_code(self, company_id, branch_id):
         """

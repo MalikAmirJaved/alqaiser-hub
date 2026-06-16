@@ -428,8 +428,26 @@ class DesignationViewSet(BaseCompanyView, viewsets.ModelViewSet):
     lookup_field = '_id'
     
     def get_queryset(self):
+        from django.db.models import Q
         company, settings = self._get_settings(self.request.user)
-        return Designation.objects.filter(company_settings=settings, is_deleted=False)  # ✅ Changed
+        qs = Designation.objects.filter(company_settings=settings, is_deleted=False)
+        
+        search = self.request.query_params.get('search')
+        if search:
+            qs = qs.filter(Q(name__icontains=search))
+        
+        is_active = self.request.query_params.get('is_active')
+        if is_active is not None:
+            if is_active.lower() in ('true', '1', 'yes'):
+                qs = qs.filter(is_active=True)
+            elif is_active.lower() in ('false', '0', 'no'):
+                qs = qs.filter(is_active=False)
+        
+        department = self.request.query_params.get('department')
+        if department:
+            qs = qs.filter(department___id=department)
+        
+        return qs
     
     def perform_create(self, serializer):
         company, settings = self._get_settings(self.request.user)

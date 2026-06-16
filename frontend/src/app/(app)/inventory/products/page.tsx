@@ -7,7 +7,7 @@ import PageHeader from "@/components/PageHeader";
 import { Plus, Grid, List, Download } from "lucide-react";
 import { TableView, GridView, Column } from "@/components/reuseable/TableGridView";
 import { StatsCards } from "@/components/reuseable/StatsCards";
-import ProductFilters from "@/components/inventory/product/ProductFilters";
+import FilterBar, { FilterField } from "@/components/reuseable/FilterBar";
 import ProductForm from "@/components/inventory/product/ProductForm";
 import { useProducts, useDeleteProduct, useCreateProduct, useUpdateProduct, Product, ProductPayload } from "@/hooks/useProducts";
 import { useCategories } from "@/hooks/useCategories";
@@ -23,11 +23,26 @@ export default function ProductsPage() {
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [showProductModal, setShowProductModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | undefined>(undefined);
-  const [filters, setFilters] = useState({ search: "", category: "", brand: "", status: "" });
+  const [filters, setFilters] = useState<Record<string, string>>({});
 
   const { data: products = [], isLoading, refetch } = useProducts(filters);
   const { data: categories = [] } = useCategories();
   const { data: brands = [] } = useBrands();
+
+  // Build filter field options from fetched data
+  const categoryOpts = categories.map(c => ({ value: c.id, label: c.name }));
+  const brandOpts = brands.map(b => ({ value: b.id, label: b.name }));
+  const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
+    { name: "category", label: "Category", type: "select", searchable: true, options: categoryOpts },
+    { name: "brand", label: "Brand", type: "select", searchable: true, options: brandOpts },
+    { name: "status", label: "Status", type: "status", options: [
+      { value: "active", label: "Active" },
+      { value: "draft", label: "Draft" },
+      { value: "archived", label: "Archived" },
+      { value: "discontinued", label: "Discontinued" },
+    ] },
+  ];
   const deleteProduct = useDeleteProduct();
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
@@ -256,7 +271,7 @@ export default function ProductsPage() {
       <StatsCards stats={stats} />
 
       {/* Filters */}
-      <ProductFilters filters={filters} onChange={setFilters} categories={categories} brands={brands} />
+      <FilterBar fields={filterFields} filters={filters} onChange={setFilters} />
 
       {/* Table / Grid */}
       {viewMode === "table" ? (

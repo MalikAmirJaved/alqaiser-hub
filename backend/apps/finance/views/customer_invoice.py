@@ -5,6 +5,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from decimal import Decimal
 from rest_framework.exceptions import ValidationError
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.finance.models import CustomerInvoice, CustomerInvoiceLine
 from apps.finance.serializers import CustomerInvoiceSerializer
@@ -13,6 +14,7 @@ from apps.finance.services.invoice_payment import pay_customer_invoice
 
 
 class CustomerInvoiceViewSet(
+    GenericFilterMixin,
     CompanyBranchUserMixin,
     CompanyBranchMixin,
     PermissionRequiredMixin,
@@ -28,21 +30,15 @@ class CustomerInvoiceViewSet(
     permission_resource = 'customer_invoice'
     lookup_field = '_id'
     lookup_url_kwarg = '_id'
+    filter_fields = {
+        'status': 'status',
+        'customer': 'customer___id',
+        'search': ['invoice_number', 'customer__name'],
+    }
 
     def get_queryset(self):
         qs = super().get_queryset()
         qs = qs.prefetch_related('lines__variant__product')
-        status_param = self.request.query_params.get('status')
-        if status_param:
-            qs = qs.filter(status=status_param)
-        customer_uuid = self.request.query_params.get('customer')
-        if customer_uuid:
-            from apps.inventory.models import Customer
-            try:
-                customer = Customer.objects.get(_id=customer_uuid, company_id=self.request.user.company_id)
-                qs = qs.filter(customer=customer)
-            except Customer.DoesNotExist:
-                return qs.none()
         return qs.order_by('-created_at')
 
     def create(self, request, *args, **kwargs):

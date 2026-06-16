@@ -10,6 +10,8 @@ import {
   type Department,
 } from "@/hooks/useDepartments";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
 import DepartmentFormModal from "@/components/settings/departments/DepartmentFormModal";
 import { Switch } from "@/components/ui/switch";
 import { useRouter } from "next/navigation";
@@ -17,8 +19,16 @@ import { useRouter } from "next/navigation";
 export default function DepartmentsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
+  const [filters, setFilters] = useState<Record<string, string>>({});
 
-  const { data: departments = [], isLoading, refetch } = useDepartments();
+  const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
+    { name: "is_active", label: "Status", type: "boolean" },
+  ];
+
+  const { data: departments = [], isLoading, refetch } = useDepartments(
+    filters.search ? { search: filters.search } : undefined
+  );
   const createDepartment = useCreateDepartment();
   const updateDepartment = useUpdateDepartment();
   const deleteDepartment = useDeleteDepartment();
@@ -113,6 +123,13 @@ export default function DepartmentsPage() {
           onDelete: handleDelete,
         }}
         exportEnabled={permissions.export}
+        filterBar={
+          <FilterBar
+            fields={filterFields}
+            filters={filters}
+            onChange={setFilters}
+          />
+        }
       />
       <DepartmentFormModal
         open={modalOpen}

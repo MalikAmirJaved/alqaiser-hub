@@ -10,6 +10,7 @@ from rest_framework import status
 import logging
 import json
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import Employee, EmployeeDefaultShift, EmployeeAssetAssignment, AssetCategory, RecruitmentCandidate
 from apps.organization.models import Department
@@ -103,6 +104,7 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
             query = query.filter(models.Q(branch_id=branch_id) | models.Q(branch_id__isnull=True))
 
+        # Apply filters using GenericFilterMixin logic
         search = request.query_params.get('search')
         if search:
             query = query.filter(
@@ -114,16 +116,30 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 models.Q(email__icontains=search)
             )
 
-        department_filter = request.query_params.get('department')
-        status_filter = request.query_params.get('status')
-        employment_type = request.query_params.get('employmentType')
+        # Support UUID-based department filter (department___id)
+        department_uuid = request.query_params.get('department')
+        if department_uuid:
+            try:
+                dept = Department.objects.get(_id=department_uuid, company_id=company_id, is_deleted=False)
+                query = query.filter(department=dept)
+            except Department.DoesNotExist:
+                pass
 
-        if department_filter:
-            query = query.filter(department__name=department_filter)
+        status_filter = request.query_params.get('status')
         if status_filter:
             query = query.filter(employment_status=status_filter)
+
+        employment_type = request.query_params.get('employmentType')
         if employment_type:
             query = query.filter(employment_type=employment_type)
+
+        designation_uuid = request.query_params.get('designation')
+        if designation_uuid:
+            try:
+                desig = Designation.objects.get(_id=designation_uuid, company_id=company_id, is_deleted=False)
+                query = query.filter(designation=desig)
+            except Designation.DoesNotExist:
+                pass
 
         employees = query.order_by('first_name', 'last_name')
         return Response([serialize_employee(e) for e in employees])

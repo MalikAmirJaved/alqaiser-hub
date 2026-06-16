@@ -17,6 +17,8 @@ import {
 } from "@/components/reuseable/final/DynamicModulePage";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { StatusBadge } from "@/components/finance/ui";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
 import { Trash2 } from "lucide-react";
 import LeadFormModal from "./LeadFormModal";
 import QuoteFormModal from "./QuoteFormModal";
@@ -121,8 +123,27 @@ export default function LeadsPanel() {
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
   const [quotePrefillCustomerId, setQuotePrefillCustomerId] = useState<string | null>(null);
   const [convertingLeadId, setConvertingLeadId] = useState<string | null>(null);
+  const [filters, setFilters] = useState<Record<string, string>>({});
 
-  const { data: leads = [], isLoading, refetch } = useLeads();
+  const leadStatusOptions = [
+    { value: "NEW", label: "New" },
+    { value: "CONTACTED", label: "Contacted" },
+    { value: "QUALIFIED", label: "Qualified" },
+    { value: "ACCEPTED", label: "Accepted" },
+    { value: "LOST", label: "Lost" },
+    { value: "WON", label: "Won" },
+  ];
+
+  const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
+    { name: "status", label: "Status", type: "status", options: leadStatusOptions },
+  ];
+
+  const { data: leads = [], isLoading, refetch } = useLeads(
+    Object.keys(filters).length > 0
+      ? { status: filters.status || undefined, search: filters.search || undefined }
+      : undefined
+  );
   const deleteLead = useDeleteLead();
   const acceptLead = useAcceptLead();
   const createCustomerFromLead = useCreateCustomerFromLead();
@@ -296,6 +317,13 @@ export default function LeadsPanel() {
         onRowClick={handleRowClick}
         exportEnabled={permissions.export}
         onRowSelect={setSelectedIds}
+        filterBar={
+          <FilterBar
+            fields={filterFields}
+            filters={filters}
+            onChange={setFilters}
+          />
+        }
         batchActions={
           <button
             onClick={() => selectedIds.forEach((id) => deleteLead.mutate(id))}

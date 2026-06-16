@@ -5,9 +5,12 @@ import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
 import { useCustomerInvoices, useDeleteCustomerInvoice, usePayCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { useCustomers } from "@/hooks/useCustomers";
 import CustomerInvoiceFormModal from "@/components/finance/customer-invoices/CustomerInvoiceFormModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatusBadge } from "@/components/finance/ui";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
 import { Trash2, Send } from "lucide-react";
 
 interface CustomerInvoicesPanelProps {
@@ -20,8 +23,27 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
   const [modalOpen, setModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [filters, setFilters] = useState<Record<string, string>>({});
 
-  const { data: invoices, isLoading } = useCustomerInvoices();
+  const { data: customers = [] } = useCustomers();
+  const customerOptions = customers.map(c => ({ value: c.id, label: c.name }));
+
+  const filterFields: FilterField[] = [
+    { name: "customer", label: "Customer", type: "select", searchable: true, options: customerOptions },
+    { name: "status", label: "Status", type: "status", options: [
+      { value: "DRAFT", label: "Draft" },
+      { value: "CANCELLED", label: "Cancelled" },
+    ]},
+  ];
+
+  const { data: invoices, isLoading } = useCustomerInvoices(
+    Object.keys(filters).length > 0
+      ? {
+          status: filters.status || undefined,
+          customer: filters.customer || undefined,
+        }
+      : undefined
+  );
   const deleteInvoice = useDeleteCustomerInvoice();
   const payInvoice = usePayCustomerInvoice();
 
@@ -152,6 +174,13 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
         onRowClick={handleRowClick}
         exportEnabled={permissions.export}
         onRowSelect={setSelectedIds}
+        filterBar={
+          <FilterBar
+            fields={filterFields}
+            filters={filters}
+            onChange={setFilters}
+          />
+        }
         batchActions={
           <>
             <button

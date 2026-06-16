@@ -5,11 +5,12 @@ import React, { useState, useEffect } from "react";
 import { useTransfers, useTransferStats, useConfirmTransfer, useCancelTransfer } from "@/hooks/useTransfers";
 import {TableView} from "@/components/reuseable/TableGridView";
 import {StatsCards} from "@/components/reuseable/StatsCards";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
 import ConfirmationModal from "@/components/reuseable/ConfirmationModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, CheckCircle, XCircle, Clock, Eye } from "lucide-react";
+import { CheckCircle, Eye } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
 import type { PermissionActions } from "@/lib/permissions";
@@ -27,22 +28,36 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
 };
 
 export default function TransferList({ refreshTrigger, onTransferCompleted, permissions }: TransferListProps) {
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const [selectedTransfer, setSelectedTransfer] = useState<any>(null);
   const [confirmAction, setConfirmAction] = useState<"confirm" | "cancel" | null>(null);
 
+  const statusOptions = [
+    { value: "PENDING", label: "Pending" },
+    { value: "COMPLETED", label: "Completed" },
+    { value: "CANCELLED", label: "Cancelled" },
+  ];
+
+  const filterFields: FilterField[] = [
+    { name: "status", label: "Status", type: "status", options: statusOptions },
+  ];
+
   const { data: transfers = [], isLoading, refetch } = useTransfers({
-  status: statusFilter === "all" ? undefined : statusFilter
-});
+    status: filters.status || undefined,
+  });
   const { data: stats, refetch: refetchStats } = useTransferStats();
 
   const confirmMutation = useConfirmTransfer();
   const cancelMutation = useCancelTransfer();
 
+  // refreshTrigger reloads data (but filters auto-refetch via React Query query keys)
   useEffect(() => {
-    refetch();
-    refetchStats();
-  }, [refreshTrigger, statusFilter, refetch, refetchStats]);
+    if (refreshTrigger) {
+      refetch();
+      refetchStats();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTrigger]);
 
   const handleConfirm = async () => {
     if (!selectedTransfer) return;
@@ -160,18 +175,12 @@ const columns = [
   );
 
   const filterBar = (
-    <div className="flex items-center gap-4 mb-4">
-      <Select value={statusFilter} onValueChange={setStatusFilter}>
-        <SelectTrigger className="w-[180px]">
-          <SelectValue placeholder="All Statuses" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Statuses</SelectItem>
-          <SelectItem value="PENDING">Pending</SelectItem>
-          <SelectItem value="COMPLETED">Completed</SelectItem>
-          <SelectItem value="CANCELLED">Cancelled</SelectItem>
-        </SelectContent>
-      </Select>
+    <div className="mb-4">
+      <FilterBar
+        fields={filterFields}
+        filters={filters}
+        onChange={setFilters}
+      />
     </div>
   );
 

@@ -1,12 +1,14 @@
 // frontend/src/app/(app)/settings/designations/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
 import { useDesignations, useCreateDesignation, useUpdateDesignation, useDeleteDesignation, type Designation } from "@/hooks/useDesignations";
 import { useDepartmentOptions } from "@/hooks/useDepartments";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
 import { Switch } from "@/components/ui/switch";
 import DesignationFormModal from "@/components/settings/designations/DesignationFormModal";
 
@@ -14,14 +16,28 @@ export default function DesignationsPage() {
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingDesignation, setEditingDesignation] = useState<Designation | null>(null);
+  const [filters, setFilters] = useState<Record<string, string>>({});
 
-  const { data: designations = [], isLoading, refetch } = useDesignations();
+  const { options: departmentOptions } = useDepartmentOptions();
+
+  const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
+    { name: "department", label: "Department", type: "select", searchable: true, options: departmentOptions },
+    { name: "is_active", label: "Status", type: "boolean" },
+  ];
+
+  const { data: designations = [], isLoading, refetch } = useDesignations(
+    Object.keys(filters).length > 0
+      ? Object.fromEntries(
+          Object.entries(filters).filter(([_, v]) => v !== "")
+        )
+      : undefined
+  );
 
   const createDesignation = useCreateDesignation();
   const updateDesignation = useUpdateDesignation();
   const deleteDesignation = useDeleteDesignation();
   const permissions = useFeaturePermissions("SETTINGS", "designation");
-  const { options: departmentOptions } = useDepartmentOptions();
 
   const modulePermissions: ModulePermissions = {
     create: permissions.create,
@@ -120,6 +136,13 @@ export default function DesignationsPage() {
           onDelete: handleDelete,
         }}
         exportEnabled={permissions.export}
+        filterBar={
+          <FilterBar
+            fields={filterFields}
+            filters={filters}
+            onChange={setFilters}
+          />
+        }
       />
       <DesignationFormModal
         open={modalOpen}

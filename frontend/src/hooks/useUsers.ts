@@ -58,13 +58,16 @@ export function useActiveUsers() {
 }
 
 // Fetch all users
-export function useUsers() {
+export function useUsers(filters?: Record<string, string>) {
   const api = useApi();
+  const queryString = filters && Object.keys(filters).length > 0
+    ? '?' + new URLSearchParams(filters).toString()
+    : '';
 
   return useQuery<User[]>({
-    queryKey: ["users"],
+    queryKey: ["users", filters],
     queryFn: async () => {
-      const response = await api<PaginatedResponse<User>>("/api/organization/users/");
+      const response = await api<PaginatedResponse<User>>(`/api/organization/users/${queryString}`);
       return response.results || [];
     },
     staleTime: 30 * 1000,

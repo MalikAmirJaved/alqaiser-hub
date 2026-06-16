@@ -14,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import (
     PurchaseOrder, PurchaseOrderLine, GoodsReceipt, GoodsReceiptLine,
@@ -29,21 +30,20 @@ from apps.hr.services.assignment_service import create_or_update_asset_from_rece
 import logging
 logger = logging.getLogger(__name__)
 
-class PurchaseOrderViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+class PurchaseOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'INVENTORY'
     permission_resource = 'purchase_order'
     queryset = PurchaseOrder.objects.all()
     serializer_class = PurchaseOrderSerializer
     lookup_field = '_id'
+    filter_fields = {
+        'status': 'status',
+        'supplier': 'supplier___id',
+        'search': ['order_number', 'supplier__name'],
+    }
     def get_queryset(self):
         qs = super().get_queryset()
         qs = qs.prefetch_related('lines__variant__product')
-        status = self.request.query_params.get('status')
-        if status:
-            qs = qs.filter(status=status)
-        supplier = self.request.query_params.get('supplier')
-        if supplier:
-            qs = qs.filter(supplier_id=supplier)
         return qs
 
     def create(self, request, *args, **kwargs):
@@ -104,29 +104,20 @@ class PurchaseOrderViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets
             return Response({'status': 'success', 'message': 'Order cancelled'})
         return Response({'error': 'Cannot cancel this order'}, status=400)
 
-class GoodsReceiptViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+class GoodsReceiptViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'INVENTORY'
     permission_resource = 'purchase_order'
     queryset = GoodsReceipt.objects.all()
     serializer_class = GoodsReceiptSerializer
     lookup_field = '_id'
+    filter_fields = {
+        'status': 'status',
+        'supplier': 'supplier___id',
+        'search': ['receipt_number', 'purchase_order__order_number'],
+    }
     def get_queryset(self):
         qs = super().get_queryset()
         qs = qs.prefetch_related('lines__purchase_order_line__variant__product')
-        
-        status = self.request.query_params.get('status')
-        if status:
-            qs = qs.filter(status=status)
-        
-        supplier_uuid = self.request.query_params.get('supplier')
-        if supplier_uuid:
-            # Resolve UUID to integer ID
-            from apps.inventory.models import Supplier
-            try:
-                supplier = Supplier.objects.get(_id=supplier_uuid, company_id=self.request.user.company_id)
-                qs = qs.filter(supplier_id=supplier.id)
-            except Supplier.DoesNotExist:
-                return qs.none()
         return qs
 
     def create(self, request, *args, **kwargs):

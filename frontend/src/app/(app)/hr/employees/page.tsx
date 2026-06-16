@@ -4,12 +4,16 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useEmployees, useEmployeeStats, useCreateEmployee, useUpdateEmployee, useDeleteEmployee } from "@/hooks/useEmployees";
 import { useShiftTemplates } from "@/hooks/useShiftTemplates";
+import { useDepartmentOptions } from "@/hooks/useDepartments";
+import { useDesignations } from "@/hooks/useDesignations";
 import PageHeader from "@/components/PageHeader";
 import EmployeeForm from "@/components/Forms/EmployeeForm";
 import EmployeeStatusModal from "@/components/EmployeeStatusModal";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { TableView, GridView } from "@/components/reuseable/TableGridView";
-import { Plus, Pencil, Trash2, Search, Download, Shield, Clock, LayoutGrid, LayoutList, Building2, Briefcase, Award, Phone, Key, ToggleRight, TrendingUp } from "lucide-react";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
+import { Plus, Pencil, Trash2, Download, Shield, Clock, LayoutGrid, LayoutList, Building2, Briefcase, Award, Phone, Key, ToggleRight, TrendingUp } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { useConfirmation } from "@/contexts/ConfirmationModalContext";
@@ -24,7 +28,7 @@ import PromotionModal from "@/components/payroll/PromotionModal";
 export default function EmployeesPage() {
   const { user, ready } = useAuth();
   const { confirm } = useConfirmation();
-  const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const [modalOpen, setModalOpen] = useState(false);
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [selectedEmployeeForStatus, setSelectedEmployeeForStatus] = useState<any>(null);
@@ -38,6 +42,36 @@ export default function EmployeesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefill = searchParams.get("prefill");
+
+  const { options: departmentOptions } = useDepartmentOptions();
+  const { data: designations = [] } = useDesignations();
+
+  const designationOptions = (designations || [])
+    .filter(d => d.isActive)
+    .map(d => ({ value: d._id || d.id, label: d.name }));
+
+  const employmentStatusOptions = [
+    { value: "ACTIVE", label: "Active" },
+    { value: "ON_LEAVE", label: "On Leave" },
+    { value: "SUSPENDED", label: "Suspended" },
+    { value: "TERMINATED", label: "Terminated" },
+    { value: "RESIGNED", label: "Resigned" },
+  ];
+
+  const employmentTypeOptions = [
+    { value: "FULL_TIME", label: "Full Time" },
+    { value: "PART_TIME", label: "Part Time" },
+    { value: "CONTRACT", label: "Contract" },
+    { value: "INTERN", label: "Intern" },
+  ];
+
+  const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
+    { name: "department_id", label: "Department", type: "select", searchable: true, options: departmentOptions },
+    { name: "designation_id", label: "Designation", type: "select", searchable: true, options: designationOptions },
+    { name: "employment_status", label: "Status", type: "status", options: employmentStatusOptions },
+    { name: "employment_type", label: "Type", type: "select", options: employmentTypeOptions },
+  ];
 
   const prefillData = useMemo(() => {
     if (!prefill) return null;
@@ -55,7 +89,7 @@ export default function EmployeesPage() {
   }, [searchParams, prefill]);
 
   const { data: employees = [], isLoading } = useEmployees(
-    query ? { search: query } : undefined
+    Object.keys(filters).length > 0 ? filters : undefined
   );
   const permissions = useSelector(
     (state: RootState) => state.permissions.permissions
@@ -590,15 +624,11 @@ export default function EmployeesPage() {
       <StatsCards stats={employeeStats} />
 
       <div className="mb-4">
-        <div className="relative max-w-md">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search employees by ID, name, department, designation..."
-            className="w-full bg-background pl-9 pr-3 h-9 rounded-md text-sm outline-none focus:ring-2 focus:ring-ring border border-border"
-          />
-        </div>
+        <FilterBar
+          fields={filterFields}
+          filters={filters}
+          onChange={setFilters}
+        />
       </div>
 
       {viewMode === "table" ? (

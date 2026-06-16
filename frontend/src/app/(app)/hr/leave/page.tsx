@@ -10,6 +10,8 @@ import PageHeader from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { TableView, Column } from "@/components/reuseable/TableGridView";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
 import { LeaveFormModal } from "@/components/leave/LeaveFormModal";
 import { LeaveDetailDrawer } from "@/components/leave/LeaveDetailDrawer";
 import { LeaveCard } from "@/components/leave/LeaveCard";
@@ -55,7 +57,22 @@ export default function LeaveManagementPage() {
   const [isApplyOpen, setIsApplyOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedLeave, setSelectedLeave] = useState<any>(null);
+  const [filters, setFilters] = useState<Record<string, string>>({});
 
+  const leaveTypeOptions = LEAVE_TYPES.map(t => ({ value: t.value, label: t.label }));
+
+  const leaveStatusOptions = [
+    { value: "PENDING", label: "Pending" },
+    { value: "APPROVED", label: "Approved" },
+    { value: "REJECTED", label: "Rejected" },
+    { value: "CANCELLED", label: "Cancelled" },
+  ];
+
+  const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
+    { name: "leave_type", label: "Leave Type", type: "select", options: leaveTypeOptions },
+    { name: "status", label: "Status", type: "status", options: leaveStatusOptions },
+  ];
 
     const permissions = useSelector(
   (state: RootState) => state.permissions.permissions
@@ -68,7 +85,9 @@ const leavePermissions = getPermissions(
 );
 
   // Fetch data with React Query
-  const { data: leaves = [], refetch: refetchLeaves, isLoading: leavesLoading } = useLeaves();
+  const { data: leaves = [], refetch: refetchLeaves, isLoading: leavesLoading } = useLeaves(
+    Object.keys(filters).length > 0 ? filters : undefined
+  );
   const { data: employees = [] } = useActiveEmployees();
   const { data: stats, refetch: refetchStats } = useLeaveStats();
 
@@ -405,6 +424,15 @@ const leavePermissions = getPermissions(
 
       {/* Stats Cards */}
       <StatsCards stats={statsCards} />
+
+      {/* Filters */}
+      <div className="mb-4">
+        <FilterBar
+          fields={filterFields}
+          filters={filters}
+          onChange={setFilters}
+        />
+      </div>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">

@@ -226,10 +226,19 @@ class UserListView(PermissionRequiredMixin, generics.ListCreateAPIView):
     serializer_class = UserProfileSerializer
 
     def get_queryset(self):
-        return User.objects.filter(
+        qs = User.objects.filter(
             company=self.request.user.company,
             is_deleted=False
         )
+        search = self.request.query_params.get('search')
+        if search:
+            qs = qs.filter(
+                Q(username__icontains=search) |
+                Q(email__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search)
+            )
+        return qs
 
     def perform_create(self, serializer):
         # Let the serializer handle the department field (which is a UUID from frontend)

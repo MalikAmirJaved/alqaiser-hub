@@ -3,6 +3,8 @@
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Package, Building2 } from 'lucide-react';
+import FilterBar from '@/components/reuseable/FilterBar';
+import type { FilterField } from '@/components/reuseable/FilterBar';
 import { useFeaturePermissions } from '@/hooks/useFeaturePermissions';
 import {
   usePurchaseOrders,
@@ -112,9 +114,7 @@ export default function PurchaseOrdersPage() {
     quantity: number;
     under_date: string;
   } | null>(null);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [supplierFilter, setSupplierFilter] = useState('');
+  const [filters, setFilters] = useState<Record<string, string>>({});
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = useMemo(() => ({
@@ -131,9 +131,20 @@ export default function PurchaseOrdersPage() {
     return names as string[];
   }, [orders]);
 
+  const statusOptions = Object.entries(STATUS_CONFIG).map(([val, { label }]) => ({ value: val, label }));
+  const supplierOptions = suppliers.map((s) => ({ value: s, label: s }));
+
+  const filterFields: FilterField[] = [
+    { name: 'search', label: 'Search', type: 'search' },
+    { name: 'status', label: 'Status', type: 'status', options: statusOptions },
+    { name: 'supplier', label: 'Supplier', type: 'select', searchable: true, options: supplierOptions },
+  ];
+
   // ── Filtered orders ───────────────────────────────────────────────────────
   const filtered = useMemo(() => {
-    const q = search.toLowerCase();
+    const q = (filters.search || '').toLowerCase();
+    const statusFilter = filters.status || '';
+    const supplierFilter = filters.supplier || '';
     return orders.filter((o) => {
       const matchQ =
         !q ||
@@ -144,7 +155,7 @@ export default function PurchaseOrdersPage() {
       const matchSupplier = !supplierFilter || o.supplier_name === supplierFilter;
       return matchQ && matchStatus && matchSupplier;
     });
-  }, [orders, search, statusFilter, supplierFilter]);
+  }, [orders, filters]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleView = (order: PurchaseOrder) =>
@@ -249,44 +260,12 @@ export default function PurchaseOrdersPage() {
         ]}
       />
 
-      {/* Toolbar */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none"
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-          >
-            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-          </svg>
-          <input
-            type="text"
-            placeholder="Search by order number, supplier, warehouse…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-        </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none"
-        >
-          <option value="">All statuses</option>
-          {Object.entries(STATUS_CONFIG).map(([val, { label }]) => (
-            <option key={val} value={val}>{label}</option>
-          ))}
-        </select>
-        <select
-          value={supplierFilter}
-          onChange={(e) => setSupplierFilter(e.target.value)}
-          className="px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none"
-        >
-          <option value="">All suppliers</option>
-          {suppliers.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-      </div>
+      {/* FilterBar */}
+      <FilterBar
+        fields={filterFields}
+        filters={filters}
+        onChange={setFilters}
+      />
 
       {/* Table */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">

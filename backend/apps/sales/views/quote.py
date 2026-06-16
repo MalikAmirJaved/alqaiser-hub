@@ -3,24 +3,26 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.db import transaction
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.sales.models.quote import Quote
 from apps.sales.serializers.quote import QuoteSerializer
 
 
-class QuoteViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'SALES'
     permission_resource = 'quote'
     queryset = Quote.objects.all()
     serializer_class = QuoteSerializer
     lookup_field = '_id'
+    filter_fields = {
+        'status': 'status',
+        'search': ['quote_number', 'customer__name'],
+    }
 
     def get_queryset(self):
         qs = super().get_queryset()
         qs = qs.prefetch_related('lines__variant__product')
-        status_param = self.request.query_params.get('status')
-        if status_param:
-            qs = qs.filter(status=status_param)
         return qs.order_by('-created_at')
 
     def create(self, request, *args, **kwargs):

@@ -2,12 +2,13 @@ from rest_framework import viewsets, status
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter, SearchFilter
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.finance.models import JournalEntry
 from apps.finance.serializers import JournalEntrySerializer
 from apps.finance.mixins import CompanyBranchUserMixin
 
-class JournalEntryViewSet(CompanyBranchUserMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+class JournalEntryViewSet(GenericFilterMixin, CompanyBranchUserMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     queryset = JournalEntry.objects.all()
     serializer_class = JournalEntrySerializer
     permission_module = 'FINANCE'
@@ -24,6 +25,10 @@ class JournalEntryViewSet(CompanyBranchUserMixin, CompanyBranchMixin, Permission
     }
     ordering_fields = ['date', 'entry_number', 'created_at']
     search_fields = ['entry_number', 'description']
+    filter_fields = {
+        'search': ['entry_number', 'description'],
+        'is_posted': 'is_posted',
+    }
 
     def get_queryset(self):
         # Ensure only current tenant's data

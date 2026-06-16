@@ -11,6 +11,7 @@ import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Edit, Trash2 } from "lucide-react";
+import FilterBar, { FilterField } from "@/components/reuseable/FilterBar";
 import { useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier, type Supplier } from "@/hooks/useSuppliers";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useRouter } from 'next/navigation';
@@ -66,13 +67,23 @@ export default function SuppliersPage() {
   const [selectedItem, setSelectedItem] = useState<Supplier | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Supplier | null>(null);
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const { confirm, Modal: ConfirmationModal } = useConfirmationModal();
   const router = useRouter();
+
+  const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
+    { name: "status", label: "Status", type: "status", options: [
+      { value: "active", label: "Active" },
+      { value: "inactive", label: "Inactive" },
+      { value: "suspended", label: "Suspended" },
+    ] },
+  ];
 
   const { generateCode, validateCode } = useAutoCode("supplier");
 
   // Suppliers hooks
-  const { data: suppliers, isLoading: suppliersLoading } = useSuppliers();
+  const { data: suppliers, isLoading: suppliersLoading } = useSuppliers(filters);
   const createSupplier = useCreateSupplier();
   const updateSupplier = useUpdateSupplier();
   const deleteSupplier = useDeleteSupplier();
@@ -183,7 +194,11 @@ export default function SuppliersPage() {
           {/* Stats Cards */}
           <StatsCards stats={stats} className="mt-6" />
 
-          <div className="mt-6">
+          <div className="mt-4">
+            <FilterBar fields={filterFields} filters={filters} onChange={setFilters} />
+          </div>
+
+          <div className="mt-4">
             <TableView
               columns={tableColumns}
               data={suppliers || []}

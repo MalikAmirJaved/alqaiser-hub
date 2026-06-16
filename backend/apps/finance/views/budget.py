@@ -4,12 +4,14 @@ from rest_framework.response import Response
 from django.db.models import Sum
 from decimal import Decimal
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.finance.models import Budget, Account, JournalLine
 from apps.finance.serializers import BudgetSerializer
 from apps.finance.mixins import CompanyBranchUserMixin, SoftDeleteMixin
 
 class BudgetViewSet(
+    GenericFilterMixin,
     CompanyBranchUserMixin,
     CompanyBranchMixin,
     PermissionRequiredMixin,
@@ -22,18 +24,15 @@ class BudgetViewSet(
     permission_resource = 'budget'
     lookup_field = '_id'
     lookup_url_kwarg = '_id'
+    filter_fields = {
+        'account_id': 'account___id',
+        'year': 'year',
+        'period_type': 'period_type',
+        'account_type': 'account__account_type',
+    }
 
     def get_queryset(self):
         qs = super().get_queryset()
-        account_id = self.request.query_params.get('account_id')
-        year = self.request.query_params.get('year')
-        period_type = self.request.query_params.get('period_type')
-        if account_id:
-            qs = qs.filter(account_id=account_id)
-        if year:
-            qs = qs.filter(year=year)
-        if period_type:
-            qs = qs.filter(period_type=period_type)
         return qs
 
     def create(self, request, *args, **kwargs):

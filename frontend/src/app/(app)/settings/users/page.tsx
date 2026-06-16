@@ -3,7 +3,9 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from "@/hooks/useUsers";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Pencil, Trash2, Search, UserPlus, ToggleRight } from "lucide-react";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
+import { Plus, Pencil, Trash2, UserPlus, ToggleRight } from "lucide-react";
 import UserForm from "@/components/Forms/UserForm";
 import UserStatusModal from "@/components/UserStatusModal";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
@@ -13,14 +15,13 @@ export default function UsersPage() {
   const searchParams = useSearchParams();
   const permissions = useFeaturePermissions("SETTINGS", "user");
 
-  const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const [modalOpen, setModalOpen] = useState(false);
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [selectedUserForStatus, setSelectedUserForStatus] = useState<any>(null);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [storedPrefill, setStoredPrefill] = useState<any>(null);
 
-  const { data: users = [], isLoading } = useUsers();
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
@@ -100,13 +101,24 @@ export default function UsersPage() {
     }
   };
 
-  const filteredUsers = users.filter(
-    (u) =>
-      u.username?.toLowerCase().includes(query.toLowerCase()) ||
-      u.email?.toLowerCase().includes(query.toLowerCase()) ||
-      u.first_name?.toLowerCase().includes(query.toLowerCase()) ||
-      u.last_name?.toLowerCase().includes(query.toLowerCase())
+  const { data: users = [], isLoading } = useUsers(
+    Object.keys(filters).length > 0 ? filters : undefined
   );
+
+  // Only is_active is client-side (backend doesn't support server-side status filter for users)
+  const isActiveFilter = filters.is_active;
+  const filteredUsers = isActiveFilter
+    ? users.filter((u) => {
+        if (isActiveFilter === "true" && !u.is_active) return false;
+        if (isActiveFilter === "false" && u.is_active) return false;
+        return true;
+      })
+    : users;
+
+  const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
+    { name: "is_active", label: "Status", type: "boolean" },
+  ];
 
   if (isLoading) {
     return (
@@ -137,18 +149,14 @@ export default function UsersPage() {
         }
       />
 
-      {/* Search */}
+      {/* Filters */}
       <div className="bg-card border border-border rounded-2xl shadow-sm">
         <div className="p-3 border-b border-border">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search users..."
-              className="w-full bg-muted/40 pl-9 pr-3 h-9 rounded-md text-sm outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
+          <FilterBar
+            fields={filterFields}
+            filters={filters}
+            onChange={setFilters}
+          />
         </div>
 
         <div className="overflow-x-auto">

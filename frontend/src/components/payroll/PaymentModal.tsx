@@ -90,21 +90,42 @@ export default function PaymentModal({
     [selectedLoanDeductions]
   );
 
+  // Calculate the per-month deduction for a loan in the current payroll period
+  const getLoanMonthlyDeduction = (loan: any): number => {
+    const freq = loan.frequency_type;
+    if (freq === 'SELECTED_MONTH' || freq === 'ONE_TIME') {
+      const matched = loan.selected_months?.find((sm: any) => sm.month === selectedMonth && sm.year === selectedYear);
+      if (matched) return parseFloat(String(matched.deduction ?? "0"));
+      if (freq === 'ONE_TIME') return parseFloat(loan.remaining_amount || "0");
+      return 0;
+    }
+    if (freq === 'MONTH_RANGE') {
+      const matched = loan.selected_months?.find((sm: any) => sm.month === selectedMonth && sm.year === selectedYear);
+      if (matched) return parseFloat(String(matched.deduction ?? "0"));
+      try {
+        const mr = loan.month_range;
+        if (mr) return parseFloat(String(mr.deduction ?? "0"));
+      } catch {}
+      return 0;
+    }
+    return parseFloat(loan.remaining_amount || "0");
+  };
+
   // Total from explicitly selected loans (once initialized)
   const totalFromSelections = useMemo(() =>
     selectedLoanIds.reduce((sum, id) => {
       const loan = allLoans.find(l => l.id === id);
-      return sum + (loan ? parseFloat(loan.remaining_amount || "0") : 0);
+      return sum + (loan ? getLoanMonthlyDeduction(loan) : 0);
     }, 0),
-    [selectedLoanIds, allLoans]
+    [selectedLoanIds, allLoans, selectedMonth, selectedYear]
   );
 
   // Fallback: total from active loans
   const totalFromAllActive = useMemo(() =>
     activeLoans.reduce((sum, loan) =>
-      sum + parseFloat(loan.remaining_amount || "0"), 0
+      sum + getLoanMonthlyDeduction(loan), 0
     ),
-    [activeLoans]
+    [activeLoans, selectedMonth, selectedYear]
   );
 
   // Use selections if active, otherwise fall back to all active loans

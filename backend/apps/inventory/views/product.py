@@ -6,6 +6,7 @@ from django.db.models import Q, F
 import uuid
 from decimal import Decimal
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import (
     Product, ProductVariant, StockItem, InventoryTransaction, Warehouse,
@@ -14,13 +15,19 @@ from apps.inventory.models import (
 from apps.inventory.serializers import ProductSerializer
 
 
-class ProductViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'INVENTORY'
     permission_resource = 'product'
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
     lookup_field = '_id'
     lookup_value_regex = '[0-9a-f-]+'
+    filter_fields = {
+        'search': ['product_name', 'variants__sku'],
+        'category': 'category___id',
+        'brand': 'brand___id',
+        'status': 'status',
+    }
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -32,30 +39,6 @@ class ProductViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Model
             'variants__variant_attributes',
             'variants__variant_images'
         )
-
-        search = self.request.query_params.get('search')
-        if search:
-            qs = qs.filter(product_name__icontains=search)
-
-        category_uuid = self.request.query_params.get('category')
-        if category_uuid:
-            try:
-                category = Category.objects.get(_id=category_uuid, company_id=user.company_id)
-                qs = qs.filter(category=category)
-            except Category.DoesNotExist:
-                qs = qs.none()
-
-        brand_uuid = self.request.query_params.get('brand')
-        if brand_uuid:
-            try:
-                brand = Brand.objects.get(_id=brand_uuid, company_id=user.company_id)
-                qs = qs.filter(brand=brand)
-            except Brand.DoesNotExist:
-                qs = qs.none()
-
-        status_filter = self.request.query_params.get('status')
-        if status_filter:
-            qs = qs.filter(status=status_filter)
 
         return qs
 

@@ -6,18 +6,26 @@ from django.utils import timezone
 import uuid
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import StockTransfer, StockItem, InventoryTransaction, ProductVariant, Warehouse
 from apps.inventory.serializers.transfer import StockTransferSerializer, StockTransferCreateSerializer
 
 
-class StockTransferViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+class StockTransferViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'INVENTORY'
     permission_resource = 'stock_transfer'
     queryset = StockTransfer.objects.all()
     serializer_class = StockTransferSerializer
     lookup_field = '_id'
     lookup_value_regex = '[0-9a-f-]+'
+    filter_fields = {
+        'status': 'status',
+        'variant_id': 'variant___id',
+        'source_warehouse': 'source_warehouse___id',
+        'destination_warehouse': 'destination_warehouse___id',
+        'search': ['transfer_number', 'variant__sku'],
+    }
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -26,36 +34,6 @@ class StockTransferViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets
 
     def get_queryset(self):
         qs = super().get_queryset()
-        user = self.request.user
-
-        status_filter = self.request.query_params.get('status')
-        if status_filter:
-            qs = qs.filter(status=status_filter)
-
-        variant_uuid = self.request.query_params.get('variant_id')
-        if variant_uuid:
-            try:
-                variant = ProductVariant.objects.get(_id=variant_uuid, company_id=user.company_id)
-                qs = qs.filter(variant=variant)
-            except ProductVariant.DoesNotExist:
-                qs = qs.none()
-
-        src_uuid = self.request.query_params.get('source_warehouse')
-        if src_uuid:
-            try:
-                src = Warehouse.objects.get(_id=src_uuid, company_id=user.company_id)
-                qs = qs.filter(source_warehouse=src)
-            except Warehouse.DoesNotExist:
-                qs = qs.none()
-
-        dst_uuid = self.request.query_params.get('destination_warehouse')
-        if dst_uuid:
-            try:
-                dst = Warehouse.objects.get(_id=dst_uuid, company_id=user.company_id)
-                qs = qs.filter(destination_warehouse=dst)
-            except Warehouse.DoesNotExist:
-                qs = qs.none()
-
         return qs.order_by('-created_at')
 
     def create(self, request, *args, **kwargs):

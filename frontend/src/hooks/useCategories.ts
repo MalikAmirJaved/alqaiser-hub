@@ -20,19 +20,31 @@ interface PaginatedResponse<T> {
 }
 
 // Fetch all categories
-export function useCategories(search?: string) {
+// Backward compatible: accepts string (search) or object (filters)
+export function useCategories(filters?: Record<string, string> | string) {
   const api = useApi();
-
-  const url = search
-    ? `/api/inventory/categories/?search=${encodeURIComponent(search)}`
-    : "/api/inventory/categories/";
+  
+  // Support old string-based usage
+  if (typeof filters === 'string') {
+    filters = { search: filters };
+  }
+  if (!filters) {
+    filters = {};
+  }
+  
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, val]) => {
+    if (val) params.append(key, val);
+  });
+  const queryString = params.toString();
+  const url = `/api/inventory/categories/${queryString ? `?${queryString}` : ""}`;
 
   return useQuery<
     PaginatedResponse<Category>,
     Error,
     Category[]
   >({
-    queryKey: ["inventory_category", search],
+    queryKey: ["inventory_category", filters],
     queryFn: () => api<PaginatedResponse<Category>>(url),
     select: (data) => data.results,
     staleTime: 30 * 1000,

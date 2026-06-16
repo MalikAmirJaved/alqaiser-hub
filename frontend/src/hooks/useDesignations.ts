@@ -35,12 +35,15 @@ export interface DesignationEmployee {
 }
 
 // Fetch all designations
-export function useDesignations() {
+export function useDesignations(filters?: Record<string, string>) {
   const api = useApi();
+  const queryString = filters && Object.keys(filters).length > 0
+    ? '?' + new URLSearchParams(filters).toString()
+    : '';
   return useQuery<Designation[]>({
-    queryKey: ["designations"],
+    queryKey: ["designations", filters],
     queryFn: async () => {
-      const response = await api("/api/company/designations/") as any;;
+      const response = await api(`/api/company/designations/${queryString}`) as any;
       // If response has 'results' property (paginated), return that, else assume array
       return response.results ?? response;
     },

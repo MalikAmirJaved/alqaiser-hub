@@ -5,10 +5,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions, type Kpi } from "@/components/reuseable/final/DynamicModulePage";
-import { usePayments, useDeletePayment, type Payment } from "@/hooks/finance/usePayments";
+import { usePayments, useDeletePayment, type Payment, paymentTypeOptions } from "@/hooks/finance/usePayments";
+import { useSuppliers } from "@/hooks/useSuppliers";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatusBadge } from "@/components/finance/ui";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
 import PaymentFormModal from "@/components/finance/payments/PaymentFormModal";
 
 // Helper function to safely convert amount to number
@@ -22,8 +25,28 @@ export default function PaymentsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [filters, setFilters] = useState<Record<string, string>>({});
 
-  const { data: payments, isLoading } = usePayments();
+  const { data: suppliers = [] } = useSuppliers();
+  const supplierOptions = suppliers.map(s => ({ value: s.id, label: s.name }));
+
+  const filterFields: FilterField[] = [
+    { name: "payment_type", label: "Type", type: "select", options: paymentTypeOptions },
+    { name: "supplier", label: "Supplier/Customer", type: "select", searchable: true, options: supplierOptions },
+    { name: "start_date", label: "From", type: "date" },
+    { name: "end_date", label: "To", type: "date" },
+  ];
+
+  const { data: payments, isLoading } = usePayments(
+    Object.keys(filters).length > 0
+      ? {
+          payment_type: (filters.payment_type as "RECEIPT" | "PAYMENT") || undefined,
+          supplier: filters.supplier || undefined,
+          start_date: filters.start_date || undefined,
+          end_date: filters.end_date || undefined,
+        }
+      : undefined
+  );
   const deletePayment = useDeletePayment();
   const permissions = useFeaturePermissions("FINANCE", "payment");
 
@@ -124,6 +147,13 @@ export default function PaymentsPage() {
         onRowClick={handleRowClick}
         exportEnabled={permissions.export}
         onRowSelect={setSelectedIds}
+        filterBar={
+          <FilterBar
+            fields={filterFields}
+            filters={filters}
+            onChange={setFilters}
+          />
+        }
         batchActions={
           <button
             onClick={() => {

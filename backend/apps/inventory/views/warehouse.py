@@ -3,48 +3,29 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.db.models import Q
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import Warehouse
 from apps.inventory.serializers import WarehouseSerializer
 
 
-class WarehouseViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+class WarehouseViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'INVENTORY'
     permission_resource = 'warehouse'
     queryset = Warehouse.objects.all()
     serializer_class = WarehouseSerializer
     lookup_field = '_id'
     lookup_value_regex = '[0-9a-f-]+'
+    filter_fields = {
+        'search': ['warehouse_name', 'code', 'city', 'state', 'country'],
+        'is_active': 'is_active',
+        'country': 'country__icontains',
+        'state': 'state__icontains',
+        'city': 'city__icontains',
+    }
 
     def get_queryset(self):
         qs = super().get_queryset()
-
-        search = self.request.query_params.get('search')
-        if search:
-            qs = qs.filter(
-                Q(warehouse_name__icontains=search) |
-                Q(code__icontains=search) |
-                Q(city__icontains=search) |
-                Q(state__icontains=search) |
-                Q(country__icontains=search)
-            )
-
-        is_active = self.request.query_params.get('is_active')
-        if is_active is not None:
-            qs = qs.filter(is_active=is_active.lower() == 'true')
-
-        country = self.request.query_params.get('country')
-        if country:
-            qs = qs.filter(country__icontains=country)
-
-        state = self.request.query_params.get('state')
-        if state:
-            qs = qs.filter(state__icontains=state)
-
-        city = self.request.query_params.get('city')
-        if city:
-            qs = qs.filter(city__icontains=city)
-
         return qs
 
     def create(self, request, *args, **kwargs):

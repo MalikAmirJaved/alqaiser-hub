@@ -9,6 +9,7 @@ from datetime import timedelta
 import uuid
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import (
     StockItem, InventoryTransaction, StockReservation, ProductVariant
@@ -111,27 +112,21 @@ def sync_sales_order_to_invoice(order, user):
             )
 
 
-class SalesOrderViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+class SalesOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'INVENTORY'
     permission_resource = 'sales_order'
     queryset = SalesOrder.objects.all()
     serializer_class = SalesOrderSerializer
     lookup_field = '_id'
+    filter_fields = {
+        'status': 'status',
+        'customer': 'customer___id',
+        'search': ['order_number', 'customer__name'],
+    }
 
     def get_queryset(self):
         qs = super().get_queryset()
         qs = qs.prefetch_related('lines__variant__product')
-        status_param = self.request.query_params.get('status')
-        if status_param:
-            qs = qs.filter(status=status_param)
-        customer_uuid = self.request.query_params.get('customer')
-        if customer_uuid:
-            from apps.inventory.models import Customer
-            try:
-                customer = Customer.objects.get(_id=customer_uuid, company_id=self.request.user.company_id)
-                qs = qs.filter(customer_id=customer.id)
-            except Customer.DoesNotExist:
-                return qs.none()
         return qs
 
     def create(self, request, *args, **kwargs):
@@ -593,26 +588,20 @@ class SalesOrderViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Mo
         return f"SO-{int(time.time())}-{random.randint(1000, 9999)}"
 
 
-class SalesReturnViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+class SalesReturnViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'INVENTORY'
     permission_resource = 'sales_order'
     queryset = SalesReturn.objects.all()
     serializer_class = SalesReturnSerializer
     lookup_field = '_id'
+    filter_fields = {
+        'status': 'status',
+        'sales_order': 'sales_order___id',
+    }
 
     def get_queryset(self):
         qs = super().get_queryset()
         qs = qs.select_related('sales_order', 'warehouse').prefetch_related('lines__sales_order_line__variant__product')
-        status = self.request.query_params.get('status')
-        if status:
-            qs = qs.filter(status=status)
-        sales_order_uuid = self.request.query_params.get('sales_order')
-        if sales_order_uuid:
-            try:
-                sales_order = SalesOrder.objects.get(_id=sales_order_uuid, company_id=self.request.user.company_id)
-                qs = qs.filter(sales_order_id=sales_order.id)
-            except SalesOrder.DoesNotExist:
-                return qs.none()
         return qs
 
     def create(self, request, *args, **kwargs):

@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
-import { useExpenses, useDeleteExpense, expenseCategoryLabels } from "@/hooks/finance/useExpenses";
+import { useExpenses, useDeleteExpense, expenseCategoryLabels, expenseCategoryOptions } from "@/hooks/finance/useExpenses";
 import { usePaySupplierBill } from "@/hooks/finance/useSupplierBills";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
 import { Trash2, Send } from "lucide-react";
 import ExpenseFormModal from "@/components/finance/expenses/ExpenseFormModal";
 
@@ -16,9 +18,22 @@ export default function ExpensesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const paySupplierBill = usePaySupplierBill();
-  const { data: expenses, isLoading } = useExpenses();
+  const { data: expenses, isLoading } = useExpenses(
+    Object.keys(filters).length > 0
+      ? {
+          category: filters.category || undefined,
+          paid: filters.paid ? filters.paid === "true" : undefined,
+        }
+      : undefined
+  );
   const deleteExpense = useDeleteExpense();
+  const filterFields: FilterField[] = [
+    { name: "category", label: "Category", type: "select", searchable: true, options: expenseCategoryOptions },
+    { name: "paid", label: "Payment", type: "boolean" },
+  ];
+
   const permissions = useFeaturePermissions("FINANCE", "expense");
   
   const modulePermissions: ModulePermissions = {
@@ -206,6 +221,13 @@ export default function ExpensesPage() {
         onRowClick={handleRowClick}
         exportEnabled={permissions.export}
         onRowSelect={setSelectedIds}
+        filterBar={
+          <FilterBar
+            fields={filterFields}
+            filters={filters}
+            onChange={setFilters}
+          />
+        }
         batchActions={
           <>
             <button

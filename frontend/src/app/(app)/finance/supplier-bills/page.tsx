@@ -6,8 +6,11 @@ import { DynamicModulePage, type ModulePermissions } from "@/components/reuseabl
 import { useSupplierBills, useDeleteSupplierBill, usePaySupplierBill } from "@/hooks/finance/useSupplierBills";
 import { StatusBadge } from "@/components/finance/ui";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { useSuppliers } from "@/hooks/useSuppliers";
 import SupplierBillFormModal from "@/components/finance/supplier-bills/SupplierBillFormModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
 import { Trash2, Send } from "lucide-react";
 
 
@@ -17,8 +20,27 @@ export default function SupplierBillsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingBill, setEditingBill] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [filters, setFilters] = useState<Record<string, string>>({});
 
-  const { data: bills, isLoading } = useSupplierBills();
+  const { data: suppliers = [] } = useSuppliers();
+  const supplierOptions = suppliers.map(s => ({ value: s.id, label: s.name }));
+
+  const filterFields: FilterField[] = [
+    { name: "supplier", label: "Supplier", type: "select", searchable: true, options: supplierOptions },
+    { name: "status", label: "Status", type: "status", options: [
+      { value: "DRAFT", label: "Draft" },
+      { value: "CANCELLED", label: "Cancelled" },
+    ]},
+  ];
+
+  const { data: bills, isLoading } = useSupplierBills(
+    Object.keys(filters).length > 0
+      ? {
+          status: filters.status || undefined,
+          supplier: filters.supplier || undefined,
+        }
+      : undefined
+  );
 
   const deleteBill = useDeleteSupplierBill();
   const payBill = usePaySupplierBill();
@@ -116,6 +138,13 @@ export default function SupplierBillsPage() {
         onRowClick={handleRowClick}
         exportEnabled={permissions.export}
         onRowSelect={setSelectedIds}
+        filterBar={
+          <FilterBar
+            fields={filterFields}
+            filters={filters}
+            onChange={setFilters}
+          />
+        }
         batchActions={
           <>
             <button

@@ -1,14 +1,16 @@
 // src/app/recruitment/page.tsx
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import {
-  Search, Plus, Trash2, Pencil, UserCheck,
-  Users, FileText, X, Loader2, Briefcase, Eye,
-  ChevronRight, ChevronLeft, RotateCcw, Link2,
+  Plus, Trash2, Pencil, UserCheck,
+  Users, FileText, Loader2, Briefcase, Eye, X,
+  ChevronRight, ChevronLeft, Link2,
   Building2, Clock, Banknote, CalendarDays, Phone, Mail
 } from "lucide-react";
 import {
@@ -142,9 +144,7 @@ function Avatar({ name, size = "sm" }: { name: string; size?: "sm" | "md" }) {
 export default function RecruitmentPage() {
   const router = useRouter();
   const permissions = useFeaturePermissions("HR", "recruitment");
-  const [query, setQuery] = useState("");
-  const [filterDept, setFilterDept] = useState("");
-  const [filterStage, setFilterStage] = useState("");
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<RecruitmentRecord | null>(null);
   const [roundsModalOpen, setRoundsModalOpen] = useState(false);
@@ -154,10 +154,16 @@ export default function RecruitmentPage() {
   const [deleteTarget, setDeleteTarget] = useState<RecruitmentRecord | null>(null);
   const pageSize = 20;
 
+  // Reset page when filters change
+  const handleFilterChange = useCallback((newFilters: Record<string, string>) => {
+    setFilters(newFilters);
+    setPage(1);
+  }, []);
+
   const { data: recruitmentData, isLoading: loading, refetch } = useRecruitment({
-    search: query || undefined,
-    department: filterDept || undefined,
-    stage: filterStage || undefined,
+    search: filters.search || undefined,
+    department: filters.department || undefined,
+    stage: filters.stage || undefined,
     page,
     page_size: pageSize,
   });
@@ -165,9 +171,15 @@ export default function RecruitmentPage() {
   const { data: statsData } = useRecruitmentStats();
   const { data: employeesData } = useActiveEmployees();
   const { data: departments } = useDepartments();
-  const departmentOptions = (departments || [])
+  const departmentOptions = useMemo(() => (departments || [])
     .filter(d => d.is_active)
-    .map(d => ({ value: d.code, label: d.name }));
+    .map(d => ({ value: d.code, label: d.name })), [departments]);
+
+  const filterFields: FilterField[] = useMemo(() => [
+    { name: "search", label: "Search", type: "search" },
+    { name: "department", label: "Department", type: "select", searchable: true, options: departmentOptions },
+    { name: "stage", label: "Stage", type: "select", options: STAGES },
+  ], [departmentOptions]);
 
   const { data: roundsData, refetch: refetchRounds } = useInterviewRounds(
     roundsModalOpen && selectedCandidate?.id ? selectedCandidate.id : undefined
@@ -192,7 +204,7 @@ export default function RecruitmentPage() {
     { label: "Rejected",         value: statsData?.rejected ?? 0,         color: "text-red-600" },
   ], [statsData]);
 
-  const hasActiveFilters = query || filterDept || filterStage;
+  const hasActiveFilters = Object.values(filters).some(v => !!v);
 
   // ==========================================
   // ACTIONS
@@ -251,12 +263,10 @@ export default function RecruitmentPage() {
     }
   };
 
-  const clearFilters = () => {
-    setQuery("");
-    setFilterDept("");
-    setFilterStage("");
+  const clearFilters = useCallback(() => {
+    setFilters({});
     setPage(1);
-  };
+  }, []);
 
   // ==========================================
   // RENDER
@@ -290,41 +300,12 @@ export default function RecruitmentPage() {
 />
 
       {/* Filters */}
-      <div className="bg-card border border-border rounded-xl p-3 flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1 min-w-0">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-          <input
-            value={query}
-            onChange={e => { setQuery(e.target.value); setPage(1); }}
-            placeholder="Search by name, email, position, company…"
-            className="w-full bg-muted/40 pl-9 pr-3 h-9 rounded-lg text-sm outline-none focus:ring-2 focus:ring-ring"
-          />
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <SearchableSelect
-            value={filterDept}
-            onChange={v => { setFilterDept(v); setPage(1); }}
-            options={departmentOptions}
-            placeholder="Department"
-            className="w-44"
-          />
-          <SearchableSelect
-            value={filterStage}
-            onChange={v => { setFilterStage(v); setPage(1); }}
-            options={STAGES}
-            placeholder="Stage"
-            className="w-36"
-          />
-          {hasActiveFilters && (
-            <button
-              onClick={clearFilters}
-              className="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg border border-border text-sm text-muted-foreground hover:bg-muted transition-colors"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              Clear
-            </button>
-          )}
-        </div>
+      <div className="bg-card border border-border rounded-xl p-4">
+        <FilterBar
+          fields={filterFields}
+          filters={filters}
+          onChange={handleFilterChange}
+        />
       </div>
 
       {/* Table */}

@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
 import { useJournalEntries, type JournalEntry } from "@/hooks/finance/useJournalEntries";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
 
 const toNumber = (value: number | string): number => {
   return typeof value === "string" ? parseFloat(value) : value;
@@ -14,18 +16,34 @@ const toNumber = (value: number | string): number => {
 export default function JournalEntriesPage() {
     const formatCurrency = useFormatCurrency();
   const router = useRouter();
-  const [referenceType, setReferenceType] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [entryNumber, setEntryNumber] = useState("");
+  const [filters, setFilters] = useState<Record<string, string>>({});
 
-  const { data: entries, isLoading } = useJournalEntries({
-    date__gte: startDate || undefined,
-    date__lte: endDate || undefined,
-    entry_number: entryNumber || undefined,
-    reference_type: referenceType || undefined,
-    ordering: "-date",
-  });
+  // Build API filters from FilterBar state
+  const journalFilters = useMemo(() => {
+    const apiFilters: Record<string, string> = {};
+    if (filters.date__gte) apiFilters.date__gte = filters.date__gte;
+    if (filters.date__lte) apiFilters.date__lte = filters.date__lte;
+    if (filters.reference_type) apiFilters.reference_type = filters.reference_type;
+    if (filters.is_posted) apiFilters.is_posted = filters.is_posted;
+    apiFilters.ordering = "-date";
+    return apiFilters;
+  }, [filters]);
+
+  const filterFields: FilterField[] = [
+    { name: "date__gte", label: "From Date", type: "date" },
+    { name: "date__lte", label: "To Date", type: "date" },
+    { name: "reference_type", label: "Reference", type: "select", options: [
+      { value: "", label: "All References" },
+      { value: "MANUAL", label: "Manual" },
+      { value: "INVOICE", label: "Invoice" },
+      { value: "EXPENSE", label: "Expense" },
+      { value: "PAYMENT", label: "Payment" },
+      { value: "BILL", label: "Bill" },
+    ]},
+    { name: "is_posted", label: "Status", type: "boolean" },
+  ];
+
+  const { data: entries, isLoading } = useJournalEntries(journalFilters);
 
   const permissions = useFeaturePermissions("FINANCE", "journal_entrie");
   const modulePermissions: ModulePermissions = {
@@ -109,6 +127,13 @@ export default function JournalEntriesPage() {
         onCreate={undefined}
         onRowClick={handleRowClick}
         exportEnabled={permissions.export}
+        filterBar={
+          <FilterBar
+            fields={filterFields}
+            filters={filters}
+            onChange={setFilters}
+          />
+        }
         // No batch actions for journal entries
       />
     </>

@@ -4,18 +4,22 @@ import { useState } from "react";
 import { useAlerts, useMarkAlertsRead, type Alert } from "@/hooks/useAlerts";
 import { TableView, type Column } from "@/components/reuseable/TableGridView";
 import { StatsCards } from "@/components/reuseable/StatsCards";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
 import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
 import PageHeader from "@/components/PageHeader";
 import { CheckCircle, Bell } from "lucide-react";
 
 export default function AlertsPage() {
-  const [filters, setFilters] = useState({
-    page: 1,
-    page_size: 50,
-  });
+  const [filterState, setFilterState] = useState<Record<string, string>>({});
+  const [page, setPage] = useState(1);
 
-  const { data, isLoading, refetch } = useAlerts(filters.page, filters.page_size);
+  const { data, isLoading, refetch } = useAlerts(page, 50, {
+    search: filterState.search || undefined,
+    severity: filterState.severity || undefined,
+    is_read: filterState.is_read || undefined,
+  });
   const markRead = useMarkAlertsRead();
 
   const alerts = (data?.results || []) as (Alert & Record<string, unknown>)[];
@@ -23,6 +27,16 @@ export default function AlertsPage() {
   const unreadCount = alerts.filter((a) => !a.is_read).length;
   const criticalCount = alerts.filter((a) => a.severity === "critical").length;
   const warningCount = alerts.filter((a) => a.severity === "warning").length;
+
+  const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
+    { name: "severity", label: "Severity", type: "status", options: [
+      { value: "info", label: "Info" },
+      { value: "warning", label: "Warning" },
+      { value: "critical", label: "Critical" },
+    ]},
+    { name: "is_read", label: "Read Status", type: "boolean" },
+  ];
 
   const stats = [
     { id: "total", label: "Total Alerts", value: totalCount, valueClassName: "" },
@@ -111,6 +125,15 @@ export default function AlertsPage() {
       </PageHeader>
 
       <StatsCards stats={stats} />
+
+      {/* FilterBar */}
+      <div className="mb-4">
+        <FilterBar
+          fields={filterFields}
+          filters={filterState}
+          onChange={setFilterState}
+        />
+      </div>
 
       <TableView
         columns={columns}

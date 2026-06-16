@@ -1,35 +1,29 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
-from django.db.models import Q
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import Supplier
 from apps.inventory.serializers import SupplierSerializer
 
 
-class BaseSupplierViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+class BaseSupplierViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'INVENTORY'
     queryset = Supplier.objects.all()
     serializer_class = SupplierSerializer
     lookup_field = '_id'
     lookup_value_regex = '[0-9a-f-]+'
+    filter_fields = {
+        'search': ['name', 'code', 'email', 'phone', 'contact_person'],
+        'status': 'status',
+        'country': 'country__icontains',
+        'city': 'city__icontains',
+    }
 
     def get_queryset(self):
         qs = super().get_queryset()
 
         qs = qs.filter(partner_type=self.partner_type)
-
-        search = self.request.query_params.get('search')
-        if search:
-            qs = qs.filter(
-                Q(name__icontains=search) |
-                Q(code__icontains=search) |
-                Q(email__icontains=search)
-            )
-
-        status_param = self.request.query_params.get('status')
-        if status_param:
-            qs = qs.filter(status=status_param)
 
         sort_by = self.request.query_params.get('sort_by')
         sort_order = self.request.query_params.get('sort_order', 'asc')

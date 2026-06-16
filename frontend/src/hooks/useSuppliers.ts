@@ -28,16 +28,20 @@ export type PaginatedResponse<T> = {
 };
 
 // Fetch all suppliers
-export function useSuppliers() {
+export function useSuppliers(filters?: Record<string, string>) {
   const api = useApi();
+  const params = new URLSearchParams();
+  if (filters) {
+    Object.entries(filters).forEach(([key, val]) => {
+      if (val) params.append(key, val);
+    });
+  }
+  const url = `/api/inventory/suppliers/${params.toString() ? `?${params}` : ""}`;
 
   return useQuery<Supplier[]>({
-    queryKey: ["inventory_supplier"],
+    queryKey: ["inventory_supplier", filters],
     queryFn: async () => {
-      const res = await api<PaginatedResponse<Supplier>>(
-        "/api/inventory/suppliers/"
-      );
-
+      const res = await api<PaginatedResponse<Supplier>>(url);
       return res.results;
     },
   });

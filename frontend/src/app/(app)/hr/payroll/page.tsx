@@ -9,8 +9,10 @@ import PageHeader from "@/components/PageHeader";
 import PaymentModal from "@/components/payroll/PaymentModal";
 import PayslipModal from "@/components/payroll/PayslipModal";
 import MonthSelectorModal from "@/components/payroll/MonthSelectorModal";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
 import { useRouter } from "next/navigation";
-import { Search, Filter, Eye, CreditCard, Calendar, RefreshCw, Info } from "lucide-react";
+import { Eye, CreditCard, Calendar, RefreshCw, Info } from "lucide-react";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { getPermissions } from "@/lib/permissions";
 import { useSelector } from "react-redux";
@@ -32,8 +34,7 @@ export function PayrollPage({
 }) {
   const router = useRouter();
   const formatCurrency = useFormatCurrency();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [payslipModalOpen, setPayslipModalOpen] = useState(false);
@@ -170,16 +171,17 @@ const payrollPermissions = getPermissions(
       }
     }
 
-    const searchTerm = searchQuery.toLowerCase();
-    const matchesSearch =
+    const searchTerm = (filters.search || "").toLowerCase();
+    const matchesSearch = !searchTerm ||
       emp.first_name?.toLowerCase().includes(searchTerm) ||
       emp.last_name?.toLowerCase().includes(searchTerm) ||
       emp.department_name?.toLowerCase().includes(searchTerm) ||
       emp.designation_name?.toLowerCase().includes(searchTerm) ||
       emp.employee_id?.toLowerCase().includes(searchTerm);
     
+    const statusFilter = filters.status || "";
     const status = getPaymentStatus(emp.id);
-    const matchesStatus = statusFilter === "all" || status === statusFilter.toUpperCase();
+    const matchesStatus = !statusFilter || status === statusFilter.toUpperCase();
     
     return matchesSearch && matchesStatus;
   });
@@ -299,35 +301,20 @@ const handleRefresh = () => {
         </div>
       )}
 
+      {/* Filter Bar */}
+      <div className="mb-4">
+        <FilterBar
+          fields={[
+            { name: "search", label: "Search", type: "search" },
+            { name: "status", label: "Payment", type: "status", options: [{ value: "pending", label: "Pending" }, { value: "paid", label: "Paid" }] },
+          ]}
+          filters={filters}
+          onChange={setFilters}
+        />
+      </div>
+
       {/* Employee Payment Table */}
       <div className="bg-card border border-border rounded-2xl shadow-sm">
-        <div className="p-3 border-b border-border">
-          <div className="flex flex-col sm:flex-row gap-2">
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by name, department..."
-                className="w-full bg-muted/40 pl-9 pr-3 h-9 rounded-md text-sm outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-            <div className="flex gap-2">
-              <div className="relative">
-                <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="pl-9 pr-3 h-9 rounded-md border border-border bg-muted/40 text-sm outline-none"
-                >
-                  <option value="all">All</option>
-                  <option value="pending">Pending</option>
-                  <option value="paid">Paid</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">

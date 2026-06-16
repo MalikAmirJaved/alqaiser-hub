@@ -1,25 +1,23 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import PageHeader from "@/components/PageHeader";
-import { Search, Plus, Layers, Trash2, Pencil } from "lucide-react";
+import { Plus, Trash2, Pencil } from "lucide-react";
 import CategoryFormModal from "@/components/inventory/category/CategoryFormModal";
+import FilterBar, { FilterField } from "@/components/reuseable/FilterBar";
 import { useCategories, useDeleteCategory, Category } from "@/hooks/useCategories";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 export default function CategoriesPage() {
   const permissions = useFeaturePermissions("INVENTORY", "category");
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
 
-  // Debounce search
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedQuery(query), 400);
-    return () => clearTimeout(timer);
-  }, [query]);
+  const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
+  ];
 
-  const { data: items = [], isLoading, error } = useCategories(debouncedQuery);
+  const { data: items = [], isLoading } = useCategories(filters);
   const deleteCategory = useDeleteCategory();
 
   const handleDelete = (id: string) => {
@@ -48,18 +46,9 @@ export default function CategoriesPage() {
           )
         }
       />
+      <FilterBar fields={filterFields} filters={filters} onChange={setFilters} />
+
       <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-border flex gap-3">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by name or code..."
-              className="w-full bg-muted/20 pl-9 pr-3 h-10 rounded-xl outline-none focus:ring-2 focus:ring-primary/30 transition"
-            />
-          </div>
-        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/20 text-xs uppercase text-muted-foreground">

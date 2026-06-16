@@ -61,6 +61,7 @@ interface DynamicModulePageProps<T> {
   onRowSelect?: (selectedIds: string[]) => void;
   batchActions?: ReactNode;
   onRowClick?: (item: T) => void;
+  filterBar?: ReactNode;
 }
 
 export function DynamicModulePage<T>({
@@ -82,6 +83,7 @@ export function DynamicModulePage<T>({
   onRowSelect,
   batchActions,
   onRowClick,
+  filterBar,
 }: DynamicModulePageProps<T>) {
   const formatCurrency = useFormatCurrency();
   const { confirm, Modal: ConfirmModal } = useConfirmationModal();
@@ -218,6 +220,12 @@ export function DynamicModulePage<T>({
                 </Card>
               );
             })}
+          </div>
+        )}
+
+        {filterBar && (
+          <div className="bg-card border border-border rounded-xl p-4">
+            {filterBar}
           </div>
         )}
 

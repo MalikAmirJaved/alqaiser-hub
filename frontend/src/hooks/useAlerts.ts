@@ -20,14 +20,27 @@ export interface PaginatedResponse<T> {
 }
 type AlertsResponse = PaginatedResponse<Alert>;
 
-export function useAlerts(page = 1, pageSize = 20) {
+export interface AlertFilters {
+  search?: string;
+  severity?: string;
+  is_read?: string;
+}
+
+export function useAlerts(page = 1, pageSize = 20, filters?: AlertFilters) {
   const api = useApi();
 
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("page_size", String(pageSize));
+  if (filters?.search) params.set("search", filters.search);
+  if (filters?.severity) params.set("severity", filters.severity);
+  if (filters?.is_read) params.set("is_read", filters.is_read);
+
   return useQuery<AlertsResponse>({
-    queryKey: ["alerts", page, pageSize],
+    queryKey: ["alerts", page, pageSize, filters],
     queryFn: () =>
       api<AlertsResponse>(
-        `/api/inventory/alerts/?page=${page}&page_size=${pageSize}`
+        `/api/inventory/alerts/?${params.toString()}`
       ),
   });
 }
