@@ -366,7 +366,7 @@ class ExitRecordView(BaseExitView):
                 f'Settlement: {settlement_amount:.2f} | '
                 f'Loans settled: {total_loan_settled:.2f} | '
                 f'Advances settled: {total_advance_settled:.2f} '
-                f'| Payroll: {final_payroll.transaction_number}'
+                f'| Payroll: {transaction_number}'
             )
         else:
             result['settlement_note'] = (
@@ -601,15 +601,33 @@ class ExitFinalSettlementView(BaseExitView):
 
         lwd_month_start = date(lwd.year, lwd.month, 1)
 
-        prev_month = lwd_month_start - timedelta(days=1)
-        prev_month_paid = self._is_month_paid(employee, prev_month.month, prev_month.year)
+        # Walk backwards from LWD month to find the most recent PAID month
+        last_paid_month_end = None
+        cursor_check = lwd_month_start
+        while cursor_check >= date(join_date.year, join_date.month, 1):
+            m = cursor_check.month
+            y = cursor_check.year
+            if self._is_month_paid(employee, m, y):
+                # This month is paid — start from the next month
+                if m == 12:
+                    last_paid_month_end = date(y + 1, 1, 1)
+                else:
+                    last_paid_month_end = date(y, m + 1, 1)
+                break
+            # Move to previous month
+            if m == 1:
+                cursor_check = date(y - 1, 12, 1)
+            else:
+                cursor_check = date(y, m - 1, 1)
 
-        if join_date.month == lwd.month and join_date.year == lwd.year:
-            period_start = join_date
-        elif not prev_month_paid:
-            period_start = join_date
+        if last_paid_month_end is not None:
+            if join_date > last_paid_month_end:
+                period_start = join_date
+            else:
+                period_start = max(join_date, last_paid_month_end)
         else:
-            period_start = lwd_month_start
+            # No months paid — include all from join date
+            period_start = join_date
 
         period_end = lwd
 
@@ -631,6 +649,14 @@ class ExitFinalSettlementView(BaseExitView):
         while cursor <= period_end:
             month = cursor.month
             year = cursor.year
+
+            # Skip months already paid via regular payroll
+            if self._is_month_paid(employee, month, year):
+                if month == 12:
+                    cursor = date(year + 1, 1, 1)
+                else:
+                    cursor = date(year, month + 1, 1)
+                continue
 
             month_start = max(period_start, cursor)
             if month == 12:
@@ -712,7 +738,7 @@ class ExitFinalSettlementView(BaseExitView):
             'last_working_day': lwd.isoformat(),
             'period_start': period_start.isoformat(),
             'period_end': period_end.isoformat(),
-            'prev_month_paid': prev_month_paid,
+            'prev_month_paid': last_paid_month_end is not None and last_paid_month_end > lwd_month_start,
             'days_in_month': days_in_month,
             'daily_rate': str(daily_rate),
             'original_base_salary': str(original_base_salary),

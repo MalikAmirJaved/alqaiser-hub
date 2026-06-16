@@ -44,6 +44,24 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
         ],
     }
 
+    # -------------------- RETRIEVE --------------------
+    def retrieve(self, request, pk=None):
+        try:
+            stock_item = StockItem.objects.select_related(
+                'variant__product', 'warehouse'
+            ).get(
+                _id=pk,
+                company_id=request.user.company_id,
+            )
+        except StockItem.DoesNotExist:
+            return Response(
+                {'error': 'Stock item not found'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = StockItemSerializer(stock_item)
+        return Response(serializer.data)
+
     # -------------------- STOCK ADJUST --------------------
     @action(detail=False, methods=['post'])
     def adjust(self, request):
