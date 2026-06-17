@@ -109,7 +109,7 @@ export default function CompensationTab({ filteredCompensations, formatCurrency,
                         Reject
                       </Button>
                     )}
-                    {onEdit && (
+                    {item.status === 'PENDING' && onEdit && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -120,7 +120,7 @@ export default function CompensationTab({ filteredCompensations, formatCurrency,
                         <Pencil className="w-4 h-4" />
                       </Button>
                     )}
-                    {onDelete && (
+                    {item.status === 'PENDING' && onDelete && (
                       <Button
                         variant="ghost"
                         size="icon"
