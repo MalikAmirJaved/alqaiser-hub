@@ -120,14 +120,34 @@ export function useActiveEmployees() {
 // Fetch all employees
 export function useEmployees(params?: Record<string, string>) {
   const api = useApi();
-  const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
-  
+
+  const paramMap: Record<string, string> = {
+    department_id: "department",
+    designation_id: "designation",
+    employment_status: "status",
+    employment_type: "employmentType",
+  };
+
+  const apiParams = params
+    ? Object.fromEntries(
+        Object.entries(params).map(([key, value]) => [
+          paramMap[key] || key,
+          value,
+        ])
+      )
+    : undefined;
+
+  const queryString = apiParams
+    ? "?" + new URLSearchParams(apiParams).toString()
+    : "";
+
   return useQuery<Employee[]>({
-    queryKey: ["employees", params],
+    queryKey: ["employees", apiParams],
     queryFn: () => api(`/api/hr/employees/${queryString}`),
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
+    placeholderData: (previousData) => previousData,
   });
 }
 
