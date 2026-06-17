@@ -131,7 +131,7 @@ export const menuPermissionMapping: Record<string, string | null> = {
   "Leads":              "SALES:lead:view",
   "Quotes":             "SALES:quote:view",
   "Sales Customers":    "SALES:sales_customer:view",
-  "Sales Invoices":     "SALES:sales_customers_invoice:view",
+  "Invoices":     "SALES:sales_customers_invoice:view",
 
   // Finance
   "Finance Dashboard":        "FINANCE:dashboard:view",
