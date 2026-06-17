@@ -8,6 +8,7 @@ import {
 } from "recharts";
 import { PageHeader, Card, CardHeader, StatusBadge, ToolbarButton } from "@/components/finance/ui";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { useRouter } from "next/navigation";
 import {
   useSalesDashboardSummary,
   useSalesPipeline,
@@ -82,6 +83,7 @@ function Kpi({
 
 export default function SalesDashboardPage() {
   const formatCurrency = useFormatCurrency();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const t = tooltipStyle();
   
@@ -236,7 +238,7 @@ export default function SalesDashboardPage() {
             <CardHeader
               title="Recent Leads"
               subtitle="Latest incoming leads"
-              action={<button className="text-xs text-primary font-medium hover:underline">View all →</button>}
+              action={<button onClick={() => router.push('/sales/leads')} className="text-xs text-primary font-medium hover:underline">View all →</button>}
             />
             <div className="divide-y divide-border">
               {(activity?.leads ?? []).slice(0, 5).map((lead) => (
@@ -268,7 +270,7 @@ export default function SalesDashboardPage() {
             <CardHeader
               title="Recent Quotes"
               subtitle="Latest proposals sent"
-              action={<button className="text-xs text-primary font-medium hover:underline">View all →</button>}
+              action={<button onClick={() => router.push('/sales/quotes')} className="text-xs text-primary font-medium hover:underline">View all →</button>}
             />
             <div className="divide-y divide-border">
               {(activity?.quotes ?? []).slice(0, 5).map((quote) => (

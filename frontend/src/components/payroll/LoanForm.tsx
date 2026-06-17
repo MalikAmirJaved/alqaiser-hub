@@ -286,20 +286,19 @@ export default function LoanForm({
           <label className="text-sm font-medium flex items-center gap-2 text-foreground">
             <span className="text-red-500">*</span> Loan Type
           </label>
-          <SearchableSelect
+          <select
             value={formData.loan_type || "PERSONAL_LOAN"}
-            onChange={(val) => setFormData({ ...formData, loan_type: val })}
-            options={[
-              { value: "PERSONAL_LOAN", label: "Personal Loan" },
-              { value: "SALARY_ADVANCE", label: "Salary Advance" },
-              { value: "CAR_LOAN", label: "Car Loan" },
-              { value: "HOUSE_LOAN", label: "House Loan" },
-              { value: "EDUCATION_LOAN", label: "Education Loan" },
-              { value: "MEDICAL_LOAN", label: "Medical Loan" },
-              { value: "EMERGENCY_LOAN", label: "Emergency Loan" },
-            ]}
-            placeholder="Select loan type"
-          />
+            onChange={(e) => setFormData({ ...formData, loan_type: e.target.value })}
+            className="w-full bg-background border border-border rounded-lg h-10 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="PERSONAL_LOAN">Personal Loan</option>
+            <option value="SALARY_ADVANCE">Salary Advance</option>
+            <option value="CAR_LOAN">Car Loan</option>
+            <option value="HOUSE_LOAN">House Loan</option>
+            <option value="EDUCATION_LOAN">Education Loan</option>
+            <option value="MEDICAL_LOAN">Medical Loan</option>
+            <option value="EMERGENCY_LOAN">Emergency Loan</option>
+          </select>
         </div>
 
         {/* Principal Amount */}
@@ -357,12 +356,15 @@ export default function LoanForm({
 
         {freqExpanded && (
           <div className="px-4 pb-4 space-y-4">
-            <SearchableSelect
+            <select
               value={frequencyType}
-              onChange={(val) => setFormData({ ...formData, frequency_type: val, selected_months: [], month_range: {} })}
-              options={FREQUENCY_TYPES}
-              placeholder="Select frequency"
-            />
+              onChange={(e) => setFormData({ ...formData, frequency_type: e.target.value, selected_months: [], month_range: {} })}
+              className="w-full bg-background border border-border rounded-lg h-10 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              {FREQUENCY_TYPES.map(ft => (
+                <option key={ft.value} value={ft.value}>{ft.label}</option>
+              ))}
+            </select>
 
             {/* ONE_TIME / SELECTED_MONTH - Multi-select months with deduction */}
             {(frequencyType === 'ONE_TIME' || frequencyType === 'SELECTED_MONTH') && (
@@ -452,26 +454,30 @@ export default function LoanForm({
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-muted-foreground">Start Month</label>
-                    <SearchableSelect
+                    <select
                       value={mr.start_month ? String(mr.start_month) : ""}
-                      onChange={(val) => {
-                        const newMonth = Number(val);
+                      onChange={(e) => {
+                        const newMonth = Number(e.target.value);
                         const updated = { ...mr, start_month: newMonth };
                         if (mr.end_year === mr.start_year && mr.end_month <= newMonth) {
                           updated.end_month = 0;
                         }
                         setFormData({ ...formData, month_range: updated });
                       }}
-                      options={availableStartMonths.map(m => ({ value: String(m.value), label: m.label }))}
-                      placeholder="Month"
-                    />
+                      className="w-full bg-background border border-border rounded-lg h-10 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    >
+                      <option value="">Month</option>
+                      {availableStartMonths.map(m => (
+                        <option key={m.value} value={String(m.value)}>{m.label}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-muted-foreground">Start Year</label>
-                    <SearchableSelect
+                    <select
                       value={mr.start_year ? String(mr.start_year) : ""}
-                      onChange={(val) => {
-                        const newYear = Number(val);
+                      onChange={(e) => {
+                        const newYear = Number(e.target.value);
                         const updated = { ...mr, start_year: newYear };
                         if (mr.end_year < newYear) {
                           updated.end_month = 0;
@@ -481,35 +487,47 @@ export default function LoanForm({
                         }
                         setFormData({ ...formData, month_range: updated });
                       }}
-                      options={yearOptions.filter(y => !joiningDate || y.value >= joiningDate.year).map(y => ({ value: String(y.value), label: y.label }))}
-                      placeholder="Year"
-                    />
+                      className="w-full bg-background border border-border rounded-lg h-10 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    >
+                      <option value="">Year</option>
+                      {yearOptions.filter(y => !joiningDate || y.value >= joiningDate.year).map(y => (
+                        <option key={y.value} value={String(y.value)}>{y.label}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-muted-foreground">End Month</label>
-                    <SearchableSelect
+                    <select
                       value={mr.end_month ? String(mr.end_month) : ""}
-                      onChange={(val) => setFormData({
+                      onChange={(e) => setFormData({
                         ...formData,
-                        month_range: { ...mr, end_month: Number(val) }
+                        month_range: { ...mr, end_month: Number(e.target.value) }
                       })}
-                      options={availableEndMonths.map(m => ({ value: String(m.value), label: m.label }))}
-                      placeholder="Month"
                       disabled={!mr.start_month || !mr.start_year}
-                    />
+                      className="w-full bg-background border border-border rounded-lg h-10 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Month</option>
+                      {availableEndMonths.map(m => (
+                        <option key={m.value} value={String(m.value)}>{m.label}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-muted-foreground">End Year</label>
-                    <SearchableSelect
+                    <select
                       value={mr.end_year ? String(mr.end_year) : ""}
-                      onChange={(val) => setFormData({
+                      onChange={(e) => setFormData({
                         ...formData,
-                        month_range: { ...mr, end_year: Number(val) }
+                        month_range: { ...mr, end_year: Number(e.target.value) }
                       })}
-                      options={availableEndYears.map(y => ({ value: String(y.value), label: y.label }))}
-                      placeholder="Year"
                       disabled={!mr.start_month || !mr.start_year}
-                    />
+                      className="w-full bg-background border border-border rounded-lg h-10 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Year</option>
+                      {availableEndYears.map(y => (
+                        <option key={y.value} value={String(y.value)}>{y.label}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
                 {monthRangeError && (

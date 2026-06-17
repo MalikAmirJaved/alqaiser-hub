@@ -109,7 +109,9 @@ export function PurchaseOrderModal({
   prefillFromRequest,
   loading,
 }: PurchaseOrderModalProps) {
-  const { data: suppliers = [] } = useSuppliers();
+  const { data: suppliers = [] } = useSuppliers({
+  status: "active",
+});
   const { data: warehouses = [] } = useWarehouses();
   const { data: products = [], refetch: refetchProducts } = useProducts();
   const { data: assets = [] } = useAssets();

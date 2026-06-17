@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X, Layers, Check, Loader2, RotateCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCreateCategory, useUpdateCategory, Category } from "@/hooks/useCategories";
@@ -56,7 +57,7 @@ export default function CategoryFormModal({ isOpen, onClose, initialData }: Prop
     }
   };
 
-  return (
+  return typeof document !== "undefined" ? createPortal(
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -77,7 +78,7 @@ export default function CategoryFormModal({ isOpen, onClose, initialData }: Prop
                   <p className="text-xs text-muted-foreground">Organize your product inventory</p>
                 </div>
               </div>
-              <button onClick={onClose} className="p-2 hover:bg-muted rounded-lg transition">
+              <button type="button" onClick={onClose} className="p-2 hover:bg-muted rounded-lg transition">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -137,6 +138,7 @@ export default function CategoryFormModal({ isOpen, onClose, initialData }: Prop
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
-  );
+    </AnimatePresence>,
+    document.body
+  ) : null;
 }

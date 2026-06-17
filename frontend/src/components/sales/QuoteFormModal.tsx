@@ -278,7 +278,7 @@ export default function QuoteFormModal({
                   <Plus className="w-3.5 h-3.5" /> Add Item
                 </button>
               </div>
-              <div className="overflow-x-auto border border-border rounded-lg">
+              <div className="overflow-visible border border-border rounded-lg">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50">
                     <tr>
@@ -286,7 +286,7 @@ export default function QuoteFormModal({
                       <th className="px-3 py-2 text-right w-20">Qty</th>
                       <th className="px-3 py-2 text-right w-28">Unit Price</th>
                       <th className="px-3 py-2 text-right w-28">Discount</th>
-                      <th className="px-3 py-2 text-right w-28">Tax Rate</th>
+                      <th className="px-3 py-2 text-right w-28">Tax Rate %</th>
                       <th className="px-3 py-2 text-right w-28">Total</th>
                       <th className="w-10"></th>
                     </tr>

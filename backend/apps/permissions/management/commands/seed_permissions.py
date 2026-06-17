@@ -103,7 +103,7 @@ RESOURCES_ACTIONS: dict[str, dict[str, list[str]]] = {
     "SALES": {
         "dashboard":              ["view", "export"],
         "lead":                   ["view", "create", "update", "delete", "accept", "convert_to_quote", "export"],
-        "quote":                  ["view", "approve", "reject", "update", "delete", "export"],
+        "quote":                  ["view", "create", "approve", "reject", "update", "delete", "export"],
         "sales_customer":         ["view", "create", "update", "delete", "export"],
         "sales_customers_invoice":["view", "create", "pay", "update", "delete", "export"],
     },
@@ -116,6 +116,9 @@ RESOURCES_ACTIONS: dict[str, dict[str, list[str]]] = {
         "alert":            ["view", "export"],
         "report":           ["view", "export"],
         "activity":         ["view", "export"],
+        "site":             ["view", "create", "update", "delete", "export"],
+        "nvr":              ["view", "create", "update", "delete", "export"],
+        "camera":           ["view", "create", "update", "delete", "export"],
     },
 
     # ── Settings ─────────────────────────────────────────────────────────────

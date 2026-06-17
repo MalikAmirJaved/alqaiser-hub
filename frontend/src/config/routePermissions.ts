@@ -76,6 +76,7 @@ export const routePermissions: Record<string, string> = {
   "/monitoring/workforce-monitoring":"AI_MONITORING:workforce:view",
   "/monitoring/alerts-events":       "AI_MONITORING:alert:view",
   "/monitoring/reports-insights":    "AI_MONITORING:report:view",
+  "/monitoring/camera-configuration":"AI_MONITORING:site:view",
 
   // Settings
   "/settings/company":      "SETTINGS:company:view",
@@ -156,6 +157,7 @@ export const menuPermissionMapping: Record<string, string | null> = {
   "Workforce Monitoring": "AI_MONITORING:workforce:view",
   "Alerts & Events":      "AI_MONITORING:alert:view",
   "Reports & Insights":   "AI_MONITORING:report:view",
+  "Camera Configuration":  "AI_MONITORING:site:view",
 
   // Settings
   "Company Profile": "SETTINGS:company:view",
