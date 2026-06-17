@@ -133,8 +133,7 @@ export default function CameraConfigurationPage() {
     setCameraLoading(true);
     try {
       if (editingCamera) {
-        const { nvr, ...rest } = cameraForm;
-        await updateCamera.mutateAsync({ id: editingCamera.id, data: rest });
+        await updateCamera.mutateAsync({ id: editingCamera.id, data: cameraForm });
       } else {
         await createCamera.mutateAsync(cameraForm);
       }

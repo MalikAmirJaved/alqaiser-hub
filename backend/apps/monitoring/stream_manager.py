@@ -20,28 +20,35 @@ class StreamManager:
         return [
             'ffmpeg',
             '-rtsp_transport', 'tcp',
-            '-re',
             '-fflags', 'nobuffer',
             '-flags', 'low_delay',
-            '-strict', 'unofficial',
             '-analyzeduration', '0',
             '-probesize', '32',
             '-i', rtsp_url,
+
             '-c:v', 'libx264',
             '-preset', 'ultrafast',
             '-tune', 'zerolatency',
-            '-g', '24',
-            '-keyint_min', '12',
+
+            '-g', '50',
+            '-keyint_min', '50',
             '-sc_threshold', '0',
-            '-vf', 'scale=-2:720',
+
+            '-vf', 'scale=-2:720,fps=25',
+
             '-c:a', 'aac',
             '-ar', '44100',
             '-ac', '1',
+
             '-f', 'hls',
             '-hls_time', '2',
             '-hls_list_size', '6',
-            '-hls_flags', 'delete_segments+omit_endlist+append_list',
-            '-hls_segment_filename', os.path.join(output_dir, 'segment_%d.ts'),
+            '-hls_flags',
+            'delete_segments+append_list+omit_endlist+independent_segments',
+
+            '-hls_segment_filename',
+            os.path.join(output_dir, 'segment_%d.ts'),
+
             '-max_muxing_queue_size', '1024',
             '-progress', '-',
             '-y', hls_file,
