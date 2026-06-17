@@ -33,7 +33,6 @@ class NvrSerializer(serializers.ModelSerializer):
             'camera_count', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'site_id', 'site_name', 'camera_count', 'created_at', 'updated_at']
-        extra_kwargs = {'password': {'write_only': True}}
 
     def get_camera_count(self, obj):
         return obj.cameras.filter(is_deleted=False).count()
@@ -62,7 +61,6 @@ class CameraSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'nvr_id', 'nvr_name', 'created_at', 'updated_at']
-        extra_kwargs = {'password': {'write_only': True}}
 
     def validate_nvr(self, value):
         import uuid

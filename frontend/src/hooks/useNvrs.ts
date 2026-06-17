@@ -8,6 +8,7 @@ export interface Nvr {
   site_name: string;
   nvr_name: string;
   nvr_username: string;
+  password: string;
   ip: string;
   port: number;
   camera_count: number;

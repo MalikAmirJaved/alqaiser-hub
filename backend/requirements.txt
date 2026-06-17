@@ -1,3 +1,5 @@
+# System dependency: ffmpeg (install via: apt install ffmpeg or equivalent)
+# Download: https://ffmpeg.org/download.html
 asgiref==3.11.1
 Django==6.0.4
 django-environ==0.13.0
