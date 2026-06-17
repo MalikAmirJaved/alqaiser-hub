@@ -1,7 +1,7 @@
 // components/payroll/LoanForm.tsx
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { AlertCircle, Calculator, Target, FileText, Clock, Check, X, ChevronDown, ChevronRight, Banknote, Building2 } from "lucide-react";
 
@@ -12,6 +12,7 @@ interface LoanFormProps {
   formData: any;
   setFormData: (data: any) => void;
   employeeOptions: Array<{ value: string; label: string }>;
+  employees?: Array<{ id: string; bank_name?: string; bank_account_number?: string; bank_iban?: string }>;
   selectedEmployeeSalary: number;
   formatCurrency: (amount: number) => string;
   errors: string[];
@@ -37,6 +38,7 @@ export default function LoanForm({
   formData,
   setFormData,
   employeeOptions,
+  employees = [],
   selectedEmployeeSalary,
   formatCurrency,
   errors,
@@ -138,6 +140,27 @@ export default function LoanForm({
       setFormData({ ...formData, month_range: updated });
     }
   }, [formData.month_range?.start_year, formData.month_range?.start_month, frequencyType]);
+
+  // Auto-populate bank info when employee selection changes
+  const prevEmployeeId = useRef(formData.employee_id);
+  useEffect(() => {
+    const currentId = formData.employee_id;
+    if (!currentId) return;
+
+    const hasBankInfo = formData.bank_name || formData.bank_account_number || formData.bank_iban;
+    if (currentId === prevEmployeeId.current && hasBankInfo) return;
+
+    prevEmployeeId.current = currentId;
+    const employee = employees.find((e: any) => String(e.id) === String(currentId));
+    if (employee) {
+      setFormData({
+        ...formData,
+        bank_name: employee.bank_name || formData.bank_name || "",
+        bank_account_number: employee.bank_account_number || formData.bank_account_number || "",
+        bank_iban: employee.bank_iban || formData.bank_iban || "",
+      });
+    }
+  }, [formData.employee_id, employees]);
 
   // Auto-calculate deduction per month for selected months (totalPayable / num months)
   const selectedMonthDeduction = useMemo(() => {

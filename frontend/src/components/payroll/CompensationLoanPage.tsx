@@ -463,6 +463,7 @@ export default function CompensationLoanPage({
                   formData={formData}
                   setFormData={setFormData}
                   employeeOptions={employeeOptionsForLoan}
+                  employees={employees}
                   selectedEmployeeSalary={selectedEmployeeSalary}
                   formatCurrency={formatCurrency}
                   errors={[]}
@@ -509,6 +510,7 @@ export default function CompensationLoanPage({
                 formData={formData}
                 setFormData={setFormData}
                 employeeOptions={employeeOptionsForLoan}
+                employees={employees}
                 selectedEmployeeSalary={selectedEmployeeSalary}
                 formatCurrency={formatCurrency}
                 errors={[]}
