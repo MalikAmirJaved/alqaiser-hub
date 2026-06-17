@@ -44,7 +44,9 @@ export default function ExpenseFormModal({
   });
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();
-  const { data: suppliers, isLoading: suppliersLoading } = useSuppliers();
+  const { data: suppliers, isLoading: suppliersLoading } = useSuppliers({
+  status: "active",
+});
   const { generateCode, validateCode } = useAutoCode("expense");
 
   const supplierValue = watch("supplier");

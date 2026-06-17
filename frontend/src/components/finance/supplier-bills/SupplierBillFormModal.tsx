@@ -48,7 +48,9 @@ export default function SupplierBillFormModal({ open, onClose, initialData, onSu
   });
   const createBill = useCreateSupplierBill();
   const updateBill = useUpdateSupplierBill();
-  const { data: suppliers } = useSuppliers();
+  const { data: suppliers } = useSuppliers({
+  status: "active",
+});
   const { generateCode, validateCode } = useAutoCode("supplier_bill");
 
   useEffect(() => {
