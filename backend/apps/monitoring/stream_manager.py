@@ -67,7 +67,23 @@ class StreamManager:
             shutil.rmtree(output_dir, ignore_errors=True)
             raise RuntimeError("FFmpeg not found. Install FFmpeg to enable streaming.")
 
-        time.sleep(2)
+        # Wait until at least one .ts segment file exists (confirms stream is producing data)
+        hls_file = os.path.join(output_dir, 'index.m3u8')
+        wait_start = time.monotonic()
+        while time.monotonic() - wait_start < 10:
+            if process.poll() is not None:
+                break
+            # Check if any segment files exist
+            if os.path.exists(hls_file):
+                # Verify the m3u8 has at least one segment listed
+                try:
+                    with open(hls_file, 'r') as f:
+                        content = f.read()
+                    if '#EXTINF:' in content:
+                        break
+                except Exception:
+                    pass
+            time.sleep(0.5)
 
         poll = process.poll()
         if poll is not None:
@@ -76,6 +92,9 @@ class StreamManager:
                 "FFmpeg exited immediately. Check that the RTSP URL is correct "
                 "and the camera is reachable."
             )
+
+        # Brief extra time to ensure the first segment completes writing
+        time.sleep(0.5)
 
         with cls._lock:
             cls._instances[stream_id] = {
@@ -149,7 +168,22 @@ class StreamManager:
                             stderr=f,
                         )
 
-                    time.sleep(2)
+                    # Wait for first segment
+                    new_hls_file = os.path.join(new_output_dir, 'index.m3u8')
+                    wait_start = time.monotonic()
+                    while time.monotonic() - wait_start < 10:
+                        if new_process.poll() is not None:
+                            break
+                        if os.path.exists(new_hls_file):
+                            try:
+                                with open(new_hls_file, 'r') as f:
+                                    content = f.read()
+                                if '#EXTINF:' in content:
+                                    break
+                            except Exception:
+                                pass
+                        time.sleep(0.5)
+
                     if new_process.poll() is not None:
                         shutil.rmtree(new_output_dir, ignore_errors=True)
                         with cls._lock:
