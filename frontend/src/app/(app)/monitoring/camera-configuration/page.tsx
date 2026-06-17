@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Eye, EyeOff, Building2, Monitor, Camera } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye, EyeOff, Building2, Monitor, Camera, ArrowLeft } from "lucide-react";
 import {
   useSites, useCreateSite, useUpdateSite, useDeleteSite,
   type Site, type SiteFormData,
@@ -57,7 +57,9 @@ export default function CameraConfigurationPage() {
   const [nvrLoading, setNvrLoading] = useState(false);
   const [cameraLoading, setCameraLoading] = useState(false);
 
-  // Site handlers
+  const selectedSite = sites?.find((s) => s.id === selectedSiteId) ?? null;
+  const selectedNvr = nvrs?.find((n) => n.id === selectedNvrId) ?? null;
+
   const openAddSite = () => {
     setEditingSite(null);
     setSiteForm({ name: "", location: "", description: "" });
@@ -84,7 +86,6 @@ export default function CameraConfigurationPage() {
     if (selectedSiteId === id) { setSelectedSiteId(null); setSelectedNvrId(null); }
   };
 
-  // NVR handlers
   const openAddNvr = (siteId: string) => {
     setEditingNvr(null);
     setNvrForm({ site: siteId, nvr_name: "", nvr_username: "", password: "", ip: "", port: 554 });
@@ -113,7 +114,6 @@ export default function CameraConfigurationPage() {
     if (selectedNvrId === id) setSelectedNvrId(null);
   };
 
-  // Camera handlers
   const openAddCamera = (nvrId: string) => {
     setEditingCamera(null);
     setCameraForm({ nvr: nvrId, camera: "", channel: 1, zone: "", purpose: "" });
@@ -143,13 +143,13 @@ export default function CameraConfigurationPage() {
     await deleteCamera.mutateAsync(id);
   };
 
-  const selectSite = (id: string) => {
+  const toggleSite = (id: string) => {
     setSelectedSiteId(selectedSiteId === id ? null : id);
     setSelectedNvrId(null);
   };
 
   return (
-    <div>
+    <div className="flex flex-col h-full">
       <PageHeader
         title="Camera Configuration"
         subtitle="Manage sites, NVRs, and cameras"
@@ -171,46 +171,189 @@ export default function CameraConfigurationPage() {
           <p className="text-sm">Click &quot;Add Site&quot; to get started</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {sites.map((site) => {
-            const siteNvrs = selectedSiteId === site.id ? nvrs : undefined;
-            return (
-              <SiteCard
+        <div className="grid grid-cols-[380px_1fr] gap-4 flex-1 min-h-0">
+          {/* ─── Left Panel: Sites List ─── */}
+          <div className="border border-border rounded-2xl bg-card overflow-y-auto">
+            <div className="p-3 border-b border-border">
+              <span className="text-sm font-medium text-muted-foreground">Sites</span>
+            </div>
+            {sites.map((site) => (
+              <button
                 key={site.id}
-                site={site}
-                isOpen={selectedSiteId === site.id}
-                onToggle={() => selectSite(site.id)}
-                onEdit={() => openEditSite(site)}
-                onDelete={() => handleDeleteSite(site.id)}
-                canEdit={sitePerms.update}
-                canDelete={sitePerms.delete}
+                onClick={() => toggleSite(site.id)}
+                className={`w-full flex items-center gap-3 p-3 text-left border-b border-border/50 hover:bg-muted/30 transition-colors last:border-b-0 ${
+                  selectedSiteId === site.id ? "bg-primary/5 ring-1 ring-primary/20" : ""
+                }`}
               >
-                {selectedSiteId === site.id && (
-                  <NvrList
-                    nvrs={siteNvrs}
-                    loading={nvrsLoading}
-                    siteId={site.id}
-                    selectedNvrId={selectedNvrId}
-                    onSelectNvr={setSelectedNvrId}
-                    onAddNvr={() => openAddNvr(site.id)}
-                    onEditNvr={openEditNvr}
-                    onDeleteNvr={handleDeleteNvr}
-                    canCreate={nvrPerms.create}
-                    canEdit={nvrPerms.update}
-                    canDelete={nvrPerms.delete}
+                <Building2 className="w-5 h-5 text-muted-foreground shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{site.name}</div>
+                  {site.location && <div className="text-xs text-muted-foreground truncate">{site.location}</div>}
+                </div>
+                <span className="text-xs bg-muted px-2 py-0.5 rounded-full whitespace-nowrap">{site.nvr_count} NVRs</span>
+              </button>
+            ))}
+          </div>
+
+          {/* ─── Right Panel: Detail View ─── */}
+          <div className="border border-border rounded-2xl bg-card overflow-y-auto">
+            {!selectedSiteId ? (
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-20">
+                <Building2 className="w-16 h-16 mb-4 opacity-20" />
+                <p className="text-lg font-medium">Select a site</p>
+                <p className="text-sm">Choose a site from the list to view its details</p>
+              </div>
+            ) : selectedNvrId && selectedNvr ? (
+              /* ── NVR Detail View ── */
+              <div>
+                <div className="p-4 border-b border-border">
+                  <button
+                    onClick={() => setSelectedNvrId(null)}
+                    className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-3"
+                  >
+                    <ArrowLeft className="w-4 h-4" /> Back to {selectedSite?.name ?? "Site"}
+                  </button>
+
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <Monitor className="w-6 h-6 text-muted-foreground" />
+                      <div>
+                        <h2 className="text-lg font-semibold">{selectedNvr.nvr_name}</h2>
+                        <p className="text-sm text-muted-foreground">
+                          {selectedNvr.ip}:{selectedNvr.port}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {nvrPerms.update && (
+                        <button onClick={() => openEditNvr(selectedNvr)} className="p-1.5 rounded-md hover:bg-muted">
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                      )}
+                      {nvrPerms.delete && (
+                        <button onClick={() => handleDeleteNvr(selectedNvr.id)} className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1 mt-3 text-sm">
+                    <div><span className="text-muted-foreground">Username:</span> {selectedNvr.nvr_username}</div>
+                    <div><span className="text-muted-foreground">Site:</span> {selectedNvr.site_name}</div>
+                  </div>
+                </div>
+
+                {/* Cameras section */}
+                <div className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-medium text-muted-foreground">Cameras</h3>
+                    {cameraPerms.create && (
+                      <button onClick={() => openAddCamera(selectedNvr.id)} className="inline-flex items-center gap-1 text-xs px-2 h-7 rounded-md bg-primary text-primary-foreground hover:opacity-90">
+                        <Plus className="w-3 h-3" /> Add Camera
+                      </button>
+                    )}
+                  </div>
+                  <CameraTable
+                    nvrId={selectedNvr.id}
                     cameras={cameras}
-                    camerasLoading={camerasLoading}
-                    onAddCamera={openAddCamera}
-                    onEditCamera={openEditCamera}
-                    onDeleteCamera={handleDeleteCamera}
-                    canCreateCamera={cameraPerms.create}
-                    canEditCamera={cameraPerms.update}
-                    canDeleteCamera={cameraPerms.delete}
+                    loading={camerasLoading}
+                    onEdit={openEditCamera}
+                    onDelete={handleDeleteCamera}
+                    canEdit={cameraPerms.update}
+                    canDelete={cameraPerms.delete}
                   />
+                </div>
+              </div>
+            ) : (
+              /* ── Site Detail View ── */
+              <div>
+                {selectedSite && (
+                  <>
+                    <div className="p-4 border-b border-border">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <Building2 className="w-6 h-6 text-muted-foreground" />
+                          <div>
+                            <h2 className="text-lg font-semibold">{selectedSite.name}</h2>
+                            {selectedSite.location && (
+                              <p className="text-sm text-muted-foreground">{selectedSite.location}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {sitePerms.update && (
+                            <button onClick={() => openEditSite(selectedSite)} className="p-1.5 rounded-md hover:bg-muted">
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
+                          {sitePerms.delete && (
+                            <button onClick={() => handleDeleteSite(selectedSite.id)} className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {selectedSite.description && (
+                        <p className="text-sm text-muted-foreground mt-2">{selectedSite.description}</p>
+                      )}
+                    </div>
+
+                    {/* NVR list */}
+                    <div className="p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-medium text-muted-foreground">NVR Devices</h3>
+                        {nvrPerms.create && (
+                          <button onClick={() => openAddNvr(selectedSite.id)} className="inline-flex items-center gap-1 text-xs px-2 h-7 rounded-md bg-primary text-primary-foreground hover:opacity-90">
+                            <Plus className="w-3 h-3" /> Add NVR
+                          </button>
+                        )}
+                      </div>
+                      {nvrsLoading ? (
+                        <div className="text-sm text-muted-foreground py-6 text-center">Loading...</div>
+                      ) : !nvrs?.length ? (
+                        <div className="text-sm text-muted-foreground py-8 text-center border border-dashed border-border rounded-xl">
+                          <Monitor className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                          No NVRs for this site
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {nvrs.map((nvr) => (
+                            <button
+                              key={nvr.id}
+                              onClick={() => setSelectedNvrId(nvr.id)}
+                              className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-colors hover:bg-muted/20 ${
+                                selectedNvrId === nvr.id ? "border-primary/30 bg-primary/5" : "border-border"
+                              }`}
+                            >
+                              <Monitor className="w-5 h-5 text-muted-foreground shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium truncate">{nvr.nvr_name}</div>
+                                <div className="text-xs text-muted-foreground">{nvr.ip}:{nvr.port}</div>
+                              </div>
+                              <span className="text-xs bg-muted px-2 py-0.5 rounded-full whitespace-nowrap">{nvr.camera_count} cameras</span>
+                              <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                {nvrPerms.update && (
+                                  <button onClick={() => openEditNvr(nvr)} className="p-1 rounded-md hover:bg-muted">
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                {nvrPerms.delete && (
+                                  <button onClick={() => handleDeleteNvr(nvr.id)} className="p-1 rounded-md hover:bg-destructive/15 text-destructive">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
-              </SiteCard>
-            );
-          })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -288,155 +431,63 @@ export default function CameraConfigurationPage() {
   );
 }
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
+/* ─── Sub-components ─── */
 
-function SiteCard({ site, isOpen, onToggle, onEdit, onDelete, canEdit, canDelete, children }: {
-  site: Site; isOpen: boolean; onToggle: () => void;
-  onEdit: () => void; onDelete: () => void; canEdit: boolean; canDelete: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
-      <button onClick={onToggle} className="w-full flex items-center justify-between p-4 hover:bg-muted/30 transition-colors text-left">
-        <div className="flex items-center gap-3">
-          <Building2 className="w-5 h-5 text-muted-foreground" />
-          <div>
-            <span className="font-medium">{site.name}</span>
-            {site.location && <span className="text-xs text-muted-foreground ml-2">{site.location}</span>}
-          </div>
-          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{site.nvr_count} NVRs</span>
-        </div>
-        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          {canEdit && <button onClick={onEdit} className="p-1.5 rounded-md hover:bg-muted"><Pencil className="w-4 h-4" /></button>}
-          {canDelete && <button onClick={onDelete} className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"><Trash2 className="w-4 h-4" /></button>}
-        </div>
-      </button>
-      {isOpen && <div className="border-t border-border">{children}</div>}
-    </div>
-  );
-}
-
-function NvrList({ nvrs, loading, siteId, selectedNvrId, onSelectNvr, onAddNvr, onEditNvr, onDeleteNvr,
-  canCreate, canEdit, canDelete, cameras, camerasLoading, onAddCamera, onEditCamera, onDeleteCamera,
-  canCreateCamera, canEditCamera, canDeleteCamera,
-}: {
-  nvrs?: Nvr[]; loading: boolean; siteId: string; selectedNvrId: string | null;
-  onSelectNvr: (id: string | null) => void;
-  onAddNvr: () => void; onEditNvr: (n: Nvr) => void; onDeleteNvr: (id: string) => void;
-  canCreate: boolean; canEdit: boolean; canDelete: boolean;
-  cameras?: CameraType[]; camerasLoading: boolean;
-  onAddCamera: (nvrId: string) => void; onEditCamera: (c: CameraType) => void; onDeleteCamera: (id: string) => void;
-  canCreateCamera: boolean; canEditCamera: boolean; canDeleteCamera: boolean;
-}) {
-  return (
-    <div className="p-4 bg-muted/5">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-medium text-muted-foreground">NVR Devices</span>
-        {canCreate && (
-          <button onClick={onAddNvr} className="inline-flex items-center gap-1 text-xs px-2 h-7 rounded-md bg-primary text-primary-foreground hover:opacity-90">
-            <Plus className="w-3 h-3" /> Add NVR
-          </button>
-        )}
-      </div>
-      {loading ? (
-        <div className="text-xs text-muted-foreground py-2">Loading...</div>
-      ) : !nvrs?.length ? (
-        <div className="text-xs text-muted-foreground py-4 text-center border border-dashed border-border rounded-lg">
-          <Monitor className="w-6 h-6 mx-auto mb-1 opacity-40" />
-          No NVRs. Click &quot;Add NVR&quot; to add one.
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {nvrs.map((nvr) => {
-            const isNvrOpen = selectedNvrId === nvr.id;
-            return (
-              <div key={nvr.id} className="bg-card border border-border rounded-xl overflow-hidden">
-                <button onClick={() => onSelectNvr(isNvrOpen ? null : nvr.id)} className="w-full flex items-center justify-between p-3 hover:bg-muted/20 text-left">
-                  <div className="flex items-center gap-2">
-                    <Monitor className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">{nvr.nvr_name}</span>
-                    <span className="text-xs text-muted-foreground">{nvr.ip}:{nvr.port}</span>
-                    <span className="text-xs bg-muted px-1.5 py-0.5 rounded">{nvr.camera_count} cameras</span>
-                  </div>
-                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                    {canEdit && <button onClick={() => onEditNvr(nvr)} className="p-1 rounded-md hover:bg-muted"><Pencil className="w-3.5 h-3.5" /></button>}
-                    {canDelete && <button onClick={() => onDeleteNvr(nvr.id)} className="p-1 rounded-md hover:bg-destructive/15 text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>}
-                  </div>
-                </button>
-                {isNvrOpen && (
-                  <CameraTable
-                    nvrId={nvr.id}
-                    cameras={cameras}
-                    loading={camerasLoading}
-                    onAdd={() => onAddCamera(nvr.id)}
-                    onEdit={onEditCamera}
-                    onDelete={onDeleteCamera}
-                    canCreate={canCreateCamera}
-                    canEdit={canEditCamera}
-                    canDelete={canDeleteCamera}
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CameraTable({ nvrId, cameras, loading, onAdd, onEdit, onDelete, canCreate, canEdit, canDelete }: {
+function CameraTable({ nvrId, cameras, loading, onEdit, onDelete, canEdit, canDelete }: {
   nvrId: string; cameras?: CameraType[]; loading: boolean;
-  onAdd: () => void; onEdit: (c: CameraType) => void; onDelete: (id: string) => void;
-  canCreate: boolean; canEdit: boolean; canDelete: boolean;
+  onEdit: (c: CameraType) => void; onDelete: (id: string) => void;
+  canEdit: boolean; canDelete: boolean;
 }) {
   const nvrCameras = cameras?.filter((c) => c.nvr_id === nvrId) ?? [];
-  return (
-    <div className="border-t border-border p-3 bg-muted/10">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-muted-foreground">Cameras</span>
-        {canCreate && (
-          <button onClick={onAdd} className="inline-flex items-center gap-1 text-xs px-2 h-6 rounded-md bg-primary text-primary-foreground hover:opacity-90">
-            <Plus className="w-3 h-3" /> Add
-          </button>
-        )}
+
+  if (loading) return <div className="text-sm text-muted-foreground py-6 text-center">Loading...</div>;
+
+  if (!nvrCameras.length) {
+    return (
+      <div className="text-sm text-muted-foreground py-8 text-center border border-dashed border-border rounded-xl">
+        <Camera className="w-8 h-8 mx-auto mb-2 opacity-40" />
+        No cameras for this NVR
       </div>
-      {loading ? (
-        <div className="text-xs text-muted-foreground py-2">Loading...</div>
-      ) : !nvrCameras.length ? (
-        <div className="text-xs text-muted-foreground py-3 text-center border border-dashed border-border rounded-lg">
-          <Camera className="w-5 h-5 mx-auto mb-1 opacity-40" />
-          No cameras
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-muted-foreground border-b border-border">
-                <th className="text-left px-2 py-1.5 font-medium">Camera</th>
-                <th className="text-left px-2 py-1.5 font-medium">CH</th>
-                <th className="text-left px-2 py-1.5 font-medium">Zone</th>
-                <th className="text-left px-2 py-1.5 font-medium">Purpose</th>
-                <th className="text-right px-2 py-1.5 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {nvrCameras.map((cam) => (
-                <tr key={cam.id} className="border-b border-border/30 hover:bg-muted/20">
-                  <td className="px-2 py-1.5">{cam.camera}</td>
-                  <td className="px-2 py-1.5"><span className="bg-muted px-1.5 py-0.5 rounded font-mono">{cam.channel}</span></td>
-                  <td className="px-2 py-1.5">{cam.zone || "—"}</td>
-                  <td className="px-2 py-1.5 text-muted-foreground max-w-[150px] truncate">{cam.purpose || "—"}</td>
-                  <td className="px-2 py-1.5 text-right whitespace-nowrap">
-                    {canEdit && <button onClick={() => onEdit(cam)} className="p-1 rounded-md hover:bg-muted inline-flex"><Pencil className="w-3 h-3" /></button>}
-                    {canDelete && <button onClick={() => onDelete(cam.id)} className="p-1 rounded-md hover:bg-destructive/15 text-destructive inline-flex"><Trash2 className="w-3 h-3" /></button>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-xs uppercase text-muted-foreground border-b border-border">
+            <th className="text-left px-3 py-2 font-medium">Camera</th>
+            <th className="text-left px-3 py-2 font-medium">Channel</th>
+            <th className="text-left px-3 py-2 font-medium">Zone</th>
+            <th className="text-left px-3 py-2 font-medium">Purpose</th>
+            <th className="text-right px-3 py-2 font-medium">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {nvrCameras.map((cam) => (
+            <tr key={cam.id} className="border-b border-border/30 hover:bg-muted/20">
+              <td className="px-3 py-2 font-medium">{cam.camera}</td>
+              <td className="px-3 py-2">
+                <span className="bg-muted px-2 py-0.5 rounded text-xs font-mono">CH {cam.channel}</span>
+              </td>
+              <td className="px-3 py-2 text-muted-foreground">{cam.zone || "—"}</td>
+              <td className="px-3 py-2 text-muted-foreground max-w-[200px] truncate">{cam.purpose || "—"}</td>
+              <td className="px-3 py-2 text-right whitespace-nowrap">
+                {canEdit && (
+                  <button onClick={() => onEdit(cam)} className="p-1 rounded-md hover:bg-muted">
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {canDelete && (
+                  <button onClick={() => onDelete(cam.id)} className="p-1 rounded-md hover:bg-destructive/15 text-destructive">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
