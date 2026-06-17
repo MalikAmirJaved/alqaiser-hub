@@ -1,6 +1,7 @@
 // src/components/inventory/brand/BrandFormModal.tsx
 "use client";
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { X, Tag, Check, Loader2, Globe, RotateCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CountrySelect } from "@/components/reuseable/LocationSelectors";
@@ -71,7 +72,7 @@ export default function BrandFormModal({ isOpen, onClose, initialData }: Props) 
     }
   };
 
-  return (
+  return typeof document !== "undefined" ? createPortal(
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -92,7 +93,7 @@ export default function BrandFormModal({ isOpen, onClose, initialData }: Props) 
                   <p className="text-xs text-muted-foreground">Manage manufacturer details</p>
                 </div>
               </div>
-              <button onClick={onClose} className="p-2 hover:bg-muted rounded-lg transition">
+              <button type="button" onClick={onClose} className="p-2 hover:bg-muted rounded-lg transition">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -159,6 +160,7 @@ export default function BrandFormModal({ isOpen, onClose, initialData }: Props) 
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
-  );
+    </AnimatePresence>,
+    document.body
+  ) : null;
 }
