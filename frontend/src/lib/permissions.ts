@@ -114,6 +114,9 @@ export const PERMISSIONS = {
     alert:          ["view", "export"] as const,
     report:         ["view", "export"] as const,
     activity:       ["view", "export"] as const,
+    site:           ["view", "create", "update", "delete", "export"] as const,
+    nvr:            ["view", "create", "update", "delete", "export"] as const,
+    camera:         ["view", "create", "update", "delete", "export"] as const,
   },
 
   // ── Settings ──────────────────────────────────────────────────────────────

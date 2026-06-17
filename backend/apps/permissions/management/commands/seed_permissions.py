@@ -116,6 +116,9 @@ RESOURCES_ACTIONS: dict[str, dict[str, list[str]]] = {
         "alert":            ["view", "export"],
         "report":           ["view", "export"],
         "activity":         ["view", "export"],
+        "site":             ["view", "create", "update", "delete", "export"],
+        "nvr":              ["view", "create", "update", "delete", "export"],
+        "camera":           ["view", "create", "update", "delete", "export"],
     },
 
     # ── Settings ─────────────────────────────────────────────────────────────

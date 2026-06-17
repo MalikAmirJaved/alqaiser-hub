@@ -134,6 +134,7 @@ children: [
       { title: "Workforce Monitoring", to: "/monitoring/workforce-monitoring", icon: Video },
       { title: "Alerts & Events", to: "/monitoring/alerts-events", icon: DoorOpen },
       { title: "Reports & Insights", to: "/monitoring/reports-insights", icon: Camera },
+      { title: "Camera Configuration", to: "/monitoring/camera-configuration", icon: Camera },
     ],
   },
 

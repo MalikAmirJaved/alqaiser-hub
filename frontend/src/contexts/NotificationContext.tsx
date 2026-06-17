@@ -91,6 +91,11 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   user: ["users", "user"],
   company_settings: ["companySettings"],
   designation: ["designation", "companySettings"],
+
+  // ---------- Monitoring ----------
+  monitoring_site: ["monitoring_sites"],
+  monitoring_nvr: ["monitoring_nvrs"],
+  monitoring_camera: ["monitoring_cameras"],
 };
 
 // ----------------------------------------------------------------------
