@@ -36,7 +36,7 @@ export const menu = [
         ],
       },
       {
-        title: "Employee Assets",
+        title: "Inventory Assets",
         icon: Briefcase,
         children: [
           { title: "Assets", to: "/hr/assets/list", icon: Briefcase },
