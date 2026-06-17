@@ -663,6 +663,15 @@ function ExitFormModal({
                   readOnly
                 />
               </label>
+              <label className="text-sm sm:col-span-2">
+                <div className="bg-muted/30 border border-border rounded-xl p-3">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-primary" />
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Monthly Salary</span>
+                  </div>
+                  <div className="text-lg font-bold mt-1">{formatCurrency(parseFloat(selectedEmployee.salary || "0"))}</div>
+                </div>
+              </label>
             </>
           )}
 
