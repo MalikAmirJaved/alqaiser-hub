@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { MoreHorizontal, CheckCircle, FileText } from "lucide-react";
 import {
@@ -37,28 +38,44 @@ function LeadActionsCell({
   isConverting: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState<{ top: number; right: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const isAccepted = lead.status === "ACCEPTED";
   const isWon = lead.status === "WON";
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) &&
+          btnRef.current && !btnRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
+    const handleScroll = () => setIsOpen(false);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
     if (isOpen) {
       document.addEventListener("click", handleClickOutside);
+      document.addEventListener("scroll", handleScroll, true);
+      document.addEventListener("keydown", handleKeyDown);
     }
     return () => {
       document.removeEventListener("click", handleClickOutside);
+      document.removeEventListener("scroll", handleScroll, true);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isOpen]);
 
   const toggleDropdown = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsOpen(!isOpen);
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    if (isOpen) {
+      setIsOpen(false);
+    } else {
+      setPosition({ top: rect.bottom + 4, right: document.documentElement.clientWidth - rect.right });
+      setIsOpen(true);
+    }
   };
 
   const handleAccept = (e: React.MouseEvent) => {
@@ -74,15 +91,20 @@ function LeadActionsCell({
   };
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <>
       <button
+        ref={btnRef}
         onClick={toggleDropdown}
         className="p-1.5 rounded-md hover:bg-muted transition"
       >
         <MoreHorizontal className="w-4 h-4" />
       </button>
-      {isOpen && (
-        <div className="absolute right-0 top-full mt-1 w-48 rounded-md border border-border bg-card shadow-lg z-20">
+      {isOpen && position && typeof document !== "undefined" && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{ position: 'fixed', top: position.top, right: position.right, zIndex: 9999 }}
+          className="w-48 rounded-md border border-border bg-card shadow-xl"
+        >
           <div className="py-1">
             {!isAccepted && !isWon && (
               <button
@@ -109,9 +131,10 @@ function LeadActionsCell({
               </span>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
 

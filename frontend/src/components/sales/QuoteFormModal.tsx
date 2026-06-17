@@ -286,7 +286,7 @@ export default function QuoteFormModal({
                       <th className="px-3 py-2 text-right w-20">Qty</th>
                       <th className="px-3 py-2 text-right w-28">Unit Price</th>
                       <th className="px-3 py-2 text-right w-28">Discount</th>
-                      <th className="px-3 py-2 text-right w-28">Tax Rate</th>
+                      <th className="px-3 py-2 text-right w-28">Tax Rate %</th>
                       <th className="px-3 py-2 text-right w-28">Total</th>
                       <th className="w-10"></th>
                     </tr>

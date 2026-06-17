@@ -103,7 +103,7 @@ RESOURCES_ACTIONS: dict[str, dict[str, list[str]]] = {
     "SALES": {
         "dashboard":              ["view", "export"],
         "lead":                   ["view", "create", "update", "delete", "accept", "convert_to_quote", "export"],
-        "quote":                  ["view", "approve", "reject", "update", "delete", "export"],
+        "quote":                  ["view", "create", "approve", "reject", "update", "delete", "export"],
         "sales_customer":         ["view", "create", "update", "delete", "export"],
         "sales_customers_invoice":["view", "create", "pay", "update", "delete", "export"],
     },

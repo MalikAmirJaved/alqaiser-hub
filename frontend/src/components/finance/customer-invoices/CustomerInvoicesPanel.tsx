@@ -47,7 +47,8 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
   const deleteInvoice = useDeleteCustomerInvoice();
   const payInvoice = usePayCustomerInvoice();
 
-  const permissions = useFeaturePermissions(moduleCode, "customer_invoice");
+  const resourceName = moduleCode === "SALES" ? "sales_customers_invoice" : "customer_invoice";
+  const permissions = useFeaturePermissions(moduleCode, resourceName);
 
   const modulePermissions: ModulePermissions = {
     create: permissions.create,
