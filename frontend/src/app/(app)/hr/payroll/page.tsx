@@ -289,7 +289,7 @@ const handleRefresh = () => {
 />
 
       {/* Advance Salary Banner */}
-      {(selectedYear > currentYear || (selectedYear === currentYear && selectedMonth >= currentMonth)) && (
+      {(selectedYear > currentYear || (selectedYear === currentYear && selectedMonth > currentMonth)) && (
         <div className="bg-amber/10 border border-amber/30 rounded-xl p-4 mb-4 flex items-center gap-3">
           <Info className="w-5 h-5 text-amber shrink-0" />
           <div className="flex-1 min-w-0">
@@ -407,10 +407,9 @@ const handleRefresh = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {(selectedYear > currentYear || (selectedYear === currentYear && selectedMonth >= currentMonth)
-                          ? !getAdvanceLoan(employee.id) && !isPaid
-                          : !isPaid || hasAdvanceItems(employee.id)
-                        ) && payrollPermissions.pay_salary && (
+                        {(selectedYear < currentYear || (selectedYear === currentYear && selectedMonth < currentMonth))
+                          && (!isPaid || hasAdvanceItems(employee.id))
+                          && payrollPermissions.pay_salary && (
                           <button
                             onClick={() => {
                               setSelectedEmployee(employee);

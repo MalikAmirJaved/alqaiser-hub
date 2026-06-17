@@ -51,7 +51,7 @@ export default function PaymentModal({
         && l.advance_for_year === selectedYear
         && l.approval === "CONFIRM"
   );
-  const isAdvance = !advanceExists && (selectedYear > currentYear || (selectedYear === currentYear && selectedMonth >= currentMonth));
+  const isAdvance = !advanceExists && (selectedYear > currentYear || (selectedYear === currentYear && selectedMonth > currentMonth));
   const previewMutation = usePayrollPreview(apiModule);
   const processPayroll = useProcessPayroll(apiModule);
   const processPayrollAdvance = useProcessPayrollAdvance(apiModule);
