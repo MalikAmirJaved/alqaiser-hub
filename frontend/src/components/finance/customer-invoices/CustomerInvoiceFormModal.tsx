@@ -293,7 +293,7 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
                   <Plus className="w-3.5 h-3.5" /> Add Item
                 </button>
               </div>
-              <div className="overflow-x-auto border border-border rounded-lg">
+              <div className="overflow-visible border border-border rounded-lg">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50">
                     <tr>
