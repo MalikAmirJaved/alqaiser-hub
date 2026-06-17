@@ -2,12 +2,12 @@
 import { useEffect, useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { X, Plus, Trash2, Search, RotateCw } from "lucide-react";import { useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api";
 import {
   useCreateCustomerInvoice,
   useUpdateCustomerInvoice,
   type CustomerInvoice,
 } from "@/hooks/finance/useCustomerInvoices";
+import { useCreateSalesInvoice, useUpdateSalesInvoice } from "@/hooks/sales/useSalesInvoices";
 import { useCustomers } from "@/hooks/useCustomers";
 import { useAllVariantsSimple } from "@/hooks/useAllVariants";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
@@ -52,6 +52,8 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
   const { data: variants = [] } = useAllVariantsSimple({ active_only: true });
   const createInvoice = useCreateCustomerInvoice();
   const updateInvoice = useUpdateCustomerInvoice();
+  const createSalesInvoice = useCreateSalesInvoice();
+  const updateSalesInvoice = useUpdateSalesInvoice();
   const queryClient = useQueryClient();
   const { generateCode, validateCode } = useAutoCode("customer_invoice");
 
@@ -185,16 +187,11 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
     }));
 
     if (moduleCode === "SALES") {
-      const salesUrl = initialData
-        ? `/api/sales/invoices/${initialData.id}/`
-        : "/api/sales/invoices/";
-      const method = initialData ? "PUT" : "POST";
-      await apiFetch(salesUrl, {
-        method,
-        body: JSON.stringify(payload),
-      });
-      queryClient.invalidateQueries({ queryKey: ["finance_customer_invoices"] });
-      queryClient.invalidateQueries({ queryKey: ["sales_dashboard"] });
+      if (initialData) {
+        await updateSalesInvoice.mutateAsync({ id: initialData.id, data: payload });
+      } else {
+        await createSalesInvoice.mutateAsync(payload);
+      }
     } else {
       if (initialData) {
         await updateInvoice.mutateAsync({ id: initialData.id, data: payload });

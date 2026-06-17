@@ -10,7 +10,7 @@ import React, {
   useCallback,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useApi } from "@/hooks/useApi";
+import { useNotificationsApi } from "@/hooks/useNotificationsApi";
 import {
   registerServiceWorker,
   requestNotificationPermission,
@@ -152,17 +152,17 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
 
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const api = useApi();
+  const { fetchNotifications: fetchNotificationsApi, markAsRead: markAsReadApi, markAllAsRead: markAllAsReadApi, toggleFavourite: toggleFavouriteApi } = useNotificationsApi();
   const queryClient = useQueryClient();
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const data = await api<PaginatedNotificationsResponse>("/api/notifications/");
-      setNotifications(data.results || []);
+      const results = await fetchNotificationsApi();
+      setNotifications(results);
     } catch (e) {
       console.error("Error fetching notifications", e);
     }
-  }, [api]);
+  }, [fetchNotificationsApi]);
 
   // Register service worker and request permission on mount
   useEffect(() => {
@@ -292,7 +292,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         ws.close(); // trigger reconnect
       };
     },
-    [api, fetchNotifications, queryClient, user?.companyId, user?.branchId, isAuthenticated]
+    [fetchNotifications, queryClient, user?.companyId, user?.branchId, isAuthenticated]
   );
 
   useEffect(() => {
@@ -320,7 +320,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
   const markAsRead = useCallback(
     async (id: string) => {
       try {
-        await api(`/api/notifications/${id}/mark_read/`, { method: "POST" });
+        await markAsReadApi(id);
         setNotifications((prev) =>
           prev.map((n) =>
             n.id === id ? { ...n, is_read: true, read_at: new Date().toISOString() } : n
@@ -330,26 +330,24 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         console.error("Error marking notification as read", e);
       }
     },
-    [api]
+    [markAsReadApi]
   );
 
   const markAllAsRead = useCallback(async () => {
     try {
-      await api("/api/notifications/mark_all_read/", { method: "POST" });
+      await markAllAsReadApi();
       setNotifications((prev) =>
         prev.map((n) => ({ ...n, is_read: true, read_at: n.read_at || new Date().toISOString() }))
       );
     } catch (e) {
       console.error("Error marking all notifications as read", e);
     }
-  }, [api]);
+  }, [markAllAsReadApi]);
 
   const toggleFavourite = useCallback(
     async (id: string) => {
       try {
-        const res = await api<{ is_favourite: boolean }>(`/api/notifications/${id}/toggle_favourite/`, {
-          method: "POST",
-        });
+        const res = await toggleFavouriteApi(id);
         setNotifications((prev) =>
           prev.map((n) => (n.id === id ? { ...n, is_favourite: res.is_favourite } : n))
         );
@@ -357,7 +355,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         console.error("Error toggling favourite", e);
       }
     },
-    [api]
+    [toggleFavouriteApi]
   );
 
   return (

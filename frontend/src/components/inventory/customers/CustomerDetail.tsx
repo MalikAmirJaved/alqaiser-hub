@@ -2,9 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { useApi } from "@/hooks/useApi";
-import { Customer, useDeleteCustomer, useUpdateCustomer } from "@/hooks/useCustomers";
+import { Customer, useCustomer, useDeleteCustomer, useUpdateCustomer } from "@/hooks/useCustomers";
 import { useSalesOrders, type SalesOrderResponse } from "@/hooks/useSalesOrder";
 import { useCustomerInvoices, type CustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
@@ -33,7 +31,6 @@ interface CustomerDetailProps {
 export default function CustomerDetail({ id, moduleCode, onBack }: CustomerDetailProps) {
   const formatCurrency = useFormatCurrency();
   const router = useRouter();
-  const api = useApi();
   const deleteCustomer = useDeleteCustomer();
   const updateCustomer = useUpdateCustomer();
   const permissions = useFeaturePermissions(moduleCode, moduleCode === "SALES" ? "sales_customer" : "customer");
@@ -42,10 +39,7 @@ export default function CustomerDetail({ id, moduleCode, onBack }: CustomerDetai
   const [isEditing, setIsEditing] = useState(false);
 
   // Fetch customer data
-  const { data: customer, refetch, isLoading: customerLoading } = useQuery<Customer>({
-    queryKey: ["customer", id],
-    queryFn: () => api(`/api/inventory/customers/${id}/`),
-  });
+  const { data: customer, refetch, isLoading: customerLoading } = useCustomer(id);
 
   // Fetch sales orders
   const { data: allOrders = [], isLoading: ordersLoading } = useSalesOrders({

@@ -224,6 +224,28 @@ export function useFetchSalesOrderByNumber(orderNumber: string) {
   });
 }
 
+/**
+ * Update an existing sales order (e.g. save draft changes)
+ */
+export function useUpdateSalesOrder() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ orderId, data }: { orderId: string; data: Record<string, any> }) =>
+      api(`/api/inventory/sales-orders/${orderId}/`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    onSuccess: (_, { orderId }) => {
+      queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
+      queryClient.invalidateQueries({ queryKey: ["salesOrder", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
+      queryClient.invalidateQueries({ queryKey: ["batchStock"] });
+    },
+  });
+}
+
 export function useDraftSalesOrders() {
   const api = useApi();
   return useQuery({

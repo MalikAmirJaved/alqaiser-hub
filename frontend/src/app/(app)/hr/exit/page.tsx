@@ -30,7 +30,6 @@ import {
 } from "@/hooks/useExitManagement";
 import { useActiveEmployees } from "@/hooks/useEmployees";
 import { toast } from "sonner";
-import { useApi } from "@/hooks/useApi";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
@@ -60,7 +59,6 @@ export default function ExitManagementPage() {
   const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const permissions = useFeaturePermissions("HR", "exit");
-  const api = useApi();
   const { data: employees = [] } = useActiveEmployees();
   const confirmationModal = useConfirmationModal();
   const [query, setQuery] = useState("");

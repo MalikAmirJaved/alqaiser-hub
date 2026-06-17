@@ -1,64 +1,17 @@
 // app/(dashboard)/hr/policies/[id]/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useApi } from "@/hooks/useApi";
+import { usePolicyDetail } from "@/hooks/usePolicies";
 import PageHeader from "@/components/PageHeader";
 import { 
   ArrowLeft, FileText, Clock, Download
 } from "lucide-react";
-import { toast } from "sonner";
-
-interface PolicyDetail {
-  id: string;
-  code: string;
-  title: string;
-  category: string;
-  department: string | null;
-  department_name?: string;
-  employee_type: string;
-  version: string;
-  status: string;
-  document_url?: string;
-  content: string;
-  change_summary?: string;
-  approved_by_name?: string;
-  created_by_name?: string;
-  created_at: string;
-  updated_at: string;
-  versions?: Array<{
-    id: number;
-    version: string;
-    change_summary?: string;
-    changed_by_name?: string;
-    created_at: string;
-  }>;
-}
 
 export default function PolicyDetailPage() {
   const { id } = useParams();
   const router = useRouter();
-  const api = useApi();
-  const [policy, setPolicy] = useState<PolicyDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadPolicy();
-  }, [id]);
-
-  const loadPolicy = async () => {
-    try {
-      setLoading(true);
-      const data = await api<PolicyDetail>(`/api/hr/policies/${id}/`);
-      setPolicy(data);
-    } catch (error: any) {
-      toast.error("Failed to load policy details");
-      router.push("/hr/policies");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: policy, isLoading: loading } = usePolicyDetail(id as string | undefined);
 
   if (loading) {
     return (
@@ -116,7 +69,7 @@ export default function PolicyDetailPage() {
             {policy.status.replace("_", " ")}
           </span>
           <span className="text-sm text-muted-foreground">
-            Created by {policy.created_by_name} on {new Date(policy.created_at).toLocaleDateString()}
+            Created by {policy.created_by_name} on {policy.created_at ? new Date(policy.created_at).toLocaleDateString() : "—"}
           </span>
         </div>
         <div className="flex gap-2">
