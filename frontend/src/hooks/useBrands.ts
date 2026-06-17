@@ -21,19 +21,31 @@ interface PaginatedResponse<T> {
 }
 
 // Fetch all brands
-export function useBrands(search?: string) {
+// Backward compatible: accepts string (search) or object (filters)
+export function useBrands(filters?: Record<string, string> | string) {
   const api = useApi();
-
-  const url = search
-    ? `/api/inventory/brands/?search=${encodeURIComponent(search)}`
-    : "/api/inventory/brands/";
+  
+  // Support old string-based usage
+  if (typeof filters === 'string') {
+    filters = { search: filters };
+  }
+  if (!filters) {
+    filters = {};
+  }
+  
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, val]) => {
+    if (val) params.append(key, val);
+  });
+  const queryString = params.toString();
+  const url = `/api/inventory/brands/${queryString ? `?${queryString}` : ""}`;
 
   return useQuery<
     PaginatedResponse<Brand>,
     Error,
     Brand[]
   >({
-    queryKey: ["inventory_brand", search],
+    queryKey: ["inventory_brand", filters],
     queryFn: () => api<PaginatedResponse<Brand>>(url),
     select: (data) => data.results,
     staleTime: 30 * 1000,

@@ -1,14 +1,18 @@
 // src/app/(app)/hr/payroll/page.tsx
 "use client";
 import { useState, useEffect } from "react";
-import { useEmployees } from "@/hooks/useEmployees";
-import { usePayroll, usePayrollStats } from "@/hooks/usePayroll";
-import { formatCurrency } from "@/lib/currency";
+import { useActiveEmployees } from "@/hooks/useEmployees";
+import { usePayroll, usePayrollStats, useEmployeeLoans, useCompensations } from "@/hooks/usePayroll";
+import { useLeaves } from "@/hooks/useLeaves";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import PageHeader from "@/components/PageHeader";
 import PaymentModal from "@/components/payroll/PaymentModal";
 import PayslipModal from "@/components/payroll/PayslipModal";
 import MonthSelectorModal from "@/components/payroll/MonthSelectorModal";
-import { Search, Filter, Eye, CreditCard, Calendar, RefreshCw } from "lucide-react";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
+import { useRouter } from "next/navigation";
+import { Eye, CreditCard, Calendar, RefreshCw, Info } from "lucide-react";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { getPermissions } from "@/lib/permissions";
 import { useSelector } from "react-redux";
@@ -28,17 +32,26 @@ export function PayrollPage({
   title?: string;
   permissionModule?: "HR" | "FINANCE";
 }) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const router = useRouter();
+  const formatCurrency = useFormatCurrency();
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [payslipModalOpen, setPayslipModalOpen] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth() + 1;
+  const currentYear = currentDate.getFullYear();
+  const defaultPrevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+  const defaultPrevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+  const [selectedMonth, setSelectedMonth] = useState(defaultPrevMonth);
+  const [selectedYear, setSelectedYear] = useState(defaultPrevYear);
   const [monthSelectorOpen, setMonthSelectorOpen] = useState(false);
 
   // Fetch data from backend
-  const { data: employees = [], isLoading: employeesLoading } = useEmployees();
+  const { data: employees = [], isLoading: employeesLoading } = useActiveEmployees();
+  const { data: allLoans = [] } = useEmployeeLoans();
+  const { data: compensations = [] } = useCompensations();
+  const { data: leaves = [] } = useLeaves();
   const { data: payrollRecords = [], isLoading: payrollLoading } = usePayroll({
     month: String(selectedMonth),
     year: String(selectedYear),
@@ -57,7 +70,6 @@ const payrollPermissions = getPermissions(
   permissionModule,
   "payroll"
 );
-
   // Get payment status for employee in selected month
   const getPaymentStatus = (employeeId: string) => {
     const record = payrollRecords.find(
@@ -73,21 +85,103 @@ const payrollPermissions = getPermissions(
     );
   };
 
-  // Filter active employees
-  const activeEmployees = employees.filter(e => e.employment_status === "ACTIVE");
+  // Get advance loan for this employee/month (PAID = not yet returned)
+  const getAdvanceLoan = (employeeId: string) => {
+    return allLoans.find(
+      l => l.employee_id === employeeId
+        && l.loan_type === "SALARY_ADVANCE"
+        && l.advance_for_month === selectedMonth
+        && l.advance_for_year === selectedYear
+        && l.approval === "CONFIRM"
+        && l.status === "PAID"
+    );
+  };
 
-  // Filter employees by search and status
-  const filteredEmployees = activeEmployees.filter(emp => {
-    const searchTerm = searchQuery.toLowerCase();
-    const matchesSearch =
+  // Helper: check if an active compensation applies to the selected month
+  const compensationAppliesToMonth = (comp: any): boolean => {
+    if (comp.status !== 'CONFIRM') return false;
+    const freq = comp.frequency_type;
+    if (freq === 'ONE_TIME' || freq === 'SELECTED_MONTH') {
+      return comp.selected_months?.some(
+        (sm: any) => sm.month === selectedMonth && sm.year === selectedYear
+      ) ?? false;
+    }
+    if (freq === 'MONTH_RANGE') {
+      const mr = comp.month_range;
+      if (!mr) return false;
+      const startVal = mr.start_year * 12 + mr.start_month;
+      const endVal = mr.end_year * 12 + mr.end_month;
+      const curVal = selectedYear * 12 + selectedMonth;
+      return curVal >= startVal && curVal <= endVal;
+    }
+    return true; // OTHER/MONTHLY — always applies
+  };
+
+  // Helper: does an advance payroll have outstanding items (comp/leave/loans) to process?
+  const hasAdvanceItems = (employeeId: string): boolean => {
+    const payrollRecord = getPayrollRecord(employeeId);
+    if (!payrollRecord || payrollRecord.transaction_type !== 'ADVANCE') return false;
+
+    // Check if compensation applies to this month
+    const empComp = compensations.find(c => c.employee_id === employeeId && c.status === 'CONFIRM');
+    if (empComp && compensationAppliesToMonth(empComp)) return true;
+
+    // Check paid non-advance loans that apply to this month
+    const empLoans = allLoans.filter((l: any) => {
+      if (l.employee_id !== employeeId || l.approval !== 'CONFIRM' || l.status !== 'PAID' || l.loan_type === 'SALARY_ADVANCE') return false;
+      const freq = l.frequency_type;
+      if (freq === 'SELECTED_MONTH' || freq === 'ONE_TIME') {
+        return l.selected_months?.some((sm: any) => sm.month === selectedMonth && sm.year === selectedYear) ?? false;
+      }
+      if (freq === 'MONTH_RANGE') {
+        const mr = l.month_range;
+        if (!mr) return false;
+        const startVal = mr.start_year * 12 + mr.start_month;
+        const endVal = mr.end_year * 12 + mr.end_month;
+        const curVal = selectedYear * 12 + selectedMonth;
+        return curVal >= startVal && curVal <= endVal;
+      }
+      return true;
+    });
+    if (empLoans.length > 0) return true;
+
+    // Check approved leaves overlapping this month
+    const hasLeave = leaves.some(l => {
+      if (l.employee_id !== employeeId || l.status !== 'APPROVED') return false;
+      const startDate = new Date(l.start_date);
+      const endDate = new Date(l.end_date);
+      const monthStart = new Date(selectedYear, selectedMonth - 1, 1);
+      const monthEnd = new Date(selectedYear, selectedMonth, 0);
+      return startDate <= monthEnd && endDate >= monthStart;
+    });
+    if (hasLeave) return true;
+
+    return false;
+  };
+
+  // Filter employees by search, status, and joining date
+  const filteredEmployees = employees.filter(emp => {
+    // Exclude employees who haven't joined by the selected month
+    if (emp.joining_date) {
+      const joinDate = new Date(emp.joining_date);
+      const joinMonth = joinDate.getMonth() + 1;
+      const joinYear = joinDate.getFullYear();
+      if (joinYear > selectedYear || (joinYear === selectedYear && joinMonth > selectedMonth)) {
+        return false;
+      }
+    }
+
+    const searchTerm = (filters.search || "").toLowerCase();
+    const matchesSearch = !searchTerm ||
       emp.first_name?.toLowerCase().includes(searchTerm) ||
       emp.last_name?.toLowerCase().includes(searchTerm) ||
-      emp.department?.toLowerCase().includes(searchTerm) ||
-      emp.designation?.toLowerCase().includes(searchTerm) ||
+      emp.department_name?.toLowerCase().includes(searchTerm) ||
+      emp.designation_name?.toLowerCase().includes(searchTerm) ||
       emp.employee_id?.toLowerCase().includes(searchTerm);
     
+    const statusFilter = filters.status || "";
     const status = getPaymentStatus(emp.id);
-    const matchesStatus = statusFilter === "all" || status === statusFilter.toUpperCase();
+    const matchesStatus = !statusFilter || status === statusFilter.toUpperCase();
     
     return matchesSearch && matchesStatus;
   });
@@ -121,10 +215,16 @@ const handleRefresh = () => {
     );
   }
 
-  const paidCount = stats?.paidCount || activeEmployees.filter(e => getPaymentStatus(e.id) === "PAID").length;
-  const pendingCount = activeEmployees.length - paidCount;
-  const totalPayroll = stats?.totalPayroll ? parseFloat(stats.totalPayroll) : activeEmployees.reduce((sum, e) => sum + (parseFloat(e.salary) || 0), 0);
-  const avgSalary = stats?.avgSalary ? parseFloat(stats.avgSalary) : (activeEmployees.length > 0 ? totalPayroll / activeEmployees.length : 0);
+  const paidCount = stats?.paidCount || employees.filter(e => getPaymentStatus(e.id) === "PAID").length;
+  const pendingCount = employees.length - paidCount;
+  const totalPayroll = stats?.totalPayroll ? parseFloat(stats.totalPayroll) : employees.reduce((sum, e) => sum + (parseFloat(e.salary) || 0), 0);
+  const avgSalary = stats?.avgSalary ? parseFloat(stats.avgSalary) : (employees.length > 0 ? totalPayroll / employees.length : 0);
+
+  const overallPayable = employees.reduce((sum, employee) => {
+    if (getPaymentStatus(employee.id) === "PAID") return sum;
+    const record = getPayrollRecord(employee.id);
+    return sum + parseFloat(record?.net_salary || employee.salary || "0");
+  }, 0);
 
   return (
     <div>
@@ -164,9 +264,9 @@ const handleRefresh = () => {
       id: "paid-employees",
       label: "Paid Employees",
       value:
-        activeEmployees.length > 0
+        employees.length > 0
           ? `${paidCount} (${Math.round(
-              (paidCount / activeEmployees.length) * 100
+              (paidCount / employees.length) * 100
             )}%)`
           : paidCount,
     },
@@ -180,38 +280,41 @@ const handleRefresh = () => {
       label: "Avg. Salary",
       value: `${formatCurrency(avgSalary)}`,
     },
+    {
+      id: "overall-payable",
+      label: "Overall Payable",
+      value: `${formatCurrency(overallPayable)}`,
+    },
   ]}
 />
 
-      {/* Employee Payment Table */}
-      <div className="bg-card border border-border rounded-2xl shadow-sm">
-        <div className="p-3 border-b border-border">
-          <div className="flex flex-col sm:flex-row gap-2">
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by name, department..."
-                className="w-full bg-muted/40 pl-9 pr-3 h-9 rounded-md text-sm outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-            <div className="flex gap-2">
-              <div className="relative">
-                <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="pl-9 pr-3 h-9 rounded-md border border-border bg-muted/40 text-sm outline-none"
-                >
-                  <option value="all">All</option>
-                  <option value="pending">Pending</option>
-                  <option value="paid">Paid</option>
-                </select>
-              </div>
-            </div>
+      {/* Advance Salary Banner */}
+      {(selectedYear > currentYear || (selectedYear === currentYear && selectedMonth > currentMonth)) && (
+        <div className="bg-amber/10 border border-amber/30 rounded-xl p-4 mb-4 flex items-center gap-3">
+          <Info className="w-5 h-5 text-amber shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber">Future Month - Advance Salary</p>
+            <p className="text-xs text-muted-foreground">
+              Click <strong>Process Payment</strong> on any employee to create a Salary Advance loan. The advance will be auto-deducted when regular payroll runs for this month.
+            </p>
           </div>
         </div>
+      )}
+
+      {/* Filter Bar */}
+      <div className="mb-4">
+        <FilterBar
+          fields={[
+            { name: "search", label: "Search", type: "search" },
+            { name: "status", label: "Payment", type: "status", options: [{ value: "pending", label: "Pending" }, { value: "paid", label: "Paid" }] },
+          ]}
+          filters={filters}
+          onChange={setFilters}
+        />
+      </div>
+
+      {/* Employee Payment Table */}
+      <div className="bg-card border border-border rounded-2xl shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
@@ -238,11 +341,27 @@ const handleRefresh = () => {
                 const status = getPaymentStatus(employee.id);
                 const isPaid = status === "PAID";
                 const payrollRecord = getPayrollRecord(employee.id);
+
                 return (
                   <tr key={employee.id} className="border-t border-border hover:bg-muted/30">
                     <td className="px-4 py-3">
-                      <div className="font-medium">{employee.first_name} {employee.last_name || ""}</div>
-                      <div className="text-xs text-muted-foreground">{employee.designation || employee.department || ""}</div>
+                      <button
+                        onClick={() => router.push(`payroll/${employee.id}`)}
+                        className="text-left hover:underline"
+                      >
+                        <div className="font-medium">{employee.first_name} {employee.last_name || ""}</div>
+                        <div className="text-xs text-muted-foreground">{employee.designation_name || employee.department_name || ""}</div>
+                      </button>
+                      {(() => {
+                        const advance = getAdvanceLoan(employee.id);
+                        return advance ? (
+                          <div className="flex items-center gap-1 mt-1">
+                            <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] rounded-full bg-amber/10 text-amber border border-amber/30">
+                              Advance: {formatCurrency(parseFloat(advance.remaining_amount || advance.total_payable))}
+                            </span>
+                          </div>
+                        ) : null;
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-xs font-mono text-primary">
@@ -288,7 +407,9 @@ const handleRefresh = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {(!isPaid && payrollPermissions.create) && (
+                        {(selectedYear < currentYear || (selectedYear === currentYear && selectedMonth < currentMonth))
+                          && (!isPaid || hasAdvanceItems(employee.id))
+                          && payrollPermissions.pay_salary && (
                           <button
                             onClick={() => {
                               setSelectedEmployee(employee);
@@ -310,7 +431,7 @@ const handleRefresh = () => {
         </div>
         <div className="p-3 border-t border-border flex items-center justify-between">
           <div className="text-xs text-muted-foreground">
-            Showing {filteredEmployees.length} of {activeEmployees.length} employees
+            Showing {filteredEmployees.length} of {employees.length} employees
           </div>
           <div className="text-xs text-muted-foreground">
             Total Payroll: {formatCurrency(totalPayroll)}
@@ -319,7 +440,7 @@ const handleRefresh = () => {
       </div>
 
       {/* Modals */}
-      {(paymentModalOpen && selectedEmployee && payrollPermissions.create)&& (
+      {(paymentModalOpen && selectedEmployee && payrollPermissions.pay_salary)&& (
         <PaymentModal
           formatCurrency={formatCurrency}
           employee={selectedEmployee}

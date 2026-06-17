@@ -1,4 +1,4 @@
-// src/constants/productAttributes.ts
+// lib/productAttributes.ts
 
 export const ATTRIBUTE_SUGGESTIONS: Record<string, { value: string; label: string }[]> = {
   Size: [

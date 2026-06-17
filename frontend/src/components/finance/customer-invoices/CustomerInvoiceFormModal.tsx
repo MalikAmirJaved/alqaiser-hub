@@ -1,7 +1,7 @@
 // components/finance/CustomerInvoiceFormModal.tsx
 import { useEffect, useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
-import { X, Plus, Trash2, Search } from "lucide-react";
+import { X, Plus, Trash2, Search, RotateCw } from "lucide-react";
 import {
   useCreateCustomerInvoice,
   useUpdateCustomerInvoice,
@@ -10,7 +10,9 @@ import {
 import { useCustomers } from "@/hooks/useCustomers";
 import { useAllVariantsSimple } from "@/hooks/useAllVariants";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { useAutoCode } from "@/hooks/useAutoCode";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 interface InvoiceLine {
   variant: string;
@@ -41,12 +43,14 @@ interface Props {
 }
 
 export default function CustomerInvoiceFormModal({ open, onClose, initialData, onSuccess }: Props) {
+  const formatCurrency = useFormatCurrency();
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [newCustomerInfo, setNewCustomerInfo] = useState<any>(null);
   const { data: customers = [], refetch: refetchCustomers } = useCustomers("");
   const { data: variants = [] } = useAllVariantsSimple({ active_only: true });
   const createInvoice = useCreateCustomerInvoice();
   const updateInvoice = useUpdateCustomerInvoice();
+  const { generateCode, validateCode } = useAutoCode("customer_invoice");
 
   const { register, control, handleSubmit, reset, setValue, watch } = useForm<CustomerInvoiceFormData>({
     defaultValues: {
@@ -118,6 +122,7 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
         lines: [],
       });
       setNewCustomerInfo(null);
+      generateCode().then(code => setValue("invoice_number", code)).catch(() => {});
     }
   }, [initialData, setValue, reset, open]);
 
@@ -201,31 +206,42 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Invoice Number *</label>
-                <input
-                  {...register("invoice_number", { required: true })}
-                  className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-                  placeholder="e.g., INV-2024-001"
-                />
+                <div className="flex gap-2">
+                  <input
+                    {...register("invoice_number", { required: true })}
+                    onBlur={(e) => validateCode(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-border rounded-md bg-background text-sm font-mono"
+                    placeholder="e.g., INV-2024-001"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => generateCode().then(code => setValue("invoice_number", code)).catch(() => {})}
+                    className="h-9 w-9 flex items-center justify-center rounded-md border border-border hover:bg-muted transition flex-shrink-0"
+                    title="Generate new code"
+                  >
+                    <RotateCw className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Customer *</label>
                 <div className="flex gap-2">
-                  <select
-                    {...register("customer", { required: !newCustomerInfo })}
-                    disabled={!!newCustomerInfo}
-                    className="flex-1 px-3 py-2 border border-border rounded-md bg-background text-sm"
-                  >
-                    <option value="">Select customer</option>
-                    {customers.map((cust) => (
-                      <option key={cust.id} value={cust.id}>
-                        {cust.name} ({cust.customer_code})
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex-1">
+                    <SearchableSelect
+                      value={watch("customer") || ""}
+                      onChange={(val) => setValue("customer", val)}
+                      options={customers.map((cust) => ({
+                        value: cust.id,
+                        label: `${cust.name} (${cust.customer_code})`,
+                      }))}
+                      placeholder="Select customer"
+                      required={!newCustomerInfo}
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={() => setShowCustomerModal(true)}
-                    className="p-2 rounded-md border border-border hover:bg-muted text-primary"
+                    className="p-2 rounded-md border border-border hover:bg-muted text-primary shrink-0"
                     title="Add New Customer"
                   >
                     <Plus className="w-4 h-4" />
@@ -310,19 +326,12 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
                         return (
                           <tr key={field.id} className="border-t border-border">
                             <td className="px-3 py-2">
-                              <select
+                              <SearchableSelect
                                 value={currentLine.variant || ""}
-                                onChange={(e) => updateLine(idx, "variant", e.target.value)}
-                                className="w-full bg-transparent focus:outline-none"
-                                required
-                              >
-                                <option value="">Select variant</option>
-                                {variants.map((v) => (
-                                  <option key={v.id} value={v.id}>
-                                    {v.product_name} ({v.sku})
-                                  </option>
-                                ))}
-                              </select>
+                                onChange={(val) => updateLine(idx, "variant", val)}
+                                options={variants.map((v) => ({ value: v.id, label: `${v.product_name} (${v.sku})` }))}
+                                placeholder="Select variant"
+                              />
                             </td>
                             <td className="px-3 py-2">
                               <input

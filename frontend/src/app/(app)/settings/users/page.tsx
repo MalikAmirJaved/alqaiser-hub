@@ -1,36 +1,81 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from "@/hooks/useUsers";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Pencil, Trash2, Search } from "lucide-react";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
+import { Plus, Pencil, Trash2, UserPlus, ToggleRight } from "lucide-react";
 import UserForm from "@/components/Forms/UserForm";
-import { toast } from "sonner";
+import UserStatusModal from "@/components/UserStatusModal";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 export default function UsersPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const permissions = useFeaturePermissions("SETTINGS", "user");
-  const [query, setQuery] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<any>(null);
 
-  const { data: users = [], isLoading } = useUsers();
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+  const [modalOpen, setModalOpen] = useState(false);
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [selectedUserForStatus, setSelectedUserForStatus] = useState<any>(null);
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [storedPrefill, setStoredPrefill] = useState<any>(null);
+
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
+
+  // --- Prefill data from employee page (when coming from employee "Login Access")
+  const prefill = searchParams.get("prefill");
+  const prefillData = useMemo(() => {
+    if (!prefill) return null;
+    const email = searchParams.get("email") || "";
+    return {
+      username: email.split("@")[0] || "",
+      email: email,
+      first_name: searchParams.get("first_name") || "",
+      last_name: searchParams.get("last_name") || "",
+      department: searchParams.get("department_id") || searchParams.get("department") || "",
+      designation: searchParams.get("designation_id") || searchParams.get("designation") || "",
+      phone_number: searchParams.get("phone_number") || "",
+      isfrom_employee_id: searchParams.get("isfrom_employee_id") || null,
+      password: "",
+      confirm_password: "",
+    };
+  }, [searchParams, prefill]);
+
+  // Auto‑open modal when prefill is present and user has create permission
+  const hasAutoOpened = useRef(false);
+  useEffect(() => {
+    if (prefill && !hasAutoOpened.current && permissions.create) {
+      hasAutoOpened.current = true;
+      setStoredPrefill(prefillData);
+      setEditingUser(null);
+      setModalOpen(true);
+      router.replace("/settings/users", undefined);
+    }
+  }, [prefill, permissions.create, router, prefillData]);
 
   const handleSave = async (userData: any) => {
     try {
       if (editingUser) {
         await updateUser.mutateAsync({ id: editingUser.id, data: userData });
-        toast.success("User updated");
       } else {
-        await createUser.mutateAsync(userData);
-        toast.success("User created");
+        const payload = { ...userData };
+        if (storedPrefill?.isfrom_employee_id) {
+          payload.isfrom_employee_id = storedPrefill.isfrom_employee_id;
+        }
+        const newUser = await createUser.mutateAsync(payload);
+          router.push(`/settings/permissions?userId=${newUser.id}`);
+        
       }
       setModalOpen(false);
       setEditingUser(null);
+      setStoredPrefill(null);
     } catch (error: any) {
-      toast.error(error.message || "Operation failed");
     }
   };
 
@@ -38,17 +83,52 @@ export default function UsersPage() {
     if (!confirm(`Delete user "${user.username}"?`)) return;
     try {
       await deleteUser.mutateAsync(user.id);
-      toast.success("User deleted");
     } catch (error: any) {
-      toast.error(error.message || "Delete failed");
     }
   };
-  const filteredUsers = users.filter(u =>
-    u.username?.toLowerCase().includes(query.toLowerCase()) ||
-    u.email?.toLowerCase().includes(query.toLowerCase()) ||
-    u.first_name?.toLowerCase().includes(query.toLowerCase()) ||
-    u.last_name?.toLowerCase().includes(query.toLowerCase())
+
+  const openStatusModal = (user: any) => {
+    setSelectedUserForStatus(user);
+    setStatusModalOpen(true);
+  };
+
+  const handleStatusChange = async (isActive: boolean) => {
+    try {
+      await updateUser.mutateAsync({
+        id: selectedUserForStatus.id,
+        data: { is_active: isActive },
+      });
+    } catch (error: any) {
+      throw error;
+    }
+  };
+
+  const { data: users = [], isLoading } = useUsers(
+    Object.keys(filters).length > 0 ? filters : undefined
   );
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setPage(1); }, [filters]);
+
+  // Only is_active is client-side (backend doesn't support server-side status filter for users)
+  const isActiveFilter = filters.is_active;
+  const filteredUsers = isActiveFilter
+    ? users.filter((u) => {
+        if (isActiveFilter === "true" && !u.is_active) return false;
+        if (isActiveFilter === "false" && u.is_active) return false;
+        return true;
+      })
+    : users;
+
+  // Paginate
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const paginatedUsers = filteredUsers.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
+    { name: "is_active", label: "Status", type: "boolean" },
+  ];
 
   if (isLoading) {
     return (
@@ -68,6 +148,7 @@ export default function UsersPage() {
             <button
               onClick={() => {
                 setEditingUser(null);
+                setStoredPrefill(null);
                 setModalOpen(true);
               }}
               className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm"
@@ -78,18 +159,14 @@ export default function UsersPage() {
         }
       />
 
-      {/* Search */}
+      {/* Filters */}
       <div className="bg-card border border-border rounded-2xl shadow-sm">
         <div className="p-3 border-b border-border">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search users..."
-              className="w-full bg-muted/40 pl-9 pr-3 h-9 rounded-md text-sm outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
+          <FilterBar
+            fields={filterFields}
+            filters={filters}
+            onChange={setFilters}
+          />
         </div>
 
         <div className="overflow-x-auto">
@@ -107,66 +184,149 @@ export default function UsersPage() {
             <tbody>
               {filteredUsers.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center py-10 text-muted-foreground">
+                  <td colSpan={6} className="text-center py-10 text-muted-foreground">
                     No users found.
                   </td>
                 </tr>
               )}
-              {filteredUsers.map((user) => (
+              {paginatedUsers.map((user) => (
                 <tr key={user.id} className="border-t border-border hover:bg-muted/30">
                   <td className="px-4 py-2.5 font-mono text-xs">{user.username}</td>
                   <td className="px-4 py-2.5 font-medium">
                     {user.first_name} {user.last_name}
                   </td>
                   <td className="px-4 py-2.5">{user.email}</td>
-                  <td className="px-4 py-2.5">{user.department || "—"}</td>
+                  <td className="px-4 py-2.5">{user.department_name || user.department || "—"}</td>
                   <td className="px-4 py-2.5">
-                    <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
-                      user.is_active
-                        ? "bg-success/15 text-success border-success/30"
-                        : "bg-destructive/15 text-destructive border-destructive/30"
-                    }`}>
-                      {user.is_active ? "Active" : "Inactive"}
-                    </span>
+                   <button
+                     onClick={(e) => {
+                       e.stopPropagation();
+                       if (permissions.update) {
+                         openStatusModal(user);
+                       }
+                     }}
+                     className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border cursor-pointer hover:opacity-80 transition-opacity ${
+                       user.is_active
+                         ? "bg-success/15 text-success border-success/30"
+                         : "bg-destructive/15 text-destructive border-destructive/30"
+                     }`}
+                     title={permissions.update ? "Click to change status" : "No permission to change status"}
+                   >
+                     {user.is_active ? "Active" : "Inactive"}
+                   </button>
                   </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
                     {permissions.update && (
                       <button
-                        onClick={() => {
-                          setEditingUser(user);
-                          setModalOpen(true);
-                        }}
-                        className="p-1.5 rounded-md hover:bg-muted"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                    )}
-                    {permissions.delete && (
-                      <button
-                        onClick={() => handleDelete(user)}
-                        className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+                       onClick={() => openStatusModal(user)}
+                       className="p-1.5 rounded-md hover:bg-blue-100 text-blue-600 transition-colors"
+                       title="Change User Status"
+                       aria-label="Change Status"
+                     >
+                       <ToggleRight className="w-4 h-4" />
+                     </button>
+                   )}
+
+                   {permissions.update && (
+                     <button
+                       onClick={() => {
+                         setEditingUser(user);
+                         setStoredPrefill(null);
+                         setModalOpen(true);
+                       }}
+                       className="p-1.5 rounded-md hover:bg-muted"
+                     >
+                       <Pencil className="w-4 h-4" />
+                     </button>
+                   )}
+
+                   {/* Go to Employee: hidden if user already linked to an employee */}
+                   {permissions.create && !user.isfrom_employee_id && (
+                     <button
+                       onClick={() => {
+                         const params = new URLSearchParams({
+                           prefill: "true",
+                           first_name: user.first_name || "",
+                           last_name: user.last_name || "",
+                           email: user.email || "",
+                           phone: user.phone_number || "",
+                           department_id: user.department_id || user.department || "",
+                           designation_id: user.designation_id || user.designation || "",
+                           isfrom_user_id: user._id || "",
+                         });
+                         router.push(`/hr/employees?${params.toString()}`);
+                       }}
+                       className="p-1.5 rounded-md hover:bg-primary/15 text-primary transition-colors"
+                       title="Create Employee from User"
+                     >
+                       <UserPlus className="w-4 h-4" />
+                     </button>
+                   )}
+
+                   {permissions.delete && (
+                     <button
+                       onClick={() => handleDelete(user)}
+                       className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
+                     >
+                       <Trash2 className="w-4 h-4" />
+                     </button>
+                   )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        {filteredUsers.length > pageSize && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border text-xs text-muted-foreground">
+            <span>
+              {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filteredUsers.length)} of {filteredUsers.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <span>Page {safePage} of {totalPages}</span>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={safePage <= 1}
+                className="px-2.5 py-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setPage(p => p + 1)}
+                disabled={safePage >= totalPages}
+                className="px-2.5 py-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
+      {/* User Form Modal */}
       {(modalOpen && (editingUser ? permissions.update : permissions.create)) && (
         <UserForm
-          initialData={editingUser}
+          initialData={editingUser ? editingUser : storedPrefill || undefined}
           onSubmit={handleSave}
           onCancel={() => {
             setModalOpen(false);
             setEditingUser(null);
+            setStoredPrefill(null);
           }}
           isLoading={createUser.isPending || updateUser.isPending}
-          departments={["HR", "INVENTORY", "FINANCE", "MONITORING", "SETTINGS"]}
+        />
+      )}
+
+      {/* User Status Modal */}
+      {selectedUserForStatus && (
+        <UserStatusModal
+          open={statusModalOpen}
+          onOpenChange={setStatusModalOpen}
+          user={selectedUserForStatus}
+          onSubmit={handleStatusChange}
+          onSuccess={() => {
+            setSelectedUserForStatus(null);
+          }}
         />
       )}
     </div>

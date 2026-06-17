@@ -4,10 +4,18 @@ from apps.common.basemodel import BaseModel
 class Warehouse(BaseModel):
     warehouse_name = models.CharField(max_length=200)
     code = models.CharField(max_length=50)
-    manager_name = models.CharField(max_length=150)
-    phone = models.CharField(max_length=20)
-    capacity = models.DecimalField(max_digits=12, decimal_places=2, help_text="Storage capacity in sq ft or cubic meters")
-    current_occupancy = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    # New fields
+    employee = models.ForeignKey(
+        'hr.Employee',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='warehouses'
+    )
+    landline_number = models.CharField(max_length=20, blank=True, null=True)
+    
+    # Existing fields that remain
     country = models.CharField(max_length=100)
     state = models.CharField(max_length=100, blank=True)
     city = models.CharField(max_length=100)
@@ -28,13 +36,3 @@ class Warehouse(BaseModel):
 
     def __str__(self):
         return f"{self.code} - {self.warehouse_name}"
-
-    @property
-    def available_capacity(self):
-        return self.capacity - self.current_occupancy
-
-    @property
-    def occupancy_percentage(self):
-        if self.capacity > 0:
-            return (self.current_occupancy / self.capacity) * 100
-        return 0

@@ -1,10 +1,9 @@
-// src/components/inventory/WarehouseDetail.tsx
-"use client";
+// frontend/src/components/inventory/warehouse/WarehouseDetail.tsx
 
-import { useState } from "react";
-import { X, MapPin, Phone, Mail, Package, TrendingUp, Edit, Trash2, Activity } from "lucide-react";
+import { X, MapPin, Mail, Package, Edit, Trash2, User, Phone, FileText } from "lucide-react";
 import { Warehouse } from "@/hooks/useWarehouses";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
 
 interface WarehouseDetailProps {
   warehouse: Warehouse | null;
@@ -26,19 +25,6 @@ export function WarehouseDetail({ warehouse, onClose, onEdit, onDelete, isOpen }
   };
 
   if (!warehouse) return null;
-
-  const getStatusColor = (percentage: number) => {
-    if (percentage < 60) return "text-success bg-success/10";
-    if (percentage < 85) return "text-warning bg-warning/10";
-    return "text-destructive bg-destructive/10";
-  };
-
-  const getOccupancyStatus = (percentage: number) => {
-    if (percentage < 60) return "Optimal";
-    if (percentage < 85) return "Moderate";
-    if (percentage < 95) return "High";
-    return "Critical";
-  };
 
   return (
     <>
@@ -74,51 +60,28 @@ export function WarehouseDetail({ warehouse, onClose, onEdit, onDelete, isOpen }
 
         {/* Content */}
         <div className="overflow-y-auto h-[calc(100%-73px)]">
-          {/* Stats Cards */}
           <div className="p-6 space-y-6">
-            {/* Occupancy Status */}
-            <div className="bg-muted/30 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Activity className="w-4 h-4" />
-                  <span>Occupancy Rate</span>
+            {/* Employee Info */}
+            {warehouse.employee_name && (
+              <div className="bg-muted/30 rounded-xl p-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                  <User className="w-4 h-4" />
+                  <span>Responsible Employee</span>
                 </div>
-                <span className={cn("text-sm font-semibold px-2 py-1 rounded-full", getStatusColor(warehouse.occupancy_percentage))}>
-                  {getOccupancyStatus(warehouse.occupancy_percentage)}
-                </span>
+                <p className="text-foreground font-medium">{warehouse.employee_name}</p>
               </div>
-              <div className="relative">
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary transition-all duration-500 rounded-full"
-                    style={{ width: `${Math.min(warehouse.occupancy_percentage, 100)}%` }}
-                  />
-                </div>
-                <div className="flex justify-between mt-2 text-xs text-muted-foreground">
-                  <span>0%</span>
-                  <span>{warehouse.occupancy_percentage}%</span>
-                  <span>100%</span>
-                </div>
-              </div>
-            </div>
+            )}
 
-            {/* Capacity Info */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-muted/30 rounded-xl p-3">
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <Package className="w-4 h-4" />
-                  <span className="text-xs">Capacity</span>
+            {/* Landline */}
+            {warehouse.landline_number && (
+              <div className="bg-muted/30 rounded-xl p-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                  <Phone className="w-4 h-4" />
+                  <span>Landline</span>
                 </div>
-                <div className="text-xl font-semibold">{warehouse.capacity.toLocaleString()} sq ft</div>
+                <p className="text-foreground">{warehouse.landline_number}</p>
               </div>
-              <div className="bg-muted/30 rounded-xl p-3">
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <TrendingUp className="w-4 h-4" />
-                  <span className="text-xs">Available</span>
-                </div>
-                <div className="text-xl font-semibold text-success">{warehouse.available_capacity.toLocaleString()} sq ft</div>
-              </div>
-            </div>
+            )}
 
             {/* Location */}
             <div className="space-y-3">
@@ -137,34 +100,22 @@ export function WarehouseDetail({ warehouse, onClose, onEdit, onDelete, isOpen }
               </div>
             </div>
 
-            {/* Contact Info */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <Phone className="w-4 h-4" />
-                <span>Contact Information</span>
+            {/* Email */}
+            {warehouse.email && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <Mail className="w-4 h-4" />
+                  <span>Email</span>
+                </div>
+                <p className="text-sm text-muted-foreground pl-6">{warehouse.email}</p>
               </div>
-              <div className="space-y-2 text-sm pl-6">
-                <p>
-                  <span className="text-muted-foreground">Manager:</span>{" "}
-                  <span className="text-foreground">{warehouse.manager_name}</span>
-                </p>
-                <p>
-                  <span className="text-muted-foreground">Phone:</span>{" "}
-                  <span className="text-foreground">{warehouse.phone}</span>
-                </p>
-                {warehouse.email && (
-                  <p>
-                    <span className="text-muted-foreground">Email:</span>{" "}
-                    <span className="text-foreground">{warehouse.email}</span>
-                  </p>
-                )}
-              </div>
-            </div>
+            )}
 
             {/* Description */}
             {warehouse.description && (
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <FileText className="w-4 h-4" />
                   <span>Description</span>
                 </div>
                 <p className="text-sm text-muted-foreground pl-6">{warehouse.description}</p>

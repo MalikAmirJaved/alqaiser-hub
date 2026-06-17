@@ -3,11 +3,12 @@ from django.urls import path
 from apps.hr.views.shift_template_views import ShiftTemplateView
 from apps.hr.views.asset_views import AssetView, AssetStatsView
 from apps.hr.views.asset_category_views import AssetCategoryView, AssetCategoryStatsView
-from apps.hr.views.employee_views import EmployeeView, EmployeeStatsView
+from apps.hr.views.asset_purchase_request_views import AssetPurchaseRequestView
+from apps.hr.views.employee_views import EmployeeView, EmployeeStatsView, ActiveEmployeesView
 from apps.hr.views.payroll_views import (
-    PayrollView, PayrollStatsView, PayrollPreviewView,
-    EmployeeLoanView, CompensationView,
-    LoanStatusUpdateView 
+    PayrollView, PayrollStatsView, PayrollPreviewView, PayrollAdvanceView,
+    EmployeeLoanView, CompensationView, CompensationStatusUpdateView,
+    LoanStatusUpdateView, LoanApproveView, LoanPayView,
 )
 from apps.hr.views.employee_asset_views import (
     EmployeeAssetAssignmentView,
@@ -41,18 +42,22 @@ from apps.hr.views.recruitment_views import (
 from apps.hr.views.exit_management_views import (
     ExitRecordView,
     ExitStatsView,
+    ExitFinalSettlementView,
     ExitChecklistView,
     ExitBulkActionView,
+    ExitClearDuesView,
+    ExitEmployeeAssetsView,
+    ExitReturnAssetView,
 )
+
+from apps.hr.views.promotion_views import PromotionView
 
 from apps.hr.views.policy_views import (
     PolicyView,
     PolicyStatsView,
-    PolicyAcknowledgmentView,
     PolicyBulkActionView,
     PolicyVersionView,
     PolicyCategoryView,
-    EmployeePendingAcknowledgmentsView,
 )
 
 
@@ -69,20 +74,34 @@ urlpatterns = [
     path('asset-categories/stats/', AssetCategoryStatsView.as_view(), name='asset-category-stats'),
     
     # Employees
+    path('employees/active/', ActiveEmployeesView.as_view(), name='active-employees'),
     path('employees/', EmployeeView.as_view(), name='employees'),
     path('employees/stats/', EmployeeStatsView.as_view(), name='employee-stats'),
     
+    # Promotions
+    path('promotions/', PromotionView.as_view(), name='promotions'),
+    path('promotions/<str:pk>/', PromotionView.as_view(), name='promotion-detail'),
+
     # Payroll
     path('payroll/', PayrollView.as_view(), name='payroll'),
     path('payroll/stats/', PayrollStatsView.as_view(), name='payroll-stats'),
     path('payroll/preview/', PayrollPreviewView.as_view(), name='payroll-preview'),
+    path('payroll/advance/', PayrollAdvanceView.as_view(), name='payroll-advance'),
 
     # Loans (with individual update/delete support)
     path('loans/', EmployeeLoanView.as_view(), name='employee-loans'),
     path('loans/status/', LoanStatusUpdateView.as_view(), name='loan-status-update'),
+    path('loans/approve/', LoanApproveView.as_view(), name='loan-approve'),
+    path('loans/pay/', LoanPayView.as_view(), name='loan-pay'),
+    path('loans/<str:pk>/', EmployeeLoanView.as_view(), name='employee-loan-detail'),
 
     # Compensations
+    path('compensations/status/', CompensationStatusUpdateView.as_view(), name='compensation-status'),
     path('compensations/', CompensationView.as_view(), name='compensations'),
+    path('compensations/<str:pk>/', CompensationView.as_view(), name='compensation-detail'),
+
+    # Asset Purchase Requests
+    path('asset-purchase-requests/', AssetPurchaseRequestView.as_view(), name='asset-purchase-requests'),
 
     # employee assets
     path('employee-assets/assignments/', EmployeeAssetAssignmentView.as_view(), name='employee-asset-assignments'),
@@ -123,8 +142,12 @@ urlpatterns = [
     # Exit Management
     path('exits/', ExitRecordView.as_view(), name='exit-records'),
     path('exits/stats/', ExitStatsView.as_view(), name='exit-stats'),
+    path('exits/final-settlement/', ExitFinalSettlementView.as_view(), name='exit-final-settlement'),
     path('exits/checklist/', ExitChecklistView.as_view(), name='exit-checklist'),
+    path('exits/clear-dues/', ExitClearDuesView.as_view(), name='exit-clear-dues'),
     path('exits/bulk-action/', ExitBulkActionView.as_view(), name='exit-bulk-action'),
+    path('exits/<str:exit_id>/assets/', ExitEmployeeAssetsView.as_view(), name='exit-employee-assets'),
+    path('exits/<str:exit_id>/return-asset/', ExitReturnAssetView.as_view(), name='exit-return-asset'),
 
     # Policy Management
     path('policies/', PolicyView.as_view(), name='policies'),
@@ -137,15 +160,6 @@ urlpatterns = [
     # Policy Versions
     path('policies/<str:policy_id>/versions/', PolicyVersionView.as_view(), name='policy-versions'),
     
-    # Policy Acknowledgments
-    path('policies/<str:policy_id>/acknowledgments/', PolicyAcknowledgmentView.as_view(), name='policy-acknowledgments'),
-    path('policies/<str:policy_id>/acknowledge/', PolicyAcknowledgmentView.as_view(), name='policy-acknowledge'),
-    
     # Custom Categories
     path('policies/categories/', PolicyCategoryView.as_view(), name='policy-categories'),
-    
-    # Employee-specific
-    path('employees/<str:employee_id>/pending-acknowledgments/', 
-         EmployeePendingAcknowledgmentsView.as_view(), 
-         name='employee-pending-acknowledgments'),
 ]

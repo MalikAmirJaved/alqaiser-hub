@@ -5,17 +5,40 @@ import { useRouter } from "next/navigation";
 import { useQuotes, useDeleteQuote, useAcceptQuote, useRejectQuote, Quote } from "@/hooks/sales/useQuotes";
 import { DynamicModulePage, type ModulePermissions, type Kpi } from "@/components/reuseable/final/DynamicModulePage";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatusBadge } from "@/components/finance/ui";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
 import { CheckCircle, XCircle, Trash2 } from "lucide-react";
 import QuoteFormModal from "./QuoteFormModal";
 
 export default function QuotesPanel() {
+  const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
-  const { data: quotes = [], isLoading, refetch } = useQuotes();
+  const [filters, setFilters] = useState<Record<string, string>>({});
+
+  const quoteStatusOptions = [
+    { value: "DRAFT", label: "Draft" },
+    { value: "SENT", label: "Sent" },
+    { value: "ACCEPTED", label: "Accepted" },
+    { value: "DECLINED", label: "Declined" },
+    { value: "EXPIRED", label: "Expired" },
+    { value: "REJECTED", label: "Rejected" },
+  ];
+
+  const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
+    { name: "status", label: "Status", type: "status", options: quoteStatusOptions },
+  ];
+
+  const { data: quotes = [], isLoading, refetch } = useQuotes(
+    Object.keys(filters).length > 0
+      ? { status: filters.status || undefined, search: filters.search || undefined }
+      : undefined
+  );
   const deleteQuote = useDeleteQuote();
   const acceptQuote = useAcceptQuote();
   const rejectQuote = useRejectQuote();
@@ -26,7 +49,7 @@ export default function QuotesPanel() {
     update: permissions.update,
     delete: permissions.delete,
     view: permissions.view,
-    export: true,
+    export: permissions.export,
   };
 
   const handleAccept = async (quote: Quote) => {
@@ -132,8 +155,15 @@ export default function QuotesPanel() {
           onDelete: (quote) => deleteQuote.mutate(quote.id),
         }}
         onRowClick={(quote) => router.push(`/sales/quotes/${quote.id}`)}
-        exportEnabled
+        exportEnabled={permissions.export}
         onRowSelect={setSelectedIds}
+        filterBar={
+          <FilterBar
+            fields={filterFields}
+            filters={filters}
+            onChange={setFilters}
+          />
+        }
         batchActions={
           <button
             onClick={() => selectedIds.forEach(id => deleteQuote.mutate(id))}

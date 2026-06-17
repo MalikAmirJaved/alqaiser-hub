@@ -52,6 +52,7 @@ export interface SalesOrderResponse {
   customer?: { id: string; name: string };
   warehouse?: { id: string; warehouse_name: string };
   order_date: string;
+  created_at: string;
   status: string;
   notes?: string;
   lines?: Array<{

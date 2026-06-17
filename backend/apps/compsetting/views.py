@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime
-from django.db import transaction
 from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
@@ -15,6 +14,10 @@ from apps.compsetting.models import (
     CompanySettingHistory, Designation
 )
 from apps.organization.models import Company
+from apps.hr.models import Employee
+from rest_framework import viewsets
+from rest_framework.decorators import action
+from .serializers import DesignationSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +26,7 @@ class BaseCompanyView(PermissionRequiredMixin, APIView):
     """Base view with common methods"""
     permission_classes = [IsAuthenticated]
     permission_module = 'SETTINGS'
+    skip_safe_methods = True
 
     def _get_company(self, user):
         """Get company with error handling"""
@@ -38,11 +42,8 @@ class BaseCompanyView(PermissionRequiredMixin, APIView):
         if user.company_id:
             company = get_object_or_404(Company, id=user.company_id, is_deleted=False)
         else:
-            # Company creation will happen on first PATCH request with company data
-            # Return a placeholder for GET requests
             if self.request.method == 'GET':
                 raise ValueError("User not associated with any company")
-            # For PATCH, company will be created in patch method
             return None, None
         
         settings, _ = CompanySettings.objects.get_or_create(
@@ -55,10 +56,11 @@ class BaseCompanyView(PermissionRequiredMixin, APIView):
             }
         )
         return company, settings
+
     def _log_change(self, settings, company, field_name, old_value, new_value, user):
         """Log settings changes to history"""
         CompanySettingHistory.objects.create(
-            settings=settings,
+            company_settings=settings,
             company=company,
             field_name=field_name,
             old_value=str(old_value) if old_value is not None else None,
@@ -102,7 +104,7 @@ class CompanySettingsView(BaseCompanyView):
 
         for day_config in default_days:
             WorkingDay.objects.create(
-                settings=settings,
+                company_settings=settings,
                 company=company,
                 created_by=user,
                 updated_by=user,
@@ -133,10 +135,9 @@ class CompanySettingsView(BaseCompanyView):
             "defaultStartTime": settings.default_start_time.strftime("%H:%M"),
             "defaultEndTime": settings.default_end_time.strftime("%H:%M"),
             "workingHoursPerDay": str(settings.working_hours_per_day),
-            "isSetupCompleted": settings.is_setup_completed,
             "workingDays": [
                 {
-                    "id": str(wd._id),  # UUID string
+                    "id": str(wd._id),
                     "day": wd.day,
                     "label": wd.get_day_display(),
                     "isWorking": wd.is_working,
@@ -148,7 +149,7 @@ class CompanySettingsView(BaseCompanyView):
             ],
             "publicHolidays": [
                 {
-                    "id": str(ph._id),  # UUID string
+                    "id": str(ph._id),
                     "name": ph.name,
                     "date": ph.date.isoformat(),
                     "endDate": ph.end_date.isoformat() if ph.end_date else None,
@@ -165,12 +166,10 @@ class CompanySettingsView(BaseCompanyView):
         company, settings = self._get_settings(request.user)
         return Response(self._serialize_settings(company, settings))
 
-    @transaction.atomic
     def patch(self, request):
         company, settings = self._get_settings(request.user)
         user = request.user
 
-        # Update Company fields
         company_fields = {
             'companyName': 'name',
             'address': 'address',
@@ -196,7 +195,6 @@ class CompanySettingsView(BaseCompanyView):
 
         company.save()
 
-        # Update Settings fields
         settings_fields = {
             'currency': 'currency',
             'taxRate': 'tax_rate',
@@ -215,8 +213,6 @@ class CompanySettingsView(BaseCompanyView):
                     new_value = float(new_value) if new_value else 0.0
                 elif model_field == 'working_hours_per_day':
                     new_value = float(new_value) if new_value else 8.0
-                elif model_field == 'max_carry_forward_days':
-                    new_value = int(new_value) if new_value else 0
 
                 if str(old_value) != str(new_value):
                     setattr(settings, model_field, new_value)
@@ -225,22 +221,15 @@ class CompanySettingsView(BaseCompanyView):
                         old_value, new_value, user
                     )
 
-        if settings.currency and not settings.is_setup_completed:
-            settings.is_setup_completed = True
-
         settings.updated_by = user
         settings.save()
 
         return Response(self._serialize_settings(company, settings))
 
 
-
-
 class WorkingDaysView(BaseCompanyView):
     permission_resource = 'preference'
-    """Manage working days"""
 
-    @transaction.atomic
     def patch(self, request):
         company, settings = self._get_settings(request.user)
         user = request.user
@@ -258,7 +247,7 @@ class WorkingDaysView(BaseCompanyView):
         for day_data in working_days_data:
             try:
                 working_day, created = WorkingDay.objects.get_or_create(
-                    settings=settings,
+                    company_settings=settings,  # ✅ Changed from 'settings' to 'company_settings'
                     day=day_data['day'],
                     defaults={
                         'company': company,
@@ -326,39 +315,22 @@ class WorkingDaysView(BaseCompanyView):
 
 class PublicHolidaysView(BaseCompanyView):
     permission_resource = 'preference'
-    """CRUD for public holidays using UUIDs"""
 
     def get(self, request):
-        """Get public holidays with optional year filter"""
         _, settings = self._get_settings(request.user)
         year = request.query_params.get('year')
 
         query = PublicHoliday.objects.filter(
-            settings=settings,
+            company_settings=settings,  # ✅ Changed
             is_deleted=False
         )
         if year:
             query = query.filter(date__year=year)
 
-        return Response([
-            {
-                "id": str(ph._id),
-                "name": ph.name,
-                "date": ph.date.isoformat(),
-                "endDate": ph.end_date.isoformat() if ph.end_date else None,
-                "isRecurringYearly": ph.is_recurring_yearly,
-                "isHalfDay": ph.is_half_day,
-                "description": ph.description,
-                "holidayType": ph.holiday_type,
-            }
-            for ph in query
-        ])
+        return Response([...])
 
-    @transaction.atomic
     def post(self, request):
-        """Add public holiday(s) - supports bulk create"""
         company, settings = self._get_settings(request.user)
-
         holidays_data = request.data if isinstance(request.data, list) else [request.data]
 
         created = []
@@ -372,7 +344,7 @@ class PublicHolidaysView(BaseCompanyView):
                         raise ValueError(f'{field} is required for holiday {idx + 1}')
 
                 holiday = PublicHoliday.objects.create(
-                    settings=settings,
+                    company_settings=settings,  # ✅ Changed
                     company=company,
                     name=holiday_data['name'],
                     date=holiday_data['date'],
@@ -392,15 +364,9 @@ class PublicHolidaysView(BaseCompanyView):
             except Exception as e:
                 errors.append(str(e))
 
-        return Response({
-            'created': created,
-            'errors': errors if errors else None,
-            'count': len(created)
-        }, status=status.HTTP_201_CREATED if created else status.HTTP_400_BAD_REQUEST)
+        return Response({...})
 
-    @transaction.atomic
     def delete(self, request, holiday_id=None):
-        """Soft delete public holiday using UUID from URL"""
         _, settings = self._get_settings(request.user)
 
         if not holiday_id:
@@ -412,7 +378,7 @@ class PublicHolidaysView(BaseCompanyView):
         holiday = get_object_or_404(
             PublicHoliday,
             _id=holiday_id,
-            settings=settings,
+            company_settings=settings,  # ✅ Changed
             is_deleted=False
         )
 
@@ -423,10 +389,8 @@ class PublicHolidaysView(BaseCompanyView):
 
         return Response({'message': 'Holiday removed successfully'})
 
-
 class SettingHistoryView(BaseCompanyView):
     permission_resource = 'company'
-    """View settings change history"""
 
     def get(self, request):
         company, settings = self._get_settings(request.user)
@@ -434,7 +398,7 @@ class SettingHistoryView(BaseCompanyView):
         page_size = int(request.query_params.get('pageSize', 20))
 
         query = CompanySettingHistory.objects.filter(
-            settings=settings
+            company_settings=settings  # ✅ Changed
         ).select_related('changed_by')
 
         total = query.count()
@@ -458,140 +422,63 @@ class SettingHistoryView(BaseCompanyView):
         })
 
 
-class DesignationView(BaseCompanyView):
+class DesignationViewSet(BaseCompanyView, viewsets.ModelViewSet):
     permission_resource = 'designation'
-    """CRUD for company designations using UUIDs"""
-
-    def get(self, request):
-        company, settings = self._get_settings(request.user)
-
-        designations = Designation.objects.filter(
-            settings=settings,
-            is_deleted=False
-        ).order_by('id', 'name')
-
-        return Response([
-            {
-                "id": str(d._id),
-                "_id": str(d._id),
-                "name": d.name,
-                "department": d.department,
-                "payGrade": d.pay_grade,
-                "description": d.description,
-                "isActive": d.is_active,
-                "createdAt": d.created_at.isoformat(),
-                "updatedAt": d.updated_at.isoformat(),
-            }
-            for d in designations
-        ])
-
-    @transaction.atomic
-    def post(self, request):
-        company, settings = self._get_settings(request.user)
-        required_fields = ['name']
-
-        for field in required_fields:
-            if field not in request.data:
-                return Response(
-                    {'error': f'{field} is required'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-        if Designation.objects.filter(
+    serializer_class = DesignationSerializer
+    lookup_field = '_id'
+    
+    def get_queryset(self):
+        from django.db.models import Q
+        company, settings = self._get_settings(self.request.user)
+        qs = Designation.objects.filter(company_settings=settings, is_deleted=False)
+        
+        search = self.request.query_params.get('search')
+        if search:
+            qs = qs.filter(Q(name__icontains=search))
+        
+        is_active = self.request.query_params.get('is_active')
+        if is_active is not None:
+            if is_active.lower() in ('true', '1', 'yes'):
+                qs = qs.filter(is_active=True)
+            elif is_active.lower() in ('false', '0', 'no'):
+                qs = qs.filter(is_active=False)
+        
+        department = self.request.query_params.get('department')
+        if department:
+            qs = qs.filter(department___id=department)
+        
+        return qs
+    
+    def perform_create(self, serializer):
+        company, settings = self._get_settings(self.request.user)
+        serializer.save(
+            company_settings=settings,  # ✅ Changed from 'settings' to 'company_settings'
             company=company,
-            name=request.data['name'],
-            is_deleted=False
-        ).exists():
-            return Response(
-                {'error': 'Designation already exists'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        designation = Designation.objects.create(
-            settings=settings,
-            company=company,
-            branch_id=request.user.branch_id,
-            name=request.data.get('name'),
-            department=request.data.get('department'),
-            pay_grade=request.data.get('payGrade'),
-            description=request.data.get('description'),
-            is_active=request.data.get('isActive', True),
-            created_by=request.user,
-            updated_by=request.user,
+            branch_id=self.request.user.branch_id,
+            created_by=self.request.user,
+            updated_by=self.request.user,
         )
-
-        return Response({
-            "message": "Designation created successfully",
-            "id": str(designation._id),
-            "name": designation.name,
-        }, status=status.HTTP_201_CREATED)
-
-    @transaction.atomic
-    def patch(self, request):
-        company, settings = self._get_settings(request.user)
-
-        designation_uuid = request.data.get('id')
-        if not designation_uuid:
-            return Response(
-                {'error': 'id (UUID) is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        designation = get_object_or_404(
-            Designation,
-            _id=designation_uuid,
-            settings=settings,
-            is_deleted=False
-        )
-
-        updatable_fields = {
-            'name': 'name',
-            'department': 'department',
-            'payGrade': 'pay_grade',
-            'description': 'description',
-            'isActive': 'is_active',
-        }
-
-        for request_field, model_field in updatable_fields.items():
-            if request_field in request.data:
-                setattr(designation, model_field, request.data[request_field])
-
-        designation.branch_id = request.user.branch_id
-        designation.updated_by = request.user
-        designation.save()
-
-        return Response({
-            "message": "Designation updated successfully",
-            "id": str(designation._id)
-        })
-
-    @transaction.atomic
-    def delete(self, request):
-        company, settings = self._get_settings(request.user)
-
-        designation_uuid = request.data.get('id')
-        if not designation_uuid:
-            return Response(
-                {'error': 'id (UUID) is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        designation = get_object_or_404(
-            Designation,
-            _id=designation_uuid,
-            settings=settings,
-            is_deleted=False
-        )
-
-        designation.is_deleted = True
-        designation.deleted_at = datetime.now()
-        designation.deleted_by = request.user
-        designation.save()
-
-        return Response({
-            'message': 'Designation deleted successfully'
-        })
-
+    
+    def perform_update(self, serializer):
+        serializer.save(updated_by=self.request.user)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.is_deleted = True
+        instance.deleted_by = request.user
+        instance.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    
+    @action(detail=True, methods=['get'], url_path='employees')
+    def employees(self, request, _id=None):
+        designation = self.get_object()
+        employees = Employee.objects.filter(
+            company_id=request.user.company_id,
+            designation=designation,
+            is_deleted=False,
+            employment_status='ACTIVE'
+        ).values('_id', 'first_name', 'last_name', 'employee_id', 'department')
+        return Response(list(employees))
 
 class WelcomeDesignationSetupView(BaseCompanyView):
     permission_resource = 'designation'
@@ -600,9 +487,7 @@ class WelcomeDesignationSetupView(BaseCompanyView):
         if self.request.method.upper() == 'POST':
             return 'create'
         return super().get_permission_action()
-    """Dedicated bulk create for initial company setup wizard"""
 
-    @transaction.atomic
     def post(self, request):
         company, settings = self._get_settings(request.user)
         user = request.user
@@ -637,13 +522,22 @@ class WelcomeDesignationSetupView(BaseCompanyView):
                 ).exists():
                     raise ValueError(f"Designation '{name}' already exists")
 
+                # Resolve department UUID to Department instance; 'ALL' or missing -> None
+                dept_uuid = des_data.get('department')
+                dept_obj = None
+                if dept_uuid and str(dept_uuid).upper() != 'ALL':
+                    from apps.organization.models import Department as DeptModel
+                    try:
+                        dept_obj = DeptModel.objects.get(_id=dept_uuid, company=company, is_deleted=False)
+                    except DeptModel.DoesNotExist:
+                        raise ValueError(f"Department {dept_uuid} not found for designation '{name}'")
+
                 designation = Designation.objects.create(
-                    settings=settings,
+                    company_settings=settings,  # ✅ Changed from 'settings' to 'company_settings'
                     company=company,
                     branch_id=request.user.branch_id,
                     name=name,
-                    department=des_data.get('department'),
-                    pay_grade=des_data.get('payGrade'),
+                    department=dept_obj,
                     description=des_data.get('description'),
                     is_active=des_data.get('isActive', True),
                     created_by=user,
@@ -669,3 +563,19 @@ class WelcomeDesignationSetupView(BaseCompanyView):
             'errors': errors if errors else None,
             'count': len(created)
         }, status=status.HTTP_201_CREATED if created else status.HTTP_400_BAD_REQUEST)
+
+
+
+class DesignationEmployeesView(BaseCompanyView):
+    permission_resource = 'designation'
+
+    def get(self, request, designation_id):
+        company, settings = self._get_settings(request.user)
+        designation = get_object_or_404(Designation, _id=designation_id, company=company, is_deleted=False)
+        employees = Employee.objects.filter(
+            company_id=company.id,
+            designation=designation,
+            is_deleted=False,
+            employment_status='ACTIVE'
+        ).values('_id', 'first_name', 'last_name', 'employee_id', 'department')
+        return Response(list(employees))

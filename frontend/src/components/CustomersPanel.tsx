@@ -15,7 +15,7 @@ interface CustomersPanelProps {
 }
 
 export default function CustomersPanel({ moduleCode }: CustomersPanelProps) {
-  const permissions = useFeaturePermissions(moduleCode, "customer");
+  const permissions = useFeaturePermissions(moduleCode, moduleCode === "SALES" ? "sales_customer" : "customer");
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);

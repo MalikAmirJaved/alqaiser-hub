@@ -7,6 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.finance.mixins import CompanyBranchUserMixin, SoftDeleteMixin
 from apps.finance.models import Expense, SupplierBill, BankAccount
 from apps.finance.serializers import ExpenseSerializer
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class ExpenseViewSet(
+    GenericFilterMixin,
     CompanyBranchUserMixin,
     CompanyBranchMixin,
     PermissionRequiredMixin,
@@ -31,8 +33,14 @@ class ExpenseViewSet(
     permission_resource = 'expense'
     lookup_field = '_id'
     lookup_url_kwarg = '_id'
+    filter_fields = {
+        'search': ['expense_number', 'description', 'notes'],
+        'category': 'category',
+        'paid': 'is_paid',
+        'start_date': 'expense_date__gte',
+        'end_date': 'expense_date__lte',
+    }
 
-    @transaction.atomic
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -96,7 +104,6 @@ class ExpenseViewSet(
             status=status.HTTP_201_CREATED,
         )
 
-    @transaction.atomic
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()

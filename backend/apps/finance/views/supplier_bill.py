@@ -4,10 +4,10 @@
 from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
 from decimal import Decimal
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.finance.models import SupplierBill
 from apps.finance.serializers import SupplierBillSerializer
@@ -16,6 +16,7 @@ from apps.finance.services.invoice_payment import pay_supplier_bill
 
 
 class SupplierBillViewSet(
+    GenericFilterMixin,
     CompanyBranchUserMixin,
     CompanyBranchMixin,
     PermissionRequiredMixin,
@@ -28,6 +29,11 @@ class SupplierBillViewSet(
     permission_resource = 'supplier_bill'
     lookup_field = '_id'
     lookup_url_kwarg = '_id'
+    filter_fields = {
+        'search': ['bill_number', 'supplier__name', 'notes'],
+        'status': 'status',
+        'supplier': 'supplier___id',
+    }
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)

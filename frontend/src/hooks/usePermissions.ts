@@ -114,7 +114,7 @@ export function usePermissionUsers() {
   const api = useApi();
   return useQuery<PermissionUser[]>({
     queryKey: permissionKeys.users(),
-    queryFn: () => api<PermissionUser[]>("/api/organization/users/"),
+    queryFn: () => api<PermissionUser[]>("/api/organization/users/active/"),
     select: (res: any) => res.results,
     staleTime: 60_000,
     gcTime: 5 * 60_000,

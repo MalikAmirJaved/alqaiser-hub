@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { usePayroll } from "@/hooks/usePayroll";
 import { useEmployeeLoans } from "@/hooks/usePayroll";
 import { useCompensations } from "@/hooks/usePayroll";
-import { X, Receipt } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { X, Receipt, ExternalLink } from "lucide-react";
 
 export default function PayslipModal({ 
   employee, 
@@ -27,8 +28,9 @@ export default function PayslipModal({
     isOpen && employee ? { employee_id: String(employee.id) } : undefined
   );
 
-  const activeCompensation = compensations.find(c => c.status === "ACTIVE");
-  const activeLoans = loans.filter(l => l.status === "ACTIVE");
+  const router = useRouter();
+  const activeCompensation = compensations.find(c => c.status === "CONFIRM");
+  const activeLoans = loans.filter(l => l.approval === "CONFIRM" && l.status === "PAID");
 
   if (!isOpen) return null;
 
@@ -40,9 +42,21 @@ export default function PayslipModal({
             <Receipt className="w-5 h-5 text-primary" />
             Payslip - {employee?.first_name} {employee?.last_name || ""}
           </h2>
-          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-muted">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                onClose();
+                router.push(`payroll/${employee.id}`);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm bg-primary/10 hover:bg-primary/20 text-primary"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Full Detail
+            </button>
+            <button onClick={onClose} className="p-1.5 rounded-md hover:bg-muted">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <div className="p-5">
@@ -55,11 +69,11 @@ export default function PayslipModal({
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Department</div>
-                <div className="font-medium">{employee?.department || "—"}</div>
+                <div className="font-medium">{employee?.department_name || "—"}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Designation</div>
-                <div className="font-medium">{employee?.designation || "—"}</div>
+                <div className="font-medium">{employee?.designation_name || "—"}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Joining Date</div>
@@ -104,15 +118,11 @@ export default function PayslipModal({
                   <div key={loan.id} className="bg-warning/10 rounded-xl p-3">
                     <div className="flex justify-between text-sm">
                       <span>{loan.loan_type_display || loan.loan_type}</span>
-                      <span className="font-medium">{formatCurrency(parseFloat(loan.monthly_deduction))}/month</span>
+                      <span className="font-medium">{formatCurrency(parseFloat(loan.remaining_amount))} remaining</span>
                     </div>
                     <div className="flex justify-between text-sm mt-1">
                       <span className="text-muted-foreground">Remaining</span>
                       <span>{formatCurrency(parseFloat(loan.remaining_amount))}</span>
-                    </div>
-                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                      <span>Started: {loan.start_date}</span>
-                      <span>Progress: {loan.paid_months}/{loan.total_months} months</span>
                     </div>
                   </div>
                 ))}
@@ -120,7 +130,7 @@ export default function PayslipModal({
             </div>
           )}
 
-          {/* Payment History */}
+          {/* Payment History with Relational Breakdown */}
           <div>
             <h3 className="text-sm font-semibold mb-2">Payment History</h3>
             {payrollRecords.length === 0 ? (
@@ -153,10 +163,28 @@ export default function PayslipModal({
                         <div className="text-xs text-muted-foreground">Base Salary</div>
                         <div>{formatCurrency(parseFloat(record.base_salary))}</div>
                       </div>
+                      {record.total_compensation && parseFloat(record.total_compensation) > 0 && (
+                        <div>
+                          <div className="text-xs text-muted-foreground">Compensation</div>
+                          <div className="text-success">+{formatCurrency(parseFloat(record.total_compensation))}</div>
+                        </div>
+                      )}
                       {parseFloat(record.bonus) > 0 && (
                         <div>
                           <div className="text-xs text-muted-foreground">Bonus</div>
                           <div className="text-success">+{formatCurrency(parseFloat(record.bonus))}</div>
+                        </div>
+                      )}
+                      {record.total_leave_deduction && parseFloat(record.total_leave_deduction) > 0 && (
+                        <div>
+                          <div className="text-xs text-muted-foreground">Leave Deduction</div>
+                          <div className="text-destructive">-{formatCurrency(parseFloat(record.total_leave_deduction))}</div>
+                        </div>
+                      )}
+                      {record.total_loan_deduction && parseFloat(record.total_loan_deduction) > 0 && (
+                        <div>
+                          <div className="text-xs text-muted-foreground">Loan Deduction</div>
+                          <div className="text-destructive">-{formatCurrency(parseFloat(record.total_loan_deduction))}</div>
                         </div>
                       )}
                       <div>
@@ -168,6 +196,43 @@ export default function PayslipModal({
                         <div className="font-bold text-primary">{formatCurrency(parseFloat(record.net_salary))}</div>
                       </div>
                     </div>
+
+                    {record.compensation_breakdown && record.compensation_breakdown.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-border">
+                        <div className="text-xs font-medium text-muted-foreground mb-1">Compensation Breakdown</div>
+                        {record.compensation_breakdown.map((cb: any) => (
+                          <div key={cb.id} className="flex justify-between text-xs">
+                            <span>Compensation Applied</span>
+                            <span className="text-success">+{formatCurrency(parseFloat(cb.amount))}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {record.loan_breakdown && record.loan_breakdown.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-border">
+                        <div className="text-xs font-medium text-muted-foreground mb-1">Loan Deductions</div>
+                        {record.loan_breakdown.map((lb: any) => (
+                          <div key={lb.id} className="flex justify-between text-xs">
+                            <span>Principal: {formatCurrency(parseFloat(lb.principal_amount))}</span>
+                            <span>Interest: {formatCurrency(parseFloat(lb.interest_amount))}</span>
+                            <span className="text-destructive">-{formatCurrency(parseFloat(lb.total_amount))}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {record.leave_breakdown && record.leave_breakdown.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-border">
+                        <div className="text-xs font-medium text-muted-foreground mb-1">Leave Deductions</div>
+                        {record.leave_breakdown.map((lb: any) => (
+                          <div key={lb.id} className="flex justify-between text-xs">
+                            <span>{lb.working_days} working day(s)</span>
+                            <span className="text-destructive">-{formatCurrency(parseFloat(lb.amount))}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
                     {record.custom_note && (
                       <div className="mt-2 text-xs text-muted-foreground border-t border-border pt-2">

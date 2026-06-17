@@ -28,10 +28,11 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-export function useLeads(filters?: { status?: string }) {
+export function useLeads(filters?: { status?: string; search?: string }) {
   const api = useApi();
   const searchParams = new URLSearchParams();
   if (filters?.status) searchParams.append("status", filters.status);
+  if (filters?.search) searchParams.append("search", filters.search);
   const url = `/api/sales/leads/${searchParams.toString() ? `?${searchParams}` : ""}`;
 
   return useQuery({

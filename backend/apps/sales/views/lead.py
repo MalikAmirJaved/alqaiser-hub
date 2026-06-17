@@ -3,27 +3,59 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.db import transaction
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.sales.models.lead import Lead
 from apps.sales.serializers.lead import LeadSerializer
 
 
-class LeadViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+class LeadViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'SALES'
     permission_resource = 'lead'
     queryset = Lead.objects.all()
     serializer_class = LeadSerializer
     lookup_field = '_id'
+    filter_fields = {
+        'status': 'status',
+        'source': 'source',
+        'search': ['company_name', 'contact_name', 'email', 'phone'],
+    }
 
     def get_queryset(self):
         qs = super().get_queryset()
-        status_param = self.request.query_params.get('status')
-        if status_param:
-            qs = qs.filter(status=status_param)
-        source_param = self.request.query_params.get('source')
-        if source_param:
-            qs = qs.filter(source=source_param)
         return qs.order_by('-created_at')
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response({
+            'status': 'success',
+            'message': 'Lead created successfully',
+            'data': serializer.data
+        }, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response({
+            'status': 'success',
+            'message': 'Lead updated successfully',
+            'data': serializer.data
+        })
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.is_deleted = True
+        instance.deleted_by = request.user
+        instance.save(update_fields=['is_deleted', 'deleted_by'])
+        return Response({
+            'status': 'success',
+            'message': 'Lead deleted successfully'
+        })
 
     def perform_create(self, serializer):
         serializer.save()

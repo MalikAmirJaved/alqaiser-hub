@@ -1,8 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
-import { X, Layers, Check, Loader2 } from "lucide-react";
+import { X, Layers, Check, Loader2, RotateCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCreateCategory, useUpdateCategory, Category } from "@/hooks/useCategories";
+import { useAutoCode } from "@/hooks/useAutoCode";
 
 
 interface Props {
@@ -15,6 +16,7 @@ export default function CategoryFormModal({ isOpen, onClose, initialData }: Prop
   const [form, setForm] = useState({ name: "", code: "", description: "" });
   const createCategory = useCreateCategory();
   const updateCategory = useUpdateCategory();
+  const { generateCode, validateCode } = useAutoCode("category");
 
   const isSubmitting = createCategory.isPending || updateCategory.isPending;
 
@@ -27,6 +29,7 @@ export default function CategoryFormModal({ isOpen, onClose, initialData }: Prop
       });
     } else {
       setForm({ name: "", code: "", description: "" });
+      generateCode().then(code => setForm(prev => ({ ...prev, code }))).catch(() => {});
     }
   }, [initialData, isOpen]);
 
@@ -90,12 +93,23 @@ export default function CategoryFormModal({ isOpen, onClose, initialData }: Prop
               </label>
               <label className="text-sm flex flex-col gap-1.5">
                 <span className="text-muted-foreground text-xs">Category Code *</span>
-                <input
-                  required
-                  value={form.code}
-                  onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
-                  className="h-10 px-3 rounded-xl border border-border bg-muted/20 outline-none focus:ring-2 focus:ring-primary/30 font-mono text-sm transition"
-                />
+                <div className="flex gap-2">
+                  <input
+                    required
+                    value={form.code}
+                    onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                    onBlur={() => validateCode(form.code)}
+                    className="flex-1 h-10 px-3 rounded-xl border border-border bg-muted/20 outline-none focus:ring-2 focus:ring-primary/30 font-mono text-sm transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => generateCode().then(code => setForm(prev => ({ ...prev, code }))).catch(() => {})}
+                    className="h-10 w-10 flex items-center justify-center rounded-xl border border-border hover:bg-muted transition"
+                    title="Generate new code"
+                  >
+                    <RotateCw className="w-4 h-4" />
+                  </button>
+                </div>
               </label>
               <label className="text-sm flex flex-col gap-1.5">
                 <span className="text-muted-foreground text-xs">Description</span>

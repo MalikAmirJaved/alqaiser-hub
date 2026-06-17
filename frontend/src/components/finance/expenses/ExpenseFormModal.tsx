@@ -2,9 +2,11 @@
 
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { X } from "lucide-react";
+import { X, RotateCw } from "lucide-react";
 import { useCreateExpense, useUpdateExpense, expenseCategoryOptions } from "@/hooks/finance/useExpenses";
-import { useSuppliers } from "@/hooks/useSuppliers";  // adjust import path as needed
+import { useSuppliers } from "@/hooks/useSuppliers";
+import { useAutoCode } from "@/hooks/useAutoCode";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 interface ExpenseFormData {
   expense_number: string;
@@ -43,6 +45,7 @@ export default function ExpenseFormModal({
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();
   const { data: suppliers, isLoading: suppliersLoading } = useSuppliers();
+  const { generateCode, validateCode } = useAutoCode("expense");
 
   const supplierValue = watch("supplier");
   const payImmediately = watch("pay_immediately");
@@ -59,8 +62,9 @@ export default function ExpenseFormModal({
       setValue("pay_immediately", false);
     } else {
       reset();
+      generateCode().then(code => setValue("expense_number", code)).catch(() => {});
     }
-  }, [initialData, setValue, reset]);
+  }, [initialData, setValue, reset, open]);
 
   const onSubmit = async (data: ExpenseFormData) => {
     const payload = {
@@ -92,15 +96,26 @@ export default function ExpenseFormModal({
         <form onSubmit={handleSubmit(onSubmit)} className="p-4 space-y-4">
           <div>
             <label className="block text-sm mb-1">Expense Number *</label>
-            <input {...register("expense_number", { required: true })} className="w-full px-3 py-2 border border-border rounded-md bg-background" />
+            <div className="flex gap-2">
+              <input {...register("expense_number", { required: true })} onBlur={(e) => validateCode(e.target.value)} className="flex-1 px-3 py-2 border border-border rounded-md bg-background font-mono" />
+              <button
+                type="button"
+                onClick={() => generateCode().then(code => setValue("expense_number", code)).catch(() => {})}
+                className="h-9 w-9 flex items-center justify-center rounded-md border border-border hover:bg-muted transition flex-shrink-0"
+                title="Generate new code"
+              >
+                <RotateCw className="w-4 h-4" />
+              </button>
+            </div>
           </div>
           <div>
             <label className="block text-sm mb-1">Category *</label>
-            <select {...register("category", { required: true })} className="w-full px-3 py-2 border border-border rounded-md bg-background">
-              {expenseCategoryOptions.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={watch("category") || "OTHER"}
+              onChange={(val) => setValue("category", val)}
+              options={expenseCategoryOptions}
+              placeholder="Select category"
+            />
           </div>
           <div>
             <label className="block text-sm mb-1">Date *</label>
@@ -122,12 +137,15 @@ export default function ExpenseFormModal({
           {/* Supplier / Vendor field */}
           <div>
             <label className="block text-sm mb-1">Vendor (Supplier)</label>
-            <select {...register("supplier")} className="w-full px-3 py-2 border border-border rounded-md bg-background" disabled={suppliersLoading}>
-              <option value="">-- None (manual expense) --</option>
-              {suppliers?.map((s: any) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={watch("supplier") || ""}
+              onChange={(val) => setValue("supplier", val)}
+              options={[
+                { value: "", label: "-- None (manual expense) --" },
+                ...(suppliers || []).map((s: any) => ({ value: s.id, label: s.name })),
+              ]}
+              placeholder="-- None (manual expense) --"
+            />
             <p className="text-xs text-muted-foreground mt-1">
               If a vendor is selected, a Supplier Bill will be auto‑created and linked to this expense.
             </p>

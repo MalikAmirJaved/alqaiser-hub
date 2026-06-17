@@ -74,7 +74,8 @@ export function LeaveCard({ leave, onView, onCancel, getStatusBadge, showApprova
             <span>{formatDate(leave.start_date)} → {formatDate(leave.end_date)}</span>
           </div>
           <div className="text-xs text-muted-foreground mt-0.5">
-            {leave.total_days} day{leave.total_days !== 1 ? 's' : ''}{leave.is_half_day === "true" ? " (Half Day)" : ""}
+            {leave.total_days} day{leave.total_days !== 1 ? 's' : ''}
+            {leave.leave_sub_type === 'SHORT' ? ' (Short Leave)' : leave.leave_sub_type === 'HALF' ? ' (Half Leave)' : leave.is_half_day ? ' (Half Day)' : ''}
           </div>
         </div>
 

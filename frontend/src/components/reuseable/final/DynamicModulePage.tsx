@@ -1,10 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { PageHeader, Card, TableToolbar, ToolbarButton } from "@/components/finance/ui";
 import { Plus, Download, Pencil, Trash2, Send } from "lucide-react";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 
 export type Column<T = any> = {
@@ -26,9 +26,9 @@ export interface Kpi {
 }
 
 export interface ModulePermissions {
-  create: boolean;
+  create?: boolean;
   update: boolean;
-  delete: boolean;
+  delete?: boolean;
   view: boolean;
   export?: boolean;
 }
@@ -61,6 +61,7 @@ interface DynamicModulePageProps<T> {
   onRowSelect?: (selectedIds: string[]) => void;
   batchActions?: ReactNode;
   onRowClick?: (item: T) => void;
+  filterBar?: ReactNode;
 }
 
 export function DynamicModulePage<T>({
@@ -77,17 +78,21 @@ export function DynamicModulePage<T>({
   primaryActionLabel = "New",
   onCreate,
   actions,
-  exportEnabled = true,
+  exportEnabled = false,
   onExport,
   onRowSelect,
   batchActions,
   onRowClick,
+  filterBar,
 }: DynamicModulePageProps<T>) {
+  const formatCurrency = useFormatCurrency();
   const { confirm, Modal: ConfirmModal } = useConfirmationModal();
 
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
 
   const computedKpis = typeof kpis === "function" ? kpis(data) : kpis;
 
@@ -100,8 +105,11 @@ export function DynamicModulePage<T>({
     }
   };
 
+  // Reset page when data or sort key changes
+  useEffect(() => { setPage(1); }, [data, sortKey]);
+
   const sortedData = useMemo(() => {
-    if (!sortKey) return data;
+    if (!sortKey) return [...data];
 
     const column = columns.find((c) => c.key === sortKey);
     return [...data].sort((a, b) => {
@@ -130,6 +138,11 @@ export function DynamicModulePage<T>({
       return 0;
     });
   }, [data, sortKey, sortDir, columns]);
+
+  // Paginate
+  const totalPages = Math.max(1, Math.ceil(sortedData.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const paginatedData = sortedData.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const handleSelectRow = (id: string, checked: boolean) => {
     const newSelected = new Set(selectedIds);
@@ -220,6 +233,12 @@ export function DynamicModulePage<T>({
           </div>
         )}
 
+        {filterBar && (
+          <div className="bg-card border border-border rounded-xl p-4">
+            {filterBar}
+          </div>
+        )}
+
         {batchActions && selectedIds.size > 0 && (
           <div className="bg-surface/80 rounded-lg px-4 py-2 flex items-center gap-4 border border-border">
             <span className="text-sm text-muted-foreground">{selectedIds.size} selected</span>
@@ -271,14 +290,14 @@ export function DynamicModulePage<T>({
                       Loading...
                     </td>
                   </tr>
-                ) : sortedData.length === 0 ? (
+                ) : paginatedData.length === 0 ? (
                   <tr>
                     <td colSpan={columns.length + 2} className="px-4 py-8 text-center text-muted-foreground">
                       {emptyMessage}
                     </td>
                   </tr>
                 ) : (
-                  sortedData.map((item) => {
+                  paginatedData.map((item) => {
                     const rowId = getRowId(item);
                     const isSelected = selectedIds.has(rowId);
                     return (
@@ -354,12 +373,32 @@ export function DynamicModulePage<T>({
               </tbody>
             </table>
           </div>
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border text-xs text-muted-foreground">
-            <span>
-              Showing {sortedData.length} of {data.length} records
-            </span>
-            <div className="flex items-center gap-2">{/* Pagination can be added later */}</div>
-          </div>
+          {sortedData.length > pageSize && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border text-xs text-muted-foreground">
+              <span>
+                Showing {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, sortedData.length)} of {sortedData.length} records
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">
+                  Page {safePage} of {totalPages}
+                </span>
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                  className="px-2.5 py-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={safePage >= totalPages}
+                  className="px-2.5 py-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </Card>
       </div>
       <ConfirmModal />

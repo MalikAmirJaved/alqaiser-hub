@@ -11,7 +11,7 @@ from decimal import Decimal
 
 class ReportViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.GenericViewSet):
     permission_module = 'FINANCE'
-    permission_resource = 'report'
+    permission_resource = 'finance_reports'
     
     @action(detail=False, methods=['get'])
     def trial_balance(self, request):

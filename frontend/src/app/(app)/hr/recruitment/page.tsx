@@ -1,13 +1,16 @@
 // src/app/recruitment/page.tsx
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import {
-  Search, Plus, Trash2, Pencil, UserCheck,
-  Users, FileText, X, Loader2, Briefcase, Eye,
-  ChevronRight, ChevronLeft, RotateCcw, Link2,
+  Plus, Trash2, Pencil, UserCheck,
+  Users, FileText, Loader2, Briefcase, Eye, X,
+  ChevronRight, ChevronLeft, Link2,
   Building2, Clock, Banknote, CalendarDays, Phone, Mail
 } from "lucide-react";
 import {
@@ -17,7 +20,8 @@ import {
   useUpdateRecruitmentCandidate,
   useDeleteRecruitmentCandidate,
 } from "@/hooks/useRecruitment";
-import { useEmployees } from "@/hooks/useEmployees";
+import { useActiveEmployees } from "@/hooks/useEmployees";
+import { useDepartments } from "@/hooks/useDepartments";
 import { toast } from "sonner";
 import { RoundBuilder } from "@/components/recruitment/RoundBuilder";
 import { RoundStatusModal } from "@/components/recruitment/RoundStatusModal";
@@ -66,6 +70,8 @@ interface RecruitmentRecord {
   updated_at: string;
   created_by_name?: string;
   updated_by_name?: string;
+  converted_employee_id?: string;
+  converted_employee_name?: string;
 }
 
 interface InterviewRound {
@@ -81,13 +87,6 @@ interface InterviewRound {
   duration_minutes?: number;
   meeting_link?: string;
 }
-
-const DEPARTMENTS = [
-  { value: "HR", label: "Human Resources" },
-  { value: "INVENTORY", label: "Inventory & Operations" },
-  { value: "FINANCE", label: "Finance & Accounting" },
-  { value: "MONITORING", label: "Monitoring" },
-];
 
 const STAGES = [
   { value: "Applied", label: "Applied" },
@@ -143,10 +142,9 @@ function Avatar({ name, size = "sm" }: { name: string; size?: "sm" | "md" }) {
 // MAIN PAGE COMPONENT
 // ==========================================
 export default function RecruitmentPage() {
+  const router = useRouter();
   const permissions = useFeaturePermissions("HR", "recruitment");
-  const [query, setQuery] = useState("");
-  const [filterDept, setFilterDept] = useState("");
-  const [filterStage, setFilterStage] = useState("");
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<RecruitmentRecord | null>(null);
   const [roundsModalOpen, setRoundsModalOpen] = useState(false);
@@ -156,16 +154,32 @@ export default function RecruitmentPage() {
   const [deleteTarget, setDeleteTarget] = useState<RecruitmentRecord | null>(null);
   const pageSize = 20;
 
+  // Reset page when filters change
+  const handleFilterChange = useCallback((newFilters: Record<string, string>) => {
+    setFilters(newFilters);
+    setPage(1);
+  }, []);
+
   const { data: recruitmentData, isLoading: loading, refetch } = useRecruitment({
-    search: query || undefined,
-    department: filterDept || undefined,
-    stage: filterStage || undefined,
+    search: filters.search || undefined,
+    department: filters.department || undefined,
+    stage: filters.stage || undefined,
     page,
     page_size: pageSize,
   });
 
   const { data: statsData } = useRecruitmentStats();
-  const { data: employeesData } = useEmployees({ status: "ACTIVE" });
+  const { data: employeesData } = useActiveEmployees();
+  const { data: departments } = useDepartments();
+  const departmentOptions = useMemo(() => (departments || [])
+    .filter(d => d.is_active)
+    .map(d => ({ value: d.code, label: d.name })), [departments]);
+
+  const filterFields: FilterField[] = useMemo(() => [
+    { name: "search", label: "Search", type: "search" },
+    { name: "department", label: "Department", type: "select", searchable: true, options: departmentOptions },
+    { name: "stage", label: "Stage", type: "select", options: STAGES },
+  ], [departmentOptions]);
 
   const { data: roundsData, refetch: refetchRounds } = useInterviewRounds(
     roundsModalOpen && selectedCandidate?.id ? selectedCandidate.id : undefined
@@ -190,7 +204,7 @@ export default function RecruitmentPage() {
     { label: "Rejected",         value: statsData?.rejected ?? 0,         color: "text-red-600" },
   ], [statsData]);
 
-  const hasActiveFilters = query || filterDept || filterStage;
+  const hasActiveFilters = Object.values(filters).some(v => !!v);
 
   // ==========================================
   // ACTIONS
@@ -201,11 +215,9 @@ export default function RecruitmentPage() {
       if (editingRecord) {
         await updateMutation.mutateAsync({ id: editingRecord.id, ...data });
         savedCandidate = editingRecord;
-        toast.success("Candidate updated");
       } else {
         const result = await createMutation.mutateAsync(data as any);
         savedCandidate = result;
-        toast.success("Candidate added");
       }
       if (rounds && rounds.length > 0 && savedCandidate?.id) {
         await createRoundsMutation.mutateAsync({
@@ -218,13 +230,11 @@ export default function RecruitmentPage() {
             notes: r.notes,
           })),
         });
-        toast.success(`${rounds.length} rounds created`);
       }
       setModalOpen(false);
       setEditingRecord(null);
       refetch();
     } catch (error: any) {
-      toast.error(error.message || "Failed to save");
     }
   };
 
@@ -232,11 +242,9 @@ export default function RecruitmentPage() {
     if (!deleteTarget) return;
     try {
       await deleteMutation.mutateAsync(deleteTarget.id);
-      toast.success("Candidate removed");
       setDeleteTarget(null);
       refetch();
     } catch (error: any) {
-      toast.error(error.message || "Failed to delete");
     }
   };
 
@@ -249,20 +257,16 @@ export default function RecruitmentPage() {
     if (!selectedCandidate) return;
     try {
       await updateRoundsMutation.mutateAsync({ candidateId: selectedCandidate.id, updates });
-      toast.success("Rounds updated");
       await refetchRounds();
       refetch();
     } catch (error: any) {
-      toast.error(error.message || "Failed to update rounds");
     }
   };
 
-  const clearFilters = () => {
-    setQuery("");
-    setFilterDept("");
-    setFilterStage("");
+  const clearFilters = useCallback(() => {
+    setFilters({});
     setPage(1);
-  };
+  }, []);
 
   // ==========================================
   // RENDER
@@ -296,41 +300,12 @@ export default function RecruitmentPage() {
 />
 
       {/* Filters */}
-      <div className="bg-card border border-border rounded-xl p-3 flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1 min-w-0">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-          <input
-            value={query}
-            onChange={e => { setQuery(e.target.value); setPage(1); }}
-            placeholder="Search by name, email, position, company…"
-            className="w-full bg-muted/40 pl-9 pr-3 h-9 rounded-lg text-sm outline-none focus:ring-2 focus:ring-ring"
-          />
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <SearchableSelect
-            value={filterDept}
-            onChange={v => { setFilterDept(v); setPage(1); }}
-            options={DEPARTMENTS}
-            placeholder="Department"
-            className="w-44"
-          />
-          <SearchableSelect
-            value={filterStage}
-            onChange={v => { setFilterStage(v); setPage(1); }}
-            options={STAGES}
-            placeholder="Stage"
-            className="w-36"
-          />
-          {hasActiveFilters && (
-            <button
-              onClick={clearFilters}
-              className="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg border border-border text-sm text-muted-foreground hover:bg-muted transition-colors"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              Clear
-            </button>
-          )}
-        </div>
+      <div className="bg-card border border-border rounded-xl p-4">
+        <FilterBar
+          fields={filterFields}
+          filters={filters}
+          onChange={handleFilterChange}
+        />
       </div>
 
       {/* Table */}
@@ -345,6 +320,7 @@ export default function RecruitmentPage() {
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide hidden lg:table-cell">Assigned To</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide">Stage</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide">Rounds</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">Employee</th>
                 <th className="px-4 py-3 text-right font-medium text-muted-foreground text-xs uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
@@ -361,7 +337,7 @@ export default function RecruitmentPage() {
                 ))
               ) : records.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-16 text-muted-foreground">
+                    <td colSpan={8} className="text-center py-16 text-muted-foreground">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
                         <Users className="w-6 h-6 opacity-40" />
@@ -453,6 +429,18 @@ export default function RecruitmentPage() {
                       </button>
                     </td>
 
+                    {/* Employee Conversion */}
+                    <td className="px-4 py-3.5">
+                      {r.converted_employee_name ? (
+                        <div className="flex items-center gap-2">
+                          <Avatar name={r.converted_employee_name} size="sm" />
+                          <span className="text-sm truncate max-w-[140px]">{r.converted_employee_name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground/50">—</span>
+                      )}
+                    </td>
+
                     {/* Actions */}
                     <td className="px-4 py-3.5 text-right">
                       <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -467,6 +455,29 @@ export default function RecruitmentPage() {
                           >
                             <Link2 className="w-4 h-4" />
                           </a>
+                        )}
+                        {!r.converted_employee_id && (r.stage === "Offer" || r.stage === "Hired") && (
+                          <button
+                            onClick={() => {
+                              const nameParts = (r.name || "").split(" ");
+                              const firstName = nameParts[0] || "";
+                              const lastName = nameParts.slice(1).join(" ");
+                              const params = new URLSearchParams({
+                                prefill: "true",
+                                first_name: firstName,
+                                last_name: lastName,
+                                email: r.email || "",
+                                phone: r.phone || "",
+                                candidate_id: r.id,
+                                expected_salary: String(r.expected_salary || 0),
+                              });
+                              router.push(`/hr/employees?${params.toString()}`);
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 text-muted-foreground hover:text-green-600 transition-colors"
+                            title="Add to Employee"
+                          >
+                            <Building2 className="w-4 h-4" />
+                          </button>
                         )}
                         {permissions.update && (
                           <button
@@ -529,6 +540,7 @@ export default function RecruitmentPage() {
         <CandidateFormModal
           employeeOptions={employees}
           initialData={editingRecord}
+          departmentOptions={departmentOptions}
           onSubmit={handleSave}
           onClose={() => { setModalOpen(false); setEditingRecord(null); }}
         />
@@ -539,8 +551,9 @@ export default function RecruitmentPage() {
         <RoundStatusModal
           rounds={existingRounds.length > 0 ? existingRounds : (roundsData || [])}
           candidateName={selectedCandidate.name}
+          candidateStage={selectedCandidate.stage}
           onClose={() => { setRoundsModalOpen(false); setSelectedCandidate(null); setExistingRounds([]); }}
-          onUpdate={permissions.update ? handleUpdateRounds : undefined}
+          onUpdate={permissions.update_round ? handleUpdateRounds : undefined}
         />
       )}
 
@@ -564,15 +577,16 @@ export default function RecruitmentPage() {
 function CandidateFormModal({
   initialData,
   employeeOptions,
+  departmentOptions,
   onSubmit,
   onClose,
 }: {
   initialData: RecruitmentRecord | null;
   employeeOptions: any[];
+  departmentOptions: { value: string; label: string }[];
   onSubmit: (d: Partial<RecruitmentRecord>, rounds?: any[]) => void;
   onClose: () => void;
 }) {
-  const [step, setStep] = useState<"basic" | "rounds">("basic");
   const [formData, setFormData] = useState<Partial<RecruitmentRecord>>({
     name: "",
     position: "",
@@ -582,7 +596,13 @@ function CandidateFormModal({
     apply_date: new Date().toISOString().split("T")[0],
     ...initialData,
   });
-  const [rounds, setRounds] = useState<any[]>([]);
+  const [rounds, setRounds] = useState<any[]>(() =>
+    initialData ? [] : [{
+      round_number: 1,
+      round_title: "Round 1",
+      interview_type: "TECHNICAL",
+    }]
+  );
   const [assignedId, setAssignedId] = useState(initialData?.assigned_to_id?.toString() || "");
   const [loading, setLoading] = useState(false);
 
@@ -590,26 +610,19 @@ function CandidateFormModal({
 
   const employeeOpts = employeeOptions.map(e => ({
     value: e.id.toString(),
-    label: `${e.first_name} ${e.last_name || ""} (${e.department})`,
+    label: `${e.first_name} ${e.last_name || ""} (${e.department_name || "N/A"})`,
   }));
 
   const update = (field: keyof RecruitmentRecord, value: any) =>
     setFormData(prev => ({ ...prev, [field]: value }));
 
-  const handleNext = () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
     if (!formData.name || !formData.position || !formData.department) {
       toast.error("Please fill in all required fields");
       return;
     }
-    setStep("rounds");
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-  if (!isEditing && step === "rounds" && rounds.length === 0) {
-    toast.error("Please add at least one interview round before creating the candidate.");
-    return;
-  }
 
     setLoading(true);
     const assigned = employeeOptions.find(emp => emp.id.toString() === assignedId);
@@ -638,11 +651,7 @@ function CandidateFormModal({
                 {isEditing ? `Edit — ${initialData.name}` : "Add Candidate"}
               </h2>
               {!isEditing && (
-                <div className="flex items-center gap-2 mt-1.5">
-                  <StepIndicator active={step === "basic"} done={step === "rounds"} label="Basic Info" num={1} />
-                  <div className="w-8 h-px bg-border" />
-                  <StepIndicator active={step === "rounds"} done={false} label="Interview Rounds" num={2} />
-                </div>
+                <p className="text-xs text-muted-foreground mt-1">Fill in candidate details and configure interview rounds below.</p>
               )}
             </div>
           </div>
@@ -652,132 +661,125 @@ function CandidateFormModal({
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5">
-          {step === "basic" ? (
-            <div className="space-y-6">
-              {/* Basic Info */}
-              <Section icon={<Users className="w-4 h-4" />} title="Personal Info">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <Field label="Full Name" required>
-                    <input required value={formData.name || ""} onChange={e => update("name", e.target.value)} placeholder="John Smith" className={inputCls} />
-                  </Field>
-                  <Field label="Email">
-                    <input type="email" value={formData.email || ""} onChange={e => update("email", e.target.value)} placeholder="john@example.com" className={inputCls} />
-                  </Field>
-                  <Field label="Phone">
-                    <input type="tel" value={formData.phone || ""} onChange={e => update("phone", e.target.value)} placeholder="+1 234 567 890" className={inputCls} />
-                  </Field>
-                  <Field label="Source">
-                    <SearchableSelect value={formData.source || ""} onChange={v => update("source", v)} options={SOURCES} placeholder="Where did they apply?" />
-                  </Field>
-                </div>
-              </Section>
+        <div className="px-6 py-5 space-y-6">
+          {/* Basic Info */}
+          <Section icon={<Users className="w-4 h-4" />} title="Personal Info">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Field label="Full Name" required>
+                <input required value={formData.name || ""} onChange={e => update("name", e.target.value)} placeholder="John Smith" className={inputCls} />
+              </Field>
+              <Field label="Email">
+                <input type="email" value={formData.email || ""} onChange={e => update("email", e.target.value)} placeholder="john@example.com" className={inputCls} />
+              </Field>
+              <Field label="Phone">
+                <input type="tel" value={formData.phone || ""} onChange={e => update("phone", e.target.value.replace(/[^0-9+]/g, "").slice(0, 15))} maxLength={20} placeholder="+1 234 567 890" className={inputCls} />
+              </Field>
+              <Field label="Source">
+                <SearchableSelect value={formData.source || ""} onChange={v => update("source", v)} options={SOURCES} placeholder="Where did they apply?" />
+              </Field>
+            </div>
+          </Section>
 
-              {/* Position */}
-              <Section icon={<Briefcase className="w-4 h-4" />} title="Position & Experience">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <Field label="Position" required>
-                    <input required value={formData.position || ""} onChange={e => update("position", e.target.value)} placeholder="e.g. Senior Frontend Engineer" className={inputCls} />
-                  </Field>
-                  <Field label="Department" required>
-                    <SearchableSelect value={formData.department || ""} onChange={v => update("department", v)} options={DEPARTMENTS} placeholder="Select department" />
-                  </Field>
-                  <Field label="Current Company">
-                    <input value={formData.current_company || ""} onChange={e => update("current_company", e.target.value)} placeholder="Previous employer" className={inputCls} />
-                  </Field>
-                  <Field label="Current Position">
-                    <input value={formData.current_position || ""} onChange={e => update("current_position", e.target.value)} placeholder="Current role" className={inputCls} />
-                  </Field>
-                  <Field label="Years of Experience">
-                    <input type="number" step="0.5" min="0" value={formData.years_of_experience || ""} onChange={e => update("years_of_experience", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="e.g. 5" className={inputCls} />
-                  </Field>
-                  <Field label="Notice Period (days)">
-                    <input type="number" min="0" value={formData.notice_period_days || ""} onChange={e => update("notice_period_days", e.target.value ? parseInt(e.target.value) : undefined)} placeholder="e.g. 30" className={inputCls} />
-                  </Field>
-                  <Field label="Expected Salary">
-                    <input type="number" step="1000" min="0" value={formData.expected_salary || ""} onChange={e => update("expected_salary", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="e.g. 80000" className={inputCls} />
-                  </Field>
-                  <Field label="Apply Date">
-                    <input type="date" value={formData.apply_date || ""} onChange={e => update("apply_date", e.target.value)} className={inputCls} />
-                  </Field>
-                </div>
-              </Section>
+          {/* Position */}
+          <Section icon={<Briefcase className="w-4 h-4" />} title="Position & Experience">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Field label="Position" required>
+                <input required value={formData.position || ""} onChange={e => update("position", e.target.value)} placeholder="e.g. Senior Frontend Engineer" className={inputCls} />
+              </Field>
+              <Field label="Department" required>
+                <SearchableSelect value={formData.department || ""} onChange={v => update("department", v)} options={departmentOptions} placeholder="Select department" />
+              </Field>
+              <Field label="Current Company">
+                <input value={formData.current_company || ""} onChange={e => update("current_company", e.target.value)} placeholder="Previous employer" className={inputCls} />
+              </Field>
+              <Field label="Current Position">
+                <input value={formData.current_position || ""} onChange={e => update("current_position", e.target.value)} placeholder="Current role" className={inputCls} />
+              </Field>
+              <Field label="Years of Experience">
+                <input type="number" step="0.5" min="0" value={formData.years_of_experience || ""} onChange={e => update("years_of_experience", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="e.g. 5" className={inputCls} />
+              </Field>
+              <Field label="Notice Period (days)">
+                <input type="number" min="0" value={formData.notice_period_days || ""} onChange={e => update("notice_period_days", e.target.value ? parseInt(e.target.value) : undefined)} placeholder="e.g. 30" className={inputCls} />
+              </Field>
+              <Field label="Expected Salary">
+                <input type="number"  min="0" value={formData.expected_salary || ""} onChange={e => update("expected_salary", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="e.g. 80000" className={inputCls} />
+              </Field>
+              <Field label="Apply Date">
+                <input type="date" value={formData.apply_date || ""} onChange={e => update("apply_date", e.target.value)} className={inputCls} />
+              </Field>
+            </div>
+          </Section>
 
-              {/* Stage (for editing) */}
-              {isEditing && (
-                <Section icon={<FileText className="w-4 h-4" />} title="Pipeline Stage">
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <Field label="Stage">
-                      <SearchableSelect value={formData.stage || ""} onChange={v => update("stage", v)} options={STAGES} placeholder="Select stage" />
-                    </Field>
-                    <Field label="Status">
-                      <SearchableSelect
-                        value={formData.status || ""}
-                        onChange={v => update("status", v)}
-                        options={[{ value: "Active", label: "Active" }, { value: "Closed", label: "Closed" }]}
-                        placeholder="Select status"
-                      />
-                    </Field>
-                  </div>
-                </Section>
-              )}
-
-              {/* Assignment */}
-              <Section icon={<UserCheck className="w-4 h-4" />} title="Assignment">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <Field label="Assigned To">
-                    <SearchableSelect value={assignedId} onChange={setAssignedId} options={employeeOpts} placeholder="Assign to an employee" />
-                  </Field>
-                  <Field label="Resume / Portfolio URL">
-                    <input type="url" value={formData.resume_url || ""} onChange={e => update("resume_url", e.target.value)} placeholder="https://…" className={inputCls} />
-                  </Field>
-                </div>
-                <Field label="Notes">
-                  <textarea
-                    rows={3}
-                    value={formData.notes || ""}
-                    onChange={e => update("notes", e.target.value)}
-                    placeholder="Any additional notes about the candidate…"
-                    className="w-full bg-muted/40 border border-border rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
+          {/* Stage (for editing) */}
+          {isEditing && (
+            <Section icon={<FileText className="w-4 h-4" />} title="Pipeline Stage">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Field label="Stage">
+                  <SearchableSelect value={formData.stage || ""} onChange={v => update("stage", v)} options={STAGES} placeholder="Select stage" />
+                </Field>
+                <Field label="Status">
+                  <SearchableSelect
+                    value={formData.status || ""}
+                    onChange={v => update("status", v)}
+                    options={[{ value: "Active", label: "Active" }, { value: "Closed", label: "Closed" }]}
+                    placeholder="Select status"
                   />
                 </Field>
-              </Section>
+              </div>
+            </Section>
+          )}
+
+          {/* Assignment */}
+          <Section icon={<UserCheck className="w-4 h-4" />} title="Assignment">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Field label="Assigned To">
+                <SearchableSelect value={assignedId} onChange={setAssignedId} options={employeeOpts} placeholder="Assign to an employee" />
+              </Field>
+              <Field label="Resume / Portfolio URL">
+                <input type="url" value={formData.resume_url || ""} onChange={e => update("resume_url", e.target.value)} placeholder="https://…" className={inputCls} />
+              </Field>
             </div>
-          ) : (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Configure the interview rounds for this candidate. You can update round statuses later.</p>
-              <RoundBuilder value={rounds} onChange={setRounds} employees={employeeOptions} />
-            </div>
+            <Field label="Notes">
+              <textarea
+                rows={3}
+                value={formData.notes || ""}
+                onChange={e => update("notes", e.target.value)}
+                placeholder="Any additional notes about the candidate…"
+                className="w-full bg-muted/40 border border-border rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
+              />
+            </Field>
+          </Section>
+
+          {/* Interview Rounds */}
+          {!isEditing && (
+            <section>
+              <div className="flex items-center gap-2 text-sm font-semibold mb-3 text-foreground">
+                <FileText className="w-4 h-4 text-muted-foreground" />
+                Interview Rounds
+              </div>
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">Configure the interview rounds for this candidate. You can update round statuses later.</p>
+                <RoundBuilder value={rounds} onChange={setRounds} employees={employeeOptions} />
+              </div>
+            </section>
           )}
         </div>
 
         {/* Footer */}
         <div className="sticky bottom-0 bg-card border-t border-border px-6 py-4 flex items-center justify-between">
-          <div>
-            {step === "rounds" && !isEditing && (
-              <button type="button" onClick={() => setStep("basic")} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-                <ChevronLeft className="w-4 h-4" /> Back
-              </button>
-            )}
-          </div>
+          <div />
           <div className="flex items-center gap-2">
             <button type="button" onClick={onClose} disabled={loading} className="px-4 h-9 rounded-lg border border-border text-sm hover:bg-muted transition-colors disabled:opacity-50">
               Cancel
             </button>
-            {step === "basic" && !isEditing ? (
-              <button type="button" onClick={handleNext} className="inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
-                Next <ChevronRight className="w-4 h-4" />
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={loading || (!isEditing && step === "rounds" && rounds.length === 0)}
-                className="..."
-              >
-                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                {isEditing ? "Save Changes" : "Create Candidate"}
-              </button>
-            )}
+            <button
+              type="submit"
+              disabled={loading}
+              className="inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {isEditing ? "Save Changes" : "Create Candidate"}
+            </button>
           </div>
         </div>
       </form>

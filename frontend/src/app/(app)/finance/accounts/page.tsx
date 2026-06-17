@@ -3,10 +3,12 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { useAccounts } from "@/hooks/finance/useAccounts";
+import { useAccounts, accountTypeOptions } from "@/hooks/finance/useAccounts";
 import { useTrialBalance } from "@/hooks/finance/useTrialBalance";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { PageHeader, Card, ToolbarButton } from "@/components/finance/ui";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
 import { Plus, Download, Upload, ChevronRight, ChevronDown } from "lucide-react";
 import AccountFormModal from "@/components/finance/accounts/AccountFormModal";
 
@@ -79,6 +81,7 @@ function AccountRow({ node, depth = 0, filterType, searchTerm, onRowClick }: {
   searchTerm: string;
   onRowClick: (account: AccountNode) => void;
 }) {
+  const formatCurrency = useFormatCurrency();
   const [open, setOpen] = useState(depth < 1);
   const hasChildren = node.children.length > 0;
   const matchesFilter = filterType === "All" || node.account_type === filterType;
@@ -130,14 +133,26 @@ function AccountRow({ node, depth = 0, filterType, searchTerm, onRowClick }: {
 }
 
 export default function ChartOfAccountsPage() {
+  const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const permissions = useFeaturePermissions("FINANCE", "account");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState("All");
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<any>(null);
 
-  const { data: accounts, isLoading: accountsLoading } = useAccounts();
+  const searchTerm = filters.search || "";
+  const filterType = filters.account_type || "All";
+
+  const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
+    { name: "account_type", label: "Type", type: "select", options: [{ value: "All", label: "All Types" }, ...accountTypeOptions] },
+  ];
+
+  const { data: accounts, isLoading: accountsLoading } = useAccounts(
+    filters.account_type && filters.account_type !== "All"
+      ? { account_type: filters.account_type }
+      : undefined
+  );
   const { data: trialBalance, isLoading: balanceLoading } = useTrialBalance();
 
   const balanceMap = useMemo(() => {
@@ -182,7 +197,7 @@ export default function ChartOfAccountsPage() {
         actions={
           <>
             <ToolbarButton icon={Upload} variant="ghost">Import</ToolbarButton>
-            <ToolbarButton icon={Download} variant="ghost">Export</ToolbarButton>
+            {permissions.export && <ToolbarButton icon={Download} variant="ghost">Export</ToolbarButton>}
             {permissions.create && (
               <ToolbarButton icon={Plus} variant="primary" onClick={() => { setEditingAccount(null); setModalOpen(true); }}>
                 New Account
@@ -203,24 +218,12 @@ export default function ChartOfAccountsPage() {
         </div>
 
         <Card>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <input
-              placeholder="Search accounts…"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-64 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary/60"
+          <div className="px-4 py-3 border-b border-border">
+            <FilterBar
+              fields={filterFields}
+              filters={filters}
+              onChange={setFilters}
             />
-            <div className="flex gap-2 text-xs">
-              {["All", "ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"].map(t => (
-                <button
-                  key={t}
-                  onClick={() => setFilterType(t)}
-                  className={`px-2.5 py-1 rounded-md border ${filterType === t ? "bg-surface-2 border-border-strong" : "border-border text-muted-foreground hover:text-foreground"}`}
-                >
-                  {t === "All" ? "All" : typeLabels[t as keyof typeof typeLabels]}
-                </button>
-              ))}
-            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

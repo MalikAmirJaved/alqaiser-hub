@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { DetailLayout, StandardSidebar, RelatedRecords, type DetailTab } from "@/components/reuseable/final/DetailLayout";
 import { useExpense, useUpdateExpense, expenseCategoryLabels } from "@/hooks/finance/useExpenses";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import ExpenseFormModal from "@/components/finance/expenses/ExpenseFormModal";
 import { usePaySupplierBill } from "@/hooks/finance/useSupplierBills";
 
@@ -14,6 +14,7 @@ const toNumber = (value: number | string): number => {
 };
 
 export default function ExpenseDetailPage() {
+    const formatCurrency = useFormatCurrency();
   const { id } = useParams();
   const router = useRouter();
   const { data: expense, isLoading, refetch } = useExpense(id as string);

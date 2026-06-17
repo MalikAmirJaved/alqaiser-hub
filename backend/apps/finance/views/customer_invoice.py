@@ -1,11 +1,11 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
 from decimal import Decimal
 from rest_framework.exceptions import ValidationError
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.finance.models import CustomerInvoice, CustomerInvoiceLine
 from apps.finance.serializers import CustomerInvoiceSerializer
@@ -14,6 +14,7 @@ from apps.finance.services.invoice_payment import pay_customer_invoice
 
 
 class CustomerInvoiceViewSet(
+    GenericFilterMixin,
     CompanyBranchUserMixin,
     CompanyBranchMixin,
     PermissionRequiredMixin,
@@ -29,22 +30,27 @@ class CustomerInvoiceViewSet(
     permission_resource = 'customer_invoice'
     lookup_field = '_id'
     lookup_url_kwarg = '_id'
+    filter_fields = {
+        'status': 'status',
+        'customer': 'customer___id',
+        'search': ['invoice_number', 'customer__name'],
+    }
 
     def get_queryset(self):
         qs = super().get_queryset()
         qs = qs.prefetch_related('lines__variant__product')
-        status_param = self.request.query_params.get('status')
-        if status_param:
-            qs = qs.filter(status=status_param)
-        customer_uuid = self.request.query_params.get('customer')
-        if customer_uuid:
-            from apps.inventory.models import Customer
-            try:
-                customer = Customer.objects.get(_id=customer_uuid, company_id=self.request.user.company_id)
-                qs = qs.filter(customer=customer)
-            except Customer.DoesNotExist:
-                return qs.none()
         return qs.order_by('-created_at')
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        import time, random
+        self.perform_create(serializer)
+        return Response({
+            'status': 'success',
+            'message': f'Invoice {serializer.instance.invoice_number} created',
+            'data': serializer.data
+        }, status=status.HTTP_201_CREATED)
 
     def perform_create(self, serializer):
         import time, random
@@ -57,13 +63,23 @@ class CustomerInvoiceViewSet(
             updated_by=self.request.user,
         )
 
-    def perform_update(self, serializer):
-        instance = serializer.instance
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
         if instance.status != 'DRAFT':
-            raise ValidationError('Only DRAFT invoices can be updated.')
-        # NEW: reject if already paid
+            return Response({'error': 'Only DRAFT invoices can be updated.'}, status=status.HTTP_400_BAD_REQUEST)
         if instance.payment_status == 'PAID':
-            raise ValidationError('Cannot edit a paid invoice.')
+            return Response({'error': 'Cannot edit a paid invoice.'}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response({
+            'status': 'success',
+            'message': f'Invoice updated successfully',
+            'data': serializer.data
+        })
+
+    def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
 
     def destroy(self, request, *args, **kwargs):

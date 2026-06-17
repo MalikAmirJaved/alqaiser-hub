@@ -1,11 +1,11 @@
 from decimal import Decimal
 
-from django.db import transaction
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.finance.models import CustomerInvoice, CustomerInvoiceLine
 from apps.finance.services.invoice_payment import pay_customer_invoice
 from apps.permissions.mixins import PermissionRequiredMixin
@@ -13,7 +13,7 @@ from apps.sales.serializers.invoice import SalesInvoiceSerializer
 from rest_framework.exceptions import ValidationError
 
 
-class SalesInvoiceViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+class SalesInvoiceViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     """
     Full CRUD for Customer Invoices exposed under the Sales module.
     Finance module only has read-only access.
@@ -24,22 +24,16 @@ class SalesInvoiceViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
     permission_resource = 'sales_customers_invoice'
     lookup_field = '_id'
     lookup_url_kwarg = '_id'
+    filter_fields = {
+        'status': 'status',
+        'customer': 'customer___id',
+        'search': ['invoice_number', 'customer__name'],
+    }
 
     def get_queryset(self):
         qs = super().get_queryset()
         qs = qs.filter(source__in=['SALES_AGENT', 'SALES_QUOTE', 'SALES_POS'])
         qs = qs.prefetch_related('lines__variant__product')
-        status_param = self.request.query_params.get('status')
-        if status_param:
-            qs = qs.filter(status=status_param)
-        customer_uuid = self.request.query_params.get('customer')
-        if customer_uuid:
-            from apps.inventory.models import Customer
-            try:
-                customer = Customer.objects.get(_id=customer_uuid, company_id=self.request.user.company_id)
-                qs = qs.filter(customer=customer)
-            except Customer.DoesNotExist:
-                return qs.none()
         return qs.order_by('-created_at')
 
     def perform_create(self, serializer):

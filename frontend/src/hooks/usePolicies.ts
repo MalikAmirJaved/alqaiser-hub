@@ -11,15 +11,11 @@ export interface PolicyRecord {
   code: string;
   title: string;
   category: string;
-  department: string;
+  department: string | null;
+  department_name?: string;
   employee_type: string;
   version: string;
   status: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "PUBLISHED" | "ARCHIVED" | "REVOKED";
-  effective_date: string;
-  review_date?: string;
-  expiry_date?: string;
-  requires_acknowledgment: boolean;
-  acknowledgment_deadline?: number;
   document_url?: string;
   content: string;
   approved_by?: string | null;
@@ -30,32 +26,15 @@ export interface PolicyRecord {
   updated_by_name?: string;
   created_at?: string;
   updated_at?: string;
-  acknowledgment_stats?: {
-    total_acknowledgments?: number;
-    total_employees?: number;
-    acknowledged?: number;
-    pending?: number;
-    completion_percentage?: number;
-  };
 }
 
 export interface PolicyDetail extends PolicyRecord {
-  acknowledgments?: Array<{
-    id: number;
-    employee: number;
-    employee_name: string;
-    employee_id: string;
-    acknowledged_at: string;
-    acknowledged_via: string;
-    notes?: string;
-  }>;
   versions?: Array<{
     id: number;
     version: string;
     content: string;
     document_url?: string;
     change_summary?: string;
-    effective_date: string;
     changed_by_name?: string;
     created_at: string;
   }>;
@@ -68,10 +47,6 @@ export interface PolicyStats {
   pendingReview: number;
   approvedPolicies: number;
   archivedPolicies: number;
-  policiesRequiringAck: number;
-  totalAcknowledgments: number;
-  expiringSoon: number;
-  overdueReview: number;
   statusDistribution: Record<string, number>;
   categoryDistribution: Array<{ category: string; count: number }>;
   departmentDistribution: Array<{ department: string; count: number }>;
@@ -84,9 +59,6 @@ export interface PolicyFilters {
   category?: string;
   department?: string;
   employeeType?: string;
-  requiresAcknowledgment?: string;
-  dateFrom?: string;
-  dateTo?: string;
   sortBy?: string;
   page?: number;
   pageSize?: number;
@@ -96,15 +68,10 @@ export interface PolicyFormData {
   code: string;
   title: string;
   category: string;
-  department: string;
+  department: string | null;
   employee_type: string;
   version: string;
   status: PolicyRecord['status'];
-  effective_date: string;
-  review_date?: string;
-  expiry_date?: string;
-  requires_acknowledgment: boolean;
-  acknowledgment_deadline?: number;
   document_url?: string;
   content: string;
   change_summary?: string;
@@ -211,22 +178,6 @@ export function usePolicyVersions(policyId: string | undefined) {
 }
 
 /**
- * Fetch pending acknowledgments for an employee
- */
-export function usePendingAcknowledgments(employeeId: number | undefined) {
-  const api = useApi();
-  
-  return useQuery({
-    queryKey: ["pendingAcknowledgments", employeeId],
-    queryFn: () => api(`/api/hr/employees/${employeeId}/pending-acknowledgments/`),
-    enabled: !!employeeId,
-    staleTime: 30 * 1000,
-    gcTime: 5 * 60 * 1000,
-    retry: 2,
-  });
-}
-
-/**
  * Fetch custom policy categories
  */
 export function usePolicyCategories() {
@@ -235,7 +186,7 @@ export function usePolicyCategories() {
   return useQuery<PolicyCategory[]>({
     queryKey: ["policyCategories"],
     queryFn: () => api("/api/hr/policies/categories/"),
-    staleTime: 60 * 1000, // Categories change less frequently
+    staleTime: 60 * 1000,
     gcTime: 10 * 60 * 1000,
     retry: 2,
   });
@@ -326,38 +277,6 @@ export function useBulkPolicyAction() {
 }
 
 /**
- * Acknowledge a policy for an employee
- */
-export function useAcknowledgePolicy() {
-  const api = useApi();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ 
-      policyId, 
-      employeeId, 
-      notes 
-    }: { 
-      policyId: string; 
-      employeeId: number; 
-      notes?: string;
-    }) =>
-      api(`/api/hr/policies/${policyId}/acknowledge/`, {
-        method: "POST",
-        body: JSON.stringify({
-          employee: employeeId,
-          notes,
-        }),
-      }),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["policy", variables.policyId] });
-      queryClient.invalidateQueries({ queryKey: ["pendingAcknowledgments"] });
-      queryClient.invalidateQueries({ queryKey: ["policies"] });
-    },
-  });
-}
-
-/**
  * Create a custom policy category
  */
 export function useCreatePolicyCategory() {
@@ -382,7 +301,6 @@ export function useCreatePolicyCategory() {
 
 /**
  * Convenience hook that bundles all policy operations together
- * Similar to useCompanySettings pattern
  */
 export function usePolicyOperations() {
   const queries = {
@@ -390,7 +308,6 @@ export function usePolicyOperations() {
     policyDetail: usePolicyDetail,
     stats: usePolicyStats,
     versions: usePolicyVersions,
-    pendingAcknowledgments: usePendingAcknowledgments,
     categories: usePolicyCategories,
   };
 
@@ -399,7 +316,6 @@ export function usePolicyOperations() {
     updatePolicy: useUpdatePolicy(),
     deletePolicy: useDeletePolicy(),
     bulkAction: useBulkPolicyAction(),
-    acknowledgePolicy: useAcknowledgePolicy(),
     createCategory: useCreatePolicyCategory(),
   };
 
@@ -407,11 +323,9 @@ export function usePolicyOperations() {
     queries,
     mutations,
     
-    // Convenience loading states
     isCreating: mutations.createPolicy.isPending,
     isUpdating: mutations.updatePolicy.isPending,
     isDeleting: mutations.deletePolicy.isPending,
     isBulkProcessing: mutations.bulkAction.isPending,
-    isAcknowledging: mutations.acknowledgePolicy.isPending,
   };
 }

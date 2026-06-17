@@ -1,13 +1,13 @@
 "use client";
 
-import { Loader2, RefreshCw, Plus, Download, ArrowUpRight, ArrowDownRight, MoreHorizontal, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Loader2, RefreshCw, ArrowUpRight, ArrowDownRight, MoreHorizontal } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
-  BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, Legend,
+  BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
 } from "recharts";
 import { PageHeader, Card, CardHeader, StatusBadge, ToolbarButton } from "@/components/finance/ui";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import {
   useFinanceDashboardSummary,
   useFinanceCashflow,
@@ -92,6 +92,7 @@ function Kpi({
 // Main Dashboard Component
 // ------------------------------------------------------------
 export default function FinanceDashboardPage() {
+  const formatCurrency = useFormatCurrency();
   const queryClient = useQueryClient();
   const t = tooltipStyle();
 
@@ -123,19 +124,10 @@ export default function FinanceDashboardPage() {
   }
 
   const kpis = summary?.kpis;
-  // Prepare revenue trend data (match old format)
   const revenueTrendData = (revenueTrend?.data ?? []).map((item) => ({
     m: item.month,
     rev: item.revenue,
     exp: item.expense,
-  }));
-
-  // Compute net profit for forecast chart (actual net)
-  const forecastData = revenueTrendData.map((d) => ({
-    m: d.m,
-    actual: d.rev - d.exp,
-    // Simple moving average forecast (last 3 months)
-    forecast: (d.rev - d.exp) * (0.95 + Math.random() * 0.1), // random for demo – replace with real logic
   }));
 
   // Map recent payments to old transaction table format
@@ -149,39 +141,6 @@ export default function FinanceDashboardPage() {
     status: p.status?.toLowerCase() || "confirmed",
   }));
 
-  // ---------- Placeholder data for sections not yet backed by API ----------
-  // (Keep the UI structure but show "Coming soon" – replace with real hooks later)
-  const pendingApprovalsPlaceholder = [
-    {
-      id: "EXP-001",
-      type: "Expense",
-      title: "Travel reimbursement - John Doe",
-      requester: "John Doe",
-      age: "2 hours",
-      amount: 1250.0,
-    },
-  ];
-  const departmentSpendPlaceholder = [
-    { dep: "Sales", budget: 50000, actual: 48200 },
-    { dep: "Marketing", budget: 35000, actual: 36800 },
-    { dep: "Engineering", budget: 120000, actual: 118500 },
-    { dep: "Operations", budget: 45000, actual: 44100 },
-  ];
-  const receivablesAgingPlaceholder = [
-    { l: "Current", v: 1240000, c: "var(--color-success)" },
-    { l: "1–30 days", v: 480000, c: "var(--color-info)" },
-    { l: "31–60 days", v: 280000, c: "var(--color-warning)" },
-    { l: "61–90 days", v: 124000, c: "var(--color-chart-5)" },
-    { l: "90+ days", v: 60500, c: "var(--color-destructive)" },
-  ];
-  const payablesAgingPlaceholder = [
-    { l: "Current", v: 820000, c: "var(--color-success)" },
-    { l: "1–30 days", v: 320000, c: "var(--color-info)" },
-    { l: "31–60 days", v: 140000, c: "var(--color-warning)" },
-    { l: "61–90 days", v: 88000, c: "var(--color-chart-5)" },
-    { l: "90+ days", v: 34700, c: "var(--color-destructive)" },
-  ];
-
   return (
     <>
       <PageHeader
@@ -190,7 +149,6 @@ export default function FinanceDashboardPage() {
         description="Real-time view of revenue, cash, AR/AP, and approvals."
         actions={
           <>
-            <ToolbarButton icon={Download} variant="ghost">Export</ToolbarButton>
             <button
               onClick={refreshAll}
               className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-secondary text-secondary-foreground hover:bg-accent transition"
@@ -321,34 +279,22 @@ export default function FinanceDashboardPage() {
           </Card>
 
           <Card>
-            <CardHeader title="Budget vs Actual" subtitle="By department · YTD (placeholder)" />
-            <div className="p-4 h-[260px]">
-              <ResponsiveContainer>
-                <BarChart data={departmentSpendPlaceholder} layout="vertical" margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
-                  <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis dataKey="dep" type="category" stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} width={84} />
-                  <Tooltip {...t} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="budget" name="Budget" fill="var(--color-chart-2)" radius={[0, 4, 4, 0]} />
-                  <Bar dataKey="actual" name="Actual" fill="var(--color-chart-1)" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+            <CardHeader title="Budget vs Actual" subtitle="By department · YTD" />
+            <div className="p-5 flex items-center justify-center h-[260px] text-muted-foreground text-sm">
+              Budget tracking will appear once budget data is configured.
             </div>
-            <div className="text-center text-xs text-muted-foreground pb-2">Demo data – integrate real budget API</div>
           </Card>
 
           <Card>
             <CardHeader title="Forecast vs Actual" subtitle="Net income · 12M" />
             <div className="p-4 h-[260px]">
               <ResponsiveContainer>
-                <LineChart data={forecastData}>
+                <LineChart data={revenueTrendData.map(d => ({ m: d.m, actual: d.rev - d.exp }))}>
                   <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="m" stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
                   <YAxis stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
                   <Tooltip {...t} />
-                  <Line type="monotone" dataKey="actual" stroke="var(--color-chart-1)" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="forecast" stroke="var(--color-chart-4)" strokeWidth={2} strokeDasharray="4 4" dot={false} />
+                  <Line type="monotone" dataKey="actual" stroke="var(--color-chart-1)" strokeWidth={2} dot={false} name="Net Income" />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -401,32 +347,10 @@ export default function FinanceDashboardPage() {
             <Card>
               <CardHeader
                 title="Pending Approvals"
-                subtitle="Coming soon – integrate approval workflow"
-                action={<span className="text-xs px-1.5 py-0.5 rounded bg-warning/15 text-warning font-medium">Demo</span>}
+                subtitle="Awaiting review"
               />
-              <div className="divide-y divide-border">
-                {pendingApprovalsPlaceholder.map((a) => (
-                  <div key={a.id} className="px-5 py-3 flex items-start gap-3 hover:bg-surface-2/50">
-                    <div className="h-8 w-8 rounded-md bg-surface-2 border border-border flex items-center justify-center text-[10px] font-semibold text-muted-foreground">
-                      {a.type[0]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground font-mono">{a.id}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-muted-foreground">{a.type}</span>
-                      </div>
-                      <div className="text-sm font-medium truncate">{a.title}</div>
-                      <div className="text-xs text-muted-foreground">{a.requester} · {a.age} ago</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm font-semibold num">{formatCurrency(a.amount)}</div>
-                      <div className="flex gap-1 mt-1 justify-end">
-                        <button className="h-6 w-6 rounded bg-success/15 text-success hover:bg-success/25 flex items-center justify-center"><CheckCircle2 className="h-3.5 w-3.5" /></button>
-                        <button className="h-6 w-6 rounded bg-destructive/15 text-destructive hover:bg-destructive/25 flex items-center justify-center"><AlertTriangle className="h-3.5 w-3.5" /></button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+              <div className="p-5 text-sm text-muted-foreground text-center">
+                Pending approvals will appear once the approval workflow is configured.
               </div>
             </Card>
           </div>
@@ -454,43 +378,15 @@ export default function FinanceDashboardPage() {
 
           <Card>
             <CardHeader title="Receivables Aging" subtitle={`Total ${formatCurrency(Number(kpis?.receivables ?? 0))}`} />
-            <div className="p-5 space-y-3">
-              {receivablesAgingPlaceholder.map((b) => {
-                const pct = (b.v / Number(kpis?.receivables ?? 1)) * 100;
-                return (
-                  <div key={b.l}>
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-muted-foreground">{b.l}</span>
-                      <span className="num font-medium">{formatCurrency(b.v)}</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-border overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: b.c }} />
-                    </div>
-                  </div>
-                );
-              })}
-              <div className="text-center text-xs text-muted-foreground pt-2">Demo distribution – replace with real invoice aging</div>
+            <div className="p-5 flex items-center justify-center h-[260px] text-sm text-muted-foreground">
+              Aging distribution will appear once invoice data is configured.
             </div>
           </Card>
 
           <Card>
             <CardHeader title="Payables Aging" subtitle={`Total ${formatCurrency(Number(kpis?.payables ?? 0))}`} />
-            <div className="p-5 space-y-3">
-              {payablesAgingPlaceholder.map((b) => {
-                const pct = (b.v / Number(kpis?.payables ?? 1)) * 100;
-                return (
-                  <div key={b.l}>
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-muted-foreground">{b.l}</span>
-                      <span className="num font-medium">{formatCurrency(b.v)}</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-border overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: b.c }} />
-                    </div>
-                  </div>
-                );
-              })}
-              <div className="text-center text-xs text-muted-foreground pt-2">Demo distribution – replace with real bill aging</div>
+            <div className="p-5 flex items-center justify-center h-[260px] text-sm text-muted-foreground">
+              Aging distribution will appear once bill data is configured.
             </div>
           </Card>
         </div>

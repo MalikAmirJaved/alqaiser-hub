@@ -49,7 +49,8 @@ INSTALLED_APPS = [
     'apps.permissions',
     'apps.sales',
     'apps.forecast',
-    'apps.overall_dashboard'
+    'apps.overall_dashboard',
+    'apps.audit',
 ]
 
 AUTH_USER_MODEL = 'organization.User'
@@ -107,6 +108,7 @@ DATABASES = {
         'HOST': env("DB_HOST"),
         'PORT': env("DB_PORT", default="5432"),
         'CONN_MAX_AGE': 60,   # persistent connections for scalability
+        'ATOMIC_REQUESTS': True,  # wrap every request in a transaction
         'OPTIONS': {
             'connect_timeout': 10,
         },
@@ -137,7 +139,7 @@ REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': (
         'rest_framework.renderers.JSONRenderer',
     ),
-    'EXCEPTION_HANDLER': 'rest_framework.views.exception_handler',
+    'EXCEPTION_HANDLER': 'apps.common.exceptions.custom_exception_handler',
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
 

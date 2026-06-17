@@ -9,7 +9,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useLeaves } from "@/hooks/useLeaves";
-import { usePayroll, useEmployeeLoans, useCompensations } from "@/hooks/usePayroll";
+import { usePayroll, useEmployeeLoans, useCompensations, computeTotalMonths } from "@/hooks/usePayroll";
 import { useEmployeeAssignments } from "@/hooks/useEmployeeAssets";
 import { useShiftTemplates } from "@/hooks/useShiftTemplates";
 import { useExitRecords } from "@/hooks/useExitManagement";
@@ -55,6 +55,7 @@ import {
   Tag,
   Percent,
 } from "lucide-react";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -68,9 +69,9 @@ const statusColors: Record<string, string> = {
   APPROVED: "bg-success/15 text-success border-success/20",
   REJECTED: "bg-destructive/15 text-destructive border-destructive/20",
   CANCELLED: "bg-muted text-muted-foreground border-border",
-  PAID: "bg-success/15 text-success border-success/20",
+  PAID: "bg-blue-500/15 text-blue-600 border-blue-500/30",
+  RETURNED: "bg-green-500/15 text-green-600 border-green-500/30",
   UNPAID: "bg-warning/15 text-warning border-warning/20",
-  ACTIVE_LOAN: "bg-info/15 text-info border-info/20",
 };
 
 const badge = (label: string, cls?: string) => (
@@ -85,10 +86,7 @@ const fmt = (val?: string | number | null, fallback = "—") =>
 const fmtDate = (d?: string) =>
   d ? new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "—";
 
-const fmtCurrency = (val?: string | number, currency = "USD") => {
-  const n = parseFloat(String(val || 0));
-  return isNaN(n) ? "—" : new Intl.NumberFormat("en-US", { style: "currency", currency }).format(n);
-};
+
 
 const initials = (first?: string, last?: string) =>
   `${(first || "?")[0]}${(last || "")[0] || ""}`.toUpperCase();
@@ -146,6 +144,7 @@ const TABS = [
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function EmployeeDetailPage() {
+  const formatCurrency = useFormatCurrency();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("overview");
@@ -241,8 +240,8 @@ export default function EmployeeDetailPage() {
     employment: (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <SectionCard title="Job Details" icon={Briefcase}>
-          <InfoRow label="Department" value={employee.department} />
-          <InfoRow label="Designation" value={employee.designation} />
+          <InfoRow label="Department" value={employee.department_name} />
+          <InfoRow label="Designation" value={employee.designation_name} />
           <InfoRow
             label="Status"
           >
@@ -280,14 +279,14 @@ export default function EmployeeDetailPage() {
         </SectionCard>
 
         <SectionCard title="Compensation Summary" icon={DollarSign}>
-          <InfoRow label="Base Salary" value={fmtCurrency(employee.salary)} />
+          <InfoRow label="Base Salary" value={formatCurrency(employee.salary)} />
           {latestCompensation && (
             <>
-              <InfoRow label="Basic" value={fmtCurrency(latestCompensation.basic_salary)} />
-              <InfoRow label="HRA" value={fmtCurrency(latestCompensation.house_rent_allowance)} />
-              <InfoRow label="Medical" value={fmtCurrency(latestCompensation.medical_allowance)} />
-              <InfoRow label="Transport" value={fmtCurrency(latestCompensation.transport_allowance)} />
-              <InfoRow label="Total CTC" value={fmtCurrency(latestCompensation.total_ctc)} />
+              <InfoRow label="Basic" value={formatCurrency(latestCompensation.basic_salary)} />
+              <InfoRow label="HRA" value={formatCurrency(latestCompensation.house_rent_allowance)} />
+              <InfoRow label="Medical" value={formatCurrency(latestCompensation.medical_allowance)} />
+              <InfoRow label="Transport" value={formatCurrency(latestCompensation.transport_allowance)} />
+              <InfoRow label="Total CTC" value={formatCurrency(latestCompensation.total_ctc)} />
             </>
           )}
         </SectionCard>
@@ -306,24 +305,21 @@ export default function EmployeeDetailPage() {
                 { label: "HRA", val: latestCompensation.house_rent_allowance },
                 { label: "Medical", val: latestCompensation.medical_allowance },
                 { label: "Transport", val: latestCompensation.transport_allowance },
-                { label: "Fuel", val: latestCompensation.fuel_allowance },
                 { label: "Phone", val: latestCompensation.phone_allowance },
                 { label: "Utilities", val: latestCompensation.utilities_allowance },
                 { label: "Education", val: latestCompensation.education_allowance },
                 { label: "Others", val: latestCompensation.other_allowances },
-                { label: "Employer PF", val: latestCompensation.employer_pf },
-                { label: "Employer EOBI", val: latestCompensation.employer_eobi },
                 { label: "Total Allowances", val: latestCompensation.total_allowances },
               ].map(({ label, val }) => (
                 <div key={label} className="bg-muted/40 rounded-lg p-3">
                   <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
-                  <p className="text-sm font-semibold">{fmtCurrency(val)}</p>
+                  <p className="text-sm font-semibold">{formatCurrency(val)}</p>
                 </div>
               ))}
             </div>
             <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
               <span className="text-sm font-semibold">Total Monthly CTC</span>
-              <span className="text-lg font-bold text-primary">{fmtCurrency(latestCompensation.total_monthly)}</span>
+              <span className="text-lg font-bold text-primary">{formatCurrency(latestCompensation.total_monthly)}</span>
             </div>
           </SectionCard>
         )}
@@ -348,10 +344,10 @@ export default function EmployeeDetailPage() {
                       <td className="py-2.5 pr-4 whitespace-nowrap font-mono text-xs">
                         {p.year}-{String(p.month).padStart(2, "0")}
                       </td>
-                      <td className="py-2.5 pr-4 whitespace-nowrap">{fmtCurrency(p.base_salary)}</td>
-                      <td className="py-2.5 pr-4 whitespace-nowrap text-success">{fmtCurrency(p.bonus)}</td>
-                      <td className="py-2.5 pr-4 whitespace-nowrap text-destructive">{fmtCurrency(p.deductions)}</td>
-                      <td className="py-2.5 pr-4 whitespace-nowrap font-semibold">{fmtCurrency(p.net_salary)}</td>
+                      <td className="py-2.5 pr-4 whitespace-nowrap">{formatCurrency(p.base_salary)}</td>
+                      <td className="py-2.5 pr-4 whitespace-nowrap text-success">{formatCurrency(p.bonus)}</td>
+                      <td className="py-2.5 pr-4 whitespace-nowrap text-destructive">{formatCurrency(p.deductions)}</td>
+                      <td className="py-2.5 pr-4 whitespace-nowrap font-semibold">{formatCurrency(p.net_salary)}</td>
                       <td className="py-2.5 pr-4">{badge(p.status, statusColors[p.status])}</td>
                       <td className="py-2.5 text-muted-foreground text-xs">{p.payment_method?.replace("_", " ")}</td>
                     </tr>
@@ -372,8 +368,9 @@ export default function EmployeeDetailPage() {
         ) : (
           <div className="space-y-4">
             {loans.map((loan) => {
-              const paidPct = loan.total_months
-                ? Math.round((loan.paid_months / loan.total_months) * 100)
+              const totMonths = computeTotalMonths(loan);
+              const paidPct = totMonths
+                ? Math.round((loan.paid_months / totMonths) * 100)
                 : 0;
               return (
                 <div key={loan.id} className="border border-border rounded-xl p-4 space-y-3">
@@ -382,13 +379,13 @@ export default function EmployeeDetailPage() {
                       <p className="font-semibold text-sm">{loan.loan_type_display || loan.loan_type}</p>
                       <p className="text-xs text-muted-foreground">Since {fmtDate(loan.start_date)}</p>
                     </div>
-                    {badge(loan.status, statusColors[loan.status] || statusColors.ACTIVE_LOAN)}
+                    {badge(loan.status, statusColors[loan.status] || "bg-info/15 text-info border-info/20")}
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                     {[
-                      { label: "Principal", val: fmtCurrency(loan.principal_amount) },
-                      { label: "Remaining", val: fmtCurrency(loan.remaining_amount) },
-                      { label: "Monthly", val: fmtCurrency(loan.monthly_deduction) },
+                      { label: "Principal", val: formatCurrency(loan.principal_amount) },
+                      { label: "Remaining", val: formatCurrency(loan.remaining_amount) },
+                      { label: "Monthly", val: formatCurrency(loan.monthly_deduction) },
                       { label: "Interest", val: `${loan.interest_rate}%` },
                     ].map(({ label, val }) => (
                       <div key={label} className="bg-muted/40 rounded-lg p-2">
@@ -400,7 +397,7 @@ export default function EmployeeDetailPage() {
                   {/* Progress */}
                   <div>
                     <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                      <span>{loan.paid_months} / {loan.total_months} months paid</span>
+                      <span>{loan.paid_months} / {computeTotalMonths(loan)} months paid</span>
                       <span>{paidPct}%</span>
                     </div>
                     <div className="h-1.5 bg-muted rounded-full overflow-hidden">
@@ -570,42 +567,11 @@ export default function EmployeeDetailPage() {
                   <XCircle className="w-4 h-4 text-destructive" />
                 )}
               </InfoRow>
-              <InfoRow label="Final Settlement" value={fmtCurrency(exitRecord.final_settlement)} />
+              {exitRecord.final_settlement != null && (
+                <InfoRow label="Final Settlement" value={"AED " + Number(exitRecord.final_settlement || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} />
+              )}
+              {exitRecord.settlement_notes && <InfoRow label="Settlement Notes" value={exitRecord.settlement_notes} />}
               {exitRecord.notes && <InfoRow label="Notes" value={exitRecord.notes} />}
-            </SectionCard>
-
-            <SectionCard title="Clearance Status" icon={CheckCircle2}>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                {[
-                  { label: "HR", cleared: exitRecord.clearance_hr },
-                  { label: "IT", cleared: exitRecord.clearance_it },
-                  { label: "Finance", cleared: exitRecord.clearance_finance },
-                  { label: "Admin", cleared: exitRecord.clearance_admin },
-                ].map(({ label, cleared }) => (
-                  <div key={label} className={cn(
-                    "flex flex-col items-center gap-2 p-3 rounded-xl border",
-                    cleared ? "bg-success/10 border-success/20" : "bg-muted/40 border-border"
-                  )}>
-                    {cleared
-                      ? <CheckCircle2 className="w-6 h-6 text-success" />
-                      : <XCircle className="w-6 h-6 text-muted-foreground" />
-                    }
-                    <span className="text-xs font-medium">{label}</span>
-                  </div>
-                ))}
-              </div>
-              <div>
-                <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                  <span>Overall clearance</span>
-                  <span>{exitRecord.clearance_progress ?? 0}%</span>
-                </div>
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-success rounded-full transition-all"
-                    style={{ width: `${exitRecord.clearance_progress ?? 0}%` }}
-                  />
-                </div>
-              </div>
             </SectionCard>
           </>
         )}
@@ -639,7 +605,7 @@ export default function EmployeeDetailPage() {
               </div>
               <div className="mb-1">
                 <h1 className="text-xl font-bold leading-tight">{fullName}</h1>
-                <p className="text-sm text-muted-foreground">{employee.designation || employee.department}</p>
+                <p className="text-sm text-muted-foreground">{employee.designation_name || employee.department_name}</p>
                 <p className="text-xs font-mono text-muted-foreground">{employee.employee_id}</p>
               </div>
             </div>
@@ -667,7 +633,7 @@ export default function EmployeeDetailPage() {
               {
                 icon: Building2,
                 label: "Department",
-                value: employee.department,
+                value: employee.department_name,
               },
               {
                 icon: Calendar,
@@ -682,7 +648,7 @@ export default function EmployeeDetailPage() {
               {
                 icon: DollarSign,
                 label: "Salary",
-                value: fmtCurrency(employee.salary),
+                value: formatCurrency(employee.salary),
               },
             ].map(({ icon: Icon, label, value }) => (
               <div key={label} className="bg-muted/40 rounded-xl p-3 flex items-center gap-2.5">

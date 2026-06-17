@@ -17,7 +17,7 @@ import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { toast } from "sonner";
 
 // Import hooks
-import { useEmployees, type Employee } from "@/hooks/useEmployees";
+import { useActiveEmployees, useUpdateEmployee, type ActiveEmployee } from "@/hooks/useEmployees";
 import { useShiftTemplates, type ShiftTemplate } from "@/hooks/useShiftTemplates";
 import { 
   useResolvedShifts, 
@@ -71,10 +71,11 @@ export default function ShiftsManagementPage() {
     assignment_type: "OVERRIDE" as "OVERRIDE" | "DATE_RANGE"
   });
   const [historyPage, setHistoryPage] = useState(0);
-  const [selectedEmployeeForHistory, setSelectedEmployeeForHistory] = useState<Employee | null>(null);
+  const [selectedEmployeeForHistory, setSelectedEmployeeForHistory] = useState<ActiveEmployee | null>(null);
+  const [setDefaultModal, setSetDefaultModal] = useState<{ employee: ActiveEmployee; templateId: string } | null>(null);
 
   // Queries
-  const { data: employees = [], isLoading: employeesLoading } = useEmployees({ employment_status: "ACTIVE" });
+  const { data: employees = [], isLoading: employeesLoading } = useActiveEmployees();
   const { data: templates = [], isLoading: templatesLoading } = useShiftTemplates();
   
   // Filtered employees (moved before useMemo that depends on it)
@@ -82,8 +83,8 @@ export default function ShiftsManagementPage() {
     return employees.filter(e => {
       const fullName = `${e.first_name} ${e.last_name || ''}`.toLowerCase();
       const matchesSearch = fullName.includes(filters.search.toLowerCase()) || 
-                           e.department?.toLowerCase().includes(filters.search.toLowerCase());
-      const matchesDepartment = !filters.department || e.department === filters.department;
+                           e.department_name?.toLowerCase().includes(filters.search.toLowerCase());
+      const matchesDepartment = !filters.department || e.department_name === filters.department;
       return matchesSearch && matchesDepartment;
     });
   }, [employees, filters.search, filters.department]);
@@ -136,10 +137,11 @@ export default function ShiftsManagementPage() {
   const deleteOverride = useDeleteShiftOverride();
   const bulkAssign = useBulkShiftAssignment();
   const generateSchedule = useGenerateShiftSchedule();
+  const updateEmployee = useUpdateEmployee();
   
   // Departments list
   const departments = useMemo(() => {
-    const depts = new Set(employees.map(e => e.department).filter(Boolean));
+    const depts = new Set(employees.map(e => e.department_name).filter((d): d is string => !!d));
     return Array.from(depts);
   }, [employees]);
   
@@ -250,7 +252,6 @@ export default function ShiftsManagementPage() {
           }
         }
         
-        toast.success(`Scheduled ${selectedEmployees.length} employee(s) for ${dates.length} day(s)`);
       } else {
         // Create date range assignment
         await bulkAssign.mutateAsync({
@@ -261,8 +262,6 @@ export default function ShiftsManagementPage() {
           assignment_type: "DATE_RANGE",
           reason: scheduleFormData.reason
         });
-        
-        toast.success(`Created date range assignment for ${selectedEmployees.length} employee(s)`);
       }
       
       // Refresh data
@@ -274,7 +273,6 @@ export default function ShiftsManagementPage() {
       setScheduleFormData({ template_id: "", date_range: { start: "", end: "" }, reason: "", assignment_type: "OVERRIDE" });
       setSelectedEmployees([]);
     } catch (error: any) {
-      toast.error(error.message || "Failed to schedule shift");
     }
   };
   
@@ -284,11 +282,9 @@ export default function ShiftsManagementPage() {
     
     try {
       await deleteOverride.mutateAsync(overrideId);
-      toast.success("Shift assignment removed");
       refetchShifts();
       refetchOverrides();
     } catch (error: any) {
-      toast.error(error.message || "Failed to remove assignment");
     }
   };
   
@@ -312,11 +308,9 @@ export default function ShiftsManagementPage() {
       for (const override of overridesToDelete) {
         await deleteOverride.mutateAsync(override.id);
       }
-      toast.success(`${overridesToDelete.length} assignment(s) removed`);
       refetchShifts();
       refetchOverrides();
     } catch (error: any) {
-      toast.error(error.message || "Failed to remove assignments");
     }
   };
   
@@ -327,10 +321,22 @@ export default function ShiftsManagementPage() {
     
     try {
       await generateSchedule.mutateAsync({ start_date: startDate, end_date: endDate });
-      toast.success("Shift schedules generated");
       refetchShifts();
     } catch (error: any) {
-      toast.error(error.message || "Failed to generate schedules");
+    }
+  };
+  
+  // Handle set default shift
+  const handleSetDefaultShift = async () => {
+    if (!setDefaultModal) return;
+    try {
+      await updateEmployee.mutateAsync({
+        id:setDefaultModal.employee.id,
+        default_shift_id: setDefaultModal.templateId || undefined,
+      });
+      refetchShifts();
+      setSetDefaultModal(null);
+    } catch (error: any) {
     }
   };
   
@@ -622,7 +628,7 @@ export default function ShiftsManagementPage() {
                             <span className="ml-2 text-[10px] bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 px-1.5 py-0.5 rounded-full">Override Today</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">{emp.department || "—"}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{emp.department_name || "—"}</td>
                         <td className="px-4 py-3">
                           {resolved?.template ? (
                             <div className="inline-flex items-center gap-2 px-2 py-1 rounded text-xs" style={{ backgroundColor: `#3b82f620` }}>
@@ -640,6 +646,15 @@ export default function ShiftsManagementPage() {
                           {emp.default_shift_name ? "From hire date" : "—"}
                         </td>
                         <td className="px-4 py-3 text-right space-x-2">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              setSetDefaultModal({ employee: emp, templateId: emp.default_shift_id || "" });
+                            }}
+                          >
+                            <Settings className="w-3.5 h-3.5 mr-1.5"/> Set Default
+                          </Button>
                           <Button 
                             size="sm" 
                             variant="outline"
@@ -719,7 +734,7 @@ export default function ShiftsManagementPage() {
                         className="rounded border-border"
                       />
                       <span className="text-sm">{emp.first_name} {emp.last_name || ''}</span>
-                      <span className="text-xs text-muted-foreground ml-auto">{emp.department}</span>
+                      <span className="text-xs text-muted-foreground ml-auto">{emp.department_name}</span>
                     </label>
                   ))}
                 </div>
@@ -886,7 +901,7 @@ export default function ShiftsManagementPage() {
                           <div className="font-medium text-sm">
                             {emp.first_name} {emp.last_name || ''}
                           </div>
-                          <div className="text-xs text-muted-foreground">{emp.department}</div>
+                          <div className="text-xs text-muted-foreground">{emp.department_name}</div>
                         </div>
                         <div className="flex gap-1">
                           {isOverride && (
@@ -1049,6 +1064,56 @@ export default function ShiftsManagementPage() {
             
             <div className="p-4 border-t border-border flex justify-end">
               <Button onClick={() => setShowHistoryModal(false)}>Close</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* SET DEFAULT SHIFT MODAL */}
+      {setDefaultModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4">
+          <div className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-md">
+            <div className="p-4 border-b border-border flex justify-between items-center">
+              <h2 className="font-semibold flex items-center gap-2">
+                <Settings className="w-4 h-4 text-primary" /> Set Default Shift
+              </h2>
+              <button onClick={() => setSetDefaultModal(null)} className="p-1.5 hover:bg-muted rounded">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="p-4 space-y-4">
+              <div className="bg-muted/40 rounded-lg p-3">
+                <div className="text-xs text-muted-foreground mb-1">Employee</div>
+                <div className="font-medium">
+                  {setDefaultModal.employee.first_name} {setDefaultModal.employee.last_name || ''}
+                </div>
+                <div className="text-xs text-muted-foreground">{setDefaultModal.employee.department_name}</div>
+              </div>
+              
+              <div>
+                <label className="text-sm text-muted-foreground mb-1 block">Select Default Shift Template</label>
+                <SearchableSelect 
+                  value={setDefaultModal.templateId} 
+                  onChange={(v) => setSetDefaultModal({ ...setDefaultModal, templateId: v })} 
+                  options={templates.filter(t => t.is_active).map(t => ({value: t.id, label: `${t.name} (${t.startTime} - ${t.endTime})`}))} 
+                  placeholder="Select shift template"
+                />
+              </div>
+              
+              <p className="text-xs text-muted-foreground">
+                This will set the employee's permanent default shift. Existing overrides for today are not affected.
+              </p>
+            </div>
+            
+            <div className="p-4 border-t border-border flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setSetDefaultModal(null)}>Cancel</Button>
+              <Button 
+                onClick={handleSetDefaultShift}
+                disabled={updateEmployee.isPending}
+              >
+                {updateEmployee.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Save Default
+              </Button>
             </div>
           </div>
         </div>

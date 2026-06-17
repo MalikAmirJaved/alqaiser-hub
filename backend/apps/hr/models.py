@@ -10,6 +10,9 @@ from apps.common.basemodel import BaseModel
 from apps.finance.services.payable import PayableModelMixin
 
 
+from apps.organization.models import Department
+from apps.compsetting.models import Designation
+
 def current_year():
     return date.today().year
 
@@ -105,6 +108,56 @@ class Asset(BaseModel):
             return None
         return self.warranty_until >= date.today()
 # =========================================================
+# ASSET PURCHASE REQUEST
+# =========================================================
+class AssetPurchaseRequest(BaseModel):
+    """Purchase requests for HR assets - raised from asset library, fulfilled via inventory PO"""
+
+    asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name='purchase_requests')
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='asset_purchase_requests'
+    )
+    employee = models.ForeignKey(
+        'Employee', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='asset_purchase_requests'
+    )
+    quantity = models.PositiveIntegerField()
+    reason = models.TextField()
+    under_date = models.DateField(help_text="Date by which the asset is needed")
+    status = models.CharField(
+        max_length=30,
+        choices=[
+            ('PENDING', 'Pending'),
+            ('APPROVED', 'Approved'),
+            ('PURCHASE_ORDER_CREATED', 'Purchase Order Created'),
+            ('CANCELLED', 'Cancelled'),
+        ],
+        default='PENDING',
+        db_index=True
+    )
+    purchase_order = models.ForeignKey(
+        'inventory.PurchaseOrder', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='asset_purchase_requests'
+    )
+    notes = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = "Asset Purchase Request"
+        verbose_name_plural = "Asset Purchase Requests"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['company_id', 'status']),
+            models.Index(fields=['asset', 'status']),
+            models.Index(fields=['company_id', 'branch_id']),
+            models.Index(fields=['purchase_order']),
+        ]
+
+    def __str__(self):
+        return f"Request for {self.asset.name} x{self.quantity} ({self.get_status_display()})"
+
+
+# =========================================================
 # ASSET CATEGORY (Kit)
 # =========================================================
 class AssetCategory(BaseModel):
@@ -165,6 +218,11 @@ class Employee(BaseModel):
     phone = models.CharField(max_length=20)
     email = models.EmailField(blank=True, null=True)
     personal_email = models.EmailField(blank=True, null=True)
+
+    # If this employee was used to create a system user, link it here
+    isfrom_user = models.ForeignKey(
+        'organization.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='employee_profile'
+    )
     
     # Address
     address_line = models.TextField(blank=True, null=True)
@@ -184,8 +242,22 @@ class Employee(BaseModel):
         choices=[('STAFF', 'Staff'), ('BRANCH_ADMIN', 'Branch Admin'), ('COMPANY_ADMIN', 'Company Admin')],
         default='STAFF'
     )
-    department = models.CharField(max_length=100)
-    designation = models.CharField(max_length=100, blank=True, null=True)
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='employees'
+    )
+
+    designation = models.ForeignKey(
+        Designation,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='employees'
+    )
+
     employment_type = models.CharField(
         max_length=50,
         choices=[('FULL_TIME', 'Full Time'), ('PART_TIME', 'Part Time'), ('CONTRACT', 'Contract'), ('INTERN', 'Intern')],
@@ -250,6 +322,39 @@ class Employee(BaseModel):
     @property
     def full_name(self):
         return f"{self.first_name} {self.last_name or ''}".strip()
+
+
+# =========================================================
+# EMPLOYEE PROMOTION
+# =========================================================
+class EmployeePromotion(BaseModel):
+    """Employee salary promotion history"""
+    
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='promotions')
+    previous_salary = models.DecimalField(max_digits=12, decimal_places=2)
+    new_salary = models.DecimalField(max_digits=12, decimal_places=2)
+    effective_date = models.DateField()
+    notes = models.TextField(blank=True, null=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_promotions'
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        verbose_name = "Employee Promotion"
+        verbose_name_plural = "Employee Promotions"
+        ordering = ['-effective_date', '-created_at']
+        indexes = [
+            models.Index(fields=['employee', 'effective_date']),
+            models.Index(fields=['company_id', 'effective_date']),
+        ]
+    
+    def __str__(self):
+        return f"{self.employee} - {self.previous_salary} -> {self.new_salary}"
 
 
 # =========================================================
@@ -345,42 +450,50 @@ class Compensation(BaseModel):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='compensations')
     
     # Salary Structure
-    grade = models.CharField(max_length=50, blank=True, null=True)
     house_rent_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     medical_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     transport_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    fuel_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     phone_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     utilities_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     education_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     other_allowances = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     
-    # Employer Contributions
-    employer_pf = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    employer_eobi = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    
     # Additional
     overtime_rate = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    bonus_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    
+    # Frequency Type
+    frequency_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('ONE_TIME', 'One Time'),
+            ('SELECTED_MONTH', 'Selected Month'),
+            ('MONTH_RANGE', 'Month Range'),
+        ],
+        default='MONTH_RANGE'
+    )
     
     # Status & Dates
-    is_active = models.BooleanField(default=True)
     status = models.CharField(
         max_length=20,
-        choices=[('ACTIVE', 'Active'), ('INACTIVE', 'Inactive')],
-        default='ACTIVE'
+        choices=[
+            ('PENDING', 'Pending'),
+            ('CONFIRM', 'Confirmed'),
+            ('REJECT', 'Rejected'),
+            ('FULLYPAID', 'Fully Paid'),
+        ],
+        default='PENDING'
     )
-    effective_date = models.DateField()
     review_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True, null=True)
     
     class Meta:
         verbose_name = "Compensation"
         verbose_name_plural = "Compensations"
-        ordering = ['-effective_date']
+        ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['employee', 'is_active']),
-            models.Index(fields=['company_id', 'is_active']),
+            models.Index(fields=['employee']),
+            models.Index(fields=['company_id', 'status']),
+            models.Index(fields=['frequency_type']),
         ]
     
     @property
@@ -389,7 +502,6 @@ class Compensation(BaseModel):
             self.house_rent_allowance +
             self.medical_allowance +
             self.transport_allowance +
-            self.fuel_allowance +
             self.phone_allowance +
             self.utilities_allowance +
             self.education_allowance +
@@ -398,11 +510,42 @@ class Compensation(BaseModel):
     
     @property
     def total_ctc(self):
-        return self.total_allowances + self.employer_pf + self.employer_eobi
+        return self.total_allowances
     
     @property
     def total_monthly(self):
         return self.total_allowances
+
+
+class CompensationSelectedMonth(BaseModel):
+    """Selected months for compensation with SELECTED_MONTH frequency"""
+    
+    compensation = models.ForeignKey(Compensation, on_delete=models.CASCADE, related_name='selected_months')
+    month = models.PositiveSmallIntegerField(help_text="1-12")
+    year = models.PositiveSmallIntegerField()
+    
+    class Meta:
+        verbose_name = "Compensation Selected Month"
+        verbose_name_plural = "Compensation Selected Months"
+        ordering = ['year', 'month']
+        unique_together = ('compensation', 'month', 'year')
+        indexes = [
+            models.Index(fields=['compensation']),
+        ]
+
+
+class CompensationMonthRange(BaseModel):
+    """Month range for compensation with MONTH_RANGE frequency"""
+    
+    compensation = models.OneToOneField(Compensation, on_delete=models.CASCADE, related_name='month_range')
+    start_month = models.PositiveSmallIntegerField(help_text="1-12")
+    start_year = models.PositiveSmallIntegerField()
+    end_month = models.PositiveSmallIntegerField(help_text="1-12")
+    end_year = models.PositiveSmallIntegerField()
+    
+    class Meta:
+        verbose_name = "Compensation Month Range"
+        verbose_name_plural = "Compensation Month Ranges"
 
 
 # =========================================================
@@ -429,31 +572,51 @@ class EmployeeLoan(BaseModel):
         default='PERSONAL_LOAN'
     )
     principal_amount = models.DecimalField(max_digits=12, decimal_places=2)
-    monthly_deduction = models.DecimalField(max_digits=12, decimal_places=2)
     remaining_amount = models.DecimalField(max_digits=12, decimal_places=2)
-    total_months = models.PositiveIntegerField()
+    paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     paid_months = models.PositiveIntegerField(default=0)
     
     # Interest
     interest_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     total_payable = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     
-    # Dates
-    start_date = models.DateField()
-    end_date = models.DateField(null=True, blank=True)
+    # Frequency Type
+    frequency_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('ONE_TIME', 'One Time'),
+            ('SELECTED_MONTH', 'Selected Month'),
+            ('MONTH_RANGE', 'Month Range'),
+        ],
+        default='MONTH_RANGE'
+    )
     
     # Status
     status = models.CharField(
         max_length=20,
         choices=[
-            ('PENDING', 'Pending'),
-            ('ACTIVE', 'Active'),
+            ('UNPAID', 'Unpaid'),
             ('PAID', 'Paid'),
-            ('DEFAULTED', 'Defaulted'),
-            ('CANCELLED', 'Cancelled'),
+            ('RETURNED', 'Returned'),
+        ],
+        default='UNPAID'
+    )
+    
+    # Approval
+    approval = models.CharField(
+        max_length=20,
+        choices=[
+            ('PENDING', 'Pending'),
+            ('CONFIRM', 'Confirmed'),
+            ('REJECTED', 'Rejected'),
         ],
         default='PENDING'
     )
+    
+    # Bank Info
+    bank_name = models.CharField(max_length=255, blank=True, null=True)
+    bank_account_number = models.CharField(max_length=100, blank=True, null=True)
+    bank_iban = models.CharField(max_length=50, blank=True, null=True)
     
     # Additional Info
     purpose = models.TextField(blank=True, null=True)
@@ -465,8 +628,21 @@ class EmployeeLoan(BaseModel):
         related_name='approved_loans'
     )
     approved_at = models.DateTimeField(null=True, blank=True)
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='confirmed_loans'
+    )
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True, null=True)
     transaction_number = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Advance Salary fields - tracks which future month this advance is for
+    advance_for_month = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Future month this advance is for (1-12)")
+    advance_for_year = models.PositiveIntegerField(null=True, blank=True, help_text="Future year this advance is for")
     
     class Meta:
         verbose_name = "Employee Loan"
@@ -475,11 +651,50 @@ class EmployeeLoan(BaseModel):
         indexes = [
             models.Index(fields=['employee', 'status']),
             models.Index(fields=['company_id', 'status']),
+            models.Index(fields=['company_id', 'approval']),
+            models.Index(fields=['frequency_type']),
+            models.Index(fields=['advance_for_month', 'advance_for_year']),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['employee', 'advance_for_month', 'advance_for_year'],
+                name='unique_employee_advance_for_month',
+                condition=models.Q(advance_for_month__isnull=False),
+            ),
+        ]
+
+
+class LoanSelectedMonth(BaseModel):
+    """Selected months for loan with SELECTED_MONTH frequency"""
     
-    @property
-    def remaining_months(self):
-        return max(0, self.total_months - self.paid_months)
+    loan = models.ForeignKey(EmployeeLoan, on_delete=models.CASCADE, related_name='selected_months')
+    month = models.PositiveSmallIntegerField(help_text="1-12")
+    year = models.PositiveSmallIntegerField()
+    deduction = models.DecimalField(max_digits=12, decimal_places=2, help_text="Auto-calculated but editable")
+    
+    class Meta:
+        verbose_name = "Loan Selected Month"
+        verbose_name_plural = "Loan Selected Months"
+        ordering = ['year', 'month']
+        unique_together = ('loan', 'month', 'year')
+        indexes = [
+            models.Index(fields=['loan']),
+        ]
+
+
+class LoanMonthRange(BaseModel):
+    """Month range for loan with MONTH_RANGE frequency"""
+    
+    loan = models.OneToOneField(EmployeeLoan, on_delete=models.CASCADE, related_name='month_range')
+    start_month = models.PositiveSmallIntegerField(help_text="1-12")
+    start_year = models.PositiveSmallIntegerField()
+    end_month = models.PositiveSmallIntegerField(help_text="1-12")
+    end_year = models.PositiveSmallIntegerField()
+    deduction = models.DecimalField(max_digits=12, decimal_places=2, help_text="Auto-calculated, not editable")
+    
+    class Meta:
+        verbose_name = "Loan Month Range"
+        verbose_name_plural = "Loan Month Ranges"
 
 
 # =========================================================
@@ -497,6 +712,11 @@ class PayrollRecord(PayableModelMixin, BaseModel):
     bonus = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     deductions = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     net_salary = models.DecimalField(max_digits=12, decimal_places=2)
+
+    # Denormalized totals from child relational tables
+    total_compensation = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_loan_deduction = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_leave_deduction = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     transaction_type = models.CharField(
         max_length=50,
@@ -560,6 +780,76 @@ class PayrollDeductionDetail(BaseModel):
     
     def __str__(self):
         return f"{self.get_deduction_type_display()} - {self.amount}"
+
+
+# =========================================================
+# PAYROLL COMPENSATION (relational link)
+# =========================================================
+class PayrollCompensation(BaseModel):
+    """Relational link between PayrollRecord and Compensation for the payroll month"""
+
+    payroll = models.ForeignKey(PayrollRecord, on_delete=models.CASCADE, related_name='payroll_compensations')
+    compensation = models.ForeignKey(Compensation, on_delete=models.CASCADE, related_name='payroll_records')
+    amount = models.DecimalField(max_digits=12, decimal_places=2, help_text="Compensation amount applied for this payroll month")
+
+    class Meta:
+        verbose_name = "Payroll Compensation"
+        verbose_name_plural = "Payroll Compensations"
+        unique_together = ('payroll', 'compensation')
+        indexes = [
+            models.Index(fields=['payroll', 'compensation']),
+        ]
+
+    def __str__(self):
+        return f"PayrollCompensation({self.amount})"
+
+
+# =========================================================
+# PAYROLL LOAN DEDUCTION (relational link)
+# =========================================================
+class PayrollLoanDeduction(BaseModel):
+    """Relational link between PayrollRecord and EmployeeLoan deduction"""
+
+    payroll = models.ForeignKey(PayrollRecord, on_delete=models.CASCADE, related_name='payroll_loan_deductions')
+    loan = models.ForeignKey(EmployeeLoan, on_delete=models.CASCADE, related_name='payroll_loan_deductions')
+    principal_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    interest_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        verbose_name = "Payroll Loan Deduction"
+        verbose_name_plural = "Payroll Loan Deductions"
+        indexes = [
+            models.Index(fields=['payroll']),
+            models.Index(fields=['loan']),
+        ]
+
+    def __str__(self):
+        return f"PayrollLoanDeduction({self.total_amount})"
+
+
+# =========================================================
+# PAYROLL LEAVE DEDUCTION (relational link)
+# =========================================================
+class PayrollLeaveDeduction(BaseModel):
+    """Relational link between PayrollRecord and Leave deduction"""
+
+    payroll = models.ForeignKey(PayrollRecord, on_delete=models.CASCADE, related_name='payroll_leave_deductions')
+    leave_request = models.ForeignKey('LeaveRequest', on_delete=models.CASCADE, related_name='payroll_deductions')
+    working_days = models.DecimalField(max_digits=5, decimal_places=1)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        verbose_name = "Payroll Leave Deduction"
+        verbose_name_plural = "Payroll Leave Deductions"
+        indexes = [
+            models.Index(fields=['payroll']),
+            models.Index(fields=['leave_request']),
+        ]
+
+    def __str__(self):
+        return f"PayrollLeaveDeduction({self.working_days}d, {self.amount})"
+
 
 # =========================================================
 # SHIFT OVERRIDE
@@ -760,6 +1050,19 @@ class LeaveRequest(BaseModel):
     
     # Leave Details
     leave_type = models.CharField(max_length=20, choices=LEAVE_TYPE_CHOICES, default='CASUAL')
+    
+    # Leave Period Type: SHORT (single day full), HALF (single day half), FULL_DAY (date range)
+    leave_sub_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('SHORT', 'Short Leave'),
+            ('HALF', 'Half Leave'),
+            ('FULL_DAY', 'Date Range'),
+        ],
+        default='FULL_DAY',
+        help_text="Leave period type"
+    )
+    
     start_date = models.DateField()
     end_date = models.DateField()
     is_half_day = models.BooleanField(default=False)
@@ -800,8 +1103,14 @@ class LeaveRequest(BaseModel):
         return f"{self.employee.full_name} - {self.get_leave_type_display()} ({self.start_date} to {self.end_date})"
     
     def save(self, *args, **kwargs):
-        """Auto-calculate total days before saving"""
+        """Auto-calculate total days and sync is_half_day before saving"""
         if self.start_date and self.end_date:
+            # Sync is_half_day based on leave_sub_type
+            if self.leave_sub_type == 'HALF':
+                self.is_half_day = True
+            elif self.leave_sub_type == 'SHORT':
+                self.is_half_day = False
+            
             delta = (self.end_date - self.start_date).days + 1
             self.total_days = delta - 0.5 if self.is_half_day and delta == 1 else float(delta)
         super().save(*args, **kwargs)
@@ -888,6 +1197,9 @@ class RecruitmentCandidate(BaseModel):
     # Rejection reason
     rejection_reason = models.TextField(blank=True, null=True)
     rejection_date = models.DateField(blank=True, null=True)
+    
+    # Employee conversion
+    converted_employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='converted_from_candidates')
     
     class Meta:
         db_table = 'hr_recruitment_candidates'
@@ -1031,50 +1343,25 @@ class ExitRecord(BaseModel):
         ('OTHER', 'Other'),
     ]
     
-    CLEARANCE_STATUS = [
+    SETTLEMENT_STATUS = [
         ('PENDING', 'Pending'),
-        ('IN_PROGRESS', 'In Progress'),
-        ('APPROVED', 'Approved'),
-        ('COMPLETED', 'Completed'),
+        ('CONFIRMED', 'Confirmed'),
+        ('REJECTED', 'Rejected'),
     ]
-    
-    RECORD_STATUS = [
-        ('ACTIVE', 'Active'),
-        ('CLOSED', 'Closed'),
-    ]
-    
+
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='exit_records')
     employee_name = models.CharField(max_length=255, blank=True, db_index=True)
-    department = models.CharField(max_length=100, db_index=True)
-    designation = models.CharField(max_length=100, blank=True, null=True)
     
     exit_date = models.DateField(db_index=True)
     last_working_day = models.DateField(null=True, blank=True)
     reason = models.CharField(max_length=50, choices=EXIT_REASONS, default='RESIGNATION', db_index=True)
     notice_served = models.BooleanField(default=True)
     
-    clearance_hr = models.BooleanField(default=False, verbose_name="HR Clearance")
-    clearance_it = models.BooleanField(default=False, verbose_name="IT Clearance")
-    clearance_finance = models.BooleanField(default=False, verbose_name="Finance Clearance")
-    clearance_admin = models.BooleanField(default=False, verbose_name="Admin Clearance")
-    clearance_status = models.CharField(max_length=20, choices=CLEARANCE_STATUS, default='PENDING', db_index=True)
-    
     final_settlement = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    settlement_notes = models.TextField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
-    
-    status = models.CharField(max_length=20, choices=RECORD_STATUS, default='ACTIVE', db_index=True)
-    
-    @property
-    def clearance_progress(self):
-        """Calculate clearance progress percentage based on four department clearances."""
-        total = 4
-        completed = sum([
-            self.clearance_hr,
-            self.clearance_it,
-            self.clearance_finance,
-            self.clearance_admin
-        ])
-        return int((completed / total) * 100) if total > 0 else 0
+
+    status = models.CharField(max_length=20, choices=SETTLEMENT_STATUS, default='PENDING', db_index=True)
     
     class Meta:
         db_table = 'hr_exit_records'
@@ -1084,19 +1371,15 @@ class ExitRecord(BaseModel):
         indexes = [
             models.Index(fields=['company_id', 'is_deleted']),
             models.Index(fields=['company_id', 'status']),
-            models.Index(fields=['company_id', 'clearance_status']),
             models.Index(fields=['company_id', 'reason']),
             models.Index(fields=['employee', 'status']),
-            models.Index(fields=['department', 'status']),
             models.Index(fields=['exit_date']),
             models.Index(fields=['last_working_day']),
-            models.Index(fields=['company_id', 'clearance_status', 'status'], name='exit_clearance_status_idx'),
-            models.Index(fields=['company_id', 'department', 'reason'], name='exit_dept_reason_idx'),
         ]
         constraints = [
             models.UniqueConstraint(
                 fields=['employee'],
-                condition=models.Q(status='ACTIVE', is_deleted=False),
+                condition=models.Q(status='PENDING', is_deleted=False),
                 name='unique_active_exit_per_employee'
             )
         ]
@@ -1192,26 +1475,25 @@ class Policy(BaseModel):
 
     # Classification
     category = models.CharField(max_length=50, choices=Category.choices, db_index=True)
-    department = models.CharField(max_length=100, default="ALL", db_index=True)
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='policies'
+    )
     employee_type = models.CharField(max_length=20, choices=EmployeeType.choices, default='ALL', db_index=True)
 
     # Status
     status = models.CharField(max_length=20, choices=PolicyStatus.choices, default='DRAFT', db_index=True)
 
     # Dates
-    effective_date = models.DateField()
-    review_date = models.DateField(null=True, blank=True)
-    expiry_date = models.DateField(null=True, blank=True)
     approval_date = models.DateField(null=True, blank=True)
 
     # Content
     content = models.TextField()
     document_url = models.URLField(max_length=500, null=True, blank=True)
     change_summary = models.TextField(null=True, blank=True)
-
-    # Acknowledgment
-    requires_acknowledgment = models.BooleanField(default=False, db_index=True)
-    acknowledgment_deadline = models.PositiveIntegerField(null=True, blank=True)
 
     # Approval
     approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_policies')
@@ -1228,46 +1510,9 @@ class Policy(BaseModel):
             models.Index(fields=['company_id', 'department']),
             models.Index(fields=['company_id', 'employee_type']),
             models.Index(fields=['code']),
-            models.Index(fields=['effective_date']),
         ]
         constraints = [
             models.UniqueConstraint(fields=['company_id', 'code'], name='unique_company_policy_code')
-        ]
-
-    @property
-    def is_expired(self):
-        if self.expiry_date:
-            return self.expiry_date < timezone.now().date()
-        return False
-
-    @property
-    def needs_review(self):
-        if self.review_date:
-            return self.review_date <= timezone.now().date()
-        return False
-
-
-# =========================================================
-# POLICY ACKNOWLEDGMENT
-# =========================================================
-class PolicyAcknowledgment(BaseModel):
-    policy = models.ForeignKey(Policy, on_delete=models.CASCADE, related_name='acknowledgments')
-    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='policy_acknowledgments')
-    
-    acknowledged_at = models.DateTimeField(default=timezone.now)
-    acknowledged_via = models.CharField(max_length=50, default='WEB')
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    notes = models.TextField(null=True, blank=True)
-
-    class Meta:
-        db_table = 'hr_policy_acknowledgments'
-        ordering = ['-acknowledged_at']
-        indexes = [
-            models.Index(fields=['policy', 'employee']),
-            models.Index(fields=['employee', 'acknowledged_at']),
-        ]
-        constraints = [
-            models.UniqueConstraint(fields=['policy', 'employee'], name='unique_policy_employee_acknowledgment')
         ]
 
 
@@ -1281,7 +1526,6 @@ class PolicyVersion(BaseModel):
     content = models.TextField()
     document_url = models.URLField(max_length=500, null=True, blank=True)
     change_summary = models.TextField(null=True, blank=True)
-    effective_date = models.DateField()
     
     changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='policy_changes')
 

@@ -415,6 +415,16 @@ const openEdit = (row) => {
           />
         );
       
+      case "code":
+        return (
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => updateFormValue(field.key, e.target.value.toUpperCase())}
+            className={`${commonClassName} font-mono text-xs`}
+          />
+        );
+      
       default:
         return (
           <input

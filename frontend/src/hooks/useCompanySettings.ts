@@ -50,9 +50,6 @@ export interface CompanySettings {
   defaultEndTime: string;
   workingHoursPerDay: string;
     
-  // Status
-  isSetupCompleted: boolean;
-  
   // Relations
   workingDays: WorkingDay[];
   publicHolidays: PublicHoliday[];

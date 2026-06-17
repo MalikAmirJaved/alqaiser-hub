@@ -2,32 +2,47 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { Plus, Grid, List, Download } from "lucide-react";
 import { TableView, GridView, Column } from "@/components/reuseable/TableGridView";
 import { StatsCards } from "@/components/reuseable/StatsCards";
-import ProductFilters from "@/components/inventory/product/ProductFilters";
-import ProductDetailsModal from "@/components/inventory/product/ProductDetailsModal";
+import FilterBar, { FilterField } from "@/components/reuseable/FilterBar";
 import ProductForm from "@/components/inventory/product/ProductForm";
 import { useProducts, useDeleteProduct, useCreateProduct, useUpdateProduct, Product, ProductPayload } from "@/hooks/useProducts";
 import { useCategories } from "@/hooks/useCategories";
 import { useBrands } from "@/hooks/useBrands";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 export default function ProductsPage() {
+  const router = useRouter();
+  const formatCurrency = useFormatCurrency();
   const permissions = useFeaturePermissions("INVENTORY", "product");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [showProductModal, setShowProductModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | undefined>(undefined);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [filters, setFilters] = useState({ search: "", category: "", brand: "", status: "" });
+  const [filters, setFilters] = useState<Record<string, string>>({});
 
   const { data: products = [], isLoading, refetch } = useProducts(filters);
   const { data: categories = [] } = useCategories();
   const { data: brands = [] } = useBrands();
+
+  // Build filter field options from fetched data
+  const categoryOpts = categories.map(c => ({ value: c.id, label: c.name }));
+  const brandOpts = brands.map(b => ({ value: b.id, label: b.name }));
+  const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
+    { name: "category", label: "Category", type: "select", searchable: true, options: categoryOpts },
+    { name: "brand", label: "Brand", type: "select", searchable: true, options: brandOpts },
+    { name: "status", label: "Status", type: "status", options: [
+      { value: "active", label: "Active" },
+      { value: "draft", label: "Draft" },
+      { value: "archived", label: "Archived" },
+      { value: "discontinued", label: "Discontinued" },
+    ] },
+  ];
   const deleteProduct = useDeleteProduct();
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
@@ -69,7 +84,7 @@ export default function ProductsPage() {
 
   const handleCreate = () => { setSelectedProduct(undefined); setShowProductModal(true); };
   const handleEdit = (p: Product) => { setSelectedProduct(p); setShowProductModal(true); };
-  const handleViewDetails = (p: Product) => { setSelectedProduct(p); setShowDetailsModal(true); };
+  const handleViewDetails = (p: Product) => { router.push(`/inventory/products/${p.id}`); };
 
   const handleDelete = (p: Product) => {
     deleteConfirm.confirm({
@@ -77,7 +92,6 @@ export default function ProductsPage() {
       message: `Delete "${p.product_name}"? This removes all variants and stock.`,
       onConfirm: async () => {
         await deleteProduct.mutateAsync(p.id);
-        toast.success(`"${p.product_name}" deleted`);
         refetch();
       },
     });
@@ -86,10 +100,8 @@ export default function ProductsPage() {
   const handleSave = async (data: ProductPayload) => {
     if (selectedProduct) {
       await updateProduct.mutateAsync({ id: selectedProduct.id, ...data });
-      toast.success(`"${data.productName}" updated`);
     } else {
       await createProduct.mutateAsync(data);
-      toast.success(`"${data.productName}" created`);
     }
     setShowProductModal(false);
     refetch();
@@ -259,7 +271,7 @@ export default function ProductsPage() {
       <StatsCards stats={stats} />
 
       {/* Filters */}
-      <ProductFilters filters={filters} onChange={setFilters} categories={categories} brands={brands} />
+      <FilterBar fields={filterFields} filters={filters} onChange={setFilters} />
 
       {/* Table / Grid */}
       {viewMode === "table" ? (
@@ -295,15 +307,6 @@ export default function ProductsPage() {
             />
           </div>
         </div>
-      )}
-
-      {/* Details Modal */}
-      {showDetailsModal && selectedProduct && (
-        <ProductDetailsModal
-          productId={selectedProduct.id}   
-          onClose={() => setShowDetailsModal(false)}
-          onEdit={permissions.update ? () => { setShowDetailsModal(false); handleEdit(selectedProduct); } : undefined}
-        />
       )}
 
       <deleteConfirm.Modal />

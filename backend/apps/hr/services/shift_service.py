@@ -244,24 +244,29 @@ class ShiftResolutionService:
         # Get current shift before change
         current_shift = cls._resolve_employee_shift(employee_id, date_obj)
         
-        # Delete existing override if any
-        ShiftOverride.objects.filter(employee_id=employee_id, date=date_obj).delete()
-        
         # Get employee and template to ensure they exist
         employee = Employee.objects.get(id=employee_id)
         new_template = ShiftTemplate.objects.get(id=template_id)
         
-        # Create new override - ADD company_id
-        override = ShiftOverride.objects.create(
-            company_id=employee.company_id,  # <-- ADD THIS LINE
-            branch_id=employee.branch_id,    # <-- Optional: also set branch
-            employee_id=employee_id,
-            shift_template_id=template_id,
-            date=date_obj,
-            reason=reason,
-            created_by=user,
-            updated_by=user
-        )
+        # Update existing override if any, otherwise create new one
+        existing = ShiftOverride.objects.filter(employee_id=employee_id, date=date_obj).first()
+        if existing:
+            existing.shift_template_id = template_id
+            existing.reason = reason
+            existing.updated_by = user
+            existing.save()
+            override = existing
+        else:
+            override = ShiftOverride.objects.create(
+                company_id=employee.company_id,
+                branch_id=employee.branch_id,
+                employee_id=employee_id,
+                shift_template_id=template_id,
+                date=date_obj,
+                reason=reason,
+                created_by=user,
+                updated_by=user
+            )
         
         # Create history record
         ShiftChangeHistory.objects.create(
@@ -358,8 +363,10 @@ class ShiftResolutionService:
         if override:
             employee = Employee.objects.get(id=employee_id)
             
-            # Get the shift that will replace this (after deletion)
-            override.delete()
+            # Soft delete the override
+            override.is_deleted = True
+            override.deleted_by = user
+            override.save(update_fields=["is_deleted", "deleted_by"])
             
             # Invalidate cache
             cache_key = f"shift_resolved_{employee_id}_{date_obj.isoformat()}"

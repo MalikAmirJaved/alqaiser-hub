@@ -2,13 +2,15 @@
 
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { X } from "lucide-react";
+import { X, RotateCw } from "lucide-react";
 import {
   useCreateSupplierBill,
   useUpdateSupplierBill,
   type SupplierBill,
 } from "@/hooks/finance/useSupplierBills";
 import { useSuppliers } from "@/hooks/useSuppliers";
+import { useAutoCode } from "@/hooks/useAutoCode";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 interface SupplierBillFormData {
   bill_number: string;
@@ -33,7 +35,7 @@ const toNumber = (value: number | string | undefined): number => {
 };
 
 export default function SupplierBillFormModal({ open, onClose, initialData, onSuccess }: Props) {
-  const { register, handleSubmit, reset, setValue } = useForm<SupplierBillFormData>({
+  const { register, handleSubmit, reset, setValue, watch } = useForm<SupplierBillFormData>({
     defaultValues: {
       bill_number: "",
       supplier: "",
@@ -47,6 +49,7 @@ export default function SupplierBillFormModal({ open, onClose, initialData, onSu
   const createBill = useCreateSupplierBill();
   const updateBill = useUpdateSupplierBill();
   const { data: suppliers } = useSuppliers();
+  const { generateCode, validateCode } = useAutoCode("supplier_bill");
 
   useEffect(() => {
     if (initialData) {
@@ -67,6 +70,7 @@ export default function SupplierBillFormModal({ open, onClose, initialData, onSu
         amount: 0,
         notes: "",
       });
+      generateCode().then(code => setValue("bill_number", code)).catch(() => {});
     }
   }, [initialData, setValue, reset]);
 
@@ -98,26 +102,33 @@ export default function SupplierBillFormModal({ open, onClose, initialData, onSu
           {/* ... existing form fields ... */}
           <div>
             <label className="block text-sm font-medium mb-1">Bill Number *</label>
-            <input
-              {...register("bill_number", { required: true })}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-              placeholder="e.g., BILL-2024-001"
-            />
+            <div className="flex gap-2">
+              <input
+                {...register("bill_number", { required: true })}
+                onBlur={(e) => validateCode(e.target.value)}
+                className="flex-1 px-3 py-2 border border-border rounded-md bg-background text-sm font-mono"
+                placeholder="e.g., BILL-2024-001"
+              />
+              <button
+                type="button"
+                onClick={() => generateCode().then(code => setValue("bill_number", code)).catch(() => {})}
+                className="h-9 w-9 flex items-center justify-center rounded-md border border-border hover:bg-muted transition flex-shrink-0"
+                title="Generate new code"
+              >
+                <RotateCw className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-1">Supplier *</label>
-            <select
-              {...register("supplier", { required: true })}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-            >
-              <option value="">Select supplier</option>
-              {suppliers?.map((sup) => (
-                <option key={sup.id} value={sup.id}>
-                  {sup.name} ({sup.code})
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={watch("supplier") || ""}
+              onChange={(val) => setValue("supplier", val)}
+              options={(suppliers || []).map((s) => ({ value: s.id, label: `${s.name} (${s.code})` }))}
+              placeholder="Select supplier"
+              required
+            />
           </div>
 
           <div>

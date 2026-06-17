@@ -17,7 +17,9 @@ import {
   showDesktopNotification,
 } from "@/lib/notifications";
 import { useSelector } from "react-redux";
-import { RootState } from "@/store";
+import { RootState, store } from "@/store";
+import { loadCompanySettings } from "@/store/slices/companySettingsSlice";
+import { setUnauthenticated } from "@/store/slices/authSlice";
 
 // ----------------------------------------------------------------------
 // Map backend entity names to React Query keys for cache invalidation
@@ -33,10 +35,13 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   shiftDateRange: ["shiftDateRange", "resolvedShifts", "shiftStatistics"],
   payroll: ["payroll", "payrollStats"],
   recruitment: ["recruitment", "recruitmentStats"],
-  exitRecords: ["exitRecords", "exitMetrics"],
+  exitRecords: ["exitRecords", "exitStats"],
   policies: ["policies"],
   compensations: ["compensations"],
-  loans: ["loans"],
+  loans: ["loans", "employeeLoans"],
+
+  // ---------- HR ----------
+  asset_purchase_request: ["assetPurchaseRequests"],
 
   // ---------- Inventory ----------
   inventory_category: ["inventory_category"],
@@ -50,7 +55,7 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   inventory_stock_transfer: ["inventory_stock_transfer"],
   inventory_purchase_order: ["inventory_purchase_order"],
 
-  // Inventory aliases (optional)
+  // Inventory aliases
   product: ["inventory_product"],
   inventory: ["inventory_product"],
   supplier: ["inventory_supplier"],
@@ -76,7 +81,6 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   finance_bank_transaction: ["finance_bank_transactions"],
   finance_budget: ["finance_budgets"],
   finance_expense: ["finance_expenses"],
-  // Additional finance aliases
   supplier_bill: ["finance_supplier_bills"],
   customer_invoice: ["finance_customer_invoices"],
   bank_transaction: ["finance_bank_transactions"],
@@ -139,6 +143,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const user = useSelector((state: RootState) => state.auth.user);
+  const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
 
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -163,6 +168,13 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
   // WebSocket connection with exponential backoff
   const connectSocket = useCallback(
     async (retryCount = 0) => {
+      if (!isAuthenticated || !user) {
+        console.warn(
+          "[NotificationContext] User not authenticated – skipping WebSocket connection."
+        );
+        return;
+      }
+
       const companyId = user?.companyId;
       const branchId = user?.branchId;
       if (!companyId || !branchId) {
@@ -182,7 +194,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
 
       await fetchNotifications();
 
-      const wsUrl = apiUrl.replace(/^http/, "ws") + `/ws/notifications/${companyId}/${branchId}/`;
+      const wsUrl = apiUrl.replace(/^http/, "ws") + `/ws/notifications/${companyId}/${branchId || "None"}/`;
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -232,6 +244,20 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                 queryClient.invalidateQueries({ queryKey: [key] });
               });
             }
+
+            // 🔄 Refresh Redux company settings when they change (e.g., currency update)
+            if (entity === "company_settings") {
+              console.log("[NotificationContext] Refreshing company settings via Redux thunk");
+              store
+                .dispatch(loadCompanySettings())
+                .unwrap()
+                .then(() => {
+                  console.log("[NotificationContext] Company settings refreshed successfully");
+                })
+                .catch((err) => {
+                  console.error("[NotificationContext] Failed to refresh company settings:", err);
+                });
+            }
           }
         } catch (e) {
           console.error("[NotificationContext] Error parsing websocket message", e);
@@ -244,6 +270,12 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         setIsConnected(false);
         if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
 
+        if (event.code === 4403 || event.code === 1008) {
+          console.warn("[NotificationContext] Auth rejected – clearing session.");
+          store.dispatch(setUnauthenticated());
+          return;
+        }
+
         const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
         reconnectTimeoutRef.current = setTimeout(() => {
           connectSocket(retryCount + 1);
@@ -255,7 +287,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         ws.close(); // trigger reconnect
       };
     },
-    [api, fetchNotifications, queryClient, user?.companyId, user?.branchId]
+    [api, fetchNotifications, queryClient, user?.companyId, user?.branchId, isAuthenticated]
   );
 
   useEffect(() => {
@@ -274,6 +306,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
       pollInterval = setInterval(() => {
         queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
         queryClient.invalidateQueries({ queryKey: ["currentStock"] });
+        queryClient.invalidateQueries({ queryKey: ["companySettings"] });
       }, 30000);
     }
     return () => clearInterval(pollInterval);

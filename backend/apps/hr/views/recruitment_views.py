@@ -1,6 +1,5 @@
 # apps/hr/views/recruitment_views.py
 
-from django.db import models
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -10,7 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from datetime import datetime, date, timedelta
 import logging
-from django.db import models, transaction
+from django.db import models
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import RecruitmentCandidate, RecruitmentActivityLog, Employee, InterviewRound
@@ -65,6 +64,8 @@ class RecruitmentCandidateView(CompanyBranchMixin, PermissionRequiredMixin, APIV
             "rejection_date": safe_date(candidate.rejection_date),
             "created_at": safe_date(candidate.created_at),
             "updated_at": safe_date(candidate.updated_at),
+            "converted_employee_id": str(candidate.converted_employee._id) if candidate.converted_employee else None,
+            "converted_employee_name": candidate.converted_employee.full_name if candidate.converted_employee else None,
         }
     
     def get(self, request):
@@ -80,7 +81,7 @@ class RecruitmentCandidateView(CompanyBranchMixin, PermissionRequiredMixin, APIV
         query = RecruitmentCandidate.objects.filter(
             company_id=company_id,
             is_deleted=False
-        ).select_related('assigned_to', 'created_by', 'updated_by')
+        ).select_related('assigned_to', 'converted_employee', 'created_by', 'updated_by')
         
         department = request.query_params.get('department')
         if department:
@@ -144,7 +145,7 @@ class RecruitmentCandidateView(CompanyBranchMixin, PermissionRequiredMixin, APIV
             }
         })
     
-    @transaction.atomic
+
     def post(self, request):
         """Create new candidate"""
         company_id = request.user.company_id
@@ -200,7 +201,7 @@ class RecruitmentCandidateView(CompanyBranchMixin, PermissionRequiredMixin, APIV
         
         return Response(self._serialize_candidate(candidate), status=status.HTTP_201_CREATED)
     
-    @transaction.atomic
+
     def patch(self, request):
         """Update candidate using UUID"""
         company_id = request.user.company_id
@@ -280,7 +281,7 @@ class RecruitmentCandidateView(CompanyBranchMixin, PermissionRequiredMixin, APIV
         
         return Response(self._serialize_candidate(candidate))
     
-    @transaction.atomic
+
     def delete(self, request):
         """Soft delete candidate using UUID"""
         company_id = request.user.company_id
@@ -470,7 +471,7 @@ class RecruitmentBulkActionView(CompanyBranchMixin, PermissionRequiredMixin, API
     """Bulk actions for recruitment candidates with UUID support"""
     permission_classes = [IsAuthenticated]
     
-    @transaction.atomic
+
     def post(self, request):
         company_id = request.user.company_id
         action = request.data.get('action')
@@ -609,7 +610,7 @@ class InterviewRoundView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             for r in rounds
         ])
     
-    @transaction.atomic
+
     def post(self, request, candidate_id):
         """Create a new interview round"""
         company_id = request.user.company_id
@@ -673,7 +674,7 @@ class InterviewRoundView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "status": interview_round.status,
         }, status=status.HTTP_201_CREATED)
     
-    @transaction.atomic
+
     def patch(self, request, candidate_id, round_id):
         """Update a specific round using UUID"""
         company_id = request.user.company_id
@@ -696,6 +697,13 @@ class InterviewRoundView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             _id=round_id,
             candidate=candidate
         )
+        
+        # Lock rounds once candidate reaches Offer or Hired stage
+        if candidate.stage in ('Offer', 'Hired'):
+            return Response(
+                {'error': 'Rounds are locked once candidate reaches Offer stage'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         old_status = interview_round.status
         
@@ -734,7 +742,7 @@ class InterviewRoundView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "status": interview_round.status,
         })
     
-    @transaction.atomic
+
     def delete(self, request, candidate_id, round_id):
         """Delete a round using UUID"""
         company_id = request.user.company_id
@@ -758,6 +766,12 @@ class InterviewRoundView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             candidate=candidate
         )
         
+        if candidate.stage in ('Offer', 'Hired'):
+            return Response(
+                {'error': 'Rounds are locked once candidate reaches Offer stage'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         interview_round.delete()
         return Response({'message': 'Round deleted successfully'})
 
@@ -768,7 +782,7 @@ class RoundBulkCreateView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     """Bulk create interview rounds for a candidate"""
     permission_classes = [IsAuthenticated]
     
-    @transaction.atomic
+
     def post(self, request, candidate_id):
         company_id = request.user.company_id
         
@@ -788,58 +802,55 @@ class RoundBulkCreateView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         candidate.interview_rounds.all().delete()
         
         serializer = RoundBulkCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        rounds_data = serializer.validated_data['rounds']
+        created_rounds = []
         
-        if serializer.is_valid():
-            rounds_data = serializer.validated_data['rounds']
-            created_rounds = []
+        for round_data in rounds_data:
+            interviewer_uuid = round_data.get('interviewer_id')
+            interviewer = None
+            if interviewer_uuid:
+                interviewer = get_object_or_404(Employee, _id=interviewer_uuid, company_id=company_id, is_deleted=False)
             
-            for round_data in rounds_data:
-                interviewer_uuid = round_data.get('interviewer_id')
-                interviewer = None
-                if interviewer_uuid:
-                    interviewer = get_object_or_404(Employee, _id=interviewer_uuid, company_id=company_id, is_deleted=False)
-                
-                interview_round = InterviewRound.objects.create(
-                    candidate=candidate,
-                    round_number=round_data['round_number'],
-                    round_title=round_data['round_title'],
-                    interview_type=round_data.get('interview_type', 'TECHNICAL'),
-                    status='PENDING',
-                    interviewer=interviewer,
-                    interviewer_name=interviewer.full_name if interviewer else None,
-                    duration_minutes=round_data.get('duration_minutes'),
-                    notes=round_data.get('notes', '')
-                )
-                created_rounds.append(interview_round)
-            
-            if candidate.stage != 'Interview':
-                candidate.stage = 'Interview'
-                candidate.save()
-            
-            RecruitmentActivityLog.objects.create(
-                company_id=company_id,
+            interview_round = InterviewRound.objects.create(
                 candidate=candidate,
-                action='INTERVIEW_SCHEDULED',
-                new_value=f"Created {len(created_rounds)} interview rounds",
-                metadata={'rounds_count': len(created_rounds)},
-                performed_by=request.user,
-                ip_address=request.META.get('REMOTE_ADDR'),
-                user_agent=request.META.get('HTTP_USER_AGENT')
+                round_number=round_data['round_number'],
+                round_title=round_data['round_title'],
+                interview_type=round_data.get('interview_type', 'TECHNICAL'),
+                status='PENDING',
+                interviewer=interviewer,
+                interviewer_name=interviewer.full_name if interviewer else None,
+                duration_minutes=round_data.get('duration_minutes'),
+                notes=round_data.get('notes', '')
             )
-            
-            return Response({
-                'message': f'Successfully created {len(created_rounds)} rounds',
-                'rounds': [
-                    {
-                        "id": str(r._id),
-                        "round_number": r.round_number,
-                        "round_title": r.round_title,
-                    }
-                    for r in created_rounds
-                ]
-            }, status=status.HTTP_201_CREATED)
+            created_rounds.append(interview_round)
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if candidate.stage != 'Interview':
+            candidate.stage = 'Interview'
+            candidate.save()
+        
+        RecruitmentActivityLog.objects.create(
+            company_id=company_id,
+            candidate=candidate,
+            action='INTERVIEW_SCHEDULED',
+            new_value=f"Created {len(created_rounds)} interview rounds",
+            metadata={'rounds_count': len(created_rounds)},
+            performed_by=request.user,
+            ip_address=request.META.get('REMOTE_ADDR'),
+            user_agent=request.META.get('HTTP_USER_AGENT')
+        )
+        
+        return Response({
+            'message': f'Successfully created {len(created_rounds)} rounds',
+            'rounds': [
+                {
+                    "id": str(r._id),
+                    "round_number": r.round_number,
+                    "round_title": r.round_title,
+                }
+                for r in created_rounds
+            ]
+        }, status=status.HTTP_201_CREATED)
 
 
 class RoundStatusBulkUpdateView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
@@ -848,7 +859,7 @@ class RoundStatusBulkUpdateView(CompanyBranchMixin, PermissionRequiredMixin, API
     """Bulk update round statuses with cascade logic"""
     permission_classes = [IsAuthenticated]
     
-    @transaction.atomic
+
     def post(self, request, candidate_id):
         company_id = request.user.company_id
         
@@ -864,6 +875,13 @@ class RoundStatusBulkUpdateView(CompanyBranchMixin, PermissionRequiredMixin, API
             company_id=company_id,
             is_deleted=False
         )
+        
+        # Lock rounds once candidate reaches Offer or Hired stage
+        if candidate.stage in ('Offer', 'Hired'):
+            return Response(
+                {'error': 'Rounds are locked once candidate reaches Offer stage'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         updates = request.data.get('updates', [])
         updated_rounds = []

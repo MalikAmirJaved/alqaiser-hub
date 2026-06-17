@@ -10,7 +10,7 @@ import { useExpenses } from "@/hooks/finance/useExpenses";
 import { useBudgetVariance } from "@/hooks/finance/useBudgets";
 import { useARAging, useAPAging } from "@/hooks/finance/useAgingReports";
 import { useExpenseReport } from "@/hooks/finance/useExpenseReport";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import {
   Download, Printer, Calendar, FileText, BarChart3, PieChart, Scale,
@@ -27,7 +27,12 @@ const toNumber = (val: any): number => {
 // Report Components (same as before)
 // --------------------------------------------------------------
 
-function TrialBalanceReport({ asOfDate }: { asOfDate: string }) {
+function TrialBalanceReport({
+  asOfDate,
+}: {
+  asOfDate: string;
+}) {
+  const formatCurrency = useFormatCurrency();
   const { data, isLoading } = useTrialBalance(asOfDate);
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!data?.data.length) return <div className="p-8 text-center text-muted-foreground">No data</div>;
@@ -70,6 +75,7 @@ function TrialBalanceReport({ asOfDate }: { asOfDate: string }) {
 }
 
 function ProfitLossReport({ startDate, endDate }: { startDate: string; endDate: string }) {
+  const formatCurrency = useFormatCurrency();
   const { data, isLoading } = useProfitLoss(startDate, endDate);
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!data) return <div className="p-8 text-center text-muted-foreground">No data</div>;
@@ -120,6 +126,7 @@ function ProfitLossReport({ startDate, endDate }: { startDate: string; endDate: 
 }
 
 function BalanceSheetReport({ asOfDate }: { asOfDate: string }) {
+  const formatCurrency = useFormatCurrency();
   const { data, isLoading } = useBalanceSheet(asOfDate);
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!data) return <div className="p-8 text-center text-muted-foreground">No data</div>;
@@ -195,10 +202,12 @@ function BalanceSheetReport({ asOfDate }: { asOfDate: string }) {
 }
 
 function CashFlowReport() {
+  const formatCurrency = useFormatCurrency();
   return <div className="p-8 text-center text-muted-foreground">Cash Flow Statement coming soon.</div>;
 }
 
 function GeneralLedgerReport() {
+  const formatCurrency = useFormatCurrency();
   const { data, isLoading } = useJournalEntries({ ordering: "-date" });
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!data?.length) return <div className="p-8 text-center text-muted-foreground">No entries</div>;
@@ -236,6 +245,7 @@ function GeneralLedgerReport() {
 }
 
 function ARAgingReport() {
+  const formatCurrency = useFormatCurrency();
   const { data, isLoading } = useARAging();
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!data) return <div className="p-8 text-center text-muted-foreground">No data</div>;
@@ -276,6 +286,7 @@ function ARAgingReport() {
 }
 
 function APAgingReport() {
+  const formatCurrency = useFormatCurrency();
   const { data, isLoading } = useAPAging();
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!data) return <div className="p-8 text-center text-muted-foreground">No data</div>;
@@ -316,10 +327,12 @@ function APAgingReport() {
 }
 
 function TaxReport() {
+  const formatCurrency = useFormatCurrency();
   return <div className="p-8 text-center text-muted-foreground">Tax Reports coming soon.</div>;
 }
 
 function ExpenseReportComponent({ startDate, endDate }: { startDate: string; endDate: string }) {
+  const formatCurrency = useFormatCurrency();
   const { data: byCategory, isLoading } = useExpenseReport(startDate, endDate);
   const { data: expenses, isLoading: isLoadingExpenses } = useExpenses({ start_date: startDate, end_date: endDate });
   if (isLoading || isLoadingExpenses) return <div className="p-8 text-center">Loading...</div>;
@@ -353,6 +366,7 @@ function ExpenseReportComponent({ startDate, endDate }: { startDate: string; end
 }
 
 function BudgetReportComponent() {
+  const formatCurrency = useFormatCurrency();
   const [year, setYear] = useState(new Date().getFullYear());
   const { data, isLoading } = useBudgetVariance(year, 'MONTHLY');
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
@@ -411,6 +425,7 @@ const reportsList = [
 ];
 
 export default function FinancialReportsPage() {
+  const formatCurrency = useFormatCurrency();
   const { settings } = useCompanySettings();
   const [activeReport, setActiveReport] = useState("profit_loss");
   const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0]);
@@ -438,7 +453,6 @@ export default function FinancialReportsPage() {
           <>
             <ToolbarButton variant="ghost" icon={Calendar}>Schedule</ToolbarButton>
             <ToolbarButton variant="ghost" icon={Printer}>Print</ToolbarButton>
-            <ToolbarButton variant="primary" icon={Download}>Export PDF</ToolbarButton>
           </>
         }
       />

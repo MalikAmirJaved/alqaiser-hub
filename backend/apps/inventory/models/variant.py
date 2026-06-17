@@ -4,6 +4,7 @@ from apps.common.basemodel import BaseModel
 class ProductVariant(BaseModel):
     product = models.ForeignKey('Product', on_delete=models.CASCADE, related_name='variants')
     sku = models.CharField(max_length=100)
+    variant_title = models.CharField(max_length=200, blank=True)
     barcode = models.CharField(max_length=100, blank=True)
     qr_code = models.CharField(max_length=200, blank=True)
 

@@ -1,19 +1,24 @@
-// src/components/inventory/WarehouseForm.tsx
-"use client";
+// frontend/src/components/inventory/warehouse/WarehouseForm.tsx
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { RotateCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { CountrySelect, StateSelect, CitySelect } from "@/components/reuseable/LocationSelectors";
 import { Checkbox } from "@/components/reuseable/Checkbox";
+import { useActiveEmployees } from "@/hooks/useEmployees";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import { useAutoCode } from "@/hooks/useAutoCode";
 
 interface WarehouseFormData {
   id?: string;
   warehouse_name: string;
   code: string;
-  manager_name: string;
-  phone: string;
-  capacity: number;
-  current_occupancy: number;
+  employee_id?: string | null;
+  landline_number?: string | null;
   country: string;
   state: string;
   city: string;
@@ -31,14 +36,18 @@ interface WarehouseFormProps {
   isLoading?: boolean;
 }
 
+function FieldWrapper({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return <div className={`space-y-2 ${className}`}>{children}</div>;
+}
+
 export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: WarehouseFormProps) {
+  const { data: employees = [] } = useActiveEmployees();
+
   const [formData, setFormData] = useState<WarehouseFormData>({
     warehouse_name: "",
     code: "",
-    manager_name: "",
-    phone: "",
-    capacity: 0,
-    current_occupancy: 0,
+    employee_id: null,
+    landline_number: "",
     country: "",
     state: "",
     city: "",
@@ -51,230 +60,172 @@ export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: Wa
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const { generateCode, validateCode } = useAutoCode("warehouse");
+
+  useEffect(() => {
+    if (!initialData?.id && !formData.code) {
+      generateCode().then(code => setFormData(prev => ({ ...prev, code }))).catch(() => {});
+    }
+  }, []);
+
+  const employeeOptions = employees.map((emp) => ({
+    value: emp.id,
+    label: `${emp.first_name} ${emp.last_name || ""} (${emp.department_name || "N/A"})`,
+  }));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
     const newErrors: Record<string, string> = {};
-    
     if (!formData.warehouse_name) newErrors.warehouse_name = "Warehouse name is required";
     if (!formData.code) newErrors.code = "Code is required";
-    if (!formData.manager_name) newErrors.manager_name = "Manager name is required";
-    if (!formData.phone) newErrors.phone = "Phone is required";
-    if (formData.capacity <= 0) newErrors.capacity = "Capacity must be greater than 0";
     if (!formData.country) newErrors.country = "Country is required";
     if (!formData.city) newErrors.city = "City is required";
-    
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
-    
     onSubmit(formData);
   };
 
-  const inputClassName = "bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring w-full";
-  const textareaClassName = "bg-muted/40 border border-border rounded-md p-2 outline-none focus:ring-2 focus:ring-ring w-full";
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">
-              Warehouse Name <span className="text-destructive">*</span>
-            </span>
-            <input
-              type="text"
-              value={formData.warehouse_name}
-              onChange={(e) => setFormData({ ...formData, warehouse_name: e.target.value })}
-              className={cn(inputClassName, errors.warehouse_name && "border-destructive")}
-              placeholder="Main Warehouse"
-            />
-            {errors.warehouse_name && <span className="text-xs text-destructive mt-0.5">{errors.warehouse_name}</span>}
-          </label>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <FieldWrapper>
+          <Label htmlFor="warehouse_name" className="text-sm font-medium">
+            Warehouse Name <span className="text-destructive ml-1">*</span>
+          </Label>
+          <Input
+            id="warehouse_name"
+            value={formData.warehouse_name}
+            onChange={(e) => setFormData({ ...formData, warehouse_name: e.target.value })}
+            className={cn(errors.warehouse_name && "border-destructive")}
+          />
+          {errors.warehouse_name && <p className="text-xs text-destructive">{errors.warehouse_name}</p>}
+        </FieldWrapper>
 
-        <div>
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">
-              Code <span className="text-destructive">*</span>
-            </span>
-            <input
-              type="text"
+        <FieldWrapper>
+          <Label htmlFor="code" className="text-sm font-medium">
+            Code <span className="text-destructive ml-1">*</span>
+          </Label>
+          <div className="flex gap-2">
+            <Input
+              id="code"
               value={formData.code}
               onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-              className={cn(inputClassName, errors.code && "border-destructive")}
-              placeholder="WH-001"
+              onBlur={() => validateCode(formData.code)}
+              className={cn("font-mono flex-1", errors.code && "border-destructive")}
             />
-            {errors.code && <span className="text-xs text-destructive mt-0.5">{errors.code}</span>}
-          </label>
-        </div>
+            <button
+              type="button"
+              onClick={() => generateCode().then(code => setFormData(prev => ({ ...prev, code }))).catch(() => {})}
+              className="h-9 w-9 flex items-center justify-center rounded-md border border-border hover:bg-muted transition flex-shrink-0"
+              title="Generate new code"
+            >
+              <RotateCw className="w-4 h-4" />
+            </button>
+          </div>
+          {errors.code && <p className="text-xs text-destructive">{errors.code}</p>}
+        </FieldWrapper>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">
-              Manager Name <span className="text-destructive">*</span>
-            </span>
-            <input
-              type="text"
-              value={formData.manager_name}
-              onChange={(e) => setFormData({ ...formData, manager_name: e.target.value })}
-              className={cn(inputClassName, errors.manager_name && "border-destructive")}
-              placeholder="John Doe"
-            />
-            {errors.manager_name && <span className="text-xs text-destructive mt-0.5">{errors.manager_name}</span>}
-          </label>
-        </div>
-
-        <div>
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">
-              Phone <span className="text-destructive">*</span>
-            </span>
-            <input
-              type="tel"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              className={cn(inputClassName, errors.phone && "border-destructive")}
-              placeholder="+1 234 567 8900"
-            />
-            {errors.phone && <span className="text-xs text-destructive mt-0.5">{errors.phone}</span>}
-          </label>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">
-              Email
-            </span>
-            <input
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className={inputClassName}
-              placeholder="warehouse@company.com"
-            />
-          </label>
-        </div>
-
-        <div>
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">
-              Capacity (sq ft) <span className="text-destructive">*</span>
-            </span>
-            <input
-              type="number"
-              value={formData.capacity}
-              onChange={(e) => setFormData({ ...formData, capacity: parseFloat(e.target.value) })}
-              className={cn(inputClassName, errors.capacity && "border-destructive")}
-              placeholder="10000"
-            />
-            {errors.capacity && <span className="text-xs text-destructive mt-0.5">{errors.capacity}</span>}
-          </label>
-        </div>
-      </div>
-
-      <div>
-        <label className="text-sm flex flex-col gap-1">
-          <span className="text-muted-foreground text-xs">Address Line</span>
-          <textarea
-            value={formData.address_line}
-            onChange={(e) => setFormData({ ...formData, address_line: e.target.value })}
-            rows={2}
-            className={textareaClassName}
-            placeholder="Street address, building, apartment"
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <FieldWrapper>
+          <Label className="text-sm font-medium">Responsible Employee</Label>
+          <SearchableSelect
+            value={formData.employee_id || ""}
+            onChange={(val) => setFormData({ ...formData, employee_id: val || null })}
+            options={employeeOptions}
+            placeholder="Select employee"
           />
-        </label>
-      </div>
+        </FieldWrapper>
 
-      <div className="grid grid-cols-3 gap-4">
-        <div>
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">Country <span className="text-destructive">*</span></span>
-            <CountrySelect
-              value={formData.country}
-              onChange={(val) => {
-                setFormData({ ...formData, country: val, state: "", city: "" });
-                if (errors.country) setErrors({ ...errors, country: "" });
-              }}
-            />
-            {errors.country && <span className="text-xs text-destructive mt-0.5">{errors.country}</span>}
-          </label>
-        </div>
-
-        <div>
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">State/Region</span>
-            <StateSelect
-              countryCode={formData.country}
-              value={formData.state}
-              onChange={(val) => setFormData({ ...formData, state: val, city: "" })}
-            />
-          </label>
-        </div>
-
-        <div>
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">City <span className="text-destructive">*</span></span>
-            <CitySelect
-              countryCode={formData.country}
-              stateCode={formData.state}
-              value={formData.city}
-              onChange={(val) => {
-                setFormData({ ...formData, city: val });
-                if (errors.city) setErrors({ ...errors, city: "" });
-              }}
-            />
-            {errors.city && <span className="text-xs text-destructive mt-0.5">{errors.city}</span>}
-          </label>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">Postal/ZIP Code</span>
-            <input
-              type="text"
-              value={formData.postal_code}
-              onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
-              className={inputClassName}
-              placeholder="12345"
-            />
-          </label>
-        </div>
-
-        <div>
-          <label className="text-sm flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">Current Occupancy (sq ft)</span>
-            <input
-              type="number"
-              value={formData.current_occupancy}
-              onChange={(e) => setFormData({ ...formData, current_occupancy: parseFloat(e.target.value) })}
-              className={inputClassName}
-              placeholder="0"
-            />
-          </label>
-        </div>
-      </div>
-
-      <div>
-        <label className="text-sm flex flex-col gap-1">
-          <span className="text-muted-foreground text-xs">Description</span>
-          <textarea
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            rows={3}
-            className={textareaClassName}
-            placeholder="Additional details about the warehouse..."
+        <FieldWrapper>
+          <Label htmlFor="landline_number" className="text-sm font-medium">Landline Number</Label>
+          <Input
+            id="landline_number"
+            type="tel"
+            value={formData.landline_number || ""}
+            onChange={(e) => setFormData({ ...formData, landline_number: e.target.value })}
+            placeholder="e.g., +1 234 567 8900"
           />
-        </label>
+        </FieldWrapper>
       </div>
+
+      <FieldWrapper>
+        <Label htmlFor="address_line" className="text-sm font-medium">Address Line</Label>
+        <Textarea
+          id="address_line"
+          value={formData.address_line}
+          onChange={(e) => setFormData({ ...formData, address_line: e.target.value })}
+          rows={2}
+        />
+      </FieldWrapper>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <FieldWrapper>
+          <Label className="text-sm font-medium">
+            Country <span className="text-destructive ml-1">*</span>
+          </Label>
+          <CountrySelect
+            value={formData.country}
+            onChange={(val) => setFormData({ ...formData, country: val, state: "", city: "" })}
+          />
+          {errors.country && <p className="text-xs text-destructive">{errors.country}</p>}
+        </FieldWrapper>
+
+        <FieldWrapper>
+          <Label className="text-sm font-medium">State/Region</Label>
+          <StateSelect
+            countryCode={formData.country}
+            value={formData.state}
+            onChange={(val) => setFormData({ ...formData, state: val, city: "" })}
+          />
+        </FieldWrapper>
+
+        <FieldWrapper>
+          <Label className="text-sm font-medium">
+            City <span className="text-destructive ml-1">*</span>
+          </Label>
+          <CitySelect
+            countryCode={formData.country}
+            stateCode={formData.state}
+            value={formData.city}
+            onChange={(val) => setFormData({ ...formData, city: val })}
+          />
+          {errors.city && <p className="text-xs text-destructive">{errors.city}</p>}
+        </FieldWrapper>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <FieldWrapper>
+          <Label htmlFor="postal_code" className="text-sm font-medium">Postal/ZIP Code</Label>
+          <Input
+            id="postal_code"
+            value={formData.postal_code}
+            onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
+          />
+        </FieldWrapper>
+
+        <FieldWrapper>
+          <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+          />
+        </FieldWrapper>
+      </div>
+
+      <FieldWrapper>
+        <Label htmlFor="description" className="text-sm font-medium">Description</Label>
+        <Textarea
+          id="description"
+          value={formData.description}
+          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          rows={3}
+        />
+      </FieldWrapper>
 
       <div>
         <Checkbox
@@ -286,21 +237,13 @@ export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: Wa
       </div>
 
       <div className="flex justify-end gap-3 pt-4 border-t border-border">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="inline-flex items-center justify-center gap-2 px-4 h-9 rounded-md border border-border bg-transparent text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
-        >
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
           Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="inline-flex items-center justify-center gap-2 px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
-        >
-          {isLoading && <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />}
+        </Button>
+        <Button type="submit" disabled={isLoading}>
+          {isLoading && <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />}
           {initialData?.id ? "Update" : "Create"} Warehouse
-        </button>
+        </Button>
       </div>
     </form>
   );

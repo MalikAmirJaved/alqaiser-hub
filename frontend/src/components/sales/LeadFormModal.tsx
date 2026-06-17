@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, UserPlus, Plus } from "lucide-react";
+import { X, Plus } from "lucide-react";
 import { useCustomers } from "@/hooks/useCustomers";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
 import { useCreateLead, useUpdateLead, Lead } from "@/hooks/sales/useLeads";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 interface LeadFormModalProps {
   open: boolean;
@@ -158,20 +159,18 @@ export default function LeadFormModal({ open, onClose, initialData, onSuccess }:
             <div className="col-span-full">
               <label className="block text-sm font-medium mb-1">Customer</label>
               <div className="flex gap-2">
-                <select
-                  value={formData.customer}
-                  onChange={e => handleCustomerSelect(e.target.value)}
-                  className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                >
-                  <option value="">Select existing customer</option>
-                  {customers.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+                <div className="flex-1">
+                  <SearchableSelect
+                    value={formData.customer}
+                    onChange={handleCustomerSelect}
+                    options={customers.map(c => ({ value: c.id, label: c.name }))}
+                    placeholder="Select existing customer"
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={() => setShowCustomerModal(true)}
-                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-border hover:bg-muted text-primary text-sm"
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-border hover:bg-muted text-primary text-sm shrink-0"
                 >
                   <Plus className="w-4 h-4" />
                   New
@@ -213,19 +212,20 @@ export default function LeadFormModal({ open, onClose, initialData, onSuccess }:
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Source</label>
-                <select
+                <SearchableSelect
                   value={formData.source}
-                  onChange={e => setFormData({ ...formData, source: e.target.value })}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                >
-                  <option value="MANUAL">Manual</option>
-                  <option value="FACEBOOK">Facebook</option>
-                  <option value="WHATSAPP">WhatsApp</option>
-                  <option value="INSTAGRAM">Instagram</option>
-                  <option value="WEBSITE">Website</option>
-                  <option value="REFERRAL">Referral</option>
-                  <option value="OTHER">Other</option>
-                </select>
+                  onChange={val => setFormData({ ...formData, source: val })}
+                  options={[
+                    { value: "MANUAL", label: "Manual" },
+                    { value: "FACEBOOK", label: "Facebook" },
+                    { value: "WHATSAPP", label: "WhatsApp" },
+                    { value: "INSTAGRAM", label: "Instagram" },
+                    { value: "WEBSITE", label: "Website" },
+                    { value: "REFERRAL", label: "Referral" },
+                    { value: "OTHER", label: "Other" },
+                  ]}
+                  placeholder="Select source"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Email</label>

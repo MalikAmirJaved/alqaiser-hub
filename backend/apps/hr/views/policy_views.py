@@ -1,7 +1,9 @@
 # apps/hr/views/policy_views.py
+import uuid as uuid_lib
 from datetime import date, datetime
-from django.db import models, transaction
+from django.db import models
 from django.shortcuts import get_object_or_404
+from django.http import Http404
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
@@ -13,18 +15,27 @@ import logging
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import (
-    Policy, PolicyAcknowledgment, PolicyVersion, PolicyCategory, Employee
+    Policy, PolicyVersion, PolicyCategory, Employee
 )
 from apps.hr.serializers.policy_serializers import (
     PolicyListSerializer,
     PolicyDetailSerializer,
     PolicyCreateUpdateSerializer,
-    PolicyAcknowledgmentSerializer,
-    PolicyAcknowledgmentCreateSerializer,
     PolicyCategorySerializer,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_policy(company_id, pk):
+    """Resolve a Policy by _id (UUID) or fall back to id (numeric)."""
+    try:
+        uuid_lib.UUID(str(pk))
+        return get_object_or_404(Policy, _id=pk, company_id=company_id, is_deleted=False)
+    except (ValueError, AttributeError, Http404) as e:
+        if isinstance(e, Http404):
+            raise
+        return get_object_or_404(Policy, id=pk, company_id=company_id, is_deleted=False)
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -48,7 +59,7 @@ class PolicyView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         return Policy.objects.filter(
             company_id=user.company_id,
             is_deleted=False
-        ).select_related('approved_by', 'created_by', 'updated_by')
+        ).select_related('approved_by', 'created_by', 'updated_by', 'department')
     
     def _apply_filters(self, queryset, request):
         """Apply query parameter filters"""
@@ -71,7 +82,7 @@ class PolicyView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         department = request.query_params.get('department')
         if department:
             queryset = queryset.filter(
-                models.Q(department=department) | models.Q(department='ALL')
+                models.Q(department__name__icontains=department) | models.Q(department__isnull=True)
             )
         
         employee_type = request.query_params.get('employeeType')
@@ -79,20 +90,6 @@ class PolicyView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             queryset = queryset.filter(
                 models.Q(employee_type=employee_type) | models.Q(employee_type='ALL')
             )
-        
-        requires_ack = request.query_params.get('requiresAcknowledgment')
-        if requires_ack is not None:
-            queryset = queryset.filter(
-                requires_acknowledgment=requires_ack.lower() == 'true'
-            )
-        
-        date_from = request.query_params.get('dateFrom')
-        if date_from:
-            queryset = queryset.filter(effective_date__gte=date_from)
-        
-        date_to = request.query_params.get('dateTo')
-        if date_to:
-            queryset = queryset.filter(effective_date__lte=date_to)
         
         return queryset
     
@@ -109,12 +106,7 @@ class PolicyView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             )
         
         if pk:
-            policy = get_object_or_404(
-                Policy,
-                _id=pk,
-                company_id=company_id,
-                is_deleted=False
-            )
+            policy = _resolve_policy(company_id, pk)
             serializer = PolicyDetailSerializer(policy)
             return Response(serializer.data)
         
@@ -123,7 +115,7 @@ class PolicyView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         
         sort_by = request.query_params.get('sortBy', '-created_at')
         valid_sort_fields = ['code', 'title', 'version', 'status', 
-                           'effective_date', 'created_at', 'updated_at']
+                           'created_at', 'updated_at']
         
         if sort_by.lstrip('-') in valid_sort_fields:
             queryset = queryset.order_by(sort_by)
@@ -136,7 +128,7 @@ class PolicyView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         serializer = PolicyListSerializer(paginated_queryset, many=True)
         return paginator.get_paginated_response(serializer.data)
     
-    @transaction.atomic
+
     def post(self, request):
         """
         POST /api/hr/policies/ - Create new policy
@@ -152,15 +144,15 @@ class PolicyView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             data=request.data,
             context={'request': request}
         )
-        
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+        serializer.is_valid(raise_exception=True)
         policy = serializer.save()
         detail_serializer = PolicyDetailSerializer(policy)
-        return Response(detail_serializer.data, status=status.HTTP_201_CREATED)
+        return Response({
+            'message': f'Policy "{policy.title}" created successfully',
+            'data': detail_serializer.data
+        }, status=status.HTTP_201_CREATED)
     
-    @transaction.atomic
+
     def patch(self, request, pk=None):
         """
         PATCH /api/hr/policies/{uuid}/ - Update existing policy
@@ -172,12 +164,7 @@ class PolicyView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        policy = get_object_or_404(
-            Policy,
-            _id=pk,
-            company_id=company_id,
-            is_deleted=False
-        )
+        policy = _resolve_policy(company_id, pk)
         
         serializer = PolicyCreateUpdateSerializer(
             policy,
@@ -185,15 +172,15 @@ class PolicyView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             partial=True,
             context={'request': request}
         )
-        
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+        serializer.is_valid(raise_exception=True)
         updated_policy = serializer.save()
         detail_serializer = PolicyDetailSerializer(updated_policy)
-        return Response(detail_serializer.data)
+        return Response({
+            'message': f'Policy "{updated_policy.title}" updated successfully',
+            'data': detail_serializer.data
+        })
     
-    @transaction.atomic
+
     def delete(self, request, pk=None):
         """
         DELETE /api/hr/policies/{uuid}/ - Soft delete policy
@@ -205,12 +192,7 @@ class PolicyView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        policy = get_object_or_404(
-            Policy,
-            _id=pk,
-            company_id=company_id,
-            is_deleted=False
-        )
+        policy = _resolve_policy(company_id, pk)
         
         policy.is_deleted = True
         policy.deleted_at = timezone.now()
@@ -258,34 +240,12 @@ class PolicyStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         )
         
         department_stats = list(
-            policies.values('department')
+            policies.values('department__name')
             .annotate(count=models.Count('id'))
             .order_by('-count')
         )
-        
-        published_policies_with_ack = policies.filter(
-            status='PUBLISHED',
-            requires_acknowledgment=True
-        )
-        
-        total_acknowledgments = PolicyAcknowledgment.objects.filter(
-            policy__company_id=company_id,
-            policy__in=policies.filter(status='PUBLISHED')
-        ).count()
-        
-        today = date.today()
-        thirty_days = today + timezone.timedelta(days=30)
-        expiring_soon = policies.filter(
-            expiry_date__isnull=False,
-            expiry_date__gte=today,
-            expiry_date__lte=thirty_days
-        ).count()
-        
-        overdue_review = policies.filter(
-            review_date__isnull=False,
-            review_date__lt=today,
-            status__in=['PUBLISHED', 'APPROVED']
-        ).count()
+        for item in department_stats:
+            item['department'] = item.pop('department__name') or 'All'
         
         return Response({
             'totalPolicies': total_policies,
@@ -297,96 +257,8 @@ class PolicyStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             'pendingReview': status_stats.get('PENDING_REVIEW', 0),
             'approvedPolicies': status_stats.get('APPROVED', 0),
             'archivedPolicies': status_stats.get('ARCHIVED', 0),
-            'policiesRequiringAck': published_policies_with_ack.count(),
-            'totalAcknowledgments': total_acknowledgments,
-            'expiringSoon': expiring_soon,
-            'overdueReview': overdue_review,
             'updatedAt': timezone.now().isoformat(),
         })
-
-
-class PolicyAcknowledgmentView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
-    permission_module = 'HR'
-    permission_resource = 'policy'
-    """
-    Manage policy acknowledgments with UUID support.
-    """
-    permission_classes = [IsAuthenticated]
-    
-    def get(self, request, policy_id=None):
-        """
-        GET /api/hr/policies/{uuid}/acknowledgments/ - List acknowledgments
-        """
-        company_id = request.user.company_id
-        if not company_id:
-            return Response(
-                {'error': 'User is not associated with any company'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if not policy_id:
-            return Response(
-                {'error': 'Policy ID is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        policy = get_object_or_404(
-            Policy,
-            _id=policy_id,
-            company_id=company_id,
-            is_deleted=False
-        )
-        
-        acknowledgments = PolicyAcknowledgment.objects.filter(
-            company_id=company_id,
-            policy=policy
-        ).select_related('employee', 'policy').order_by('-acknowledged_at')
-        
-        serializer = PolicyAcknowledgmentSerializer(acknowledgments, many=True)
-        return Response(serializer.data)
-    
-    @transaction.atomic
-    def post(self, request, policy_id=None):
-        """
-        POST /api/hr/policies/{uuid}/acknowledge/ - Acknowledge a policy
-        """
-        company_id = request.user.company_id
-        if not company_id:
-            return Response(
-                {'error': 'User is not associated with any company'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if not policy_id:
-            return Response(
-                {'error': 'Policy ID is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        policy = get_object_or_404(
-            Policy,
-            _id=policy_id,
-            company_id=company_id,
-            is_deleted=False
-        )
-        
-        data = request.data.copy()
-        data['policy'] = policy.id
-        
-        serializer = PolicyAcknowledgmentCreateSerializer(
-            data=data,
-            context={'request': request}
-        )
-        
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        acknowledgment = serializer.save()
-        
-        response_data = PolicyAcknowledgmentSerializer(acknowledgment).data
-        response_data['id'] = str(acknowledgment._id)
-        
-        return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 class PolicyBulkActionView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
@@ -397,7 +269,7 @@ class PolicyBulkActionView(CompanyBranchMixin, PermissionRequiredMixin, APIView)
     """
     permission_classes = [IsAuthenticated]
     
-    @transaction.atomic
+
     def post(self, request):
         """
         POST /api/hr/policies/bulk-action/
@@ -543,7 +415,6 @@ class PolicyVersionView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         from apps.hr.serializers.policy_serializers import PolicyVersionSerializer
         serializer = PolicyVersionSerializer(versions, many=True)
         
-        # Convert UUIDs in response
         response_data = serializer.data
         for item in response_data:
             if 'id' in item:
@@ -579,7 +450,7 @@ class PolicyCategoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         serializer = PolicyCategorySerializer(categories, many=True)
         return Response(serializer.data)
     
-    @transaction.atomic
+
     def post(self, request):
         """
         POST /api/hr/policies/categories/ - Create new category
@@ -592,8 +463,7 @@ class PolicyCategoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             )
         
         serializer = PolicyCategorySerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
         
         category = serializer.save(
             company_id=company_id,
@@ -604,9 +474,12 @@ class PolicyCategoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         response_data = serializer.data
         response_data['id'] = str(category._id)
         
-        return Response(response_data, status=status.HTTP_201_CREATED)
+        return Response({
+            'message': 'Category created successfully',
+            'data': response_data
+        }, status=status.HTTP_201_CREATED)
     
-    @transaction.atomic
+
     def patch(self, request):
         """
         PATCH /api/hr/policies/categories/ - Update category using UUID
@@ -632,16 +505,18 @@ class PolicyCategoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         )
         
         serializer = PolicyCategorySerializer(category, data=request.data, partial=True)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
         
         updated_category = serializer.save(updated_by=request.user)
         response_data = serializer.data
         response_data['id'] = str(updated_category._id)
         
-        return Response(response_data)
+        return Response({
+            'message': 'Category updated successfully',
+            'data': response_data
+        })
     
-    @transaction.atomic
+
     def delete(self, request):
         """
         DELETE /api/hr/policies/categories/ - Soft delete category using UUID
@@ -671,61 +546,3 @@ class PolicyCategoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         category.save()
         
         return Response({'message': 'Category deleted successfully'})
-
-
-class EmployeePendingAcknowledgmentsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
-    permission_module = 'HR'
-    permission_resource = 'policy'
-    """
-    Get pending acknowledgments for an employee with UUID support.
-    """
-    permission_classes = [IsAuthenticated]
-    
-    def get(self, request, employee_id=None):
-        """
-        GET /api/hr/employees/{uuid}/pending-acknowledgments/
-        """
-        company_id = request.user.company_id
-        if not company_id:
-            return Response(
-                {'error': 'User is not associated with any company'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if not employee_id:
-            return Response(
-                {'error': 'Employee ID is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        employee = get_object_or_404(
-            Employee,
-            _id=employee_id,
-            company_id=company_id,
-            is_deleted=False
-        )
-        
-        published_policies = Policy.objects.filter(
-            company_id=company_id,
-            status='PUBLISHED',
-            requires_acknowledgment=True,
-            is_deleted=False
-        ).exclude(
-            acknowledgments__employee=employee
-        )
-        
-        published_policies = published_policies.filter(
-            models.Q(employee_type='ALL') | models.Q(employee_type=employee.employment_type)
-        )
-        
-        published_policies = published_policies.filter(
-            models.Q(department='ALL') | models.Q(department=employee.department)
-        )
-        
-        serializer = PolicyListSerializer(published_policies, many=True)
-        return Response({
-            'employee_id': str(employee._id),
-            'employee_name': employee.full_name,
-            'pending_count': published_policies.count(),
-            'policies': serializer.data
-        })

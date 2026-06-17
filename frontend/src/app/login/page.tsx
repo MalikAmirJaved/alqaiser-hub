@@ -37,14 +37,13 @@ export default function LoginPage() {
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-sidebar-primary text-sidebar-primary-foreground grid place-items-center font-bold">C</div>
           <div>
-            <div className="font-semibold">Clickmasters BOS</div>
-            <div className="text-xs text-muted-foreground">Al Qaiser IT Company</div>
+            <div className="font-semibold">Al Qaiser IT Company</div>
           </div>
         </div>
         <div>
           <h1 className="text-3xl font-semibold leading-tight">Internal Business Operating System</h1>
           <p className="mt-3 text-sm text-muted-foreground max-w-md">
-            Inventory · Human Resources · Finance · Operations. Manage everything from one
+            Inventory · Human Resources · Finance · Sales · Operations. Manage everything from one
             secure desktop-grade workspace.
           </p>
           <div className="mt-8 grid grid-cols-3 gap-3 max-w-md">
@@ -108,6 +107,12 @@ export default function LoginPage() {
               </div>
             )}
           </div>
+
+          {err && (
+            <div className="mt-4 p-3 rounded-md bg-destructive/15 border border-destructive/30 text-destructive text-sm">
+              {err}
+            </div>
+          )}
 
           {forgot ? (
             <div className="mt-5 space-y-2">

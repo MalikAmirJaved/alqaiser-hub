@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from decimal import Decimal
+import uuid
 from django.db.models import Sum, Value, DecimalField
 from django.db.models.functions import Coalesce
 from apps.inventory.models import (
@@ -9,7 +10,7 @@ from apps.inventory.models import (
 from apps.common.serializer_fields import UUIDForeignRelatedField
 from django.contrib.contenttypes.models import ContentType
 from apps.finance.models import Payment, SupplierBill
-from apps.hr.models import Asset
+from apps.hr.models import Asset, AssetPurchaseRequest
 
 
 class PurchaseOrderLineSerializer(serializers.ModelSerializer):
@@ -66,7 +67,7 @@ class PurchaseOrderLineSerializer(serializers.ModelSerializer):
 
 class PurchaseOrderSerializer(serializers.ModelSerializer):
     supplier = UUIDForeignRelatedField(queryset=Supplier.objects.all())
-    warehouse = UUIDForeignRelatedField(queryset=Warehouse.objects.all())
+    warehouse = UUIDForeignRelatedField(queryset=Warehouse.objects.all(), required=False, allow_null=True)
     supplier_name = serializers.CharField(source='supplier.name', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.warehouse_name', read_only=True)
     lines = PurchaseOrderLineSerializer(many=True, read_only=True)
@@ -123,6 +124,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         line_items_data = validated_data.pop('line_items', [])
+        request_ids_data = validated_data.pop('request_ids', None)
         user = self.context['request'].user
         company_id = user.company_id
         branch_id = user.branch_id
@@ -168,6 +170,40 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
 
         po.total_amount = total_amount
         po.save(update_fields=['total_amount'])
+
+        # Update pending asset purchase requests linked to the ordered assets
+        if po.inventory_type == 'OFFICE_INVENTORY':
+            if request_ids_data:
+                AssetPurchaseRequest.objects.filter(
+                    _id__in=[uuid.UUID(r) for r in request_ids_data],
+                    status='PENDING',
+                    company_id=company_id,
+                ).update(
+                    status='PURCHASE_ORDER_CREATED',
+                    purchase_order=po,
+                    updated_by=user,
+                )
+            else:
+                asset_ids = []
+                for line_data in line_items_data:
+                    asset_uuid = line_data.get('asset')
+                    if asset_uuid:
+                        try:
+                            asset = Asset.objects.get(_id=asset_uuid, company_id=company_id)
+                            asset_ids.append(asset.id)
+                        except Asset.DoesNotExist:
+                            pass
+                if asset_ids:
+                    AssetPurchaseRequest.objects.filter(
+                        asset_id__in=asset_ids,
+                        status='PENDING',
+                        company_id=company_id,
+                    ).update(
+                        status='PURCHASE_ORDER_CREATED',
+                        purchase_order=po,
+                        updated_by=user,
+                    )
+
         return po
 
     def _generate_order_number(self):

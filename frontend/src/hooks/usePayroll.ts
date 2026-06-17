@@ -3,6 +3,27 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
+export interface CompensationBreakdown {
+  id: string;
+  compensation_id: string;
+  amount: string;
+}
+
+export interface LoanBreakdown {
+  id: string;
+  loan_id: string;
+  principal_amount: string;
+  interest_amount: string;
+  total_amount: string;
+}
+
+export interface LeaveBreakdown {
+  id: string;
+  leave_request_id: string | null;
+  working_days: string;
+  amount: string;
+}
+
 export interface PayrollRecord {
   id: string;
   employee_id: string;
@@ -15,6 +36,12 @@ export interface PayrollRecord {
   base_salary: string;
   bonus: string;
   deductions: string;
+  total_compensation: string;
+  total_loan_deduction: string;
+  total_leave_deduction: string;
+  compensation_breakdown: CompensationBreakdown[];
+  loan_breakdown: LoanBreakdown[];
+  leave_breakdown: LeaveBreakdown[];
   deduction_breakdown?: any;
   net_salary: string;
   transaction_type: string;
@@ -39,6 +66,22 @@ export interface PayrollStats {
   year: number;
 }
 
+export interface SelectedMonth {
+  id?: string;
+  month: number;
+  year: number;
+  deduction?: number;
+}
+
+export interface MonthRange {
+  id?: string;
+  start_month: number;
+  start_year: number;
+  end_month: number;
+  end_year: number;
+  deduction?: number;
+}
+
 export interface EmployeeLoan {
   id: string;
   employee_id: string;
@@ -49,21 +92,47 @@ export interface EmployeeLoan {
   loan_type: string;
   loan_type_display: string;
   principal_amount: string;
-  monthly_deduction: string;
   remaining_amount: string;
-  total_months: number;
+  paid_amount: string;
   paid_months: number;
-  remaining_months: number;
   interest_rate: string;
   total_payable: string;
-  start_date: string;
-  end_date?: string;
+  frequency_type: 'ONE_TIME' | 'SELECTED_MONTH' | 'MONTH_RANGE';
+  selected_months: SelectedMonth[];
+  month_range: MonthRange | null;
   status: string;
+  approval: string;
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_iban?: string;
+  paid_months_set?: Array<[number, number]>;
   purpose?: string;
   transaction_number?: string;
   approved_at?: string;
+  confirmed_at?: string;
+  paid_at?: string;
   notes?: string;
+  advance_for_month?: number;
+  advance_for_year?: number;
   created_at?: string;
+  total_months?: number;
+}
+
+export function computeTotalMonths(loan: EmployeeLoan): number {
+  if (loan.total_months != null) return loan.total_months;
+  switch (loan.frequency_type) {
+    case 'ONE_TIME':
+      return 1;
+    case 'SELECTED_MONTH':
+      return loan.selected_months?.length ?? 0;
+    case 'MONTH_RANGE': {
+      const r = loan.month_range;
+      if (!r) return 0;
+      return (r.end_year - r.start_year) * 12 + (r.end_month - r.start_month + 1);
+    }
+    default:
+      return 0;
+  }
 }
 
 export interface Compensation {
@@ -73,33 +142,39 @@ export interface Compensation {
   employee_code: string;
   department: string;
   designation?: string;
-  grade?: string;
   basic_salary: string;
   house_rent_allowance: string;
   medical_allowance: string;
   transport_allowance: string;
-  fuel_allowance: string;
   phone_allowance: string;
   utilities_allowance: string;
   education_allowance: string;
   other_allowances: string;
-  employer_pf: string;
-  employer_eobi: string;
   overtime_rate: string;
-  bonus_percentage: string;
   total_allowances: string;
   total_ctc: string;
   total_monthly: string;
-  is_active: boolean;
-  status: string;
-  effective_date: string;
+  frequency_type: 'ONE_TIME' | 'SELECTED_MONTH' | 'MONTH_RANGE';
+  selected_months: SelectedMonth[];
+  month_range: MonthRange | null;
+  status: 'PENDING' | 'CONFIRM' | 'REJECT' | 'FULLYPAID';
+  paid_months_set?: Array<[number, number]>;
   review_date?: string;
   notes?: string;
   created_at?: string;
 }
 
 export interface PayrollPreview {
+  employee_id: string;
+  employee_name: string;
+  employee_code: string;
+  joining_date: string | null;
+  original_base_salary?: number;
   base_salary: number;
+  prorated_days?: number;
+  days_in_month?: number;
+  proration_factor?: string;
+  daily_rate?: number;
   compensation: number;
   overtime_hours: number;
   overtime_amount: number;
@@ -117,6 +192,11 @@ export interface PayrollPreview {
   custom_deductions: number;
   total_deductions: number;
   net_salary: number;
+  // Carryover fields when deductions exceed salary
+  carryover_amount?: number;
+  carryover_required?: boolean;
+  suggested_carryover_month?: number;
+  suggested_carryover_year?: number;
 }
 
 
@@ -168,6 +248,20 @@ export function useProcessPayroll(module: PayrollApiBase = "hr") {
   });
 }
 
+export function useProcessPayrollAdvance(module: PayrollApiBase = "hr") {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  const base = payrollBase(module);
+  return useMutation({
+    mutationFn: (data: any) => api(`${base}/advance/`, { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payroll"] });
+      queryClient.invalidateQueries({ queryKey: ["payrollStats"] });
+      queryClient.invalidateQueries({ queryKey: ["employeeLoans"] });
+    },
+  });
+}
+
 // ===== Loan Hooks =====
 export function useEmployeeLoans(params?: Record<string, string>) {
   const api = useApi();
@@ -178,6 +272,17 @@ export function useEmployeeLoans(params?: Record<string, string>) {
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
+  });
+}
+
+export function useEmployeeLoan(id: string | null) {
+  const api = useApi();
+  return useQuery<EmployeeLoan>({
+    queryKey: ["employeeLoan", id],
+    queryFn: () => api(`/api/hr/loans/${id}/`),
+    enabled: !!id,
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 }
 
@@ -196,7 +301,10 @@ export function useUpdateEmployeeLoan() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: any) => api("/api/hr/loans/", { method: "PATCH", body: JSON.stringify(data) }),
+    mutationFn: (data: any) => {
+      const { id, ...rest } = data;
+      return api(`/api/hr/loans/${id}/`, { method: "PATCH", body: JSON.stringify(rest) });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employeeLoans"] });
     },
@@ -207,7 +315,7 @@ export function useDeleteEmployeeLoan() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api("/api/hr/loans/", { method: "DELETE", body: JSON.stringify({ id }) }),
+    mutationFn: (id: string) => api(`/api/hr/loans/${id}/`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employeeLoans"] });
     },
@@ -227,6 +335,17 @@ export function useCompensations(params?: Record<string, string>) {
   });
 }
 
+export function useCompensation(id: string | null) {
+  const api = useApi();
+  return useQuery<Compensation>({
+    queryKey: ["compensation", id],
+    queryFn: () => api(`/api/hr/compensations/${id}/`),
+    enabled: !!id,
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
+}
+
 export function useCreateCompensation() {
   const api = useApi();
   const queryClient = useQueryClient();
@@ -243,7 +362,10 @@ export function useUpdateCompensation() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: any) => api("/api/hr/compensations/", { method: "PATCH", body: JSON.stringify(data) }),
+    mutationFn: (data: any) => {
+      const { id, ...rest } = data;
+      return api(`/api/hr/compensations/${id}/`, { method: "PATCH", body: JSON.stringify(rest) });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["compensations"] });
       queryClient.invalidateQueries({ queryKey: ["employees"] });
@@ -255,10 +377,22 @@ export function useDeleteCompensation() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api("/api/hr/compensations/", { method: "DELETE", body: JSON.stringify({ id }) }),
+    mutationFn: (id: string) => api(`/api/hr/compensations/${id}/`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["compensations"] });
       queryClient.invalidateQueries({ queryKey: ["employees"] });
+    },
+  });
+}
+
+export function useUpdateCompensationStatus() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: string; status: string }) =>
+      api("/api/hr/compensations/status/", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["compensations"] });
     },
   });
 }
@@ -267,10 +401,37 @@ export function useUpdateLoanStatus() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string; status: string }) => 
+    mutationFn: (data: { id: string; status?: string; approval?: string }) => 
       api("/api/hr/loans/status/", { method: "POST", body: JSON.stringify(data) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employeeLoans"] });
+    },
+  });
+}
+
+export function useApproveLoan() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: string; approval: string }) => 
+      api("/api/hr/loans/approve/", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["employeeLoans"] });
+    },
+  });
+}
+
+export function usePayLoan() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) => {
+      const { id, ...rest } = data;
+      return api(`/api/hr/loans/pay/`, { method: "POST", body: JSON.stringify({ id, ...rest }) });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["employeeLoans"] });
+      queryClient.invalidateQueries({ queryKey: ["payroll"] });
     },
   });
 }

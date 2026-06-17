@@ -5,7 +5,7 @@ import { useState } from "react";
 import { DynamicModulePage, type ModulePermissions, type Kpi } from "@/components/reuseable/final/DynamicModulePage";
 import { useBankAccounts, useDeleteBankAccount } from "@/hooks/finance/useBank";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import BankAccountFormModal from "@/components/finance/bank/BankAccountFormModal";
 
 const toNumber = (value: number | string | undefined): number => {
@@ -14,6 +14,7 @@ const toNumber = (value: number | string | undefined): number => {
 };
 
 export default function BankAccountsPage() {
+    const formatCurrency = useFormatCurrency();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -101,7 +102,7 @@ export default function BankAccountsPage() {
           onEdit: handleEdit,
           onDelete: handleDelete,
         }}
-        exportEnabled
+        exportEnabled={permissions.export}
         onRowSelect={setSelectedIds}
         batchActions={
           selectedIds.length > 0 && (

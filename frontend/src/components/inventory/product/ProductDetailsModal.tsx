@@ -4,7 +4,7 @@
 import { X, Edit, Package, Layers, Warehouse, User, Calendar, Tag } from "lucide-react";
 import { useProduct } from "@/hooks/useProducts";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 interface Props {
   productId: string; 
   onClose: () => void;
@@ -37,6 +37,7 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 export default function ProductDetailsModal({ productId, onClose, onEdit }: Props) {
+  const formatCurrency = useFormatCurrency();
   const { data: product, isLoading, error } = useProduct(productId);
 
   if (isLoading) {
@@ -228,7 +229,6 @@ export default function ProductDetailsModal({ productId, onClose, onEdit }: Prop
                   </div>
                   <div className="text-right shrink-0 ml-4">
                     <p className="text-sm font-bold text-success">{formatCurrency(v.selling_price)}</p>
-                    <p className="text-xs text-muted-foreground line-through">{formatCurrency(v.buying_price)}</p>
                     <p className="text-xs text-muted-foreground mt-1">{v.total_stock} in stock</p>
                   </div>
                 </div>

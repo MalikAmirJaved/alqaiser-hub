@@ -1,28 +1,29 @@
 // src/components/transfers/CreateTransferForm.tsx
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useCreateTransfer, } from "@/hooks/useTransfers";
+import { useCreateTransfer } from "@/hooks/useTransfers";
+import { useProducts } from "@/hooks/useProducts";
 import { useWarehouses } from "@/hooks/useWarehouses";
-import { useAllVariantsSimple } from "@/hooks/useAllVariants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { CalendarIcon, Loader2 } from "lucide-react";
 
 const transferSchema = z.object({
-  variant_id: z.string().uuid("Select a valid product variant"),
+  product_id: z.string().uuid("Select a product"),
+  variant_id: z.string().uuid("Select a variant"),
   source_warehouse_id: z.string().uuid("Select source warehouse"),
   destination_warehouse_id: z.string().uuid("Select destination warehouse"),
   quantity: z.number().int().min(1, "Quantity must be at least 1"),
-  planned_date: z.date().nullable().optional(),
+  planned_date: z.date({ required_error: "Planned date is required" }),
   notes: z.string().optional(),
 });
 
@@ -35,27 +36,81 @@ interface CreateTransferFormProps {
 
 export default function CreateTransferForm({ onSuccess, onCancel }: CreateTransferFormProps) {
   const createTransfer = useCreateTransfer();
-  const { data: warehouses = [] } = useWarehouses({ is_active: true });
-  const { data: variants = [], isLoading: variantsLoading } = useAllVariantsSimple({ active_only: true });
+  const { data: products = [], isLoading: productsLoading } = useProducts();
+  const { data: allWarehouses = [] } = useWarehouses({ is_active: true });
 
   const {
     control,
     handleSubmit,
     watch,
+    resetField,
     formState: { errors, isSubmitting },
   } = useForm<TransferFormValues>({
     resolver: zodResolver(transferSchema),
     defaultValues: {
       quantity: 1,
-      planned_date: null,
+      planned_date: new Date(),
       notes: "",
     },
   });
 
+  const selectedProductId = watch("product_id");
   const selectedVariantId = watch("variant_id");
   const selectedSourceId = watch("source_warehouse_id");
 
-  const availableVariants = variants.filter(v => !v.is_deleted);
+  const selectedProduct = useMemo(
+    () => products.find((p) => p.id === selectedProductId),
+    [products, selectedProductId]
+  );
+
+  const productVariants = useMemo(
+    () => selectedProduct?.variants.filter((v) => !v.is_deleted) ?? [],
+    [selectedProduct]
+  );
+
+  const selectedVariant = useMemo(
+    () => productVariants.find((v) => v.id === selectedVariantId),
+    [productVariants, selectedVariantId]
+  );
+
+  const warehousesWithStock = useMemo(() => {
+    if (!selectedVariant) return [];
+    const stockMap = new Map(
+      selectedVariant.stock_by_warehouse.map((sw) => [sw.warehouse_id, sw.quantity_on_hand])
+    );
+    return allWarehouses.map((wh) => ({
+      warehouse_id: wh.id,
+      warehouse_name: wh.warehouse_name,
+      quantity_on_hand: stockMap.get(wh.id) ?? 0,
+    }));
+  }, [selectedVariant, allWarehouses]);
+
+  const sourceWarehouses = warehousesWithStock;
+
+  const destinationWarehouses = useMemo(
+    () => warehousesWithStock.filter((sw) => sw.warehouse_id !== selectedSourceId),
+    [warehousesWithStock, selectedSourceId]
+  );
+
+  const getSourceStock = (warehouseId: string) => {
+    const entry = warehousesWithStock.find((sw) => sw.warehouse_id === warehouseId);
+    return entry?.quantity_on_hand ?? 0;
+  };
+
+  const handleProductChange = (value: string) => {
+    resetField("variant_id");
+    resetField("source_warehouse_id");
+    resetField("destination_warehouse_id");
+  };
+
+  const handleVariantChange = (value: string) => {
+    resetField("source_warehouse_id");
+    resetField("destination_warehouse_id");
+  };
+
+  const handleSourceChange = (value: string) => {
+    resetField("destination_warehouse_id");
+  };
 
   const onSubmit = async (data: TransferFormValues) => {
     try {
@@ -64,39 +119,52 @@ export default function CreateTransferForm({ onSuccess, onCancel }: CreateTransf
         source_warehouse_id: data.source_warehouse_id,
         destination_warehouse_id: data.destination_warehouse_id,
         quantity: data.quantity,
-        planned_date: data.planned_date ? format(data.planned_date, "yyyy-MM-dd") : undefined,
+        planned_date: format(data.planned_date, "yyyy-MM-dd"),
         notes: data.notes,
       });
       onSuccess();
     } catch (error: any) {
-      
     }
   };
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="space-y-2">
-        <Label>Product Variant *</Label>
+        <Label>Product *</Label>
+        <Controller
+          name="product_id"
+          control={control}
+          render={({ field }) => (
+            <SearchableSelect
+              value={field.value || ""}
+              onChange={(value) => {
+                field.onChange(value);
+                handleProductChange(value);
+              }}
+              options={products.map((product) => ({ value: product.id, label: product.product_name }))}
+              placeholder="Select product"
+            />
+          )}
+        />
+        {errors.product_id && <p className="text-sm text-red-500">{errors.product_id.message}</p>}
+      </div>
+
+      <div className="space-y-2">
+        <Label>Variant *</Label>
         <Controller
           name="variant_id"
           control={control}
           render={({ field }) => (
-            <Select onValueChange={field.onChange} value={field.value}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select product variant" />
-              </SelectTrigger>
-              <SelectContent>
-                {variantsLoading ? (
-                  <div className="p-2 text-center">Loading...</div>
-                ) : (
-                  availableVariants.map((variant) => (
-                    <SelectItem key={variant.id} value={variant.id}>
-                      {variant.product_name} - {variant.sku}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={field.value || ""}
+              onChange={(value) => {
+                field.onChange(value);
+                handleVariantChange(value);
+              }}
+              options={productVariants.map((variant) => ({ value: variant.id, label: `${variant.sku} - ${variant.variant_title}` }))}
+              placeholder={selectedProductId ? "Select variant" : "Select product first"}
+              disabled={!selectedProductId}
+            />
           )}
         />
         {errors.variant_id && <p className="text-sm text-red-500">{errors.variant_id.message}</p>}
@@ -108,18 +176,16 @@ export default function CreateTransferForm({ onSuccess, onCancel }: CreateTransf
           name="source_warehouse_id"
           control={control}
           render={({ field }) => (
-            <Select onValueChange={field.onChange} value={field.value}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select source warehouse" />
-              </SelectTrigger>
-              <SelectContent>
-                {warehouses.map((wh) => (
-                  <SelectItem key={wh.id} value={String(wh.id)}>
-                    {wh.warehouse_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={field.value || ""}
+              onChange={(value) => {
+                field.onChange(value);
+                handleSourceChange(value);
+              }}
+              options={sourceWarehouses.map((sw) => ({ value: sw.warehouse_id, label: `${sw.warehouse_name} — Stock: ${sw.quantity_on_hand}` }))}
+              placeholder={selectedVariantId ? "Select source warehouse" : "Select variant first"}
+              disabled={!selectedVariantId}
+            />
           )}
         />
         {errors.source_warehouse_id && <p className="text-sm text-red-500">{errors.source_warehouse_id.message}</p>}
@@ -131,18 +197,13 @@ export default function CreateTransferForm({ onSuccess, onCancel }: CreateTransf
           name="destination_warehouse_id"
           control={control}
           render={({ field }) => (
-            <Select onValueChange={field.onChange} value={field.value}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select destination warehouse" />
-              </SelectTrigger>
-              <SelectContent>
-                {warehouses.map((wh) => (
-                  <SelectItem key={wh.id} value={String(wh.id)}>
-                    {wh.warehouse_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={field.value || ""}
+              onChange={field.onChange}
+              options={destinationWarehouses.map((sw) => ({ value: sw.warehouse_id, label: sw.warehouse_name }))}
+              placeholder={selectedSourceId ? "Select destination warehouse" : "Select source first"}
+              disabled={!selectedSourceId}
+            />
           )}
         />
         {errors.destination_warehouse_id && <p className="text-sm text-red-500">{errors.destination_warehouse_id.message}</p>}
@@ -157,6 +218,7 @@ export default function CreateTransferForm({ onSuccess, onCancel }: CreateTransf
             <Input
               type="number"
               min={1}
+              max={selectedSourceId ? getSourceStock(selectedSourceId) : undefined}
               {...field}
               onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
             />
@@ -166,7 +228,7 @@ export default function CreateTransferForm({ onSuccess, onCancel }: CreateTransf
       </div>
 
       <div className="space-y-2">
-        <Label>Planned Date</Label>
+        <Label>Planned Date *</Label>
         <Controller
           name="planned_date"
           control={control}
@@ -184,6 +246,7 @@ export default function CreateTransferForm({ onSuccess, onCancel }: CreateTransf
             </Popover>
           )}
         />
+        {errors.planned_date && <p className="text-sm text-red-500">{errors.planned_date.message}</p>}
       </div>
 
       <div className="space-y-2">

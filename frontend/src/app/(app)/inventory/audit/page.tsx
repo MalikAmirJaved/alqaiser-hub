@@ -7,6 +7,8 @@ import {
   type Column,
 } from "@/components/reuseable/TableGridView";
 import { StatsCards } from "@/components/reuseable/StatsCards";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import Link from "next/link";
@@ -14,16 +16,39 @@ import { Eye } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 
 export default function AuditLogsPage() {
-  const [filters, setFilters] = useState({
-    entity_type: "",
-    action: "",
-    start_date: "",
-    end_date: "",
-    page: 1,
-    page_size: 20,
-  });
+  const [filterState, setFilterState] = useState<Record<string, string>>({});
+  const [page, setPage] = useState(1);
 
-  const { data, isLoading, error } = useAuditLogs(filters);
+  const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
+    { name: "action", label: "Action", type: "select", options: [
+      { value: "CREATE", label: "Create" },
+      { value: "UPDATE", label: "Update" },
+      { value: "DELETE", label: "Delete" },
+    ]},
+    { name: "entity_type", label: "Entity", type: "select", options: [
+      { value: "PRODUCT", label: "Product" },
+      { value: "PURCHASE_ORDER", label: "Purchase Order" },
+      { value: "STOCK", label: "Stock" },
+      { value: "WAREHOUSE", label: "Warehouse" },
+      { value: "SUPPLIER", label: "Supplier" },
+      { value: "CUSTOMER", label: "Customer" },
+    ]},
+    { name: "start_date", label: "From", type: "date" },
+    { name: "end_date", label: "To", type: "date" },
+  ];
+
+  const apiFilters = {
+    search: filterState.search || undefined,
+    action: filterState.action || undefined,
+    entity_type: filterState.entity_type || undefined,
+    start_date: filterState.start_date || undefined,
+    end_date: filterState.end_date || undefined,
+    page,
+    page_size: 20,
+  };
+
+  const { data, isLoading, error } = useAuditLogs(apiFilters);
 
   // 👇 cast for TableView generic constraint
   const logs = (data?.results || []) as (AuditLog &

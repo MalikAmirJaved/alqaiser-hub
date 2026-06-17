@@ -11,55 +11,45 @@ import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Edit, Trash2 } from "lucide-react";
+import FilterBar, { FilterField } from "@/components/reuseable/FilterBar";
 import { useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier, type Supplier } from "@/hooks/useSuppliers";
-import { formatCurrency } from "@/lib/currency";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useRouter } from 'next/navigation';
+import { useAutoCode } from "@/hooks/useAutoCode";
 
 // Helper to render status badge
 const StatusBadge = ({ status }: { status: string }) => {
-  const variants: Record<string, string> = {
-    active: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
-    inactive: "bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/20",
-    suspended: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+  const colors: Record<string, string> = {
+    active: "bg-success/15 text-success",
+    inactive: "bg-muted/40 text-muted-foreground",
+    suspended: "bg-destructive/15 text-destructive",
   };
   return (
-    <Badge variant="outline" className={variants[status] || ""}>
+    <span className={`inline-flex px-2 py-0.5 text-xs rounded-full font-medium ${colors[status] || "bg-muted/40 text-muted-foreground"}`}>
       {status}
-    </Badge>
-  );
-};
-
-// Rating display with stars
-const RatingStars = ({ rating }: { rating: number }) => {
-  return (
-    <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map((star) => (
-        <span key={star} className={star <= rating ? "text-yellow-500" : "text-gray-300 dark:text-gray-600"}>
-          ★
-        </span>
-      ))}
-      <span className="ml-1 text-xs text-muted-foreground">({rating})</span>
-    </div>
+    </span>
   );
 };
 
 // Form fields configuration (only supplier-specific)
 const formFields = [
-  { name: "code", label: "Code", type: "text", required: true, placeholder: "e.g., SUP-001" },
+  { name: "code", label: "Code", type: "code", required: true, placeholder: "e.g., SUP-001" },
   { name: "name", label: "Name", type: "text", required: true, placeholder: "Company name" },
   { name: "contact_person", label: "Contact Person", type: "text", placeholder: "Full name" },
   { name: "email", label: "Email", type: "email", placeholder: "contact@company.com" },
-  { name: "phone", label: "Phone", type: "tel", placeholder: "+1 234 567 8900" },
+  { name: "phone", label: "Phone", type: "tel", minLength: 7, maxLength: 20, placeholder: "+1 234 567 8900" },
   { name: "address_line", label: "Address Line", type: "textarea", placeholder: "Street address" },
-  { name: "country", label: "Country", type: "text", placeholder: "Country" },
-  { name: "state", label: "State", type: "text", placeholder: "State/Province" },
-  { name: "city", label: "City", type: "text", placeholder: "City" },
+  {
+    name: "location",
+    label: "Location",
+    type: "location-group",
+    fields: {
+      country: "country",
+      state: "state",
+      city: "city",
+    },
+  },
   { name: "postal_code", label: "Postal Code", type: "text", placeholder: "Postal code" },
-  { name: "payment_terms", label: "Payment Terms", type: "text", placeholder: "Net 30" },
-  { name: "credit_limit", label: "Credit Limit", type: "number", step: "0.01", placeholder: "0.00" },
-  { name: "balance", label: "Balance", type: "number", step: "0.01", placeholder: "0.00" },
-  { name: "rating", label: "Rating (1-5)", type: "number", min: 1, max: 5, placeholder: "5" },
   {
     name: "status",
     label: "Status",
@@ -73,15 +63,27 @@ const formFields = [
 ];
 
 export default function SuppliersPage() {
-  const permissions = useFeaturePermissions("INVENTORY", "supplier");
+    const permissions = useFeaturePermissions("INVENTORY", "supplier");
   const [selectedItem, setSelectedItem] = useState<Supplier | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Supplier | null>(null);
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const { confirm, Modal: ConfirmationModal } = useConfirmationModal();
   const router = useRouter();
 
+  const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
+    { name: "status", label: "Status", type: "status", options: [
+      { value: "active", label: "Active" },
+      { value: "inactive", label: "Inactive" },
+      { value: "suspended", label: "Suspended" },
+    ] },
+  ];
+
+  const { generateCode, validateCode } = useAutoCode("supplier");
+
   // Suppliers hooks
-  const { data: suppliers, isLoading: suppliersLoading } = useSuppliers();
+  const { data: suppliers, isLoading: suppliersLoading } = useSuppliers(filters);
   const createSupplier = useCreateSupplier();
   const updateSupplier = useUpdateSupplier();
   const deleteSupplier = useDeleteSupplier();
@@ -94,21 +96,15 @@ export default function SuppliersPage() {
       return [
         { id: "total", label: "Total", value: 0 },
         { id: "active", label: "Active", value: 0 },
-        { id: "credit", label: "Total Credit Limit", value: "$0" },
-        { id: "rating", label: "Average Rating", value: "0.0" },
       ];
     }
 
     const total = suppliers.length;
     const active = suppliers.filter((item) => item.status === "active").length;
-    const totalCredit = suppliers.reduce((sum, item) => sum + Number(item.credit_limit), 0);
-    const avgRating = suppliers.reduce((sum, item) => sum + Number(item.rating), 0) / total;
 
     return [
       { id: "total", label: "Total", value: total, valueClassName: "text-2xl font-bold" },
       { id: "active", label: "Active", value: active, valueClassName: "text-green-600 dark:text-green-400" },
-      { id: "credit", label: "Total Credit Limit", value: formatCurrency(totalCredit), valueClassName: "text-blue-600 dark:text-blue-400" },
-      { id: "rating", label: "Average Rating", value: avgRating.toFixed(1), valueClassName: "text-yellow-600 dark:text-yellow-400" },
     ];
   }, [suppliers]);
 
@@ -119,28 +115,6 @@ export default function SuppliersPage() {
     { key: "contact_person", label: "Contact Person", sortable: true },
     { key: "email", label: "Email", sortable: true },
     { key: "phone", label: "Phone", sortable: true },
-    { key: "payment_terms", label: "Payment Terms", sortable: true },
-    {
-      key: "credit_limit",
-      label: "Credit Limit",
-      sortable: true,
-      render: (value) => <span className="font-medium">{formatCurrency(value as number)}</span>,
-      sortAccessor: (row) => row.credit_limit,
-    },
-    {
-      key: "balance",
-      label: "Balance",
-      sortable: true,
-      render: (value) => <span className={Number(value) > 0 ? "text-yellow-600" : "text-green-600"}>{formatCurrency(value as number)}</span>,
-      sortAccessor: (row) => row.balance,
-    },
-    {
-      key: "rating",
-      label: "Rating",
-      sortable: true,
-      render: (value) => <RatingStars rating={value as number} />,
-      sortAccessor: (row) => row.rating,
-    },
     {
       key: "status",
       label: "Status",
@@ -160,10 +134,6 @@ export default function SuppliersPage() {
     { label: "Address", key: "address_line" },
     { label: "Location", key: (row: Supplier) => `${row.city}, ${row.state}, ${row.country}` },
     { label: "Postal Code", key: "postal_code" },
-    { label: "Payment Terms", key: "payment_terms" },
-    { label: "Credit Limit", key: "credit_limit", formatter: (val: number) => formatCurrency(val) },
-    { label: "Current Balance", key: "balance", formatter: (val: number) => formatCurrency(val) },
-    { label: "Rating", key: "rating", formatter: (val: number) => <RatingStars rating={val} /> },
     { label: "Status", key: "status", formatter: (val: string) => <StatusBadge status={val} /> },
     { label: "Created", key: "created_at", formatter: (val: string) => new Date(val).toLocaleDateString() },
     { label: "Last Updated", key: "updated_at", formatter: (val: string) => new Date(val).toLocaleString() },
@@ -224,7 +194,11 @@ export default function SuppliersPage() {
           {/* Stats Cards */}
           <StatsCards stats={stats} className="mt-6" />
 
-          <div className="mt-6">
+          <div className="mt-4">
+            <FilterBar fields={filterFields} filters={filters} onChange={setFilters} />
+          </div>
+
+          <div className="mt-4">
             <TableView
               columns={tableColumns}
               data={suppliers || []}
@@ -288,6 +262,8 @@ export default function SuppliersPage() {
         initialData={editingItem || {}}
         onSubmit={handleFormSubmit}
         isSubmitting={createSupplier.isPending || updateSupplier.isPending}
+        onGenerateCode={generateCode}
+        onValidateCode={validateCode}
       />
       
       <ConfirmationModal />

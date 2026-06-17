@@ -1,10 +1,12 @@
 // src/components/inventory/brand/BrandFormModal.tsx
 "use client";
-import { useState, useEffect } from "react";
-import { X, Tag, Check, Loader2, Globe } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { X, Tag, Check, Loader2, Globe, RotateCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CountrySelect } from "@/components/reuseable/LocationSelectors";
 import { useCreateBrand, useUpdateBrand, Brand } from "@/hooks/useBrands";
+import { useAutoCode } from "@/hooks/useAutoCode";
+import { useSelector } from "react-redux";
 
 interface Props {
   isOpen: boolean;
@@ -13,16 +15,18 @@ interface Props {
 }
 
 export default function BrandFormModal({ isOpen, onClose, initialData }: Props) {
-  const [form, setForm] = useState({ 
+  const companyCountry = useSelector((state: any) => state.companySettings?.data?.country || "");
+  const [form, setForm] = useState(() => ({ 
     name: "", 
     code: "", 
     description: "", 
     country_of_origin: "" 
-  });
+  }));
   
   const createBrand = useCreateBrand();
   const updateBrand = useUpdateBrand();
   const isSubmitting = createBrand.isPending || updateBrand.isPending;
+  const { generateCode, validateCode } = useAutoCode("brand");
 
   useEffect(() => {
     if (initialData) {
@@ -34,8 +38,15 @@ export default function BrandFormModal({ isOpen, onClose, initialData }: Props) 
       });
     } else {
       setForm({ name: "", code: "", description: "", country_of_origin: "" });
+      generateCode().then(code => setForm(prev => ({ ...prev, code }))).catch(() => {});
     }
   }, [initialData, isOpen]);
+
+  useEffect(() => {
+    if (!initialData && companyCountry && !form.country_of_origin) {
+      setForm(prev => ({ ...prev, country_of_origin: companyCountry }));
+    }
+  }, [companyCountry, initialData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,12 +108,23 @@ export default function BrandFormModal({ isOpen, onClose, initialData }: Props) 
               </label>
               <label className="text-sm flex flex-col gap-1.5">
                 <span className="text-muted-foreground text-xs">Brand Code *</span>
-                <input
-                  required
-                  value={form.code}
-                  onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
-                  className="h-10 px-3 rounded-xl border border-border bg-muted/20 outline-none focus:ring-2 focus:ring-primary/30 font-mono text-sm transition"
-                />
+                <div className="flex gap-2">
+                  <input
+                    required
+                    value={form.code}
+                    onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                    onBlur={() => validateCode(form.code)}
+                    className="flex-1 h-10 px-3 rounded-xl border border-border bg-muted/20 outline-none focus:ring-2 focus:ring-primary/30 font-mono text-sm transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => generateCode().then(code => setForm(prev => ({ ...prev, code }))).catch(() => {})}
+                    className="h-10 w-10 flex items-center justify-center rounded-xl border border-border hover:bg-muted transition"
+                    title="Generate new code"
+                  >
+                    <RotateCw className="w-4 h-4" />
+                  </button>
+                </div>
               </label>
               <div className="flex flex-col gap-1.5">
                 <span className="text-xs text-muted-foreground">Country of Origin</span>

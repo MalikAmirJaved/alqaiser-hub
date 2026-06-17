@@ -1,48 +1,109 @@
 // @ts-nocheck
 "use client";
 
-// ============================================
-// FILE: src/app/(dashboard)/hr/employees/page.tsx (BACKEND INTEGRATED)
-// ============================================
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useEmployees, useEmployeeStats, useCreateEmployee, useUpdateEmployee, useDeleteEmployee } from "@/hooks/useEmployees";
 import { useShiftTemplates } from "@/hooks/useShiftTemplates";
+import { useDepartmentOptions } from "@/hooks/useDepartments";
+import { useDesignations } from "@/hooks/useDesignations";
 import PageHeader from "@/components/PageHeader";
 import EmployeeForm from "@/components/Forms/EmployeeForm";
+import EmployeeStatusModal from "@/components/EmployeeStatusModal";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { TableView, GridView } from "@/components/reuseable/TableGridView";
-import { Plus, Pencil, Trash2, Search, Download, Shield, Clock, LayoutGrid, LayoutList, Building2, Briefcase, Award, Phone } from "lucide-react";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
+import { Plus, Pencil, Trash2, Download, Shield, Clock, LayoutGrid, LayoutList, Building2, Briefcase, Award, Phone, Key, ToggleRight, TrendingUp } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useConfirmation } from "@/contexts/ConfirmationModalContext";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getPermissions } from "@/lib/permissions";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import PromotionModal from "@/components/payroll/PromotionModal";
+
 
 export default function EmployeesPage() {
   const { user, ready } = useAuth();
   const { confirm } = useConfirmation();
-  const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const [modalOpen, setModalOpen] = useState(false);
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [selectedEmployeeForStatus, setSelectedEmployeeForStatus] = useState<any>(null);
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
+  const [storedPrefillData, setStoredPrefillData] = useState<any>(null);
+  const [promotionModalOpen, setPromotionModalOpen] = useState(false);
+  const [selectedForPromotion, setSelectedForPromotion] = useState<any>(null);
+  const formatCurrency = useFormatCurrency();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const prefill = searchParams.get("prefill");
+
+  const { options: departmentOptions } = useDepartmentOptions();
+  const { data: designations = [] } = useDesignations();
+
+  const designationOptions = (designations || [])
+    .filter(d => d.isActive)
+    .map(d => ({ value: d._id || d.id, label: d.name }));
+
+  const employmentStatusOptions = [
+    { value: "ACTIVE", label: "Active" },
+    { value: "ON_LEAVE", label: "On Leave" },
+    { value: "SUSPENDED", label: "Suspended" },
+    { value: "TERMINATED", label: "Terminated" },
+    { value: "RESIGNED", label: "Resigned" },
+  ];
+
+  const employmentTypeOptions = [
+    { value: "FULL_TIME", label: "Full Time" },
+    { value: "PART_TIME", label: "Part Time" },
+    { value: "CONTRACT", label: "Contract" },
+    { value: "INTERN", label: "Intern" },
+  ];
+
+  const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
+    { name: "department_id", label: "Department", type: "select", searchable: true, options: departmentOptions },
+    { name: "designation_id", label: "Designation", type: "select", searchable: true, options: designationOptions },
+    { name: "employment_status", label: "Status", type: "status", options: employmentStatusOptions },
+    { name: "employment_type", label: "Type", type: "select", options: employmentTypeOptions },
+  ];
+
+  const prefillData = useMemo(() => {
+    if (!prefill) return null;
+    return {
+      first_name: searchParams.get("first_name") || "",
+      last_name: searchParams.get("last_name") || "",
+      email: searchParams.get("email") || "",
+      phone: searchParams.get("phone") || "",
+      department_id: searchParams.get("department_id") || "",
+      designation_id: searchParams.get("designation_id") || "",
+      isfrom_user_id: searchParams.get("isfrom_user_id") || null,
+      candidate_id: searchParams.get("candidate_id") || null,
+      expected_salary: searchParams.get("expected_salary") || null,
+    };
+  }, [searchParams, prefill]);
+
   const { data: employees = [], isLoading } = useEmployees(
-    query ? { search: query } : undefined
+    Object.keys(filters).length > 0 ? filters : undefined
   );
   const permissions = useSelector(
-  (state: RootState) => state.permissions.permissions
-);
+    (state: RootState) => state.permissions.permissions
+  );
 
-const employeePermissions = getPermissions(
-  permissions,
-  "HR",
-  "employee"
-);
+  const userExistsForEmployee = (employee: any) => {
+    return !!employee.isfrom_user_id;
+  };
+
+  const employeePermissions = getPermissions(
+    permissions,
+    "HR",
+    "employee"
+  );
 
   const { data: stats } = useEmployeeStats();
   const { data: shiftTemplates = [] } = useShiftTemplates();
@@ -50,7 +111,19 @@ const employeePermissions = getPermissions(
   const updateEmployee = useUpdateEmployee();
   const deleteEmployee = useDeleteEmployee();
 
-
+  const getPrefillUserUrl = (employee: any) => {
+    const params = new URLSearchParams({
+      prefill: "true",
+      first_name: employee.first_name || "",
+      last_name: employee.last_name || "",
+      email: employee.email || "",
+      phone_number: employee.phone || "",
+      department_id: employee.department_id || "",
+      designation_id: employee.designation_id || "",
+      isfrom_employee_id: employee._id || employee.id || "",
+    });
+    return `/settings/users?${params.toString()}`;
+  };
 
   const getEmployeeDefaultShiftName = (employee) => {
     if (employee.default_shift_name) return employee.default_shift_name;
@@ -61,28 +134,44 @@ const employeePermissions = getPermissions(
     return null;
   };
 
+  // Auto-open modal when navigated here with prefill params
+  const hasAutoOpened = useRef(false);
+  useEffect(() => {
+    if (prefill && !hasAutoOpened.current && employeePermissions.create) {
+      hasAutoOpened.current = true;
+      setStoredPrefillData(prefillData);
+      setEditingEmployee(null);
+      setModalOpen(true);
+      router.replace("/hr/employees", undefined);
+    }
+  }, [prefill, employeePermissions.create, router, prefillData]);
+
   const handleSaveEmployee = async (employeeData) => {
     try {
+      const payload = { ...employeeData };
+      if (!editingEmployee && storedPrefillData?.isfrom_user_id) {
+        payload.isfrom_user_id = storedPrefillData.isfrom_user_id;
+      }
+      if (!editingEmployee && storedPrefillData?.candidate_id) {
+        payload.candidate_id = storedPrefillData.candidate_id;
+      }
       if (editingEmployee) {
         await updateEmployee.mutateAsync({
           id: editingEmployee.id,
-          ...employeeData,
+          ...payload,
         });
       } else {
-        await createEmployee.mutateAsync(employeeData);
+        await createEmployee.mutateAsync(payload);
       }
-
       setModalOpen(false);
       setEditingEmployee(null);
-      setSelectedRows(new Set()); // Clear selections after save
+      setStoredPrefillData(null);
+      setSelectedRows(new Set());
     } catch (error: any) {
-      toast.error(error.message || "Failed to save employee");
     }
   };
 
   const handleDelete = async (employee) => {
-
-
     confirm({
       title: "Delete Employee",
       message: `Are you sure you want to delete "${employee.first_name} ${employee.last_name || ''}"? This action cannot be undone.`,
@@ -92,21 +181,15 @@ const employeePermissions = getPermissions(
         try {
           await deleteEmployee.mutateAsync(employee.id);
           setSelectedRows(new Set());
-          toast.success(`${employee.first_name} ${employee.last_name || ''} deleted successfully`);
         } catch (error: any) {
-          toast.error(error.message || "Failed to delete employee");
         }
       },
     });
   };
 
-
   const handleBulkDelete = async () => {
-
-
     const selectedEmployees = Array.from(selectedRows).map(idx => employees[idx]);
     if (selectedEmployees.length === 0) return;
-
     confirm({
       title: "Bulk Delete Employees",
       message: `You are about to delete ${selectedEmployees.length} employee(s). This action cannot be undone.`,
@@ -116,9 +199,7 @@ const employeePermissions = getPermissions(
         try {
           await Promise.all(selectedEmployees.map(emp => deleteEmployee.mutateAsync(emp.id)));
           setSelectedRows(new Set());
-          toast.success(`${selectedEmployees.length} employee(s) deleted successfully`);
         } catch (error: any) {
-          toast.error(error.message || "Failed to delete employees");
         }
       },
     });
@@ -126,14 +207,20 @@ const employeePermissions = getPermissions(
 
   const openAddModal = () => {
     setEditingEmployee(null);
+    setStoredPrefillData(null);
     setModalOpen(true);
   };
 
   const openEditModal = (employee) => {
     setEditingEmployee(employee);
+    setStoredPrefillData(null);
     setModalOpen(true);
   };
 
+  const openStatusModal = (employee) => {
+    setSelectedEmployeeForStatus(employee);
+    setStatusModalOpen(true);
+  };
 
   const exportCsv = () => {
     const headers = ["Employee ID", "First Name", "Last Name", "Department", "Designation", "Employment Type", "Status", "Phone", "Email", "Default Shift"];
@@ -141,8 +228,8 @@ const employeePermissions = getPermissions(
       emp.employee_id,
       emp.first_name,
       emp.last_name || "",
-      emp.department,
-      emp.designation || "",
+      emp.department_name || "",
+      emp.designation_name || "",
       emp.employment_type,
       emp.employment_status,
       emp.phone,
@@ -159,7 +246,6 @@ const employeePermissions = getPermissions(
     URL.revokeObjectURL(url);
   };
 
-  // Prepare stats data for the reusable component
   const employeeStats = [
     {
       id: "total-employees",
@@ -181,7 +267,7 @@ const employeePermissions = getPermissions(
     {
       id: "departments",
       label: "Departments",
-      value: stats?.departments || new Set(employees.map(e => e.department)).size
+      value: stats?.departments || new Set(employees.map(e => e.department_name)).size
     },
     {
       id: "default-shift",
@@ -190,7 +276,6 @@ const employeePermissions = getPermissions(
     }
   ];
 
-  // Define columns for the table
   const employeeColumns = [
     {
       key: "employee_id",
@@ -205,20 +290,18 @@ const employeePermissions = getPermissions(
       sortAccessor: (row) =>
         `${row.first_name ?? ""} ${row.last_name ?? ""}`.toLowerCase(),
       render: (_, row) => `${row.first_name} ${row.last_name || ""}`
-
     },
     {
-      key: "department",
+      key: "department_name",
       label: "Department",
       sortable: true,
-      sortAccessor: (row) => (row.department ?? "").toLowerCase()
-
+      sortAccessor: (row) => (row.department_name ?? "").toLowerCase()
     },
     {
-      key: "designation",
+      key: "designation_name",
       label: "Designation",
       sortable: true,
-      sortAccessor: (row) => (row.designation ?? "").toLowerCase()
+      sortAccessor: (row) => (row.designation_name ?? "").toLowerCase()
     },
     {
       key: "employment_type",
@@ -230,15 +313,24 @@ const employeePermissions = getPermissions(
       key: "employment_status",
       label: "Status",
       sortable: true,
-      render: (value) => (
-        <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${value === "ACTIVE"
-          ? "bg-success/15 text-success border-success/30"
-          : value === "ON_LEAVE"
-            ? "bg-warning/15 text-warning border-warning/30"
-            : "bg-destructive/15 text-destructive border-destructive/30"
-          }`}>
+      render: (value, row) => (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (employeePermissions.update) {
+              openStatusModal(row);
+            }
+          }}
+          className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border cursor-pointer hover:opacity-80 transition-opacity ${value === "ACTIVE"
+            ? "bg-success/15 text-success border-success/30"
+            : value === "ON_LEAVE"
+              ? "bg-warning/15 text-warning border-warning/30"
+              : "bg-destructive/15 text-destructive border-destructive/30"
+            }`}
+          title={employeePermissions.update ? "Click to change status" : "No permission to change status"}
+        >
           {value}
-        </span>
+        </button>
       )
     },
     {
@@ -247,7 +339,6 @@ const employeePermissions = getPermissions(
       sortable: true,
       sortAccessor: (row) =>
         (getEmployeeDefaultShiftName(row) ?? "").toLowerCase(),
-
       render: (_, row) => {
         const shiftName = getEmployeeDefaultShiftName(row);
         return shiftName ? (
@@ -268,31 +359,55 @@ const employeePermissions = getPermissions(
     }
   ];
 
-  // Define actions for each row
+  const openPromotionModal = (employee: any) => {
+    setSelectedForPromotion(employee);
+    setPromotionModalOpen(true);
+  };
+
   const renderActions = (row, idx) => (
     <>
-    {employeePermissions.update && (
-      <button
-        onClick={() => openEditModal(row)}
-        className="p-1.5 rounded-md hover:bg-muted transition-colors"
-        aria-label="Edit"
-      >
-        <Pencil className="w-4 h-4" />
-      </button>
-    )} 
-    {employeePermissions.delete && (
-      <button
-        onClick={() => handleDelete(row)}
-        className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive transition-colors"
-        aria-label="Delete"
-      >
-        <Trash2 className="w-4 h-4" />
-      </button>
-    )}
+      {employeePermissions.update && (
+        <>
+          <button
+            onClick={() => openPromotionModal(row)}
+            className="p-1.5 rounded-md hover:bg-success/15 text-success transition-colors"
+            title="Promotion"
+            aria-label="Promotion"
+          >
+            <TrendingUp className="w-4 h-4" />
+          </button>
+        </>
+      )}
+      {!userExistsForEmployee(row) && (
+        <button
+          onClick={() => router.push(getPrefillUserUrl(row))}
+          className="p-1.5 rounded-md hover:bg-primary/15 text-primary transition-colors"
+          aria-label="Give Login Access"
+        >
+          <Key className="w-4 h-4" />
+        </button>
+      )}
+      {employeePermissions.update && (
+        <button
+          onClick={() => openEditModal(row)}
+          className="p-1.5 rounded-md hover:bg-muted transition-colors"
+          aria-label="Edit"
+        >
+          <Pencil className="w-4 h-4" />
+        </button>
+      )}
+      {employeePermissions.delete && (
+        <button
+          onClick={() => handleDelete(row)}
+          className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive transition-colors"
+          aria-label="Delete"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      )}
     </>
   );
 
-  // Render card for grid view
   const renderEmployeeCard = (employee, idx) => {
     const isSelected = selectedRows.has(idx);
     const defaultShiftName = getEmployeeDefaultShiftName(employee);
@@ -307,13 +422,11 @@ const employeePermissions = getPermissions(
           isSelected
             ? "border-primary bg-primary/5 ring-2 ring-primary/20 shadow-md scale-[1.02]"
             : "border-border bg-card hover:border-primary/30",
-          // Add subtle gradient overlay on hover
           "after:absolute after:inset-0 after:rounded-xl after:opacity-0 after:transition-opacity after:duration-300",
           "after:bg-gradient-to-b after:from-primary/5 after:to-transparent",
           "hover:after:opacity-100"
         )}
       >
-        {/* Selection Checkbox with improved styling */}
         <div className={cn(
           "absolute top-2 left-2 z-10 transition-all duration-200",
           isSelected ? "opacity-100 scale-100" : "opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100"
@@ -335,9 +448,7 @@ const employeePermissions = getPermissions(
           />
         </div>
 
-        {/* Card Content */}
         <div className="p-5">
-          {/* Header: ID & Status */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <span className="font-mono text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-md">
@@ -362,7 +473,6 @@ const employeePermissions = getPermissions(
             </span>
           </div>
 
-          {/* Avatar/Initial Circle & Name */}
           <div className="flex items-start gap-3 mb-4">
             <div className={cn(
               "w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold shrink-0",
@@ -388,13 +498,11 @@ const employeePermissions = getPermissions(
             </div>
           </div>
 
-          {/* Details Grid */}
           <div className="space-y-2.5 mb-4">
-            {/* Department & Employment Type */}
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-muted font-medium">
                 <Building2 className="w-3 h-3 text-muted-foreground" />
-                {employee.department}
+                {employee.department_name}
               </span>
               {employee.employment_type && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-muted/50 text-muted-foreground">
@@ -404,15 +512,13 @@ const employeePermissions = getPermissions(
               )}
             </div>
 
-            {/* Designation */}
-            {employee.designation && (
+            {employee.designation_name && (
               <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                 <Award className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="truncate">{employee.designation}</span>
+                <span className="truncate">{employee.designation_name}</span>
               </p>
             )}
 
-            {/* Shift Info */}
             {defaultShiftName && (
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-lg px-2.5 py-1.5">
                 <Clock className="w-3.5 h-3.5 flex-shrink-0" />
@@ -420,7 +526,6 @@ const employeePermissions = getPermissions(
               </div>
             )}
 
-            {/* Phone */}
             {employee.phone && (
               <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                 <Phone className="w-3.5 h-3.5 flex-shrink-0" />
@@ -429,7 +534,6 @@ const employeePermissions = getPermissions(
             )}
           </div>
 
-          {/* Actions Footer */}
           <div className={cn(
             "flex items-center justify-between pt-3 border-t border-border",
             "transition-all duration-200"
@@ -457,7 +561,6 @@ const employeePermissions = getPermissions(
     );
   }
 
-
   return (
     <div>
       <PageHeader
@@ -465,7 +568,6 @@ const employeePermissions = getPermissions(
         subtitle="Manage employee records, employment details, and default shifts"
         actions={
           <div className="flex items-center gap-2">
-            {/* Bulk Delete Button */}
             {selectedRows.size > 0 && (
               <button
                 onClick={handleBulkDelete}
@@ -475,7 +577,6 @@ const employeePermissions = getPermissions(
               </button>
             )}
 
-            {/* Export Button */}
             {employeePermissions.export && (
               <button
                 onClick={exportCsv}
@@ -485,7 +586,6 @@ const employeePermissions = getPermissions(
               </button>
             )}
 
-            {/* View Toggle Buttons */}
             <div className="flex items-center gap-1 p-0.5 rounded-md border border-border">
               <button
                 onClick={() => setViewMode("table")}
@@ -509,37 +609,28 @@ const employeePermissions = getPermissions(
               </button>
             </div>
 
-            {/* Add Employee Button */}
             {employeePermissions.create && (
-
-            <button
-              onClick={openAddModal}
-              className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-colors"
-            >
-              <Plus className="w-4 h-4" /> Add Employee
-            </button>
+              <button
+                onClick={openAddModal}
+                className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition-colors"
+              >
+                <Plus className="w-4 h-4" /> Add Employee
+              </button>
             )}
           </div>
         }
       />
 
-      {/* Stats Cards */}
       <StatsCards stats={employeeStats} />
 
-      {/* Search Bar */}
       <div className="mb-4">
-        <div className="relative max-w-md">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search employees by ID, name, department, designation..."
-            className="w-full bg-background pl-9 pr-3 h-9 rounded-md text-sm outline-none focus:ring-2 focus:ring-ring border border-border"
-          />
-        </div>
+        <FilterBar
+          fields={filterFields}
+          filters={filters}
+          onChange={setFilters}
+        />
       </div>
 
-      {/* View Mode Toggle */}
       {viewMode === "table" ? (
         <TableView
           columns={employeeColumns}
@@ -559,19 +650,15 @@ const employeePermissions = getPermissions(
           renderCard={renderEmployeeCard}
           loading={isLoading}
           emptyMessage="No employees found"
-          emptyAction={
-            {
-              label: "Add Employee",
-              onClick: openAddModal,
-            }
-            || undefined
-          }
+          emptyAction={{
+            label: "Add Employee",
+            onClick: openAddModal,
+          }}
           columns={4}
           gap={4}
         />
       )}
 
-      {/* Selection Info Bar */}
       {selectedRows.size > 0 && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
           <div className="bg-card border border-border rounded-lg shadow-lg px-4 py-2 flex items-center gap-3">
@@ -594,14 +681,38 @@ const employeePermissions = getPermissions(
         </div>
       )}
 
-      {/* Employee Form Modal */}
-      {(modalOpen && (editingEmployee? employeePermissions.update: employeePermissions.create)) && (
+      {selectedForPromotion && (
+        <PromotionModal
+          employee={selectedForPromotion}
+          isOpen={promotionModalOpen}
+          onClose={() => {
+            setPromotionModalOpen(false);
+            setSelectedForPromotion(null);
+          }}
+          onSuccess={() => {}}
+          formatCurrency={formatCurrency}
+        />
+      )}
+
+      {(modalOpen && (editingEmployee ? employeePermissions.update : employeePermissions.create)) && (
         <EmployeeForm
-          initialData={editingEmployee}
+          initialData={editingEmployee ? editingEmployee : storedPrefillData || undefined}
           onSubmit={handleSaveEmployee}
           onCancel={() => {
             setModalOpen(false);
             setEditingEmployee(null);
+            setStoredPrefillData(null);
+          }}
+        />
+      )}
+
+      {selectedEmployeeForStatus && (
+        <EmployeeStatusModal
+          open={statusModalOpen}
+          onOpenChange={setStatusModalOpen}
+          employee={selectedEmployeeForStatus}
+          onSuccess={() => {
+            setSelectedEmployeeForStatus(null);
           }}
         />
       )}

@@ -26,9 +26,9 @@ export interface StockByWarehouse {
 export interface ProductVariant {
   id: string;
   sku: string;
+  variant_title: string;
   barcode: string;
-  qr_code: string;
-  buying_price: number;
+  buying_price?: number;
   selling_price: number;
   min_stock_level: number;
   max_stock_level: number;
@@ -69,13 +69,11 @@ interface PaginatedResponse<T> {
 
 // Payload for create/update – now includes optional id and correct stock handling
 export interface ProductVariantPayload {
-  id?: string;                      // ← ADDED: required for updates
+  id?: string;
   sku: string;
+  variantTitle?: string;
   barcode?: string;
-  qrCode?: string;
-  buyingPrice: number;
   sellingPrice: number;
-  stock?: number;                   // only for new variants or absolute change
   minStockLevel?: number;
   maxStockLevel?: number;
   attributes?: Array<{ key: string; value: string }>;

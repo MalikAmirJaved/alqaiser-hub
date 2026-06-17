@@ -7,7 +7,7 @@ import { Modal, ModalContent, ModalHeader, ModalFooter } from "@/components/ui/m
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 export default function BudgetFormModal({ open, onClose, initialData, selectedYear, onSuccess }) {
   const [accountId, setAccountId] = useState("");
@@ -70,55 +70,53 @@ export default function BudgetFormModal({ open, onClose, initialData, selectedYe
         <div className="space-y-4 py-4">
           <div>
             <Label>Account</Label>
-            <Select value={accountId} onValueChange={setAccountId}>
-              <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
-              <SelectContent>
-                {accounts
-                  ?.filter((acc) => ["EXPENSE", "INCOME"].includes(acc.account_type))
-                  .map((acc) => (
-                    <SelectItem key={acc.id} value={acc.id}>
-                      {acc.code} - {acc.name} ({acc.account_type})
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={accountId}
+              onChange={setAccountId}
+              options={(accounts || [])
+                .filter((acc) => ["EXPENSE", "INCOME"].includes(acc.account_type))
+                .map((acc) => ({ value: acc.id, label: `${acc.code} - ${acc.name} (${acc.account_type})` }))}
+              placeholder="Select account"
+            />
           </div>
           <div>
             <Label>Period Type</Label>
-            <Select value={periodType} onValueChange={(v: any) => setPeriodType(v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="YEARLY">Yearly</SelectItem>
-                <SelectItem value="QUARTERLY">Quarterly</SelectItem>
-                <SelectItem value="MONTHLY">Monthly</SelectItem>
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={periodType}
+              onChange={(v: any) => setPeriodType(v)}
+              options={[
+                { value: "YEARLY", label: "Yearly" },
+                { value: "QUARTERLY", label: "Quarterly" },
+                { value: "MONTHLY", label: "Monthly" },
+              ]}
+              placeholder="Select period"
+            />
           </div>
           {periodType === "MONTHLY" && (
             <div>
               <Label>Month</Label>
-              <Select value={month?.toString()} onValueChange={(v) => setMonth(parseInt(v))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                    <SelectItem key={m} value={m.toString()}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={month?.toString() || ""}
+                onChange={(v) => setMonth(parseInt(v))}
+                options={Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))}
+                placeholder="Select month"
+              />
             </div>
           )}
           {periodType === "QUARTERLY" && (
             <div>
               <Label>Quarter</Label>
-              <Select value={quarter?.toString()} onValueChange={(v) => setQuarter(parseInt(v))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">Q1</SelectItem>
-                  <SelectItem value="2">Q2</SelectItem>
-                  <SelectItem value="3">Q3</SelectItem>
-                  <SelectItem value="4">Q4</SelectItem>
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={quarter?.toString() || ""}
+                onChange={(v) => setQuarter(parseInt(v))}
+                options={[
+                  { value: "1", label: "Q1" },
+                  { value: "2", label: "Q2" },
+                  { value: "3", label: "Q3" },
+                  { value: "4", label: "Q4" },
+                ]}
+                placeholder="Select quarter"
+              />
             </div>
           )}
           <div>

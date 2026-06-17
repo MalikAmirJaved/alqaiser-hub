@@ -39,6 +39,7 @@ interface PaginatedResponse<T> {
 }
 
 interface AuditFilters {
+  search?: string;
   entity_type?: string;
   action?: string;
   user_id?: number;

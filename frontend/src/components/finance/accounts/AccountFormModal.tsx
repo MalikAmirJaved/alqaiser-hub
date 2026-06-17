@@ -3,8 +3,10 @@
 
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { X } from "lucide-react";
-import { useCreateAccount, useUpdateAccount,accountTypeLabels, type Account, useAccounts } from "@/hooks/finance/useAccounts";
+import { X, RotateCw } from "lucide-react";
+import { useCreateAccount, useUpdateAccount, accountTypeLabels, type Account, useAccounts } from "@/hooks/finance/useAccounts";
+import { useAutoCode } from "@/hooks/useAutoCode";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 interface AccountFormData {
   code: string;
@@ -44,6 +46,7 @@ export default function AccountFormModal({ open, onClose, initialData, onSuccess
   const createAccount = useCreateAccount();
   const updateAccount = useUpdateAccount();
   const { data: accounts } = useAccounts();
+  const { generateCode, validateCode } = useAutoCode("account");
   const selectedType = watch("account_type");
 
   // Filter parent accounts: only show accounts that can be parents (exclude current account in edit mode)
@@ -71,8 +74,9 @@ export default function AccountFormModal({ open, onClose, initialData, onSuccess
         is_active: true,
         description: "",
       });
+      generateCode().then(code => setValue("code", code)).catch(() => {});
     }
-  }, [initialData, setValue, reset]);
+  }, [initialData, setValue, reset, open]);
 
   const onSubmit = async (data: AccountFormData) => {
     const submitData = {
@@ -110,11 +114,22 @@ export default function AccountFormModal({ open, onClose, initialData, onSuccess
         <form onSubmit={handleSubmit(onSubmit)} className="p-4 space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">Code *</label>
-            <input
-              {...register("code", { required: "Code is required" })}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-              placeholder="e.g., 1010"
-            />
+            <div className="flex gap-2">
+              <input
+                {...register("code", { required: "Code is required" })}
+                onBlur={(e) => validateCode(e.target.value)}
+                className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm font-mono"
+                placeholder="e.g., 1010"
+              />
+              <button
+                type="button"
+                onClick={() => generateCode().then(code => setValue("code", code)).catch(() => {})}
+                className="h-9 w-9 flex items-center justify-center rounded-md border border-border hover:bg-muted transition flex-shrink-0"
+                title="Generate new code"
+              >
+                <RotateCw className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           <div>
@@ -128,31 +143,28 @@ export default function AccountFormModal({ open, onClose, initialData, onSuccess
 
           <div>
             <label className="block text-sm font-medium mb-1">Type *</label>
-            <select
-              {...register("account_type", { required: "Type is required" })}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-            >
-              {accountTypeOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={watch("account_type") || "ASSET"}
+              onChange={(val) => setValue("account_type", val as any)}
+              options={accountTypeOptions}
+              placeholder="Select type"
+            />
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-1">Parent Account</label>
-            <select
-              {...register("parent")}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm"
-            >
-              <option value="">None (Root Account)</option>
-              {parentOptions?.map((acc) => (
-                <option key={acc.id} value={acc.id}>
-                  {acc.code} - {acc.name} ({accountTypeLabels[acc.account_type]})
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={watch("parent") || ""}
+              onChange={(val) => setValue("parent", val || null)}
+              options={[
+                { value: "", label: "None (Root Account)" },
+                ...(parentOptions || []).map((acc) => ({
+                  value: acc.id,
+                  label: `${acc.code} - ${acc.name} (${accountTypeLabels[acc.account_type]})`,
+                })),
+              ]}
+              placeholder="None (Root Account)"
+            />
             <p className="text-xs text-muted-foreground mt-1">Select a parent account to create hierarchy</p>
           </div>
 

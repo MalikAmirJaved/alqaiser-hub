@@ -1,3 +1,4 @@
+from .attribute import AttributeViewSet
 from .category import CategoryViewSet
 from .brand import BrandViewSet
 from .warehouse import WarehouseViewSet
@@ -16,7 +17,7 @@ from .alert import AlertViewSet
 from .barcode import BarcodeViewSet
 
 __all__ = [
-    "CategoryViewSet", "BrandViewSet", "WarehouseViewSet",
+    "AttributeViewSet", "CategoryViewSet", "BrandViewSet", "WarehouseViewSet",
     "BaseSupplierViewSet", "SupplierViewSet","VendorViewSet","ProductViewSet","StockManagementViewSet",
     "StockTransferViewSet","PurchaseOrderViewSet", "GoodsReceiptViewSet",
      "CustomerViewSet", "SalesOrderViewSet",

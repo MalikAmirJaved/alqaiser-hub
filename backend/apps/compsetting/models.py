@@ -1,8 +1,7 @@
+# apps/compsetting/models.py
 import uuid
 from django.db import models
-from django.conf import settings
-from apps.organization.models import Company, Branch
-from django.conf import settings as django_settings  # Add this at the top of the file
+from django.conf import settings as django_settings  # Rename to avoid conflict
 
 
 class TimeStampedModel(models.Model):
@@ -28,44 +27,29 @@ class CompanySettings(TimeStampedModel):
     id = models.BigAutoField(primary_key=True)
     _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 
-    # Company & Branch relationships
     company = models.OneToOneField(
-        Company,
+        'organization.Company',
         on_delete=models.CASCADE,
         related_name='settings'
     )
     branch = models.ForeignKey(
-        Branch,
+        'organization.Branch',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='settings'
     )
 
-    # Financial
     currency = models.CharField(max_length=10, default="USD")
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
     tax_id = models.CharField(max_length=100, blank=True, null=True)
-    
-    # Time & Location
     timezone = models.CharField(max_length=50, default="UTC")
-
     allow_carry_forward = models.BooleanField(default=False)
     max_carry_forward_days = models.PositiveIntegerField(default=0)
-    
-    # Working Hours
     default_start_time = models.TimeField(default="09:00")
     default_end_time = models.TimeField(default="18:00")
-    working_hours_per_day = models.DecimalField(
-        max_digits=4, 
-        decimal_places=2, 
-        default=8.00
-    )
+    working_hours_per_day = models.DecimalField(max_digits=4, decimal_places=2, default=8.00)
     
-    # Status
-    is_setup_completed = models.BooleanField(default=False)
-    
-    # Audit
     created_by = models.ForeignKey(
         django_settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -87,7 +71,6 @@ class CompanySettings(TimeStampedModel):
         indexes = [
             models.Index(fields=['company', 'is_deleted']),
             models.Index(fields=['branch']),
-            models.Index(fields=['is_setup_completed']),
         ]
 
     def __str__(self):
@@ -99,18 +82,18 @@ class WorkingDay(TimeStampedModel):
     id = models.BigAutoField(primary_key=True)
     _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     
-    settings = models.ForeignKey(
+    company_settings = models.ForeignKey(  # Renamed from 'settings' to 'company_settings'
         CompanySettings,
         on_delete=models.CASCADE,
         related_name='working_days'
     )
     company = models.ForeignKey(
-        Company,
+        'organization.Company',
         on_delete=models.CASCADE,
         related_name='working_days'
     )
     branch = models.ForeignKey(
-        Branch,
+        'organization.Branch',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -133,7 +116,6 @@ class WorkingDay(TimeStampedModel):
     end_time = models.TimeField(default="18:00")
     is_half_day = models.BooleanField(default=False)
     
-    # Audit
     created_by = models.ForeignKey(
         django_settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -150,10 +132,10 @@ class WorkingDay(TimeStampedModel):
     )
     
     class Meta:
-        unique_together = [('settings', 'day')]
+        unique_together = [('company_settings', 'day')]
         ordering = ['day']
         indexes = [
-            models.Index(fields=['settings', 'is_working']),
+            models.Index(fields=['company_settings', 'is_working']),
             models.Index(fields=['company', 'is_deleted']),
         ]
         verbose_name = "Working Day"
@@ -168,18 +150,18 @@ class PublicHoliday(TimeStampedModel):
     id = models.BigAutoField(primary_key=True)
     _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     
-    settings = models.ForeignKey(
+    company_settings = models.ForeignKey(  # Renamed from 'settings' to 'company_settings'
         CompanySettings,
         on_delete=models.CASCADE,
         related_name='public_holidays'
     )
     company = models.ForeignKey(
-        Company,
+        'organization.Company',
         on_delete=models.CASCADE,
         related_name='public_holidays'
     )
     branch = models.ForeignKey(
-        Branch,
+        'organization.Branch',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -203,7 +185,6 @@ class PublicHoliday(TimeStampedModel):
         default='NATIONAL'
     )
     
-    # Audit
     created_by = models.ForeignKey(
         django_settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -220,10 +201,10 @@ class PublicHoliday(TimeStampedModel):
     )
     
     class Meta:
-        unique_together = [('settings', 'date', 'name')]
+        unique_together = [('company_settings', 'date', 'name')]
         ordering = ['date']
         indexes = [
-            models.Index(fields=['settings', 'date']),
+            models.Index(fields=['company_settings', 'date']),
             models.Index(fields=['company', 'date']),
             models.Index(fields=['is_deleted', 'date']),
         ]
@@ -239,13 +220,13 @@ class CompanySettingHistory(TimeStampedModel):
     id = models.BigAutoField(primary_key=True)
     _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     
-    settings = models.ForeignKey(
+    company_settings = models.ForeignKey(  # Renamed from 'settings' to 'company_settings'
         CompanySettings,
         on_delete=models.CASCADE,
         related_name='history'
     )
     company = models.ForeignKey(
-        Company,
+        'organization.Company',
         on_delete=models.CASCADE,
         related_name='settings_history'
     )
@@ -266,11 +247,12 @@ class CompanySettingHistory(TimeStampedModel):
     class Meta:
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['settings', '-created_at']),
+            models.Index(fields=['company_settings', '-created_at']),
             models.Index(fields=['company', 'field_name']),
         ]
         verbose_name = "Setting History"
         verbose_name_plural = "Setting Histories"
+
 
 class Designation(TimeStampedModel):
     """Employee designations / job titles"""
@@ -278,50 +260,36 @@ class Designation(TimeStampedModel):
     id = models.BigAutoField(primary_key=True)
     _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 
-    # Relations
-    settings = models.ForeignKey(
+    company_settings = models.ForeignKey(  # Renamed from 'settings' to 'company_settings'
         CompanySettings,
         on_delete=models.CASCADE,
         related_name='designations'
     )
-
     company = models.ForeignKey(
-        Company,
+        'organization.Company',
         on_delete=models.CASCADE,
         related_name='designations'
     )
-
     branch = models.ForeignKey(
-        Branch,
+        'organization.Branch',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='designations'
     )
 
-    # Core Fields
     name = models.CharField(max_length=150)
-
-    department = models.CharField(
-        max_length=150,
+    # Store FK to Department instead of department name string. Use NULL to represent 'ALL' departments.
+    department = models.ForeignKey(
+        'organization.Department',
+        on_delete=models.SET_NULL,
         null=True,
-        blank=True
+        blank=True,
+        related_name='designations'
     )
-
-    pay_grade = models.CharField(
-        max_length=50,
-        null=True,
-        blank=True
-    )
-
-    description = models.TextField(
-        null=True,
-        blank=True
-    )
-
+    description = models.TextField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
 
-    # Audit
     created_by = models.ForeignKey(
         django_settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -329,7 +297,6 @@ class Designation(TimeStampedModel):
         blank=True,
         related_name='created_designations'
     )
-
     updated_by = models.ForeignKey(
         django_settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -341,18 +308,14 @@ class Designation(TimeStampedModel):
     class Meta:
         verbose_name = "Designation"
         verbose_name_plural = "Designations"
-
-        ordering = ['pay_grade', 'name']
-
+        ordering = ['name']
         unique_together = [('company', 'name')]
-
         indexes = [
             models.Index(fields=['company', 'is_deleted']),
             models.Index(fields=['branch']),
             models.Index(fields=['department']),
-            models.Index(fields=['pay_grade']),
             models.Index(fields=['is_active']),
         ]
 
     def __str__(self):
-        return f"{self.name} - {self.department or 'General'}"
+        return f"{self.name} - {self.department.name if self.department else 'General'}"

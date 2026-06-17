@@ -1,16 +1,17 @@
-// src/app/(dashboard)/hr/exit-management/page.tsx
+// src/app/(app)/hr/exit/page.tsx
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
-import StatCard from "@/components/cards/StatCard";
 import SearchableSelect, { SearchableSelectOption } from "@/components/reuseable/SearchableSelect";
 import { DatePicker } from "@/components/reuseable/DatePicker";
 import { Checkbox } from "@/components/reuseable/Checkbox";
 import ConfirmationModal, { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import {
   Search, Plus, RefreshCw, Trash2, Pencil, LogOut, Briefcase,
-  AlertTriangle, Clock, CheckCircle2, X, FileText, ShieldCheck
+  AlertTriangle, Clock, CheckCircle2, X, FileText, ShieldCheck,
+  Eye, Loader2, RotateCcw, DollarSign
 } from "lucide-react";
 import {
   useExitRecords,
@@ -19,47 +20,63 @@ import {
   useUpdateExitRecord,
   useDeleteExitRecord,
   useBulkAction,
+  useClearExitDues,
+  useFinalSettlementPreview,
+  useExitEmployeeAssets,
+  useReturnExitAsset,
   ExitRecord,
-  ExitChecklistItem
+  ExitEmployeeAsset,
+  FinalSettlementPreview
 } from "@/hooks/useExitManagement";
-import { useEmployees } from "@/hooks/useEmployees";
+import { useActiveEmployees } from "@/hooks/useEmployees";
 import { toast } from "sonner";
 import { useApi } from "@/hooks/useApi";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 const EXIT_REASONS: SearchableSelectOption[] = [
-  { value: "RESIGNATION", label: "👋 Resignation" },
-  { value: "TERMINATION", label: "❌ Termination" },
-  { value: "CONTRACT_END", label: "📄 Contract End" },
-  { value: "RETIREMENT", label: "👴 Retirement" },
-  { value: "OTHER", label: "📝 Other" },
+  { value: "RESIGNATION", label: "Resignation" },
+  { value: "TERMINATION", label: "Termination" },
+  { value: "CONTRACT_END", label: "Contract End" },
+  { value: "RETIREMENT", label: "Retirement" },
+  { value: "OTHER", label: "Other" },
 ];
 
-const CLEARANCE_STATUSES: SearchableSelectOption[] = [
-  { value: "PENDING", label: "Pending" },
-  { value: "IN_PROGRESS", label: "In Progress" },
-  { value: "APPROVED", label: "Approved" },
-  { value: "COMPLETED", label: "Completed" },
+const STATUS_STYLES: Record<string, string> = {
+  PENDING: "bg-muted text-muted-foreground",
+  CONFIRMED: "bg-success/15 text-success",
+  REJECTED: "bg-destructive/15 text-destructive",
+};
+
+const CONDITION_OPTIONS: SearchableSelectOption[] = [
+  { value: "GOOD", label: "Good" },
+  { value: "FAIR", label: "Fair" },
+  { value: "POOR", label: "Poor" },
+  { value: "DAMAGED", label: "Damaged" },
 ];
 
 export default function ExitManagementPage() {
+  const formatCurrency = useFormatCurrency();
+  const router = useRouter();
   const permissions = useFeaturePermissions("HR", "exit");
   const api = useApi();
-  const { data: employees = [] } = useEmployees();
+  const { data: employees = [] } = useActiveEmployees();
   const confirmationModal = useConfirmationModal();
   const [query, setQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterReason, setFilterReason] = useState("");
-  const [filterClearance, setFilterClearance] = useState("");
   const [selectedRecords, setSelectedRecords] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<ExitRecord | null>(null);
-  const [checklistModal, setChecklistModal] = useState(false);
-  const [activeRecord, setActiveRecord] = useState<ExitRecord | null>(null);
-  const [checklistItems, setChecklistItems] = useState<ExitChecklistItem[]>([]);
+  const [settlementDialog, setSettlementDialog] = useState<{ recordId: string; status: string } | null>(null);
+  const [settlementReason, setSettlementReason] = useState("");
+
+  // Asset return modal state
+  const [assetReturnExitId, setAssetReturnExitId] = useState<string | null>(null);
+  const { data: assets = [], isLoading: assetsLoading } = useExitEmployeeAssets(assetReturnExitId);
+  const returnAssetMutation = useReturnExitAsset();
 
   const { data: recordsData, isLoading, refetch } = useExitRecords();
   const { data: stats } = useExitStats();
@@ -67,45 +84,31 @@ export default function ExitManagementPage() {
   const updateMutation = useUpdateExitRecord();
   const deleteMutation = useDeleteExitRecord();
   const bulkActionMutation = useBulkAction();
+  const clearDuesMutation = useClearExitDues();
 
   const records = recordsData?.data || [];
-
-  const loadChecklist = useCallback(async (recordId: string) => {
-    try {
-      const items = await api<ExitChecklistItem[]>(`/api/hr/exits/checklist/?exit_record_id=${recordId}`);
-      setChecklistItems(items);
-    } catch (error) {
-      toast.error("Failed to load checklist");
-    }
-  }, [api]);
 
   const filteredRecords = useMemo(() => {
     return records.filter(r => {
       const matchesSearch = query === "" ||
-        r.employee_name.toLowerCase().includes(query.toLowerCase()) ||
-        r.department.toLowerCase().includes(query.toLowerCase()) ||
-        (r.designation?.toLowerCase() || "").includes(query.toLowerCase());
+        r.employee_name.toLowerCase().includes(query.toLowerCase());
       const matchesStatus = filterStatus === "" || r.status_value === filterStatus;
       const matchesReason = filterReason === "" || r.reason_value === filterReason;
-      const matchesClearance = filterClearance === "" || r.clearance_status_value === filterClearance;
-      return matchesSearch && matchesStatus && matchesReason && matchesClearance;
+      return matchesSearch && matchesStatus && matchesReason;
     });
-  }, [records, query, filterStatus, filterReason, filterClearance]);
+  }, [records, query, filterStatus, filterReason]);
 
   const handleSave = async (data: Partial<ExitRecord>) => {
     try {
       if (editingRecord) {
         await updateMutation.mutateAsync({ id: editingRecord.id, ...data });
-        toast.success("Exit record updated");
       } else {
         await createMutation.mutateAsync(data);
-        toast.success("Exit record created");
       }
       await refetch();
       setModalOpen(false);
       setEditingRecord(null);
     } catch (error: any) {
-      toast.error(error.message || "Failed to save");
     }
   };
 
@@ -117,7 +120,6 @@ export default function ExitManagementPage() {
       confirmText: "Delete",
       onConfirm: async () => {
         await deleteMutation.mutateAsync(id);
-        toast.success("Deleted");
         await refetch();
       },
     });
@@ -136,25 +138,18 @@ export default function ExitManagementPage() {
       onConfirm: async () => {
         await bulkActionMutation.mutateAsync({ action, ids: Array.from(selectedRecords) });
         setSelectedRecords(new Set());
-        toast.success(`${action} completed`);
         await refetch();
       },
     });
   };
 
-  const handleUpdateChecklistItem = async (itemId: string, status: string) => {
+  const handleUpdateStatus = async (recordId: string, status: string, reason: string) => {
     try {
-      await api("/api/hr/exits/checklist/", {
-        method: "PATCH",
-        body: JSON.stringify({ id: itemId, status }),
-      });
-      if (activeRecord) {
-        await loadChecklist(activeRecord.id);
-        await refetch();
-      }
-      toast.success("Checklist updated");
+      const payload: any = { id: recordId, status };
+      if (reason) payload.settlement_notes = reason;
+      await updateMutation.mutateAsync(payload);
+      await refetch();
     } catch (error: any) {
-      toast.error(error.message);
     }
   };
 
@@ -170,7 +165,7 @@ export default function ExitManagementPage() {
     <div className="space-y-5">
       <PageHeader
         title="Exit Management"
-        subtitle="Track employee offboarding, clearances, and final settlements"
+        subtitle="Track employee offboarding and clearances"
         actions={
           <div className="flex items-center gap-2">
             <button
@@ -191,40 +186,16 @@ export default function ExitManagementPage() {
         }
       />
 
-{stats && (
-  <StatsCards
-    stats={[
-      {
-        id: "total-exits",
-        label: "Total Exits",
-        value: stats.total_exits,
-      },
-      {
-        id: "active-exits",
-        label: "Active Exits",
-        value: stats.active_exits,
-      },
-      {
-        id: "pending-clearance",
-        label: "Pending Clearance",
-        value: stats.pending_clearance,
-        valueClassName: "text-warning",
-      },
-      {
-        id: "in-progress",
-        label: "In Progress",
-        value: stats.in_progress_clearance,
-        valueClassName: "text-destructive",
-      },
-      {
-        id: "completed",
-        label: "Completed",
-        value: stats.completed_clearance,
-        valueClassName: "text-success",
-      },
-    ]}
-  />
-)}
+      {stats && (
+        <StatsCards
+          stats={[
+            { id: "total-exits", label: "Total Exits", value: stats.total_exits },
+            { id: "pending-exits", label: "Pending", value: stats.pending_exits, valueClassName: "text-warning" },
+            { id: "confirmed-exits", label: "Confirmed", value: stats.confirmed_exits, valueClassName: "text-success" },
+            { id: "rejected-exits", label: "Rejected", value: stats.rejected_exits, valueClassName: "text-destructive" },
+          ]}
+        />
+      )}
 
       <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
         <div className="p-3 border-b border-border flex flex-col sm:flex-row gap-3">
@@ -233,7 +204,7 @@ export default function ExitManagementPage() {
             <input
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Search by employee name, department..."
+              placeholder="Search by employee name..."
               className="w-full bg-muted/40 pl-9 pr-3 h-9 rounded-md text-sm outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
@@ -241,16 +212,13 @@ export default function ExitManagementPage() {
             <SearchableSelect
               value={filterStatus}
               onChange={setFilterStatus}
-              options={[{ value: "ACTIVE", label: "Active" }, { value: "CLOSED", label: "Closed" }]}
+              options={[
+                { value: "PENDING", label: "Pending" },
+                { value: "CONFIRMED", label: "Confirmed" },
+                { value: "REJECTED", label: "Rejected" },
+              ]}
               placeholder="Status"
               className="w-32"
-            />
-            <SearchableSelect
-              value={filterClearance}
-              onChange={setFilterClearance}
-              options={CLEARANCE_STATUSES}
-              placeholder="Clearance"
-              className="w-40"
             />
             <SearchableSelect
               value={filterReason}
@@ -269,8 +237,13 @@ export default function ExitManagementPage() {
               {selectedRecords.size > 0 && (
                 <>
                   {permissions.update && (
-                    <button onClick={() => handleBulkAction("CLOSE")} className="px-3 h-9 rounded-md border border-border text-sm text-success">
-                      Close
+                    <button onClick={() => handleBulkAction("CONFIRM")} className="px-3 h-9 rounded-md border border-border text-sm text-success">
+                      Confirm
+                    </button>
+                  )}
+                  {permissions.update && (
+                    <button onClick={() => handleBulkAction("REJECT")} className="px-3 h-9 rounded-md border border-border text-sm text-destructive">
+                      Reject
                     </button>
                   )}
                   {permissions.delete && (
@@ -300,12 +273,11 @@ export default function ExitManagementPage() {
                     />
                   </th>
                   <th className="text-left px-4 py-2.5">Employee</th>
-                  <th className="text-left px-4 py-2.5">Department</th>
                   <th className="text-left px-4 py-2.5">Exit / LWD</th>
                   <th className="text-left px-4 py-2.5">Reason</th>
-                  <th className="text-left px-4 py-2.5">Clearance</th>
-                  <th className="text-left px-4 py-2.5">Progress</th>
+                  <th className="text-left px-4 py-2.5">Status</th>
                   <th className="text-left px-4 py-2.5">Settlement</th>
+                  <th className="text-left px-4 py-2.5">Notes</th>
                   <th className="px-4 py-2.5 text-right">Actions</th>
                 </tr>
               </thead>
@@ -325,9 +297,7 @@ export default function ExitManagementPage() {
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="font-medium">{r.employee_name}</div>
-                      <div className="text-xs text-muted-foreground">{r.designation || "—"}</div>
                     </td>
-                    <td className="px-4 py-2.5 text-xs">{r.department}</td>
                     <td className="px-4 py-2.5">
                       <div className="text-xs">{r.exit_date || "—"}</div>
                       <div className="text-[10px] text-muted-foreground">LWD: {r.last_working_day || "—"}</div>
@@ -338,38 +308,77 @@ export default function ExitManagementPage() {
                       </span>
                     </td>
                     <td className="px-4 py-2.5">
-                      <span className="inline-flex px-2 py-0.5 text-[11px] rounded-full border">
-                        {r.clearance_status}
-                      </span>
-                      <div className="flex gap-1 mt-1">
-                        <ShieldCheck className={`w-3 h-3 ${r.clearance_hr ? "text-success" : "text-muted-foreground/40"}`} />
-                        <ShieldCheck className={`w-3 h-3 ${r.clearance_it ? "text-success" : "text-muted-foreground/40"}`} />
-                        <ShieldCheck className={`w-3 h-3 ${r.clearance_finance ? "text-success" : "text-muted-foreground/40"}`} />
-                        <ShieldCheck className={`w-3 h-3 ${r.clearance_admin ? "text-success" : "text-muted-foreground/40"}`} />
-                      </div>
+                      {permissions.update && r.status_value === "PENDING" ? (
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => { setSettlementDialog({ recordId: r.id, status: "CONFIRMED" }); setSettlementReason(""); }}
+                            className="text-[11px] font-medium rounded-full px-2 py-1 bg-success/15 text-success hover:bg-success/25"
+                          >
+                            Confirm
+                          </button>
+                          <button
+                            onClick={() => { setSettlementDialog({ recordId: r.id, status: "REJECTED" }); setSettlementReason(""); }}
+                            className="text-[11px] font-medium rounded-full px-2 py-1 bg-destructive/15 text-destructive hover:bg-destructive/25"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full font-medium ${STATUS_STYLES[r.status_value] || 'bg-muted text-muted-foreground'}`}>
+                          {r.status}
+                        </span>
+                      )}
                     </td>
-                    <td className="px-4 py-2.5">
-                      <div className="w-20 bg-muted rounded-full h-1.5">
-                        <div className="bg-primary h-1.5 rounded-full" style={{ width: `${r.clearance_progress}%` }} />
-                      </div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">{r.clearance_progress}%</div>
+                    <td className="px-4 py-2.5 text-xs font-mono">
+                      {r.final_settlement < 0 ? (
+                        <span className="text-destructive font-bold" title="Employee owes company">
+                          -{formatCurrency(Math.abs(r.final_settlement))}
+                        </span>
+                      ) : (
+                        formatCurrency(r.final_settlement)
+                      )}
                     </td>
-                    <td className="px-4 py-2.5 text-xs font-medium">
-                      {r.final_settlement ? `${formatCurrency(r.final_settlement)}` : "—"}
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground max-w-[200px] truncate">
+                      {r.settlement_notes || "—"}
                     </td>
                     <td className="px-4 py-2.5 text-right whitespace-nowrap">
                       <div className="flex justify-end gap-1">
                         <button
-                          onClick={() => {
-                            setActiveRecord(r);
-                            setChecklistModal(true);
-                            loadChecklist(r.id);
-                          }}
+                          onClick={() => router.push(`/hr/exit/${r.id}`)}
                           className="p-1.5 rounded-md hover:bg-muted"
-                          title="Checklist"
+                          title="View Details"
                         >
-                          <FileText className="w-4 h-4" />
+                          <Eye className="w-4 h-4" />
                         </button>
+                        {r.status_value === "CONFIRMED" && (
+                          <button
+                            onClick={() => setAssetReturnExitId(r.id)}
+                            className="p-1.5 rounded-md hover:bg-muted text-primary"
+                            title="Return Assets"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
+                        )}
+                        {r.status_value === "CONFIRMED" && r.final_settlement < 0 && (
+                          <button
+                            onClick={() => {
+                              confirmationModal.confirm({
+                                title: "Clear Employee Dues",
+                                message: `This will record that the employee has returned ${formatCurrency(Math.abs(r.final_settlement))} to the company and create a finance receipt. Continue?`,
+                                type: "warning",
+                                confirmText: "Clear Dues",
+                                onConfirm: async () => {
+                                  await clearDuesMutation.mutateAsync(r.id);
+                                  await refetch();
+                                },
+                              });
+                            }}
+                            className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
+                            title="Clear Dues (Employee Owes)"
+                          >
+                            <DollarSign className="w-4 h-4" />
+                          </button>
+                        )}
                         {permissions.update && (
                           <button onClick={() => { setEditingRecord(r); setModalOpen(true); }} className="p-1.5 rounded-md hover:bg-muted">
                             <Pencil className="w-4 h-4" />
@@ -386,7 +395,7 @@ export default function ExitManagementPage() {
                 ))}
                 {filteredRecords.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="text-center py-10 text-muted-foreground">No exit records found.</td>
+                    <td colSpan={7} className="text-center py-10 text-muted-foreground">No exit records found.</td>
                   </tr>
                 )}
               </tbody>
@@ -395,13 +404,13 @@ export default function ExitManagementPage() {
         )}
 
         {viewMode === "kanban" && (
-          <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {["PENDING", "IN_PROGRESS", "APPROVED", "COMPLETED"].map(status => {
-              const statusRecords = filteredRecords.filter(r => r.clearance_status_value === status);
+          <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+            {["PENDING", "CONFIRMED", "REJECTED"].map(status => {
+              const statusRecords = filteredRecords.filter(r => r.status_value === status);
               return (
                 <div key={status} className="bg-muted/20 rounded-lg p-3">
                   <div className="flex justify-between mb-3">
-                    <h3 className="text-sm font-semibold">{status.replace("_", " ")}</h3>
+                    <h3 className="text-sm font-semibold">{status}</h3>
                     <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{statusRecords.length}</span>
                   </div>
                   <div className="space-y-2">
@@ -409,14 +418,13 @@ export default function ExitManagementPage() {
                       <div
                         key={r.id}
                         className="bg-card border border-border rounded-lg p-3 cursor-pointer hover:shadow-md"
-                        onClick={() => { if (permissions.update) { setEditingRecord(r); setModalOpen(true); } }}
+                        onClick={() => router.push(`/hr/exit/${r.id}`)}
                       >
                         <div className="font-medium text-sm">{r.employee_name}</div>
-                        <div className="text-xs text-muted-foreground">{r.department}</div>
                         <div className="text-xs mt-1">{r.reason}</div>
                         <div className="flex justify-between mt-2 text-xs">
                           <span>{r.exit_date}</span>
-                          <span>{formatCurrency(r.final_settlement)}</span>
+                          {r.settlement_notes && <span className="text-muted-foreground truncate ml-2">{r.settlement_notes}</span>}
                         </div>
                       </div>
                     ))}
@@ -437,18 +445,72 @@ export default function ExitManagementPage() {
         <ExitFormModal
           formatCurrency={formatCurrency}
           employees={employees}
+          exitRecords={records}
           initialData={editingRecord}
           onSubmit={handleSave}
-          onClose={() => setModalOpen(false)}
+          onClose={() => { setModalOpen(false); setEditingRecord(null); }}
         />
       )}
 
-      {checklistModal && activeRecord && (
-        <ChecklistModal
-          record={activeRecord}
-          items={checklistItems}
-          onUpdateItem={permissions.update ? handleUpdateChecklistItem : undefined}
-          onClose={() => setChecklistModal(false)}
+      {settlementDialog && (
+        <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4" onClick={() => setSettlementDialog(null)}>
+          <div className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h2 className="font-semibold">{settlementDialog.status === "CONFIRMED" ? "Confirm" : "Reject"} Exit</h2>
+              <button type="button" onClick={() => setSettlementDialog(null)} className="p-1.5 rounded-md hover:bg-muted">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-sm text-muted-foreground">
+                {settlementDialog.status === "CONFIRMED"
+                  ? "Confirming this exit will update the employee's employment status and lock the record."
+                  : "Rejecting this exit will keep the employee's status unchanged and lock the record."}
+              </p>
+              <label className="text-sm flex flex-col gap-1">
+                <span className="text-muted-foreground">Reason (optional)</span>
+                <textarea
+                  value={settlementReason}
+                  onChange={e => setSettlementReason(e.target.value)}
+                  className="bg-muted/40 border border-border rounded-md p-3 outline-none resize-none"
+                  rows={3}
+                  placeholder={`Enter reason for ${settlementDialog.status.toLowerCase()}...`}
+                />
+              </label>
+            </div>
+            <div className="p-4 border-t border-border flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSettlementDialog(null)}
+                className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleUpdateStatus(settlementDialog.recordId, settlementDialog.status, settlementReason);
+                  setSettlementDialog(null);
+                }}
+                className={`px-4 h-9 rounded-md text-sm text-white hover:opacity-90 ${
+                  settlementDialog.status === "CONFIRMED" ? "bg-success" : "bg-destructive"
+                }`}
+              >
+                {settlementDialog.status === "CONFIRMED" ? "Confirm Exit" : "Reject Exit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Asset Return Modal */}
+      {assetReturnExitId && (
+        <AssetReturnModal
+          exitId={assetReturnExitId}
+          assets={assets}
+          loading={assetsLoading}
+          returnMutation={returnAssetMutation}
+          onClose={() => { setAssetReturnExitId(null); refetch(); }}
         />
       )}
 
@@ -464,12 +526,14 @@ function ExitFormModal({
   formatCurrency,
   initialData,
   employees,
+  exitRecords,
   onSubmit,
   onClose
 }: {
   formatCurrency: (amount?: number, decimals?: number) => string;
   initialData: ExitRecord | null;
   employees: any[];
+  exitRecords: ExitRecord[];
   onSubmit: (d: any) => void;
   onClose: () => void;
 }) {
@@ -479,42 +543,78 @@ function ExitFormModal({
     last_working_day: initialData?.last_working_day || "",
     reason: initialData?.reason_value || "RESIGNATION",
     notice_served: initialData?.notice_served ?? true,
-    clearance_hr: initialData?.clearance_hr || false,
-    clearance_it: initialData?.clearance_it || false,
-    clearance_finance: initialData?.clearance_finance || false,
-    clearance_admin: initialData?.clearance_admin || false,
-    final_settlement: initialData?.final_settlement || 0,
     notes: initialData?.notes || "",
-    update_employee_status: true,
   });
 
-  const employeeOpts: SearchableSelectOption[] = employees
-    .filter((e: any) => e.employment_status === "ACTIVE")
+  const [settlementPreview, setSettlementPreview] = useState<number | null>(initialData?.final_settlement ?? null);
+  const [settlementDetail, setSettlementDetail] = useState<FinalSettlementPreview | null>(null);
+  const [calculating, setCalculating] = useState(false);
+  const finalSettlementMutation = useFinalSettlementPreview();
+
+  const isLocked = initialData?.status_value === "CONFIRMED" || initialData?.status_value === "REJECTED";
+  const isEditMode = !!initialData;
+
+  // ── Auto-fetch settlement when both employee + LWD are selected ──
+  useEffect(() => {
+    if (isLocked) return;
+    if (!formData.employee_id || !formData.last_working_day) return;
+    // In edit mode with existing settlement, skip auto-fetch (user can click button)
+    if (isEditMode && initialData?.final_settlement) return;
+    // Debounce: wait 300ms after both fields are set
+    const timer = setTimeout(() => {
+      handleCalculateSettlement();
+    }, 300);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.employee_id, formData.last_working_day]);
+
+  const blockedEmployeeIds = new Set(
+    exitRecords
+      .filter(r => r.status_value !== 'REJECTED')
+      .map(r => r.employee_id)
+  );
+  const availableEmployees = initialData
+    ? employees.filter(e => String(e.id) === initialData.employee_id || !blockedEmployeeIds.has(String(e.id)))
+    : employees.filter(e => !blockedEmployeeIds.has(String(e.id)));
+  const employeeOpts: SearchableSelectOption[] = availableEmployees
     .map((e: any) => ({
       value: String(e.id),
-      label: `${e.first_name} ${e.last_name || ""} (${e.department || "N/A"})`
+      label: `${e.first_name} ${e.last_name || ""} (${e.department_name || "N/A"})`
     }));
 
-  const handleEmployeeSelect = (empId: string) => {
-    const emp = employees.find((e: any) => String(e.id) === empId);
-    if (emp) {
-      setFormData(prev => ({
-        ...prev,
-        employee_id: empId,
-      }));
+  const selectedEmployee = employees.find((e: any) => String(e.id) === formData.employee_id);
+
+  const handleCalculateSettlement = async () => {
+    if (!formData.employee_id || !formData.last_working_day) {
+      toast.error("Select an employee and set a last working day first.");
+      return;
+    }
+    setCalculating(true);
+    try {
+      const result = await finalSettlementMutation.mutateAsync({
+        employee_id: formData.employee_id,
+        last_working_day: formData.last_working_day,
+      });
+      // Use net_settlement_raw (may be negative) so preview shows true amount
+      const raw = parseFloat(result.net_settlement_raw || result.net_settlement || result.net_salary || "0");
+      setSettlementPreview(raw);
+      setSettlementDetail(result);
+      toast.success("Settlement calculated");
+    } catch {
+      toast.error("Failed to calculate settlement");
+    } finally {
+      setCalculating(false);
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.employee_id || !formData.exit_date) {
-      toast.error("Employee and Exit Date are required.");
+    if (!formData.employee_id || !formData.exit_date || !formData.last_working_day || !formData.reason) {
+      toast.error("Employee, Exit Date, Last Working Day and reason are required.");
       return;
     }
-    onSubmit(formData);
+    onSubmit({ ...formData, final_settlement: settlementPreview ?? 0 });
   };
-
-  const selectedEmployee = employees.find((e: any) => String(e.id) === formData.employee_id);
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4 overflow-y-auto" onClick={onClose}>
@@ -526,14 +626,22 @@ function ExitFormModal({
           </button>
         </div>
 
+        {isLocked && (
+          <div className="mx-5 mt-4 px-4 py-2.5 rounded-lg bg-warning/10 border border-warning/30 text-sm flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-warning shrink-0" />
+            <span>This record is <strong>{initialData?.status === "Confirmed" ? "Confirmed" : "Rejected"}</strong> and cannot be edited.</span>
+          </div>
+        )}
+
         <div className="p-5 grid sm:grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto">
           <label className="text-sm flex flex-col gap-1 sm:col-span-2">
             <span className="text-muted-foreground">Employee *</span>
             <SearchableSelect
               value={formData.employee_id}
-              onChange={handleEmployeeSelect}
+              onChange={v => setFormData({ ...formData, employee_id: v })}
               options={employeeOpts}
               placeholder="Select Employee"
+              disabled={isLocked}
             />
           </label>
 
@@ -542,7 +650,7 @@ function ExitFormModal({
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground">Department</span>
                 <input
-                  value={selectedEmployee.department || ""}
+                  value={selectedEmployee.department_name || ""}
                   className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none"
                   readOnly
                 />
@@ -550,7 +658,7 @@ function ExitFormModal({
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground">Designation</span>
                 <input
-                  value={selectedEmployee.designation || ""}
+                  value={selectedEmployee.designation_name || ""}
                   className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none"
                   readOnly
                 />
@@ -565,6 +673,7 @@ function ExitFormModal({
               onChange={v => setFormData({ ...formData, reason: v })}
               options={EXIT_REASONS}
               placeholder="Select Reason"
+              disabled={isLocked}
             />
           </label>
 
@@ -573,6 +682,7 @@ function ExitFormModal({
             <DatePicker
               value={formData.exit_date}
               onChange={v => setFormData({ ...formData, exit_date: v || "" })}
+              disabled={isLocked}
             />
           </label>
 
@@ -581,52 +691,22 @@ function ExitFormModal({
             <DatePicker
               value={formData.last_working_day}
               onChange={v => setFormData({ ...formData, last_working_day: v || "" })}
+              disabled={isLocked}
             />
           </label>
 
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground">Notice Period Served?</span>
-            <select
+            <SearchableSelect
               value={formData.notice_served.toString()}
-              onChange={e => setFormData({ ...formData, notice_served: e.target.value === "true" })}
-              className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none"
-            >
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-            </select>
-          </label>
-
-          <div className="sm:col-span-2 bg-muted/20 p-3 rounded-lg border border-border">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Department Clearances</span>
-            <div className="grid grid-cols-2 gap-3 mt-2">
-              {[
-                { key: 'clearance_hr', label: 'HR' },
-                { key: 'clearance_it', label: 'IT' },
-                { key: 'clearance_finance', label: 'Finance' },
-                { key: 'clearance_admin', label: 'Admin' },
-              ].map(({ key, label }) => (
-                <Checkbox
-                  key={key}
-                  checked={formData[key as keyof typeof formData] as boolean}
-                  onChange={v => setFormData({ ...formData, [key]: v })}
-                  label={label}
-                />
-              ))}
-            </div>
-          </div>
-
-          <label className="text-sm flex flex-col gap-1 sm:col-span-2">
-            <span className="text-muted-foreground">Final Settlement Amount</span>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">{formatCurrency()}</span>
-              <input
-                type="number"
-                value={formData.final_settlement}
-                onChange={e => setFormData({ ...formData, final_settlement: Number(e.target.value) })}
-                className="bg-muted/40 border border-border rounded-md h-9 pl-10 pr-3 outline-none w-full"
-                placeholder="0.00"
-              />
-            </div>
+              onChange={val => setFormData({ ...formData, notice_served: val === "true" })}
+              options={[
+                { value: "true", label: "Yes" },
+                { value: "false", label: "No" },
+              ]}
+              placeholder="Select option"
+              disabled={isLocked}
+            />
           </label>
 
           <label className="text-sm flex flex-col gap-1 sm:col-span-2">
@@ -637,28 +717,101 @@ function ExitFormModal({
               onChange={e => setFormData({ ...formData, notes: e.target.value })}
               className="bg-muted/40 border border-border rounded-md p-3 outline-none"
               placeholder="Asset return details, final handover notes, etc."
+              disabled={isLocked}
             />
           </label>
 
-          {!initialData && (
-            <label className="sm:col-span-2">
-              <Checkbox
-                checked={formData.update_employee_status}
-                onChange={v => setFormData({ ...formData, update_employee_status: v })}
-                label="Update employee status"
-                description="Automatically update employee status to Resigned/Terminated"
-              />
-            </label>
+          {/* Settlement Calculation */}
+          {!isLocked && (
+            <div className="sm:col-span-2 border border-border rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium">Final Settlement</h4>
+                <button
+                  type="button"
+                  onClick={handleCalculateSettlement}
+                  disabled={calculating || !formData.employee_id || !formData.last_working_day}
+                  className="px-3 h-8 text-xs rounded-md bg-primary/10 text-primary hover:bg-primary/20 inline-flex items-center gap-1"
+                >
+                  {calculating && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {calculating ? "Calculating..." : "Calculate"}
+                </button>
+              </div>
+              {settlementPreview !== null && settlementDetail ? (
+                <div className="space-y-3">
+                  {/* Breakdown grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    <div className="bg-muted/30 rounded-lg p-2.5">
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Base Salary</div>
+                      <div className="text-sm font-semibold">{formatCurrency(parseFloat(settlementDetail.base_salary || "0"))}</div>
+                    </div>
+                    <div className="bg-muted/30 rounded-lg p-2.5">
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Compensation</div>
+                      <div className="text-sm font-semibold text-success">+{formatCurrency(parseFloat(settlementDetail.compensation || "0"))}</div>
+                    </div>
+                    <div className="bg-muted/30 rounded-lg p-2.5">
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Leave Deduction</div>
+                      <div className="text-sm font-semibold text-destructive">-{formatCurrency(parseFloat(settlementDetail.leave_deduction || "0"))}</div>
+                    </div>
+                    <div className="bg-muted/30 rounded-lg p-2.5">
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Loan Deduction</div>
+                      <div className="text-sm font-semibold text-destructive">-{formatCurrency(parseFloat(settlementDetail.loan_deduction || "0"))}</div>
+                    </div>
+                    <div className="bg-muted/30 rounded-lg p-2.5">
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Advance Deduction</div>
+                      <div className="text-sm font-semibold text-destructive">-{formatCurrency(parseFloat(settlementDetail.advance_deduction || "0"))}</div>
+                    </div>
+                    {settlementPreview >= 0 ? (
+                      <div className="bg-primary/5 border border-primary/20 rounded-lg p-2.5">
+                        <div className="text-[10px] text-primary uppercase tracking-wider font-medium">= Net Settlement</div>
+                        <div className="text-sm font-bold text-primary">{formatCurrency(settlementPreview)}</div>
+                      </div>
+                    ) : (
+                      <div className="bg-destructive/5 border border-destructive/30 rounded-lg p-2.5">
+                        <div className="text-[10px] text-destructive uppercase tracking-wider font-medium">= Net Settlement</div>
+                        <div className="text-sm font-bold text-destructive">-{formatCurrency(Math.abs(settlementPreview))}</div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Employee owes company card */}
+                  {settlementPreview < 0 && (
+                    <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 flex items-start gap-3">
+                      <AlertTriangle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+                      <div>
+                        <div className="text-sm font-semibold text-destructive">Employee Owes Company</div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          The deductions (leave + loan + advance) exceed the salary payable. 
+                          The employee must return{' '}
+                          <span className="font-bold text-destructive">{formatCurrency(Math.abs(settlementPreview))}</span> to the company.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                    <span>Daily Rate: {formatCurrency(parseFloat(settlementDetail.daily_rate || "0"), 2)}</span>
+                    <span className="text-muted-foreground/40">|</span>
+                    <span>Period: {settlementDetail.period_start} → {settlementDetail.period_end}</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Select an employee and set a last working day, then click Calculate.
+                </p>
+              )}
+            </div>
           )}
         </div>
 
         <div className="p-4 border-t border-border flex justify-end gap-2">
           <button type="button" onClick={onClose} className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted">
-            Cancel
+            {isLocked ? "Close" : "Cancel"}
           </button>
-          <button type="submit" className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90">
-            {initialData ? "Update Record" : "Save Record"}
-          </button>
+          {!isLocked && (
+            <button type="submit" className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90">
+              {initialData ? "Update Record" : "Save Record"}
+            </button>
+          )}
         </div>
       </form>
     </div>
@@ -666,85 +819,118 @@ function ExitFormModal({
 }
 
 // ==========================================
-// CHECKLIST MODAL
+// ASSET RETURN MODAL
 // ==========================================
-function ChecklistModal({
-  record,
-  items,
-  onUpdateItem,
+function AssetReturnModal({
+  exitId,
+  assets,
+  loading,
+  returnMutation,
   onClose,
 }: {
-  record: ExitRecord;
-  items: ExitChecklistItem[];
-  onUpdateItem?: (itemId: string, status: string) => void;
+  exitId: string;
+  assets: ExitEmployeeAsset[];
+  loading: boolean;
+  returnMutation: any;
   onClose: () => void;
 }) {
-  const groupedItems = items.reduce((acc, item) => {
-    if (!acc[item.item_type]) acc[item.item_type] = [];
-    acc[item.item_type].push(item);
-    return acc;
-  }, {} as Record<string, ExitChecklistItem[]>);
+  const [returningId, setReturningId] = useState<string | null>(null);
+  const [conditionMap, setConditionMap] = useState<Record<string, string>>({});
+  const [notesMap, setNotesMap] = useState<Record<string, string>>({});
+
+  const handleReturn = async (asset: ExitEmployeeAsset) => {
+    setReturningId(asset.id);
+    try {
+      await returnMutation.mutateAsync({
+        exitId,
+        assignment_id: asset.id,
+        condition_on_return: conditionMap[asset.id] || "GOOD",
+        return_notes: notesMap[asset.id] || "",
+      });
+      toast.success(`"${asset.asset_name}" returned successfully`);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to return asset");
+    } finally {
+      setReturningId(null);
+    }
+  };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4 overflow-y-auto" onClick={onClose}>
-      <div className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-3xl max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-card">
-          <div>
-            <h2 className="font-semibold">Exit Checklist</h2>
-            <p className="text-sm text-muted-foreground">{record.employee_name} - {record.department}</p>
-          </div>
-          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-muted">
+    <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4" onClick={onClose}>
+      <div className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-lg max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
+          <h2 className="font-semibold">Return Assets</h2>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-md hover:bg-muted">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="p-5 space-y-4">
-          {Object.entries(groupedItems).map(([type, typeItems]) => (
-            <div key={type}>
-              <h3 className="text-sm font-semibold mb-2 text-primary">{type}</h3>
-              <div className="space-y-2">
-                {typeItems.map(item => (
-                  <div key={item.id} className="flex items-center justify-between p-3 bg-muted/20 rounded-lg">
-                    <div className="flex-1">
-                      <div className="text-sm font-medium">{item.item_name}</div>
-                      {item.description && (
-                        <div className="text-xs text-muted-foreground">{item.description}</div>
-                      )}
-                      {item.assigned_to_name && (
-                        <div className="text-xs mt-1">Assigned to: {item.assigned_to_name}</div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {onUpdateItem ? (
-                        <select
-                          value={item.status}
-                          onChange={e => onUpdateItem(item.id, e.target.value)}
-                          className="text-xs bg-muted/40 border border-border rounded px-2 py-1"
-                        >
-                          <option value="PENDING">Pending</option>
-                          <option value="COMPLETED">Completed</option>
-                          <option value="WAIVED">Waived</option>
-                          <option value="NOT_APPLICABLE">N/A</option>
-                        </select>
-                      ) : (
-                        <span className="text-xs">{item.status}</span>
-                      )}
-                      {item.status === "COMPLETED" && (
-                        <CheckCircle2 className="w-4 h-4 text-success" />
-                      )}
+        <div className="p-5 overflow-y-auto space-y-3">
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : assets.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">No assets allocated to this employee.</p>
+          ) : (
+            assets.map(asset => (
+              <div key={asset.id} className="border border-border rounded-xl p-4 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="font-medium text-sm">{asset.asset_name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {[asset.asset_brand, asset.asset_serial].filter(Boolean).join(" · ") || "—"}
                     </div>
                   </div>
-                ))}
+                  <span className="text-xs bg-muted px-2 py-0.5 rounded-full">Qty: {asset.quantity}</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-xs flex flex-col gap-1">
+                    <span className="text-muted-foreground">Condition on Return</span>
+                    <select
+                      value={conditionMap[asset.id] || "GOOD"}
+                      onChange={e => setConditionMap(p => ({ ...p, [asset.id]: e.target.value }))}
+                      className="bg-muted/40 border border-border rounded-md h-8 px-2 text-xs outline-none"
+                    >
+                      {CONDITION_OPTIONS.map(o => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-xs flex flex-col gap-1">
+                    <span className="text-muted-foreground">Return Notes</span>
+                    <input
+                      value={notesMap[asset.id] || ""}
+                      onChange={e => setNotesMap(p => ({ ...p, [asset.id]: e.target.value }))}
+                      className="bg-muted/40 border border-border rounded-md h-8 px-2 text-xs outline-none"
+                      placeholder="Optional notes"
+                    />
+                  </label>
+                </div>
+
+                <button
+                  onClick={() => handleReturn(asset)}
+                  disabled={returningId === asset.id}
+                  className="w-full h-8 rounded-md bg-primary text-primary-foreground text-xs hover:opacity-90 inline-flex items-center justify-center gap-1"
+                >
+                  {returningId === asset.id ? (
+                    <><Loader2 className="w-3 h-3 animate-spin" /> Returning...</>
+                  ) : (
+                    <><RotateCcw className="w-3 h-3" /> Return Asset</>
+                  )}
+                </button>
               </div>
-            </div>
-          ))}
-          {Object.keys(groupedItems).length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">No checklist items yet</div>
+            ))
           )}
         </div>
 
-        <div className="p-4 border-t border-border flex justify-end">
-          <button onClick={onClose} className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted">
+        <div className="p-4 border-t border-border shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full h-9 rounded-md border border-border text-sm hover:bg-muted"
+          >
             Close
           </button>
         </div>

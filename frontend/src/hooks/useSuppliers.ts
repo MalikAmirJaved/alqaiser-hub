@@ -15,10 +15,6 @@ export interface Supplier extends Record<string, unknown> {
   state: string;
   city: string;
   postal_code: string;
-  payment_terms: string;
-  credit_limit: number;
-  balance: number;
-  rating: number;
   status: "active" | "inactive" | "suspended";
   created_at: string;
   updated_at: string;
@@ -32,16 +28,20 @@ export type PaginatedResponse<T> = {
 };
 
 // Fetch all suppliers
-export function useSuppliers() {
+export function useSuppliers(filters?: Record<string, string>) {
   const api = useApi();
+  const params = new URLSearchParams();
+  if (filters) {
+    Object.entries(filters).forEach(([key, val]) => {
+      if (val) params.append(key, val);
+    });
+  }
+  const url = `/api/inventory/suppliers/${params.toString() ? `?${params}` : ""}`;
 
   return useQuery<Supplier[]>({
-    queryKey: ["inventory_supplier"],
+    queryKey: ["inventory_supplier", filters],
     queryFn: async () => {
-      const res = await api<PaginatedResponse<Supplier>>(
-        "/api/inventory/suppliers/"
-      );
-
+      const res = await api<PaginatedResponse<Supplier>>(url);
       return res.results;
     },
   });

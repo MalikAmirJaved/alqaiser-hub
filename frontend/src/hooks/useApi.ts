@@ -14,7 +14,7 @@ export function useApi() {
 
   const logout = useCallback(async () => {
     try {
-      await apiFetch("/api/accounts/logout/", { method: "POST" });
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/accounts/logout/`, { method: "POST", credentials: "include" });
     } catch {}
     queryClient.setQueryData(["user"], null);
     dispatch(setUnauthenticated());

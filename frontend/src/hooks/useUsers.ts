@@ -11,13 +11,19 @@ export interface User {
   first_name: string;
   last_name: string;
   department: string;
+  department_id?: string;
+  department_name?: string;
   designation: string;
+  designation_id?: string;
+  designation_name?: string;
   phone_number: string;
   is_active: boolean;
   branch_id?: string;
   branch_name?: string;
   created_at: string;
   updated_at: string;
+  // Link to employee if created from an employee
+  isfrom_employee_id?: string;
 }
 
 export interface UserFormData {
@@ -29,6 +35,7 @@ export interface UserFormData {
   designation?: string;
   phone_number?: string;
   password?: string;  // Added password field
+  is_active?: boolean;
 }
 
 interface PaginatedResponse<T> {
@@ -38,14 +45,29 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-// Fetch all users
-export function useUsers() {
+// Fetch only active users (for dropdowns)
+export function useActiveUsers() {
   const api = useApi();
+  return useQuery<User[]>({
+    queryKey: ["users", "active"],
+    queryFn: () => api("/api/organization/users/active/"),
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+}
+
+// Fetch all users
+export function useUsers(filters?: Record<string, string>) {
+  const api = useApi();
+  const queryString = filters && Object.keys(filters).length > 0
+    ? '?' + new URLSearchParams(filters).toString()
+    : '';
 
   return useQuery<User[]>({
-    queryKey: ["users"],
+    queryKey: ["users", filters],
     queryFn: async () => {
-      const response = await api<PaginatedResponse<User>>("/api/organization/users/");
+      const response = await api<PaginatedResponse<User>>(`/api/organization/users/${queryString}`);
       return response.results || [];
     },
     staleTime: 30 * 1000,
@@ -86,6 +108,9 @@ export function useCreateUser() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
+      // Refresh employees so UI reflects new isfrom_user links when users are created from employees
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+      queryClient.invalidateQueries({ queryKey: ["employeeStats"] });
     },
   });
 }

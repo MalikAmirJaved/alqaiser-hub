@@ -118,13 +118,13 @@ class DemandForecaster:
             forecaster = cls(variant, company_id, branch_id)
             forecasts = forecaster.generate_forecast()
             if forecasts:
-                # Replace old forecasts for this variant
+                # Soft-delete old forecasts for this variant
                 SalesForecast.objects.filter(
                     variant=variant,
                     forecast_date__gte=timezone.now().date(),
                     company_id=company_id,
                     branch_id=branch_id
-                ).delete()
+                ).update(is_deleted=True)
                 SalesForecast.objects.bulk_create(forecasts)
 
 class StockForecaster:

@@ -97,7 +97,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
         instance.save()
 
         if lines_data is not None:
-            instance.lines.all().delete()
+            instance.lines.all().update(is_deleted=True)
             for line_item in lines_data:
                 CustomerInvoiceLine.objects.create(
                     customer_invoice=instance,

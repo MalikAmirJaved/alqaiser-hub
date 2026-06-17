@@ -122,7 +122,6 @@ export function TableToolbar({ children }: { children?: ReactNode }) {
       </div>
       <div className="flex items-center gap-2">
         {children}
-        <ToolbarButton icon={Download} variant="ghost">Export</ToolbarButton>
         <ToolbarButton variant="ghost" icon={MoreHorizontal}><span className="sr-only">More</span></ToolbarButton>
       </div>
     </div>

@@ -22,10 +22,6 @@ class Supplier(BaseModel):
     state = models.CharField(max_length=100, blank=True)
     city = models.CharField(max_length=100, blank=True)
     postal_code = models.CharField(max_length=20, blank=True)
-    payment_terms = models.CharField(max_length=100, blank=True)
-    credit_limit = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
-    balance = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
-    rating = models.PositiveSmallIntegerField(default=3, help_text="1-5 stars")
     partner_type = models.CharField(max_length=20, choices=PARTNER_TYPES, default='supplier')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
 

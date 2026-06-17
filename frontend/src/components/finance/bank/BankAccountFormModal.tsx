@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { RotateCw } from "lucide-react";
 import { useCreateBankAccount, useUpdateBankAccount } from "@/hooks/finance/useBank";
+import { useAutoCode } from "@/hooks/useAutoCode";
 import { Modal, ModalContent, ModalHeader, ModalFooter } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +27,7 @@ export default function BankAccountFormModal({ open, onClose, initialData, onSuc
 
   const createAccount = useCreateBankAccount();
   const updateAccount = useUpdateBankAccount();
+  const { generateCode, validateCode } = useAutoCode("bank_account");
 
   useEffect(() => {
     if (initialData) {
@@ -36,6 +39,7 @@ export default function BankAccountFormModal({ open, onClose, initialData, onSuc
       setIsActive(initialData.is_active ?? true);
     } else {
       resetForm();
+      generateCode().then(code => setAccountNumber(code)).catch(() => {});
     }
   }, [initialData, open]);
 
@@ -101,12 +105,24 @@ export default function BankAccountFormModal({ open, onClose, initialData, onSuc
           </div>
           <div>
             <Label htmlFor="accountNumber">Account Number</Label>
-            <Input
-              id="accountNumber"
-              value={accountNumber}
-              onChange={(e) => setAccountNumber(e.target.value)}
-              placeholder="e.g., ****1234"
-            />
+            <div className="flex gap-2">
+              <Input
+                id="accountNumber"
+                value={accountNumber}
+                onChange={(e) => setAccountNumber(e.target.value)}
+                onBlur={() => validateCode(accountNumber)}
+                placeholder="e.g., ****1234"
+                className="flex-1 font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => generateCode().then(code => setAccountNumber(code)).catch(() => {})}
+                className="h-9 w-9 flex items-center justify-center rounded-md border border-border hover:bg-muted transition flex-shrink-0"
+                title="Generate new code"
+              >
+                <RotateCw className="w-4 h-4" />
+              </button>
+            </div>
           </div>
           <div>
             <Label htmlFor="openingBalance">Opening Balance</Label>

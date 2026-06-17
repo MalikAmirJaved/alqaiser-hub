@@ -11,7 +11,7 @@ import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import { DetailLayout, StandardSidebar, type DetailTab } from "@/components/reuseable/final/DetailLayout";
 import { TableView, type Column } from "@/components/reuseable/TableGridView";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import CustomerForm from "./CustomerForm";
@@ -31,11 +31,12 @@ interface CustomerDetailProps {
 }
 
 export default function CustomerDetail({ id, moduleCode, onBack }: CustomerDetailProps) {
+  const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const api = useApi();
   const deleteCustomer = useDeleteCustomer();
   const updateCustomer = useUpdateCustomer();
-  const permissions = useFeaturePermissions(moduleCode, "customer");
+  const permissions = useFeaturePermissions(moduleCode, moduleCode === "SALES" ? "sales_customer" : "customer");
   const { confirm, Modal: ConfirmModal } = useConfirmationModal();
 
   const [isEditing, setIsEditing] = useState(false);

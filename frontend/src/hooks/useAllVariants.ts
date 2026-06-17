@@ -2,16 +2,22 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
+export interface VariantAttribute {
+  key: string;
+  value: string;
+}
+
 export interface VariantDetail {
   id: string;
   sku: string;
+  variant_title: string;
   barcode: string;
-  qr_code: string;
-  buying_price: number;
+  buying_price?: number;
   selling_price: number;
   min_stock_level: number;
   max_stock_level: number;
   is_deleted: boolean;
+  attributes: VariantAttribute[];
   product_id: string;
   product_name: string;
   category_id: string | null;

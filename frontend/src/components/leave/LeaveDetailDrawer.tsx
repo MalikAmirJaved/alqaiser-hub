@@ -80,7 +80,7 @@ export function LeaveDetailDrawer({
               />
               <DetailRow
                 label="Total Days"
-                value={`${leave.total_days}${leave.is_half_day === "true" ? " (Half Day)" : ""}`}
+                value={`${leave.total_days}${leave.leave_sub_type === 'SHORT' ? ' (Short Leave)' : leave.leave_sub_type === 'HALF' ? ' (Half Leave)' : leave.is_half_day ? ' (Half Day)' : ''}`}
                 icon={Clock}
               />
               <DetailRow label="Applied On" value={new Date(leave.applied_at).toLocaleDateString()} />

@@ -187,7 +187,6 @@ export default function AssetCategories() {
       setEditing(null);
       setForm({ name: "", assetIds: [], description: "" });
     } catch (error: any) {
-      toast.error(error.message || "Failed to save kit");
     }
   };
 
@@ -195,7 +194,6 @@ export default function AssetCategories() {
     try {
       await deleteCategory.mutateAsync(id);
     } catch (error: any) {
-      toast.error(error.message || "Failed to delete kit");
     }
   };
 

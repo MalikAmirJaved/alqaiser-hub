@@ -5,11 +5,13 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
 import { useLeaves, useCreateLeaveRequest, useApproveLeave, useLeaveStats, LEAVE_TYPES } from "@/hooks/useLeaves";
-import { useEmployees } from "@/hooks/useEmployees";
+import { useActiveEmployees } from "@/hooks/useEmployees";
 import PageHeader from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { TableView, Column } from "@/components/reuseable/TableGridView";
+import FilterBar from "@/components/reuseable/FilterBar";
+import type { FilterField } from "@/components/reuseable/FilterBar";
 import { LeaveFormModal } from "@/components/leave/LeaveFormModal";
 import { LeaveDetailDrawer } from "@/components/leave/LeaveDetailDrawer";
 import { LeaveCard } from "@/components/leave/LeaveCard";
@@ -36,6 +38,7 @@ import {
 interface LeaveFormData {
   employee_id: string;
   leave_type: string;
+  leave_sub_type: 'SHORT' | 'HALF' | 'FULL_DAY';
   start_date: string;
   end_date: string;
   is_half_day: boolean;
@@ -49,12 +52,27 @@ export default function LeaveManagementPage() {
   const { user } = useAuth();
   const api = useApi();
 
-  const [activeTab, setActiveTab] = useState("my-leaves");
+  const [activeTab, setActiveTab] = useState("all-leaves");
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [isApplyOpen, setIsApplyOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedLeave, setSelectedLeave] = useState<any>(null);
+  const [filters, setFilters] = useState<Record<string, string>>({});
 
+  const leaveTypeOptions = LEAVE_TYPES.map(t => ({ value: t.value, label: t.label }));
+
+  const leaveStatusOptions = [
+    { value: "PENDING", label: "Pending" },
+    { value: "APPROVED", label: "Approved" },
+    { value: "REJECTED", label: "Rejected" },
+    { value: "CANCELLED", label: "Cancelled" },
+  ];
+
+  const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
+    { name: "leave_type", label: "Leave Type", type: "select", options: leaveTypeOptions },
+    { name: "status", label: "Status", type: "status", options: leaveStatusOptions },
+  ];
 
     const permissions = useSelector(
   (state: RootState) => state.permissions.permissions
@@ -67,8 +85,10 @@ const leavePermissions = getPermissions(
 );
 
   // Fetch data with React Query
-  const { data: leaves = [], refetch: refetchLeaves, isLoading: leavesLoading } = useLeaves();
-  const { data: employees = [] } = useEmployees();
+  const { data: leaves = [], refetch: refetchLeaves, isLoading: leavesLoading } = useLeaves(
+    Object.keys(filters).length > 0 ? filters : undefined
+  );
+  const { data: employees = [] } = useActiveEmployees();
   const { data: stats, refetch: refetchStats } = useLeaveStats();
 
   // Mutations
@@ -99,6 +119,7 @@ const leavePermissions = getPermissions(
       await createLeave.mutateAsync({
         employee_id: formData.employee_id,
         leave_type: formData.leave_type,
+        leave_sub_type: formData.leave_sub_type,
         start_date: formData.start_date,
         end_date: formData.end_date || formData.start_date,
         is_half_day: formData.is_half_day,
@@ -109,7 +130,6 @@ const leavePermissions = getPermissions(
       setIsApplyOpen(false);
       refreshData();
     } catch (error: any) {
-      alert(error.message || "Failed to submit leave request");
     }
   };
 
@@ -123,7 +143,6 @@ const leavePermissions = getPermissions(
       refreshData();
       setIsDrawerOpen(false);
     } catch (error: any) {
-      alert(error.message || `Failed to ${status.toLowerCase()} leave request`);
     }
   };
 
@@ -137,7 +156,6 @@ const leavePermissions = getPermissions(
       });
       refreshData();
     } catch (error: any) {
-      alert(error.message || "Failed to delete leave request");
     }
   };
 
@@ -202,7 +220,10 @@ const leavePermissions = getPermissions(
       label: "Days", 
       sortable: true,
       render: (value: unknown, row: any) => (
-        <span>{String(value)}{row.is_half_day && " (Half)"}</span>
+        <span>
+          {String(value)}
+          {row.leave_sub_type === 'SHORT' ? ' (Short)' : row.leave_sub_type === 'HALF' ? ' (Half)' : row.is_half_day ? ' (Half)' : ''}
+        </span>
       )
     },
     { 
@@ -276,7 +297,7 @@ const leavePermissions = getPermissions(
       sortable: true,
       render: (_: unknown, row: any) => {
         const employee = employees.find((e: any) => e.id === row.employee_id);
-        return employee?.department || "—";
+        return employee?.department_name || "—";
       }
     },
     { key: "leave_type_display", label: "Leave Type", sortable: true },
@@ -403,6 +424,15 @@ const leavePermissions = getPermissions(
 
       {/* Stats Cards */}
       <StatsCards stats={statsCards} />
+
+      {/* Filters */}
+      <div className="mb-4">
+        <FilterBar
+          fields={filterFields}
+          filters={filters}
+          onChange={setFilters}
+        />
+      </div>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">

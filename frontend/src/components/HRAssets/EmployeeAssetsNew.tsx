@@ -1,7 +1,7 @@
 // components/HRAssets/EmployeeAssetsNew.tsx
 "use client";
 import { useState, useMemo, useEffect } from "react";
-import { useEmployees } from "@/hooks/useEmployees";
+import { useActiveEmployees } from "@/hooks/useEmployees";
 import {
   useEmployeeAssignments,
   useAvailableAssets,
@@ -14,6 +14,7 @@ import {
   type AvailableAsset,
 } from "@/hooks/useEmployeeAssets";
 import PageHeader from "@/components/PageHeader";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -59,10 +60,10 @@ import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 interface Employee {
   id: string;
   first_name: string;
-  last_name: string;
+  last_name?: string;
   employee_id: string;
-  department: string;
-  designation?: string;
+  department_name?: string;
+  designation_name?: string;
 }
 
 export default function EmployeeAssetsNew() {
@@ -83,9 +84,7 @@ export default function EmployeeAssetsNew() {
   // Category filter for assets
   const [assetCategoryFilter, setAssetCategoryFilter] = useState<string>("all");
 
-  const { data: employees = [], isLoading: employeesLoading } = useEmployees(
-    searchQuery ? { search: searchQuery } : undefined
-  ) as { data: Employee[]; isLoading: boolean };
+  const { data: employees = [], isLoading: employeesLoading } = useActiveEmployees()
 
   const { data: assignmentData, isLoading: assignmentsLoading } = useEmployeeAssignments(
     selectedEmployee?.id
@@ -144,6 +143,12 @@ export default function EmployeeAssetsNew() {
       // Deselect kit – nothing else needed; assets may remain selected individually (they were removed when kit was selected)
       newKitIds.delete(kitId);
     } else {
+      // Check kit stock
+      const totalAvailable = kit.assets.reduce((sum, a) => sum + (a.available_quantity || 0), 0);
+      if (totalAvailable <= 0) {
+        toast.error(`"${kit.name}" has no stock available`);
+        return;
+      }
       // Select kit – remove its assets from direct selections (to prevent double assignment)
       const newQuantities = { ...selectedAssetQuantities };
       kit.assets.forEach(asset => {
@@ -211,10 +216,8 @@ export default function EmployeeAssetsNew() {
         condition: assignmentCondition,
         notes: assignmentNotes,
       });
-      toast.success("Assets assigned successfully");
       setShowAssignModal(false);
     } catch (error: any) {
-      toast.error(error.message || "Failed to assign assets");
     }
   };
 
@@ -225,10 +228,8 @@ export default function EmployeeAssetsNew() {
         assignment_ids: Array.from(selectedReturnIds),
         condition_on_return: "GOOD",
       });
-      toast.success(`${selectedReturnIds.size} asset(s) returned`);
       setSelectedReturnIds(new Set());
     } catch (error: any) {
-      toast.error(error.message || "Failed to return assets");
     }
   };
 
@@ -287,7 +288,7 @@ export default function EmployeeAssetsNew() {
                         {emp.first_name} {emp.last_name}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {emp.department} • {emp.designation || "N/A"}
+                        {emp.department_name} • {emp.designation_name || "N/A"}
                       </p>
                     </div>
                   </div>
@@ -308,7 +309,7 @@ export default function EmployeeAssetsNew() {
                 {selectedEmployee.first_name} {selectedEmployee.last_name}
               </h2>
               <p className="text-sm text-muted-foreground">
-                {selectedEmployee.employee_id} • {selectedEmployee.department}
+                {selectedEmployee.employee_id} • {selectedEmployee.department_name}
               </p>
             </div>
             <div className="flex gap-2">
@@ -330,7 +331,7 @@ export default function EmployeeAssetsNew() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base">Active Assignments</CardTitle>
-                  {selectedReturnIds.size > 0 && permissions.update && (
+                  {selectedReturnIds.size > 0 && permissions.return && (
                     <Button
                       variant="destructive"
                       size="sm"
@@ -579,16 +580,14 @@ export default function EmployeeAssetsNew() {
                   </Badge>
                 </h3>
                 {availableCategories.length > 0 && (
-                  <select
+                  <SearchableSelect
                     value={assetCategoryFilter}
-                    onChange={(e) => setAssetCategoryFilter(e.target.value)}
-                    className="text-xs border border-border rounded-md px-2 py-1 bg-background"
-                  >
-                    <option value="all">All Categories</option>
-                    {availableCategories.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => setAssetCategoryFilter(val)}
+                    options={[
+                      { value: "all", label: "All Categories" },
+                      ...availableCategories.map(cat => ({ value: cat, label: cat }))
+                    ]}
+                  />
                 )}
               </div>
 
@@ -666,16 +665,17 @@ export default function EmployeeAssetsNew() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-xs text-muted-foreground">Condition</label>
-                <select
+                <SearchableSelect
                   value={assignmentCondition}
-                  onChange={(e) => setAssignmentCondition(e.target.value)}
-                  className="w-full mt-1 bg-muted/40 border border-border rounded-md h-9 px-2 text-sm"
-                >
-                  <option value="NEW">New</option>
-                  <option value="GOOD">Good</option>
-                  <option value="FAIR">Fair</option>
-                  <option value="POOR">Poor</option>
-                </select>
+                  onChange={(val) => setAssignmentCondition(val)}
+                  options={[
+                    { value: "NEW", label: "New" },
+                    { value: "GOOD", label: "Good" },
+                    { value: "FAIR", label: "Fair" },
+                    { value: "POOR", label: "Poor" },
+                  ]}
+                  placeholder="Select condition"
+                />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Notes</label>

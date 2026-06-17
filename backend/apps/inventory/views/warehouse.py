@@ -1,51 +1,31 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from django.db.models import Q, Sum
+from django.db.models import Q
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import Warehouse
 from apps.inventory.serializers import WarehouseSerializer
 
 
-class WarehouseViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+class WarehouseViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'INVENTORY'
     permission_resource = 'warehouse'
     queryset = Warehouse.objects.all()
     serializer_class = WarehouseSerializer
     lookup_field = '_id'
     lookup_value_regex = '[0-9a-f-]+'
+    filter_fields = {
+        'search': ['warehouse_name', 'code', 'city', 'state', 'country'],
+        'is_active': 'is_active',
+        'country': 'country__icontains',
+        'state': 'state__icontains',
+        'city': 'city__icontains',
+    }
 
     def get_queryset(self):
         qs = super().get_queryset()
-
-        search = self.request.query_params.get('search')
-        if search:
-            qs = qs.filter(
-                Q(warehouse_name__icontains=search) |
-                Q(code__icontains=search) |
-                Q(manager_name__icontains=search) |
-                Q(city__icontains=search) |
-                Q(state__icontains=search) |
-                Q(country__icontains=search)
-            )
-
-        is_active = self.request.query_params.get('is_active')
-        if is_active is not None:
-            qs = qs.filter(is_active=is_active.lower() == 'true')
-
-        country = self.request.query_params.get('country')
-        if country:
-            qs = qs.filter(country__icontains=country)
-
-        state = self.request.query_params.get('state')
-        if state:
-            qs = qs.filter(state__icontains=state)
-
-        city = self.request.query_params.get('city')
-        if city:
-            qs = qs.filter(city__icontains=city)
-
         return qs
 
     def create(self, request, *args, **kwargs):
@@ -104,44 +84,8 @@ class WarehouseViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Mod
         total_warehouses = queryset.count()
         active_warehouses = queryset.filter(is_active=True).count()
 
-        total_capacity = queryset.aggregate(
-            total=Sum('capacity')
-        )['total'] or 0
-
-        total_occupancy = queryset.aggregate(
-            total=Sum('current_occupancy')
-        )['total'] or 0
-
         return Response({
             'total_warehouses': total_warehouses,
             'active_warehouses': active_warehouses,
             'inactive_warehouses': total_warehouses - active_warehouses,
-            'total_capacity': total_capacity,
-            'total_occupancy': total_occupancy,
-            'overall_occupancy_percentage':
-                (total_occupancy / total_capacity * 100)
-                if total_capacity > 0 else 0
         })
-
-    @action(detail=True, methods=['get'])
-    def utilization(self, request, pk=None):
-        warehouse = self.get_object()
-
-        return Response({
-            'id': warehouse._id,
-            'name': warehouse.warehouse_name,
-            'capacity': warehouse.capacity,
-            'current_occupancy': warehouse.current_occupancy,
-            'available_capacity': warehouse.available_capacity,
-            'occupancy_percentage': warehouse.occupancy_percentage,
-            'status': (
-                'Optimal'
-                if warehouse.occupancy_percentage < 80
-                else 'Critical'
-                if warehouse.occupancy_percentage > 95
-                else 'Warning'
-            )
-        })
-
-    def perform_update(self, serializer):
-        serializer.save()

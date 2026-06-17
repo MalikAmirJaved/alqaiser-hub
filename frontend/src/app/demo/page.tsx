@@ -25,13 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -387,14 +381,12 @@ function Step1({ data, set }: { data: FormState; set: <K extends keyof FormState
         <Input className={inputCls} value={data.city} onChange={(e) => set("city", e.target.value)} placeholder="San Francisco" />
       </Field>
       <Field label="Timezone">
-        <Select value={data.timezone} onValueChange={(v) => set("timezone", v)}>
-          <SelectTrigger className={inputCls}><SelectValue placeholder="Select timezone" /></SelectTrigger>
-          <SelectContent>
-            {["UTC", "America/New_York", "America/Los_Angeles", "Europe/London", "Europe/Paris", "Asia/Dubai", "Asia/Kolkata", "Asia/Singapore", "Asia/Tokyo", "Australia/Sydney"].map((tz) => (
-              <SelectItem key={tz} value={tz}>{tz}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          value={data.timezone}
+          onChange={(v) => set("timezone", v)}
+          options={["UTC", "America/New_York", "America/Los_Angeles", "Europe/London", "Europe/Paris", "Asia/Dubai", "Asia/Kolkata", "Asia/Singapore", "Asia/Tokyo", "Australia/Sydney"].map((tz) => ({ value: tz, label: tz }))}
+          placeholder="Select timezone"
+        />
       </Field>
       <Field label="Address" className="md:col-span-2">
         <Textarea className="bg-background/40 border-border/70 min-h-[90px]" value={data.address} onChange={(e) => set("address", e.target.value)} placeholder="Street, building, floor…" />
@@ -496,14 +488,12 @@ function Step5({ data, set }: { data: FormState; set: <K extends keyof FormState
   return (
     <Grid>
       <Field label="Currency">
-        <Select value={data.currency} onValueChange={(v) => set("currency", v)}>
-          <SelectTrigger className={inputCls}><SelectValue placeholder="Select currency" /></SelectTrigger>
-          <SelectContent>
-            {["USD", "EUR", "GBP", "INR", "AED", "SGD", "JPY", "AUD", "CAD"].map((c) => (
-              <SelectItem key={c} value={c}>{c}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          value={data.currency}
+          onChange={(v) => set("currency", v)}
+          options={["USD", "EUR", "GBP", "INR", "AED", "SGD", "JPY", "AUD", "CAD"].map((c) => ({ value: c, label: c }))}
+          placeholder="Select currency"
+        />
       </Field>
       <Field label="Tax Rate (%)">
         <Input className={inputCls} type="number" value={data.taxRate} onChange={(e) => set("taxRate", e.target.value)} placeholder="e.g. 18" />

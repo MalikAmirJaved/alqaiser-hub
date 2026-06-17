@@ -3,12 +3,13 @@ import { useState, useEffect } from "react";
 import { useFetchSalesOrderByNumber, useCreateSalesReturn } from "@/hooks/useSalesOrder";
 import type { Warehouse } from "@/hooks/useWarehouses";
 import { fmt } from "@/hooks/useSalesOrder";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 interface ReturnPanelProps {
   warehouses: Warehouse[];
 }
 
 export function ReturnPanel({ warehouses }: ReturnPanelProps) {
+  const formatCurrency = useFormatCurrency();
   const [orderNum, setOrderNum] = useState("");
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>(warehouses[0]?.id?.toString() ?? "");
   const [orderData, setOrderData] = useState<any>(null);

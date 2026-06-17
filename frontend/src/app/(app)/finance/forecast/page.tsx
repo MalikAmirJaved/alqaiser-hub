@@ -120,7 +120,7 @@ type Granularity = "daily" | "weekly" | "monthly";
 
 export default function SalesForecastPage() {
   const queryClient = useQueryClient();
-  const permissions = useFeaturePermissions("INVENTORY", "forecast");
+  const permissions = useFeaturePermissions("FINANCE", "forecast");
 
   const [tab, setTab] = useState<Tab>("sales");
   const [granularity, setGranularity] = useState<Granularity>("daily");

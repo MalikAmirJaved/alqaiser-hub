@@ -72,7 +72,13 @@ class LoginView(APIView):
             return Response({"error": "Invalid credentials"}, status=400)
 
         if not user.is_active:
-            return Response({"error": "Account is disabled"}, status=403)
+            return Response(
+                {
+                    "error": "Account is inactive",
+                    "detail": "Your account has been disabled by an administrator. Please contact support for assistance."
+                },
+                status=403
+            )
 
         refresh = RefreshToken.for_user(user)
         response = Response({
@@ -92,7 +98,7 @@ class MeView(APIView):
 
 
 class LogoutView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def post(self, request):
         response = Response({"detail": "Logged out successfully"})

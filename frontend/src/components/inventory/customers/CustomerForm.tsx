@@ -1,6 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
+import { RotateCw } from "lucide-react";
 import { Customer } from "@/hooks/useCustomers";
+import { useAutoCode } from "@/hooks/useAutoCode";
 
 interface CustomerFormProps {
   initialData?: Customer;
@@ -10,6 +12,7 @@ interface CustomerFormProps {
 }
 
 export default function CustomerForm({ initialData, onSubmit, onCancel, isLoading }: CustomerFormProps) {
+  const { generateCode, validateCode } = useAutoCode("customer");
   const [formData, setFormData] = useState({
     customer_code: "",
     name: "",
@@ -39,6 +42,8 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, isLoadin
         country: initialData.country || "",
         is_active: initialData.is_active ?? true,
       });
+    } else {
+      generateCode().then(code => setFormData(prev => ({ ...prev, customer_code: code }))).catch(() => {});
     }
   }, [initialData]);
 
@@ -60,7 +65,12 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, isLoadin
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium mb-1">Customer Code</label>
-          <input name="customer_code" value={formData.customer_code} onChange={handleChange} className="w-full rounded-lg border border-border bg-background px-3 py-2" />
+          <div className="flex gap-2">
+            <input name="customer_code" value={formData.customer_code} onChange={handleChange} onBlur={() => validateCode(formData.customer_code)} className="flex-1 w-full rounded-lg border border-border bg-background px-3 py-2 font-mono" />
+            <button type="button" onClick={() => generateCode().then(code => setFormData(prev => ({ ...prev, customer_code: code }))).catch(() => {})} className="h-9 w-9 flex items-center justify-center rounded-md border border-border hover:bg-muted transition flex-shrink-0" title="Generate new code">
+              <RotateCw className="w-4 h-4" />
+            </button>
+          </div>
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Name *</label>

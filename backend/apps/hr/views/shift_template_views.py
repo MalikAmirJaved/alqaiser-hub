@@ -2,7 +2,6 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.db import transaction
 from django.shortcuts import get_object_or_404
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
@@ -66,7 +65,7 @@ class ShiftTemplateView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             for t in templates
         ])
     
-    @transaction.atomic
+
     def post(self, request):
         """Create new shift template"""
         company_id = request.user.company_id
@@ -123,7 +122,7 @@ class ShiftTemplateView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "workingHours": template.working_hours,
         }, status=status.HTTP_201_CREATED)
     
-    @transaction.atomic
+
     def patch(self, request):
         """Update shift template using UUID"""
         company_id = request.user.company_id
@@ -182,7 +181,7 @@ class ShiftTemplateView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "workingHours": template.working_hours,
         })
     
-    @transaction.atomic
+
     def delete(self, request):
         """Soft delete shift template using UUID"""
         company_id = request.user.company_id

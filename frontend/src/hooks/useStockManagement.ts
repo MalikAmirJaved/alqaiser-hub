@@ -147,6 +147,17 @@ export function useAdjustStock() {
   });
 }
 
+// ---------- Single Stock Item (by record id) ----------
+export function useStockItem(id: string | null) {
+  const api = useApi();
+  return useQuery<StockItem>({
+    queryKey: ["inventory_stock", id],
+    queryFn: () => api(`/api/inventory/stock/${id}/`),
+    enabled: !!id,
+    staleTime: 30_000,
+  });
+}
+
 // ---------- Variant Summary (by variant_id) ----------
 export function useVariantSummary(variantId: string | null) {
   const api = useApi();

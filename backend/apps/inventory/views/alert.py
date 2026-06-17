@@ -4,26 +4,32 @@ from rest_framework.response import Response
 from django.db.models import Q
 from django.utils import timezone  # <-- ADD THIS IMPORT
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import Alert
 from apps.inventory.serializers.alert import AlertSerializer
 
-class AlertViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ReadOnlyModelViewSet):
+class AlertViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ReadOnlyModelViewSet):
     permission_module = 'INVENTORY'
     permission_resource = 'alert'
     serializer_class = AlertSerializer
     lookup_field = '_id'
-    # Define queryset to satisfy DRF (even though we override get_queryset, but base classes may need it)
-    queryset = Alert.objects.none()   # <-- ADD THIS
+    queryset = Alert.objects.none()
+    filter_fields = {
+        'type': 'type',
+        'severity': 'severity',
+        'is_read': 'is_read',
+        'search': ['title', 'message'],
+    }
 
     def get_queryset(self):
-        # Do NOT call super().get_queryset() because CompanyBranchMixin expects self.queryset
         user = self.request.user
         qs = Alert.objects.filter(
             Q(company_id=user.company_id) &
             (Q(branch_id=user.branch_id) | Q(branch_id__isnull=True)) &
             (Q(target_user_id__isnull=True) | Q(target_user_id=user.id))
         )
+        qs = self._apply_filters(qs)
         return qs.order_by('-created_at')
 
     @action(detail=False, methods=['post'])

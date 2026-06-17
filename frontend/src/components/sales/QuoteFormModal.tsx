@@ -6,7 +6,8 @@ import { useCustomers } from "@/hooks/useCustomers";
 import { useAllVariantsSimple } from "@/hooks/useAllVariants";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
 import { useCreateQuote, useUpdateQuote, Quote } from "@/hooks/sales/useQuotes";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 interface QuoteLine {
   variant: string;
@@ -33,6 +34,7 @@ export default function QuoteFormModal({
   initialCustomerId,
   onSuccess,
 }: QuoteFormModalProps) {
+  const formatCurrency = useFormatCurrency();
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [newCustomerInfo, setNewCustomerInfo] = useState<any>(null);
   const { data: customers = [], refetch: refetchCustomers } = useCustomers("");
@@ -214,23 +216,19 @@ export default function QuoteFormModal({
               <div>
                 <label className="block text-sm font-medium mb-1">Customer *</label>
                 <div className="flex gap-2">
-                  <select
-                    value={formData.customer}
-                    onChange={(e) => handleCustomerSelect(e.target.value)}
-                    required
-                    className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                  >
-                    <option value="">Select customer</option>
-                    {customers.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex-1">
+                    <SearchableSelect
+                      value={formData.customer}
+                      onChange={handleCustomerSelect}
+                      options={customers.map((c) => ({ value: c.id, label: c.name }))}
+                      placeholder="Select customer"
+                      required
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={() => setShowCustomerModal(true)}
-                    className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-border hover:bg-muted text-primary text-sm whitespace-nowrap"
+                    className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-border hover:bg-muted text-primary text-sm whitespace-nowrap shrink-0"
                   >
                     <Plus className="w-4 h-4" />
                     New
@@ -313,21 +311,14 @@ export default function QuoteFormModal({
                         return (
                           <tr key={idx} className="border-t border-border">
                             <td className="px-3 py-2">
-                              <select
+                              <SearchableSelect
                                 value={line.variant}
-                                onChange={(e) =>
-                                  updateLine(idx, "variant", e.target.value)
+                                onChange={(val) =>
+                                  updateLine(idx, "variant", val)
                                 }
-                                className="w-full bg-transparent focus:outline-none"
-                                required
-                              >
-                                <option value="">Select variant</option>
-                                {variants.map((v) => (
-                                  <option key={v.id} value={v.id}>
-                                    {v.product_name} ({v.sku})
-                                  </option>
-                                ))}
-                              </select>
+                                options={variants.map((v) => ({ value: v.id, label: `${v.product_name} (${v.sku})` }))}
+                                placeholder="Select variant"
+                              />
                             </td>
                             <td className="px-3 py-2">
                               <input

@@ -13,6 +13,7 @@ const nextConfig = {
 
   // Experimental: enable SWC-based CSS transforms if needed
   experimental: {
+    cpus: 4,
     // optimizePackageImports helps tree-shake large icon/component libraries
     optimizePackageImports: ["lucide-react", "framer-motion", "recharts"],
   },

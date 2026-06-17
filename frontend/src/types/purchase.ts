@@ -50,12 +50,13 @@ export interface PurchaseOrderLinePayload {
 
 export interface PurchaseOrderPayload {
   supplier: string;
-  warehouse: string;
+  warehouse?: string;
   inventory_type: 'FOR_SALE' | 'OFFICE_INVENTORY';
   order_date?: string;
   expected_delivery_date?: string;
   notes?: string;
   line_items: PurchaseOrderLinePayload[];
+  request_ids?: string[];  // Asset purchase request UUIDs to link and mark as fulfilled
 }
 
 export interface GoodsReceiptLinePayload {

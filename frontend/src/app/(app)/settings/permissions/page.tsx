@@ -13,7 +13,6 @@ import {
   Wifi, WifiOff, Eye, Edit, Trash2, Plus, RefreshCw,
   CheckSquare, Square, Minus, Crown, Zap
 } from "lucide-react";
-import { toast } from "sonner";
 
 import {
   usePermissionUsers,
@@ -30,7 +29,8 @@ import {
   ModuleNode,
 } from "@/hooks/usePermissions";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-
+import { useSearchParams } from "next/navigation";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const ACTION_COLORS: Record<string, string> = {
@@ -313,20 +313,16 @@ function RolesPanel({
     if (!selectedRoleId) return;
     try {
       await assignRole.mutateAsync({ user_id: userId, role_id: Number(selectedRoleId) });
-      toast.success("Role assigned");
       setShowAdd(false);
       setSelectedRoleId("");
     } catch {
-      toast.error("Failed to assign role");
     }
   };
 
   const handleRemove = async (roleId: number) => {
     try {
       await removeRole.mutateAsync({ userId, roleId });
-      toast.success("Role removed");
     } catch {
-      toast.error("Failed to remove role");
     }
   };
 
@@ -367,16 +363,12 @@ function RolesPanel({
         )
       ) : canAssign ? (
         <div className="flex gap-2">
-          <select
-            value={selectedRoleId}
-            onChange={e => setSelectedRoleId(Number(e.target.value) as any)}
-            className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="">Select role…</option>
-            {availableRoles.map(r => (
-              <option key={r.id} value={r.id}>{r.name}</option>
-            ))}
-          </select>
+          <SearchableSelect
+            value={selectedRoleId ? String(selectedRoleId) : ""}
+            onChange={val => setSelectedRoleId(Number(val) as any)}
+            options={availableRoles.map(r => ({ value: String(r.id), label: r.name }))}
+            placeholder="Select role…"
+          />
           <button
             onClick={handleAssign}
             disabled={!selectedRoleId || assignRole.isPending}
@@ -405,14 +397,15 @@ export default function PermissionsPage() {
   const [pendingChanges, setPendingChanges] = useState<Record<string, boolean>>({});
   const [wsOnline, setWsOnline] = useState(true);
   const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
-
+  const searchParams = useSearchParams(); 
+const urlUserId = searchParams.get("userId"); 
   // Hooks
   const { data: users = [], isLoading: usersLoading } = usePermissionUsers();
   const { data: modules = [], isLoading: modulesLoading, refetch: refetchModules } = useUserModules(selectedUserId);
   const { data: overrides = [] } = useUserOverrides(selectedUserId);
   const bulkSet = useBulkSetPermissions();
   const removeOverride = useRemoveOverride();
-
+  
   // Real-time WebSocket
   usePermissionSocket(selectedUserId);
   const selectedUser = users.find(u => u.id === selectedUserId);
@@ -430,7 +423,16 @@ export default function PermissionsPage() {
     }),
     [users, search]
   );
-
+    useEffect(() => {
+    if (urlUserId && users.length > 0) {
+      const id = parseInt(urlUserId, 10);
+      if (users.find(u => u.id === id)) {
+        setSelectedUserId(id);
+        // Optionally remove the query param from URL to avoid re-selecting on refresh
+        // window.history.replaceState({}, '', '/settings/permissions');
+      }
+    }
+  }, [urlUserId, users]);
   // Reset pending when user changes
   useEffect(() => {
     setPendingChanges({});
@@ -458,10 +460,8 @@ export default function PermissionsPage() {
 
     try {
       await bulkSet.mutateAsync({ user_id: selectedUserId, permissions });
-      toast.success(`${permissions.length} permission${permissions.length > 1 ? "s" : ""} updated`);
       setPendingChanges({});
     } catch {
-      toast.error("Failed to save permissions");
     }
   };
 
@@ -730,9 +730,7 @@ export default function PermissionsPage() {
                               onClick={async () => {
                                 try {
                                   await removeOverride.mutateAsync({ userId: selectedUserId!, overrideId: ov.id });
-                                  toast.success("Override removed");
                                 } catch {
-                                  toast.error("Failed to remove override");
                                 }
                               }}
                               className="p-1 rounded hover:bg-muted transition-colors"

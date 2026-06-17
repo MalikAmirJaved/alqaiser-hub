@@ -1,8 +1,8 @@
 # apps/hr/views/exit_management_views.py
 
 import logging
-from datetime import datetime, date
-from django.db import transaction, models
+from datetime import datetime, date, timedelta
+from django.db import models
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.views import APIView
@@ -13,9 +13,19 @@ from django.db.models import Count, Sum, Avg, Q
 
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
+from decimal import Decimal
+from django.db import transaction as db_transaction
+
 from apps.hr.models import (
-    ExitRecord, ExitChecklist, Employee
+    ExitRecord, ExitChecklist, Employee, PayrollRecord,
+    Compensation, EmployeeLoan, LeaveRequest,
+    CompensationSelectedMonth, CompensationMonthRange,
+    LoanSelectedMonth, LoanMonthRange,
+    PayrollLoanDeduction,
+    EmployeeAssetAssignment, Asset
 )
+from apps.finance.services.payable import create_payment_for
+from apps.compsetting.models import CompanySettings, WorkingDay, PublicHoliday
 
 logger = logging.getLogger(__name__)
 
@@ -42,21 +52,13 @@ class BaseExitView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "id": str(exit_record._id),
             "employee_id": str(exit_record.employee._id) if exit_record.employee else None,
             "employee_name": exit_record.employee_name,
-            "department": exit_record.department,
-            "designation": exit_record.designation,
             "exit_date": exit_record.exit_date.isoformat() if exit_record.exit_date else None,
             "last_working_day": exit_record.last_working_day.isoformat() if exit_record.last_working_day else None,
             "reason": exit_record.get_reason_display(),
             "reason_value": exit_record.reason,
             "notice_served": exit_record.notice_served,
-            "clearance_hr": exit_record.clearance_hr,
-            "clearance_it": exit_record.clearance_it,
-            "clearance_finance": exit_record.clearance_finance,
-            "clearance_admin": exit_record.clearance_admin,
-            "clearance_status": exit_record.get_clearance_status_display(),
-            "clearance_status_value": exit_record.clearance_status,
-            "clearance_progress": exit_record.clearance_progress,
-            "final_settlement": float(exit_record.final_settlement),
+            "final_settlement": float(exit_record.final_settlement or 0),
+            "settlement_notes": exit_record.settlement_notes,
             "notes": exit_record.notes,
             "status": exit_record.get_status_display(),
             "status_value": exit_record.status,
@@ -84,26 +86,23 @@ class ExitRecordView(BaseExitView):
         if search:
             query = query.filter(
                 Q(employee_name__icontains=search) |
-                Q(department__icontains=search) |
-                Q(designation__icontains=search) |
                 Q(notes__icontains=search)
             )
         
+        # Support direct UUID lookup for detail page
+        pk = request.query_params.get('pk')
+        if pk:
+            query = query.filter(_id=pk)
+        
         status_filter = request.query_params.get('status')
-        clearance_filter = request.query_params.get('clearance_status')
         reason_filter = request.query_params.get('reason')
-        department_filter = request.query_params.get('department')
         date_from = request.query_params.get('date_from')
         date_to = request.query_params.get('date_to')
         
         if status_filter:
             query = query.filter(status=status_filter)
-        if clearance_filter:
-            query = query.filter(clearance_status=clearance_filter)
         if reason_filter:
             query = query.filter(reason=reason_filter)
-        if department_filter:
-            query = query.filter(department=department_filter)
         if date_from:
             query = query.filter(exit_date__gte=date_from)
         if date_to:
@@ -112,8 +111,7 @@ class ExitRecordView(BaseExitView):
         order_by = request.query_params.get('order_by', '-created_at')
         allowed_order_fields = [
             'created_at', '-created_at', 'exit_date', '-exit_date',
-            'employee_name', '-employee_name', 'department', '-department',
-            'clearance_status', '-clearance_status'
+            'employee_name', '-employee_name',
         ]
         if order_by in allowed_order_fields:
             query = query.order_by(order_by)
@@ -135,12 +133,12 @@ class ExitRecordView(BaseExitView):
             }
         })
     
-    @transaction.atomic
+
     def post(self, request):
         """Create new exit record"""
         company_id, branch_id = self._get_company_context(request)
         
-        required_fields = ['employee_id', 'exit_date', 'reason']
+        required_fields = ['employee_id', 'exit_date', 'last_working_day', 'reason']
         for field in required_fields:
             if not request.data.get(field):
                 return Response(
@@ -158,46 +156,35 @@ class ExitRecordView(BaseExitView):
         
         existing_exit = ExitRecord.objects.filter(
             employee=employee,
-            status='ACTIVE',
+            status='PENDING',
             is_deleted=False
         ).first()
         
         if existing_exit:
             return Response(
-                {'error': 'Employee already has an active exit record'},
+                {'error': 'Employee already has a pending exit record'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         exit_date = datetime.strptime(request.data['exit_date'], '%Y-%m-%d').date()
-        last_working_day = None
-        if request.data.get('last_working_day'):
-            last_working_day = datetime.strptime(request.data['last_working_day'], '%Y-%m-%d').date()
+        last_working_day = datetime.strptime(request.data['last_working_day'], '%Y-%m-%d').date()
+        
         
         exit_record = ExitRecord.objects.create(
             company_id=company_id,
             branch_id=branch_id,
             employee=employee,
             employee_name=employee.full_name,
-            department=request.data.get('department', employee.department),
-            designation=request.data.get('designation', employee.designation),
             exit_date=exit_date,
             last_working_day=last_working_day,
             reason=request.data['reason'],
             notice_served=request.data.get('notice_served', True),
-            clearance_hr=request.data.get('clearance_hr', False),
-            clearance_it=request.data.get('clearance_it', False),
-            clearance_finance=request.data.get('clearance_finance', False),
-            clearance_admin=request.data.get('clearance_admin', False),
             final_settlement=request.data.get('final_settlement', 0),
+            settlement_notes=request.data.get('settlement_notes', ''),
             notes=request.data.get('notes', ''),
-            status='ACTIVE',
             created_by=request.user,
             updated_by=request.user,
         )
-        
-        if request.data.get('update_employee_status', False):
-            employee.employment_status = 'RESIGNED' if exit_record.reason == 'RESIGNATION' else 'TERMINATED'
-            employee.save(update_fields=['employment_status'])
         
         self._create_default_checklist(exit_record, request.user)
         
@@ -244,11 +231,160 @@ class ExitRecordView(BaseExitView):
         
         if checklist_items:
             ExitChecklist.objects.bulk_create(checklist_items)
+
+    @db_transaction.atomic
+    def _apply_final_settlement(self, employee, company_id, branch_id, exit_record, user):
+        """
+        Apply final settlement side effects when exit is CONFIRMED:
+        - Deactivate active compensation
+        - Cancel pending/approved leaves after LWD
+        - Settle all outstanding personal loans (mark as RETURNED)
+        - Settle all outstanding salary advances (mark as RETURNED)
+        - Create a final PayrollRecord with CONFIRMED payment
+        - Update exit_record.final_settlement with calculated amount
+        """
+        result = {}
+        lwd = exit_record.last_working_day or exit_record.exit_date
+        month = lwd.month
+        year = lwd.year
+
+        # ── 1. Deactivate compensation ──
+        active_comp = Compensation.objects.filter(
+            employee=employee,
+            status='CONFIRM',
+            is_deleted=False
+        ).first()
+        if active_comp:
+            active_comp.updated_by = user
+            active_comp.save(update_fields=['updated_by'])
+            result['compensation_deactivated'] = str(active_comp._id)
+
+        # ── 2. Cancel pending/approved leaves after LWD ──
+        cancelled_leaves = LeaveRequest.objects.filter(
+            employee=employee,
+            status__in=['PENDING', 'APPROVED'],
+            start_date__gt=lwd,
+            is_deleted=False
+        )
+        cancelled_count = cancelled_leaves.count()
+        cancelled_leaves.update(
+            status='CANCELLED',
+            updated_by=user,
+        )
+        result['leaves_cancelled'] = cancelled_count
+
+        # ── 3. Settle all outstanding personal loans ──
+        outstanding_loans = EmployeeLoan.objects.filter(
+            employee=employee,
+            approval='CONFIRM',
+            is_deleted=False
+        ).exclude(loan_type='SALARY_ADVANCE').filter(
+            Q(status='UNPAID') | Q(status='PAID')
+        )
+        total_loan_settled = 0
+        for loan in outstanding_loans:
+            remaining = float(loan.remaining_amount or 0)
+            if remaining > 0:
+                total_loan_settled += remaining
+            loan.remaining_amount = 0
+            loan.paid_amount = float(loan.total_payable)
+            loan.status = 'RETURNED'
+            loan.updated_by = user
+            loan.save(update_fields=['remaining_amount', 'paid_amount', 'status', 'updated_by'])
+        result['loans_settled'] = outstanding_loans.count()
+        result['loan_settlement_amount'] = total_loan_settled
+
+        # ── 4. Settle all outstanding salary advances ──
+        outstanding_advances = EmployeeLoan.objects.filter(
+            employee=employee,
+            loan_type='SALARY_ADVANCE',
+            approval='CONFIRM',
+            status='PAID',
+            is_deleted=False
+        )
+        total_advance_settled = 0
+        for adv in outstanding_advances:
+            remaining = float(adv.remaining_amount or 0)
+            if remaining > 0:
+                total_advance_settled += remaining
+            adv.remaining_amount = 0
+            adv.paid_amount = float(adv.total_payable)
+            adv.status = 'RETURNED'
+            adv.updated_by = user
+            adv.save(update_fields=['remaining_amount', 'paid_amount', 'status', 'updated_by'])
+        result['advances_settled'] = outstanding_advances.count()
+        result['advance_settlement_amount'] = total_advance_settled
+
+        # ── 5. Create final PayrollRecord with CONFIRMED payment (only if settlement > 0) ──
+        settlement_amount = exit_record.final_settlement or 0
+        transaction_number = f"EXIT-{year}{str(month).zfill(2)}-{employee.employee_id}"
+
+        if settlement_amount > 0:
+            final_payroll, created = PayrollRecord.objects.update_or_create(
+                employee=employee,
+                month=month,
+                year=year,
+                is_deleted=False,
+                defaults={
+                    'company_id': company_id,
+                    'branch_id': branch_id,
+                    'base_salary': Decimal(str(settlement_amount)),
+                    'bonus': 0,
+                    'deductions': Decimal(str(total_loan_settled + total_advance_settled)),
+                    'net_salary': Decimal(str(settlement_amount)),
+                    'total_compensation': 0,
+                    'total_loan_deduction': Decimal(str(total_loan_settled + total_advance_settled)),
+                    'total_leave_deduction': 0,
+                    'transaction_type': 'FINAL_SETTLEMENT',
+                    'custom_note': f'Exit settlement - {exit_record.get_reason_display()}',
+                    'processed_at': timezone.now(),
+                    'created_by': user,
+                    'updated_by': user,
+                }
+            )
+            result['payroll_id'] = str(final_payroll._id)
+            result['payroll_created'] = created
+
+            # ── 6. Create CONFIRMED payment → goes to finance ──
+            payment = create_payment_for(
+                final_payroll,
+                amount=Decimal(str(settlement_amount)),
+                payment_date=date.today(),
+                user=user,
+                payment_method='BANK_TRANSFER',
+                reference_number=transaction_number,
+                notes=f'Exit settlement for {employee.full_name} - {exit_record.get_reason_display()}',
+                auto_confirm=False,
+            )
+            payment.status = 'CONFIRMED'
+            payment.save(update_fields=['status', 'updated_at'])
+            result['payment_id'] = str(payment._id)
+            result['transaction_number'] = transaction_number
+
+            result['settlement_note'] = (
+                f'Settlement: {settlement_amount:.2f} | '
+                f'Loans settled: {total_loan_settled:.2f} | '
+                f'Advances settled: {total_advance_settled:.2f} '
+                f'| Payroll: {transaction_number}'
+            )
+        else:
+            result['settlement_note'] = (
+                f'No payout — employee owes company {abs(settlement_amount):.2f} | '
+                f'Loans settled: {total_loan_settled:.2f} | '
+                f'Advances settled: {total_advance_settled:.2f}'
+            )
+
+        # Update exit record with calculated settlement
+        exit_record.final_settlement = settlement_amount
+        exit_record.settlement_notes = result.get('settlement_note', '')
+        exit_record.save(update_fields=['final_settlement', 'settlement_notes'])
+
+        return result
     
-    @transaction.atomic
+
     def patch(self, request):
         """Update exit record using UUID"""
-        company_id, _ = self._get_company_context(request)
+        company_id, branch_id = self._get_company_context(request)
         
         exit_uuid = request.data.get('id')
         if not exit_uuid:
@@ -264,36 +400,59 @@ class ExitRecordView(BaseExitView):
             is_deleted=False
         )
         
+        # Lock editing once status is confirmed or rejected
+        if exit_record.status in ('CONFIRMED', 'REJECTED'):
+            return Response(
+                {'error': f'Exit record is locked. Status is already {exit_record.status.lower()}.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         updatable_fields = [
             'exit_date', 'last_working_day', 'reason', 'notice_served',
-            'clearance_hr', 'clearance_it', 'clearance_finance', 'clearance_admin',
-            'clearance_status', 'final_settlement', 'notes', 'status'
+            'final_settlement', 'settlement_notes', 'notes', 'status'
         ]
         
         for field in updatable_fields:
             if field in request.data:
                 if field in ['exit_date', 'last_working_day'] and request.data[field]:
                     setattr(exit_record, field, datetime.strptime(request.data[field], '%Y-%m-%d').date())
-                elif field == 'final_settlement':
-                    setattr(exit_record, field, float(request.data[field]))
                 else:
                     setattr(exit_record, field, request.data[field])
         
-        if request.data.get('status') == 'CLOSED' and exit_record.status != 'CLOSED':
+        # Apply final settlement side effects when exit is confirmed
+        if request.data.get('status') == 'CONFIRMED':
             employee = exit_record.employee
-            if employee and employee.employment_status in ['ACTIVE', 'ON_LEAVE']:
+            if employee and employee.employment_status not in ['RESIGNED', 'TERMINATED']:
                 employee.employment_status = 'RESIGNED' if exit_record.reason == 'RESIGNATION' else 'TERMINATED'
                 employee.save(update_fields=['employment_status'])
-        
+
+            # Apply settlement: deactivate comp, cancel leaves, settle loans, create payroll
+            try:
+                settlement_result = self._apply_final_settlement(
+                    employee, company_id, branch_id, exit_record, request.user
+                )
+            except Exception as e:
+                logger.error(f"Failed to apply final settlement for {employee.full_name}: {e}", exc_info=True)
+                return Response(
+                    {'error': f'Exit confirmed but settlement application failed: {str(e)}'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        else:
+            settlement_result = None
+
         exit_record.updated_by = request.user
         exit_record.save()
-        
-        return Response({
+
+        response_data = {
             "message": "Exit record updated successfully",
             "exit_record": self._serialize_exit_record(exit_record)
-        })
+        }
+        if settlement_result:
+            response_data["settlement"] = settlement_result
+
+        return Response(response_data)
     
-    @transaction.atomic
+
     def delete(self, request):
         """Soft delete exit record using UUID"""
         company_id, _ = self._get_company_context(request)
@@ -341,23 +500,256 @@ class ExitStatsView(BaseExitView):
         
         stats = {
             "total_exits": base_query.count(),
-            "active_exits": base_query.filter(status='ACTIVE').count(),
-            "closed_exits": base_query.filter(status='CLOSED').count(),
-            "pending_clearance": base_query.filter(clearance_status='PENDING').count(),
-            "in_progress_clearance": base_query.filter(clearance_status='IN_PROGRESS').count(),
-            "completed_clearance": base_query.filter(clearance_status='COMPLETED').count(),
-            "avg_settlement": float(base_query.aggregate(Avg('final_settlement'))['final_settlement__avg'] or 0),
-            "total_settlement": float(base_query.aggregate(Sum('final_settlement'))['final_settlement__sum'] or 0),
+            "pending_exits": base_query.filter(status='PENDING').count(),
+            "confirmed_exits": base_query.filter(status='CONFIRMED').count(),
+            "rejected_exits": base_query.filter(status='REJECTED').count(),
             "by_reason": list(base_query.values('reason').annotate(count=Count('id')).order_by('-count')),
-            "by_department": list(base_query.values('department').annotate(count=Count('id')).order_by('-count')),
             "monthly_trend": list(monthly_query.annotate(
                 month=models.functions.ExtractMonth('exit_date')
             ).values('month').annotate(count=Count('id')).order_by('month')),
-            "clearance_completion_rate": round((base_query.filter(clearance_status='COMPLETED').count() / base_query.count() * 100) if base_query.count() > 0 else 0, 2),
             "notice_compliance_rate": round((base_query.filter(notice_served=True).count() / base_query.count() * 100) if base_query.count() > 0 else 0, 2),
         }
         
         return Response(stats)
+
+
+class ExitFinalSettlementView(BaseExitView):
+    """Calculate final settlement amount for an employee
+    Uses same calendar-day proration logic as PayrollView for consistency.
+    """
+
+    def get_permission_action(self):
+        return 'view'
+
+    def _is_working_day(self, company_id, dt):
+        company_settings = CompanySettings.objects.filter(company_id=company_id).first()
+        if not company_settings:
+            return True
+        working_days_set = set(
+            WorkingDay.objects.filter(
+                company_settings=company_settings,
+                is_working=True
+            ).values_list('day', flat=True)
+        )
+        if dt.weekday() not in working_days_set:
+            return False
+        if PublicHoliday.objects.filter(
+            company_id=company_id,
+            date=dt,
+            is_deleted=False
+        ).exists():
+            return False
+        return True
+
+    def _count_working_days_in_range(self, company_id, start_date, end_date):
+        working_days = 0
+        current = start_date
+        while current <= end_date:
+            if self._is_working_day(company_id, current):
+                working_days += 1
+            current += timedelta(days=1)
+        return working_days
+
+    def _is_month_paid(self, employee, month, year):
+        return PayrollRecord.objects.filter(
+            employee=employee,
+            month=month,
+            year=year,
+            is_deleted=False,
+            is_cancelled=False,
+            net_salary__gt=0
+        ).exists()
+
+    def post(self, request):
+        company_id, _ = self._get_company_context(request)
+
+        employee_uuid = request.data.get('employee_id')
+        if not employee_uuid:
+            return Response(
+                {'error': 'employee_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        employee = get_object_or_404(
+            Employee,
+            _id=employee_uuid,
+            company_id=company_id,
+            is_deleted=False
+        )
+
+        original_base_salary = float(employee.salary or 0)
+        join_date = employee.joining_date
+
+        lwd = None
+        if request.data.get('last_working_day'):
+            lwd = datetime.strptime(request.data['last_working_day'], '%Y-%m-%d').date()
+        else:
+            exit_record = ExitRecord.objects.filter(
+                employee=employee,
+                is_deleted=False,
+                status='PENDING'
+            ).first()
+            if exit_record:
+                lwd = exit_record.last_working_day or exit_record.exit_date
+
+        if not join_date or not lwd:
+            return Response(
+                {'error': 'Employee joining date and last working day are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        lwd_month_start = date(lwd.year, lwd.month, 1)
+
+        # Walk backwards from LWD month to find the most recent PAID month
+        last_paid_month_end = None
+        cursor_check = lwd_month_start
+        while cursor_check >= date(join_date.year, join_date.month, 1):
+            m = cursor_check.month
+            y = cursor_check.year
+            if self._is_month_paid(employee, m, y):
+                # This month is paid — start from the next month
+                if m == 12:
+                    last_paid_month_end = date(y + 1, 1, 1)
+                else:
+                    last_paid_month_end = date(y, m + 1, 1)
+                break
+            # Move to previous month
+            if m == 1:
+                cursor_check = date(y - 1, 12, 1)
+            else:
+                cursor_check = date(y, m - 1, 1)
+
+        if last_paid_month_end is not None:
+            if join_date > last_paid_month_end:
+                period_start = join_date
+            else:
+                period_start = max(join_date, last_paid_month_end)
+        else:
+            # No months paid — include all from join date
+            period_start = join_date
+
+        period_end = lwd
+
+        # ---- PayrollView-style: iterate per unpaid month ----
+        days_in_month = 30
+        daily_rate = original_base_salary / days_in_month if original_base_salary > 0 else 0
+
+        compensation = Compensation.objects.filter(
+            employee=employee,
+            status='CONFIRM',
+            is_deleted=False
+        ).prefetch_related('selected_months', 'month_range').first()
+
+        total_base_salary = 0
+        total_compensation = 0
+        total_leave_deduction = 0
+
+        cursor = date(period_start.year, period_start.month, 1)
+        while cursor <= period_end:
+            month = cursor.month
+            year = cursor.year
+
+            # Skip months already paid via regular payroll
+            if self._is_month_paid(employee, month, year):
+                if month == 12:
+                    cursor = date(year + 1, 1, 1)
+                else:
+                    cursor = date(year, month + 1, 1)
+                continue
+
+            month_start = max(period_start, cursor)
+            if month == 12:
+                month_end = min(period_end, date(year, 12, 31))
+            else:
+                month_end = min(period_end, date(year, month + 1, 1) - timedelta(days=1))
+
+            calendar_days = (month_end - month_start).days + 1
+            prorated_days = min(calendar_days, days_in_month)
+            proration_factor = prorated_days / days_in_month
+
+            total_base_salary += original_base_salary * proration_factor
+
+            if compensation:
+                freq = compensation.frequency_type
+                full_month_comp = 0
+                if freq in ('ONE_TIME', 'SELECTED_MONTH'):
+                    if compensation.selected_months.filter(month=month, year=year).exists():
+                        full_month_comp = float(compensation.total_allowances)
+                elif freq == 'MONTH_RANGE':
+                    try:
+                        mr = compensation.month_range
+                        if (mr.start_year, mr.start_month) <= (year, month) <= (mr.end_year, mr.end_month):
+                            full_month_comp = float(compensation.total_allowances)
+                    except CompensationMonthRange.DoesNotExist:
+                        pass
+                else:
+                    full_month_comp = float(compensation.total_allowances)
+                total_compensation += full_month_comp * proration_factor
+
+            if daily_rate > 0:
+                approved_leaves = LeaveRequest.objects.filter(
+                    employee=employee,
+                    status='APPROVED',
+                    start_date__lte=month_end,
+                    end_date__gte=month_start,
+                    is_deleted=False
+                )
+                for leave in approved_leaves:
+                    l_start = max(leave.start_date, month_start)
+                    l_end = min(leave.end_date, month_end)
+                    leave_working_days = self._count_working_days_in_range(company_id, l_start, l_end)
+                    if leave.is_half_day and leave_working_days == 1:
+                        leave_working_days = 0.5
+                    total_leave_deduction += leave_working_days * daily_rate
+
+            if month == 12:
+                cursor = date(year + 1, 1, 1)
+            else:
+                cursor = date(year, month + 1, 1)
+
+    # ---- Loan deductions (all outstanding: personal loans, NOT salary advances) ----
+        active_loans = EmployeeLoan.objects.filter(
+            employee=employee,
+            approval='CONFIRM',
+            is_deleted=False
+        ).exclude(loan_type='SALARY_ADVANCE').filter(
+            Q(status='UNPAID') | Q(status='PAID')
+        )
+        total_loan_deduction = sum(float(l.remaining_amount or 0) for l in active_loans)
+
+        # Salary advances outstanding (status='PAID' = not yet returned/deducted)
+        advance_loans = EmployeeLoan.objects.filter(
+            employee=employee,
+            loan_type='SALARY_ADVANCE',
+            approval='CONFIRM',
+            status='PAID',
+            is_deleted=False
+        )
+        total_advance_outstanding = sum(float(l.remaining_amount or 0) for l in advance_loans)
+
+        net_settlement = total_base_salary + total_compensation - total_leave_deduction - total_loan_deduction - total_advance_outstanding
+        net_settlement_payable = max(0, net_settlement)
+
+        return Response({
+            'employee_id': str(employee._id),
+            'employee_name': employee.full_name,
+            'joining_date': join_date.isoformat(),
+            'last_working_day': lwd.isoformat(),
+            'period_start': period_start.isoformat(),
+            'period_end': period_end.isoformat(),
+            'prev_month_paid': last_paid_month_end is not None and last_paid_month_end > lwd_month_start,
+            'days_in_month': days_in_month,
+            'daily_rate': str(daily_rate),
+            'original_base_salary': str(original_base_salary),
+            'base_salary': str(total_base_salary),
+            'compensation': str(total_compensation),
+            'leave_deduction': str(total_leave_deduction),
+            'loan_deduction': str(total_loan_deduction),
+            'advance_deduction': str(total_advance_outstanding),
+            'net_settlement': str(net_settlement_payable),
+            'net_salary': str(net_settlement_payable),
+            'net_settlement_raw': str(net_settlement),  # may be negative — employee owes company
+        })
 
 
 class ExitChecklistView(BaseExitView):
@@ -402,7 +794,7 @@ class ExitChecklistView(BaseExitView):
             for item in checklist_items
         ])
     
-    @transaction.atomic
+
     def patch(self, request):
         """Update checklist item status using UUID"""
         company_id, _ = self._get_company_context(request)
@@ -443,39 +835,16 @@ class ExitChecklistView(BaseExitView):
         checklist_item.updated_by = request.user
         checklist_item.save()
         
-        exit_record = checklist_item.exit_record
-        self._update_exit_clearance_status(exit_record)
-        
         return Response({
             "message": "Checklist item updated successfully",
             "item_id": str(checklist_item._id),
             "status": checklist_item.status
         })
-    
-    def _update_exit_clearance_status(self, exit_record):
-        """Update exit record clearance based on checklist progress"""
-        checklist_items = ExitChecklist.objects.filter(
-            exit_record=exit_record,
-            is_deleted=False
-        )
-        
-        total_items = checklist_items.count()
-        if total_items == 0:
-            return
-        
-        for clearance_type in ['HR', 'IT', 'FINANCE', 'ADMIN']:
-            type_items = checklist_items.filter(item_type=clearance_type)
-            type_completed = type_items.filter(status='COMPLETED').count()
-            is_cleared = type_items.count() > 0 and type_completed == type_items.count()
-            setattr(exit_record, f'clearance_{clearance_type.lower()}', is_cleared)
-        
-        exit_record.save()
 
 
 class ExitBulkActionView(BaseExitView):
     """Bulk actions for exit records with UUID support"""
     
-    @transaction.atomic
     def post(self, request):
         """Perform bulk actions"""
         company_id, _ = self._get_company_context(request)
@@ -495,19 +864,19 @@ class ExitBulkActionView(BaseExitView):
             is_deleted=False
         )
         
-        if action == 'CLOSE':
+        if action == 'CONFIRM':
             records.update(
-                status='CLOSED',
+                status='CONFIRMED',
                 updated_by=request.user
             )
-            message = f'Successfully closed {records.count()} exit records'
+            message = f'Successfully confirmed {records.count()} exit records'
         
-        elif action == 'REOPEN':
+        elif action == 'REJECT':
             records.update(
-                status='ACTIVE',
+                status='REJECTED',
                 updated_by=request.user
             )
-            message = f'Successfully reopened {records.count()} exit records'
+            message = f'Successfully rejected {records.count()} exit records'
         
         elif action == 'DELETE':
             records.update(
@@ -526,4 +895,186 @@ class ExitBulkActionView(BaseExitView):
         return Response({
             'message': message,
             'affected_count': records.count()
+        })
+
+
+class ExitClearDuesView(BaseExitView):
+    """Clear negative settlement (employee owes company) by creating a finance receipt"""
+
+    def get_permission_action(self):
+        return 'update'
+
+    @db_transaction.atomic
+    def post(self, request):
+        company_id, branch_id = self._get_company_context(request)
+
+        exit_uuid = request.data.get('exit_id')
+        if not exit_uuid:
+            return Response(
+                {'error': 'exit_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        exit_record = get_object_or_404(
+            ExitRecord,
+            _id=exit_uuid,
+            company_id=company_id,
+            is_deleted=False
+        )
+
+        # Validate: must be CONFIRMED and have negative settlement
+        if exit_record.status != 'CONFIRMED':
+            return Response(
+                {'error': 'Only CONFIRMED exit records can have dues cleared'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if exit_record.final_settlement >= 0:
+            return Response(
+                {'error': 'No negative settlement to clear'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        amount_due = abs(exit_record.final_settlement)
+        employee = exit_record.employee
+
+        # ── Create a finance RECEIPT payment (employee returned money to company) ──
+        from django.contrib.contenttypes.models import ContentType
+        from apps.finance.models import Payment
+
+        ct = ContentType.objects.get_for_model(ExitRecord, for_concrete_model=False)
+        payment = Payment.objects.create(
+            company_id=company_id,
+            branch_id=branch_id,
+            content_type=ct,
+            object_id=exit_record.pk,
+            payment_type='RECEIPT',
+            payment_method='BANK_TRANSFER',
+            amount=Decimal(str(amount_due)),
+            payment_date=date.today(),
+            reference_number=f'DUES-{exit_record._id}'[:50],
+            notes=f'Employee dues recovery - {employee.full_name if employee else exit_record.employee_name} - Exit {exit_record._id}',
+            status='CONFIRMED',
+            created_by=request.user,
+            updated_by=request.user,
+        )
+
+        # ── Update exit record ──
+        old_notes = exit_record.settlement_notes or ''
+        exit_record.final_settlement = 0
+        exit_record.settlement_notes = (
+            f'{old_notes} | Dues cleared: {amount_due:.2f} received on {date.today().isoformat()}'
+        )
+        exit_record.updated_by = request.user
+        exit_record.save(update_fields=['final_settlement', 'settlement_notes', 'updated_by'])
+
+        return Response({
+            'message': f'Dues of {amount_due:.2f} cleared successfully',
+            'payment_id': str(payment._id),
+            'transaction_number': payment.reference_number,
+        }, status=status.HTTP_200_OK)
+
+
+class ExitEmployeeAssetsView(BaseExitView):
+    """View and return assets allocated to the employee of an exit record"""
+
+    def get_permission_action(self):
+        return 'view'
+
+    def get(self, request, exit_id):
+        """Get all ACTIVE asset assignments for this exit's employee"""
+        company_id, _ = self._get_company_context(request)
+        
+        exit_record = get_object_or_404(
+            ExitRecord,
+            _id=exit_id,
+            company_id=company_id,
+            is_deleted=False
+        )
+        
+        assignments = EmployeeAssetAssignment.objects.filter(
+            employee=exit_record.employee,
+            status='ACTIVE',
+            is_deleted=False,
+            company_id=company_id
+        ).select_related('asset')
+        
+        return Response([
+            {
+                "id": str(a._id),
+                "asset_id": str(a.asset._id),
+                "asset_name": a.asset.name,
+                "asset_brand": a.asset.brand,
+                "asset_serial": a.asset.serial_number,
+                "quantity": a.quantity,
+                "assigned_date": a.assigned_date.isoformat() if a.assigned_date else None,
+                "condition_on_assignment": a.condition_on_assignment,
+                "notes": a.notes,
+            }
+            for a in assignments
+        ])
+
+
+class ExitReturnAssetView(BaseExitView):
+    """Return a single asset assignment from an exit record"""
+
+    def get_permission_action(self):
+        return 'update'
+
+    def post(self, request, exit_id):
+        """Return a specific asset assignment"""
+        company_id, _ = self._get_company_context(request)
+        
+        exit_record = get_object_or_404(
+            ExitRecord,
+            _id=exit_id,
+            company_id=company_id,
+            is_deleted=False
+        )
+        
+        if exit_record.status != 'CONFIRMED':
+            return Response(
+                {'error': 'Asset return is only allowed for confirmed exit records'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        assignment_id = request.data.get('assignment_id')
+        if not assignment_id:
+            return Response(
+                {'error': 'assignment_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        assignment = get_object_or_404(
+            EmployeeAssetAssignment,
+            _id=assignment_id,
+            employee=exit_record.employee,
+            status='ACTIVE',
+            company_id=company_id,
+            is_deleted=False
+        )
+        
+        condition_on_return = request.data.get('condition_on_return', 'GOOD')
+        return_notes = request.data.get('return_notes', '')
+        returned_date = request.data.get('returned_date', date.today().isoformat())
+        
+        if isinstance(returned_date, str):
+            returned_date = datetime.strptime(returned_date, '%Y-%m-%d').date()
+        
+        assignment.status = 'RETURNED'
+        assignment.returned_date = returned_date
+        assignment.condition_on_return = condition_on_return
+        assignment.return_notes = return_notes
+        assignment.updated_by = request.user
+        assignment.save()
+        
+        # Restore asset quantity
+        asset = assignment.asset
+        asset.available_quantity += assignment.quantity
+        asset.is_assigned = False
+        asset.save(update_fields=['available_quantity', 'is_assigned'])
+        
+        return Response({
+            "message": f'Asset "{asset.name}" returned successfully',
+            "assignment_id": str(assignment._id),
         })

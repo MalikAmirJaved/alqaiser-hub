@@ -9,7 +9,7 @@ import {
   Truck, Clock, CheckCircle2, DollarSign
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, PieChart, Pie, Cell, AreaChart, Area } from "recharts";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { PageHeader, Card, CardHeader, StatusBadge, ToolbarButton } from "@/components/finance/ui";
 import {
   useOverallSummary,
@@ -92,6 +92,7 @@ function Kpi({
 }
 
 export default function InventoryDashboard() {
+  const formatCurrency = useFormatCurrency();
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
   const queryClient = useQueryClient();
   const t = tooltipStyle();
@@ -158,18 +159,11 @@ export default function InventoryDashboard() {
     Purchases: item.purchase_amount,
   })) || [];
 
-  // Stock turnover rate (mock - based on movement)
+  // Stock turnover rate (based on actual movement data)
   const stockTurnoverData = movementData.slice(-6).map(item => ({
     month: item.date,
     turnover: item.Outgoing / (item.Incoming || 1),
   }));
-
-  // Warehouse distribution (mock - replace with actual data)
-  const warehouseData = [
-    { name: "Main Warehouse", value: summary?.total_stock_value ? summary.total_stock_value * 0.6 : 0 },
-    { name: "Secondary WH", value: summary?.total_stock_value ? summary.total_stock_value * 0.25 : 0 },
-    { name: "Retail Store", value: summary?.total_stock_value ? summary.total_stock_value * 0.15 : 0 },
-  ];
 
   return (
     <>
@@ -190,25 +184,21 @@ export default function InventoryDashboard() {
           <Kpi
             label="Total Variants"
             value={String(summary?.total_variants ?? 0)}
-            delta={8.2}
             accent="primary"
           />
           <Kpi
             label="Stock Value"
             value={formatCurrency(summary?.total_stock_value ?? 0)}
-            delta={12.5}
             accent="success"
           />
           <Kpi
             label="Low Stock Items"
             value={String(summary?.low_stock_count ?? 0)}
-            delta={-5.3}
             accent="warning"
           />
           <Kpi
             label="Warehouses"
             value={String(summary?.total_warehouses ?? 0)}
-            delta={0}
             accent="info"
           />
         </div>
@@ -218,25 +208,21 @@ export default function InventoryDashboard() {
           <Kpi
             label="Total Sales (YTD)"
             value={formatCurrency(summary?.total_sales_amount ?? 0)}
-            delta={18.7}
             accent="primary"
           />
           <Kpi
             label="Total Purchases (YTD)"
             value={formatCurrency(summary?.total_purchase_amount ?? 0)}
-            delta={-2.4}
             accent="info"
           />
           <Kpi
             label="Gross Margin"
             value={`${summary?.total_sales_amount && summary?.total_purchase_amount ? (((summary.total_sales_amount - summary.total_purchase_amount) / summary.total_sales_amount) * 100).toFixed(1) : "0"}%`}
-            delta={3.2}
             accent="success"
           />
           <Kpi
             label="Stock Turnover"
             value={`${stockTurnoverData.length > 0 ? (stockTurnoverData.reduce((sum, item) => sum + item.turnover, 0) / stockTurnoverData.length).toFixed(1) : "0"}`}
-            delta={0.5}
             accent="warning"
           />
         </div>
@@ -273,7 +259,7 @@ export default function InventoryDashboard() {
         )}
 
         {/* Charts Row 1 */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <Card className="xl:col-span-2">
             <CardHeader
               title="Stock Movement"
@@ -309,38 +295,6 @@ export default function InventoryDashboard() {
                   <Area type="monotone" dataKey="Outgoing" name="Outgoing" stroke="var(--color-chart-3)" fill="url(#gOut)" strokeWidth={2} />
                 </AreaChart>
               </ResponsiveContainer>
-            </div>
-          </Card>
-
-          <Card>
-            <CardHeader title="Warehouse Distribution" subtitle="Stock value by location" />
-            <div className="p-4 h-[300px]">
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie
-                    data={warehouseData}
-                    dataKey="value"
-                    nameKey="name"
-                    innerRadius={55}
-                    outerRadius={90}
-                    paddingAngle={2}
-                  >
-                    {warehouseData.map((_, i) => (
-                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} stroke="var(--color-background)" strokeWidth={2} />
-                    ))}
-                  </Pie>
-                  <Tooltip {...t} formatter={(v: any) => formatCurrency(v)} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="px-5 pb-4 grid grid-cols-1 gap-2 text-xs">
-              {warehouseData.map((item, i) => (
-                <div key={item.name} className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-sm" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
-                  <span className="text-muted-foreground flex-1 truncate">{item.name}</span>
-                  <span className="num font-medium">{formatCurrency(item.value)}</span>
-                </div>
-              ))}
             </div>
           </Card>
         </div>

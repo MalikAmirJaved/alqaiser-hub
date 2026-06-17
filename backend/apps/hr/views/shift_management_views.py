@@ -1,6 +1,5 @@
 # apps/hr/views/shift_management_views.py
 from datetime import date, datetime, timedelta
-from django.db import transaction
 from django.db.models import Q, Count, F
 from django.core.cache import cache
 from django.shortcuts import get_object_or_404
@@ -76,7 +75,7 @@ class EmployeeShiftResolveView(CompanyBranchMixin, PermissionRequiredMixin, APIV
                 results.append({
                     'employee_id': str(emp._id),
                     'employee_name': emp.full_name,
-                    'employee_department': emp.department,
+                    'employee_department': str(emp.department),
                     'template_id': str(resolved.get('template_id')) if resolved.get('template_id') else None,
                     'template_name': resolved.get('template_name'),
                     'start_time': resolved.get('start_time'),
@@ -108,7 +107,7 @@ class EmployeeShiftResolveView(CompanyBranchMixin, PermissionRequiredMixin, APIV
                 if employee:
                     formatted_results[str(employee._id)] = {
                         'employee_name': employee.full_name,
-                        'employee_department': employee.department,
+                        'employee_department': str(employee.department),
                         'shifts': {}
                     }
                     for date_str, shift_data in shifts.items():
@@ -136,8 +135,14 @@ class ShiftOverrideView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     permission_resource = 'shift_override'
     """CRUD for shift overrides with UUID support"""
     permission_classes = [IsAuthenticated]
-    
+    def get_permission_action(self):
+        # POST (create) and DELETE use 'schedule' instead of default 'create'/'delete'
+        if self.request.method in ['POST', 'DELETE']:
+            return 'schedule'
+        return super().get_permission_action()   # GET → 'view'
+
     def get(self, request):
+        
         company_id = request.user.company_id
         
         if not company_id:
@@ -180,7 +185,7 @@ class ShiftOverrideView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             for o in overrides
         ])
     
-    @transaction.atomic
+
     def post(self, request):
         company_id = request.user.company_id
         
@@ -228,7 +233,7 @@ class ShiftOverrideView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
     
-    @transaction.atomic
+
     def delete(self, request):
         company_id = request.user.company_id
         
@@ -278,7 +283,11 @@ class ShiftDateRangeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     permission_resource = 'shift_override'
     """CRUD for date range assignments with UUID support"""
     permission_classes = [IsAuthenticated]
-    
+    def get_permission_action(self):
+        if self.request.method in ['POST', 'PATCH', 'DELETE']:
+            return 'schedule'
+        return super().get_permission_action()
+
     def get(self, request):
         company_id = request.user.company_id
         
@@ -320,7 +329,7 @@ class ShiftDateRangeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             for a in assignments
         ])
     
-    @transaction.atomic
+
     def post(self, request):
         company_id = request.user.company_id
         
@@ -373,7 +382,7 @@ class ShiftDateRangeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
     
-    @transaction.atomic
+
     def patch(self, request):
         company_id = request.user.company_id
         
@@ -411,7 +420,7 @@ class ShiftDateRangeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
     
-    @transaction.atomic
+
     def delete(self, request):
         company_id = request.user.company_id
         
@@ -429,7 +438,9 @@ class ShiftDateRangeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 company_id=company_id
             )
             
-            assignment.delete()
+            assignment.is_deleted = True
+            assignment.deleted_by = request.user
+            assignment.save(update_fields=["is_deleted", "deleted_by"])
             
             return Response({'message': 'Assignment deleted successfully'})
             
@@ -443,15 +454,18 @@ class ShiftDateRangeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
 class BulkShiftAssignmentView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'shift_override'
+    permission_classes = [IsAuthenticated]
 
     def get_permission_action(self):
-        if self.request.method.upper() == 'POST':
-            return 'assign'
+        # All write operations should use 'schedule'
+        if self.request.method == 'POST':
+            return 'schedule'
         return super().get_permission_action()
+
     """Bulk shift assignment for multiple employees with UUID support"""
     permission_classes = [IsAuthenticated]
     
-    @transaction.atomic
+
     def post(self, request):
         company_id = request.user.company_id
         
@@ -699,7 +713,7 @@ class ShiftScheduleGenerateView(CompanyBranchMixin, PermissionRequiredMixin, API
     """Generate and cache shift schedules for performance with UUID support"""
     permission_classes = [IsAuthenticated]
     
-    @transaction.atomic
+
     def post(self, request):
         company_id = request.user.company_id
         

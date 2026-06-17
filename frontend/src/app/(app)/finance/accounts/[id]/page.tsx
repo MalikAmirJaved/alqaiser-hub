@@ -6,11 +6,12 @@ import { DetailLayout, StandardSidebar, RelatedRecords } from "@/components/reus
 import { useAccount } from "@/hooks/finance/useAccounts";
 import { useJournalEntries } from "@/hooks/finance/useJournalEntries";
 import { useTrialBalance } from "@/hooks/finance/useTrialBalance";
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import AccountFormModal from "@/components/finance/accounts/AccountFormModal";
 
 export default function AccountDetailPage() {
+    const formatCurrency = useFormatCurrency();
   const { id } = useParams();
   const { data: account, isLoading: accountLoading } = useAccount(id as string);
   const { data: trialBalance } = useTrialBalance();

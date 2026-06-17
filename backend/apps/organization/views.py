@@ -3,17 +3,24 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import generics, status
-from django.db import transaction
 from .models import (
-    UserCompanyContext, Company, Branch, User
+    UserCompanyContext, Company, Branch, User,Department
 )
-from .serializers import (UserProfileSerializer, BranchSerializer)
+from rest_framework import viewsets
+from .serializers import (UserProfileSerializer, BranchSerializer, DepartmentSerializer)
 from rest_framework.generics import RetrieveUpdateDestroyAPIView
 from rest_framework.exceptions import NotFound
+from apps.permissions.mixins import PermissionRequiredMixin
+from apps.common.baseauthentication import CompanyBranchMixin
+from rest_framework.decorators import action
+from django.db.models import Q
+from apps.hr.models import Employee
 
-class UserContextView(APIView):
+class UserContextView(PermissionRequiredMixin, APIView):
     """Get/Update current user's company and branch context"""
     permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
+    permission_resource = 'user'
     
     def get(self, request):
         context, created = UserCompanyContext.objects.get_or_create(
@@ -66,8 +73,10 @@ class UserContextView(APIView):
         })
 
 
-class SwitchCompanyView(APIView):
+class SwitchCompanyView(PermissionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
+    permission_resource = 'user'
 
     def post(self, request):
         company_id = request.data.get('companyId')
@@ -94,10 +103,11 @@ class SwitchCompanyView(APIView):
         return Response({'message': 'Company switched successfully'})
 
 
-class BranchCreateView(APIView):
+class BranchCreateView(PermissionRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
+    permission_resource = 'branch'
 
-    @transaction.atomic
     def post(self, request):
         user = request.user
 
@@ -133,8 +143,10 @@ class BranchCreateView(APIView):
         }, status=status.HTTP_201_CREATED)
 
 
-class BranchDetailView(RetrieveUpdateDestroyAPIView):
+class BranchDetailView(PermissionRequiredMixin, RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
+    permission_resource = 'branch'
     serializer_class = BranchSerializer
 
     def get_queryset(self):
@@ -167,9 +179,11 @@ class BranchDetailView(RetrieveUpdateDestroyAPIView):
         return Response(status=204)
 
 
-class UserProfileView(APIView):
+class UserProfileView(PermissionRequiredMixin, APIView):
     """Get and update current user's profile (including password)."""
     permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
+    permission_resource = 'user'
 
     def get(self, request):
         serializer = UserProfileSerializer(request.user)
@@ -195,36 +209,52 @@ class UserProfileView(APIView):
             user.set_password(password)
 
         serializer = UserProfileSerializer(user, data=data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            if password:
-                user.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        if password:
+            user.save()
+        return Response({
+            'message': 'Profile updated successfully',
+            'data': serializer.data
+        })
 
 
-class UserListView(generics.ListCreateAPIView):
+class UserListView(PermissionRequiredMixin, generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
+    permission_resource = 'user'
     serializer_class = UserProfileSerializer
-    
+
     def get_queryset(self):
-        # Get users for the current user's company only, exclude deleted
-        return User.objects.filter(
+        qs = User.objects.filter(
             company=self.request.user.company,
             is_deleted=False
-        )#.exclude(id=self.request.user.id)  # Exclude current user from list
+        )
+        search = self.request.query_params.get('search')
+        if search:
+            qs = qs.filter(
+                Q(username__icontains=search) |
+                Q(email__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search)
+            )
+        return qs
 
     def perform_create(self, serializer):
-        # Set company, branch, and other required fields
+        # Let the serializer handle the department field (which is a UUID from frontend)
         serializer.save(
             company=self.request.user.company,
-            branch=self.request.user.branch,  # Assign to current user's branch
+            branch=self.request.user.branch,
             created_by=self.request.user,
             updated_by=self.request.user
         )
 
 
-class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
+
+class UserDetailView(PermissionRequiredMixin, generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
+    permission_resource = 'user'
     serializer_class = UserProfileSerializer
 
     def get_queryset(self):
@@ -244,3 +274,95 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
         instance.deleted_by = self.request.user
         instance.is_active = False
         instance.save()
+
+
+class ActiveUsersView(PermissionRequiredMixin, generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    permission_module = 'SETTINGS'
+    permission_resource = 'user'
+    serializer_class = UserProfileSerializer
+
+    def get_queryset(self):
+        return User.objects.filter(
+            company=self.request.user.company,
+            is_deleted=False,
+            is_active=True
+        )
+
+
+class DepartmentViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+    permission_module = 'SETTINGS'
+    permission_resource = 'department'
+    skip_safe_methods = True  # GET requests skip permission checks
+    queryset = Department.objects.all()
+    serializer_class = DepartmentSerializer
+    lookup_field = '_id'
+    lookup_url_kwarg = '_id'
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        qs = qs.filter(is_deleted=False)
+        search = self.request.query_params.get('search')
+        if search:
+            qs = qs.filter(Q(name__icontains=search) | Q(code__icontains=search))
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(
+            company_id=self.request.user.company_id,
+            branch_id=self.request.user.branch_id,
+            created_by=self.request.user,
+            updated_by=self.request.user,
+        )
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=self.request.user)
+
+    @action(detail=True, methods=['get'])
+    def designations(self, request, _id=None):
+        """Get all designations belonging to this department (including 'ALL').
+        Designation.department now stores department UUID or 'ALL'.
+        Return department_id and department_name for each designation.
+        """
+        department = self.get_object()
+        from apps.compsetting.models import Designation
+        qs = Designation.objects.filter(
+            company_id=request.user.company_id,
+            is_deleted=False
+        ).filter(
+            Q(department=department) | Q(department__isnull=True)
+        )
+
+        result = []
+        for d in qs.select_related('department'):
+            dept_obj = d.department
+            dept_id = str(dept_obj._id) if dept_obj else None
+            dept_name = dept_obj.name if dept_obj else 'ALL'
+            result.append({
+                '_id': str(d._id),
+                'name': d.name,
+                'department_id': dept_id,
+                'department_name': dept_name,
+                'is_active': d.is_active,
+            })
+        return Response(result)
+
+
+    @action(detail=True, methods=['get'])
+    def employees(self, request, _id=None):
+        """Get all employees belonging to this department"""
+        department = self.get_object()
+        employees = Employee.objects.filter(
+            company_id=request.user.company_id,
+            department=department,
+            is_deleted=False,
+            employment_status='ACTIVE'
+        ).values('_id', 'first_name', 'last_name', 'employee_id', 'designation')
+        return Response(list(employees))
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.is_deleted = True
+        instance.deleted_by = request.user
+        instance.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)

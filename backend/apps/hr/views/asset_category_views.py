@@ -1,6 +1,6 @@
 # apps/hr/views/asset_category_views.py
 from datetime import datetime
-from django.db import transaction, models
+from django.db import models
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.views import APIView
@@ -76,7 +76,7 @@ class AssetCategoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             for c in categories
         ])
     
-    @transaction.atomic
+
     def post(self, request):
         """Create new asset category"""
         company_id = request.user.company_id
@@ -134,7 +134,7 @@ class AssetCategoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "assetCount": category.assets.count(),
         }, status=status.HTTP_201_CREATED)
     
-    @transaction.atomic
+
     def patch(self, request):
         """Update asset category using UUID"""
         company_id = request.user.company_id
@@ -191,7 +191,7 @@ class AssetCategoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             "assetCount": category.assets.count(),
         })
     
-    @transaction.atomic
+
     def delete(self, request):
         """Soft delete asset category using UUID"""
         company_id = request.user.company_id

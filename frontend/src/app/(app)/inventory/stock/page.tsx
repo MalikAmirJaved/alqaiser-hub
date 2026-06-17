@@ -2,22 +2,23 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { TableView, Column } from "@/components/reuseable/TableGridView";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/reuseable/Checkbox";
 import { StatsCards } from "@/components/reuseable/StatsCards";
-import { Eye, TrendingUp, Package, AlertTriangle, Layers } from "lucide-react";
-import { useCurrentStock, StockItem, useVariantSummary } from "@/hooks/useStockManagement";
+import { Eye, TrendingUp } from "lucide-react";
+import { useCurrentStock, StockItem } from "@/hooks/useStockManagement";
 import { useWarehouses } from "@/hooks/useWarehouses";
 import { StockAdjustModal } from "@/components/inventory/stock/StockAdjustModal";
-import { StockHistoryDrawer } from "@/components/inventory/stock/StockHistoryDrawer";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import PageHeader from "@/components/PageHeader";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 export default function StockManagementPage() {
+  const router = useRouter();
   const permissions = useFeaturePermissions("INVENTORY", "stock");
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
@@ -29,7 +30,6 @@ export default function StockManagementPage() {
     currentStock: number;
     warehouseId: string;
   } | null>(null);
-  const [historyVariantId, setHistoryVariantId] = useState<string | null>(null);
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
 
   // Fetch warehouses for filter dropdown
@@ -93,10 +93,10 @@ export default function StockManagementPage() {
 
   const actions = (row: StockItem) => (
     <div className="flex items-center gap-1 justify-end">
-      <Button variant="ghost" size="sm" onClick={() => setHistoryVariantId(row.variant_id)}>
+      <Button variant="ghost" size="sm" onClick={() => router.push(`/inventory/stock/${row.id}`)}>
         <Eye className="w-4 h-4" />
       </Button>
-      {permissions.update && (
+      {permissions.adjust && (
         <Button
           variant="ghost"
           size="sm"
@@ -140,17 +140,15 @@ export default function StockManagementPage() {
         </div>
         <div className="w-48">
           <Label htmlFor="warehouse" className="text-xs">Warehouse</Label>
-          <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
-            <SelectTrigger id="warehouse" className="h-9">
-              <SelectValue placeholder="All warehouses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              {warehouses?.map((wh) => (
-                <SelectItem key={wh.id} value={String(wh.id)}>{wh.warehouse_name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={selectedWarehouseId}
+            onChange={setSelectedWarehouseId}
+            options={[
+              { value: "all", label: "All" },
+              ...(warehouses || []).map((wh) => ({ value: String(wh.id), label: wh.warehouse_name })),
+            ]}
+            placeholder="All warehouses"
+          />
         </div>
         <div className="flex items-center gap-2 pb-1">
           <Checkbox checked={lowStockOnly} onChange={setLowStockOnly} />
@@ -196,8 +194,8 @@ export default function StockManagementPage() {
         </div>
       )}
 
-      {/* Modals & Drawers */}
-      {selectedVariant && permissions.update && (
+      {/* Modals */}
+      {selectedVariant && permissions.adjust && (
         <StockAdjustModal
           open={adjustModalOpen}
           onClose={() => {
@@ -209,9 +207,6 @@ export default function StockManagementPage() {
           currentStock={selectedVariant.currentStock}
           warehouseId={selectedVariant.warehouseId}
         />
-      )}
-      {historyVariantId && (
-        <StockHistoryDrawer variantId={historyVariantId} open={!!historyVariantId} onClose={() => setHistoryVariantId(null)} />
       )}
     </div>
   );

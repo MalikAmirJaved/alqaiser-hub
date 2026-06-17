@@ -35,7 +35,23 @@ class FinanceEmployeeLoanView(EmployeeLoanView):
     permission_module = 'FINANCE'
     permission_resource = 'payroll'
 
+    def get_permission_action(self):
+        method = self.request.method.upper()
+        if method == 'GET':    return 'view'
+        if method == 'POST':   return 'create'
+        if method == 'PATCH':  return 'update'
+        if method == 'DELETE': return 'delete'
+        return super().get_permission_action()
+
 
 class FinanceCompensationView(CompensationView):
     permission_module = 'FINANCE'
     permission_resource = 'payroll'
+
+    def get_permission_action(self):
+        method = self.request.method.upper()
+        if method == 'GET':    return 'view'
+        if method == 'POST':   return 'create'
+        if method == 'PATCH':  return 'update'
+        if method == 'DELETE': return 'delete'
+        return super().get_permission_action()

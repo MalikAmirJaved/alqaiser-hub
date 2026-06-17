@@ -6,16 +6,17 @@ import { usePolicies, usePolicyStats, useCreatePolicy, useUpdatePolicy, useDelet
 import type { PolicyRecord, PolicyFilters, PolicyFormData, BulkActionPayload } from "@/hooks/usePolicies";
 import PageHeader from "@/components/PageHeader";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
-import { DatePicker } from "@/components/reuseable/DatePicker";
 import { ConfirmationModal, useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import {
   Search, Plus, Pencil, Trash2, FileText,
-  AlertCircle, Clock, X, BookOpen, Users,
-  CheckSquare, Square, RotateCcw
+  AlertCircle, X, BookOpen, Users,
+  CheckSquare, Square, RotateCcw, ChevronDown
 } from "lucide-react";
 import { toast } from "sonner";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { useAutoCode } from "@/hooks/useAutoCode";
+import { useDepartmentOptions } from "@/hooks/useDepartments";
 
 // ==========================================
 // CONSTANTS
@@ -39,7 +40,6 @@ const STATUSES = [
 // ==========================================
 export default function HRPolicyPage() {
   const permissions = useFeaturePermissions("HR", "policy");
-  // Filters state
   const [filters, setFilters] = useState<PolicyFilters>({
     sortBy: "-created_at",
     page: 1,
@@ -49,17 +49,14 @@ export default function HRPolicyPage() {
   const [filterCategory, setFilterCategory] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   
-  // UI state
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<PolicyRecord | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkActionOpen, setBulkActionOpen] = useState(false);
   const [bulkAction, setBulkAction] = useState<string>("");
   
-  // Hooks
   const { confirm, Modal } = useConfirmationModal();
   
-  // Update filters when search/filter changes
   useEffect(() => {
     setFilters(prev => ({
       ...prev,
@@ -69,7 +66,6 @@ export default function HRPolicyPage() {
     }));
   }, [query, filterCategory, filterStatus]);
 
-  // Queries
   const { 
     data: policiesData, 
     isLoading: policiesLoading, 
@@ -83,17 +79,14 @@ export default function HRPolicyPage() {
     isLoading: statsLoading 
   } = usePolicyStats();
 
-  // Mutations
   const createPolicy = useCreatePolicy();
   const updatePolicy = useUpdatePolicy();
   const deletePolicy = useDeletePolicy();
   const bulkActionMutation = useBulkPolicyAction();
 
-  // Derived data
   const records = useMemo(() => policiesData?.results || [], [policiesData]);
   const totalCount = policiesData?.count || 0;
 
-  // Loading state
   const loading = policiesLoading || statsLoading;
 
   // ==========================================
@@ -127,13 +120,9 @@ export default function HRPolicyPage() {
         notes: `Bulk ${bulkAction} action`
       });
       
-      toast.success(`Successfully ${bulkAction}ed ${selectedIds.size} policies`);
       setSelectedIds(new Set());
       setBulkActionOpen(false);
     } catch (error: any) {
-      toast.error(`Failed to ${bulkAction} policies`, {
-        description: error.message
-      });
     }
   };
 
@@ -147,18 +136,13 @@ export default function HRPolicyPage() {
           id: editingRecord.id,
           data: data
         });
-        toast.success("Policy updated successfully");
       } else {
         await createPolicy.mutateAsync(data);
-        toast.success("Policy created successfully");
       }
       
       setModalOpen(false);
       setEditingRecord(null);
     } catch (error: any) {
-      toast.error(isEditing ? "Failed to update policy" : "Failed to create policy", {
-        description: error.message
-      });
     }
   };
 
@@ -171,14 +155,20 @@ export default function HRPolicyPage() {
       onConfirm: async () => {
         try {
           await deletePolicy.mutateAsync(id);
-          toast.success("Policy deleted successfully");
         } catch (error: any) {
-          toast.error("Failed to delete policy", {
-            description: error.message
-          });
         }
       }
     });
+  };
+
+  const handleStatusChange = async (id: string, newStatus: string) => {
+    try {
+      await updatePolicy.mutateAsync({
+        id: id,
+        data: { status: newStatus as any }
+      });
+    } catch (error: any) {
+    }
   };
 
   // ==========================================
@@ -217,7 +207,7 @@ export default function HRPolicyPage() {
     <div className="space-y-5">
       <PageHeader
         title="HR Policy Management"
-        subtitle="Create, publish, and track policy acknowledgments"
+        subtitle="Create, publish, and manage policies"
         actions={
           permissions.create && (
             <button 
@@ -231,32 +221,27 @@ export default function HRPolicyPage() {
       />
 
       {/* Stats Grid */}
-<StatsCards
-  stats={[
-    {
-      id: "total-policies",
-      label: "Total Policies",
-      value: stats?.totalPolicies || 0,
-    },
-    {
-      id: "published",
-      label: "Published",
-      value: stats?.publishedPolicies || 0,
-    },
-    {
-      id: "pending-review",
-      label: "Pending Review",
-      value:
-        (stats?.pendingReview || 0) +
-        (stats?.approvedPolicies || 0),
-    },
-    {
-      id: "awaiting-ack",
-      label: "Awaiting Ack",
-      value: stats?.policiesRequiringAck || 0,
-    },
-  ]}
-/>
+      <StatsCards
+        stats={[
+          {
+            id: "total-policies",
+            label: "Total Policies",
+            value: stats?.totalPolicies || 0,
+          },
+          {
+            id: "published",
+            label: "Published",
+            value: stats?.publishedPolicies || 0,
+          },
+          {
+            id: "pending-review",
+            label: "Pending Review",
+            value:
+              (stats?.pendingReview || 0) +
+              (stats?.approvedPolicies || 0),
+          },
+        ]}
+      />
 
       {/* Bulk Actions Bar */}
       {selectedIds.size > 0 && permissions.update && (
@@ -336,16 +321,15 @@ export default function HRPolicyPage() {
                 </th>
                 <th className="text-left px-4 py-2.5">Policy</th>
                 <th className="text-left px-4 py-2.5">Category / Audience</th>
-                <th className="text-left px-4 py-2.5">Version / Dates</th>
+                <th className="text-left px-4 py-2.5">Version</th>
                 <th className="text-left px-4 py-2.5">Status</th>
-                <th className="text-left px-4 py-2.5">Ack Required</th>
                 <th className="px-4 py-2.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {records.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-10 text-muted-foreground">
+                  <td colSpan={6} className="text-center py-10 text-muted-foreground">
                     No policies found.
                   </td>
                 </tr>
@@ -366,42 +350,42 @@ export default function HRPolicyPage() {
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="text-xs">{r.category}</div>
-                    <div className="text-[11px] text-muted-foreground">{r.department} · {r.employee_type}</div>
+                    <div className="text-[11px] text-muted-foreground">{r.department_name || 'All'} · {r.employee_type}</div>
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="text-xs">v{r.version}</div>
-                    <div className="text-[10px] text-muted-foreground">
-                      Eff: {r.effective_date ? new Date(r.effective_date).toLocaleDateString() : "—"}
-                    </div>
-                    {r.acknowledgment_stats && (
-                      <div className="text-[10px] text-info">
-                        {r.acknowledgment_stats.completion_percentage}% acknowledged
-                      </div>
-                    )}
                   </td>
                   <td className="px-4 py-2.5">
-                    <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
-                      r.status === "PUBLISHED" ? "bg-success/15 text-success border-success/30" :
-                      r.status === "APPROVED" ? "bg-info/15 text-info border-info/30" :
-                      r.status === "PENDING_REVIEW" ? "bg-warning/15 text-warning border-warning/30" :
-                      r.status === "ARCHIVED" || r.status === "REVOKED" ? "bg-destructive/15 text-destructive border-destructive/30" :
-                      "bg-muted text-muted-foreground border-border"
-                    }`}>
-                      {r.status.replace("_", " ")}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {r.requires_acknowledgment ? (
-                      <div className="flex items-center gap-1 text-xs text-warning">
-                        <AlertCircle className="w-3 h-3" /> Required
-                        {r.acknowledgment_deadline && (
-                          <span className="text-muted-foreground">
-                            ({r.acknowledgment_deadline}d)
-                          </span>
-                        )}
+                    {permissions.update ? (
+                      <div className="relative inline-block">
+                        <select
+                          value={r.status}
+                          onChange={e => handleStatusChange(r.id, e.target.value)}
+                          disabled={updatePolicy.isPending}
+                          className={`appearance-none pr-5 pl-2 py-0.5 text-[11px] rounded-full border cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring ${
+                            r.status === "PUBLISHED" ? "bg-success/15 text-success border-success/30" :
+                            r.status === "APPROVED" ? "bg-info/15 text-info border-info/30" :
+                            r.status === "PENDING_REVIEW" ? "bg-warning/15 text-warning border-warning/30" :
+                            r.status === "ARCHIVED" || r.status === "REVOKED" ? "bg-destructive/15 text-destructive border-destructive/30" :
+                            "bg-muted text-muted-foreground border-border"
+                          }`}
+                        >
+                          {STATUSES.map(s => (
+                            <option key={s.value} value={s.value}>{s.value.replace("_", " ")}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="w-3 h-3 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       </div>
                     ) : (
-                      <div className="text-xs text-muted-foreground">No</div>
+                      <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
+                        r.status === "PUBLISHED" ? "bg-success/15 text-success border-success/30" :
+                        r.status === "APPROVED" ? "bg-info/15 text-info border-info/30" :
+                        r.status === "PENDING_REVIEW" ? "bg-warning/15 text-warning border-warning/30" :
+                        r.status === "ARCHIVED" || r.status === "REVOKED" ? "bg-destructive/15 text-destructive border-destructive/30" :
+                        "bg-muted text-muted-foreground border-border"
+                      }`}>
+                        {r.status.replace("_", " ")}
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
@@ -475,7 +459,7 @@ export default function HRPolicyPage() {
 }
 
 // ==========================================
-// POLICY FORM MODAL (Updated with saving state prop)
+// POLICY FORM MODAL
 // ==========================================
 function PolicyFormModal({ 
   initialData, 
@@ -488,19 +472,19 @@ function PolicyFormModal({
   onClose: () => void;
   isSaving?: boolean;
 }) {
+  const { generateCode, validateCode } = useAutoCode("policy", "POL");
+  const { options: departmentOptions, isLoading: deptsLoading } = useDepartmentOptions();
+
+  const [codeLoading, setCodeLoading] = useState(false);
+
   const [formData, setFormData] = useState<PolicyFormData>({
-    code: initialData?.code || `POL-${String(Math.floor(Math.random() * 900) + 100)}`,
+    code: initialData?.code || "",
     title: initialData?.title || "",
     category: initialData?.category || "",
-    department: initialData?.department || "ALL",
+    department: initialData?.department || null,
     employee_type: initialData?.employee_type || "ALL",
     version: initialData?.version || "1.0",
     status: initialData?.status || "DRAFT",
-    effective_date: initialData?.effective_date || new Date().toISOString().split('T')[0],
-    review_date: initialData?.review_date || "",
-    expiry_date: initialData?.expiry_date || "",
-    requires_acknowledgment: initialData?.requires_acknowledgment || false,
-    acknowledgment_deadline: initialData?.acknowledgment_deadline || undefined,
     document_url: initialData?.document_url || "",
     content: initialData?.content || "",
     change_summary: initialData?.change_summary || "",
@@ -508,15 +492,33 @@ function PolicyFormModal({
 
   const isEditing = !!initialData;
 
+  useEffect(() => {
+    if (!isEditing && !formData.code) {
+      setCodeLoading(true);
+      generateCode()
+        .then(code => setFormData(prev => ({ ...prev, code })))
+        .catch(() => {})
+        .finally(() => setCodeLoading(false));
+    }
+  }, [isEditing]);
+
+  const handleCodeBlur = async () => {
+    if (formData.code) {
+      await validateCode(formData.code, initialData?.id);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title || !formData.content || !formData.effective_date) {
-      toast.error("Title, Content, and Effective Date are required.");
+    if (!formData.title || !formData.content) {
+      toast.error("Title and Content are required.");
       return;
     }
     
     onSubmit(formData, isEditing);
   };
+
+  const allDeptOptions = [{ value: "", label: "All Departments" }, ...departmentOptions];
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4 overflow-y-auto">
@@ -541,11 +543,33 @@ function PolicyFormModal({
             <div className="grid sm:grid-cols-2 gap-4">
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground">Policy Code *</span>
-                <input 
-                  value={formData.code} 
-                  onChange={e => setFormData({...formData, code: e.target.value})} 
-                  className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring font-mono text-xs" 
-                />
+                <div className="flex items-center gap-1">
+                  <input 
+                    value={formData.code} 
+                    onChange={e => setFormData({...formData, code: e.target.value})} 
+                    onBlur={handleCodeBlur}
+                    disabled={isEditing || codeLoading}
+                    className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring font-mono text-xs flex-1 disabled:opacity-50" 
+                  />
+                  {!isEditing && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setCodeLoading(true);
+                        try {
+                          const code = await generateCode();
+                          setFormData(prev => ({ ...prev, code }));
+                        } catch {}
+                        setCodeLoading(false);
+                      }}
+                      disabled={codeLoading}
+                      className="p-2 rounded-md border border-border hover:bg-muted"
+                      title="Regenerate code"
+                    >
+                      <RotateCcw className={`w-3 h-3 ${codeLoading ? 'animate-spin' : ''}`} />
+                    </button>
+                  )}
+                </div>
               </label>
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground">Version *</span>
@@ -583,9 +607,10 @@ function PolicyFormModal({
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground">Applicable Department</span>
                 <SearchableSelect 
-                  value={formData.department} 
-                  onChange={v => setFormData({...formData, department: v})} 
-                  options={["ALL", "HR", "FINANCE", "INVENTORY", "ENGINEERING", "SALES"].map(d => ({value:d, label:d}))} 
+                  value={formData.department || ""} 
+                  onChange={v => setFormData({...formData, department: v || null})} 
+                  options={allDeptOptions}
+                  disabled={deptsLoading}
                 />
               </label>
               <label className="text-sm flex flex-col gap-1">
@@ -594,59 +619,6 @@ function PolicyFormModal({
                   value={formData.employee_type} 
                   onChange={v => setFormData({...formData, employee_type: v})} 
                   options={["ALL", "FULL_TIME", "PART_TIME", "CONTRACT", "INTERN"].map(e => ({value:e, label:e}))} 
-                />
-              </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Require Acknowledgment?</span>
-                <select 
-                  value={formData.requires_acknowledgment ? "true" : "false"} 
-                  onChange={e => setFormData({...formData, requires_acknowledgment: e.target.value === "true"})} 
-                  className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="false">No</option>
-                  <option value="true">Yes</option>
-                </select>
-              </label>
-              {formData.requires_acknowledgment && (
-                <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground">Ack Deadline (Days)</span>
-                  <input 
-                    type="number" 
-                    value={formData.acknowledgment_deadline || ""} 
-                    onChange={e => setFormData({...formData, acknowledgment_deadline: parseInt(e.target.value) || undefined})} 
-                    className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring" 
-                    placeholder="e.g., 7" 
-                  />
-                </label>
-              )}
-            </div>
-          </div>
-
-          {/* Section 3: Lifecycle Dates & Status */}
-          <div>
-            <h3 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">
-              <Clock className="w-4 h-4"/> Lifecycle & Status
-            </h3>
-            <div className="grid sm:grid-cols-4 gap-4">
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Effective Date *</span>
-                <DatePicker 
-                  value={formData.effective_date} 
-                  onChange={v => setFormData({...formData, effective_date: v || ""})} 
-                />
-              </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Next Review Date</span>
-                <DatePicker 
-                  value={formData.review_date} 
-                  onChange={v => setFormData({...formData, review_date: v || ""})} 
-                />
-              </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Expiry Date</span>
-                <DatePicker 
-                  value={formData.expiry_date} 
-                  onChange={v => setFormData({...formData, expiry_date: v || ""})} 
                 />
               </label>
               <label className="text-sm flex flex-col gap-1">
@@ -660,7 +632,7 @@ function PolicyFormModal({
             </div>
           </div>
 
-          {/* Section 4: Content & Documentation */}
+          {/* Section 3: Content & Documentation */}
           <div>
             <h3 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">
               <BookOpen className="w-4 h-4"/> Content & Documentation
@@ -724,7 +696,7 @@ function PolicyFormModal({
 }
 
 // ==========================================
-// BULK ACTION MODAL (Updated with processing state)
+// BULK ACTION MODAL
 // ==========================================
 function BulkActionModal({
   selectedCount,

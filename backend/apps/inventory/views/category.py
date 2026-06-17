@@ -2,29 +2,25 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from django.db.models import Q
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import Category
 from apps.inventory.serializers import CategorySerializer
 
 
-class CategoryViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
+class CategoryViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'INVENTORY'
     permission_resource = 'category'
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     lookup_field = '_id'
     lookup_value_regex = '[0-9a-f-]+'
+    filter_fields = {
+        'search': ['name', 'code'],
+    }
 
     def get_queryset(self):
         qs = super().get_queryset()
-
-        search = self.request.query_params.get('search')
-        if search:
-            qs = qs.filter(
-                Q(name__icontains=search) |
-                Q(code__icontains=search)
-            )
-
         return qs
 
     def create(self, request, *args, **kwargs):
@@ -67,7 +63,9 @@ class CategoryViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Mode
         instance = self.get_object()
         category_name = instance.name
 
-        self.perform_destroy(instance)
+        instance.is_deleted = True
+        instance.deleted_by = request.user
+        instance.save(update_fields=["is_deleted", "deleted_by"])
 
         return Response({
             'status': 'success',

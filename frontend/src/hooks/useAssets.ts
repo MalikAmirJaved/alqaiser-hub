@@ -47,6 +47,7 @@ export function useAssets(params?: Record<string, string>) {
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
+    placeholderData: (previousData) => previousData,
   });
 }
 
@@ -95,7 +96,7 @@ export function useUpdateAsset() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (asset: Partial<Asset> & { id: string }) =>
+    mutationFn: (asset: Record<string, any> & { id: string }) =>
       api("/api/hr/assets/", {
         method: "PATCH",
         body: JSON.stringify(asset),

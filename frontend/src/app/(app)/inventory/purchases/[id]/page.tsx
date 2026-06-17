@@ -20,7 +20,7 @@ import { useGoodsReceipts, useCreateGoodsReceipt } from '@/hooks/useGoodsReceipt
 import { useConfirmationModal } from '@/components/reuseable/ConfirmationModal';
 import { GoodsReceiptModal } from '@/components/inventory/purchase/GoodsReceiptModal';
 import type { GoodsReceiptPayload } from '@/types/purchase';
-import { formatCurrency } from "@/lib/currency";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
@@ -75,6 +75,7 @@ function fmtAmt(val?: string | number) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function PurchaseOrderDetailPage() {
+  const formatCurrency = useFormatCurrency();
   const { id } = useParams();
   const router = useRouter();
   const { data: order, isLoading } = usePurchaseOrder(id as string);

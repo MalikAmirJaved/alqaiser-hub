@@ -10,7 +10,7 @@ import { useWarehouses } from "@/hooks/useWarehouses";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { PlusCircle, MinusCircle } from "lucide-react";
 
@@ -148,16 +148,16 @@ export function StockAdjustModal({
           {/* Transaction Type */}
           <div>
             <Label>Transaction Type</Label>
-            <Select value={transactionType} onValueChange={(val: any) => setValue("transaction_type", val)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ADJUSTMENT">Adjustment</SelectItem>
-                <SelectItem value="DAMAGE">Damage / Write-off</SelectItem>
-                <SelectItem value="STOCK_TAKE">Stock Take Correction</SelectItem>
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={transactionType}
+              onChange={(val: any) => setValue("transaction_type", val)}
+              options={[
+                { value: "ADJUSTMENT", label: "Adjustment" },
+                { value: "DAMAGE", label: "Damage / Write-off" },
+                { value: "STOCK_TAKE", label: "Stock Take Correction" },
+              ]}
+              placeholder="Select type"
+            />
           </div>
 
           {/* Reason */}

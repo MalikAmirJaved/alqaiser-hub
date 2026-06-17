@@ -56,23 +56,36 @@ export const menu = [
     type: "group",
     title: "Inventory",
     icon: Boxes,
-    children: [
-      { title: "Inventory Dashboard", to: "/inventory/dashboard", icon: LayoutDashboard },
-      { title: "Categories", to: "/inventory/categories", icon: Layers },
-      { title: "Brands", to: "/inventory/brands", icon: Tag },
-      { title: "Product Management", to: "/inventory/products", icon: Package },
-      { title: "Stock Management", to: "/inventory/stock", icon: Layers },
-      { title: "Warehouse Management", to: "/inventory/warehouses", icon: Warehouse },
-      { title: "Purchase Management", to: "/inventory/purchases", icon: ShoppingCart },
-      { title: "Suppliers & Vendors", to: "/inventory/suppliers", icon: Truck },
-      { title: "Inventory Transfers", to: "/inventory/transfers", icon: Repeat },
-      { title: "Barcode & QR", to: "/inventory/barcode", icon: QrCode },
-      { title: "Reports", to: "/inventory/reports", icon: BarChart3 },
-      { title: "Alerts", to: "/inventory/alerts", icon: Bell },
-      { title: "Customers", to: "/inventory/customers", icon: Users },
-      { title: "Selling / POS", to: "/inventory/pos", icon: ScanLine },
-      { title: "Audit Logs", to: "/inventory/audit", icon: FileText },
-    ],
+children: [
+  // Overview
+  { title: "Inventory Dashboard", to: "/inventory/dashboard", icon: LayoutDashboard },
+
+  // Setup & Masters
+  { title: "Warehouse Management", to: "/inventory/warehouses", icon: Warehouse },
+  { title: "Categories", to: "/inventory/categories", icon: Layers },
+  { title: "Brands", to: "/inventory/brands", icon: Tag },
+  { title: "Product Management", to: "/inventory/products", icon: Package },
+  { title: "Suppliers & Vendors", to: "/inventory/suppliers", icon: Truck },
+  { title: "Customers", to: "/inventory/customers", icon: Users },
+
+  // Procurement
+  { title: "Purchase Management", to: "/inventory/purchases", icon: ShoppingCart },
+
+  // Inventory Operations
+  { title: "Stock Management", to: "/inventory/stock", icon: Layers },
+  { title: "Inventory Transfers", to: "/inventory/transfers", icon: Repeat },
+  { title: "Barcode & QR", to: "/inventory/barcode", icon: QrCode },
+
+  // Sales
+  { title: "Selling / POS", to: "/inventory/pos", icon: ScanLine },
+
+  // Monitoring & Compliance
+  { title: "Alerts", to: "/inventory/alerts", icon: Bell },
+  { title: "Inventoy Audit Logs", to: "/inventory/audit", icon: FileText },
+
+  // Analytics
+  { title: "Reports", to: "/inventory/reports", icon: BarChart3 },
+]
   },
 
   {
@@ -106,7 +119,7 @@ export const menu = [
       { title: "Payments", to: "/finance/payments", icon: Landmark },
       { title: "Finance Payroll", to: "/finance/payroll", icon: Wallet },
       { title: "Taxes", to: "/finance/taxes", icon: Calculator },
-      { title: "Audit Logs", to: "/finance/audit", icon: History },
+      { title: "Finance Audit Logs", to: "/finance/audit", icon: History },
       { title: "Forecast", to: "/finance/forecast", icon: History },
     ],
   },
