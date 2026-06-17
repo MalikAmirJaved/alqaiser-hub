@@ -319,10 +319,13 @@ export default function CameraConfigurationPage() {
                       ) : (
                         <div className="space-y-2">
                           {nvrs.map((nvr) => (
-                            <button
+                            <div
                               key={nvr.id}
+                              role="button"
+                              tabIndex={0}
                               onClick={() => setSelectedNvrId(nvr.id)}
-                              className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-colors hover:bg-muted/20 ${
+                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedNvrId(nvr.id); } }}
+                              className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-colors hover:bg-muted/20 cursor-pointer ${
                                 selectedNvrId === nvr.id ? "border-primary/30 bg-primary/5" : "border-border"
                               }`}
                             >
@@ -344,7 +347,7 @@ export default function CameraConfigurationPage() {
                                   </button>
                                 )}
                               </div>
-                            </button>
+                            </div>
                           ))}
                         </div>
                       )}
