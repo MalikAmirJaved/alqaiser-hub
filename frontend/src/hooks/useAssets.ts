@@ -47,6 +47,7 @@ export function useAssets(params?: Record<string, string>) {
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
+    placeholderData: (previousData) => previousData,
   });
 }
 
