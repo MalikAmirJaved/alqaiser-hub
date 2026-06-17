@@ -11,6 +11,17 @@ from .models import Site, Nvr, Camera
 from .serializers import SiteSerializer, NvrSerializer, CameraSerializer
 from .stream_manager import StreamManager
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def stream_status(request):
+    stream_id = request.data.get('stream_id')
+    if not stream_id:
+        return Response({'error': 'stream_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+    info = StreamManager.get_status(stream_id)
+    if info is None:
+        return Response({'error': 'Stream not found'}, status=status.HTTP_404_NOT_FOUND)
+    return Response(info)
+
 
 class SiteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'AI_MONITORING'
