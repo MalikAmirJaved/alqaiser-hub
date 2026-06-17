@@ -55,11 +55,9 @@ from apps.hr.views.promotion_views import PromotionView
 from apps.hr.views.policy_views import (
     PolicyView,
     PolicyStatsView,
-    PolicyAcknowledgmentView,
     PolicyBulkActionView,
     PolicyVersionView,
     PolicyCategoryView,
-    EmployeePendingAcknowledgmentsView,
 )
 
 
@@ -162,15 +160,6 @@ urlpatterns = [
     # Policy Versions
     path('policies/<str:policy_id>/versions/', PolicyVersionView.as_view(), name='policy-versions'),
     
-    # Policy Acknowledgments
-    path('policies/<str:policy_id>/acknowledgments/', PolicyAcknowledgmentView.as_view(), name='policy-acknowledgments'),
-    path('policies/<str:policy_id>/acknowledge/', PolicyAcknowledgmentView.as_view(), name='policy-acknowledge'),
-    
     # Custom Categories
     path('policies/categories/', PolicyCategoryView.as_view(), name='policy-categories'),
-    
-    # Employee-specific
-    path('employees/<str:employee_id>/pending-acknowledgments/', 
-         EmployeePendingAcknowledgmentsView.as_view(), 
-         name='employee-pending-acknowledgments'),
 ]

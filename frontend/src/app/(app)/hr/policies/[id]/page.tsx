@@ -6,8 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useApi } from "@/hooks/useApi";
 import PageHeader from "@/components/PageHeader";
 import { 
-  ArrowLeft, FileText, Users, Clock, CheckCircle, 
-  AlertCircle, Download, User
+  ArrowLeft, FileText, Clock, Download
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -21,8 +20,6 @@ interface PolicyDetail {
   employee_type: string;
   version: string;
   status: string;
-  requires_acknowledgment: boolean;
-  acknowledgment_deadline?: number;
   document_url?: string;
   content: string;
   change_summary?: string;
@@ -30,18 +27,6 @@ interface PolicyDetail {
   created_by_name?: string;
   created_at: string;
   updated_at: string;
-  acknowledgment_stats?: {
-    total_employees: number;
-    acknowledged: number;
-    pending: number;
-    completion_percentage: number;
-  };
-  acknowledgments?: Array<{
-    id: number;
-    employee_name: string;
-    employee_id: string;
-    acknowledged_at: string;
-  }>;
   versions?: Array<{
     id: number;
     version: string;
@@ -218,63 +203,6 @@ export default function PolicyDetailPage() {
               </div>
             </div>
           </div>
-
-          {/* Acknowledgment Stats */}
-          {policy.requires_acknowledgment && policy.acknowledgment_stats && (
-            <div className="bg-card border border-border rounded-xl p-6">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Users className="w-5 h-5 text-primary" />
-                Acknowledgments
-              </h3>
-              
-              {/* Progress Bar */}
-              <div className="mb-4">
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-muted-foreground">Completion</span>
-                  <span className="font-semibold">{policy.acknowledgment_stats.completion_percentage}%</span>
-                </div>
-                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-success rounded-full transition-all"
-                    style={{ width: `${policy.acknowledgment_stats.completion_percentage}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-success/10 rounded-lg p-3 text-center">
-                  <div className="text-2xl font-bold text-success">
-                    {policy.acknowledgment_stats.acknowledged}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Acknowledged</div>
-                </div>
-                <div className="bg-warning/10 rounded-lg p-3 text-center">
-                  <div className="text-2xl font-bold text-warning">
-                    {policy.acknowledgment_stats.pending}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Pending</div>
-                </div>
-              </div>
-
-              {/* Recent Acknowledgments */}
-              {policy.acknowledgments && policy.acknowledgments.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-sm font-medium mb-2">Recent Acknowledgments</h4>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {policy.acknowledgments.slice(0, 5).map(ack => (
-                      <div key={ack.id} className="flex items-center gap-2 text-sm">
-                        <CheckCircle className="w-3 h-3 text-success flex-shrink-0" />
-                        <span className="flex-1">{ack.employee_name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(ack.acknowledged_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
     </div>

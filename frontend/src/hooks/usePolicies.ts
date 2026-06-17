@@ -16,8 +16,6 @@ export interface PolicyRecord {
   employee_type: string;
   version: string;
   status: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "PUBLISHED" | "ARCHIVED" | "REVOKED";
-  requires_acknowledgment: boolean;
-  acknowledgment_deadline?: number;
   document_url?: string;
   content: string;
   approved_by?: string | null;
@@ -28,25 +26,9 @@ export interface PolicyRecord {
   updated_by_name?: string;
   created_at?: string;
   updated_at?: string;
-  acknowledgment_stats?: {
-    total_acknowledgments?: number;
-    total_employees?: number;
-    acknowledged?: number;
-    pending?: number;
-    completion_percentage?: number;
-  };
 }
 
 export interface PolicyDetail extends PolicyRecord {
-  acknowledgments?: Array<{
-    id: number;
-    employee: number;
-    employee_name: string;
-    employee_id: string;
-    acknowledged_at: string;
-    acknowledged_via: string;
-    notes?: string;
-  }>;
   versions?: Array<{
     id: number;
     version: string;
@@ -65,8 +47,6 @@ export interface PolicyStats {
   pendingReview: number;
   approvedPolicies: number;
   archivedPolicies: number;
-  policiesRequiringAck: number;
-  totalAcknowledgments: number;
   statusDistribution: Record<string, number>;
   categoryDistribution: Array<{ category: string; count: number }>;
   departmentDistribution: Array<{ department: string; count: number }>;
@@ -79,7 +59,6 @@ export interface PolicyFilters {
   category?: string;
   department?: string;
   employeeType?: string;
-  requiresAcknowledgment?: string;
   sortBy?: string;
   page?: number;
   pageSize?: number;
@@ -93,8 +72,6 @@ export interface PolicyFormData {
   employee_type: string;
   version: string;
   status: PolicyRecord['status'];
-  requires_acknowledgment: boolean;
-  acknowledgment_deadline?: number;
   document_url?: string;
   content: string;
   change_summary?: string;
@@ -201,22 +178,6 @@ export function usePolicyVersions(policyId: string | undefined) {
 }
 
 /**
- * Fetch pending acknowledgments for an employee
- */
-export function usePendingAcknowledgments(employeeId: number | undefined) {
-  const api = useApi();
-  
-  return useQuery({
-    queryKey: ["pendingAcknowledgments", employeeId],
-    queryFn: () => api(`/api/hr/employees/${employeeId}/pending-acknowledgments/`),
-    enabled: !!employeeId,
-    staleTime: 30 * 1000,
-    gcTime: 5 * 60 * 1000,
-    retry: 2,
-  });
-}
-
-/**
  * Fetch custom policy categories
  */
 export function usePolicyCategories() {
@@ -316,38 +277,6 @@ export function useBulkPolicyAction() {
 }
 
 /**
- * Acknowledge a policy for an employee
- */
-export function useAcknowledgePolicy() {
-  const api = useApi();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ 
-      policyId, 
-      employeeId, 
-      notes 
-    }: { 
-      policyId: string; 
-      employeeId: number; 
-      notes?: string;
-    }) =>
-      api(`/api/hr/policies/${policyId}/acknowledge/`, {
-        method: "POST",
-        body: JSON.stringify({
-          employee: employeeId,
-          notes,
-        }),
-      }),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["policy", variables.policyId] });
-      queryClient.invalidateQueries({ queryKey: ["pendingAcknowledgments"] });
-      queryClient.invalidateQueries({ queryKey: ["policies"] });
-    },
-  });
-}
-
-/**
  * Create a custom policy category
  */
 export function useCreatePolicyCategory() {
@@ -379,7 +308,6 @@ export function usePolicyOperations() {
     policyDetail: usePolicyDetail,
     stats: usePolicyStats,
     versions: usePolicyVersions,
-    pendingAcknowledgments: usePendingAcknowledgments,
     categories: usePolicyCategories,
   };
 
@@ -388,7 +316,6 @@ export function usePolicyOperations() {
     updatePolicy: useUpdatePolicy(),
     deletePolicy: useDeletePolicy(),
     bulkAction: useBulkPolicyAction(),
-    acknowledgePolicy: useAcknowledgePolicy(),
     createCategory: useCreatePolicyCategory(),
   };
 
@@ -400,6 +327,5 @@ export function usePolicyOperations() {
     isUpdating: mutations.updatePolicy.isPending,
     isDeleting: mutations.deletePolicy.isPending,
     isBulkProcessing: mutations.bulkAction.isPending,
-    isAcknowledging: mutations.acknowledgePolicy.isPending,
   };
 }

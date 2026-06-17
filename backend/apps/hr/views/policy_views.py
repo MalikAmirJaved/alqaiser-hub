@@ -15,14 +15,12 @@ import logging
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import (
-    Policy, PolicyAcknowledgment, PolicyVersion, PolicyCategory, Employee
+    Policy, PolicyVersion, PolicyCategory, Employee
 )
 from apps.hr.serializers.policy_serializers import (
     PolicyListSerializer,
     PolicyDetailSerializer,
     PolicyCreateUpdateSerializer,
-    PolicyAcknowledgmentSerializer,
-    PolicyAcknowledgmentCreateSerializer,
     PolicyCategorySerializer,
 )
 
@@ -91,12 +89,6 @@ class PolicyView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         if employee_type:
             queryset = queryset.filter(
                 models.Q(employee_type=employee_type) | models.Q(employee_type='ALL')
-            )
-        
-        requires_ack = request.query_params.get('requiresAcknowledgment')
-        if requires_ack is not None:
-            queryset = queryset.filter(
-                requires_acknowledgment=requires_ack.lower() == 'true'
             )
         
         return queryset
@@ -252,19 +244,8 @@ class PolicyStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             .annotate(count=models.Count('id'))
             .order_by('-count')
         )
-        # Rename key for frontend compatibility
         for item in department_stats:
             item['department'] = item.pop('department__name') or 'All'
-        
-        published_policies_with_ack = policies.filter(
-            status='PUBLISHED',
-            requires_acknowledgment=True
-        )
-        
-        total_acknowledgments = PolicyAcknowledgment.objects.filter(
-            policy__company_id=company_id,
-            policy__in=policies.filter(status='PUBLISHED')
-        ).count()
         
         return Response({
             'totalPolicies': total_policies,
@@ -276,94 +257,8 @@ class PolicyStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             'pendingReview': status_stats.get('PENDING_REVIEW', 0),
             'approvedPolicies': status_stats.get('APPROVED', 0),
             'archivedPolicies': status_stats.get('ARCHIVED', 0),
-            'policiesRequiringAck': published_policies_with_ack.count(),
-            'totalAcknowledgments': total_acknowledgments,
             'updatedAt': timezone.now().isoformat(),
         })
-
-
-class PolicyAcknowledgmentView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
-    permission_module = 'HR'
-    permission_resource = 'policy'
-    """
-    Manage policy acknowledgments with UUID support.
-    """
-    permission_classes = [IsAuthenticated]
-    
-    def get(self, request, policy_id=None):
-        """
-        GET /api/hr/policies/{uuid}/acknowledgments/ - List acknowledgments
-        """
-        company_id = request.user.company_id
-        if not company_id:
-            return Response(
-                {'error': 'User is not associated with any company'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if not policy_id:
-            return Response(
-                {'error': 'Policy ID is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        policy = get_object_or_404(
-            Policy,
-            _id=policy_id,
-            company_id=company_id,
-            is_deleted=False
-        )
-        
-        acknowledgments = PolicyAcknowledgment.objects.filter(
-            company_id=company_id,
-            policy=policy
-        ).select_related('employee', 'policy').order_by('-acknowledged_at')
-        
-        serializer = PolicyAcknowledgmentSerializer(acknowledgments, many=True)
-        return Response(serializer.data)
-    
-
-    def post(self, request, policy_id=None):
-        """
-        POST /api/hr/policies/{uuid}/acknowledge/ - Acknowledge a policy
-        """
-        company_id = request.user.company_id
-        if not company_id:
-            return Response(
-                {'error': 'User is not associated with any company'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if not policy_id:
-            return Response(
-                {'error': 'Policy ID is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        policy = get_object_or_404(
-            Policy,
-            _id=policy_id,
-            company_id=company_id,
-            is_deleted=False
-        )
-        
-        data = request.data.copy()
-        data['policy'] = policy.id
-        
-        serializer = PolicyAcknowledgmentCreateSerializer(
-            data=data,
-            context={'request': request}
-        )
-        serializer.is_valid(raise_exception=True)
-        acknowledgment = serializer.save()
-        
-        response_data = PolicyAcknowledgmentSerializer(acknowledgment).data
-        response_data['id'] = str(acknowledgment._id)
-        
-        return Response({
-            'message': 'Policy acknowledged successfully',
-            'data': response_data
-        }, status=status.HTTP_201_CREATED)
 
 
 class PolicyBulkActionView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
@@ -651,61 +546,3 @@ class PolicyCategoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         category.save()
         
         return Response({'message': 'Category deleted successfully'})
-
-
-class EmployeePendingAcknowledgmentsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
-    permission_module = 'HR'
-    permission_resource = 'policy'
-    """
-    Get pending acknowledgments for an employee with UUID support.
-    """
-    permission_classes = [IsAuthenticated]
-    
-    def get(self, request, employee_id=None):
-        """
-        GET /api/hr/employees/{uuid}/pending-acknowledgments/
-        """
-        company_id = request.user.company_id
-        if not company_id:
-            return Response(
-                {'error': 'User is not associated with any company'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if not employee_id:
-            return Response(
-                {'error': 'Employee ID is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        employee = get_object_or_404(
-            Employee,
-            _id=employee_id,
-            company_id=company_id,
-            is_deleted=False
-        )
-        
-        published_policies = Policy.objects.filter(
-            company_id=company_id,
-            status='PUBLISHED',
-            requires_acknowledgment=True,
-            is_deleted=False
-        ).exclude(
-            acknowledgments__employee=employee
-        ).select_related('department')
-        
-        published_policies = published_policies.filter(
-            models.Q(employee_type='ALL') | models.Q(employee_type=employee.employment_type)
-        )
-        
-        published_policies = published_policies.filter(
-            models.Q(department__isnull=True) | models.Q(department=employee.department)
-        )
-        
-        serializer = PolicyListSerializer(published_policies, many=True)
-        return Response({
-            'employee_id': str(employee._id),
-            'employee_name': employee.full_name,
-            'pending_count': published_policies.count(),
-            'policies': serializer.data
-        })

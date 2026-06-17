@@ -1495,10 +1495,6 @@ class Policy(BaseModel):
     document_url = models.URLField(max_length=500, null=True, blank=True)
     change_summary = models.TextField(null=True, blank=True)
 
-    # Acknowledgment
-    requires_acknowledgment = models.BooleanField(default=False, db_index=True)
-    acknowledgment_deadline = models.PositiveIntegerField(null=True, blank=True)
-
     # Approval
     approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_policies')
 
@@ -1517,30 +1513,6 @@ class Policy(BaseModel):
         ]
         constraints = [
             models.UniqueConstraint(fields=['company_id', 'code'], name='unique_company_policy_code')
-        ]
-
-
-# =========================================================
-# POLICY ACKNOWLEDGMENT
-# =========================================================
-class PolicyAcknowledgment(BaseModel):
-    policy = models.ForeignKey(Policy, on_delete=models.CASCADE, related_name='acknowledgments')
-    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='policy_acknowledgments')
-    
-    acknowledged_at = models.DateTimeField(default=timezone.now)
-    acknowledged_via = models.CharField(max_length=50, default='WEB')
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    notes = models.TextField(null=True, blank=True)
-
-    class Meta:
-        db_table = 'hr_policy_acknowledgments'
-        ordering = ['-acknowledged_at']
-        indexes = [
-            models.Index(fields=['policy', 'employee']),
-            models.Index(fields=['employee', 'acknowledged_at']),
-        ]
-        constraints = [
-            models.UniqueConstraint(fields=['policy', 'employee'], name='unique_policy_employee_acknowledgment')
         ]
 
 

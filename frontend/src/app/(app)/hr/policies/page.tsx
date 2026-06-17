@@ -207,7 +207,7 @@ export default function HRPolicyPage() {
     <div className="space-y-5">
       <PageHeader
         title="HR Policy Management"
-        subtitle="Create, publish, and track policy acknowledgments"
+        subtitle="Create, publish, and manage policies"
         actions={
           permissions.create && (
             <button 
@@ -239,11 +239,6 @@ export default function HRPolicyPage() {
             value:
               (stats?.pendingReview || 0) +
               (stats?.approvedPolicies || 0),
-          },
-          {
-            id: "awaiting-ack",
-            label: "Awaiting Ack",
-            value: stats?.policiesRequiringAck || 0,
           },
         ]}
       />
@@ -328,14 +323,13 @@ export default function HRPolicyPage() {
                 <th className="text-left px-4 py-2.5">Category / Audience</th>
                 <th className="text-left px-4 py-2.5">Version</th>
                 <th className="text-left px-4 py-2.5">Status</th>
-                <th className="text-left px-4 py-2.5">Ack Required</th>
                 <th className="px-4 py-2.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {records.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-10 text-muted-foreground">
+                  <td colSpan={6} className="text-center py-10 text-muted-foreground">
                     No policies found.
                   </td>
                 </tr>
@@ -360,11 +354,6 @@ export default function HRPolicyPage() {
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="text-xs">v{r.version}</div>
-                    {r.acknowledgment_stats && (
-                      <div className="text-[10px] text-info">
-                        {r.acknowledgment_stats.completion_percentage}% acknowledged
-                      </div>
-                    )}
                   </td>
                   <td className="px-4 py-2.5">
                     {permissions.update ? (
@@ -397,20 +386,6 @@ export default function HRPolicyPage() {
                       }`}>
                         {r.status.replace("_", " ")}
                       </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {r.requires_acknowledgment ? (
-                      <div className="flex items-center gap-1 text-xs text-warning">
-                        <AlertCircle className="w-3 h-3" /> Required
-                        {r.acknowledgment_deadline && (
-                          <span className="text-muted-foreground">
-                            ({r.acknowledgment_deadline}d)
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-xs text-muted-foreground">No</div>
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
@@ -510,8 +485,6 @@ function PolicyFormModal({
     employee_type: initialData?.employee_type || "ALL",
     version: initialData?.version || "1.0",
     status: initialData?.status || "DRAFT",
-    requires_acknowledgment: initialData?.requires_acknowledgment || false,
-    acknowledgment_deadline: initialData?.acknowledgment_deadline || undefined,
     document_url: initialData?.document_url || "",
     content: initialData?.content || "",
     change_summary: initialData?.change_summary || "",
@@ -648,30 +621,6 @@ function PolicyFormModal({
                   options={["ALL", "FULL_TIME", "PART_TIME", "CONTRACT", "INTERN"].map(e => ({value:e, label:e}))} 
                 />
               </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Require Acknowledgment?</span>
-                <SearchableSelect 
-                  value={formData.requires_acknowledgment ? "true" : "false"} 
-                  onChange={val => setFormData({...formData, requires_acknowledgment: val === "true"})} 
-                  options={[
-                    { value: "false", label: "No" },
-                    { value: "true", label: "Yes" },
-                  ]}
-                  placeholder="Select"
-                />
-              </label>
-              {formData.requires_acknowledgment && (
-                <label className="text-sm flex flex-col gap-1">
-                  <span className="text-muted-foreground">Ack Deadline (Days)</span>
-                  <input 
-                    type="number" 
-                    value={formData.acknowledgment_deadline || ""} 
-                    onChange={e => setFormData({...formData, acknowledgment_deadline: parseInt(e.target.value) || undefined})} 
-                    className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none focus:ring-2 focus:ring-ring" 
-                    placeholder="e.g., 7" 
-                  />
-                </label>
-              )}
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground">Status</span>
                 <SearchableSelect 
