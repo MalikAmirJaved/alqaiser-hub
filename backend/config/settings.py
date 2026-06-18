@@ -12,8 +12,8 @@ environ.Env.read_env(BASE_DIR / ".env")
 # ─── Core ────────────────────────────────────────────────────────────────────
 SECRET_KEY = env("SECRET_KEY")
 DEBUG = env.bool("DEBUG", default=False)
-FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1", "0.0.0.0"])
+FRONTEND_URL = env("FRONTEND_URL")
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS")
 
 # JWT Settings
 JWT_SECRET_TIME_EXP_MINUTES = env.int("JWT_SECRET_TIME_EXP_MINUTES", default=10)
@@ -147,7 +147,7 @@ REST_FRAMEWORK = {
 
 # ─── JWT ──────────────────────────────────────────────────────────────────────
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=JWT_SECRET_TIME_EXP_MINUTES), # minutes
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=JWT_SECRET_TIME_EXP_MINUTES), # minutes
     'REFRESH_TOKEN_LIFETIME': timedelta(days=JWT_REFRESH_TIME_EXP_DAYS),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': False,
