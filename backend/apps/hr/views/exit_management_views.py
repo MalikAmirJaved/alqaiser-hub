@@ -1,5 +1,6 @@
 # apps/hr/views/exit_management_views.py
 
+import calendar
 import logging
 from datetime import datetime, date, timedelta
 from django.db import models
@@ -664,7 +665,12 @@ class ExitFinalSettlementView(BaseExitView):
                 month_end = min(period_end, date(year, month + 1, 1) - timedelta(days=1))
 
             calendar_days = (month_end - month_start).days + 1
-            prorated_days = min(calendar_days, days_in_month)
+            _, last_calendar_day = calendar.monthrange(year, month)
+            # Full calendar months always count as 30 days (not 28 for Feb)
+            if month_start.day == 1 and month_end.day == last_calendar_day:
+                prorated_days = days_in_month
+            else:
+                prorated_days = min(calendar_days, days_in_month)
             proration_factor = prorated_days / days_in_month
 
             total_base_salary += original_base_salary * proration_factor
@@ -694,13 +700,20 @@ class ExitFinalSettlementView(BaseExitView):
                     end_date__gte=month_start,
                     is_deleted=False
                 )
+                short_count = 0
+                half_count = 0
+                full_days = 0.0
                 for leave in approved_leaves:
-                    l_start = max(leave.start_date, month_start)
-                    l_end = min(leave.end_date, month_end)
-                    leave_working_days = self._count_working_days_in_range(company_id, l_start, l_end)
-                    if leave.is_half_day and leave_working_days == 1:
-                        leave_working_days = 0.5
-                    total_leave_deduction += leave_working_days * daily_rate
+                    if leave.leave_sub_type == 'SHORT':
+                        short_count += 1
+                    elif leave.leave_sub_type == 'HALF':
+                        half_count += 1
+                    else:  # FULL_DAY
+                        l_start = max(leave.start_date, month_start)
+                        l_end = min(leave.end_date, month_end)
+                        full_days += float((l_end - l_start).days + 1)
+                total_full_equivalent = full_days + half_count / 2.0 + short_count / 4.0
+                total_leave_deduction += total_full_equivalent * daily_rate
 
             if month == 12:
                 cursor = date(year + 1, 1, 1)
