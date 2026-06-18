@@ -44,6 +44,7 @@ type UpdatePaymentData = Partial<CreatePaymentData>;
 const PAYMENTS_KEY = "finance_payments";
 
 async function getAllPayments(params?: {
+  search?: string;
   payment_type?: "RECEIPT" | "PAYMENT";
   supplier_bill?: string;
   customer_invoice?: string;
@@ -52,6 +53,7 @@ async function getAllPayments(params?: {
   end_date?: string;
 }) {
   const searchParams = new URLSearchParams();
+  if (params?.search) searchParams.append("search", params.search);
   if (params?.payment_type) searchParams.append("payment_type", params.payment_type);
   if (params?.supplier_bill) searchParams.append("supplier_bill", String(params.supplier_bill));
   if (params?.customer_invoice) searchParams.append("customer_invoice", String(params.customer_invoice));
@@ -89,6 +91,7 @@ async function deletePayment(id: string) {
 // ============================================
 
 export function usePayments(filters?: {
+  search?: string;
   payment_type?: "RECEIPT" | "PAYMENT";
   supplier_bill?: string;
   customer_invoice?: string;

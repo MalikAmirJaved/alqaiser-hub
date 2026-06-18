@@ -29,6 +29,7 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
   const customerOptions = customers.map(c => ({ value: c.id, label: c.name }));
 
   const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
     { name: "customer", label: "Customer", type: "select", searchable: true, options: customerOptions },
     { name: "status", label: "Status", type: "status", options: [
       { value: "DRAFT", label: "Draft" },
@@ -39,6 +40,7 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
   const { data: invoices, isLoading } = useCustomerInvoices(
     Object.keys(filters).length > 0
       ? {
+          search: filters.search || undefined,
           status: filters.status || undefined,
           customer: filters.customer || undefined,
         }

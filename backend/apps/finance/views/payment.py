@@ -2,11 +2,11 @@ from decimal import Decimal
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
-from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.finance.mixins import CompanyBranchUserMixin, SoftDeleteMixin
 from apps.finance.models import Payment, JournalEntry, JournalLine, Account, BankTransaction
 from apps.finance.serializers import PaymentSerializer
@@ -231,6 +231,7 @@ def confirm_payment_logic(payment, user):
 
 
 class PaymentViewSet(
+    GenericFilterMixin,
     CompanyBranchUserMixin,
     CompanyBranchMixin,
     PermissionRequiredMixin,
@@ -242,9 +243,14 @@ class PaymentViewSet(
     permission_module = 'FINANCE'
     permission_resource = 'payment'
     lookup_field = '_id'
-
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['payment_type', 'status', 'payment_method']
+    filter_fields = {
+        'search': ['reference_number', 'notes'],
+        'payment_type': 'payment_type',
+        'payment_method': 'payment_method',
+        'status': 'status',
+        'start_date': 'payment_date__gte',
+        'end_date': 'payment_date__lte',
+    }
 
     def get_queryset(self):
         qs = super().get_queryset()

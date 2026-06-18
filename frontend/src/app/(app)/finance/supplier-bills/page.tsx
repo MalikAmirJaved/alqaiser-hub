@@ -26,6 +26,7 @@ export default function SupplierBillsPage() {
   const supplierOptions = suppliers.map(s => ({ value: s.id, label: s.name }));
 
   const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
     { name: "supplier", label: "Supplier", type: "select", searchable: true, options: supplierOptions },
     { name: "status", label: "Status", type: "status", options: [
       { value: "DRAFT", label: "Draft" },
@@ -36,6 +37,7 @@ export default function SupplierBillsPage() {
   const { data: bills, isLoading } = useSupplierBills(
     Object.keys(filters).length > 0
       ? {
+          search: filters.search || undefined,
           status: filters.status || undefined,
           supplier: filters.supplier || undefined,
         }

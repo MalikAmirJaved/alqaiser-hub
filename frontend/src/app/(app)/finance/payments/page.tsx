@@ -31,6 +31,7 @@ export default function PaymentsPage() {
   const supplierOptions = suppliers.map(s => ({ value: s.id, label: s.name }));
 
   const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
     { name: "payment_type", label: "Type", type: "select", options: paymentTypeOptions },
     { name: "supplier", label: "Supplier/Customer", type: "select", searchable: true, options: supplierOptions },
     { name: "start_date", label: "From", type: "date" },
@@ -40,6 +41,7 @@ export default function PaymentsPage() {
   const { data: payments, isLoading } = usePayments(
     Object.keys(filters).length > 0
       ? {
+          search: filters.search || undefined,
           payment_type: (filters.payment_type as "RECEIPT" | "PAYMENT") || undefined,
           supplier: filters.supplier || undefined,
           start_date: filters.start_date || undefined,
