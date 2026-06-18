@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { X, RotateCw } from "lucide-react";
 import { useCreateExpense, useUpdateExpense, expenseCategoryOptions } from "@/hooks/finance/useExpenses";
-import { useSuppliers } from "@/hooks/useSuppliers";
+import { useSuppliers, useCreateSupplier } from "@/hooks/useSuppliers";
 import { useAutoCode } from "@/hooks/useAutoCode";
+import { useQueryClient } from "@tanstack/react-query";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import { FormModal } from "@/components/inventory/supplier/FormModal";
 
 interface ExpenseFormData {
   expense_number: string;
@@ -30,6 +32,42 @@ export default function ExpenseFormModal({
   initialData?: any; 
   onSuccess?: () => void;
 }) {
+  const [showSupplierForm, setShowSupplierForm] = useState(false);
+  const queryClient = useQueryClient();
+  const createSupplier = useCreateSupplier();
+  const { generateCode: genSupplierCode } = useAutoCode("supplier");
+
+  const supplierFormFields = [
+    { name: "code", label: "Code", type: "code" as const, required: true, placeholder: "e.g., SUP-001" },
+    { name: "name", label: "Name", type: "text" as const, required: true, placeholder: "Company name" },
+    { name: "contact_person", label: "Contact Person", type: "text" as const, placeholder: "Full name" },
+    { name: "email", label: "Email", type: "email" as const, placeholder: "contact@company.com" },
+    { name: "phone", label: "Phone", type: "tel" as const, placeholder: "+1 234 567 8900" },
+    { name: "address_line", label: "Address Line", type: "textarea" as const, placeholder: "Street address" },
+    { name: "country", label: "Country", type: "text" as const, placeholder: "Country" },
+    { name: "state", label: "State", type: "text" as const, placeholder: "State/Province" },
+    { name: "city", label: "City", type: "text" as const, placeholder: "City" },
+    { name: "postal_code", label: "Postal Code", type: "text" as const, placeholder: "Postal code" },
+    {
+      name: "status", label: "Status", type: "select" as const,
+      options: [
+        { value: "active", label: "Active" },
+        { value: "inactive", label: "Inactive" },
+        { value: "suspended", label: "Suspended" },
+      ],
+    },
+  ];
+
+  const handleCreateSupplier = async (data: any) => {
+    const result: any = await createSupplier.mutateAsync(data);
+    setShowSupplierForm(false);
+    await queryClient.invalidateQueries({ queryKey: ["inventory_supplier"] });
+    const supplierId = result?.id || result?.data?.id || result?._id;
+    if (supplierId) {
+      setValue("supplier", supplierId);
+    }
+  };
+
   const { register, handleSubmit, reset, setValue, watch } = useForm<ExpenseFormData>({
     defaultValues: {
       expense_number: "",
@@ -69,11 +107,13 @@ export default function ExpenseFormModal({
   }, [initialData, setValue, reset, open]);
 
   const onSubmit = async (data: ExpenseFormData) => {
+    if (!data.supplier) {
+      return;
+    }
     const payload = {
       ...data,
       amount: Number(data.amount),
-      // Only include pay_immediately if a supplier is selected
-      pay_immediately: data.supplier ? data.pay_immediately : false,
+      pay_immediately: data.pay_immediately,
     };
     if (initialData) {
       await updateExpense.mutateAsync({ id: initialData.id, data: payload });
@@ -138,35 +178,20 @@ export default function ExpenseFormModal({
 
           {/* Supplier / Vendor field */}
           <div>
-            <label className="block text-sm mb-1">Vendor (Supplier)</label>
+            <label className="block text-sm mb-1">Vendor (Supplier) *</label>
             <SearchableSelect
               value={watch("supplier") || ""}
               onChange={(val) => setValue("supplier", val)}
-              options={[
-                { value: "", label: "-- None (manual expense) --" },
-                ...(suppliers || []).map((s: any) => ({ value: s.id, label: s.name })),
-              ]}
-              placeholder="-- None (manual expense) --"
+              required
+              options={(suppliers || []).map((s: any) => ({ value: s.id, label: s.name }))}
+              placeholder="Select a vendor…"
+              onAddNew={() => setShowSupplierForm(true)}
+              addNewLabel="+ Create New Vendor"
             />
             <p className="text-xs text-muted-foreground mt-1">
-              If a vendor is selected, a Supplier Bill will be auto‑created and linked to this expense.
+              A Supplier Bill will be auto‑created and linked to this expense.
             </p>
           </div>
-
-          {/* Pay immediately checkbox – only shown when a supplier is selected */}
-          {supplierValue && (
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="pay_immediately"
-                {...register("pay_immediately")}
-                className="mr-2"
-              />
-              <label htmlFor="pay_immediately" className="text-sm">
-                Pay this bill immediately (auto‑confirm payment)
-              </label>
-            </div>
-          )}
 
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="px-4 h-9 rounded-md border border-border">Cancel</button>
@@ -180,6 +205,17 @@ export default function ExpenseFormModal({
           </div>
         </form>
       </div>
+
+      <FormModal
+        open={showSupplierForm}
+        onClose={() => setShowSupplierForm(false)}
+        title="Add New Supplier"
+        fields={supplierFormFields}
+        initialData={{}}
+        onSubmit={handleCreateSupplier}
+        isSubmitting={createSupplier.isPending}
+        onGenerateCode={genSupplierCode}
+      />
     </div>
   );
 }
