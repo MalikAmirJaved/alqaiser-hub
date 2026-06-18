@@ -178,7 +178,6 @@ export default function ExpensesPage() {
     {
       key: "amount",
       label: "Amount",
-      align: "right" as const,
       sortable: true,
       render: (val: number) => formatCurrency(val),
     },
