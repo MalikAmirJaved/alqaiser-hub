@@ -366,7 +366,7 @@ export default function EmployeesPage() {
 
   const renderActions = (row, idx) => (
     <>
-      {employeePermissions.update && (
+      {/* {employeePermissions.update && (
         <>
           <button
             onClick={() => openPromotionModal(row)}
@@ -377,7 +377,7 @@ export default function EmployeesPage() {
             <TrendingUp className="w-4 h-4" />
           </button>
         </>
-      )}
+      )} */}
       {!userExistsForEmployee(row) && (
         <button
           onClick={() => router.push(getPrefillUserUrl(row))}
