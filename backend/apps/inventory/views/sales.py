@@ -99,8 +99,8 @@ def sync_sales_order_to_invoice(order, user):
             except ObjectDoesNotExist:
                 raise Exception('AR or SALES account not found in Chart of Accounts. Cannot complete order.')
             
-        # 3. Auto-payment when bank account is set (immediate POS settlement)
-        if order.bank_account and not get_payments_queryset(invoice).exists():
+        # 3. Auto-payment for immediate POS settlement
+        if not get_payments_queryset(invoice).exists():
             create_payment_for(
                 invoice,
                 amount=order.total_amount,
