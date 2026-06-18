@@ -1,5 +1,6 @@
 // src/hooks/useNotificationsApi.ts
 "use client";
+import { useCallback, useMemo } from "react";
 import { useApi } from "@/hooks/useApi";
 
 // ----------------------------------------------------------------------
@@ -30,24 +31,27 @@ export interface PaginatedNotificationsResponse {
 export function useNotificationsApi() {
   const api = useApi();
 
-  const fetchNotifications = async (): Promise<Notification[]> => {
+  const fetchNotifications = useCallback(async (): Promise<Notification[]> => {
     const data = await api<PaginatedNotificationsResponse>("/api/notifications/");
     return data.results || [];
-  };
+  }, [api]);
 
-  const markAsRead = async (id: string): Promise<void> => {
+  const markAsRead = useCallback(async (id: string): Promise<void> => {
     await api(`/api/notifications/${id}/mark_read/`, { method: "POST" });
-  };
+  }, [api]);
 
-  const markAllAsRead = async (): Promise<void> => {
+  const markAllAsRead = useCallback(async (): Promise<void> => {
     await api("/api/notifications/mark_all_read/", { method: "POST" });
-  };
+  }, [api]);
 
-  const toggleFavourite = async (id: string): Promise<{ is_favourite: boolean }> => {
+  const toggleFavourite = useCallback(async (id: string): Promise<{ is_favourite: boolean }> => {
     return api<{ is_favourite: boolean }>(`/api/notifications/${id}/toggle_favourite/`, {
       method: "POST",
     });
-  };
+  }, [api]);
 
-  return { fetchNotifications, markAsRead, markAllAsRead, toggleFavourite };
+  return useMemo(
+    () => ({ fetchNotifications, markAsRead, markAllAsRead, toggleFavourite }),
+    [fetchNotifications, markAsRead, markAllAsRead, toggleFavourite],
+  );
 }

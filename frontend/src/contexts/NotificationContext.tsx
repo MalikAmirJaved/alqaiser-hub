@@ -152,6 +152,9 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
 
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const intentionalCloseRef = useRef(false);
+  const retryCountRef = useRef(0);
+  const MAX_RETRIES = 10;
   const { fetchNotifications: fetchNotificationsApi, markAsRead: markAsReadApi, markAllAsRead: markAllAsReadApi, toggleFavourite: toggleFavouriteApi } = useNotificationsApi();
   const queryClient = useQueryClient();
 
@@ -172,7 +175,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
 
   // WebSocket connection with exponential backoff
   const connectSocket = useCallback(
-    async (retryCount = 0) => {
+    async () => {
       if (!isAuthenticated || !user) {
         console.warn(
           "[NotificationContext] User not authenticated – skipping WebSocket connection."
@@ -197,6 +200,11 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         return;
       }
 
+      if (retryCountRef.current >= MAX_RETRIES) {
+        console.warn(`[NotificationContext] Max retries (${MAX_RETRIES}) reached. Giving up.`);
+        return;
+      }
+
       await fetchNotifications();
 
       const wsUrl = apiUrl.replace(/^http/, "ws") + `/ws/notifications/${companyId}/${branchId || "None"}/`;
@@ -206,6 +214,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
 
       ws.onopen = () => {
         setIsConnected(true);
+        retryCountRef.current = 0;
         reconnectTimeoutRef.current && clearTimeout(reconnectTimeoutRef.current);
 
         // Start heartbeat
@@ -250,7 +259,6 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
               });
             }
 
-            // 🔄 Refresh Redux company settings when they change (e.g., currency update)
             if (entity === "company_settings") {
               console.log("[NotificationContext] Refreshing company settings via Redux thunk");
               store
@@ -270,7 +278,11 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
       };
 
       ws.onclose = (event) => {
-        if (!wsRef.current) return;
+        wsRef.current = null;
+        if (intentionalCloseRef.current) {
+          intentionalCloseRef.current = false;
+          return;
+        }
         console.warn(`[NotificationContext] Closed (code ${event.code}). Reconnecting...`);
         setIsConnected(false);
         if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
@@ -281,15 +293,21 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
           return;
         }
 
-        const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
+        retryCountRef.current += 1;
+        if (retryCountRef.current >= MAX_RETRIES) {
+          console.warn(`[NotificationContext] Max retries (${MAX_RETRIES}) reached. Giving up.`);
+          return;
+        }
+
+        const delay = Math.min(1000 * Math.pow(2, retryCountRef.current), 30000);
         reconnectTimeoutRef.current = setTimeout(() => {
-          connectSocket(retryCount + 1);
+          connectSocket();
         }, delay);
       };
 
       ws.onerror = (error) => {
         console.error("[NotificationContext] WebSocket error:", error);
-        ws.close(); // trigger reconnect
+        ws.close();
       };
     },
     [fetchNotifications, queryClient, user?.companyId, user?.branchId, isAuthenticated]
@@ -298,6 +316,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
   useEffect(() => {
     connectSocket();
     return () => {
+      intentionalCloseRef.current = true;
       if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (wsRef.current) wsRef.current.close();
