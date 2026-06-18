@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Eye, EyeOff, Building2, Monitor, Camera, ArrowLeft } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye, EyeOff, Building2, Monitor, Camera, ArrowLeft, Play } from "lucide-react";
 import {
   useSites, useCreateSite, useUpdateSite, useDeleteSite,
   type Site, type SiteFormData,
@@ -15,6 +15,7 @@ import {
   type Camera as CameraType, type CameraFormData,
 } from "@/hooks/useCameras";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { useStream } from "@/hooks/useStream";
 import FormModal from "@/components/reuseable/FormModal";
 import PageHeader from "@/components/PageHeader";
 
@@ -41,6 +42,8 @@ export default function CameraConfigurationPage() {
   const createCamera = useCreateCamera();
   const updateCamera = useUpdateCamera();
   const deleteCamera = useDeleteCamera();
+
+  const [streamingCamera, setStreamingCamera] = useState<CameraType | null>(null);
 
   const [siteModal, setSiteModal] = useState(false);
   const [nvrModal, setNvrModal] = useState(false);
@@ -130,8 +133,7 @@ export default function CameraConfigurationPage() {
     setCameraLoading(true);
     try {
       if (editingCamera) {
-        const { nvr, ...rest } = cameraForm;
-        await updateCamera.mutateAsync({ id: editingCamera.id, data: rest });
+        await updateCamera.mutateAsync({ id: editingCamera.id, data: cameraForm });
       } else {
         await createCamera.mutateAsync(cameraForm);
       }
@@ -254,15 +256,24 @@ export default function CameraConfigurationPage() {
                       </button>
                     )}
                   </div>
-                  <CameraTable
-                    nvrId={selectedNvr.id}
-                    cameras={cameras}
-                    loading={camerasLoading}
-                    onEdit={openEditCamera}
-                    onDelete={handleDeleteCamera}
-                    canEdit={cameraPerms.update}
-                    canDelete={cameraPerms.delete}
-                  />
+                  {streamingCamera ? (
+                    <LiveStreamView
+                      camera={streamingCamera}
+                      nvr={selectedNvr}
+                      onClose={() => setStreamingCamera(null)}
+                    />
+                  ) : (
+                    <CameraTable
+                      nvr={selectedNvr}
+                      cameras={cameras}
+                      loading={camerasLoading}
+                      onEdit={openEditCamera}
+                      onDelete={handleDeleteCamera}
+                      canEdit={cameraPerms.update}
+                      canDelete={cameraPerms.delete}
+                      onStream={setStreamingCamera}
+                    />
+                  )}
                 </div>
               </div>
             ) : (
@@ -319,10 +330,13 @@ export default function CameraConfigurationPage() {
                       ) : (
                         <div className="space-y-2">
                           {nvrs.map((nvr) => (
-                            <button
+                            <div
                               key={nvr.id}
+                              role="button"
+                              tabIndex={0}
                               onClick={() => setSelectedNvrId(nvr.id)}
-                              className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-colors hover:bg-muted/20 ${
+                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedNvrId(nvr.id); } }}
+                              className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-colors hover:bg-muted/20 cursor-pointer ${
                                 selectedNvrId === nvr.id ? "border-primary/30 bg-primary/5" : "border-border"
                               }`}
                             >
@@ -344,7 +358,7 @@ export default function CameraConfigurationPage() {
                                   </button>
                                 )}
                               </div>
-                            </button>
+                            </div>
                           ))}
                         </div>
                       )}
@@ -433,12 +447,13 @@ export default function CameraConfigurationPage() {
 
 /* ─── Sub-components ─── */
 
-function CameraTable({ nvrId, cameras, loading, onEdit, onDelete, canEdit, canDelete }: {
-  nvrId: string; cameras?: CameraType[]; loading: boolean;
+function CameraTable({ nvr, cameras, loading, onEdit, onDelete, canEdit, canDelete, onStream }: {
+  nvr: Nvr; cameras?: CameraType[]; loading: boolean;
   onEdit: (c: CameraType) => void; onDelete: (id: string) => void;
   canEdit: boolean; canDelete: boolean;
+  onStream: (cam: CameraType) => void;
 }) {
-  const nvrCameras = cameras?.filter((c) => c.nvr_id === nvrId) ?? [];
+  const nvrCameras = cameras?.filter((c) => c.nvr_id === nvr.id) ?? [];
 
   if (loading) return <div className="text-sm text-muted-foreground py-6 text-center">Loading...</div>;
 
@@ -473,6 +488,9 @@ function CameraTable({ nvrId, cameras, loading, onEdit, onDelete, canEdit, canDe
               <td className="px-3 py-2 text-muted-foreground">{cam.zone || "—"}</td>
               <td className="px-3 py-2 text-muted-foreground max-w-[200px] truncate">{cam.purpose || "—"}</td>
               <td className="px-3 py-2 text-right whitespace-nowrap">
+                <button onClick={() => onStream(cam)} className="p-1 rounded-md hover:bg-green-500/15 text-green-600 mr-1" title="Live stream">
+                  <Play className="w-3.5 h-3.5" />
+                </button>
                 {canEdit && (
                   <button onClick={() => onEdit(cam)} className="p-1 rounded-md hover:bg-muted">
                     <Pencil className="w-3.5 h-3.5" />
@@ -488,6 +506,60 @@ function CameraTable({ nvrId, cameras, loading, onEdit, onDelete, canEdit, canDe
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function LiveStreamView({ camera, nvr, onClose }: {
+  camera: CameraType; nvr: Nvr; onClose: () => void;
+}) {
+  const { videoRef, state, stop } = useStream(camera.id, true);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <button onClick={() => { stop(); onClose(); }} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Back to Cameras
+        </button>
+        {state.status === 'connecting' && (
+          <span className="text-xs bg-amber-500/15 text-amber-600 px-2 py-0.5 rounded-full font-medium">Connecting...</span>
+        )}
+        {state.status === 'active' && (
+          <span className="text-xs bg-green-500/15 text-green-600 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            LIVE
+          </span>
+        )}
+        {state.status === 'error' && (
+          <span className="text-xs bg-red-500/15 text-red-600 px-2 py-0.5 rounded-full font-medium">Stream failed</span>
+        )}
+      </div>
+
+      <div className="relative aspect-video bg-black rounded-xl overflow-hidden border border-border flex items-center justify-center">
+        {state.status === 'connecting' && (
+          <div className="text-muted-foreground text-sm">Starting stream...</div>
+        )}
+        {state.status === 'error' && (
+          <div className="text-muted-foreground text-sm text-center p-4">
+            <p className="font-medium mb-1">Unable to start stream</p>
+            <p className="text-xs">{state.error || 'Check that FFmpeg is installed and the camera is reachable'}</p>
+          </div>
+        )}
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          controls
+          className={`w-full h-full object-cover ${state.status === 'active' ? '' : 'hidden'}`}
+        />
+        <div className={`absolute bottom-3 left-3 right-3 flex items-center justify-between ${state.status === 'active' ? '' : 'hidden'}`}>
+          <div>
+            <div className="text-white font-semibold drop-shadow-md">{camera.camera}</div>
+            <div className="text-xs text-white/70 drop-shadow-md">CH {camera.channel} &middot; {nvr.nvr_name}</div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

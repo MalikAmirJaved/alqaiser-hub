@@ -85,6 +85,20 @@ export function useUpdateCustomer() {
   });
 }
 
+/**
+ * Fetch a single customer by ID
+ */
+export function useCustomer(id: string | undefined) {
+  const api = useApi();
+  return useQuery<Customer>({
+    queryKey: ["customer", id],
+    queryFn: () => api(`/api/inventory/customers/${id}/`),
+    enabled: !!id,
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
+}
+
 // Delete customer
 export function useDeleteCustomer() {
   const api = useApi();

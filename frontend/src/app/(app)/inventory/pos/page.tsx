@@ -7,6 +7,7 @@ import {
   useCreateSalesOrder,
   useCompleteSalesOrder,
   useCancelSalesOrder,
+  useUpdateSalesOrder,
   useDraftSalesOrders,
   cartToLineItems, CartLine
 } from "@/hooks/useSalesOrder";
@@ -16,7 +17,6 @@ import { CartPanel } from "@/components/inventory/pos/CartPanel";
 import { ReturnPanel } from "@/components/inventory/pos/ReturnPanel";
 import { SalesListPanel } from "@/components/inventory/pos/SalesListPanel";
 import { VariantDetailWithStock } from "@/hooks/useAllVariants";
-import { useApi } from "@/hooks/useApi";
 import { debounce } from "lodash";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
@@ -25,12 +25,12 @@ type ActivePanel = "search" | "held" | "return" | "sales";
 export default function SalesPage() {
   const permissions = useFeaturePermissions("INVENTORY", "sales_order");
   const queryClient = useQueryClient();
-  const api = useApi();
   const { data: warehouses = [] } = useWarehouses({ is_active: true });
   const { data: draftOrders = [], refetch: refetchDrafts } = useDraftSalesOrders();
   const { mutateAsync: createSalesOrder, isPending: isCreatingOrder } = useCreateSalesOrder();
   const { mutateAsync: completeOrder, isPending: isCompleting } = useCompleteSalesOrder();
   const { mutateAsync: cancelOrder, isPending: isCancelling } = useCancelSalesOrder();
+  const { mutateAsync: updateSalesOrder } = useUpdateSalesOrder();
 
   const [cart, setCart] = useState<CartLine[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
@@ -45,16 +45,16 @@ export default function SalesPage() {
       if (!orderId) return;
       try {
         const lineItems = cartToLineItems(newCart);
-        await api(`/api/inventory/sales-orders/${orderId}/`, {
-          method: "PUT",
-          body: JSON.stringify({
+        await updateSalesOrder({
+          orderId,
+          data: {
             line_items: lineItems,
             customer: custId,
             warehouse: whId,
             order_date: new Date().toISOString().split("T")[0],
             notes: notes,
             status: "DRAFT",
-          }),
+          },
         });
         refetchDrafts();
       } catch (err) {

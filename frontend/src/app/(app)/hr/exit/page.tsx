@@ -30,7 +30,6 @@ import {
 } from "@/hooks/useExitManagement";
 import { useActiveEmployees } from "@/hooks/useEmployees";
 import { toast } from "sonner";
-import { useApi } from "@/hooks/useApi";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
@@ -60,7 +59,6 @@ export default function ExitManagementPage() {
   const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const permissions = useFeaturePermissions("HR", "exit");
-  const api = useApi();
   const { data: employees = [] } = useActiveEmployees();
   const confirmationModal = useConfirmationModal();
   const [query, setQuery] = useState("");
@@ -662,6 +660,15 @@ function ExitFormModal({
                   className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none"
                   readOnly
                 />
+              </label>
+              <label className="text-sm sm:col-span-2">
+                <div className="bg-muted/30 border border-border rounded-xl p-3">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-primary" />
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Monthly Salary</span>
+                  </div>
+                  <div className="text-lg font-bold mt-1">{formatCurrency(parseFloat(selectedEmployee.salary || "0"))}</div>
+                </div>
               </label>
             </>
           )}

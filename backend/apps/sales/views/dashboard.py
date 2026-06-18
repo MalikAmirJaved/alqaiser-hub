@@ -33,7 +33,6 @@ class SalesDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewset
             company_id=company_id,
             branch_id=branch_id,
             is_deleted=False,
-            source__in=['SALES_AGENT', 'SALES_QUOTE', 'SALES_POS'],
         ).exclude(status='CANCELLED')
 
         leads_by_status = leads.values('status').annotate(count=Count('id'))

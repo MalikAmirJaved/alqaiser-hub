@@ -62,7 +62,7 @@ class NotificationViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
         return queryset.order_by('-created_at')
     
     @action(detail=True, methods=['post'])
-    def mark_read(self, request, pk=None):
+    def mark_read(self, request, _id=None):
         """Mark a single notification as read"""
         notification = self.get_object()
         notification.mark_as_read()
@@ -74,7 +74,7 @@ class NotificationViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
         })
     
     @action(detail=True, methods=['post'])
-    def mark_unread(self, request, pk=None):
+    def mark_unread(self, request, _id=None):
         """Mark a single notification as unread"""
         notification = self.get_object()
         notification.mark_as_unread()
@@ -118,7 +118,7 @@ class NotificationViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
         })
     
     @action(detail=True, methods=['post'])
-    def toggle_favourite(self, request, pk=None):
+    def toggle_favourite(self, request, _id=None):
         """Toggle favourite status of a notification"""
         notification = self.get_object()
         notification.toggle_favourite()
@@ -188,7 +188,7 @@ class NotificationViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.
         return self.clear_all(request)
     
     @action(detail=True, methods=['delete'])
-    def delete_notification(self, request, pk=None):
+    def delete_notification(self, request, _id=None):
         """Soft delete a single notification"""
         notification = self.get_object()
         notification.is_deleted = True

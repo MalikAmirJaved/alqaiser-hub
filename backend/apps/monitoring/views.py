@@ -1,10 +1,26 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, status
 from rest_framework.response import Response
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
+from django.conf import settings
+from urllib.parse import quote
 from .models import Site, Nvr, Camera
 from .serializers import SiteSerializer, NvrSerializer, CameraSerializer
+from .stream_manager import StreamManager
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def stream_status(request):
+    stream_id = request.data.get('stream_id')
+    if not stream_id:
+        return Response({'error': 'stream_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+    info = StreamManager.get_status(stream_id)
+    if info is None:
+        return Response({'error': 'Stream not found'}, status=status.HTTP_404_NOT_FOUND)
+    return Response(info)
 
 
 class SiteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
@@ -174,3 +190,47 @@ class CameraViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMi
 
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def start_stream(request):
+    camera_id = request.data.get('camera_id')
+    if not camera_id:
+        return Response({'error': 'camera_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        camera = Camera.objects.get(_id=camera_id, is_deleted=False)
+    except Camera.DoesNotExist:
+        return Response({'error': 'Camera not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    nvr = camera.nvr
+
+    existing = StreamManager.get_active_stream(str(camera._id))
+    if existing:
+        hls_url = request.build_absolute_uri(f'{settings.MEDIA_URL}streams/{existing}/index.m3u8')
+        return Response({'stream_id': existing, 'hls_url': hls_url})
+
+    username = quote(nvr.nvr_username, safe='')
+    password = quote(nvr.password, safe='')
+    channel = camera.channel
+    rtsp_url = f'rtsp://{username}:{password}@{nvr.ip}:{nvr.port}/streaming/channels/{channel}'
+
+    try:
+        stream_id, hls_path = StreamManager.start(str(camera._id), rtsp_url)
+        hls_url = request.build_absolute_uri(hls_path)
+    except RuntimeError as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({'stream_id': stream_id, 'hls_url': hls_url})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def stop_stream(request):
+    stream_id = request.data.get('stream_id')
+    if not stream_id:
+        return Response({'error': 'stream_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    StreamManager.stop(stream_id)
+    return Response({'status': 'stopped'})

@@ -1,12 +1,13 @@
 // components/finance/CustomerInvoiceFormModal.tsx
 import { useEffect, useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
-import { X, Plus, Trash2, Search, RotateCw } from "lucide-react";
+import { X, Plus, Trash2, Search, RotateCw } from "lucide-react";import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreateCustomerInvoice,
   useUpdateCustomerInvoice,
   type CustomerInvoice,
 } from "@/hooks/finance/useCustomerInvoices";
+import { useCreateSalesInvoice, useUpdateSalesInvoice } from "@/hooks/sales/useSalesInvoices";
 import { useCustomers } from "@/hooks/useCustomers";
 import { useAllVariantsSimple } from "@/hooks/useAllVariants";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
@@ -40,9 +41,10 @@ interface Props {
   onClose: () => void;
   initialData?: CustomerInvoice | null;
   onSuccess?: () => void;
+  moduleCode?: "FINANCE" | "SALES";
 }
 
-export default function CustomerInvoiceFormModal({ open, onClose, initialData, onSuccess }: Props) {
+export default function CustomerInvoiceFormModal({ open, onClose, initialData, onSuccess, moduleCode = "FINANCE" }: Props) {
   const formatCurrency = useFormatCurrency();
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [newCustomerInfo, setNewCustomerInfo] = useState<any>(null);
@@ -50,6 +52,9 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
   const { data: variants = [] } = useAllVariantsSimple({ active_only: true });
   const createInvoice = useCreateCustomerInvoice();
   const updateInvoice = useUpdateCustomerInvoice();
+  const createSalesInvoice = useCreateSalesInvoice();
+  const updateSalesInvoice = useUpdateSalesInvoice();
+  const queryClient = useQueryClient();
   const { generateCode, validateCode } = useAutoCode("customer_invoice");
 
   const { register, control, handleSubmit, reset, setValue, watch } = useForm<CustomerInvoiceFormData>({
@@ -168,6 +173,10 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
     } else if (!payload.customer) {
       delete payload.customer;
     }
+    // Clean optional fields
+    if (!payload.due_date) {
+      payload.due_date = null;
+    }
     // Clean lines
     payload.lines = payload.lines.map((line: any) => ({
       variant: line.variant,
@@ -177,10 +186,18 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
       tax_rate: line.tax_rate || 0,
     }));
 
-    if (initialData) {
-      await updateInvoice.mutateAsync({ id: initialData.id, data: payload });
+    if (moduleCode === "SALES") {
+      if (initialData) {
+        await updateSalesInvoice.mutateAsync({ id: initialData.id, data: payload });
+      } else {
+        await createSalesInvoice.mutateAsync(payload);
+      }
     } else {
-      await createInvoice.mutateAsync(payload);
+      if (initialData) {
+        await updateInvoice.mutateAsync({ id: initialData.id, data: payload });
+      } else {
+        await createInvoice.mutateAsync(payload);
+      }
     }
     onSuccess?.();
     onClose();

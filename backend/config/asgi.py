@@ -6,7 +6,7 @@ import os
 from django.urls import path
 from django.core.asgi import get_asgi_application
 from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.security.websocket import AllowedHostsOriginValidator
+from channels.security.websocket import OriginValidator
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 
@@ -21,11 +21,23 @@ websocket_urlpatterns = [
     path("ws/permissions/", PermissionConsumer.as_asgi()),    
 ]
 
+from django.conf import settings
+
+# Build allowed WebSocket origins from ALLOWED_HOSTS + FRONTEND_URL
+_allowed_ws_origins = list(settings.ALLOWED_HOSTS)
+if settings.FRONTEND_URL:
+    _allowed_ws_origins.append(settings.FRONTEND_URL)
+
+# In debug, also allow any origin for convenience
+if settings.DEBUG:
+    _allowed_ws_origins.append("*")
+
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
-    "websocket": AllowedHostsOriginValidator(
+    "websocket": OriginValidator(
         JWTAuthCookieMiddleware(
             URLRouter(websocket_urlpatterns)
-        )
+        ),
+        allowed_origins=_allowed_ws_origins,
     ),
 })

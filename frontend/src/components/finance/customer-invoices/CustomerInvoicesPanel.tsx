@@ -87,7 +87,7 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
   const computeKPIs = (data: any[]) => {
     const totalOutstanding = data.reduce((sum, inv) => sum + Number(inv.outstanding || 0), 0);
     const totalPaid = data.reduce((sum, inv) => sum + Number(inv.paid_amount || 0), 0);
-    const overdueCount = data.filter((inv) => inv.payment_status !== "PAID" && new Date(inv.due_date) < new Date()).length;
+    const overdueCount = data.filter((inv) => inv.payment_status !== "PAID" && inv.due_date && new Date(inv.due_date) < new Date()).length;
     const draftCount = data.filter((inv) => inv.status === "DRAFT").length;
     return [
       {
@@ -211,6 +211,7 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
           setEditingInvoice(null);
         }}
         initialData={editingInvoice}
+        moduleCode={moduleCode}
       />
     </>
   );

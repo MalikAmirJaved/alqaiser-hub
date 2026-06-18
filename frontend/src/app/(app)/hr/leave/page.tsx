@@ -3,8 +3,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { useApi } from "@/hooks/useApi";
-import { useLeaves, useCreateLeaveRequest, useApproveLeave, useLeaveStats, LEAVE_TYPES } from "@/hooks/useLeaves";
+import { useLeaves, useCreateLeaveRequest, useDeleteLeaveRequest, useApproveLeave, useLeaveStats, LEAVE_TYPES } from "@/hooks/useLeaves";
 import { useActiveEmployees } from "@/hooks/useEmployees";
 import PageHeader from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -50,7 +49,7 @@ type ViewMode = "grid" | "table";
 
 export default function LeaveManagementPage() {
   const { user } = useAuth();
-  const api = useApi();
+
 
   const [activeTab, setActiveTab] = useState("all-leaves");
   const [viewMode, setViewMode] = useState<ViewMode>("table");
@@ -93,6 +92,7 @@ const leavePermissions = getPermissions(
 
   // Mutations
   const createLeave = useCreateLeaveRequest();
+  const deleteLeave = useDeleteLeaveRequest();
   const approveLeave = useApproveLeave();
 
   const refreshData = useCallback(() => {
@@ -150,10 +150,7 @@ const leavePermissions = getPermissions(
     if (!confirm("Delete this leave request?")) return;
 
     try {
-      await api(`/api/hr/leaves/`, {
-        method: "DELETE",
-        body: JSON.stringify({ id: leaveId }),
-      });
+      await deleteLeave.mutateAsync(leaveId);
       refreshData();
     } catch (error: any) {
     }

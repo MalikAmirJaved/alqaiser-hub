@@ -359,7 +359,7 @@ export default function ShiftsManagementPage() {
         subtitle="Manage employee schedules, overrides, and track change history"
         actions={
           <div className="flex gap-2">
-            <Button 
+            {/* <Button 
               variant="outline"
               onClick={handleGenerateSchedule}
               disabled={generateSchedule.isPending}
@@ -370,7 +370,7 @@ export default function ShiftsManagementPage() {
                 <RefreshCw className="w-4 h-4 mr-2" />
               )}
               Generate Schedule
-            </Button>
+            </Button> */}
             <Button 
               variant="outline"
               onClick={() => {
@@ -380,7 +380,7 @@ export default function ShiftsManagementPage() {
                 refetchHistory();
               }}
             >
-              <History className="w-4 h-4 mr-2" /> Change History
+              <History className="w-4 h-4 mr-2" /> History
             </Button>
             {permissions.create && (
               <Button onClick={() => {
@@ -969,7 +969,7 @@ export default function ShiftsManagementPage() {
           <div className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-3xl max-h-[80vh] overflow-y-auto">
             <div className="p-4 border-b border-border flex justify-between items-center sticky top-0 bg-card">
               <h2 className="font-semibold flex items-center gap-2">
-                <History className="w-4 h-4 text-primary"/> Shift Change History
+                <History className="w-4 h-4 text-primary"/> Shift History
                 {selectedEmployeeForHistory && (
                   <span className="text-sm font-normal text-muted-foreground ml-2">
                     {selectedEmployeeForHistory.first_name} {selectedEmployeeForHistory.last_name || ''}
@@ -989,7 +989,7 @@ export default function ShiftsManagementPage() {
               ) : !historyData?.data?.length ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <History className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                  <p>No shift change history found</p>
+                  <p>No shift history found</p>
                 </div>
               ) : (
                 <div className="space-y-3">

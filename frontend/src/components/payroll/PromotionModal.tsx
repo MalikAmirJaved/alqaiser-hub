@@ -2,8 +2,8 @@
 "use client";
 
 import { useState } from "react";
-import { useApi } from "@/hooks/useApi";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCreatePromotion } from "@/hooks/usePromotions";
+import { useQueryClient } from "@tanstack/react-query";
 import { X, TrendingUp } from "lucide-react";
 
 export default function PromotionModal({
@@ -19,23 +19,15 @@ export default function PromotionModal({
   onSuccess: () => void;
   formatCurrency: (amount: number) => string;
 }) {
-  const api = useApi();
   const queryClient = useQueryClient();
+  const createPromotion = useCreatePromotion();
   const [newSalary, setNewSalary] = useState(parseFloat(employee?.salary || "0"));
   const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().split("T")[0]);
   const [notes, setNotes] = useState("");
 
   const currentSalary = parseFloat(employee?.salary || "0");
 
-  const promotionMutation = useMutation({
-    mutationFn: (data: any) =>
-      api("/api/hr/promotions/", { method: "POST", body: JSON.stringify(data) }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["employees"] });
-      onSuccess();
-      onClose();
-    },
-  });
+  const promotionMutation = createPromotion;
 
   const handleSubmit = async () => {
     if (newSalary <= 0) return;
@@ -45,6 +37,8 @@ export default function PromotionModal({
       effective_date: effectiveDate,
       notes: notes,
     });
+    onSuccess();
+    onClose();
   };
 
   if (!isOpen) return null;
