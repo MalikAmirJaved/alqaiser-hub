@@ -118,6 +118,21 @@ export default function LoanForm({
     }
   }, [frequencyType, mr.start_month, mr.start_year, mr.end_month, mr.end_year, totalPayable]);
 
+  // Recalculate deductions for SELECTED_MONTH/ONE_TIME when totalPayable changes
+  useEffect(() => {
+    if (frequencyType !== 'SELECTED_MONTH' && frequencyType !== 'ONE_TIME') return;
+    if (selectedMonths.length === 0 || principal <= 0) return;
+
+    const autoDeduction = totalPayable / selectedMonths.length;
+    const updated = selectedMonths.map((sm: any) => ({ ...sm, deduction: autoDeduction }));
+
+    const currentJson = JSON.stringify(selectedMonths.map((s: any) => ({ month: s.month, year: s.year, deduction: s.deduction })));
+    const newJson = JSON.stringify(updated);
+    if (currentJson !== newJson) {
+      setFormData({ ...formData, selected_months: updated });
+    }
+  }, [frequencyType, totalPayable, selectedMonths.length, principal]);
+
   // Auto-set end year and reset end month when start changes
   useEffect(() => {
     if (frequencyType !== 'MONTH_RANGE') return;
