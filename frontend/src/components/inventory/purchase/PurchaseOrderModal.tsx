@@ -84,9 +84,7 @@ const supplierFormFields = [
   { name: 'email', label: 'Email', type: 'email' as const, placeholder: 'contact@company.com' },
   { name: 'phone', label: 'Phone', type: 'tel' as const, placeholder: '+1 234 567 8900' },
   { name: 'address_line', label: 'Address Line', type: 'textarea' as const, placeholder: 'Street address' },
-  { name: 'country', label: 'Country', type: 'text' as const, placeholder: 'Country' },
-  { name: 'state', label: 'State', type: 'text' as const, placeholder: 'State/Province' },
-  { name: 'city', label: 'City', type: 'text' as const, placeholder: 'City' },
+  { name: 'location', label: 'Location', type: 'location-group' as const, fields: { country: 'country', state: 'state', city: 'city' } },
   { name: 'postal_code', label: 'Postal Code', type: 'text' as const, placeholder: 'Postal code' },
   {
     name: 'status',

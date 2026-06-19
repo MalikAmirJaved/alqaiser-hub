@@ -19,8 +19,9 @@
   9.  AI Monitoring Module
   10. Notifications System
   11. Permission & Access Control
-  12. How Modules Link Together
-  13. Troubleshooting & FAQ
+  12. Unified Dashboard
+  13. How Modules Link Together
+  14. Troubleshooting & FAQ
 
 
 ================================================================================
@@ -38,11 +39,12 @@ Al Qaiser BOS is a complete Business Operating System that manages:
 
 URL: http://192.168.88.51:3000
 
-Technology:
+  Technology:
   - Backend:  Django 6.0 + Django REST Framework + PostgreSQL + Redis
-  - Frontend: Next.js 16 + React 19 + TypeScript + Redux Toolkit + React Query
+  - Frontend: Next.js 14+ (App Router) + React 19 + TypeScript + Redux Toolkit + TanStack Query
   - Auth:     JWT (HttpOnly cookies) with role-based access control (RBAC)
-  - Realtime: WebSocket notifications + Celery background tasks
+  - Realtime: WebSocket notifications + Celery background tasks + HLS streaming
+  - Streaming: FFmpeg RTSP-to-HLS for CCTV camera feeds
 
 
 ================================================================================
@@ -161,6 +163,7 @@ Technology:
   │ Submodule          │ URL                                        │
   ├─────────────────────────────────────────────────────────────────┤
   │ Company Profile    │ /settings/company                          │
+  │ Terms & Conditions │ /settings/terms                            │
   │ Users & Roles      │ /settings/users                            │
   │ Permissions        │ /settings/permissions                      │
   │ Departments        │ /settings/departments                      │
@@ -188,7 +191,27 @@ Technology:
     - Public Holidays (add/remove holidays)
 
 ---------------------------------------
-  4.2 Users & Roles
+  4.2 Terms & Conditions
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/settings/terms
+
+  Purpose: Configure default terms and conditions text for quotes and invoices.
+
+  Actions:
+    UPDATE  - Edit quote terms and invoice terms
+
+  What to Configure:
+    - Quote Terms: Default text shown on sales quotes
+    - Invoice Terms: Default text shown on customer invoices
+
+  Why This Matters:
+    - Terms auto-populate when creating quotes and invoices
+    - Ensures consistent legal language across documents
+    - Can be customized per company
+
+---------------------------------------
+  4.3 Users & Roles
 ---------------------------------------
 
   URL: http://192.168.88.51:3000/settings/users
@@ -216,7 +239,7 @@ Technology:
     Go to Settings > Permissions and configure their permissions.
 
 ---------------------------------------
-  4.3 Permissions
+  4.4 Permissions
 ---------------------------------------
 
   URL: http://192.168.88.51:3000/settings/permissions
@@ -238,7 +261,7 @@ Technology:
     5. Changes take effect immediately
 
 ---------------------------------------
-  4.4 Departments
+  4.5 Departments
 ---------------------------------------
 
   URL: http://192.168.88.51:3000/settings/departments
@@ -266,7 +289,7 @@ Technology:
     4. When adding employees, assign them to departments
 
 ---------------------------------------
-  4.5 Designations
+  4.6 Designations
 ---------------------------------------
 
   URL: http://192.168.88.51:3000/settings/designations
@@ -305,6 +328,7 @@ Technology:
   ├─────────────────────────────────────────────────────────────────┤
   │ Employee Management   │ /hr/employees                           │
   │ Payroll               │ /hr/payroll                             │
+  │ Employee Salary       │ /hr/salary/{id}                         │
   │ Time & Attendance     │ /hr/attendance                          │
   │ Leave Management      │ /hr/leave                               │
   │ Shifts                │ /hr/shifts/list                         │
@@ -366,7 +390,36 @@ Technology:
     - Without employees, you cannot process payroll or manage leaves
 
 ---------------------------------------
-  5.2 Payroll
+  5.2 Employee Salary Detail
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/hr/salary/{id}
+
+  Purpose: Comprehensive salary overview for a single employee from joining to current.
+
+  Shows:
+    - Summary stats: Total Gross Paid, Total Deductions, Net Paid Out, Loans Outstanding
+    - Salary overview with money flow visualization
+    - Active compensation details and allowances breakdown
+    - Compensation payment status per month (PAID/PENDING badges)
+    - Full payroll history table with running totals
+    - Personal loans with progress bars
+    - Salary advances with deduction tracking
+    - Leave summary with deduction amounts
+    - Monthly timeline of all payroll events (latest 24 months)
+
+  How to Access:
+    1. Go to HR > Payroll
+    2. Click on an employee row
+    3. You are redirected to the salary detail page
+
+  Why This Matters:
+    - Complete financial picture for any employee
+    - Useful for salary negotiations, audits, and exit settlements
+    - Shows exactly how much has been paid, deducted, and outstanding
+
+---------------------------------------
+  5.3 Payroll
 ---------------------------------------
 
   URL: http://192.168.88.51:3000/hr/payroll
@@ -445,7 +498,7 @@ Technology:
     - Average salary
 
 ---------------------------------------
-  5.3 Leave Management
+  5.4 Leave Management
 ---------------------------------------
 
   URL: http://192.168.88.51:3000/hr/leave
@@ -487,7 +540,7 @@ Technology:
     - Approved vs rejected
 
 ---------------------------------------
-  5.4 Shift Management
+  5.5 Shift Management
 ---------------------------------------
 
   URL: http://192.168.88.51:3000/hr/shifts/list
@@ -553,7 +606,7 @@ Technology:
     BULK     - Assign shifts to multiple employees at once
 
 ---------------------------------------
-  5.5 Shift Templates
+  5.6 Shift Templates
 ---------------------------------------
 
   URL: http://192.168.88.51:3000/hr/shifts/templates
@@ -582,7 +635,7 @@ Technology:
     - Shift patterns affect payroll calculations
 
 ---------------------------------------
-  5.6 Inventory Assets
+  5.7 Inventory Assets
 ---------------------------------------
 
   URL: http://192.168.88.51:3000/hr/assets/list
@@ -635,7 +688,7 @@ Technology:
       VIEW     - See all assigned assets
 
 ---------------------------------------
-  5.7 Performance
+  5.8 Performance
 ---------------------------------------
 
   URL: http://192.168.88.51:3000/hr/performance
@@ -648,7 +701,7 @@ Technology:
     DELETE   - Remove performance records
 
 ---------------------------------------
-  5.8 Recruitment
+  5.9 Recruitment
 ---------------------------------------
 
   URL: http://192.168.88.51:3000/hr/recruitment
@@ -680,7 +733,7 @@ Technology:
     - Track the complete communication history
 
 ---------------------------------------
-  5.9 Exit Management
+  5.10 Exit Management
 ---------------------------------------
 
   URL: http://192.168.88.51:3000/hr/exit
@@ -717,7 +770,7 @@ Technology:
     - Process multiple exits at once
 
 ---------------------------------------
-  5.10 HR Policies
+  5.11 HR Policies
 ---------------------------------------
 
   URL: http://192.168.88.51:3000/hr/policies
@@ -744,7 +797,7 @@ Technology:
     - Examples: Leave Policy, Safety Policy, Code of Conduct
 
 ---------------------------------------
-  5.11 Compensation & Loans
+  5.12 Compensation & Loans
 ---------------------------------------
 
   URL: http://192.168.88.51:3000/hr/compensation
@@ -1251,9 +1304,18 @@ Technology:
     1. Create a quote (can be from a lead or standalone)
     2. Add line items (products, quantities, prices)
     3. System calculates totals, taxes, discounts
-    4. Send quote to customer
-    5. When approved, convert to Invoice
-    6. Invoice appears in Finance module
+    4. **Stock is automatically reserved** for the quote items
+    5. Send quote to customer
+    6. When approved, convert to Invoice
+    7. Invoice appears in Finance module
+    8. **Stock reservations transfer** from quote to invoice
+
+  Stock Reservation:
+    - On CREATE: Stock is reserved with reservation_type='QUOTE'
+    - On UPDATE: Reservations are adjusted to match new quantities
+    - On DELETE: All reserved stock is released
+    - On ACCEPT: Reservations transfer to the invoice
+    - On REJECT: All reserved stock is released
 
   Quote Fields:
     - Customer, Quote date, Valid until
@@ -1287,11 +1349,18 @@ Technology:
     UPDATE   - Edit invoice
     DELETE   - Remove invoice
     PAY      - Record payment against invoice
+    POST     - Mark invoice as fully paid
+    PARTIAL  - Record partial payment
 
   How Invoices Connect:
     - Quotes (approved) -> Invoices -> Payments (Finance)
     - Invoice data flows to Finance module
     - Payment tracking happens in Finance > Payments
+
+  Invoice Payment Actions:
+    - Post Invoice: Marks the invoice as fully paid
+    - Record Payment: Records a partial payment against the invoice
+    - Paid invoices cannot be edited or deleted
 
 
 ================================================================================
@@ -1589,24 +1658,45 @@ Technology:
 
   URL: http://192.168.88.51:3000/finance/forecast
 
-  Purpose: AI-powered financial forecasting.
+  Purpose: AI-powered sales and stock forecasting with configurable methods.
 
   Forecast Types:
-    - Sales Forecast: Predict future sales
-    - Stock Forecast: Predict stock needs
-    - Revenue Forecast: Predict revenue
+    - Sales Forecast: Predict future demand per product variant
+    - Stock Forecast: Predict stock needs and reorder quantities per warehouse
+
+  Forecasting Methods:
+    - Moving Average: Average of last N days of sales data
+    - Exponential Smoothing: Weighted average with configurable alpha factor
+    - Linear Regression: Trend-based prediction from historical data
 
   How It Works:
-    1. Configure forecast parameters
-    2. System analyzes historical data
-    3. Generates predictions
-    4. View forecasts in charts and tables
-    5. Use for planning and decision making
+    1. Configure forecast parameters (method, window, horizon)
+    2. System analyzes historical sales data
+    3. Generates demand predictions with confidence bounds
+    4. Calculates stock projections and reorder quantities
+    5. View forecasts in charts and tables
+    6. Use for planning and procurement decisions
 
-  Configuration:
-    - Set forecast period (weekly, monthly, quarterly)
-    - Choose algorithms
-    - Set confidence levels
+  Configuration Options:
+    - Scope: GLOBAL (all products), VARIANT-specific, or CATEGORY-specific
+    - Method: Moving Average, Exponential Smoothing, or Linear Regression
+    - Window Days: How many days of history to use
+    - Forecast Horizon: How many days ahead to predict
+    - Smoothing Factor (alpha): For exponential smoothing only
+
+  Analytics Available:
+    - Sales Analytics: Timeline (daily/weekly/monthly), top SKUs, method distribution, confidence histogram
+    - Stock Summary: By-warehouse projections, top reorder items, total reorder quantities
+
+  Celery Tasks:
+    - Automatic periodic forecast generation for all companies
+    - Can be triggered manually via API
+
+  Why This Matters:
+    - Predict demand to avoid stockouts
+    - Plan procurement based on forecasted needs
+    - Identify trending products and seasonal patterns
+    - Optimize inventory levels across warehouses
 
 
 ================================================================================
@@ -1615,7 +1705,8 @@ Technology:
 
   Module Path: /monitoring/*
 
-  The AI Monitoring module provides CCTV and security monitoring.
+  The AI Monitoring module provides CCTV camera management with live
+  RTSP-to-HLS streaming.
 
   ┌─────────────────────────────────────────────────────────────────┐
   │ Submodule               │ URL                                   │
@@ -1716,7 +1807,7 @@ Technology:
 
   URL: http://192.168.88.51:3000/monitoring/camera-configuration
 
-  Purpose: Configure and manage camera systems.
+  Purpose: Configure camera systems and manage live streaming.
 
   Actions:
     CREATE   - Add a new camera/site/NVR
@@ -1729,10 +1820,21 @@ Technology:
 
   How It Works:
     1. Create a Site (physical location)
-    2. Add NVRs to the site
-    3. Add Cameras to each NVR
+    2. Add NVRs to the site (IP address, port, credentials)
+    3. Add Cameras to each NVR (channel, zone, purpose)
     4. Configure RTSP stream URLs
     5. Start/stop streams as needed
+
+  Live Streaming:
+    - Uses FFmpeg to convert RTSP feeds to HLS (HTTP Live Streaming)
+    - Streams are accessible via browser as .m3u8 playlists
+    - Auto-restarts crashed streams (up to 5 retries)
+    - Background monitoring of stream health
+
+  Why This Matters:
+    - Monitor physical locations in real-time
+    - Track inventory areas and entry/exit points
+    - Review footage for security incidents
 
 ---------------------------------------
   9.8 Warehouse Monitoring
@@ -1834,7 +1936,55 @@ Technology:
 
 
 ================================================================================
-               12. HOW MODULES LINK TOGETHER
+               12. UNIFIED DASHBOARD
+================================================================================
+
+  URL: http://192.168.88.51:3000/dashboard
+
+  Purpose: Cross-module overview combining Finance, Inventory, and Sales KPIs.
+
+  What It Shows:
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ Finance KPIs                                                     │
+  │   - Revenue (MTD), Expenses (MTD), Profit (MTD)                │
+  │   - Cash Position, Accounts Receivable, Accounts Payable        │
+  ├─────────────────────────────────────────────────────────────────┤
+  │ Inventory KPIs                                                   │
+  │   - Total Products, Total Stock Value                           │
+  │   - Low Stock Alerts                                            │
+  ├─────────────────────────────────────────────────────────────────┤
+  │ Sales KPIs                                                       │
+  │   - Total Leads, New Leads (MTD)                                │
+  │   - Total Quotes, Quote Value                                   │
+  │   - Total Customers, Invoice Total                              │
+  │   - Outstanding Amount, Paid (MTD)                              │
+  │   - Conversion Rate                                             │
+  ├─────────────────────────────────────────────────────────────────┤
+  │ 12-Month Trends                                                 │
+  │   - Revenue vs Expenses                                         │
+  │   - Sales vs Purchases                                          │
+  │   - Stock Movement (incoming/outgoing)                          │
+  ├─────────────────────────────────────────────────────────────────┤
+  │ Recent Activity                                                 │
+  │   - Last 5 payments, sales orders, stock transactions           │
+  │   - Last 5 leads and quotes                                     │
+  ├─────────────────────────────────────────────────────────────────┤
+  │ Critical Alerts                                                 │
+  │   - Low stock items                                             │
+  │   - Overdue invoices and bills                                  │
+  │   - Pending leads and quotes                                    │
+  └─────────────────────────────────────────────────────────────────┘
+
+  Why This Matters:
+    - Single view of business health across all modules
+    - Identify issues (low stock, overdue payments) at a glance
+    - Track trends over 12 months
+    - Access recent activity without navigating to each module
+
+
+================================================================================
+               13. HOW MODULES LINK TOGETHER
 ================================================================================
 
   The modules are deeply interconnected. Here's how data flows:
@@ -1956,7 +2106,7 @@ Technology:
 
 
 ================================================================================
-                    13. TROUBLESHOOTING & FAQ
+                    14. TROUBLESHOOTING & FAQ
 ================================================================================
 
   Q: I can't see a module in the sidebar.
@@ -2011,6 +2161,7 @@ Technology:
   HR MODULE:
     Employees:        /hr/employees
     Payroll:          /hr/payroll
+    Salary Detail:    /hr/salary/{id}
     Attendance:       /hr/attendance
     Leave:            /hr/leave
     Shifts:           /hr/shifts/list
@@ -2076,6 +2227,7 @@ Technology:
 
   SETTINGS:
     Company:          /settings/company
+    Terms:            /settings/terms
     Users:            /settings/users
     Permissions:      /settings/permissions
     Departments:      /settings/departments
