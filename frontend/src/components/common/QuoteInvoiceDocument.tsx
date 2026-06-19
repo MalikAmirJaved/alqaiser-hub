@@ -598,7 +598,20 @@ export function PrintPreviewModal({
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    const style = `
+    const contentEl = contentRef.current;
+    if (!contentEl) return;
+
+    // Copy all stylesheet link tags from the current page so Tailwind CSS is available
+    const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+      .map((link) => link.outerHTML)
+      .join('\n');
+
+    // Also copy any inline style tags that contain critical CSS (CSS variables, etc.)
+    const inlineStyles = Array.from(document.querySelectorAll('style'))
+      .map((s) => s.outerHTML)
+      .join('\n');
+
+    const printStyles = `
       <style>
         body { margin: 0; font-family: Arial, Helvetica, sans-serif; }
         @page { margin: 10mm; }
@@ -607,19 +620,24 @@ export function PrintPreviewModal({
       </style>
     `;
 
-    const contentEl = contentRef.current;
-    if (!contentEl) return;
-
     const html = `
       <html>
-        <head>${style}</head>
+        <head>
+          ${styleLinks}
+          ${inlineStyles}
+          ${printStyles}
+        </head>
         <body>${contentEl.innerHTML}</body>
       </html>
     `;
     printWindow.document.write(html);
     printWindow.document.close();
     printWindow.focus();
-    setTimeout(() => printWindow.print(), 500);
+
+    // Wait for stylesheets to fully load before triggering print
+    printWindow.addEventListener('load', () => {
+      printWindow.print();
+    });
   };
 
   const handleDownloadPdf = async () => {
