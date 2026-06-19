@@ -3,7 +3,6 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.db.models import Sum
-from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -14,7 +13,6 @@ from apps.finance.models import (
     BankAccount,
     CustomerInvoice,
     Expense,
-    JournalLine,
     Payment,
     SupplierBill,
 )
@@ -180,42 +178,60 @@ class FinanceDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
 
     @action(detail=False, methods=['get'])
     def revenue_trend(self, request):
+        """
+        Revenue & expense trend based on **confirmed payments only**
+        (i.e. only paid invoices/bills).
+        """
         company_id = request.user.company_id
         branch_id = request.user.branch_id
         today = timezone.now().date()
-        start = today.replace(month=1, day=1) - timedelta(days=330)
+        start = today - timedelta(days=365)
 
-        receipt_lines = JournalLine.objects.filter(
-            journal_entry__is_posted=True,
-            journal_entry__date__gte=start,
-            account__code='SALES',
+        from collections import OrderedDict
+
+        # Revenue = confirmed RECEIPT payments (paid invoices)
+        receipts = Payment.objects.filter(
             company_id=company_id,
             branch_id=branch_id,
-        ).annotate(month=TruncMonth('journal_entry__date')).values('month').annotate(
-            revenue=Sum('credit'),
-        ).order_by('month')
+            status='CONFIRMED',
+            payment_type='RECEIPT',
+            payment_date__gte=start,
+            is_deleted=False,
+        )
 
-        expense_lines = JournalLine.objects.filter(
-            journal_entry__is_posted=True,
-            journal_entry__date__gte=start,
-            account__account_type='EXPENSE',
+        # Expenses = confirmed PAYMENT payments (paid bills/expenses)
+        expenses = Payment.objects.filter(
             company_id=company_id,
             branch_id=branch_id,
-        ).annotate(month=TruncMonth('journal_entry__date')).values('month').annotate(
-            expense=Sum('debit'),
-        ).order_by('month')
+            status='CONFIRMED',
+            payment_type='PAYMENT',
+            payment_date__gte=start,
+            is_deleted=False,
+        )
 
-        expense_map = {
-            row['month'].strftime('%Y-%m'): row['expense'] or Decimal('0.00')
-            for row in expense_lines
-        }
+        # Build monthly buckets (12 months, back from current)
+        months = OrderedDict()
+        for i in range(11, -1, -1):
+            m = today.month - i
+            y = today.year
+            while m <= 0:
+                m += 12
+                y -= 1
+            key = f"{y:04d}-{m:02d}"
+            months[key] = {
+                'month': date(y, m, 1).strftime('%b'),
+                'revenue': 0.0,
+                'expense': 0.0,
+            }
 
-        data = []
-        for row in receipt_lines:
-            month_key = row['month'].strftime('%Y-%m')
-            data.append({
-                'month': row['month'].strftime('%b'),
-                'revenue': float(row['revenue'] or 0),
-                'expense': float(expense_map.get(month_key, 0)),
-            })
-        return Response({'data': data})
+        for receipt in receipts:
+            key = receipt.payment_date.strftime('%Y-%m')
+            if key in months:
+                months[key]['revenue'] += float(receipt.amount)
+
+        for expense in expenses:
+            key = expense.payment_date.strftime('%Y-%m')
+            if key in months:
+                months[key]['expense'] += float(expense.amount)
+
+        return Response({'data': list(months.values())})
