@@ -1153,13 +1153,13 @@ export default function FinancialReportsPage() {
         breadcrumbs={["Finance", "Reports"]}
         title="Financial Reports"
         description="Detailed financial statements and analysis"
-        actions={
-          <>
-            <ToolbarButton variant="ghost" icon={Calendar}>Schedule</ToolbarButton>
-            <ToolbarButton variant="ghost" icon={Printer}>Print</ToolbarButton>
-            <ToolbarButton variant="ghost" icon={Download}>Export</ToolbarButton>
-          </>
-        }
+        // actions={
+        //   <>
+        //     <ToolbarButton variant="ghost" icon={Calendar}>Schedule</ToolbarButton>
+        //     <ToolbarButton variant="ghost" icon={Printer}>Print</ToolbarButton>
+        //     <ToolbarButton variant="ghost" icon={Download}>Export</ToolbarButton>
+        //   </>
+        // }
       />
       <div className="flex-1 grid grid-cols-1 xl:grid-cols-4 gap-4 overflow-hidden min-h-0 pt-6">
         {/* Sidebar - Report Library */}
