@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { RotateCw } from "lucide-react";
 import { Customer } from "@/hooks/useCustomers";
 import { useAutoCode } from "@/hooks/useAutoCode";
+import { CountrySelect, StateSelect, CitySelect } from "@/components/reuseable/LocationSelectors";
 
 interface CustomerFormProps {
   initialData?: Customer;
@@ -92,21 +93,35 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, isLoadin
           <label className="block text-sm font-medium mb-1">Address</label>
           <textarea name="address_line" value={formData.address_line} onChange={handleChange} rows={2} className="w-full rounded-lg border border-border bg-background px-3 py-2" />
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">City</label>
-          <input name="city" value={formData.city} onChange={handleChange} className="w-full rounded-lg border border-border bg-background px-3 py-2" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">State</label>
-          <input name="state" value={formData.state} onChange={handleChange} className="w-full rounded-lg border border-border bg-background px-3 py-2" />
+        <div className="col-span-full">
+          <label className="block text-sm font-medium mb-2">Location</label>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <CountrySelect
+                value={formData.country}
+                onChange={(val) => setFormData(prev => ({ ...prev, country: val, state: "", city: "" }))}
+              />
+            </div>
+            <div>
+              <StateSelect
+                countryCode={formData.country}
+                value={formData.state}
+                onChange={(val) => setFormData(prev => ({ ...prev, state: val, city: "" }))}
+              />
+            </div>
+            <div>
+              <CitySelect
+                countryCode={formData.country}
+                stateCode={formData.state}
+                value={formData.city}
+                onChange={(val) => setFormData(prev => ({ ...prev, city: val }))}
+              />
+            </div>
+          </div>
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Postal Code</label>
           <input name="postal_code" value={formData.postal_code} onChange={handleChange} className="w-full rounded-lg border border-border bg-background px-3 py-2" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Country</label>
-          <input name="country" value={formData.country} onChange={handleChange} className="w-full rounded-lg border border-border bg-background px-3 py-2" />
         </div>
         <div className="flex items-center gap-2">
           <input type="checkbox" name="is_active" checked={formData.is_active} onChange={handleChange} className="h-4 w-4" />
