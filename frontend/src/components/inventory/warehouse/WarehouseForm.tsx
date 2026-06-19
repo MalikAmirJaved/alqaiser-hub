@@ -17,7 +17,7 @@ interface WarehouseFormData {
   id?: string;
   warehouse_name: string;
   code: string;
-  employee_id?: string | null;
+  employee_uuid?: string | null;
   landline_number?: string | null;
   country: string;
   state: string;
@@ -43,20 +43,23 @@ function FieldWrapper({ children, className = "" }: { children: ReactNode; class
 export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: WarehouseFormProps) {
   const { data: employees = [] } = useActiveEmployees();
 
-  const [formData, setFormData] = useState<WarehouseFormData>({
-    warehouse_name: "",
-    code: "",
-    employee_id: null,
-    landline_number: "",
-    country: "",
-    state: "",
-    city: "",
-    address_line: "",
-    postal_code: "",
-    email: "",
-    is_active: true,
-    description: "",
-    ...initialData,
+  const [formData, setFormData] = useState<WarehouseFormData>(() => {
+    const initial = initialData as Record<string, any> | undefined;
+    return {
+      warehouse_name: "",
+      code: "",
+      landline_number: "",
+      country: "",
+      state: "",
+      city: "",
+      address_line: "",
+      postal_code: "",
+      email: "",
+      is_active: true,
+      description: "",
+      ...initialData,
+      employee_uuid: initial?.employee_id || null,
+    };
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -132,8 +135,8 @@ export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: Wa
         <FieldWrapper>
           <Label className="text-sm font-medium">Responsible Employee</Label>
           <SearchableSelect
-            value={formData.employee_id || ""}
-            onChange={(val) => setFormData({ ...formData, employee_id: val || null })}
+            value={formData.employee_uuid || ""}
+            onChange={(val) => setFormData({ ...formData, employee_uuid: val || null })}
             options={employeeOptions}
             placeholder="Select employee"
           />
