@@ -6,6 +6,9 @@ import { DetailLayout, StandardSidebar, RelatedRecords, type DetailTab } from "@
 import { useQuote, useUpdateQuote, useAcceptQuote, useRejectQuote } from "@/hooks/sales/useQuotes";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
+import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
+import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
 import QuoteFormModal from "@/components/sales/QuoteFormModal";
 
 export default function QuoteDetailPage() {
@@ -17,9 +20,12 @@ export default function QuoteDetailPage() {
   const acceptQuote = useAcceptQuote();
   const rejectQuote = useRejectQuote();
   const permissions = useFeaturePermissions("SALES", "quote");
+  const { data: companySettings } = useCompanySettingsQuery();
+  const { terms: termsData } = useTermsAndConditions();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<any>(null);
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
 
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!quote) return <div className="p-8 text-center">Quote not found</div>;
@@ -54,6 +60,14 @@ export default function QuoteDetailPage() {
     } catch (error) {
       console.error("Reject failed", error);
     }
+  };
+
+  const handlePrint = () => {
+    setShowPrintPreview(true);
+  };
+
+  const handleExportPdf = () => {
+    setShowPrintPreview(true);
   };
 
   const tabs: DetailTab[] = [
@@ -188,7 +202,9 @@ export default function QuoteDetailPage() {
         ]}
         primaryActionLabel={canAccept ? "Accept & Invoice" : undefined}
         onPrimaryAction={canAccept ? handleAccept : undefined}
-        onEdit={permissions.update ? handleEdit : undefined}
+        onEdit={(permissions.update && quote.status !== "ACCEPTED") ? handleEdit : undefined}
+        onPrint={handlePrint}
+        onExport={handleExportPdf}
         permissions={{ edit: permissions.update, submit: canAccept }}
         tabs={tabs}
         sidebar={
@@ -222,6 +238,44 @@ export default function QuoteDetailPage() {
         initialData={editingQuote}
         onSuccess={handleUpdateSuccess}
       />
+      {quote && companySettings && (
+        <PrintPreviewModal
+          open={showPrintPreview}
+          onClose={() => setShowPrintPreview(false)}
+          documentProps={{
+            data: {
+              type: "QUOTE",
+              documentNumber: quote.quote_number,
+              date: quote.date,
+              expirationDate: quote.expiration_date || undefined,
+              customerName: quote.customer_name || "—",
+              lines: (quote.lines || []).map((l) => ({
+                variant_name: l.variant_name,
+                variant_sku: l.variant_sku,
+                quantity: l.quantity,
+                unit_price: l.unit_price,
+                tax_rate: l.tax_rate,
+                discount_amount: l.discount_amount,
+              })),
+              totalAmount:
+                typeof quote.total_amount === "string"
+                  ? parseFloat(quote.total_amount)
+                  : quote.total_amount,
+              status: quote.status,
+              notes: quote.notes,
+            },
+            company: {
+              companyName: companySettings.companyName,
+              address: companySettings.address,
+              phone: companySettings.phone,
+              email: companySettings.email,
+              taxId: companySettings.taxId,
+            },
+            termsContent: termsData?.quote || "",
+            formatCurrency,
+          }}
+        />
+      )}
     </>
   );
 }

@@ -1,30 +1,32 @@
+"use client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api";
+import { useApi } from "@/hooks/useApi";
 
-export interface TermsAndConditions {
+export interface TermsData {
   quote: string;
   invoice: string;
 }
 
-const TERMS_ENDPOINT = "/api/company/settings/terms/";
+const TERMS_KEY = ["termsAndConditions"];
 
 export function useTermsAndConditions() {
+  const api = useApi();
   const queryClient = useQueryClient();
 
-  const query = useQuery<TermsAndConditions>({
-    queryKey: ["termsAndConditions"],
-    queryFn: () => apiFetch<TermsAndConditions>(TERMS_ENDPOINT),
+  const query = useQuery<TermsData>({
+    queryKey: TERMS_KEY,
+    queryFn: () => api("/api/company/settings/terms/"),
+    staleTime: 5 * 60 * 1000,
   });
 
   const mutation = useMutation({
-    mutationFn: async (payload: Partial<TermsAndConditions>) => {
-      return apiFetch<TermsAndConditions>(TERMS_ENDPOINT, {
+    mutationFn: (data: Partial<TermsData>) =>
+      api("/api/company/settings/terms/", {
         method: "PUT",
-        body: JSON.stringify(payload),
-      });
-    },
+        body: JSON.stringify(data),
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["termsAndConditions"] });
+      queryClient.invalidateQueries({ queryKey: TERMS_KEY });
     },
   });
 
@@ -33,5 +35,6 @@ export function useTermsAndConditions() {
     isLoading: query.isLoading,
     isSaving: mutation.isPending,
     save: mutation.mutateAsync,
+    query,
   };
 }

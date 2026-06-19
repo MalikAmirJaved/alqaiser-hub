@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuotes, useDeleteQuote, useAcceptQuote, useRejectQuote, Quote } from "@/hooks/sales/useQuotes";
+import { useQuotes, useAcceptQuote, useRejectQuote, Quote } from "@/hooks/sales/useQuotes";
 import { DynamicModulePage, type ModulePermissions, type Kpi } from "@/components/reuseable/final/DynamicModulePage";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatusBadge } from "@/components/finance/ui";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
-import { CheckCircle, XCircle, Trash2 } from "lucide-react";
+import { CheckCircle, XCircle } from "lucide-react";
 import QuoteFormModal from "./QuoteFormModal";
 
 export default function QuotesPanel() {
@@ -39,7 +39,6 @@ export default function QuotesPanel() {
       ? { status: filters.status || undefined, search: filters.search || undefined }
       : undefined
   );
-  const deleteQuote = useDeleteQuote();
   const acceptQuote = useAcceptQuote();
   const rejectQuote = useRejectQuote();
   const permissions = useFeaturePermissions("SALES", "quote");
@@ -152,26 +151,16 @@ export default function QuotesPanel() {
         onCreate={handleCreate}
         actions={{
           onEdit: handleEdit,
-          onDelete: (quote) => deleteQuote.mutate(quote.id),
+          canEdit: (quote) => quote.status !== "ACCEPTED",
         }}
         onRowClick={(quote) => router.push(`/sales/quotes/${quote.id}`)}
         exportEnabled={permissions.export}
-        onRowSelect={setSelectedIds}
         filterBar={
           <FilterBar
             fields={filterFields}
             filters={filters}
             onChange={setFilters}
           />
-        }
-        batchActions={
-          <button
-            onClick={() => selectedIds.forEach(id => deleteQuote.mutate(id))}
-            className="inline-flex items-center gap-1.5 text-sm text-destructive hover:text-destructive/80 transition"
-          >
-            <Trash2 className="w-4 h-4" />
-            Delete Selected
-          </button>
         }
       />
       <QuoteFormModal

@@ -37,6 +37,7 @@ interface Actions<T> {
   onEdit?: (item: T) => void;
   onDelete?: (item: T) => void;
   onPost?: (item: T) => void;
+  canEdit?: (item: T) => boolean;
   canPost?: (item: T) => boolean;
   postLabel?: string;
 }
@@ -337,7 +338,7 @@ export function DynamicModulePage<T>({
                                     <Send className="w-4 h-4" />
                                   </button>
                                 )}
-                              {actions?.onEdit && permissions.update && (
+                              {actions?.onEdit && permissions.update && (actions.canEdit?.(item) ?? true) && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
-import { useCustomerInvoices, useDeleteCustomerInvoice, usePayCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
+import { useCustomerInvoices, usePayCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useCustomers } from "@/hooks/useCustomers";
 import CustomerInvoiceFormModal from "@/components/finance/customer-invoices/CustomerInvoiceFormModal";
@@ -11,7 +11,7 @@ import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatusBadge } from "@/components/finance/ui";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
-import { Trash2, Send } from "lucide-react";
+import { Send } from "lucide-react";
 
 interface CustomerInvoicesPanelProps {
   moduleCode: "FINANCE" | "SALES";
@@ -46,7 +46,6 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
         }
       : undefined
   );
-  const deleteInvoice = useDeleteCustomerInvoice();
   const payInvoice = usePayCustomerInvoice();
 
   const resourceName = moduleCode === "SALES" ? "sales_customers_invoice" : "customer_invoice";
@@ -71,19 +70,10 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
     setModalOpen(true);
   };
 
-  const handleDelete = (invoice: any) => {
-    deleteInvoice.mutate(invoice.id);
-  };
-
   const handlePay = (invoice: any) => {
     if (invoice.payment_status !== "PAID" && invoice.status !== "CANCELLED") {
       payInvoice.mutate({ id: invoice.id });
     }
-  };
-
-  const handleBulkDelete = () => {
-    selectedIds.forEach((id) => deleteInvoice.mutate(id));
-    setSelectedIds([]);
   };
 
   const computeKPIs = (data: any[]) => {
@@ -169,7 +159,7 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
         }}
         actions={{
           onEdit: handleEdit,
-          onDelete: handleDelete,
+          canEdit: (invoice) => invoice.status === "DRAFT" && invoice.payment_status !== "PAID",
           onPost: handlePay,
           canPost: (invoice) => invoice.payment_status !== "PAID" && invoice.status !== "CANCELLED",
           postLabel: "Pay",
@@ -186,13 +176,6 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
         }
         batchActions={
           <>
-            <button
-              onClick={handleBulkDelete}
-              className="inline-flex items-center gap-1.5 text-sm text-destructive hover:text-destructive/80"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete Selected
-            </button>
             <button
               onClick={() => {
                 selectedIds.forEach((id) => payInvoice.mutate({ id }));
