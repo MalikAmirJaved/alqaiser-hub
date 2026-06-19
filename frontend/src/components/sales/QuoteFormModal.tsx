@@ -316,7 +316,7 @@ export default function QuoteFormModal({
                                 onChange={(val) =>
                                   updateLine(idx, "variant", val)
                                 }
-                                options={variants.map((v) => ({ value: v.id, label: `${v.product_name} (${v.sku})` }))}
+                                options={variants.map((v) => ({ value: v.id, label: `${v.product_name} (${v.sku}) — Stock: ${v.total_stock}` }))}
                                 placeholder="Select variant"
                               />
                             </td>

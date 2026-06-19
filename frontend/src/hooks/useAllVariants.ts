@@ -24,6 +24,7 @@ export interface VariantDetail {
   brand_id: string | null;
   unit: string;
   is_active: boolean;
+  total_stock: number;
   created_at: string;
   updated_at: string;
 }
