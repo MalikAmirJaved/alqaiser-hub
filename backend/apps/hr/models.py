@@ -302,6 +302,10 @@ class Employee(BaseModel):
     bank_account_number = models.CharField(max_length=50, blank=True, null=True)
     bank_iban = models.CharField(max_length=50, blank=True, null=True)
     salary = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    # Documents
+    profile_picture = models.CharField(max_length=500, blank=True, null=True)
+    profile_picture_thumb = models.CharField(max_length=500, blank=True, null=True)
     
     class Meta:
         verbose_name = "Employee"
@@ -322,6 +326,40 @@ class Employee(BaseModel):
     @property
     def full_name(self):
         return f"{self.first_name} {self.last_name or ''}".strip()
+
+
+# =========================================================
+# EMPLOYEE DOCUMENTS
+# =========================================================
+class EmployeeDocument(BaseModel):
+    """Employee documents - education, experience, etc."""
+    
+    DOCUMENT_TYPES = [
+        ('EDUCATION', 'Education'),
+        ('EXPERIENCE', 'Experience'),
+        ('OTHER', 'Other'),
+    ]
+    
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='documents')
+    document_type = models.CharField(max_length=20, choices=DOCUMENT_TYPES)
+    title = models.CharField(max_length=200, blank=True, null=True)
+    file_url = models.CharField(max_length=500)
+    file_url_thumb = models.CharField(max_length=500, blank=True, null=True)
+    original_filename = models.CharField(max_length=255)
+    file_size = models.PositiveIntegerField(default=0)
+    mime_type = models.CharField(max_length=100, blank=True, null=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    
+    class Meta:
+        verbose_name = "Employee Document"
+        verbose_name_plural = "Employee Documents"
+        ordering = ['sort_order', 'created_at']
+        indexes = [
+            models.Index(fields=['employee', 'document_type']),
+        ]
+    
+    def __str__(self):
+        return f"{self.employee.employee_id} - {self.document_type}: {self.title or self.original_filename}"
 
 
 # =========================================================

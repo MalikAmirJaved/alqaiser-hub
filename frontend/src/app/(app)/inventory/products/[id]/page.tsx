@@ -10,6 +10,8 @@ import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { format } from "date-fns";
+import { BASE_URL } from "@/lib/api";
+import DocumentViewer from "@/components/reuseable/DocumentViewer";
 
 export default function ProductDetailPage() {
   const router = useRouter();
@@ -24,6 +26,7 @@ export default function ProductDetailPage() {
   const deleteConfirm = useConfirmationModal();
 
   const [editing, setEditing] = useState(false);
+  const [docViewer, setDocViewer] = useState<{ open: boolean; url: string; filename?: string; mimeType?: string; title?: string }>({ open: false, url: "" });
 
   if (productLoading || !product) {
     return <div className="p-8 text-center">Loading...</div>;
@@ -178,7 +181,13 @@ export default function ProductDetailPage() {
                       {v.variant_images.length > 0 && (
                         <div className="px-4 py-3 flex gap-2 border-t border-border/40 overflow-x-auto">
                           {v.variant_images.map((img) => (
-                            <img key={img.id} src={img.image_url} alt="" className="w-12 h-12 object-cover rounded-lg border border-border shrink-0" />
+                            <img
+                              key={img.id}
+                              src={`${BASE_URL}${img.image_url_thumb || img.image_url}`}
+                              alt=""
+                              className="w-12 h-12 object-cover rounded-lg border border-border shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                              onClick={() => setDocViewer({ open: true, url: img.image_url, filename: `Variant Image`, mimeType: "image/jpeg", title: `${v.sku} Image` })}
+                            />
                           ))}
                         </div>
                       )}
@@ -235,6 +244,15 @@ export default function ProductDetailPage() {
       />
 
       <deleteConfirm.Modal />
+
+      <DocumentViewer
+        open={docViewer.open}
+        onClose={() => setDocViewer({ open: false, url: "" })}
+        url={docViewer.url}
+        filename={docViewer.filename}
+        mimeType={docViewer.mimeType}
+        title={docViewer.title}
+      />
     </>
   );
 }

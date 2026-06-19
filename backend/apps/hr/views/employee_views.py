@@ -12,7 +12,7 @@ import json
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
-from apps.hr.models import Employee, EmployeeDefaultShift, EmployeeAssetAssignment, AssetCategory, RecruitmentCandidate
+from apps.hr.models import Employee, EmployeeDefaultShift, EmployeeAssetAssignment, AssetCategory, RecruitmentCandidate, EmployeeDocument
 from apps.organization.models import Department
 from apps.compsetting.models import Designation   # <-- ADDED
 import traceback
@@ -75,6 +75,32 @@ def serialize_employee(employee):
         "bank_account_number": employee.bank_account_number,
         "bank_iban": employee.bank_iban,
         "salary": str(employee.salary),
+        "profile_picture": employee.profile_picture or "",
+        "profile_picture_thumb": employee.profile_picture_thumb or "",
+        "education_documents": [
+            {
+                "id": str(doc._id),
+                "title": doc.title,
+                "file_url": doc.file_url,
+                "file_url_thumb": doc.file_url_thumb or "",
+                "original_filename": doc.original_filename,
+                "file_size": doc.file_size,
+                "mime_type": doc.mime_type,
+            }
+            for doc in employee.documents.filter(document_type='EDUCATION', is_deleted=False)
+        ],
+        "experience_documents": [
+            {
+                "id": str(doc._id),
+                "title": doc.title,
+                "file_url": doc.file_url,
+                "file_url_thumb": doc.file_url_thumb or "",
+                "original_filename": doc.original_filename,
+                "file_size": doc.file_size,
+                "mime_type": doc.mime_type,
+            }
+            for doc in employee.documents.filter(document_type='EXPERIENCE', is_deleted=False)
+        ],
         "isfrom_user_id": str(employee.isfrom_user._id) if getattr(employee, 'isfrom_user', None) else None,
         "isfrom_user_email": employee.isfrom_user.email if getattr(employee, 'isfrom_user', None) else None,
         "createdAt": employee.created_at.isoformat() if employee.created_at else None,
@@ -240,9 +266,48 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             bank_account_number=request.data.get('bank_account_number'),
             bank_iban=request.data.get('bank_iban'),
             salary=request.data.get('salary', 0),
+            profile_picture=request.data.get('profile_picture', ''),
+            profile_picture_thumb=request.data.get('profile_picture_thumb', ''),
             created_by=request.user,
             updated_by=request.user,
         )
+
+        # Create employee documents from uploaded files
+        education_docs = request.data.get('education_documents', [])
+        for doc_data in education_docs:
+            EmployeeDocument.objects.create(
+                company_id=company_id,
+                branch_id=branch_id,
+                employee=employee,
+                document_type='EDUCATION',
+                title=doc_data.get('title', ''),
+                file_url=doc_data.get('file_url', ''),
+                file_url_thumb=doc_data.get('file_url_thumb', ''),
+                original_filename=doc_data.get('original_filename', ''),
+                file_size=doc_data.get('file_size', 0),
+                mime_type=doc_data.get('mime_type', ''),
+                sort_order=doc_data.get('sort_order', 0),
+                created_by=request.user,
+                updated_by=request.user,
+            )
+
+        experience_docs = request.data.get('experience_documents', [])
+        for doc_data in experience_docs:
+            EmployeeDocument.objects.create(
+                company_id=company_id,
+                branch_id=branch_id,
+                employee=employee,
+                document_type='EXPERIENCE',
+                title=doc_data.get('title', ''),
+                file_url=doc_data.get('file_url', ''),
+                file_url_thumb=doc_data.get('file_url_thumb', ''),
+                original_filename=doc_data.get('original_filename', ''),
+                file_size=doc_data.get('file_size', 0),
+                mime_type=doc_data.get('mime_type', ''),
+                sort_order=doc_data.get('sort_order', 0),
+                created_by=request.user,
+                updated_by=request.user,
+            )
 
         if default_shift and joining_date:
             EmployeeDefaultShift.objects.create(
@@ -377,10 +442,54 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 'employment_type', 'employment_status',
                 'work_location', 'bank_name', 'bank_account_number', 'bank_iban',
                 'probation_days',
+                'profile_picture', 'profile_picture_thumb',
             ]
             for field in updatable_fields:
                 if field in request.data:
                     setattr(employee, field, request.data[field])
+
+            # ---------- Handle education/experience documents (relational) ----------
+            if 'education_documents' in request.data:
+                # Soft-delete existing education docs
+                employee.documents.filter(document_type='EDUCATION', is_deleted=False).update(is_deleted=True)
+                # Create new ones
+                for doc_data in request.data['education_documents']:
+                    EmployeeDocument.objects.create(
+                        company_id=company_id,
+                        branch_id=employee.branch_id,
+                        employee=employee,
+                        document_type='EDUCATION',
+                        title=doc_data.get('title', ''),
+                        file_url=doc_data.get('file_url', ''),
+                        file_url_thumb=doc_data.get('file_url_thumb', ''),
+                        original_filename=doc_data.get('original_filename', ''),
+                        file_size=doc_data.get('file_size', 0),
+                        mime_type=doc_data.get('mime_type', ''),
+                        sort_order=doc_data.get('sort_order', 0),
+                        created_by=request.user,
+                        updated_by=request.user,
+                    )
+
+            if 'experience_documents' in request.data:
+                # Soft-delete existing experience docs
+                employee.documents.filter(document_type='EXPERIENCE', is_deleted=False).update(is_deleted=True)
+                # Create new ones
+                for doc_data in request.data['experience_documents']:
+                    EmployeeDocument.objects.create(
+                        company_id=company_id,
+                        branch_id=employee.branch_id,
+                        employee=employee,
+                        document_type='EXPERIENCE',
+                        title=doc_data.get('title', ''),
+                        file_url=doc_data.get('file_url', ''),
+                        file_url_thumb=doc_data.get('file_url_thumb', ''),
+                        original_filename=doc_data.get('original_filename', ''),
+                        file_size=doc_data.get('file_size', 0),
+                        mime_type=doc_data.get('mime_type', ''),
+                        sort_order=doc_data.get('sort_order', 0),
+                        created_by=request.user,
+                        updated_by=request.user,
+                    )
 
             # ---------- Salary (Decimal) ----------
             if 'salary' in request.data:

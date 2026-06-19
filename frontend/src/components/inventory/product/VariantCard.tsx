@@ -20,6 +20,9 @@ import AttributeSelector from "./Attributeselector";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { useAutoCode } from "@/hooks/useAutoCode";
 import { toast } from "sonner";
+import FileUpload from "@/components/reuseable/FileUpload";
+import { BASE_URL } from "@/lib/api";
+import type { PendingFile } from "@/components/reuseable/FileUpload";
 
 interface VariantCardStandaloneProps {
   standalone: true;
@@ -38,6 +41,8 @@ interface VariantCardFieldArrayProps {
   isEditing: boolean;
   onRemove: () => void;
   onDuplicate: () => void;
+  pendingFiles?: PendingFile[];
+  onPendingFilesChange?: (files: PendingFile[]) => void;
 }
 
 export type VariantFormData = {
@@ -64,6 +69,8 @@ function InternalVariantCard({
   onRemove,
   onDuplicate,
   standalone,
+  pendingFiles = [],
+  onPendingFilesChange,
 }: VariantCardFieldArrayProps & { standalone?: boolean }) {
   const [expanded, setExpanded] = useState(index === 0);
   const [imgUrl, setImgUrl] = useState("");
@@ -238,55 +245,20 @@ function InternalVariantCard({
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
               Images
             </p>
-            <div className="flex flex-wrap gap-3 items-end">
-              {images.map((url, i) => (
-                <div
-                  key={i}
-                  className="relative w-16 h-16 rounded-xl overflow-hidden border border-border group"
-                >
-                  <img src={url} alt="" className="w-full h-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => removeImage(i)}
-                    className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                  >
-                    <X className="w-4 h-4 text-white" />
-                  </button>
-                </div>
-              ))}
-              {addingImg ? (
-                <div className="flex items-center gap-2 flex-1 min-w-[260px]">
-                  <Input
-                    autoFocus
-                    placeholder="https://example.com/image.jpg"
-                    value={imgUrl}
-                    onChange={(e) => setImgUrl(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addImage())}
-                    className="flex-1 text-sm"
-                  />
-                  <Button type="button" size="sm" onClick={addImage}>
-                    Add
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => { setAddingImg(false); setImgUrl(""); }}
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setAddingImg(true)}
-                  className="w-16 h-16 rounded-xl border-2 border-dashed border-border hover:border-primary/50 flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-primary transition-colors"
-                >
-                  <ImageIcon className="w-4 h-4" />
-                  <span className="text-[10px] font-medium">Add</span>
-                </button>
-              )}
-            </div>
+            <FileUpload
+              value={images}
+              onChange={(urls) => setValue(`variants.${index}.images`, Array.isArray(urls) ? urls : [urls])}
+              module="inventory"
+              submodule="product"
+              type="image"
+              multiple
+              label=""
+              description="Upload product images (JPG, PNG, WebP)"
+              maxFiles={10}
+              pendingFiles={pendingFiles}
+              onPendingFilesChange={onPendingFilesChange}
+              fieldName={`variants.${index}.images`}
+            />
           </div>
         </div>
       )}

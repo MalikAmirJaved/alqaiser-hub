@@ -284,6 +284,14 @@ export default function EmployeesPage() {
       render: (value) => <span className="font-mono text-xs">{value}</span>
     },
     {
+      key: "profile_picture",
+      label: "",
+      width: "48px",
+      render: (_, row) => row.profile_picture
+        ? <img src={`${process.env.NEXT_PUBLIC_API_URL}${row.profile_picture_thumb || row.profile_picture}`} alt="" className="w-8 h-8 rounded-lg object-cover" />
+        : <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{`${row.first_name?.[0] || ''}${row.last_name?.[0] || ''}`.toUpperCase()}</div>,
+    },
+    {
       key: "full_name",
       label: "Full Name",
       sortable: true,
@@ -474,18 +482,26 @@ export default function EmployeesPage() {
           </div>
 
           <div className="flex items-start gap-3 mb-4">
-            <div className={cn(
-              "w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold shrink-0",
-              "transition-all duration-300",
-              isActive
-                ? "bg-primary/10 text-primary"
-                : isOnLeave
-                  ? "bg-warning/10 text-warning"
-                  : "bg-destructive/10 text-destructive",
-              "group-hover:shadow-md group-hover:scale-105"
-            )}>
-              {`${employee.first_name?.[0] || ''}${employee.last_name?.[0] || ''}`.toUpperCase() || '?'}
-            </div>
+            {employee.profile_picture ? (
+              <img
+                src={`${process.env.NEXT_PUBLIC_API_URL}${employee.profile_picture_thumb || employee.profile_picture}`}
+                alt={`${employee.first_name} ${employee.last_name || ""}`}
+                className="w-12 h-12 rounded-xl object-cover shrink-0 group-hover:shadow-md group-hover:scale-105 transition-all duration-300"
+              />
+            ) : (
+              <div className={cn(
+                "w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold shrink-0",
+                "transition-all duration-300",
+                isActive
+                  ? "bg-primary/10 text-primary"
+                  : isOnLeave
+                    ? "bg-warning/10 text-warning"
+                    : "bg-destructive/10 text-destructive",
+                "group-hover:shadow-md group-hover:scale-105"
+              )}>
+                {`${employee.first_name?.[0] || ''}${employee.last_name?.[0] || ''}`.toUpperCase() || '?'}
+              </div>
+            )}
             <div className="min-w-0">
               <h3 className="font-semibold text-base truncate group-hover:text-primary transition-colors duration-200">
                 {employee.first_name} {employee.last_name || ""}

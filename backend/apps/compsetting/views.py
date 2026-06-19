@@ -4,7 +4,7 @@ from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny, SAFE_METHODS
 from rest_framework import status
 from datetime import datetime, time
 
@@ -73,6 +73,11 @@ class CompanySettingsView(BaseCompanyView):
     """Main company settings CRUD"""
     permission_resource = 'company'
 
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [AllowAny()]
+        return super().get_permissions()
+
     def _get_or_create_settings(self, company, user):
         """Get or create settings with defaults"""
         settings, created = CompanySettings.objects.get_or_create(
@@ -135,6 +140,7 @@ class CompanySettingsView(BaseCompanyView):
             "defaultStartTime": settings.default_start_time.strftime("%H:%M"),
             "defaultEndTime": settings.default_end_time.strftime("%H:%M"),
             "workingHoursPerDay": str(settings.working_hours_per_day),
+            "logo": settings.logo or "",
             "workingDays": [
                 {
                     "id": str(wd._id),
@@ -163,6 +169,18 @@ class CompanySettingsView(BaseCompanyView):
         }
 
     def get(self, request):
+        user = request.user
+        if not user.is_authenticated:
+            company_id = request.query_params.get('company_id')
+            if company_id:
+                company = get_object_or_404(Company, id=company_id, is_deleted=False)
+                settings, _ = CompanySettings.objects.get_or_create(company=company)
+                return Response(self._serialize_settings(company, settings))
+            company = Company.objects.filter(is_deleted=False).first()
+            if not company:
+                return Response({"error": "No company found"}, status=404)
+            settings, _ = CompanySettings.objects.get_or_create(company=company)
+            return Response(self._serialize_settings(company, settings))
         company, settings = self._get_settings(request.user)
         return Response(self._serialize_settings(company, settings))
 
@@ -202,6 +220,7 @@ class CompanySettingsView(BaseCompanyView):
             'defaultStartTime': 'default_start_time',
             'defaultEndTime': 'default_end_time',
             'workingHoursPerDay': 'working_hours_per_day',
+            'logo': 'logo',
         }
 
         for request_field, model_field in settings_fields.items():

@@ -6,12 +6,15 @@ import {
   Building2, Globe, CalendarDays,
   CheckCircle, Mail, Percent,
   Phone, MapPin, Hash, AlertCircle,
-  Pencil, X, Clock, DollarSign, Timer
+  Pencil, X, Clock, DollarSign, Timer, Image as ImageIcon
 } from "lucide-react";
 import { LocationGroup } from "@/components/reuseable/LocationSelectors";
 import CurrencySelect from "@/components/reuseable/CurrencySelect";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import FileUpload, { type PendingFile, uploadFiles, deleteUploadedFiles } from "@/components/reuseable/FileUpload";
+import { BASE_URL } from "@/lib/api";
+import DocumentViewer from "@/components/reuseable/DocumentViewer";
 
 interface WorkingDayDisplay {
   id?: number;
@@ -39,6 +42,7 @@ interface FormData {
   defaultStartTime: string;
   defaultEndTime: string;
   workingHoursPerDay: string;
+  logo: string;
 }
 
 type ModalSection = "company" | "financial" | "schedule" | null;
@@ -140,14 +144,14 @@ function Modal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto p-4">
       {/* backdrop — 150ms fade */}
       <div
-        className="absolute inset-0 bg-background/80 backdrop-blur-sm animate-in fade-in duration-150"
+        className="fixed inset-0 bg-background/80 backdrop-blur-sm animate-in fade-in duration-150"
         onClick={onClose}
       />
-      {/* panel — slide + fade */}
-      <div className="relative z-10 w-full max-w-2xl bg-card border border-border rounded-2xl shadow-2xl flex flex-col animate-in fade-in zoom-in-95 duration-200">
+      {/* panel — centered with no overflow clipping so dropdowns aren't cut off */}
+      <div className="relative z-10 w-full max-w-2xl bg-card border border-border rounded-2xl shadow-2xl flex flex-col mx-auto my-8 animate-in fade-in zoom-in-95 duration-200">
         {/* header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-gradient-to-r from-primary/5 via-muted/60 to-muted/30 flex-shrink-0 rounded-t-2xl">
           <div className="flex items-center gap-3">
@@ -164,8 +168,8 @@ function Modal({
             <X className="w-4.5 h-4.5" />
           </button>
         </div>
-        {/* body — overflow visible so LocationGroup dropdown isn't clipped by the panel */}
-        <div className="p-6 space-y-5 overflow-visible flex-1">{children}</div>
+        {/* body */}
+        <div className="p-6 space-y-5">{children}</div>
         {/* footer */}
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border bg-muted/40 flex-shrink-0 rounded-b-2xl">
           <button
@@ -220,9 +224,11 @@ export default function CompanyProfile() {
   const { settings, isReady, updateSettings, updateWorkingDays, isUpdating } = useCompanySettings();
 
   const [saving, setSaving] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [activeModal, setActiveModal] = useState<ModalSection>(null);
+  const [docViewer, setDocViewer] = useState<{ open: boolean; url: string; filename?: string; mimeType?: string; title?: string }>({ open: false, url: "" });
 
   const [formData, setFormData] = useState<FormData>({
     companyName: "",
@@ -240,6 +246,7 @@ export default function CompanyProfile() {
     defaultStartTime: "09:00",
     defaultEndTime: "18:00",
     workingHoursPerDay: "8.00",
+    logo: "",
   });
 
   // local draft for the modal — committed on save
@@ -274,6 +281,7 @@ export default function CompanyProfile() {
         defaultStartTime: settings.defaultStartTime || "09:00",
         defaultEndTime: settings.defaultEndTime || "18:00",
         workingHoursPerDay: settings.workingHoursPerDay || "8.00",
+        logo: (settings as any).logo || "",
       };
       setFormData(loaded);
       setDraft(loaded);
@@ -313,7 +321,19 @@ export default function CompanyProfile() {
   const handleSave = async () => {
     setSaving(true);
     setErrorMsg("");
+    const uploadedUrls: string[] = [];
+
     try {
+      // Step 1: Upload pending logo file if any
+      if (pendingFiles.length > 0) {
+        const results = await uploadFiles(pendingFiles);
+        for (const result of results) {
+          uploadedUrls.push(result.url);
+          draft.logo = result.url;
+        }
+      }
+
+      // Step 2: Save settings
       if (activeModal === "company" || activeModal === "financial") {
         await updateSettings({ ...draft, taxRate: parseFloat(draft.taxRate) || 0 });
         setFormData({ ...draft });
@@ -333,10 +353,17 @@ export default function CompanyProfile() {
         setFormData({ ...draft });
         setWorkingDays([...draftDays]);
       }
+
+      // Step 3: Clear pending files on success
+      setPendingFiles([]);
       setSuccessMsg("Saved successfully!");
       setTimeout(() => setSuccessMsg(""), 3000);
       closeModal();
     } catch {
+      // Step 4: Rollback - delete uploaded files if settings save fails
+      if (uploadedUrls.length > 0) {
+        await deleteUploadedFiles(uploadedUrls);
+      }
       setErrorMsg("Failed to save. Please try again.");
     } finally {
       setSaving(false);
@@ -394,10 +421,22 @@ export default function CompanyProfile() {
       <div className="mb-6 rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
         <div className="bg-gradient-to-r from-primary/8 via-primary/3 to-transparent px-6 py-5 sm:px-8">
           <div className="flex flex-col sm:flex-row sm:items-center gap-5">
-            {/* Avatar */}
-            <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary text-2xl font-bold ring-2 ring-primary/20 shadow-sm">
-              {companyInitials}
-            </div>
+            {/* Avatar / Logo */}
+            {formData.logo ? (
+              <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl overflow-hidden ring-2 ring-primary/20 shadow-sm cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => setDocViewer({ open: true, url: formData.logo, filename: 'Company Logo', mimeType: 'image/jpeg', title: formData.companyName })}
+              >
+                <img 
+                  src={`${BASE_URL}${formData.logo}`} 
+                  alt="Company Logo" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            ) : (
+              <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary text-2xl font-bold ring-2 ring-primary/20 shadow-sm">
+                {companyInitials}
+              </div>
+            )}
             {/* Info */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 flex-wrap">
@@ -552,6 +591,18 @@ export default function CompanyProfile() {
               <input className={inputCls} value={draft.companyShortName} onChange={(e) => setDraftField("companyShortName", e.target.value)} placeholder="ACME" />
             </Field>
           </div>
+          <FileUpload
+            value={draft.logo}
+            onChange={(url) => setDraftField("logo", typeof url === "string" ? url : "")}
+            module="company"
+            submodule="logo"
+            type="image"
+            label="Company Logo"
+            description="Upload your company logo (JPG, PNG)"
+            pendingFiles={pendingFiles}
+            onPendingFilesChange={setPendingFiles}
+            fieldName="logo"
+          />
         </div>
         {/* Section: Contact */}
         <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-4">
@@ -698,6 +749,15 @@ export default function CompanyProfile() {
           </div>
         </div>
       </Modal>
+
+      <DocumentViewer
+        open={docViewer.open}
+        onClose={() => setDocViewer({ open: false, url: "" })}
+        url={docViewer.url}
+        filename={docViewer.filename}
+        mimeType={docViewer.mimeType}
+        title={docViewer.title}
+      />
     </div>
   );
 }

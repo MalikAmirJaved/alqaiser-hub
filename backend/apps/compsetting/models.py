@@ -49,6 +49,7 @@ class CompanySettings(TimeStampedModel):
     default_start_time = models.TimeField(default="09:00")
     default_end_time = models.TimeField(default="18:00")
     working_hours_per_day = models.DecimalField(max_digits=4, decimal_places=2, default=8.00)
+    logo = models.CharField(max_length=500, blank=True, null=True)
     
     created_by = models.ForeignKey(
         django_settings.AUTH_USER_MODEL,
