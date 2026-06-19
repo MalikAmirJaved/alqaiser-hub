@@ -106,8 +106,8 @@ function DocumentContent({
             />
           )}
           <div>
-            <h1 className="text-3xl font-bold text-gray-800">{company.companyName}</h1>
-            <div className="mt-2 text-sm text-gray-600 space-y-0.5">
+            <h1 className="text-3xl font-bold text-gray-900">{company.companyName}</h1>
+            <div className="mt-2 text-sm text-gray-900 space-y-0.5">
               {company.address && <p>{company.address}</p>}
               {locationStr && <p>{locationStr}</p>}
               <p>{[company.phone, company.email].filter(Boolean).join("  |  ")}</p>
@@ -116,26 +116,26 @@ function DocumentContent({
           </div>
         </div>
         <div className="text-right shrink-0">
-          <h2 className="text-2xl font-bold text-blue-700">{docType}</h2>
-          <p className="text-sm text-gray-500 mt-1">#{data.documentNumber}</p>
+          <h2 className="text-2xl font-bold text-gray-900">{docType}</h2>
+          <p className="text-sm text-gray-900 mt-1">#{data.documentNumber}</p>
         </div>
       </div>
 
       {/* ── Bill To & Dates ──────────────────── */}
       <div className="flex justify-between mb-6">
         <div>
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+          <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
             Bill To
           </h3>
           <p className="mt-1 text-base font-medium">{data.customerName}</p>
           {data.customerEmail && (
-            <p className="text-sm text-gray-500">{data.customerEmail}</p>
+            <p className="text-sm text-gray-900">{data.customerEmail}</p>
           )}
           {data.customerPhone && (
-            <p className="text-sm text-gray-500">{data.customerPhone}</p>
+            <p className="text-sm text-gray-900">{data.customerPhone}</p>
           )}
         </div>
-        <div className="text-right text-sm text-gray-600 space-y-0.5">
+        <div className="text-right text-sm text-gray-900 space-y-0.5">
           <p>
             <span className="font-medium">Date:</span> {data.date}
           </p>
@@ -157,22 +157,22 @@ function DocumentContent({
       <table className="w-full text-sm border-collapse mb-6">
         <thead>
           <tr className="bg-gray-100 border-b-2 border-gray-300">
-            <th className="text-left py-2 px-3 font-semibold text-gray-700">
+            <th className="text-left py-2 px-3 font-semibold text-gray-900">
               Product
             </th>
-            <th className="text-right py-2 px-3 font-semibold text-gray-700">
+            <th className="text-left py-2 px-3 font-semibold text-gray-900">
               Qty
             </th>
-            <th className="text-right py-2 px-3 font-semibold text-gray-700">
+            <th className="text-left py-2 px-3 font-semibold text-gray-900">
               Unit Price
             </th>
-            <th className="text-right py-2 px-3 font-semibold text-gray-700">
+            <th className="text-left py-2 px-3 font-semibold text-gray-900">
               Discount
             </th>
-            <th className="text-right py-2 px-3 font-semibold text-gray-700">
+            <th className="text-left py-2 px-3 font-semibold text-gray-900">
               Tax
             </th>
-            <th className="text-right py-2 px-3 font-semibold text-gray-700">
+            <th className="text-right py-2 px-3 font-semibold text-gray-900">
               Total
             </th>
           </tr>
@@ -188,23 +188,23 @@ function DocumentContent({
                 key={idx}
                 className="border-b border-gray-200 hover:bg-gray-50"
               >
-                <td className="py-2 px-3">
+                <td className="py-2 px-3 text-gray-900">
                   <div className="font-medium">
                     {line.variant_name || "Product"}
                   </div>
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs">
                     SKU: {line.variant_sku || "—"}
                   </div>
                 </td>
-                <td className="py-2 px-3 text-right">{line.quantity}</td>
-                <td className="py-2 px-3 text-right">
+                <td className="py-2 px-3 text-left text-gray-900">{line.quantity}</td>
+                <td className="py-2 px-3 text-left text-gray-900">
                   {formatCurrency(line.unit_price)}
                 </td>
-                <td className="py-2 px-3 text-right">
+                <td className="py-2 px-3 text-left text-gray-900">
                   {discount > 0 ? formatCurrency(discount) : "—"}
                 </td>
-                <td className="py-2 px-3 text-right">{line.tax_rate}%</td>
-                <td className="py-2 px-3 text-right font-medium">
+                <td className="py-2 px-3 text-left text-gray-900">{line.tax_rate}%</td>
+                <td className="py-2 px-3 text-right font-medium text-gray-900">
                   {formatCurrency(lineTotal)}
                 </td>
               </tr>
@@ -214,7 +214,7 @@ function DocumentContent({
             <tr>
               <td
                 colSpan={6}
-                className="py-8 text-center text-gray-400"
+                className="py-8 text-center text-gray-900"
               >
                 No items
               </td>
@@ -223,10 +223,10 @@ function DocumentContent({
         </tbody>
         <tfoot>
           <tr className="border-t-2 border-gray-300">
-            <td colSpan={5} className="py-2 px-3 text-right font-semibold">
+            <td colSpan={5} className="py-2 px-3 text-right font-semibold text-gray-900">
               Subtotal
             </td>
-            <td className="py-2 px-3 text-right">
+            <td className="py-2 px-3 text-right text-gray-900">
               {formatCurrency(calcSubtotal)}
             </td>
           </tr>
@@ -234,20 +234,20 @@ function DocumentContent({
             <tr className="border-t border-gray-200">
               <td
                 colSpan={5}
-                className="py-2 px-3 text-right font-semibold text-red-600"
+                className="py-2 px-3 text-right font-semibold text-gray-900"
               >
                 Discount
               </td>
-              <td className="py-2 px-3 text-right text-red-600">
+              <td className="py-2 px-3 text-right text-gray-900">
                 -{formatCurrency(calcDiscount)}
               </td>
             </tr>
           )}
           <tr className="border-t border-gray-200">
-            <td colSpan={5} className="py-2 px-3 text-right font-bold text-lg">
+            <td colSpan={5} className="py-2 px-3 text-right font-bold text-lg text-gray-900">
               Total
             </td>
-            <td className="py-2 px-3 text-right font-bold text-lg text-blue-700">
+            <td className="py-2 px-3 text-right font-bold text-lg text-gray-900">
               {formatCurrency(data.totalAmount)}
             </td>
           </tr>
@@ -256,8 +256,8 @@ function DocumentContent({
 
       {/* ── Notes ────────────────────────────── */}
       {data.notes && (
-        <div className="mb-6 p-4 bg-gray-50 rounded border border-gray-200 text-sm text-gray-600">
-          <span className="font-semibold text-gray-700">Notes:</span>{" "}
+        <div className="mb-6 p-4 bg-gray-50 rounded border border-gray-200 text-sm text-gray-900">
+          <span className="font-semibold text-gray-900">Notes:</span>{" "}
           {data.notes}
         </div>
       )}
@@ -265,11 +265,11 @@ function DocumentContent({
       {/* ── Terms & Conditions ───────────────── */}
       {termsContent && (
         <div className="border-t-2 border-gray-300 pt-4 mt-6">
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
+          <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-2">
             Terms & Conditions
           </h3>
           <div
-            className="text-sm text-gray-600 leading-relaxed prose prose-sm max-w-none"
+            className="text-sm text-gray-900 leading-relaxed prose prose-sm max-w-none"
             dangerouslySetInnerHTML={{ __html: termsContent }}
           />
         </div>
@@ -313,7 +313,7 @@ async function generatePdf(
       y += 8;
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
-      doc.setTextColor(100);
+      doc.setTextColor(0);
       if (company.address) {
         doc.text(company.address, textX, y);
         y += 3.5;
@@ -346,11 +346,11 @@ async function generatePdf(
   const docType = docData.type === "QUOTE" ? "QUOTE" : "INVOICE";
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(37, 99, 235);
+  doc.setTextColor(0);
   doc.text(docType, pageWidth - margin, margin + 2, { align: "right" });
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(100);
+  doc.setTextColor(0);
   doc.text(`#${docData.documentNumber}`, pageWidth - margin, margin + 8, { align: "right" });
 
   doc.setDrawColor(200);
@@ -362,7 +362,7 @@ async function generatePdf(
 
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(50);
+  doc.setTextColor(0);
   doc.text("Bill To", margin, billToY);
   billToY += 5;
 
@@ -373,7 +373,7 @@ async function generatePdf(
   billToY += 5;
 
   doc.setFontSize(9);
-  doc.setTextColor(100);
+  doc.setTextColor(0);
   if (docData.customerEmail) {
     doc.text(docData.customerEmail, margin, billToY);
     billToY += 4;
@@ -387,7 +387,7 @@ async function generatePdf(
   const dateY = y + 1;
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(100);
+  doc.setTextColor(0);
   doc.text(`Date: ${docData.date}`, pageWidth - margin, dateY, { align: "right" });
   if (docData.type === "INVOICE" && docData.dueDate) {
     doc.text(`Due Date: ${docData.dueDate}`, pageWidth - margin, dateY + 5, { align: "right" });
@@ -422,12 +422,13 @@ async function generatePdf(
     theme: "grid",
     headStyles: {
       fillColor: [243, 244, 246],
-      textColor: [55, 65, 81],
+      textColor: [0, 0, 0],
       fontStyle: "bold",
       fontSize: 9,
     },
     bodyStyles: {
       fontSize: 9,
+      textColor: [0, 0, 0],
     },
     columnStyles: {
       0: { cellWidth: 60 },
@@ -454,7 +455,7 @@ async function generatePdf(
 
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(100);
+  doc.setTextColor(0);
 
   const totalX = pageWidth - margin;
   doc.text("Subtotal", totalX - 40, finalY);
@@ -462,7 +463,7 @@ async function generatePdf(
 
   let nextY = finalY + 5;
   if (calcDiscount > 0) {
-    doc.setTextColor(220, 38, 38);
+    doc.setTextColor(0);
     doc.text("Discount", totalX - 40, nextY);
     doc.text(`-${formatCurrency(calcDiscount)}`, totalX, nextY, {
       align: "right",
@@ -476,7 +477,7 @@ async function generatePdf(
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
-  doc.setTextColor(37, 99, 235);
+  doc.setTextColor(0);
   doc.text("Total", totalX - 40, nextY);
   doc.text(formatCurrency(docData.totalAmount), totalX, nextY, {
     align: "right",
@@ -487,7 +488,7 @@ async function generatePdf(
     nextY += 10;
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
-    doc.setTextColor(100);
+    doc.setTextColor(0);
     doc.text("Notes:", margin, nextY);
     nextY += 4;
     doc.text(docData.notes, margin, nextY, { maxWidth: pageWidth - 2 * margin });
@@ -502,12 +503,12 @@ async function generatePdf(
     nextY += 6;
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(50);
+    doc.setTextColor(0);
     doc.text("Terms & Conditions", margin, nextY);
     nextY += 5;
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
-    doc.setTextColor(100);
+    doc.setTextColor(0);
 
     // Convert common HTML to readable plain text with structure preserved
     let text = termsContent
@@ -554,7 +555,7 @@ function _renderCompanyText(
   y += 6;
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(100);
+  doc.setTextColor(0);
   if (company.address) {
     doc.text(company.address, margin, y);
     y += 3.5;
