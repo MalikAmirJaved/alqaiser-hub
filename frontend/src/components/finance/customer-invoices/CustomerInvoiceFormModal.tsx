@@ -203,6 +203,11 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
     onClose();
   };
 
+  // Build set of already-selected variant IDs (excluding current row)
+  const selectedVariantIds = new Set(
+    (watchedLines || []).filter((l) => l.variant).map((l) => l.variant),
+  );
+
   if (!open) return null;
 
   return (
@@ -346,7 +351,9 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
                               <SearchableSelect
                                 value={currentLine.variant || ""}
                                 onChange={(val) => updateLine(idx, "variant", val)}
-                                options={variants.map((v) => ({ value: v.id, label: `${v.product_name} (${v.sku}) — Stock: ${v.total_stock}` }))}
+                                options={variants
+                                  .filter((v) => !selectedVariantIds.has(v.id) || v.id === currentLine.variant)
+                                  .map((v) => ({ value: v.id, label: `${v.product_name} (${v.sku}) — Stock: ${v.total_stock}` }))}
                                 placeholder="Select variant"
                               />
                             </td>

@@ -195,6 +195,11 @@ export default function QuoteFormModal({
     onClose();
   };
 
+  // Build set of already-selected variant IDs (excluding current row)
+  const selectedVariantIds = new Set(
+    formData.lines.filter((l) => l.variant).map((l) => l.variant),
+  );
+
   if (!open) return null;
 
   return (
@@ -316,7 +321,9 @@ export default function QuoteFormModal({
                                 onChange={(val) =>
                                   updateLine(idx, "variant", val)
                                 }
-                                options={variants.map((v) => ({ value: v.id, label: `${v.product_name} (${v.sku}) — Stock: ${v.total_stock}` }))}
+                                options={variants
+                                  .filter((v) => !selectedVariantIds.has(v.id) || v.id === line.variant)
+                                  .map((v) => ({ value: v.id, label: `${v.product_name} (${v.sku}) — Stock: ${v.total_stock}` }))}
                                 placeholder="Select variant"
                               />
                             </td>
