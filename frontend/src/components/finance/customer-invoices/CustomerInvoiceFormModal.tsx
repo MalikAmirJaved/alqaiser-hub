@@ -14,6 +14,7 @@ import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useAutoCode } from "@/hooks/useAutoCode";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import { toast } from "sonner";
 
 interface InvoiceLine {
   variant: string;
@@ -23,6 +24,7 @@ interface InvoiceLine {
   tax_rate: number;
   variant_name?: string;
   variant_sku?: string;
+  max_quantity?: number;
 }
 
 interface CustomerInvoiceFormData {
@@ -153,6 +155,7 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
           variant_name: variant.product_name,
           variant_sku: variant.sku,
           unit_price: variant.selling_price,
+          max_quantity: variant.total_stock,
         };
       } else {
         newLines[index] = { ...newLines[index], variant: value };
@@ -164,6 +167,19 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
   };
 
   const onSubmit = async (data: CustomerInvoiceFormData) => {
+    // ── Stock validation ──
+    for (const line of data.lines) {
+      if (line.variant && line.max_quantity !== undefined && line.quantity > line.max_quantity) {
+        const name = line.variant_name || line.variant_sku || line.variant;
+        toast.error(
+          `Insufficient stock for "${name}". ` +
+          `Requested ${line.quantity}, only ${line.max_quantity} available. ` +
+          `Please reduce the quantity or choose another item.`
+        );
+        return;
+      }
+    }
+
     const payload: any = { ...data };
     // Ensure amount is sent as number
     payload.amount = typeof payload.amount === "number" ? payload.amount : parseFloat(payload.amount);
@@ -358,13 +374,28 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
                               />
                             </td>
                             <td className="px-3 py-2">
-                              <input
-                                type="number"
-                                min="1"
-                                value={currentLine.quantity}
-                                onChange={(e) => updateLine(idx, "quantity", parseInt(e.target.value) || 1)}
-                                className="w-full text-right bg-transparent focus:outline-none"
-                              />
+                              <div className="flex flex-col items-end">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max={currentLine.max_quantity || 999999}
+                                  value={currentLine.quantity}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value) || 1;
+                                    updateLine(idx, "quantity", val > 0 ? val : 1);
+                                  }}
+                                  className={`w-full text-right bg-transparent focus:outline-none ${
+                                    currentLine.max_quantity && currentLine.quantity > currentLine.max_quantity
+                                      ? "text-destructive"
+                                      : ""
+                                  }`}
+                                />
+                                {currentLine.max_quantity !== undefined && currentLine.quantity > currentLine.max_quantity && (
+                                  <span className="text-[10px] text-destructive font-medium mt-0.5 whitespace-nowrap">
+                                    Only {currentLine.max_quantity} available
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="px-3 py-2">
                               <input

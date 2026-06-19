@@ -216,6 +216,15 @@ def deduct_reserved_stock(reference_id, company_id, user, warehouse=None):
         before = stock.quantity_on_hand
         after = before - qty
 
+        if after < 0:
+            sku = getattr(reservation.variant, 'sku', 'unknown')
+            name = getattr(reservation.variant, 'product_name', sku)
+            raise ValueError(
+                f'Insufficient stock for "{name}" ({sku}). '
+                f'Only {before} available, but {qty} required. '
+                f'Please reduce the quantity or receive more stock first.'
+            )
+
         stock.quantity_on_hand = after
         stock.quantity_reserved = F('quantity_reserved') - qty
         stock.version = F('version') + 1

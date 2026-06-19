@@ -8,6 +8,7 @@ import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
 import { useCreateQuote, useUpdateQuote, Quote } from "@/hooks/sales/useQuotes";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import { toast } from "sonner";
 
 interface QuoteLine {
   variant: string;
@@ -17,6 +18,7 @@ interface QuoteLine {
   tax_rate: number;
   variant_name?: string;
   variant_sku?: string;
+  max_quantity?: number;
 }
 
 interface QuoteFormModalProps {
@@ -145,6 +147,7 @@ export default function QuoteFormModal({
           variant_name: variant.product_name,
           variant_sku: variant.sku,
           unit_price: variant.selling_price,
+          max_quantity: variant.total_stock,
         };
       } else {
         newLines[index] = { ...newLines[index], variant: value };
@@ -166,6 +169,20 @@ export default function QuoteFormModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // ── Stock validation ──
+    for (const line of formData.lines) {
+      if (line.variant && line.max_quantity !== undefined && line.quantity > line.max_quantity) {
+        const name = line.variant_name || line.variant_sku || line.variant;
+        toast.error(
+          `Insufficient stock for "${name}". ` +
+          `Requested ${line.quantity}, only ${line.max_quantity} available. ` +
+          `Please reduce the quantity or choose another item.`
+        );
+        return;
+      }
+    }
+
     const payload: any = { ...formData };
 
     if (newCustomerInfo) {
@@ -177,7 +194,9 @@ export default function QuoteFormModal({
 
     if (!payload.expiration_date) delete payload.expiration_date;
     payload.lines = payload.lines.map((line: any) => ({
-      ...line,
+      variant: line.variant,
+      quantity: line.quantity,
+      unit_price: line.unit_price,
       discount_amount: line.discount_amount || 0,
       tax_rate: line.tax_rate || 0,
     }));
@@ -328,15 +347,28 @@ export default function QuoteFormModal({
                               />
                             </td>
                             <td className="px-3 py-2">
-                              <input
-                                type="number"
-                                min="1"
-                                value={line.quantity}
-                                onChange={(e) =>
-                                  updateLine(idx, "quantity", parseInt(e.target.value) || 1)
-                                }
-                                className="w-full text-right bg-transparent focus:outline-none"
-                              />
+                              <div className="flex flex-col items-end">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max={line.max_quantity || 999999}
+                                  value={line.quantity}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value) || 1;
+                                    updateLine(idx, "quantity", val > 0 ? val : 1);
+                                  }}
+                                  className={`w-full text-right bg-transparent focus:outline-none ${
+                                    line.max_quantity && line.quantity > line.max_quantity
+                                      ? "text-destructive"
+                                      : ""
+                                  }`}
+                                />
+                                {line.max_quantity !== undefined && line.quantity > line.max_quantity && (
+                                  <span className="text-[10px] text-destructive font-medium mt-0.5 whitespace-nowrap">
+                                    Only {line.max_quantity} available
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="px-3 py-2">
                               <input
