@@ -7,6 +7,11 @@ from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.sales.models.quote import Quote
 from apps.sales.serializers.quote import QuoteSerializer
+from apps.inventory.services.stock_service import (
+    reserve_stock_for_lines,
+    adjust_reservation,
+    release_stock_for_reference,
+)
 
 
 class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
@@ -29,6 +34,15 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
+        quote = serializer.instance
+        reserve_stock_for_lines(
+            quote.lines.all(),
+            company_id=quote.company_id,
+            branch_id=quote.branch_id,
+            reference_id=quote._id,
+            reservation_type='QUOTE',
+            user=request.user,
+        )
         return Response({
             'status': 'success',
             'message': 'Quote created successfully',
@@ -41,6 +55,14 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
+        adjust_reservation(
+            instance.lines.all(),
+            company_id=instance.company_id,
+            branch_id=instance.branch_id,
+            reference_id=instance._id,
+            reservation_type='QUOTE',
+            user=request.user,
+        )
         return Response({
             'status': 'success',
             'message': 'Quote updated successfully',
@@ -49,6 +71,7 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
+        release_stock_for_reference(instance._id, instance.company_id, request.user)
         instance.is_deleted = True
         instance.deleted_by = request.user
         instance.save(update_fields=['is_deleted', 'deleted_by'])
@@ -62,6 +85,7 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
         """
         Accept a quote: changes status to ACCEPTED and creates a
         draft CustomerInvoice with matching line items.
+        Existing stock reservations are kept (not released).
         """
         quote = self.get_object()
         if quote.status != 'DRAFT' and quote.status != 'SENT':
@@ -108,6 +132,18 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
                     updated_by=request.user,
                 )
 
+            # Re-point stock reservations from the quote to the invoice
+            # so that invoice payment can find and deduct them.
+            from apps.inventory.models import StockReservation
+            StockReservation.objects.filter(
+                reference_id=quote._id,
+                status='ACTIVE',
+                company_id=quote.company_id,
+            ).update(
+                reference_id=invoice._id,
+                updated_by=request.user,
+            )
+
         return Response({
             'status': 'success',
             'message': 'Quote accepted and invoice created',
@@ -124,4 +160,5 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
             )
         quote.status = 'REJECTED'
         quote.save(update_fields=['status'])
+        release_stock_for_reference(quote._id, quote.company_id, request.user)
         return Response({'status': 'success', 'message': 'Quote rejected'})

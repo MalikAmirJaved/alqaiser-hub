@@ -1,12 +1,15 @@
 """Shared invoice/bill payment flows."""
 from decimal import Decimal
+import uuid
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from apps.finance.services.document import ensure_customer_invoice_journal, ensure_supplier_bill_journal
 from apps.finance.services.payable import create_payment_for
+from apps.inventory.services.stock_service import deduct_reserved_stock
 
 
 def pay_customer_invoice(invoice, request, amount=None):
@@ -50,6 +53,8 @@ def pay_customer_invoice(invoice, request, amount=None):
             user=request.user,
             auto_confirm=True,
         )
+
+        deduct_reserved_stock(invoice._id, invoice.company_id, request.user)
 
     invoice.refresh_from_db()
     return True, 'Payment recorded successfully'

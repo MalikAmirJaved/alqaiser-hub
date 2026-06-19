@@ -11,6 +11,11 @@ from apps.finance.models import CustomerInvoice, CustomerInvoiceLine
 from apps.finance.serializers import CustomerInvoiceSerializer
 from apps.finance.mixins import CompanyBranchUserMixin, SoftDeleteMixin
 from apps.finance.services.invoice_payment import pay_customer_invoice
+from apps.inventory.services.stock_service import (
+    reserve_stock_for_lines,
+    adjust_reservation,
+    release_stock_for_reference,
+)
 
 
 class CustomerInvoiceViewSet(
@@ -46,6 +51,17 @@ class CustomerInvoiceViewSet(
         serializer.is_valid(raise_exception=True)
         import time, random
         self.perform_create(serializer)
+        invoice = serializer.instance
+        # Reserve stock for manually created invoices only
+        if invoice.source != 'SALES_QUOTE':
+            reserve_stock_for_lines(
+                invoice.lines.all(),
+                company_id=invoice.company_id,
+                branch_id=invoice.branch_id,
+                reference_id=invoice._id,
+                reservation_type='CUSTOMER_INVOICE',
+                user=request.user,
+            )
         return Response({
             'status': 'success',
             'message': f'Invoice {serializer.instance.invoice_number} created',
@@ -73,6 +89,14 @@ class CustomerInvoiceViewSet(
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
+        adjust_reservation(
+            instance.lines.all(),
+            company_id=instance.company_id,
+            branch_id=instance.branch_id,
+            reference_id=instance._id,
+            reservation_type='CUSTOMER_INVOICE',
+            user=request.user,
+        )
         return Response({
             'status': 'success',
             'message': f'Invoice updated successfully',
@@ -89,17 +113,16 @@ class CustomerInvoiceViewSet(
                 {'error': 'Only DRAFT invoices can be deleted'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        # NEW: reject if already paid
         if instance.payment_status == 'PAID':
             return Response(
                 {'error': 'Cannot delete a paid invoice'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        release_stock_for_reference(instance._id, instance.company_id, request.user)
         instance.is_deleted = True
         instance.deleted_by = request.user
         instance.save(update_fields=['is_deleted', 'deleted_by'])
         return Response(status=status.HTTP_204_NO_CONTENT)
-
 
     def _pay_invoice(self, invoice, request, amount=None):
         try:
