@@ -39,16 +39,20 @@ class QuoteSerializer(serializers.ModelSerializer):
         allow_null=True,
         required=False
     )
+    customer_name = serializers.SerializerMethodField()
     new_customer = CustomerSerializer(required=False, write_only=True)
 
     class Meta:
         model = Quote
         fields = [
-            'id', 'quote_number', 'lead', 'customer', 'new_customer',
+            'id', 'quote_number', 'lead', 'customer', 'customer_name', 'new_customer',
             'date', 'expiration_date', 'total_amount', 'status', 'source',
             'notes', 'lines', 'created_at', 'updated_at'
         ]
         read_only_fields = ('id', 'quote_number', 'created_at', 'updated_at', 'company_id', 'branch_id', 'total_amount')
+
+    def get_customer_name(self, obj):
+        return obj.customer.name if obj.customer else None
 
     def create(self, validated_data):
         import time, random

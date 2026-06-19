@@ -38,7 +38,7 @@ class SalesInvoiceViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequ
     def get_queryset(self):
         qs = super().get_queryset()
         qs = qs.filter(source__in=['SALES_AGENT', 'SALES_POS', 'SALES_QUOTE'])
-        qs = qs.prefetch_related('lines__variant__product')
+        qs = qs.select_related('customer').prefetch_related('lines__variant__product')
         return qs.order_by('-created_at')
 
     def perform_create(self, serializer):

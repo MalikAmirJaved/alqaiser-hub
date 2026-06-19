@@ -27,7 +27,7 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
 
     def get_queryset(self):
         qs = super().get_queryset()
-        qs = qs.prefetch_related('lines__variant__product')
+        qs = qs.select_related('customer').prefetch_related('lines__variant__product')
         return qs.order_by('-created_at')
 
     def create(self, request, *args, **kwargs):
