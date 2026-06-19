@@ -53,4 +53,6 @@ class PaymentSerializer(serializers.ModelSerializer):
             return getattr(payable, 'expense_number', None)
         if model_name == 'payrollrecord' and payable.employee:
             return f'{payable.employee.full_name} {payable.year}-{payable.month:02d}'
+        if model_name == 'employeeloan' and payable.employee:
+            return f'{payable.employee.full_name} - {payable.get_loan_type_display()}'
         return str(payable._id)

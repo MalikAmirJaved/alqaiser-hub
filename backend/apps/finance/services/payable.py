@@ -33,6 +33,11 @@ PAYABLE_CONFIG = {
         'amount_field': 'net_salary',
         'label': 'payroll',
     },
+    'employeeloan': {
+        'payment_type': 'PAYMENT',
+        'amount_field': 'total_payable',
+        'label': 'employee_loan',
+    },
 }
 
 

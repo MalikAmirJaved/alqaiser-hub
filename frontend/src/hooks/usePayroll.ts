@@ -432,6 +432,9 @@ export function usePayLoan() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employeeLoans"] });
       queryClient.invalidateQueries({ queryKey: ["payroll"] });
+      queryClient.invalidateQueries({ queryKey: ["finance_payments"] });
+      queryClient.invalidateQueries({ queryKey: ["finance_dashboard_summary"] });
+      queryClient.invalidateQueries({ queryKey: ["finance_dashboard_recent_payments"] });
     },
   });
 }

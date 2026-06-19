@@ -54,6 +54,9 @@ def _journal_description(payment):
     if model_name == 'payrollrecord':
         employee_name = payable.employee.full_name if payable.employee else 'Employee'
         return f'Payroll payment - {employee_name}'
+    if model_name == 'employeeloan':
+        employee_name = payable.employee.full_name if payable.employee else 'Employee'
+        return f'Loan disbursement - {employee_name}'
     return 'Payment'
 
 
@@ -147,6 +150,26 @@ def _create_journal_entry(payment, user):
         JournalLine.objects.create(
             journal_entry=entry,
             account=salaries_account,
+            debit=payment.amount,
+            credit=Decimal('0.00'),
+            company_id=payment.company_id,
+            branch_id=payment.branch_id,
+        )
+        JournalLine.objects.create(
+            journal_entry=entry,
+            account=cash_bank,
+            debit=Decimal('0.00'),
+            credit=payment.amount,
+            company_id=payment.company_id,
+            branch_id=payment.branch_id,
+        )
+    elif model_name == 'employeeloan':
+        loan_account = _get_or_create_account(
+            'LOANS', 'Employee Loans', 'ASSET', payment
+        )
+        JournalLine.objects.create(
+            journal_entry=entry,
+            account=loan_account,
             debit=payment.amount,
             credit=Decimal('0.00'),
             company_id=payment.company_id,

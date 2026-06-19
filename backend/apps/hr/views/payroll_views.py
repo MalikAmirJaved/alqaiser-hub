@@ -1697,6 +1697,20 @@ class LoanPayView(PermissionRequiredMixin, APIView):
         loan.updated_by = request.user
         loan.save()
         
+        # Create a payment record so the loan appears in finance
+        payment = create_payment_for(
+            loan,
+            amount=Decimal(str(loan.total_payable)),
+            payment_date=date.today(),
+            user=request.user,
+            payment_method='BANK_TRANSFER',
+            reference_number=loan.transaction_number or '',
+            notes=f'Loan disbursement - {loan.get_loan_type_display()}',
+            auto_confirm=False,
+        )
+        payment.status = 'CONFIRMED'
+        payment.save(update_fields=['status', 'updated_at'])
+        
         return Response({
             "message": "Loan paid successfully",
             "loan": {
