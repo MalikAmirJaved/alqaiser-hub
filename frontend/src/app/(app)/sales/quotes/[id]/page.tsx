@@ -249,6 +249,8 @@ export default function QuoteDetailPage() {
               date: quote.date,
               expirationDate: quote.expiration_date || undefined,
               customerName: quote.customer_name || "—",
+              customerEmail: (quote as any).customer_email || "",
+              customerPhone: (quote as any).customer_phone || "",
               lines: (quote.lines || []).map((l) => ({
                 variant_name: l.variant_name,
                 variant_sku: l.variant_sku,
@@ -267,9 +269,13 @@ export default function QuoteDetailPage() {
             company: {
               companyName: companySettings.companyName,
               address: companySettings.address,
+              city: companySettings.city,
+              state: companySettings.state,
+              country: companySettings.country,
               phone: companySettings.phone,
               email: companySettings.email,
               taxId: companySettings.taxId,
+              logo: (companySettings as any).logo || "",
             },
             termsContent: termsData?.quote || "",
             formatCurrency,

@@ -21,9 +21,13 @@ export interface DocLine {
 export interface DocCompany {
   companyName: string;
   address: string;
+  city?: string;
+  state?: string;
+  country?: string;
   phone: string;
   email: string;
   taxId?: string;
+  logo?: string;
 }
 
 export interface QuoteInvoiceData {
@@ -33,6 +37,8 @@ export interface QuoteInvoiceData {
   dueDate?: string;
   expirationDate?: string;
   customerName: string;
+  customerEmail?: string;
+  customerPhone?: string;
   lines: DocLine[];
   totalAmount: number;
   status?: string;
@@ -45,6 +51,13 @@ interface QuoteInvoiceDocumentProps {
   company: DocCompany;
   termsContent: string;
   formatCurrency: (value: number) => string;
+}
+
+// ── Helpers ────────────────────────────────────────
+
+function buildLocationString(company: DocCompany): string {
+  const parts = [company.city, company.state, company.country].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : "";
 }
 
 // ── Document Component ─────────────────────────────
@@ -64,33 +77,49 @@ function DocumentContent({
     (sum, l) => sum + (l.discount_amount || 0),
     0,
   );
+  const locationStr = buildLocationString(company);
 
   return (
     <div className="bg-white text-gray-900 p-8 max-w-4xl mx-auto font-sans">
       {/* ── Header ───────────────────────────── */}
       <div className="flex justify-between items-start border-b-2 border-gray-300 pb-6 mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800">{company.companyName}</h1>
-          <div className="mt-2 text-sm text-gray-600 space-y-0.5">
-            <p>{company.address}</p>
-            <p>{company.phone}</p>
-            <p>{company.email}</p>
-            {company.taxId && <p>Tax ID: {company.taxId}</p>}
+        <div className="flex items-start gap-4">
+          {company.logo && (
+            <img
+              src={`${process.env.NEXT_PUBLIC_API_URL}${company.logo}`}
+              alt={`${company.companyName} logo`}
+              className="w-16 h-16 object-contain rounded"
+            />
+          )}
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800">{company.companyName}</h1>
+            <div className="mt-2 text-sm text-gray-600 space-y-0.5">
+              {company.address && <p>{company.address}</p>}
+              {locationStr && <p>{locationStr}</p>}
+              <p>{[company.phone, company.email].filter(Boolean).join("  |  ")}</p>
+              {company.taxId && <p>TRN: {company.taxId}</p>}
+            </div>
           </div>
         </div>
-        <div className="text-right">
+        <div className="text-right shrink-0">
           <h2 className="text-2xl font-bold text-blue-700">{docType}</h2>
           <p className="text-sm text-gray-500 mt-1">#{data.documentNumber}</p>
         </div>
       </div>
 
-      {/* ── Document Info ─────────────────────── */}
+      {/* ── Bill To & Dates ──────────────────── */}
       <div className="flex justify-between mb-6">
         <div>
           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
             Bill To
           </h3>
           <p className="mt-1 text-base font-medium">{data.customerName}</p>
+          {data.customerEmail && (
+            <p className="text-sm text-gray-500">{data.customerEmail}</p>
+          )}
+          {data.customerPhone && (
+            <p className="text-sm text-gray-500">{data.customerPhone}</p>
+          )}
         </div>
         <div className="text-right text-sm text-gray-600 space-y-0.5">
           <p>
@@ -238,29 +267,59 @@ function DocumentContent({
 // ── PDF Generator ──────────────────────────────────
 
 async function generatePdf(
-  data: QuoteInvoiceDocumentProps,
+  props: QuoteInvoiceDocumentProps,
 ): Promise<Blob> {
-  const { data: docData, company, termsContent, formatCurrency } = data;
+  const { data: docData, company, termsContent, formatCurrency } = props;
   const doc = new jsPDF("p", "mm", "a4");
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
   let y = margin;
+  const locationStr = buildLocationString(company);
 
   // ── Header ──
-  doc.setFontSize(18);
-  doc.setFont("helvetica", "bold");
-  doc.text(company.companyName, margin, y);
-  y += 6;
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(100);
-  doc.text(company.address, margin, y);
-  y += 4;
-  doc.text(`${company.phone}  |  ${company.email}`, margin, y);
-  y += 4;
-  if (company.taxId) {
-    doc.text(`Tax ID: ${company.taxId}`, margin, y);
-    y += 4;
+  // Company logo (if provided) - try to add as image, max 16mm height
+  if (company.logo) {
+    try {
+      // Use a data URI or path - jsPDF addImage supports base64 or URL
+      const logoHeight = 14;
+      const logoWidth = 14;
+      doc.addImage(company.logo, "JPEG", margin, y - 2, logoWidth, logoHeight);
+      // Shift text to the right of the logo
+      const textX = margin + logoWidth + 6;
+      doc.setFontSize(16);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0);
+      doc.text(company.companyName, textX, y + 2);
+      y += 8;
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100);
+      if (company.address) {
+        doc.text(company.address, textX, y);
+        y += 3.5;
+      }
+      if (locationStr) {
+        doc.text(locationStr, textX, y);
+        y += 3.5;
+      }
+      const contactParts: string[] = [];
+      if (company.phone) contactParts.push(company.phone);
+      if (company.email) contactParts.push(company.email);
+      if (contactParts.length > 0) {
+        doc.text(contactParts.join("  |  "), textX, y);
+        y += 3.5;
+      }
+      if (company.taxId) {
+        doc.text(`TRN: ${company.taxId}`, textX, y);
+        y += 3.5;
+      }
+      y += 2;
+    } catch {
+      // Fallback if logo fails to load - just text
+      y = _renderCompanyText(doc, company, locationStr, margin, y);
+    }
+  } else {
+    y = _renderCompanyText(doc, company, locationStr, margin, y);
   }
 
   // Document type & number (right-aligned)
@@ -268,40 +327,56 @@ async function generatePdf(
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(37, 99, 235);
-  doc.text(docType, pageWidth - margin, margin, { align: "right" });
+  doc.text(docType, pageWidth - margin, margin + 2, { align: "right" });
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(100);
-  doc.text(`#${docData.documentNumber}`, pageWidth - margin, margin + 6, { align: "right" });
+  doc.text(`#${docData.documentNumber}`, pageWidth - margin, margin + 8, { align: "right" });
 
-  y += 6;
   doc.setDrawColor(200);
   doc.line(margin, y, pageWidth - margin, y);
   y += 8;
 
   // ── Bill To & Dates ──
+  let billToY = y;
+
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(50);
-  doc.text("Bill To", margin, y);
-  y += 5;
+  doc.text("Bill To", margin, billToY);
+  billToY += 5;
+
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
   doc.setTextColor(0);
-  doc.text(docData.customerName, margin, y);
-  y += 8;
+  doc.text(docData.customerName, margin, billToY);
+  billToY += 5;
 
-  // Dates (right-aligned)
+  doc.setFontSize(9);
+  doc.setTextColor(100);
+  if (docData.customerEmail) {
+    doc.text(docData.customerEmail, margin, billToY);
+    billToY += 4;
+  }
+  if (docData.customerPhone) {
+    doc.text(docData.customerPhone, margin, billToY);
+    billToY += 4;
+  }
+
+  // Dates (right-aligned) - align with billToY
+  const dateY = y + 1;
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(100);
-  doc.text(`Date: ${docData.date}`, pageWidth - margin, y - 13, { align: "right" });
+  doc.text(`Date: ${docData.date}`, pageWidth - margin, dateY, { align: "right" });
   if (docData.type === "INVOICE" && docData.dueDate) {
-    doc.text(`Due Date: ${docData.dueDate}`, pageWidth - margin, y - 8, { align: "right" });
+    doc.text(`Due Date: ${docData.dueDate}`, pageWidth - margin, dateY + 5, { align: "right" });
   }
   if (docData.type === "QUOTE" && docData.expirationDate) {
-    doc.text(`Expires: ${docData.expirationDate}`, pageWidth - margin, y - 8, { align: "right" });
+    doc.text(`Expires: ${docData.expirationDate}`, pageWidth - margin, dateY + 5, { align: "right" });
   }
+
+  y = Math.max(billToY, y + 14) + 4;
 
   // ── Line Items Table ──
   const tableHeaders = ["Product", "Qty", "Unit Price", "Discount", "Tax", "Total"];
@@ -422,6 +497,46 @@ async function generatePdf(
   return doc.output("blob");
 }
 
+// ── Helper: render company text block (no logo) ────
+function _renderCompanyText(
+  doc: jsPDF,
+  company: DocCompany,
+  locationStr: string,
+  margin: number,
+  startY: number,
+): number {
+  let y = startY;
+  doc.setFontSize(16);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0);
+  doc.text(company.companyName, margin, y);
+  y += 6;
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(100);
+  if (company.address) {
+    doc.text(company.address, margin, y);
+    y += 3.5;
+  }
+  if (locationStr) {
+    doc.text(locationStr, margin, y);
+    y += 3.5;
+  }
+  const contactParts: string[] = [];
+  if (company.phone) contactParts.push(company.phone);
+  if (company.email) contactParts.push(company.email);
+  if (contactParts.length > 0) {
+    doc.text(contactParts.join("  |  "), margin, y);
+    y += 3.5;
+  }
+  if (company.taxId) {
+    doc.text(`TRN: ${company.taxId}`, margin, y);
+    y += 3.5;
+  }
+  y += 2;
+  return y;
+}
+
 // ── Print Preview Modal ────────────────────────────
 
 interface PrintPreviewModalProps {
@@ -445,8 +560,9 @@ export function PrintPreviewModal({
     const style = `
       <style>
         body { margin: 0; font-family: Arial, Helvetica, sans-serif; }
-        @page { margin: 15mm; }
+        @page { margin: 10mm; }
         * { box-sizing: border-box; }
+        img { max-width: 64px; max-height: 64px; }
       </style>
     `;
 

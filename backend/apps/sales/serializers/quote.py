@@ -40,12 +40,14 @@ class QuoteSerializer(serializers.ModelSerializer):
         required=False
     )
     customer_name = serializers.SerializerMethodField()
+    customer_email = serializers.SerializerMethodField()
+    customer_phone = serializers.SerializerMethodField()
     new_customer = CustomerSerializer(required=False, write_only=True)
 
     class Meta:
         model = Quote
         fields = [
-            'id', 'quote_number', 'lead', 'customer', 'customer_name', 'new_customer',
+            'id', 'quote_number', 'lead', 'customer', 'customer_name', 'customer_email', 'customer_phone', 'new_customer',
             'date', 'expiration_date', 'total_amount', 'status', 'source',
             'notes', 'lines', 'created_at', 'updated_at'
         ]
@@ -53,6 +55,12 @@ class QuoteSerializer(serializers.ModelSerializer):
 
     def get_customer_name(self, obj):
         return obj.customer.name if obj.customer else None
+
+    def get_customer_email(self, obj):
+        return obj.customer.email if obj.customer else None
+
+    def get_customer_phone(self, obj):
+        return obj.customer.phone if obj.customer else None
 
     def create(self, validated_data):
         import time, random

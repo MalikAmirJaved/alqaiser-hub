@@ -521,13 +521,13 @@ export default function CompanyProfile() {
         <SectionCard
           icon={<DollarSign className="w-5 h-5" />}
           title="Financial & Localization"
-          description="Currency, tax, and timezone preferences"
+          description="Currency, and timezone preferences"
           canEdit={permissions.update}
           onEdit={() => openModal("financial")}
         >
           <div className="grid sm:grid-cols-3 gap-x-8 gap-y-5">
             <InfoRow icon={<DollarSign className="w-4 h-4" />} label="Currency" value={currencyLabel[formData.currency] || formData.currency} />
-            <InfoRow icon={<Percent className="w-4 h-4" />} label="Tax Rate" value={`${formData.taxRate}%`} />
+            {/* <InfoRow icon={<Percent className="w-4 h-4" />} label="Tax Rate" value={`${formData.taxRate}%`} /> */}
             <InfoRow icon={<Clock className="w-4 h-4" />} label="Timezone" value={timezoneLabel[formData.timezone] || formData.timezone} />
           </div>
         </SectionCard>
@@ -646,7 +646,7 @@ export default function CompanyProfile() {
         saving={saving || isUpdating}
       >
         <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-4">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block">Currency & Tax</span>
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block">Currency</span>
           <Field label="Primary Currency">
             <CurrencySelect
               value={draft.currency}
@@ -654,9 +654,9 @@ export default function CompanyProfile() {
               required
             />
           </Field>
-          <Field label="Default Tax Rate (%)">
+          {/* <Field label="Default Tax Rate (%)">
             <input type="number" step="0.01" min="0" max="100" className={inputCls} value={draft.taxRate} onChange={(e) => setDraftField("taxRate", e.target.value)} />
-          </Field>
+          </Field> */}
         </div>
         <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-4">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block">Timezone</span>

@@ -312,6 +312,8 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
               date: invoice.invoice_date,
               dueDate: invoice.due_date,
               customerName: invoice.customer_name || "—",
+              customerEmail: (invoice as any).customer_email || "",
+              customerPhone: (invoice as any).customer_phone || "",
               lines: (invoice.lines || []).map((l) => ({
                 variant_name: l.variant_name,
                 variant_sku: l.variant_sku,
@@ -328,9 +330,13 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
             company: {
               companyName: companySettings.companyName,
               address: companySettings.address,
+              city: companySettings.city,
+              state: companySettings.state,
+              country: companySettings.country,
               phone: companySettings.phone,
               email: companySettings.email,
               taxId: companySettings.taxId,
+              logo: (companySettings as any).logo || "",
             },
             termsContent: termsData?.invoice || "",
             formatCurrency,

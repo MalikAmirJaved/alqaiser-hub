@@ -29,6 +29,8 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
     payment_status = serializers.CharField(read_only=True)
     outstanding = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     customer_name = serializers.SerializerMethodField()
+    customer_email = serializers.SerializerMethodField()
+    customer_phone = serializers.SerializerMethodField()
     lines = CustomerInvoiceLineSerializer(many=True, required=False)
     
     customer = serializers.SlugRelatedField(
@@ -61,6 +63,12 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
 
     def get_customer_name(self, obj):
         return obj.customer.name if obj.customer else None
+
+    def get_customer_email(self, obj):
+        return obj.customer.email if obj.customer else None
+
+    def get_customer_phone(self, obj):
+        return obj.customer.phone if obj.customer else None
 
     def create(self, validated_data):
         lines_data = validated_data.pop('lines', [])
