@@ -336,6 +336,8 @@ export default function LeadsPanel() {
         actions={{
           onEdit: handleEdit,
           onDelete: (lead) => deleteLead.mutate(lead.id),
+          canEdit: (lead) => lead.status !== "ACCEPTED" && lead.status !== "WON",
+          canDelete: (lead) => lead.status !== "ACCEPTED" && lead.status !== "WON",
         }}
         onRowClick={handleRowClick}
         exportEnabled={permissions.export}
@@ -349,7 +351,14 @@ export default function LeadsPanel() {
         }
         batchActions={
           <button
-            onClick={() => selectedIds.forEach((id) => deleteLead.mutate(id))}
+            onClick={() => {
+              const deletableIds = selectedIds.filter((id) => {
+                const lead = leads.find((l) => l.id === id);
+                return lead && lead.status !== "ACCEPTED" && lead.status !== "WON";
+              });
+              if (deletableIds.length === 0) return;
+              deletableIds.forEach((id) => deleteLead.mutate(id));
+            }}
             className="inline-flex items-center gap-1.5 text-sm text-destructive hover:text-destructive/80 transition"
           >
             <Trash2 className="w-4 h-4" />

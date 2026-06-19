@@ -38,6 +38,7 @@ interface Actions<T> {
   onDelete?: (item: T) => void;
   onPost?: (item: T) => void;
   canEdit?: (item: T) => boolean;
+  canDelete?: (item: T) => boolean;
   canPost?: (item: T) => boolean;
   postLabel?: string;
 }
@@ -350,7 +351,7 @@ export function DynamicModulePage<T>({
                                   <Pencil className="w-4 h-4" />
                                 </button>
                               )}
-                              {actions?.onDelete && permissions.delete && (
+                              {actions?.onDelete && permissions.delete && (actions.canDelete?.(item) ?? true) && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();

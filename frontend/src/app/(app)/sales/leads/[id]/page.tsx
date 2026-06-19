@@ -175,7 +175,7 @@ export default function LeadDetailPage() {
         ]}
         primaryActionLabel={canConvert ? "Convert to Quote" : "Already Converted"}
         onPrimaryAction={canConvert ? handleConvertToQuote : undefined}
-        onEdit={permissions.update ? handleEdit : undefined}
+        onEdit={permissions.update && lead.status !== "ACCEPTED" && lead.status !== "WON" ? handleEdit : undefined}
         permissions={{ edit: permissions.update, submit: canConvert }}
         tabs={tabs}
         sidebar={

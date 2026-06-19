@@ -36,8 +36,13 @@ class LeadViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixi
         }, status=status.HTTP_201_CREATED)
 
     def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
         instance = self.get_object()
+        if instance.status in ('ACCEPTED', 'WON'):
+            return Response(
+                {'error': 'Cannot edit an accepted or won lead'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        partial = kwargs.pop('partial', False)
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
@@ -49,6 +54,11 @@ class LeadViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixi
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
+        if instance.status in ('ACCEPTED', 'WON'):
+            return Response(
+                {'error': 'Cannot delete an accepted or won lead'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         instance.is_deleted = True
         instance.deleted_by = request.user
         instance.save(update_fields=['is_deleted', 'deleted_by'])
