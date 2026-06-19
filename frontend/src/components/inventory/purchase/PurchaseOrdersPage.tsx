@@ -268,7 +268,8 @@ export default function PurchaseOrdersPage() {
       />
 
       {/* Table */}
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <div className="bg-card border border-border rounded-xl">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-muted/50 border-b border-border">
@@ -418,6 +419,7 @@ export default function PurchaseOrdersPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Asset Requests Panel */}

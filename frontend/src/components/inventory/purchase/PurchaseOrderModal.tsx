@@ -1131,6 +1131,10 @@ function AssetLineItems({
   currencySymbol: string;
   onCreateAsset: () => void;
 }) {
+  const selectedIds = new Set(
+    lineItems.filter((l) => l.selectedId).map((l) => l.selectedId),
+  );
+
   return (
     <div>
       <div className="po-line-header">
@@ -1164,7 +1168,9 @@ function AssetLineItems({
               <SearchableSelect
                 value={line.selectedId}
                 onChange={(val) => onSelectChange(line.id, val)}
-                options={options.map((opt) => ({ value: opt.id, label: opt.label }))}
+                options={options
+                  .filter((opt) => !selectedIds.has(opt.id) || opt.id === line.selectedId)
+                  .map((opt) => ({ value: opt.id, label: opt.label }))}
                 placeholder="Select asset…"
               />
 
@@ -1236,8 +1242,10 @@ function ProductVariantSelector({
   onToggleCollapse: (productId: string) => void;
 }) {
   const productOptions = useMemo(
-    () => products.map((p) => ({ value: p.id, label: p.product_name })),
-    [products],
+    () => products
+      .filter((p) => !selectedProducts.some((sp) => sp.id === p.id))
+      .map((p) => ({ value: p.id, label: p.product_name })),
+    [products, selectedProducts],
   );
 
   return (
