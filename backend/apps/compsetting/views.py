@@ -11,7 +11,7 @@ from datetime import datetime, time
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.compsetting.models import (
     CompanySettings, WorkingDay, PublicHoliday,
-    CompanySettingHistory, Designation
+    CompanySettingHistory, Designation, TermsAndCondition
 )
 from apps.organization.models import Company
 from apps.hr.models import Employee
@@ -583,6 +583,55 @@ class WelcomeDesignationSetupView(BaseCompanyView):
             'count': len(created)
         }, status=status.HTTP_201_CREATED if created else status.HTTP_400_BAD_REQUEST)
 
+
+
+class TermsAndConditionView(BaseCompanyView):
+    """Company terms & conditions for quotes and invoices"""
+    permission_resource = 'company'
+
+    def _get_or_create(self, company, type, user):
+        obj, _ = TermsAndCondition.objects.get_or_create(
+            company=company,
+            type=type,
+            defaults={
+                'content': '',
+                'created_by': user,
+                'updated_by': user,
+            }
+        )
+        return obj
+
+    def get(self, request):
+        company, _ = self._get_settings(request.user)
+        quote = self._get_or_create(company, 'quote', request.user)
+        invoice = self._get_or_create(company, 'invoice', request.user)
+        return Response({
+            'quote': quote.content,
+            'invoice': invoice.content,
+        })
+
+    def put(self, request):
+        company, _ = self._get_settings(request.user)
+        user = request.user
+
+        if 'quote' in request.data:
+            obj = self._get_or_create(company, 'quote', user)
+            obj.content = request.data['quote']
+            obj.updated_by = user
+            obj.save()
+
+        if 'invoice' in request.data:
+            obj = self._get_or_create(company, 'invoice', user)
+            obj.content = request.data['invoice']
+            obj.updated_by = user
+            obj.save()
+
+        quote = self._get_or_create(company, 'quote', user)
+        invoice = self._get_or_create(company, 'invoice', user)
+        return Response({
+            'quote': quote.content,
+            'invoice': invoice.content,
+        })
 
 
 class DesignationEmployeesView(BaseCompanyView):

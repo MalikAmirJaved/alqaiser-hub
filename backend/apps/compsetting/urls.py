@@ -8,6 +8,7 @@ from .views import (
     WelcomeDesignationSetupView,
     DesignationEmployeesView,
     DesignationViewSet,
+    TermsAndConditionView,
 )
 
 router = DefaultRouter()
@@ -21,5 +22,6 @@ urlpatterns = [
     path('settings/designations/setup/', WelcomeDesignationSetupView.as_view(), name='welcome-designation-setup'),
     path('settings/history/', SettingHistoryView.as_view(), name='settings-history'),
     path('settings/designations/<uuid:designation_id>/employees/', DesignationEmployeesView.as_view(), name='designation-employees'),
+    path('settings/terms/', TermsAndConditionView.as_view(), name='terms-and-conditions'),
     path('', include(router.urls)),
 ]
