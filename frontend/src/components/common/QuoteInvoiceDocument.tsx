@@ -28,6 +28,8 @@ export interface DocCompany {
   email: string;
   taxId?: string;
   logo?: string;
+  /** Full absolute URL for the logo (used in PDF generation where env vars aren't available) */
+  logoUrl?: string;
 }
 
 export interface QuoteInvoiceData {
@@ -58,6 +60,18 @@ interface QuoteInvoiceDocumentProps {
 function buildLocationString(company: DocCompany): string {
   const parts = [company.city, company.state, company.country].filter(Boolean);
   return parts.length > 0 ? parts.join(", ") : "";
+}
+
+/** Load a remote image URL into a base64 data URI */
+async function imageUrlToBase64(url: string): Promise<string> {
+  const response = await fetch(url);
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("Failed to read image blob"));
+    reader.readAsDataURL(blob);
+  });
 }
 
 // ── Document Component ─────────────────────────────
@@ -277,13 +291,19 @@ async function generatePdf(
   const locationStr = buildLocationString(company);
 
   // ── Header ──
-  // Company logo (if provided) - try to add as image, max 16mm height
-  if (company.logo) {
+  // Company logo (if provided) - load async and add as image, max 14mm height
+  const logoSourceUrl = company.logoUrl || company.logo;
+  if (logoSourceUrl) {
     try {
-      // Use a data URI or path - jsPDF addImage supports base64 or URL
+      const logoDataUrl = await imageUrlToBase64(logoSourceUrl);
       const logoHeight = 14;
       const logoWidth = 14;
-      doc.addImage(company.logo, "JPEG", margin, y - 2, logoWidth, logoHeight);
+      // Detect format from data URI
+      const format = logoDataUrl.startsWith("data:image/png") ? "PNG" :
+                     logoDataUrl.startsWith("data:image/jpeg") ? "JPEG" :
+                     logoDataUrl.startsWith("data:image/gif") ? "GIF" :
+                     logoDataUrl.startsWith("data:image/webp") ? "WEBP" : "JPEG";
+      doc.addImage(logoDataUrl, format, margin, y - 2, logoWidth, logoHeight);
       // Shift text to the right of the logo
       const textX = margin + logoWidth + 6;
       doc.setFontSize(16);
@@ -489,8 +509,29 @@ async function generatePdf(
     doc.setFont("helvetica", "normal");
     doc.setTextColor(100);
 
-    const stripped = termsContent.replace(/<[^>]*>/g, "");
-    const lines = doc.splitTextToSize(stripped, pageWidth - 2 * margin);
+    // Convert common HTML to readable plain text with structure preserved
+    let text = termsContent
+      // Replace block-level closing tags with newlines
+      .replace(/<\/(?:p|div|li|h[1-6]|blockquote|tr|table)>/gi, "\n")
+      // Replace <br> and <br/> with newlines
+      .replace(/<br\s*\/?>/gi, "\n")
+      // Replace <li> with bullet prefix
+      .replace(/<li[^>]*>/gi, "  • ")
+      // Replace <td> or <th> with tab-like spacing
+      .replace(/<\/(?:td|th)>/gi, "  ")
+      // Strip remaining HTML tags
+      .replace(/<[^>]*>/g, "")
+      // Decode common entities
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      // Collapse multiple consecutive newlines into max 2
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+
+    const lines = doc.splitTextToSize(text, pageWidth - 2 * margin);
     doc.text(lines, margin, nextY);
   }
 

@@ -276,6 +276,9 @@ export default function QuoteDetailPage() {
               email: companySettings.email,
               taxId: companySettings.taxId,
               logo: (companySettings as any).logo || "",
+              logoUrl: (companySettings as any).logo
+                ? `${process.env.NEXT_PUBLIC_API_URL}${(companySettings as any).logo}`
+                : "",
             },
             termsContent: termsData?.quote || "",
             formatCurrency,

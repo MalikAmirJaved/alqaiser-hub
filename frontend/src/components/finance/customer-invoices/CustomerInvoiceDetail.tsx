@@ -337,6 +337,9 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
               email: companySettings.email,
               taxId: companySettings.taxId,
               logo: (companySettings as any).logo || "",
+              logoUrl: (companySettings as any).logo
+                ? `${process.env.NEXT_PUBLIC_API_URL}${(companySettings as any).logo}`
+                : "",
             },
             termsContent: termsData?.invoice || "",
             formatCurrency,
