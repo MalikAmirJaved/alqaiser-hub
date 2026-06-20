@@ -106,7 +106,7 @@ export default function QuotesPanel() {
     { key: "quote_number", label: "Quote #", mono: true, sortable: true },
     { key: "customer_name", label: "Customer", sortable: true },
     { key: "date", label: "Issued Date", sortable: true },
-    { key: "total_amount", label: "Total Value", align: "right" as const, sortable: true, render: (val: number) => formatCurrency(val) },
+    { key: "total_amount", label: "Total Value", sortable: true, render: (val: number) => formatCurrency(val) },
     { key: "status", label: "Status", sortable: true, render: (val: string) => <StatusBadge status={val} /> },
     {
       key: "actions",
