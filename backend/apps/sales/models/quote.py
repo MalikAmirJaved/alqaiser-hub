@@ -7,9 +7,10 @@ class Quote(BaseModel):
     STATUS_CHOICES = [
         ('DRAFT', 'Draft'),
         ('SENT', 'Sent'),
-        ('ACCEPTED', 'Accepted'),
-        ('DECLINED', 'Declined'),
-        ('EXPIRED', 'Expired'),
+        ('VIEWED', 'Viewed'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+        ('CONVERTED', 'Converted to Invoice'),
     ]
     quote_number = models.CharField(max_length=50, unique=True)
     lead = models.ForeignKey(

@@ -55,7 +55,7 @@ class QuoteSerializer(serializers.ModelSerializer):
             'notes', 'lines', 'created_at', 'updated_at',
             'converted_invoice', 'converted_invoice_number',
         ]
-        read_only_fields = ('id', 'quote_number', 'created_at', 'updated_at', 'company_id', 'branch_id', 'total_amount')
+        read_only_fields = ('id', 'quote_number', 'created_at', 'updated_at', 'company_id', 'branch_id', 'total_amount', 'status')
 
     def get_customer_name(self, obj):
         return obj.customer.name if obj.customer else None

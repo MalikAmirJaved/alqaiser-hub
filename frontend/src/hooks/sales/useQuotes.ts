@@ -25,7 +25,7 @@ export interface Quote {
   date: string;
   expiration_date: string | null;
   total_amount: number | string;
-  status: "DRAFT" | "SENT" | "ACCEPTED" | "DECLINED" | "EXPIRED" | "REJECTED";
+  status: "DRAFT" | "SENT" | "VIEWED" | "APPROVED" | "REJECTED" | "CONVERTED";
   notes: string;
   lines: QuoteLine[];
   created_at?: string;
@@ -112,13 +112,43 @@ export function useDeleteQuote() {
   });
 }
 
-export function useAcceptQuote() {
+export function useSendQuote() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
       api<{ status: string; message: string }>(
-        `/api/sales/quotes/${id}/accept/`,
+        `/api/sales/quotes/${id}/send/`,
+        { method: "POST" }
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });
+    },
+  });
+}
+
+export function useMarkViewedQuote() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<{ status: string; message: string }>(
+        `/api/sales/quotes/${id}/mark_viewed/`,
+        { method: "POST" }
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });
+    },
+  });
+}
+
+export function useApproveQuote() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<{ status: string; message: string }>(
+        `/api/sales/quotes/${id}/approve/`,
         { method: "POST" }
       ),
     onSuccess: () => {

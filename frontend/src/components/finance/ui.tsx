@@ -102,6 +102,8 @@ export function StatusBadge({ status }: { status: string }) {
     EXPIRED: "bg-muted text-muted-foreground border-border",
     REJECTED: "bg-destructive/15 text-destructive border-destructive/30",
     SENT: "bg-info/15 text-info border-info/30",
+    VIEWED: "bg-primary/15 text-primary border-primary/30",
+    APPROVED: "bg-success/15 text-success border-success/30",
   };
   const styles = map[status] ?? "bg-muted text-muted-foreground border-border";
   return (

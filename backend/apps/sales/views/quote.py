@@ -10,7 +10,6 @@ from apps.sales.serializers.quote import QuoteSerializer
 from apps.finance.models import CustomerInvoice
 
 
-
 class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'SALES'
     permission_resource = 'quote'
@@ -40,6 +39,11 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
+        if instance.status != 'DRAFT':
+            return Response(
+                {'error': f"Cannot edit quote with status '{instance.status}'"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
@@ -59,26 +63,52 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
             'message': 'Quote deleted successfully'
         })
 
+    # ── Workflow Actions ──
+
     @action(detail=True, methods=['post'])
-    def accept(self, request, _id=None):
-        """Accept a quote: changes status to ACCEPTED."""
+    def send(self, request, _id=None):
+        """Move quote from DRAFT → SENT."""
         quote = self.get_object()
-        if quote.status not in ('DRAFT', 'SENT'):
+        if quote.status != 'DRAFT':
             return Response(
-                {'error': f"Cannot accept quote with status '{quote.status}'"},
+                {'error': f"Cannot send quote with status '{quote.status}'"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        quote.status = 'ACCEPTED'
+        quote.status = 'SENT'
         quote.save(update_fields=['status'])
-        return Response({
-            'status': 'success',
-            'message': 'Quote accepted'
-        })
+        return Response({'status': 'success', 'message': 'Quote sent to customer'})
+
+    @action(detail=True, methods=['post'])
+    def mark_viewed(self, request, _id=None):
+        """Move quote from SENT → VIEWED."""
+        quote = self.get_object()
+        if quote.status != 'SENT':
+            return Response(
+                {'error': f"Cannot mark quote as viewed with status '{quote.status}'"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        quote.status = 'VIEWED'
+        quote.save(update_fields=['status'])
+        return Response({'status': 'success', 'message': 'Quote marked as viewed'})
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, _id=None):
+        """Move quote from VIEWED → APPROVED."""
+        quote = self.get_object()
+        if quote.status != 'VIEWED':
+            return Response(
+                {'error': f"Cannot approve quote with status '{quote.status}'"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        quote.status = 'APPROVED'
+        quote.save(update_fields=['status'])
+        return Response({'status': 'success', 'message': 'Quote approved'})
 
     @action(detail=True, methods=['post'])
     def reject(self, request, _id=None):
+        """Move quote from VIEWED → REJECTED."""
         quote = self.get_object()
-        if quote.status in ['ACCEPTED', 'REJECTED']:
+        if quote.status != 'VIEWED':
             return Response(
                 {'error': f"Cannot reject quote with status '{quote.status}'"},
                 status=status.HTTP_400_BAD_REQUEST
@@ -89,8 +119,13 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
 
     @action(detail=True, methods=['post'])
     def mark_converted(self, request, _id=None):
-        """Link this quote to an invoice after successful conversion."""
+        """Link this quote to an invoice and set status to CONVERTED."""
         quote = self.get_object()
+        if quote.status != 'APPROVED':
+            return Response(
+                {'error': f"Cannot convert quote with status '{quote.status}'"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         invoice_id = request.data.get('invoice_id')
         if not invoice_id:
             return Response({'error': 'invoice_id is required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -99,5 +134,6 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
         except CustomerInvoice.DoesNotExist:
             return Response({'error': 'Invoice not found'}, status=status.HTTP_404_NOT_FOUND)
         quote.converted_invoice = invoice
-        quote.save(update_fields=['converted_invoice'])
-        return Response({'status': 'success', 'message': 'Quote marked as converted'})
+        quote.status = 'CONVERTED'
+        quote.save(update_fields=['converted_invoice', 'status'])
+        return Response({'status': 'success', 'message': 'Quote converted to invoice'})

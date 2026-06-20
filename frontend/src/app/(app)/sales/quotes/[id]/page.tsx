@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { DetailLayout, StandardSidebar, RelatedRecords, type DetailTab } from "@/components/reuseable/final/DetailLayout";
-import { useQuote, useUpdateQuote, useAcceptQuote, useRejectQuote } from "@/hooks/sales/useQuotes";
+import { useQuote, useUpdateQuote, useSendQuote, useMarkViewedQuote, useApproveQuote, useRejectQuote, useMarkConvertedQuote } from "@/hooks/sales/useQuotes";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
 import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
 import QuoteFormModal from "@/components/sales/QuoteFormModal";
+import { Printer, Download, FileText, HelpCircle, Settings, Info } from "lucide-react";
 
 export default function QuoteDetailPage() {
     const formatCurrency = useFormatCurrency();
@@ -17,7 +18,9 @@ export default function QuoteDetailPage() {
   const router = useRouter();
   const { data: quote, isLoading, refetch } = useQuote(id as string);
   const updateQuote = useUpdateQuote();
-  const acceptQuote = useAcceptQuote();
+  const sendQuote = useSendQuote();
+  const markViewed = useMarkViewedQuote();
+  const approveQuote = useApproveQuote();
   const rejectQuote = useRejectQuote();
   const permissions = useFeaturePermissions("SALES", "quote");
   const { data: companySettings } = useCompanySettingsQuery();
@@ -41,22 +44,32 @@ export default function QuoteDetailPage() {
     setEditingQuote(null);
   };
 
-  const handleAccept = async () => {
+  const handleSend = async () => {
     try {
-      await acceptQuote.mutateAsync(quote.id);
+      await sendQuote.mutateAsync(quote.id);
       refetch();
-    } catch (error) {
-      console.error("Accept failed", error);
-    }
+    } catch { /* toast from apiFetch */ }
+  };
+
+  const handleMarkViewed = async () => {
+    try {
+      await markViewed.mutateAsync(quote.id);
+      refetch();
+    } catch { /* toast from apiFetch */ }
+  };
+
+  const handleApprove = async () => {
+    try {
+      await approveQuote.mutateAsync(quote.id);
+      refetch();
+    } catch { /* toast from apiFetch */ }
   };
 
   const handleReject = async () => {
     try {
       await rejectQuote.mutateAsync(quote.id);
       refetch();
-    } catch (error) {
-      console.error("Reject failed", error);
-    }
+    } catch { /* toast from apiFetch */ }
   };
 
   const handlePrint = () => {
@@ -119,6 +132,29 @@ export default function QuoteDetailPage() {
       ),
     },
     {
+      id: "terms",
+      label: "Terms & Conditions",
+      render: () => (
+        <div className="text-sm">
+          {termsData?.quote ? (
+            <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: termsData.quote }} />
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+              <FileText className="w-10 h-10 mb-3 opacity-40" />
+              <p className="text-sm">No terms & conditions configured for quotes.</p>
+              <button
+                onClick={() => router.push("/settings/terms")}
+                className="mt-2 inline-flex items-center gap-1.5 text-primary hover:underline text-sm"
+              >
+                <Settings className="w-3.5 h-3.5" />
+                Configure in Settings
+              </button>
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
       id: "overview",
       label: "Details",
       render: () => (
@@ -143,12 +179,7 @@ export default function QuoteDetailPage() {
     },
   ];
 
-  // Build related records (invoice if accepted)
   const relatedItems: { id: string; type: string; title: string; amount?: string; status?: string }[] = [];
-  if (quote.status === "ACCEPTED") {
-    // If we had an invoice ID from the accept response, we could store it, but it's not in quote model.
-    // We could add a lookup via finance API, but skip for simplicity.
-  }
   if (quote.lead) {
     relatedItems.push({
       id: quote.lead,
@@ -175,8 +206,11 @@ export default function QuoteDetailPage() {
     });
   }
 
-  const canAccept = quote.status === "DRAFT" || quote.status === "SENT";
-  const canReject = quote.status === "DRAFT" || quote.status === "SENT";
+  const isDraft = quote.status === "DRAFT";
+  const isSent = quote.status === "SENT";
+  const isViewed = quote.status === "VIEWED";
+  const isApproved = quote.status === "APPROVED";
+  const isConverted = quote.status === "CONVERTED";
 
   return (
     <>
@@ -194,15 +228,15 @@ export default function QuoteDetailPage() {
         ]}
         summary={[
           { label: "Total Amount", value: formatCurrency(quote.total_amount), isCurrency: true, tone: "info" },
-          { label: "Status", value: quote.status, tone: quote.status === "ACCEPTED" ? "success" : quote.status === "DECLINED" ? "destructive" : "warning" },
+          { label: "Status", value: quote.status, tone: isApproved || isConverted ? "success" : quote.status === "REJECTED" ? "destructive" : "warning" },
           { label: "Valid Until", value: quote.expiration_date || "—", isCurrency: false },
         ]}
-        primaryActionLabel={canAccept ? "Accept & Invoice" : undefined}
-        onPrimaryAction={canAccept ? handleAccept : undefined}
-        onEdit={(permissions.update && quote.status !== "ACCEPTED") ? handleEdit : undefined}
+        primaryActionLabel={isDraft ? "Send to Customer" : isSent ? "Mark as Viewed" : isViewed ? "Approve Quote" : undefined}
+        onPrimaryAction={isDraft ? handleSend : isSent ? handleMarkViewed : isViewed ? handleApprove : undefined}
+        onEdit={(permissions.update && isDraft) ? handleEdit : undefined}
         onPrint={handlePrint}
         onExport={handleExportPdf}
-        permissions={{ edit: permissions.update, submit: canAccept }}
+        permissions={{ edit: permissions.update, submit: !!(isDraft || isSent || isViewed) }}
         tabs={tabs}
         sidebar={
           <StandardSidebar
@@ -216,7 +250,30 @@ export default function QuoteDetailPage() {
         }
         currencyFormatter={formatCurrency}
       />
-      {canReject && (
+
+      {/* Print/Download Context Help Banner */}
+      <div className="mt-4 flex flex-wrap items-center gap-3 p-3 rounded-xl bg-primary/5 border border-primary/10 text-xs text-muted-foreground">
+        <HelpCircle className="w-4 h-4 text-primary shrink-0" />
+        <span>
+          <strong className="text-foreground">Print & Export:</strong> Click the{" "}
+          <Printer className="w-3.5 h-3.5 inline-block mx-0.5" />{" "}
+          <strong>Print</strong> button in the toolbar to print this quote or click the{" "}
+          <Download className="w-3.5 h-3.5 inline-block mx-0.5" />{" "}
+          <strong>PDF</strong> button to download as a PDF document.
+          The Terms & Conditions from <strong>Settings → Terms & Conditions</strong> are automatically included.
+        </span>
+        <span className="hidden sm:inline text-muted-foreground/60">|</span>
+        <button
+          onClick={() => router.push("/settings/terms")}
+          className="inline-flex items-center gap-1 text-primary hover:underline shrink-0"
+          title="Configure Terms & Conditions"
+        >
+          <Settings className="w-3.5 h-3.5" />
+          Manage Terms & Conditions
+        </button>
+      </div>
+
+      {isViewed && (
         <div className="mt-4 flex justify-end">
           <button
             onClick={handleReject}

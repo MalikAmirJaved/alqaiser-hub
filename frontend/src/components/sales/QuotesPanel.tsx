@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuotes, useAcceptQuote, useRejectQuote, useMarkConvertedQuote, Quote } from "@/hooks/sales/useQuotes";
+import { useQuotes, useSendQuote, useMarkViewedQuote, useApproveQuote, useRejectQuote, useMarkConvertedQuote, Quote } from "@/hooks/sales/useQuotes";
 import { DynamicModulePage, type ModulePermissions, type Kpi } from "@/components/reuseable/final/DynamicModulePage";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
@@ -26,10 +26,10 @@ export default function QuotesPanel() {
   const quoteStatusOptions = [
     { value: "DRAFT", label: "Draft" },
     { value: "SENT", label: "Sent" },
-    { value: "ACCEPTED", label: "Accepted" },
-    { value: "DECLINED", label: "Declined" },
-    { value: "EXPIRED", label: "Expired" },
+    { value: "VIEWED", label: "Viewed" },
+    { value: "APPROVED", label: "Approved" },
     { value: "REJECTED", label: "Rejected" },
+    { value: "CONVERTED", label: "Converted to Invoice" },
   ];
 
   const filterFields: FilterField[] = [
@@ -42,7 +42,9 @@ export default function QuotesPanel() {
       ? { status: filters.status || undefined, search: filters.search || undefined }
       : undefined
   );
-  const acceptQuote = useAcceptQuote();
+  const sendQuote = useSendQuote();
+  const markViewed = useMarkViewedQuote();
+  const approveQuote = useApproveQuote();
   const rejectQuote = useRejectQuote();
   const markConverted = useMarkConvertedQuote();
   const permissions = useFeaturePermissions("SALES", "quote");
@@ -55,22 +57,32 @@ export default function QuotesPanel() {
     export: permissions.export,
   };
 
-  const handleAccept = async (quote: Quote) => {
+  const handleSend = async (quote: Quote) => {
     try {
-      await acceptQuote.mutateAsync(quote.id);
+      await sendQuote.mutateAsync(quote.id);
       refetch();
-    } catch (error: any) {
-      console.error("Accept failed", error);
-    }
+    } catch { /* toast from apiFetch */ }
+  };
+
+  const handleMarkViewed = async (quote: Quote) => {
+    try {
+      await markViewed.mutateAsync(quote.id);
+      refetch();
+    } catch { /* toast from apiFetch */ }
+  };
+
+  const handleApprove = async (quote: Quote) => {
+    try {
+      await approveQuote.mutateAsync(quote.id);
+      refetch();
+    } catch { /* toast from apiFetch */ }
   };
 
   const handleReject = async (quote: Quote) => {
     try {
       await rejectQuote.mutateAsync(quote.id);
       refetch();
-    } catch (error: any) {
-      console.error("Reject failed", error);
-    }
+    } catch { /* toast from apiFetch */ }
   };
 
   const handleConvertToInvoice = (quote: Quote) => {
@@ -106,14 +118,14 @@ export default function QuotesPanel() {
 
   const computeKPIs = (data: Quote[]): Kpi[] => {
     const totalAmount = data.reduce((sum, q) => sum + Number(q.total_amount || 0), 0);
-    const acceptedAmount = data.filter(q => q.status === "ACCEPTED").reduce((sum, q) => sum + Number(q.total_amount || 0), 0);
-    const pendingCount = data.filter(q => q.status === "DRAFT" || q.status === "SENT").length;
-    const acceptedCount = data.filter(q => q.status === "ACCEPTED").length;
+    const acceptedAmount = data.filter(q => q.status === "APPROVED" || q.status === "CONVERTED").reduce((sum, q) => sum + Number(q.total_amount || 0), 0);
+    const pendingCount = data.filter(q => q.status === "DRAFT" || q.status === "SENT" || q.status === "VIEWED").length;
+    const acceptedCount = data.filter(q => q.status === "APPROVED" || q.status === "CONVERTED").length;
 
     return [
       { label: "Pipeline Value", value: totalAmount, sub: `${data.length} total quotes`, tone: "info" as const, isCurrency: true },
-      { label: "Pending Quotes", value: pendingCount, sub: "Awaiting approval", tone: "warning" as const, isCurrency: false },
-      { label: "Closed (Won)", value: acceptedAmount, sub: `${acceptedCount} quotes accepted`, tone: "success" as const, isCurrency: true },
+      { label: "Pending Quotes", value: pendingCount, sub: "Awaiting approval or sent", tone: "warning" as const, isCurrency: false },
+      { label: "Closed (Won)", value: acceptedAmount, sub: `${acceptedCount} quotes won`, tone: "success" as const, isCurrency: true },
       { label: "Win Rate", value: data.length > 0 ? `${((acceptedCount / data.length) * 100).toFixed(1)}%` : "0%", sub: "Accepted ratio", tone: "info" as const, isCurrency: false },
     ];
   };
@@ -147,12 +159,30 @@ export default function QuotesPanel() {
       align: "right" as const,
       render: (_: any, quote: Quote) => (
         <div className="flex items-center gap-1">
-          {(quote.status === "DRAFT" || quote.status === "SENT") ? (
+          {quote.status === "DRAFT" && (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleSend(quote); }}
+              className="p-1.5 rounded-md hover:bg-info/10 text-info transition"
+              title="Send to Customer"
+            >
+              <FileText className="w-4 h-4" />
+            </button>
+          )}
+          {quote.status === "SENT" && (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleMarkViewed(quote); }}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-info/10 text-info hover:bg-info/20 text-xs font-medium transition"
+              title="Mark as Viewed"
+            >
+              Viewed
+            </button>
+          )}
+          {quote.status === "VIEWED" && (
             <>
               <button
-                onClick={(e) => { e.stopPropagation(); handleAccept(quote); }}
+                onClick={(e) => { e.stopPropagation(); handleApprove(quote); }}
                 className="p-1.5 rounded-md hover:bg-success/10 text-success transition"
-                title="Accept Quote"
+                title="Approve Quote"
               >
                 <CheckCircle className="w-4 h-4" />
               </button>
@@ -164,7 +194,8 @@ export default function QuotesPanel() {
                 <XCircle className="w-4 h-4" />
               </button>
             </>
-          ) : quote.status === "ACCEPTED" && quote.converted_invoice ? (
+          )}
+          {quote.status === "APPROVED" && quote.converted_invoice ? (
             <button
               onClick={(e) => { e.stopPropagation(); router.push(`/sales/customer-invoices/${quote.converted_invoice}`); }}
               className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-success/10 text-success hover:bg-success/20 text-xs font-medium transition"
@@ -173,7 +204,7 @@ export default function QuotesPanel() {
               <ExternalLink className="w-3.5 h-3.5" />
               {quote.converted_invoice_number || "Invoiced"}
             </button>
-          ) : quote.status === "ACCEPTED" ? (
+          ) : quote.status === "APPROVED" ? (
             <button
               onClick={(e) => { e.stopPropagation(); handleConvertToInvoice(quote); }}
               className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 text-xs font-medium transition"
@@ -204,7 +235,7 @@ export default function QuotesPanel() {
         onCreate={handleCreate}
         actions={{
           onEdit: handleEdit,
-          canEdit: (quote) => !["ACCEPTED", "REJECTED"].includes(quote.status)
+          canEdit: (quote) => quote.status === "DRAFT"
         }}
         onRowClick={(quote) => router.push(`/sales/quotes/${quote.id}`)}
         exportEnabled={permissions.export}
