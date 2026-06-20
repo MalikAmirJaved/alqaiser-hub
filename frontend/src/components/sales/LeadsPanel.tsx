@@ -190,7 +190,7 @@ export default function LeadsPanel() {
 
   const handleCreateQuote = async (lead: Lead) => {
     if (lead.status === "CONVERTED") {
-      setQuoteCustomerId(null);
+      setQuoteCustomerId(lead.converted_customer_id || null);
       setQuoteModalOpen(true);
       return;
     }

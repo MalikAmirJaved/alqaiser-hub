@@ -3,6 +3,13 @@ from apps.common.basemodel import BaseModel
 
 
 class Lead(BaseModel):
+    converted_customer = models.ForeignKey(
+        'inventory.Customer',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='converted_from_leads',
+    )
     STATUS_CHOICES = [
         ('NEW', 'New'),
         ('CONTACTED', 'Contacted'),

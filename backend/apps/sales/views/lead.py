@@ -93,8 +93,9 @@ class LeadViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixi
                 created_by=request.user,
                 updated_by=request.user,
             )
+            lead.converted_customer = customer
             lead.status = 'CONVERTED'
-            lead.save(update_fields=['status'])
+            lead.save(update_fields=['converted_customer', 'status'])
 
         return Response({
             'status': 'success',

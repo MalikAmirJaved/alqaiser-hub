@@ -4,6 +4,7 @@ from apps.sales.models.lead import Lead
 
 class LeadSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)
+    converted_customer_id = serializers.UUIDField(source='converted_customer._id', read_only=True, allow_null=True)
 
     class Meta:
         model = Lead
@@ -12,9 +13,10 @@ class LeadSerializer(serializers.ModelSerializer):
             'email', 'phone', 'source', 'status', 'notes',
             'address_line', 'country', 'state', 'city', 'score',
             'follow_up_date', 'follow_up_notes', 'lost_reason',
+            'converted_customer_id',
             'created_at', 'updated_at',
         ]
-        read_only_fields = ('id', 'created_at', 'updated_at', 'company_id', 'branch_id')
+        read_only_fields = ('id', 'created_at', 'updated_at', 'company_id', 'branch_id', 'converted_customer_id')
 
     def create(self, validated_data):
         user = self.context['request'].user

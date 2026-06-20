@@ -90,7 +90,7 @@ export default function LeadDetailPage() {
 
   const handleCreateQuote = async () => {
     if (lead.status === "CONVERTED") {
-      setQuoteCustomerId(null);
+      setQuoteCustomerId(lead.converted_customer_id || null);
       setQuoteModalOpen(true);
       return;
     }

@@ -21,6 +21,7 @@ export interface Lead {
   follow_up_date: string | null;
   follow_up_notes: string;
   lost_reason: string;
+  converted_customer_id?: string | null;
   created_at?: string;
   updated_at?: string;
   created_by_name?: string;
