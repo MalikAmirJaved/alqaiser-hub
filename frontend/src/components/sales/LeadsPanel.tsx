@@ -252,10 +252,12 @@ export default function LeadsPanel() {
       case "CONVERTED":
         return (
           <div className="flex items-center gap-1 flex-wrap">
-            <button onClick={(e) => { e.stopPropagation(); handleCreateQuote(lead); }}
-              className={`${btnClass} bg-primary/10 text-primary hover:bg-primary/20`}>
-              <FileText className="w-3.5 h-3.5" /> Quote
-            </button>
+            {lead.status === "CONVERTED" && (
+              <button onClick={(e) => { e.stopPropagation(); handleCreateQuote(lead); }}
+                className={`${btnClass} bg-primary/10 text-primary hover:bg-primary/20`}>
+                <FileText className="w-3.5 h-3.5" /> Quote
+              </button>
+            )}
             {lead.status === "QUALIFIED" && (
               <button onClick={(e) => { e.stopPropagation(); convertLeadToCustomer.mutate(lead.id, { onSuccess: () => refetch() }); }}
                 className={`${btnClass} bg-success/10 text-success hover:bg-success/20`}>
