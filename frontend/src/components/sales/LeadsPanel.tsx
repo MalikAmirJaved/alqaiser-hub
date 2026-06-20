@@ -13,8 +13,9 @@ import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { StatusBadge } from "@/components/finance/ui";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
-import { Trash2, Phone, Calendar, ThumbsUp, UserPlus, XCircle, Loader2 } from "lucide-react";
+import { Trash2, Phone, Calendar, ThumbsUp, UserPlus, XCircle, FileText, Loader2 } from "lucide-react";
 import LeadFormModal from "./LeadFormModal";
+import QuoteFormModal from "./QuoteFormModal";
 import { toast } from "sonner";
 
 function FollowUpModal({
@@ -135,6 +136,8 @@ export default function LeadsPanel() {
 
   const [followUpLead, setFollowUpLead] = useState<Lead | null>(null);
   const [lostLead, setLostLead] = useState<Lead | null>(null);
+  const [quoteModalOpen, setQuoteModalOpen] = useState(false);
+  const [quoteCustomerId, setQuoteCustomerId] = useState<string | null>(null);
 
   const leadStatusOptions = [
     { value: "NEW", label: "New" },
@@ -185,6 +188,25 @@ export default function LeadsPanel() {
     setEditingLead(null);
   };
 
+  const handleCreateQuote = async (lead: Lead) => {
+    if (lead.status === "CONVERTED") {
+      setQuoteCustomerId(null);
+      setQuoteModalOpen(true);
+      return;
+    }
+    try {
+      const result = await convertLeadToCustomer.mutateAsync(lead.id);
+      setQuoteCustomerId(result.customer_id);
+      setQuoteModalOpen(true);
+    } catch { /* toast from apiFetch */ }
+  };
+
+  const handleQuoteModalSuccess = () => {
+    setQuoteModalOpen(false);
+    setQuoteCustomerId(null);
+    refetch();
+  };
+
   const workflowActions = (lead: Lead) => {
     const btnClass = "inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition";
 
@@ -227,16 +249,25 @@ export default function LeadsPanel() {
           </div>
         );
       case "QUALIFIED":
+      case "CONVERTED":
         return (
           <div className="flex items-center gap-1 flex-wrap">
-            <button onClick={(e) => { e.stopPropagation(); convertLeadToCustomer.mutate(lead.id, { onSuccess: () => refetch() }); }}
-              className={`${btnClass} bg-success/10 text-success hover:bg-success/20`}>
-              <UserPlus className="w-3.5 h-3.5" /> Customer
+            <button onClick={(e) => { e.stopPropagation(); handleCreateQuote(lead); }}
+              className={`${btnClass} bg-primary/10 text-primary hover:bg-primary/20`}>
+              <FileText className="w-3.5 h-3.5" /> Quote
             </button>
-            <button onClick={(e) => { e.stopPropagation(); setLostLead(lead); }}
-              className={`${btnClass} bg-destructive/10 text-destructive hover:bg-destructive/20`}>
-              <XCircle className="w-3.5 h-3.5" /> Lost
-            </button>
+            {lead.status === "QUALIFIED" && (
+              <button onClick={(e) => { e.stopPropagation(); convertLeadToCustomer.mutate(lead.id, { onSuccess: () => refetch() }); }}
+                className={`${btnClass} bg-success/10 text-success hover:bg-success/20`}>
+                <UserPlus className="w-3.5 h-3.5" /> Customer
+              </button>
+            )}
+            {lead.status !== "CONVERTED" && (
+              <button onClick={(e) => { e.stopPropagation(); setLostLead(lead); }}
+                className={`${btnClass} bg-destructive/10 text-destructive hover:bg-destructive/20`}>
+                <XCircle className="w-3.5 h-3.5" /> Lost
+              </button>
+            )}
           </div>
         );
       default:
@@ -330,6 +361,13 @@ export default function LeadsPanel() {
         onClose={() => setModalOpen(false)}
         initialData={editingLead}
         onSuccess={handleModalSuccess}
+      />
+
+      <QuoteFormModal
+        open={quoteModalOpen}
+        onClose={() => { setQuoteModalOpen(false); setQuoteCustomerId(null); }}
+        initialCustomerId={quoteCustomerId}
+        onSuccess={handleQuoteModalSuccess}
       />
 
       <FollowUpModal

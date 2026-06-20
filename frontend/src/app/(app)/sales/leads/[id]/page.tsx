@@ -15,8 +15,9 @@ import {
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import LeadFormModal from "@/components/sales/LeadFormModal";
+import QuoteFormModal from "@/components/sales/QuoteFormModal";
 import { toast } from "sonner";
-import { CheckCircle, Phone, ThumbsUp, UserPlus, XCircle, Calendar, Loader2, X } from "lucide-react";
+import { CheckCircle, Phone, ThumbsUp, UserPlus, XCircle, Calendar, FileText, Loader2, X } from "lucide-react";
 
 export default function LeadDetailPage() {
   const formatCurrency = useFormatCurrency();
@@ -37,6 +38,8 @@ export default function LeadDetailPage() {
   const [followUpDate, setFollowUpDate] = useState("");
   const [followUpNotes, setFollowUpNotes] = useState("");
   const [lostReason, setLostReason] = useState("");
+  const [quoteModalOpen, setQuoteModalOpen] = useState(false);
+  const [quoteCustomerId, setQuoteCustomerId] = useState<string | null>(null);
 
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!lead) return <div className="p-8 text-center">Lead not found</div>;
@@ -83,6 +86,25 @@ export default function LeadDetailPage() {
       setShowFollowUp(false);
       refetch();
     } catch { /* toast from apiFetch */ }
+  };
+
+  const handleCreateQuote = async () => {
+    if (lead.status === "CONVERTED") {
+      setQuoteCustomerId(null);
+      setQuoteModalOpen(true);
+      return;
+    }
+    try {
+      const result = await convertLeadToCustomer.mutateAsync(lead.id);
+      setQuoteCustomerId(result.customer_id);
+      setQuoteModalOpen(true);
+    } catch { /* toast from apiFetch */ }
+  };
+
+  const handleQuoteModalSuccess = () => {
+    setQuoteModalOpen(false);
+    setQuoteCustomerId(null);
+    refetch();
   };
 
   const handleMarkLost = async () => {
@@ -137,7 +159,8 @@ export default function LeadDetailPage() {
       case "NEW":
         return { label: "Contact Lead", action: () => handleAction("contact"), icon: Phone };
       case "QUALIFIED":
-        return { label: "Convert to Customer", action: () => handleAction("convert"), icon: UserPlus };
+      case "CONVERTED":
+        return { label: "Create Quote", action: handleCreateQuote, icon: FileText };
       case "CONTACTED":
       case "FOLLOW_UP":
         return { label: "Qualify Lead", action: () => handleAction("qualify"), icon: ThumbsUp };
@@ -188,6 +211,18 @@ export default function LeadDetailPage() {
               ]}
             />
             <div className="rounded-xl border border-border bg-card p-4 space-y-2">
+              {(lead.status === "QUALIFIED" || lead.status === "CONVERTED") && (
+                <button onClick={handleCreateQuote}
+                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition">
+                  <FileText className="w-4 h-4" /> Create Quote
+                </button>
+              )}
+              {lead.status === "QUALIFIED" && (
+                <button onClick={() => handleAction("convert")}
+                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border border-border text-sm hover:bg-muted transition">
+                  <UserPlus className="w-4 h-4" /> Convert to Customer
+                </button>
+              )}
               {(lead.status === "CONTACTED" || lead.status === "QUALIFIED") && (
                 <button onClick={() => { setFollowUpNotes(""); setFollowUpDate(""); setShowFollowUp(true); }}
                   className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border border-border text-sm hover:bg-muted transition">
@@ -211,6 +246,13 @@ export default function LeadDetailPage() {
         onClose={() => { setModalOpen(false); setEditingLead(null); }}
         initialData={editingLead}
         onSuccess={handleUpdateSuccess}
+      />
+
+      <QuoteFormModal
+        open={quoteModalOpen}
+        onClose={() => { setQuoteModalOpen(false); setQuoteCustomerId(null); }}
+        initialCustomerId={quoteCustomerId}
+        onSuccess={handleQuoteModalSuccess}
       />
 
       {/* Follow Up Modal */}
