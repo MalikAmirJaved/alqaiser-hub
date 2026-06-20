@@ -354,8 +354,11 @@ export default function QuoteFormModal({
                                   max={line.max_quantity || 999999}
                                   value={line.quantity}
                                   onChange={(e) => {
-                                    const val = parseInt(e.target.value) || 1;
-                                    updateLine(idx, "quantity", val > 0 ? val : 1);
+                                    let val = parseInt(e.target.value) || 1;
+                                    if (val < 1) val = 1;
+                                    const max = line.max_quantity;
+                                    if (max !== undefined && val > max) val = max;
+                                    updateLine(idx, "quantity", val);
                                   }}
                                   className={`w-full text-right bg-transparent focus:outline-none ${
                                     line.max_quantity && line.quantity > line.max_quantity

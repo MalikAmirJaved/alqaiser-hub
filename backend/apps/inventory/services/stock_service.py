@@ -192,6 +192,130 @@ def release_stock_for_reference(reference_id, company_id, user,
 
 
 @transaction.atomic
+def direct_deduct_stock(lines, company_id, branch_id, reference_id, user, warehouse=None):
+    """Directly deduct quantity_on_hand for invoice lines (no reservation flow).
+
+    Distributes the deduction across all warehouses that have stock for each
+    variant, depleting them in order of ``warehouse__name``.
+
+    ``lines`` is an iterable of objects with ``.variant`` and ``.quantity``.
+    Creates one SALE InventoryTransaction record per warehouse per line.
+    """
+    from apps.inventory.models import InventoryTransaction, StockItem
+    import uuid
+
+    for line in lines.select_related('variant').all():
+        if not line.variant:
+            continue
+        remaining = int(line.quantity)
+        variant = line.variant
+
+        stock_items = StockItem.objects.filter(
+            variant=variant,
+            company_id=company_id,
+            quantity_on_hand__gt=0,
+        ).select_related('warehouse').order_by('warehouse__warehouse_name').select_for_update()
+
+        total_available = sum(s.quantity_on_hand for s in stock_items)
+
+        if total_available < remaining:
+            sku = getattr(variant, 'sku', 'unknown')
+            name = getattr(variant, 'product_name', sku)
+            raise ValueError(
+                f'Insufficient stock for "{name}" ({sku}). '
+                f'Only {total_available} available across all warehouses, '
+                f'but {remaining} required. '
+                f'Please reduce the quantity or receive more stock first.'
+            )
+
+        for stock in stock_items:
+            if remaining <= 0:
+                break
+
+            deduct = min(stock.quantity_on_hand, remaining)
+            before = stock.quantity_on_hand
+            after = before - deduct
+
+            stock.quantity_on_hand = after
+            stock.version = F('version') + 1
+            stock.save(update_fields=['quantity_on_hand', 'version'])
+
+            InventoryTransaction.objects.create(
+                transaction_id=uuid.uuid4(),
+                variant=variant,
+                warehouse=stock.warehouse,
+                company_id=company_id,
+                branch_id=branch_id or company_id,
+                quantity_change=-deduct,
+                quantity_before=before,
+                quantity_after=after,
+                unit_cost=variant.buying_price or 0,
+                transaction_type='SALE',
+                source_document_type='CUSTOMER_INVOICE',
+                source_document_id=reference_id,
+                source_line_id=line._id,
+                reason_text='Invoice created – direct stock deduction',
+                created_by=user,
+                updated_by=user,
+            )
+
+            remaining -= deduct
+
+
+@transaction.atomic
+def direct_release_stock(reference_id, company_id, user, warehouse=None):
+    """Reverse a direct stock deduction for a reference (e.g. unpaid invoice deleted).
+
+    Adds stock back to the exact warehouses that were deducted and creates
+    ADJUSTMENT transactions.
+    """
+    from apps.inventory.models import InventoryTransaction, StockItem
+    import uuid
+
+    transactions = InventoryTransaction.objects.filter(
+        source_document_id=reference_id,
+        source_document_type='CUSTOMER_INVOICE',
+        company_id=company_id,
+    ).select_related('variant')
+
+    for txn in transactions:
+        stock, _ = StockItem.objects.select_for_update().get_or_create(
+            variant=txn.variant,
+            warehouse=txn.warehouse,
+            company_id=company_id,
+            defaults={
+                'quantity_on_hand': 0,
+                'quantity_reserved': 0,
+                'branch_id': txn.branch_id or company_id,
+            },
+        )
+        before = stock.quantity_on_hand
+        after = before + abs(txn.quantity_change)
+
+        stock.quantity_on_hand = after
+        stock.version = F('version') + 1
+        stock.save(update_fields=['quantity_on_hand', 'version'])
+
+        InventoryTransaction.objects.create(
+            transaction_id=uuid.uuid4(),
+            variant=txn.variant,
+            warehouse=txn.warehouse,
+            company_id=company_id,
+            branch_id=txn.branch_id or company_id,
+            quantity_change=abs(txn.quantity_change),
+            quantity_before=before,
+            quantity_after=after,
+            unit_cost=txn.unit_cost,
+            transaction_type='ADJUSTMENT',
+            source_document_type='CUSTOMER_INVOICE_REVERSAL',
+            source_document_id=reference_id,
+            reason_text='Invoice deleted/reversed – stock added back',
+            created_by=user,
+            updated_by=user,
+        )
+
+
+@transaction.atomic
 def deduct_reserved_stock(reference_id, company_id, user, warehouse=None):
     """Fulfill ACTIVE reservations — deduct from both on_hand and reserved."""
     from apps.inventory.models import StockReservation, InventoryTransaction

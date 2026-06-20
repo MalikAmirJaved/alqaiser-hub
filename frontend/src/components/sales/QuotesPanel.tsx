@@ -9,8 +9,9 @@ import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatusBadge } from "@/components/finance/ui";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
-import { CheckCircle, XCircle } from "lucide-react";
+import { CheckCircle, XCircle, FileText } from "lucide-react";
 import QuoteFormModal from "./QuoteFormModal";
+import CustomerInvoiceFormModal from "@/components/finance/customer-invoices/CustomerInvoiceFormModal";
 
 export default function QuotesPanel() {
   const formatCurrency = useFormatCurrency();
@@ -19,6 +20,8 @@ export default function QuotesPanel() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [quoteToConvert, setQuoteToConvert] = useState<Quote | null>(null);
 
   const quoteStatusOptions = [
     { value: "DRAFT", label: "Draft" },
@@ -53,10 +56,7 @@ export default function QuotesPanel() {
 
   const handleAccept = async (quote: Quote) => {
     try {
-      const res = await acceptQuote.mutateAsync(quote.id);
-      if (res.invoice_id) {
-        router.push(`/sales/customer-invoices/${res.invoice_id}`);
-      }
+      await acceptQuote.mutateAsync(quote.id);
       refetch();
     } catch (error: any) {
       console.error("Accept failed", error);
@@ -70,6 +70,11 @@ export default function QuotesPanel() {
     } catch (error: any) {
       console.error("Reject failed", error);
     }
+  };
+
+  const handleConvertToInvoice = (quote: Quote) => {
+    setQuoteToConvert(quote);
+    setInvoiceModalOpen(true);
   };
 
   const handleCreate = () => {
@@ -88,6 +93,12 @@ export default function QuotesPanel() {
     setEditingQuote(null);
   };
 
+  const handleInvoiceSuccess = () => {
+    refetch();
+    setInvoiceModalOpen(false);
+    setQuoteToConvert(null);
+  };
+
   const computeKPIs = (data: Quote[]): Kpi[] => {
     const totalAmount = data.reduce((sum, q) => sum + Number(q.total_amount || 0), 0);
     const acceptedAmount = data.filter(q => q.status === "ACCEPTED").reduce((sum, q) => sum + Number(q.total_amount || 0), 0);
@@ -102,6 +113,23 @@ export default function QuotesPanel() {
     ];
   };
 
+  const buildInvoiceInitialData = (quote: Quote): any => ({
+    customer: quote.customer || "",
+    invoice_date: new Date().toISOString().split("T")[0],
+    due_date: quote.expiration_date || "",
+    amount: Number(quote.total_amount),
+    notes: quote.notes || "",
+    lines: (quote.lines || []).map((line) => ({
+      variant: line.variant,
+      quantity: line.quantity,
+      unit_price: line.unit_price,
+      discount_amount: line.discount_amount || 0,
+      tax_rate: line.tax_rate || 0,
+      variant_name: line.variant_name,
+      variant_sku: line.variant_sku,
+    })),
+  });
+
   const columns = [
     { key: "quote_number", label: "Quote #", mono: true, sortable: true },
     { key: "customer_name", label: "Customer", sortable: true },
@@ -113,24 +141,35 @@ export default function QuotesPanel() {
       label: "",
       align: "right" as const,
       render: (_: any, quote: Quote) => (
-        (quote.status === "DRAFT" || quote.status === "SENT") ? (
-          <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1">
+          {(quote.status === "DRAFT" || quote.status === "SENT") ? (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleAccept(quote); }}
+                className="p-1.5 rounded-md hover:bg-success/10 text-success transition"
+                title="Accept Quote"
+              >
+                <CheckCircle className="w-4 h-4" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleReject(quote); }}
+                className="p-1.5 rounded-md hover:bg-destructive/10 text-destructive transition"
+                title="Reject Quote"
+              >
+                <XCircle className="w-4 h-4" />
+              </button>
+            </>
+          ) : quote.status === "ACCEPTED" ? (
             <button
-              onClick={(e) => { e.stopPropagation(); handleAccept(quote); }}
-              className="p-1.5 rounded-md hover:bg-success/10 text-success transition"
-              title="Approve & Invoice"
+              onClick={(e) => { e.stopPropagation(); handleConvertToInvoice(quote); }}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 text-xs font-medium transition"
+              title="Convert to Invoice"
             >
-              <CheckCircle className="w-4 h-4" />
+              <FileText className="w-3.5 h-3.5" />
+              Invoice
             </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleReject(quote); }}
-              className="p-1.5 rounded-md hover:bg-destructive/10 text-destructive transition"
-              title="Reject Quote"
-            >
-              <XCircle className="w-4 h-4" />
-            </button>
-          </div>
-        ) : null
+          ) : null}
+        </div>
       ),
     },
   ];
@@ -168,6 +207,16 @@ export default function QuotesPanel() {
         onClose={() => setModalOpen(false)}
         initialData={editingQuote}
         onSuccess={handleModalSuccess}
+      />
+      <CustomerInvoiceFormModal
+        open={invoiceModalOpen}
+        onClose={() => {
+          setInvoiceModalOpen(false);
+          setQuoteToConvert(null);
+        }}
+        defaultValues={quoteToConvert ? buildInvoiceInitialData(quoteToConvert) : null}
+        onSuccess={handleInvoiceSuccess}
+        moduleCode="SALES"
       />
     </>
   );

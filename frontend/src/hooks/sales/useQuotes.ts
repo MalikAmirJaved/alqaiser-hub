@@ -115,13 +115,12 @@ export function useAcceptQuote() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      api<{ status: string; message: string; invoice_id: string }>(
+      api<{ status: string; message: string }>(
         `/api/sales/quotes/${id}/accept/`,
         { method: "POST" }
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });
-      queryClient.invalidateQueries({ queryKey: ["finance_customer_invoices"] });
     },
   });
 }

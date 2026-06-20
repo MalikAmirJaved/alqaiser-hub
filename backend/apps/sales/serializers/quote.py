@@ -14,6 +14,7 @@ class QuoteLineSerializer(serializers.ModelSerializer):
     variant_name = serializers.CharField(source='variant.product.product_name', read_only=True)
     subtotal = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     line_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    quantity = serializers.IntegerField(min_value=1)
 
     class Meta:
         model = QuoteLine

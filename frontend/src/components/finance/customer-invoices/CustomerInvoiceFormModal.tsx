@@ -42,11 +42,12 @@ interface Props {
   open: boolean;
   onClose: () => void;
   initialData?: CustomerInvoice | null;
+  defaultValues?: Partial<CustomerInvoiceFormData> | null;
   onSuccess?: () => void;
   moduleCode?: "FINANCE" | "SALES";
 }
 
-export default function CustomerInvoiceFormModal({ open, onClose, initialData, onSuccess, moduleCode = "FINANCE" }: Props) {
+export default function CustomerInvoiceFormModal({ open, onClose, initialData, defaultValues, onSuccess, moduleCode = "FINANCE" }: Props) {
   const formatCurrency = useFormatCurrency();
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [newCustomerInfo, setNewCustomerInfo] = useState<any>(null);
@@ -118,6 +119,15 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
         }))
       );
       setNewCustomerInfo(null);
+    } else if (defaultValues) {
+      if (defaultValues.invoice_number !== undefined) setValue("invoice_number", defaultValues.invoice_number);
+      if (defaultValues.customer !== undefined) setValue("customer", defaultValues.customer);
+      if (defaultValues.invoice_date !== undefined) setValue("invoice_date", defaultValues.invoice_date);
+      if (defaultValues.due_date !== undefined) setValue("due_date", defaultValues.due_date);
+      if (defaultValues.amount !== undefined) setValue("amount", defaultValues.amount);
+      if (defaultValues.notes !== undefined) setValue("notes", defaultValues.notes);
+      if (defaultValues.lines !== undefined) setValue("lines", defaultValues.lines as any);
+      setNewCustomerInfo(null);
     } else {
       reset({
         invoice_number: "",
@@ -131,7 +141,7 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
       setNewCustomerInfo(null);
       generateCode().then(code => setValue("invoice_number", code)).catch(() => {});
     }
-  }, [initialData, setValue, reset, open]);
+  }, [initialData, defaultValues, setValue, reset, open]);
 
   const handleCustomerCreated = async (customerId: string, customerName: string, customerData: any) => {
     await refetchCustomers();
@@ -203,13 +213,13 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
     }));
 
     if (moduleCode === "SALES") {
-      if (initialData) {
+      if (initialData?.id) {
         await updateSalesInvoice.mutateAsync({ id: initialData.id, data: payload });
       } else {
         await createSalesInvoice.mutateAsync(payload);
       }
     } else {
-      if (initialData) {
+      if (initialData?.id) {
         await updateInvoice.mutateAsync({ id: initialData.id, data: payload });
       } else {
         await createInvoice.mutateAsync(payload);
@@ -232,7 +242,7 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
         <div className="relative w-full max-w-5xl rounded-2xl border border-border bg-card shadow-2xl max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between border-b border-border p-4 sticky top-0 bg-card z-10">
             <h2 className="text-lg font-semibold">
-              {initialData ? "Edit Customer Invoice" : "New Customer Invoice"}
+              {initialData?.id ? "Edit Customer Invoice" : "New Customer Invoice"}
             </h2>
             <button onClick={onClose} className="p-1 rounded-md hover:bg-muted">
               <X className="w-4 h-4" />
@@ -381,8 +391,11 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
                                   max={currentLine.max_quantity || 999999}
                                   value={currentLine.quantity}
                                   onChange={(e) => {
-                                    const val = parseInt(e.target.value) || 1;
-                                    updateLine(idx, "quantity", val > 0 ? val : 1);
+                                    let val = parseInt(e.target.value) || 1;
+                                    if (val < 1) val = 1;
+                                    const max = currentLine.max_quantity;
+                                    if (max !== undefined && val > max) val = max;
+                                    updateLine(idx, "quantity", val);
                                   }}
                                   className={`w-full text-right bg-transparent focus:outline-none ${
                                     currentLine.max_quantity && currentLine.quantity > currentLine.max_quantity
