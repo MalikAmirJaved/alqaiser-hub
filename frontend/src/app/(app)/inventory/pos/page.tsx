@@ -19,6 +19,7 @@ import { SalesListPanel } from "@/components/inventory/pos/SalesListPanel";
 import { VariantDetailWithStock } from "@/hooks/useAllVariants";
 import { debounce } from "lodash";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type ActivePanel = "search" | "held" | "return" | "sales";
 
@@ -242,19 +243,25 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
             ))}
           </nav>
 
-          <div className="flex items-center gap-3 bg-muted/40 rounded-xl px-4 py-2 border border-border/50 hover:bg-muted/60 transition-colors cursor-pointer group">
-            <WarehouseIcon className="text-muted-foreground group-hover:text-primary transition-colors" />
-            <div className="flex flex-col">
-              <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider leading-none mb-1">Station</span>
-              <select
-                value={selectedWarehouse?.id ?? ""}
-                onChange={(e) => setSelectedWarehouse(warehouses.find(w => String(w.id) === e.target.value) ?? null)}
-                className="bg-transparent text-xs font-black outline-none text-foreground cursor-pointer appearance-none pr-4"
-              >
-                {warehouses.map(w => <option key={w.id} value={w.id}>{w.warehouse_name}</option>)}
-              </select>
-            </div>
-          </div>
+          <Select
+            value={selectedWarehouse?.id ? String(selectedWarehouse.id) : ""}
+            onValueChange={(val) => setSelectedWarehouse(warehouses.find(w => String(w.id) === val) ?? null)}
+          >
+            <SelectTrigger className="flex items-center gap-3 bg-muted/40 rounded-xl px-4 py-2 border border-border/50 hover:bg-muted/60 transition-colors cursor-pointer group !h-auto w-auto data-[placeholder]:text-muted-foreground focus:ring-0 focus:ring-offset-0 shadow-none">
+              <WarehouseIcon className="text-muted-foreground group-hover:text-primary transition-colors" />
+              <div className="flex flex-col items-start">
+                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider leading-none mb-1">Station</span>
+                <SelectValue placeholder="Select station" className="text-xs font-black" />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              {warehouses.map(w => (
+                <SelectItem key={w.id} value={String(w.id)}>
+                  {w.warehouse_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Dynamic Content Panel */}
