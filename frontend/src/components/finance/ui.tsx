@@ -93,6 +93,8 @@ export function StatusBadge({ status }: { status: string }) {
     NEW: "bg-info/15 text-info border-info/30",
     CONTACTED: "bg-warning/15 text-warning border-warning/30",
     QUALIFIED: "bg-primary/15 text-primary border-primary/30",
+    FOLLOW_UP: "bg-purple-100/40 text-purple-700 border-purple-300/40",
+    CONVERTED: "bg-success/15 text-success border-success/30",
     WON: "bg-success/15 text-success border-success/30",
     LOST: "bg-destructive/15 text-destructive border-destructive/30",
     ACCEPTED: "bg-success/15 text-success border-success/30",

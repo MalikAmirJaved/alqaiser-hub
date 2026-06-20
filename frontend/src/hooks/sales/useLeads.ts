@@ -1,4 +1,3 @@
-// src/hooks/sales/useLeads.ts
 "use client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
@@ -11,10 +10,17 @@ export interface Lead {
   company_name: string;
   email: string;
   phone: string;
-  status: "NEW" | "CONTACTED" | "QUALIFIED" | "ACCEPTED" | "LOST" | "WON";
+  status: "NEW" | "CONTACTED" | "QUALIFIED" | "FOLLOW_UP" | "CONVERTED" | "LOST";
   source: string;
   notes: string;
-  customer?: string;
+  address_line: string;
+  country: string;
+  state: string;
+  city: string;
+  score: number | null;
+  follow_up_date: string | null;
+  follow_up_notes: string;
+  lost_reason: string;
   created_at?: string;
   updated_at?: string;
   created_by_name?: string;
@@ -97,53 +103,71 @@ export function useDeleteLead() {
   });
 }
 
-export function useAcceptLead() {
+// ── Workflow mutations ──
+
+export function useContactLead() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      api<{ status: string; message: string }>(`/api/sales/leads/${id}/accept/`, {
-        method: "POST",
-      }),
-    onSuccess: (_, id) => {
+      api<{ status: string; message: string }>(`/api/sales/leads/${id}/contact/`, { method: "POST" }),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales_leads"] });
-      queryClient.invalidateQueries({ queryKey: ["sales_lead", id] });
     },
   });
 }
 
-export function useCreateCustomerFromLead() {
+export function useScheduleFollowUp() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, follow_up_date, follow_up_notes }: { id: string; follow_up_date?: string; follow_up_notes?: string }) =>
+      api<{ status: string; message: string }>(`/api/sales/leads/${id}/schedule_follow_up/`, {
+        method: "POST",
+        body: JSON.stringify({ follow_up_date, follow_up_notes }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales_leads"] });
+    },
+  });
+}
+
+export function useQualifyLead() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      api<{ status: string; message: string; customer_id: string }>(
-        `/api/sales/leads/${id}/create_customer/`,
-        { method: "POST" }
-      ),
-    onSuccess: (_, id) => {
+      api<{ status: string; message: string }>(`/api/sales/leads/${id}/qualify/`, { method: "POST" }),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales_leads"] });
-      queryClient.invalidateQueries({ queryKey: ["sales_lead", id] });
+    },
+  });
+}
+
+export function useConvertLeadToCustomer() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<{ status: string; message: string; customer_id: string }>(`/api/sales/leads/${id}/convert_to_customer/`, { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales_leads"] });
       queryClient.invalidateQueries({ queryKey: ["customers"] });
     },
   });
 }
 
-export function useConvertLead() {
+export function useMarkLost() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, createQuote }: { id: string; createQuote: boolean }) =>
-      api<{ status: string; message: string; quote_id?: string }>(
-        `/api/sales/leads/${id}/convert/`,
-        {
-          method: "POST",
-          body: JSON.stringify({ create_quote: createQuote }),
-        }
-      ),
+    mutationFn: ({ id, lost_reason }: { id: string; lost_reason: string }) =>
+      api<{ status: string; message: string }>(`/api/sales/leads/${id}/mark_lost/`, {
+        method: "POST",
+        body: JSON.stringify({ lost_reason }),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales_leads"] });
-      queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });
     },
   });
 }

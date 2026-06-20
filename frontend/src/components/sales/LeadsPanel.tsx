@@ -1,140 +1,128 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { MoreHorizontal, CheckCircle, FileText } from "lucide-react";
 import {
-  useLeads,
-  useDeleteLead,
-  useAcceptLead,
-  useCreateCustomerFromLead,
+  useLeads, useDeleteLead,
+  useContactLead, useScheduleFollowUp, useQualifyLead,
+  useConvertLeadToCustomer, useMarkLost,
   Lead,
 } from "@/hooks/sales/useLeads";
-import {
-  DynamicModulePage,
-  type ModulePermissions,
-  type Kpi,
-} from "@/components/reuseable/final/DynamicModulePage";
+import { DynamicModulePage, type ModulePermissions, type Kpi } from "@/components/reuseable/final/DynamicModulePage";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { StatusBadge } from "@/components/finance/ui";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
-import { Trash2 } from "lucide-react";
+import { Trash2, Phone, Calendar, ThumbsUp, UserPlus, XCircle, Loader2 } from "lucide-react";
 import LeadFormModal from "./LeadFormModal";
-import QuoteFormModal from "./QuoteFormModal";
-import { Quote } from "@/hooks/sales/useQuotes";
+import { toast } from "sonner";
 
-// Separate component to handle each lead's dropdown independently
-function LeadActionsCell({
-  lead,
-  onAccept,
-  onConvertToQuote,
-  isConverting,
+function FollowUpModal({
+  open, lead, onClose, onSuccess,
 }: {
-  lead: Lead;
-  onAccept: (lead: Lead) => void;
-  onConvertToQuote: (lead: Lead) => void;
-  isConverting: boolean;
+  open: boolean;
+  lead: Lead | null;
+  onClose: () => void;
+  onSuccess: () => void;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [position, setPosition] = useState<{ top: number; right: number } | null>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const isAccepted = lead.status === "ACCEPTED";
-  const isWon = lead.status === "WON";
+  const scheduleFollowUp = useScheduleFollowUp();
+  const [date, setDate] = useState("");
+  const [notes, setNotes] = useState("");
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) &&
-          btnRef.current && !btnRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    const handleScroll = () => setIsOpen(false);
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setIsOpen(false);
-    };
-    if (isOpen) {
-      document.addEventListener("click", handleClickOutside);
-      document.addEventListener("scroll", handleScroll, true);
-      document.addEventListener("keydown", handleKeyDown);
-    }
-    return () => {
-      document.removeEventListener("click", handleClickOutside);
-      document.removeEventListener("scroll", handleScroll, true);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isOpen]);
+  if (!open || !lead) return null;
 
-  const toggleDropdown = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    if (isOpen) {
-      setIsOpen(false);
-    } else {
-      setPosition({ top: rect.bottom + 4, right: document.documentElement.clientWidth - rect.right });
-      setIsOpen(true);
-    }
-  };
-
-  const handleAccept = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onAccept(lead);
-    setIsOpen(false);
-  };
-
-  const handleConvert = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onConvertToQuote(lead);
-    setIsOpen(false);
+  const handleSubmit = async () => {
+    try {
+      await scheduleFollowUp.mutateAsync({
+        id: lead.id,
+        follow_up_date: date || undefined,
+        follow_up_notes: notes,
+      });
+      toast.success("Follow-up scheduled");
+      onSuccess();
+      onClose();
+    } catch { /* toast from apiFetch */ }
   };
 
   return (
-    <>
-      <button
-        ref={btnRef}
-        onClick={toggleDropdown}
-        className="p-1.5 rounded-md hover:bg-muted transition"
-      >
-        <MoreHorizontal className="w-4 h-4" />
-      </button>
-      {isOpen && position && typeof document !== "undefined" && createPortal(
-        <div
-          ref={dropdownRef}
-          style={{ position: 'fixed', top: position.top, right: position.right, zIndex: 9999 }}
-          className="w-48 rounded-md border border-border bg-card shadow-xl"
-        >
-          <div className="py-1">
-            {!isAccepted && !isWon && (
-              <button
-                onClick={handleAccept}
-                className="w-full px-3 py-1.5 text-left text-sm hover:bg-muted flex items-center gap-2"
-              >
-                <CheckCircle className="w-4 h-4 text-success" />
-                Accept Lead
-              </button>
-            )}
-            {isAccepted && !isWon && (
-              <button
-                onClick={handleConvert}
-                disabled={isConverting}
-                className="w-full px-3 py-1.5 text-left text-sm hover:bg-muted flex items-center gap-2 disabled:opacity-50"
-              >
-                <FileText className="w-4 h-4 text-primary" />
-                {isConverting ? "Preparing..." : "Convert to Quote"}
-              </button>
-            )}
-            {isWon && (
-              <span className="block px-3 py-1.5 text-xs text-muted-foreground">
-                Converted to Quote
-              </span>
-            )}
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="relative w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl p-5" onClick={e => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold mb-4">Schedule Follow Up</h3>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium mb-1">Follow Up Date</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
           </div>
-        </div>,
-        document.body
-      )}
-    </>
+          <div>
+            <label className="block text-sm font-medium mb-1">Notes</label>
+            <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+              placeholder="e.g., Customer needs approval from manager" />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 mt-4">
+          <button onClick={onClose} className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted">Cancel</button>
+          <button onClick={handleSubmit} disabled={scheduleFollowUp.isPending}
+            className="inline-flex items-center gap-1.5 px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 disabled:opacity-50">
+            {scheduleFollowUp.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            Schedule
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LostReasonModal({
+  open, lead, onClose, onSuccess,
+}: {
+  open: boolean;
+  lead: Lead | null;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const markLost = useMarkLost();
+  const [reason, setReason] = useState("");
+
+  if (!open || !lead) return null;
+
+  const handleSubmit = async () => {
+    try {
+      await markLost.mutateAsync({ id: lead.id, lost_reason: reason });
+      toast.success("Lead marked as Lost");
+      onSuccess();
+      onClose();
+    } catch { /* toast from apiFetch */ }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="relative w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl p-5" onClick={e => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold mb-4">Mark Lead as Lost</h3>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium mb-1">Reason</label>
+            <select value={reason} onChange={e => setReason(e.target.value)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
+              <option value="">Select a reason...</option>
+              <option value="TOO_EXPENSIVE">Too Expensive</option>
+              <option value="COMPETITOR_SELECTED">Competitor Selected</option>
+              <option value="NO_RESPONSE">No Response</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 mt-4">
+          <button onClick={onClose} className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted">Cancel</button>
+          <button onClick={handleSubmit} disabled={markLost.isPending}
+            className="inline-flex items-center gap-1.5 px-4 h-9 rounded-md bg-destructive text-destructive-foreground text-sm hover:opacity-90 disabled:opacity-50">
+            {markLost.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            Mark Lost
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -143,18 +131,18 @@ export default function LeadsPanel() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
-  const [quoteModalOpen, setQuoteModalOpen] = useState(false);
-  const [quotePrefillCustomerId, setQuotePrefillCustomerId] = useState<string | null>(null);
-  const [convertingLeadId, setConvertingLeadId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
+
+  const [followUpLead, setFollowUpLead] = useState<Lead | null>(null);
+  const [lostLead, setLostLead] = useState<Lead | null>(null);
 
   const leadStatusOptions = [
     { value: "NEW", label: "New" },
     { value: "CONTACTED", label: "Contacted" },
     { value: "QUALIFIED", label: "Qualified" },
-    { value: "ACCEPTED", label: "Accepted" },
+    { value: "FOLLOW_UP", label: "Follow Up" },
+    { value: "CONVERTED", label: "Converted" },
     { value: "LOST", label: "Lost" },
-    { value: "WON", label: "Won" },
   ];
 
   const filterFields: FilterField[] = [
@@ -168,8 +156,9 @@ export default function LeadsPanel() {
       : undefined
   );
   const deleteLead = useDeleteLead();
-  const acceptLead = useAcceptLead();
-  const createCustomerFromLead = useCreateCustomerFromLead();
+  const contactLead = useContactLead();
+  const qualifyLead = useQualifyLead();
+  const convertLeadToCustomer = useConvertLeadToCustomer();
   const permissions = useFeaturePermissions("SALES", "lead");
 
   const modulePermissions: ModulePermissions = {
@@ -178,48 +167,6 @@ export default function LeadsPanel() {
     delete: permissions.delete,
     view: permissions.view,
     export: permissions.export,
-  };
-
-  const handleRowClick = (lead: Lead) => {
-    router.push(`/sales/leads/${lead.id}`);
-  };
-
-  const handleAccept = async (lead: Lead) => {
-    try {
-      await acceptLead.mutateAsync(lead.id);
-      refetch();
-    } catch (error: any) {
-      console.error("Accept failed", error);
-    }
-  };
-
-  const handleConvertToQuote = async (lead: Lead) => {
-    setConvertingLeadId(lead.id);
-    try {
-      let customerId = lead.customer;
-
-      if (!customerId) {
-        const result = await createCustomerFromLead.mutateAsync(lead.id);
-        customerId = result.customer_id;
-        await refetch();
-      }
-
-      setQuotePrefillCustomerId(customerId);
-      setQuoteModalOpen(true);
-    } catch (error: any) {
-      console.error("Failed to prepare customer for quote:", error);
-    } finally {
-      setConvertingLeadId(null);
-    }
-  };
-
-  const handleQuoteModalSuccess = (quote?: Quote) => {
-    setQuoteModalOpen(false);
-    setQuotePrefillCustomerId(null);
-    refetch();
-    if (quote?.id) {
-      router.push(`/sales/quotes/${quote.id}`);
-    }
   };
 
   const handleCreate = () => {
@@ -238,84 +185,99 @@ export default function LeadsPanel() {
     setEditingLead(null);
   };
 
+  const workflowActions = (lead: Lead) => {
+    const btnClass = "inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition";
+
+    switch (lead.status) {
+      case "NEW":
+        return (
+          <button onClick={(e) => { e.stopPropagation(); contactLead.mutate(lead.id, { onSuccess: () => refetch() }); }}
+            className={`${btnClass} bg-info/10 text-info hover:bg-info/20`}>
+            <Phone className="w-3.5 h-3.5" /> Contact
+          </button>
+        );
+      case "CONTACTED":
+        return (
+          <div className="flex items-center gap-1 flex-wrap">
+            <button onClick={(e) => { e.stopPropagation(); setFollowUpLead(lead); }}
+              className={`${btnClass} bg-purple-100/40 text-purple-700 hover:bg-purple-200/40`}>
+              <Calendar className="w-3.5 h-3.5" /> Follow Up
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); qualifyLead.mutate(lead.id, { onSuccess: () => refetch() }); }}
+              className={`${btnClass} bg-primary/10 text-primary hover:bg-primary/20`}>
+              <ThumbsUp className="w-3.5 h-3.5" /> Qualify
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); setLostLead(lead); }}
+              className={`${btnClass} bg-destructive/10 text-destructive hover:bg-destructive/20`}>
+              <XCircle className="w-3.5 h-3.5" /> Lost
+            </button>
+          </div>
+        );
+      case "FOLLOW_UP":
+        return (
+          <div className="flex items-center gap-1 flex-wrap">
+            <button onClick={(e) => { e.stopPropagation(); qualifyLead.mutate(lead.id, { onSuccess: () => refetch() }); }}
+              className={`${btnClass} bg-primary/10 text-primary hover:bg-primary/20`}>
+              <ThumbsUp className="w-3.5 h-3.5" /> Qualify
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); setLostLead(lead); }}
+              className={`${btnClass} bg-destructive/10 text-destructive hover:bg-destructive/20`}>
+              <XCircle className="w-3.5 h-3.5" /> Lost
+            </button>
+          </div>
+        );
+      case "QUALIFIED":
+        return (
+          <div className="flex items-center gap-1 flex-wrap">
+            <button onClick={(e) => { e.stopPropagation(); convertLeadToCustomer.mutate(lead.id, { onSuccess: () => refetch() }); }}
+              className={`${btnClass} bg-success/10 text-success hover:bg-success/20`}>
+              <UserPlus className="w-3.5 h-3.5" /> Customer
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); setLostLead(lead); }}
+              className={`${btnClass} bg-destructive/10 text-destructive hover:bg-destructive/20`}>
+              <XCircle className="w-3.5 h-3.5" /> Lost
+            </button>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
   const computeKPIs = (data: Lead[]): Kpi[] => {
-    const totalLeads = data.length;
-    const newLeads = data.filter((l) => l.status === "NEW").length;
-    const acceptedLeads = data.filter((l) => l.status === "ACCEPTED").length;
-    const wonLeads = data.filter((l) => l.status === "WON").length;
+    const total = data.length;
+    const newLeads = data.filter(l => l.status === "NEW").length;
+    const qualified = data.filter(l => l.status === "QUALIFIED").length;
+    const converted = data.filter(l => l.status === "CONVERTED").length;
 
     return [
-      {
-        label: "Total Leads",
-        value: totalLeads,
-        sub: "All time",
-        tone: "info" as const,
-        isCurrency: false,
-      },
-      {
-        label: "New Leads",
-        value: newLeads,
-        sub: "Awaiting contact",
-        tone: "warning" as const,
-        isCurrency: false,
-      },
-      {
-        label: "Accepted",
-        value: acceptedLeads,
-        sub: "Ready for quote",
-        tone: "success" as const,
-        isCurrency: false,
-      },
-      {
-        label: "Converted",
-        value: wonLeads,
-        sub: "Won deals",
-        tone: "info" as const,
-        isCurrency: false,
-      },
+      { label: "Total Leads", value: total, sub: "All time", tone: "info" as const, isCurrency: false },
+      { label: "New Leads", value: newLeads, sub: "Awaiting contact", tone: "warning" as const, isCurrency: false },
+      { label: "Qualified", value: qualified, sub: "Ready to convert", tone: "info" as const, isCurrency: false },
+      { label: "Converted", value: converted, sub: "Became customers", tone: "success" as const, isCurrency: false },
     ];
   };
 
   const columns = [
     { key: "title", label: "Lead Title", sortable: true, mono: true },
     {
-      key: "first_name",
-      label: "Contact Name",
-      render: (_: any, row: Lead) => `${row.first_name} ${row.last_name}`,
+      key: "first_name", label: "Contact",
+      render: (_: any, row: Lead) => `${row.first_name} ${row.last_name}`.trim(),
     },
     { key: "company_name", label: "Company", sortable: true },
-    {
-      key: "source",
-      label: "Source",
-      render: (val: string) => (
-        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-muted">
-          {val}
-        </span>
-      ),
+    { key: "city", label: "City", sortable: true,
+      render: (val: string) => val || "—",
+    },
+    { key: "source", label: "Source",
+      render: (val: string) => <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-muted">{val}</span>,
     },
     {
-      key: "status",
-      label: "Status",
-      sortable: true,
+      key: "status", label: "Status", sortable: true,
       render: (val: string) => <StatusBadge status={val} />,
     },
     {
-      key: "created_at",
-      label: "Created",
-      render: (val: string) => new Date(val).toLocaleDateString(),
-    },
-    {
-      key: "actions",
-      label: "",
-      align: "right" as const,
-      render: (_: any, lead: Lead) => (
-        <LeadActionsCell
-          lead={lead}
-          onAccept={handleAccept}
-          onConvertToQuote={handleConvertToQuote}
-          isConverting={convertingLeadId === lead.id}
-        />
-      ),
+      key: "actions", label: "", align: "right" as const,
+      render: (_: any, lead: Lead) => workflowActions(lead),
     },
   ];
 
@@ -324,7 +286,7 @@ export default function LeadsPanel() {
       <DynamicModulePage
         breadcrumbs={["Sales", "Leads"]}
         title="Leads Management"
-        description="Track and manage potential customer opportunities from various sources."
+        description="Track and manage potential customer opportunities."
         data={leads}
         isLoading={isLoading}
         columns={columns}
@@ -336,28 +298,24 @@ export default function LeadsPanel() {
         actions={{
           onEdit: handleEdit,
           onDelete: (lead) => deleteLead.mutate(lead.id),
-          canEdit: (lead) => lead.status !== "ACCEPTED" && lead.status !== "WON",
-          canDelete: (lead) => lead.status !== "ACCEPTED" && lead.status !== "WON",
+          canEdit: (lead) => !["CONVERTED", "LOST"].includes(lead.status),
+          canDelete: (lead) => !["CONVERTED", "LOST"].includes(lead.status),
         }}
-        onRowClick={handleRowClick}
+        onRowClick={(lead) => router.push(`/sales/leads/${lead.id}`)}
         exportEnabled={permissions.export}
         onRowSelect={setSelectedIds}
         filterBar={
-          <FilterBar
-            fields={filterFields}
-            filters={filters}
-            onChange={setFilters}
-          />
+          <FilterBar fields={filterFields} filters={filters} onChange={setFilters} />
         }
         batchActions={
           <button
             onClick={() => {
-              const deletableIds = selectedIds.filter((id) => {
-                const lead = leads.find((l) => l.id === id);
-                return lead && lead.status !== "ACCEPTED" && lead.status !== "WON";
+              const deletableIds = selectedIds.filter(id => {
+                const lead = leads.find(l => l.id === id);
+                return lead && !["CONVERTED", "LOST"].includes(lead.status);
               });
               if (deletableIds.length === 0) return;
-              deletableIds.forEach((id) => deleteLead.mutate(id));
+              deletableIds.forEach(id => deleteLead.mutate(id));
             }}
             className="inline-flex items-center gap-1.5 text-sm text-destructive hover:text-destructive/80 transition"
           >
@@ -374,14 +332,18 @@ export default function LeadsPanel() {
         onSuccess={handleModalSuccess}
       />
 
-      <QuoteFormModal
-        open={quoteModalOpen}
-        onClose={() => {
-          setQuoteModalOpen(false);
-          setQuotePrefillCustomerId(null);
-        }}
-        initialCustomerId={quotePrefillCustomerId}
-        onSuccess={handleQuoteModalSuccess}
+      <FollowUpModal
+        open={!!followUpLead}
+        lead={followUpLead}
+        onClose={() => setFollowUpLead(null)}
+        onSuccess={() => refetch()}
+      />
+
+      <LostReasonModal
+        open={!!lostLead}
+        lead={lostLead}
+        onClose={() => setLostLead(null)}
+        onSuccess={() => refetch()}
       />
     </>
   );
