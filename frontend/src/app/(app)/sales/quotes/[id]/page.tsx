@@ -43,10 +43,7 @@ export default function QuoteDetailPage() {
 
   const handleAccept = async () => {
     try {
-      const res = await acceptQuote.mutateAsync(quote.id);
-      if (res.invoice_id) {
-        router.push(`/sales/customer-invoices/${res.invoice_id}`);
-      }
+      await acceptQuote.mutateAsync(quote.id);
       refetch();
     } catch (error) {
       console.error("Accept failed", error);

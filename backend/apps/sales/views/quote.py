@@ -7,6 +7,7 @@ from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.sales.models.quote import Quote
 from apps.sales.serializers.quote import QuoteSerializer
+from apps.finance.models import CustomerInvoice
 
 
 
@@ -23,7 +24,7 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
 
     def get_queryset(self):
         qs = super().get_queryset()
-        qs = qs.select_related('customer').prefetch_related('lines__variant__product')
+        qs = qs.select_related('customer', 'converted_invoice').prefetch_related('lines__variant__product')
         return qs.order_by('-created_at')
 
     def create(self, request, *args, **kwargs):
@@ -85,3 +86,18 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
         quote.status = 'REJECTED'
         quote.save(update_fields=['status'])
         return Response({'status': 'success', 'message': 'Quote rejected'})
+
+    @action(detail=True, methods=['post'])
+    def mark_converted(self, request, _id=None):
+        """Link this quote to an invoice after successful conversion."""
+        quote = self.get_object()
+        invoice_id = request.data.get('invoice_id')
+        if not invoice_id:
+            return Response({'error': 'invoice_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            invoice = CustomerInvoice.objects.get(_id=invoice_id, company_id=quote.company_id)
+        except CustomerInvoice.DoesNotExist:
+            return Response({'error': 'Invoice not found'}, status=status.HTTP_404_NOT_FOUND)
+        quote.converted_invoice = invoice
+        quote.save(update_fields=['converted_invoice'])
+        return Response({'status': 'success', 'message': 'Quote marked as converted'})

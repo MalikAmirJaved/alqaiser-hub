@@ -32,6 +32,8 @@ export interface Quote {
   updated_at?: string;
   created_by_name?: string;
   updated_by_name?: string;
+  converted_invoice?: string | null;
+  converted_invoice_number?: string | null;
 }
 
 interface PaginatedResponse<T> {
@@ -133,6 +135,21 @@ export function useRejectQuote() {
       api<{ status: string; message: string }>(
         `/api/sales/quotes/${id}/reject/`,
         { method: "POST" }
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });
+    },
+  });
+}
+
+export function useMarkConvertedQuote() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ quoteId, invoiceId }: { quoteId: string; invoiceId: string }) =>
+      api<{ status: string; message: string }>(
+        `/api/sales/quotes/${quoteId}/mark_converted/`,
+        { method: "POST", body: JSON.stringify({ invoice_id: invoiceId }) }
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });

@@ -44,13 +44,16 @@ class QuoteSerializer(serializers.ModelSerializer):
     customer_email = serializers.SerializerMethodField()
     customer_phone = serializers.SerializerMethodField()
     new_customer = CustomerSerializer(required=False, write_only=True)
+    converted_invoice = serializers.UUIDField(source='converted_invoice._id', read_only=True, allow_null=True)
+    converted_invoice_number = serializers.CharField(source='converted_invoice.invoice_number', read_only=True, allow_null=True)
 
     class Meta:
         model = Quote
         fields = [
             'id', 'quote_number', 'lead', 'customer', 'customer_name', 'customer_email', 'customer_phone', 'new_customer',
             'date', 'expiration_date', 'total_amount', 'status', 'source',
-            'notes', 'lines', 'created_at', 'updated_at'
+            'notes', 'lines', 'created_at', 'updated_at',
+            'converted_invoice', 'converted_invoice_number',
         ]
         read_only_fields = ('id', 'quote_number', 'created_at', 'updated_at', 'company_id', 'branch_id', 'total_amount')
 

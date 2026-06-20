@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuotes, useAcceptQuote, useRejectQuote, Quote } from "@/hooks/sales/useQuotes";
+import { useQuotes, useAcceptQuote, useRejectQuote, useMarkConvertedQuote, Quote } from "@/hooks/sales/useQuotes";
 import { DynamicModulePage, type ModulePermissions, type Kpi } from "@/components/reuseable/final/DynamicModulePage";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatusBadge } from "@/components/finance/ui";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
-import { CheckCircle, XCircle, FileText } from "lucide-react";
+import { CheckCircle, XCircle, FileText, ExternalLink } from "lucide-react";
 import QuoteFormModal from "./QuoteFormModal";
 import CustomerInvoiceFormModal from "@/components/finance/customer-invoices/CustomerInvoiceFormModal";
 
@@ -44,6 +44,7 @@ export default function QuotesPanel() {
   );
   const acceptQuote = useAcceptQuote();
   const rejectQuote = useRejectQuote();
+  const markConverted = useMarkConvertedQuote();
   const permissions = useFeaturePermissions("SALES", "quote");
 
   const modulePermissions: ModulePermissions = {
@@ -93,7 +94,11 @@ export default function QuotesPanel() {
     setEditingQuote(null);
   };
 
-  const handleInvoiceSuccess = () => {
+  const handleInvoiceSuccess = (result?: any) => {
+    const invoiceId = result?.data?.id || result?.id;
+    if (quoteToConvert && invoiceId) {
+      markConverted.mutate({ quoteId: quoteToConvert.id, invoiceId });
+    }
     refetch();
     setInvoiceModalOpen(false);
     setQuoteToConvert(null);
@@ -159,6 +164,15 @@ export default function QuotesPanel() {
                 <XCircle className="w-4 h-4" />
               </button>
             </>
+          ) : quote.status === "ACCEPTED" && quote.converted_invoice ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); router.push(`/sales/customer-invoices/${quote.converted_invoice}`); }}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-success/10 text-success hover:bg-success/20 text-xs font-medium transition"
+              title="View converted invoice"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              {quote.converted_invoice_number || "Invoiced"}
+            </button>
           ) : quote.status === "ACCEPTED" ? (
             <button
               onClick={(e) => { e.stopPropagation(); handleConvertToInvoice(quote); }}

@@ -43,7 +43,7 @@ interface Props {
   onClose: () => void;
   initialData?: CustomerInvoice | null;
   defaultValues?: Partial<CustomerInvoiceFormData> | null;
-  onSuccess?: () => void;
+  onSuccess?: (result?: any) => void;
   moduleCode?: "FINANCE" | "SALES";
 }
 
@@ -212,20 +212,21 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
       tax_rate: line.tax_rate || 0,
     }));
 
+    let result: any;
     if (moduleCode === "SALES") {
       if (initialData?.id) {
-        await updateSalesInvoice.mutateAsync({ id: initialData.id, data: payload });
+        result = await updateSalesInvoice.mutateAsync({ id: initialData.id, data: payload });
       } else {
-        await createSalesInvoice.mutateAsync(payload);
+        result = await createSalesInvoice.mutateAsync(payload);
       }
     } else {
       if (initialData?.id) {
-        await updateInvoice.mutateAsync({ id: initialData.id, data: payload });
+        result = await updateInvoice.mutateAsync({ id: initialData.id, data: payload });
       } else {
-        await createInvoice.mutateAsync(payload);
+        result = await createInvoice.mutateAsync(payload);
       }
     }
-    onSuccess?.();
+    onSuccess?.(result);
     onClose();
   };
 

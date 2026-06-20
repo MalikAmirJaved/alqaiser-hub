@@ -112,7 +112,7 @@ export default function AuditLogsPage() {
       label: "Entity Name",
       render: (val, _row) => (
         <span className="font-medium">
-          {val || "—"}
+          {String(val || "—")}
         </span>
       ),
     },
