@@ -20,6 +20,7 @@ export interface AuditLog {
   action_display: string;
   entity_type: string;
   entity_id: string;
+  entity_name: string | null;
   source_module: string;
   reference_id: string | null;
   ip_address: string | null;
