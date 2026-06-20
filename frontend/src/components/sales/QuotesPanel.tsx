@@ -151,7 +151,7 @@ export default function QuotesPanel() {
         onCreate={handleCreate}
         actions={{
           onEdit: handleEdit,
-          canEdit: (quote) => quote.status !== "ACCEPTED",
+          canEdit: (quote) => !["ACCEPTED", "REJECTED"].includes(quote.status)
         }}
         onRowClick={(quote) => router.push(`/sales/quotes/${quote.id}`)}
         exportEnabled={permissions.export}
