@@ -57,6 +57,9 @@ def _journal_description(payment):
     if model_name == 'employeeloan':
         employee_name = payable.employee.full_name if payable.employee else 'Employee'
         return f'Loan disbursement - {employee_name}'
+    if model_name == 'salesorder':
+        customer_name = payable.customer.name if payable.customer else 'Walk-in'
+        return f'POS Sale - {customer_name} - {payable.order_number}'
     return 'Payment'
 
 
@@ -78,28 +81,50 @@ def _create_journal_entry(payment, user):
     )
 
     if payment.payment_type == 'RECEIPT':
-        ar = Account.objects.get(
-            code='AR',
-            company_id=payment.company_id,
-            branch_id=payment.branch_id,
-            is_deleted=False,
-        )
-        JournalLine.objects.create(
-            journal_entry=entry,
-            account=cash_bank,
-            debit=payment.amount,
-            credit=Decimal('0.00'),
-            company_id=payment.company_id,
-            branch_id=payment.branch_id,
-        )
-        JournalLine.objects.create(
-            journal_entry=entry,
-            account=ar,
-            debit=Decimal('0.00'),
-            credit=payment.amount,
-            company_id=payment.company_id,
-            branch_id=payment.branch_id,
-        )
+        # For SalesOrder-linked payments, use SALES_REVENUE account
+        if model_name == 'salesorder':
+            revenue_account = _get_or_create_account(
+                'SALES_REVENUE', 'Sales Revenue', 'REVENUE', payment
+            )
+            JournalLine.objects.create(
+                journal_entry=entry,
+                account=cash_bank,
+                debit=payment.amount,
+                credit=Decimal('0.00'),
+                company_id=payment.company_id,
+                branch_id=payment.branch_id,
+            )
+            JournalLine.objects.create(
+                journal_entry=entry,
+                account=revenue_account,
+                debit=Decimal('0.00'),
+                credit=payment.amount,
+                company_id=payment.company_id,
+                branch_id=payment.branch_id,
+            )
+        else:
+            ar = Account.objects.get(
+                code='AR',
+                company_id=payment.company_id,
+                branch_id=payment.branch_id,
+                is_deleted=False,
+            )
+            JournalLine.objects.create(
+                journal_entry=entry,
+                account=cash_bank,
+                debit=payment.amount,
+                credit=Decimal('0.00'),
+                company_id=payment.company_id,
+                branch_id=payment.branch_id,
+            )
+            JournalLine.objects.create(
+                journal_entry=entry,
+                account=ar,
+                debit=Decimal('0.00'),
+                credit=payment.amount,
+                company_id=payment.company_id,
+                branch_id=payment.branch_id,
+            )
     elif model_name == 'supplierbill':
         ap = Account.objects.get(
             code='AP',

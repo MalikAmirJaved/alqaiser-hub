@@ -37,7 +37,8 @@ class SalesInvoiceViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequ
 
     def get_queryset(self):
         qs = super().get_queryset()
-        qs = qs.filter(source__in=['SALES_AGENT', 'SALES_POS', 'SALES_QUOTE'])
+        # Only show sales agent and quote invoices — NOT POS invoices
+        qs = qs.filter(source__in=['SALES_AGENT', 'SALES_QUOTE'])
         qs = qs.select_related('customer').prefetch_related('lines__variant__product')
         return qs.order_by('-created_at')
 

@@ -12,6 +12,11 @@ import {
   cartToLineItems, CartLine
 } from "@/hooks/useSalesOrder";
 import { useAllVariantsSimple } from "@/hooks/useAllVariants";
+import { apiFetch } from "@/lib/api";
+import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
+import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { PrintPreviewModal, type QuoteInvoiceData, type DocCompany } from "@/components/common/QuoteInvoiceDocument";
 import { ProductSearchPanel } from "@/components/inventory/pos/ProductSearchPanel";
 import { CartPanel } from "@/components/inventory/pos/CartPanel";
 import { ReturnPanel } from "@/components/inventory/pos/ReturnPanel";
@@ -25,6 +30,7 @@ type ActivePanel = "search" | "held" | "return" | "sales";
 
 export default function SalesPage() {
   const permissions = useFeaturePermissions("INVENTORY", "sales_order");
+  const formatCurrency = useFormatCurrency();
   const queryClient = useQueryClient();
   const { data: warehouses = [] } = useWarehouses({ is_active: true });
   const { data: draftOrders = [], refetch: refetchDrafts } = useDraftSalesOrders();
@@ -32,6 +38,8 @@ export default function SalesPage() {
   const { mutateAsync: completeOrder, isPending: isCompleting } = useCompleteSalesOrder();
   const { mutateAsync: cancelOrder, isPending: isCancelling } = useCancelSalesOrder();
   const { mutateAsync: updateSalesOrder } = useUpdateSalesOrder();
+  const { data: companySettings } = useCompanySettingsQuery();
+  const { terms: termsData } = useTermsAndConditions();
 
   const [cart, setCart] = useState<CartLine[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
@@ -39,6 +47,7 @@ export default function SalesPage() {
   const [activePanel, setActivePanel] = useState<ActivePanel>("search");
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const [orderNotes, setOrderNotes] = useState("");
+  const [invoiceModalProps, setInvoiceModalProps] = useState<{ open: boolean; data: QuoteInvoiceData | null }>({ open: false, data: null });
 
   // Debounced draft updater
   const updateDraftDebounced = useRef(
@@ -129,7 +138,7 @@ const clearCart = useCallback(() => {
     setActivePanel("search");
   }, []);
 
-const handleCompleteSale = useCallback(async (notes: string, payments: any[], overrideCart?: CartLine[]) => {
+const handleCompleteSale = useCallback(async (notes: string, payments: any[], overrideCart?: CartLine[], createInvoice?: boolean) => {
   const finalCart = overrideCart || cart;
   if (finalCart.length === 0) return;
   
@@ -138,17 +147,19 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
   
   const notesWithPayments = notes + (payments.length ? ` | Payments: ${payments.map(p => `${p.method}:${p.amount}`).join(", ")}` : "");
   try {
+    let result: any;
     if (activeDraftId) {
       const updatedLineItems = cartToLineItems(finalCart);
-      await completeOrder({ orderId: activeDraftId, line_items: updatedLineItems });
+      result = await completeOrder({ orderId: activeDraftId, line_items: updatedLineItems, create_invoice: createInvoice });
     } else {
-      await createSalesOrder({
+      result = await createSalesOrder({
         customer: customerId,
         warehouse: warehouseId,
         order_date: new Date().toISOString().split("T")[0],
         notes: notesWithPayments,
         line_items: cartToLineItems(finalCart),
         status: "COMPLETE",
+        create_invoice: createInvoice,
       });
     }
     clearCart();
@@ -156,10 +167,63 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
     await queryClient.refetchQueries({ queryKey: ["inventory_variant"] });
     await queryClient.refetchQueries({ queryKey: ["batchStock"] });
     queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
+    
+    // If invoice was created, show the print modal
+    const invoiceId = result?.data?.invoice_id || result?.invoice_id;
+    if (createInvoice && invoiceId) {
+      // Fetch the invoice data to build the document props
+      try {
+        const invoiceData = await queryClient.fetchQuery<any>({
+          queryKey: ["finance_customer_invoices", invoiceId],
+          queryFn: () => apiFetch(`/api/finance/customer-invoices/${invoiceId}/`),
+          staleTime: 0,
+        });
+        
+        const company = companySettings;
+        const docCompany: DocCompany = {
+          companyName: company?.companyName || "",
+          address: company?.address || "",
+          city: company?.city || "",
+          state: company?.state || "",
+          country: company?.country || "",
+          phone: company?.phone || "",
+          email: company?.email || "",
+          taxId: company?.taxId || "",
+          logo: "",
+          logoUrl: "",
+        };
+        
+        const docData: QuoteInvoiceData = {
+          type: "INVOICE",
+          documentNumber: invoiceData?.invoice_number || "",
+          date: invoiceData?.invoice_date || new Date().toISOString().split("T")[0],
+          dueDate: invoiceData?.due_date || "",
+          customerName: selectedCustomer?.name || invoiceData?.customer_name || "",
+          customerEmail: selectedCustomer?.email || invoiceData?.customer_email || "",
+          customerPhone: selectedCustomer?.phone || invoiceData?.customer_phone || "",
+          lines: (invoiceData?.lines || []).map((l: any) => ({
+            variant_name: l.variant_name || "Product",
+            variant_sku: l.variant_sku || "",
+            quantity: l.quantity,
+            unit_price: Number(l.unit_price),
+            tax_rate: Number(l.tax_rate),
+            discount_amount: Number(l.discount_amount || 0),
+          })),
+          totalAmount: Number(invoiceData?.amount || 0),
+          status: invoiceData?.status || "DRAFT",
+          paymentStatus: invoiceData?.payment_status || "",
+          notes: invoiceData?.notes || "",
+        };
+        
+        setInvoiceModalProps({ open: true, data: docData });
+      } catch (err) {
+        console.error("Failed to load invoice for preview:", err);
+      }
+    }
   } catch (err: any) {
     console.error(err);
   }
-}, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, completeOrder, clearCart, refetchDrafts, queryClient]);
+}, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, completeOrder, clearCart, refetchDrafts, queryClient, companySettings, formatCurrency]);
 
   const handleSaveDraft = useCallback(async (notes: string, overrideCart?: CartLine[]) => {
     const finalCart = overrideCart || cart;
@@ -401,6 +465,31 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
           canUpdate={permissions.update}
         />
       </div>
+
+      {/* Invoice Print Modal */}
+      {invoiceModalProps.data && (
+        <PrintPreviewModal
+          open={invoiceModalProps.open}
+          onClose={() => setInvoiceModalProps({ open: false, data: null })}
+          documentProps={{
+            data: invoiceModalProps.data,
+            company: {
+              companyName: companySettings?.companyName || "",
+              address: companySettings?.address || "",
+              city: companySettings?.city || "",
+              state: companySettings?.state || "",
+              country: companySettings?.country || "",
+              phone: companySettings?.phone || "",
+              email: companySettings?.email || "",
+              taxId: companySettings?.taxId || "",
+              logo: "",
+              logoUrl: "",
+            },
+            termsContent: termsData?.invoice || "",
+            formatCurrency,
+          }}
+        />
+      )}
     </div>
   );
 }

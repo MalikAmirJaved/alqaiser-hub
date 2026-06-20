@@ -38,6 +38,11 @@ PAYABLE_CONFIG = {
         'amount_field': 'total_payable',
         'label': 'employee_loan',
     },
+    'salesorder': {
+        'payment_type': 'RECEIPT',
+        'amount_field': 'total_amount',
+        'label': 'pos_sale',
+    },
 }
 
 

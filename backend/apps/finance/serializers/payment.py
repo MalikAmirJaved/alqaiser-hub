@@ -55,4 +55,6 @@ class PaymentSerializer(serializers.ModelSerializer):
             return f'{payable.employee.full_name} {payable.year}-{payable.month:02d}'
         if model_name == 'employeeloan' and payable.employee:
             return f'{payable.employee.full_name} - {payable.get_loan_type_display()}'
+        if model_name == 'salesorder':
+            return getattr(payable, 'order_number', None) or str(payable._id)
         return str(payable._id)

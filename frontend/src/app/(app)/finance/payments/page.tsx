@@ -24,6 +24,7 @@ const sourceLabels: Record<string, string> = {
   expense: "Expense",
   payroll: "Payroll",
   employee_loan: "Loan",
+  pos_sale: "POS Sale",
 };
 
 const sourceColors: Record<string, string> = {
@@ -32,6 +33,7 @@ const sourceColors: Record<string, string> = {
   expense: "bg-warning/15 text-warning border-warning/30",
   payroll: "bg-success/15 text-success border-success/30",
   employee_loan: "bg-destructive/15 text-destructive border-destructive/30",
+  pos_sale: "bg-violet-500/15 text-violet-600 border-violet-500/30",
 };
 
 export default function PaymentsPage() {

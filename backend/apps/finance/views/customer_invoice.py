@@ -38,6 +38,7 @@ class CustomerInvoiceViewSet(
     filter_fields = {
         'status': 'status',
         'customer': 'customer___id',
+        'source': 'source',
         'search': ['invoice_number', 'customer__name'],
     }
 

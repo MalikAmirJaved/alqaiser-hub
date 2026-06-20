@@ -17,7 +17,7 @@ interface CartPanelProps {
   onSelectWarehouse: (warehouse: any) => void;
   warehouses: any[];
   onSaveDraft: (notes: string, overrideCart?: CartLine[]) => Promise<void>;
-  onCompleteSale: (notes: string, payments: any[], overrideCart?: CartLine[]) => Promise<void>;
+  onCompleteSale: (notes: string, payments: any[], overrideCart?: CartLine[], createInvoice?: boolean) => Promise<void>;
   onCartChange?: (newCart: CartLine[]) => void;
   isSubmitting?: boolean;
   activeDraftId?: string | null;
@@ -59,6 +59,7 @@ export function CartPanel({
   const [globalDisc, setGlobalDisc] = useState(0);
   const [expandedLine, setExpandedLine] = useState<number | null>(null);
   const [showPayments, setShowPayments] = useState(false);
+  const [exportInvoice, setExportInvoice] = useState(false);
 
   const { data: customers = [] } = useCustomers(customerSearch || undefined);
   const createCustomer = useCreateCustomer();
@@ -197,8 +198,8 @@ export function CartPanel({
 
   const handleComplete = useCallback(() => {
     const effectiveCartForSave = getEffectiveCartForSubmission();
-    onCompleteSale(orderNotes, payments, effectiveCartForSave);
-  }, [getEffectiveCartForSubmission, orderNotes, payments, onCompleteSale]);
+    onCompleteSale(orderNotes, payments, effectiveCartForSave, exportInvoice);
+  }, [getEffectiveCartForSubmission, orderNotes, payments, onCompleteSale, exportInvoice]);
 
   const handleSave = useCallback(() => {
     const effectiveCartForSave = getEffectiveCartForSubmission();
@@ -580,23 +581,38 @@ export function CartPanel({
               </button>
             )}
             {canCreate && (
-            <button
-              onClick={handleComplete}
-              disabled={isSubmitting}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-success text-success-foreground text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-all shadow-sm"
-            >
-              {isSubmitting ? (
-                <>
-                  <SpinnerIcon />
-                  Processing…
-                </>
-              ) : (
-                <>
-                  <CheckIcon size={15} />
-                  Complete Sale · {fmt(total)}
-                </>
-              )}
-            </button>
+              <div className="flex-1 flex flex-col gap-1.5">
+                {selectedCustomer && (
+                  <label className="flex items-center gap-2 px-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={exportInvoice}
+                      onChange={(e) => setExportInvoice(e.target.checked)}
+                      className="rounded border-border h-4 w-4 text-primary focus:ring-primary/30"
+                    />
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Export Invoice
+                    </span>
+                  </label>
+                )}
+                <button
+                  onClick={handleComplete}
+                  disabled={isSubmitting}
+                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-success text-success-foreground text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-all shadow-sm"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <SpinnerIcon />
+                      Processing…
+                    </>
+                  ) : (
+                    <>
+                      <CheckIcon size={15} />
+                      Complete Sale · {fmt(total)}
+                    </>
+                  )}
+                </button>
+              </div>
             )}
           </div>
         </div>

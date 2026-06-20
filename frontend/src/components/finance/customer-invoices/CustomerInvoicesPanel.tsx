@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
 import { useCustomerInvoices, usePayCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
+import { useSalesInvoices } from "@/hooks/sales/useSalesInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useCustomers } from "@/hooks/useCustomers";
 import CustomerInvoiceFormModal from "@/components/finance/customer-invoices/CustomerInvoiceFormModal";
@@ -37,15 +38,23 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
     ]},
   ];
 
-  const { data: invoices, isLoading } = useCustomerInvoices(
-    Object.keys(filters).length > 0
-      ? {
-          search: filters.search || undefined,
-          status: filters.status || undefined,
-          customer: filters.customer || undefined,
-        }
-      : undefined
-  );
+  // Use the correct API based on module code
+  // Both hooks are always called (React rules of hooks) but only the relevant one returns data
+  const isSales = moduleCode === "SALES";
+  const filterParams = Object.keys(filters).length > 0
+    ? {
+        search: filters.search || undefined,
+        status: filters.status || undefined,
+        customer: filters.customer || undefined,
+      }
+    : undefined;
+  
+  const { data: financeInvoices, isLoading: financeLoading } = useCustomerInvoices(filterParams);
+  const { data: salesInvoices, isLoading: salesLoading } = useSalesInvoices(filterParams);
+  
+  const invoices = isSales ? salesInvoices : financeInvoices;
+  const isLoading = isSales ? salesLoading : financeLoading;
+  
   const payInvoice = usePayCustomerInvoice();
 
   const resourceName = moduleCode === "SALES" ? "sales_customers_invoice" : "customer_invoice";
