@@ -130,6 +130,7 @@ export function useCreateCustomerInvoice() {
     mutationFn: createCustomerInvoice,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
     },
   });
 }
@@ -142,6 +143,7 @@ export function useUpdateCustomerInvoice() {
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY, id] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
     },
   });
 }
@@ -152,6 +154,7 @@ export function useDeleteCustomerInvoice() {
     mutationFn: deleteCustomerInvoice,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
     },
   });
 }

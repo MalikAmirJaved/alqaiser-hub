@@ -18,6 +18,7 @@ export function useCreateSalesInvoice() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["finance_customer_invoices"] });
       queryClient.invalidateQueries({ queryKey: ["sales_dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
     },
   });
 }
@@ -37,6 +38,7 @@ export function useUpdateSalesInvoice() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["finance_customer_invoices"] });
       queryClient.invalidateQueries({ queryKey: ["sales_dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
     },
   });
 }
