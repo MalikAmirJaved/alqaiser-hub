@@ -179,6 +179,58 @@ def create_payment_for(
     return payment
 
 
+def generate_expense_number(company_id):
+    """Generate a unique expense number using Redis atomic counter."""
+    from django.core.cache import cache
+    counter = cache.incr('code_counter:expense')
+    return f'EXP-{counter:04d}'
+
+
+def create_expense_for_payroll(
+    *,
+    company_id,
+    branch_id,
+    category,
+    amount,
+    description,
+    user,
+    notes='',
+    expense_date=None,
+):
+    """Auto-create an expense record with a confirmed payment for salary/loan payments."""
+    from datetime import date as _date
+    from apps.finance.models import Expense
+
+    expense = Expense.objects.create(
+        expense_number=generate_expense_number(company_id),
+        category=category,
+        expense_date=expense_date or _date.today(),
+        amount=amount,
+        description=description,
+        notes=notes,
+        company_id=company_id,
+        branch_id=branch_id,
+        created_by=user,
+        updated_by=user,
+    )
+
+    # Create a confirmed payment so the expense shows as PAID
+    payment = create_payment_for(
+        expense,
+        amount=amount,
+        payment_date=expense_date or _date.today(),
+        user=user,
+        payment_method='BANK_TRANSFER',
+        reference_number=expense.expense_number,
+        notes=description,
+        auto_confirm=False,
+    )
+    payment.status = 'CONFIRMED'
+    payment.save(update_fields=['status', 'updated_at'])
+
+    return expense
+
+
 class PayableModelMixin:
     """Mixin for models whose payments live in the central Payment table."""
 

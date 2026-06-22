@@ -25,7 +25,7 @@ from apps.hr.models import (
     PayrollLoanDeduction,
     EmployeeAssetAssignment, Asset
 )
-from apps.finance.services.payable import create_payment_for
+from apps.finance.services.payable import create_payment_for, create_expense_for_payroll
 from apps.compsetting.models import CompanySettings, WorkingDay, PublicHoliday
 
 logger = logging.getLogger(__name__)
@@ -361,6 +361,18 @@ class ExitRecordView(BaseExitView):
             payment.save(update_fields=['status', 'updated_at'])
             result['payment_id'] = str(payment._id)
             result['transaction_number'] = transaction_number
+
+            # Auto-create expense record for final settlement
+            create_expense_for_payroll(
+                company_id=company_id,
+                branch_id=branch_id,
+                category='SALARIES',
+                amount=Decimal(str(settlement_amount)),
+                description=f'Final settlement for {employee.full_name} - {exit_record.get_reason_display()}',
+                user=user,
+                notes=f'Transaction: {transaction_number}',
+                expense_date=date.today(),
+            )
 
             result['settlement_note'] = (
                 f'Settlement: {settlement_amount:.2f} | '

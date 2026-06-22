@@ -23,6 +23,7 @@ from apps.finance.services.payable import (
     annotate_total_paid,
     get_latest_confirmed_payment,
     create_payment_for,
+    create_expense_for_payroll,
 )
 
 logger = logging.getLogger(__name__)
@@ -679,6 +680,18 @@ class PayrollView(PermissionRequiredMixin, APIView):
         # Mark as confirmed without creating journal entries
         payment.status = 'CONFIRMED'
         payment.save(update_fields=['status', 'updated_at'])
+
+        # Auto-create expense record for salary payment
+        create_expense_for_payroll(
+            company_id=company_id,
+            branch_id=branch_id,
+            category='SALARIES',
+            amount=Decimal(str(net_salary)),
+            description=f'Salary payment for {employee.full_name} - {month}/{year}',
+            user=request.user,
+            notes=f'Transaction: {transaction_number}',
+            expense_date=date.today(),
+        )
         
         # ---------- Carryover advance: if net was negative, create advance for user-picked month ----------
         carryover_loan = None
@@ -1710,7 +1723,19 @@ class LoanPayView(PermissionRequiredMixin, APIView):
         )
         payment.status = 'CONFIRMED'
         payment.save(update_fields=['status', 'updated_at'])
-        
+
+        # Auto-create expense record for loan payment
+        create_expense_for_payroll(
+            company_id=company_id,
+            branch_id=branch_id,
+            category='STAFF_LOAN',
+            amount=Decimal(str(loan.total_payable)),
+            description=f'Loan payment - {loan.get_loan_type_display()} for {loan.employee.full_name}',
+            user=request.user,
+            notes=f'Transaction: {loan.transaction_number}',
+            expense_date=date.today(),
+        )
+
         return Response({
             "message": "Loan paid successfully",
             "loan": {
@@ -2255,6 +2280,18 @@ class PayrollAdvanceView(PermissionRequiredMixin, APIView):
         )
         payment.status = 'CONFIRMED'
         payment.save(update_fields=['status', 'updated_at'])
+
+        # Auto-create expense record for advance salary
+        create_expense_for_payroll(
+            company_id=company_id,
+            branch_id=branch_id,
+            category='SALARIES',
+            amount=Decimal(str(net_amount)),
+            description=f'Advance salary for {employee.full_name} - {month}/{year}',
+            user=request.user,
+            notes=f'Transaction: {transaction_number}',
+            expense_date=date.today(),
+        )
 
         # Notify frontend to refresh both payroll and loans data
         broadcast_data_update(company_id, branch_id, 'payroll', 'create', advance_payroll._id)
