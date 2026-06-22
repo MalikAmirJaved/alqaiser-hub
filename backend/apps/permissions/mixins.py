@@ -247,6 +247,7 @@ class PermissionRequiredMixin:
         any_of = (
             self.action_permission_any_of.get(viewset_action)
             or self.action_permission_any_of.get(normalized_action)
+            or self.action_permission_any_of.get("")
         )
 
         if any_of:

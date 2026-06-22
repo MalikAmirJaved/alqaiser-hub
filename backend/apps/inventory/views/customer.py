@@ -10,6 +10,9 @@ import uuid
 class CustomerViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'INVENTORY'
     permission_resource = 'customer'
+    action_permission_any_of = {
+        "": [("SALES", "sales_customer")],
+    }
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
     lookup_field = '_id'
