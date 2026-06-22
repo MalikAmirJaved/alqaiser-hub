@@ -660,6 +660,9 @@ class ActiveEmployeesView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'employee'
     permission_classes = [IsAuthenticated]
+    action_permission_any_of = {
+        "": [("INVENTORY", "warehouse"), ("INVENTORY", "purchase_order")],
+    }
 
     def get(self, request):
         company_id = request.user.company_id

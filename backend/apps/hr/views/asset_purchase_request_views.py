@@ -15,6 +15,9 @@ class AssetPurchaseRequestView(CompanyBranchMixin, PermissionRequiredMixin, APIV
     permission_module = 'HR'
     permission_resource = 'emp_asset'
     permission_classes = [IsAuthenticated]
+    action_permission_any_of = {
+        "": [("INVENTORY", "purchase_order")],
+    }
 
     def get(self, request):
         company_id = request.user.company_id

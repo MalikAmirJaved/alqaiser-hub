@@ -21,6 +21,9 @@ class AssetView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'emp_asset'
     permission_classes = [IsAuthenticated]
+    action_permission_any_of = {
+        "": [("INVENTORY", "purchase_order")],
+    }
 
     def get(self, request):
         """Get all assets for user's company"""
