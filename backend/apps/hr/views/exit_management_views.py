@@ -1000,6 +1000,73 @@ class ExitClearDuesView(BaseExitView):
         }, status=status.HTTP_200_OK)
 
 
+class ExitClearSettlementView(BaseExitView):
+    """Clear positive settlement (company owes employee) by creating expense + payment"""
+
+    def get_permission_action(self):
+        return 'update'
+
+    @db_transaction.atomic
+    def post(self, request):
+        company_id, branch_id = self._get_company_context(request)
+
+        exit_uuid = request.data.get('exit_id')
+        if not exit_uuid:
+            return Response(
+                {'error': 'exit_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        exit_record = get_object_or_404(
+            ExitRecord,
+            _id=exit_uuid,
+            company_id=company_id,
+            is_deleted=False
+        )
+
+        if exit_record.status != 'CONFIRMED':
+            return Response(
+                {'error': 'Only CONFIRMED exit records can have settlement cleared'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if exit_record.final_settlement <= 0:
+            return Response(
+                {'error': 'No positive settlement to clear'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        amount = exit_record.final_settlement
+        employee = exit_record.employee
+
+        # Create expense with category EXIT_SETTLEMENT
+        expense = create_expense_for_payroll(
+            company_id=company_id,
+            branch_id=branch_id,
+            category='EXIT_SETTLEMENT',
+            amount=Decimal(str(amount)),
+            description=f'Exit settlement paid to {employee.full_name if employee else exit_record.employee_name}',
+            user=request.user,
+            notes=f'Exit settlement cleared for {exit_record._id}',
+            expense_date=date.today(),
+        )
+
+        # Update exit record
+        old_notes = exit_record.settlement_notes or ''
+        exit_record.final_settlement = 0
+        exit_record.settlement_notes = (
+            f'{old_notes} | Settlement cleared: {amount:.2f} paid on {date.today().isoformat()}'
+        )
+        exit_record.updated_by = request.user
+        exit_record.save(update_fields=['final_settlement', 'settlement_notes', 'updated_by'])
+
+        return Response({
+            'message': f'Settlement of {amount:.2f} cleared successfully',
+            'expense_id': str(expense._id),
+            'expense_number': expense.expense_number,
+        }, status=status.HTTP_200_OK)
+
+
 class ExitEmployeeAssetsView(BaseExitView):
     """View and return assets allocated to the employee of an exit record"""
 

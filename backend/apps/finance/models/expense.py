@@ -13,6 +13,7 @@ class Expense(PayableModelMixin, BaseModel):
         ('UTILITIES', 'Utilities'),
         ('SALARIES', 'Salaries'),
         ('STAFF_LOAN', 'Staff Loan'),
+        ('EXIT_SETTLEMENT', 'Exit Settlement'),
         ('OFFICE_SUPPLIES', 'Office Supplies'),
         ('TRAVEL', 'Travel'),
         ('MARKETING', 'Marketing'),
