@@ -18,6 +18,7 @@ interface CartPanelProps {
   warehouses: any[];
   onSaveDraft: (notes: string, overrideCart?: CartLine[]) => Promise<void>;
   onCompleteSale: (notes: string, payments: any[], overrideCart?: CartLine[], createInvoice?: boolean) => Promise<void>;
+  onThermalPrint?: () => void;
   onCartChange?: (newCart: CartLine[]) => void;
   isSubmitting?: boolean;
   activeDraftId?: string | null;
@@ -38,6 +39,7 @@ export function CartPanel({
   warehouses,
   onSaveDraft,
   onCompleteSale,
+  onThermalPrint,
   onCartChange,
   isSubmitting,
   activeDraftId,
@@ -174,15 +176,11 @@ export function CartPanel({
         is_active: true,
       });
       
-      // Ensure we have an id (the API returns 'id' from _id, but let's be safe)
       const customerWithId = newCust?.id ? newCust : { ...newCust, id: newCust?._id };
       
       if (customerWithId && customerWithId.id) {
-        // 1. Update parent state
         onSelectCustomer(customerWithId);
-        // 2. Immediately set the search input to the customer name (closes the dropdown)
         setCustomerSearch(customerWithId.name);
-        // 3. Reset new customer form
         setShowNewCustomerForm(false);
         setNewCustomerName("");
         setNewCustomerEmail("");
@@ -217,7 +215,6 @@ export function CartPanel({
       if (customerRef.current && !customerRef.current.contains(e.target as Node)) {
         setShowCustomerDD(false);
         setShowNewCustomerForm(false);
-        // Clear search if no customer selected and search is empty
         if (!selectedCustomer && !customerSearch) {
           setCustomerSearch("");
         }
@@ -272,7 +269,6 @@ export function CartPanel({
                 setShowNewCustomerForm(false);
               }}
               onBlur={() => {
-                // Clear search if no customer selected and search is empty
                 if (!selectedCustomer && !customerSearch) {
                   setCustomerSearch("");
                 }
@@ -506,21 +502,20 @@ export function CartPanel({
                   </button>
                 ))}
               </div>
-
             </div>
           )}
 
           <div className="flex gap-2 pt-0.5">
             {canCreate && (
               <div className="items-end flex">  
-              <button
-                onClick={handleSave}
-                disabled={isSubmitting}
-                className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 disabled:opacity-50 transition-all"
-              >
-                <SaveIcon size={14} />
-                Hold
-              </button>
+                <button
+                  onClick={handleSave}
+                  disabled={isSubmitting}
+                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 disabled:opacity-50 transition-all"
+                >
+                  <SaveIcon size={14} />
+                  Hold
+                </button>
               </div>
             )}
             {canCreate && (
@@ -538,23 +533,36 @@ export function CartPanel({
                     </span>
                   </label>
                 )}
-                <button
-                  onClick={handleComplete}
-                  disabled={isSubmitting}
-                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-success text-success-foreground text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-all shadow-sm"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <SpinnerIcon />
-                      Processing…
-                    </>
-                  ) : (
-                    <>
-                      <CheckIcon size={15} />
-                      Complete Sale · {fmt(total)}
-                    </>
+                <div className="flex gap-2">
+                  {/* Thermal Receipt Button */}
+                  {onThermalPrint && (
+                    <button
+                      onClick={onThermalPrint}
+                      type="button"
+                      className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-bold hover:bg-amber-100 transition-all active:scale-[0.97] shrink-0"
+                      title="Print thermal receipt"
+                    >
+                      <ReceiptIcon size={15} />
+                    </button>
                   )}
-                </button>
+                  <button
+                    onClick={handleComplete}
+                    disabled={isSubmitting}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-success text-success-foreground text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-all shadow-sm"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <SpinnerIcon />
+                        Processing…
+                      </>
+                    ) : (
+                      <>
+                        <CheckIcon size={15} />
+                        Complete Sale · {fmt(total)}
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -638,5 +646,12 @@ function CheckIcon({ size = 14 }: { size?: number }) {
 function SpinnerIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-spin">
     <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+  </svg>;
+}
+
+function ReceiptIcon({ size = 15 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z" />
+    <path d="M8 7h8" /><path d="M8 11h8" /><path d="M8 15h5" />
   </svg>;
 }

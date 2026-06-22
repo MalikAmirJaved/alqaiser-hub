@@ -21,7 +21,8 @@ import { ProductSearchPanel } from "@/components/inventory/pos/ProductSearchPane
 import { CartPanel } from "@/components/inventory/pos/CartPanel";
 import { ReturnPanel } from "@/components/inventory/pos/ReturnPanel";
 import { SalesListPanel } from "@/components/inventory/pos/SalesListPanel";
-import { VariantDetailWithStock } from "@/hooks/useAllVariants";
+import ThermalReceiptModal, { type ThermalReceiptData, printThermalReceipt } from "@/components/inventory/pos/ThermalReceiptModal";
+import type { VariantDetailWithStock } from "@/hooks/useAllVariants";
 import { debounce } from "lodash";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -48,6 +49,8 @@ export default function SalesPage() {
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const [orderNotes, setOrderNotes] = useState("");
   const [invoiceModalProps, setInvoiceModalProps] = useState<{ open: boolean; data: QuoteInvoiceData | null }>({ open: false, data: null });
+  const [thermalReceiptData, setThermalReceiptData] = useState<ThermalReceiptData | null>(null);
+  const [thermalModalOpen, setThermalModalOpen] = useState(false);
 
   // Debounced draft updater
   const updateDraftDebounced = useRef(
@@ -109,11 +112,11 @@ export default function SalesPage() {
     if (!selectedWarehouse && warehouses.length > 0) setSelectedWarehouse(warehouses[0]);
   }, [warehouses, selectedWarehouse]);
 
-const clearCart = useCallback(() => {
-  setCart([]);
-  setActiveDraftId(null);
-  setOrderNotes("");
-}, []);
+  const clearCart = useCallback(() => {
+    setCart([]);
+    setActiveDraftId(null);
+    setOrderNotes("");
+  }, []);
 
   const loadDraftOrder = useCallback((order: any) => {
     const loadedCart: CartLine[] = (order.lines || []).map((line: any) => ({
@@ -137,6 +140,46 @@ const clearCart = useCallback(() => {
     setActiveDraftId(order.id);
     setActivePanel("search");
   }, []);
+
+  // Build thermal receipt data from cart
+  const buildThermalReceipt = useCallback((
+    finalCart: CartLine[],
+    totalAmount: number,
+    orderNumber: string,
+  ): ThermalReceiptData => {
+    const now = new Date();
+    return {
+      orderNumber,
+      date: now.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
+      time: now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+      customerName: selectedCustomer?.name,
+      lines: finalCart.map((line) => ({
+        variant_name: line.variant.product_name || line.variant.sku || "Product",
+        variant_sku: line.variant.sku,
+        quantity: line.qty,
+        unit_price: line.unitPrice,
+        total: line.qty * line.unitPrice,
+      })),
+      totalAmount,
+    };
+  }, [selectedCustomer]);
+
+  // Show thermal receipt popup
+  const showThermalReceipt = useCallback((data: ThermalReceiptData) => {
+    setThermalReceiptData(data);
+    setThermalModalOpen(true);
+  }, []);
+
+  // Thermal print for cart (pre-sale) - shows preview
+  const handleCartThermalPrint = useCallback(() => {
+    if (cart.length === 0) return;
+    const orderNumber = `TEMP-${Date.now()}`;
+    const data = buildThermalReceipt(cart, 0, orderNumber);
+    // Calculate total using cart values
+    const total = cart.reduce((sum, l) => sum + (l.qty * l.unitPrice - (l.discountFixed > 0 ? l.discountFixed : (l.qty * l.unitPrice * l.discountPct / 100))), 0);
+    data.totalAmount = total;
+    showThermalReceipt(data);
+  }, [cart, buildThermalReceipt, showThermalReceipt]);
 
 const handleCompleteSale = useCallback(async (notes: string, payments: any[], overrideCart?: CartLine[], createInvoice?: boolean) => {
   const finalCart = overrideCart || cart;
@@ -162,16 +205,23 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
         create_invoice: createInvoice,
       });
     }
+    
+    const orderNumber = result?.data?.order_number || result?.order_number || "";
+    const totalAmount = result?.data?.total_amount || finalCart.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+    
     clearCart();
     refetchDrafts();
     await queryClient.refetchQueries({ queryKey: ["inventory_variant"] });
     await queryClient.refetchQueries({ queryKey: ["batchStock"] });
     queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
     
-    // If invoice was created, show the print modal
+    // Auto-show thermal receipt popup
+    const receiptData = buildThermalReceipt(finalCart, totalAmount, orderNumber);
+    showThermalReceipt(receiptData);
+    
+    // If invoice was created, also show the A4 print modal
     const invoiceId = result?.data?.invoice_id || result?.invoice_id;
     if (createInvoice && invoiceId) {
-      // Fetch the invoice data to build the document props
       try {
         const invoiceData = await queryClient.fetchQuery<any>({
           queryKey: ["finance_customer_invoices", invoiceId],
@@ -223,7 +273,7 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
   } catch (err: any) {
     console.error(err);
   }
-}, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, completeOrder, clearCart, refetchDrafts, queryClient, companySettings, formatCurrency]);
+}, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, completeOrder, clearCart, refetchDrafts, queryClient, companySettings, formatCurrency, buildThermalReceipt, showThermalReceipt]);
 
   const handleSaveDraft = useCallback(async (notes: string, overrideCart?: CartLine[]) => {
     const finalCart = overrideCart || cart;
@@ -458,6 +508,7 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
           warehouses={warehouses}
           onSaveDraft={handleSaveDraft}
           onCompleteSale={handleCompleteSale}
+          onThermalPrint={handleCartThermalPrint}
           onCartChange={handleCartChange}
           isSubmitting={isCreatingOrder || isCompleting}
           activeDraftId={activeDraftId}
@@ -466,7 +517,7 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
         />
       </div>
 
-      {/* Invoice Print Modal */}
+      {/* Invoice Print Modal (A4) */}
       {invoiceModalProps.data && (
         <PrintPreviewModal
           open={invoiceModalProps.open}
@@ -488,6 +539,17 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
             termsContent: termsData?.invoice || "",
             formatCurrency,
           }}
+        />
+      )}
+
+      {/* Thermal Receipt Modal */}
+      {thermalReceiptData && (
+        <ThermalReceiptModal
+          open={thermalModalOpen}
+          onClose={() => setThermalModalOpen(false)}
+          data={thermalReceiptData}
+          companyName={companySettings?.companyName || "Store"}
+          formatCurrency={formatCurrency}
         />
       )}
     </div>

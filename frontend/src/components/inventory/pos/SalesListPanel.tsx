@@ -6,6 +6,7 @@ import {
   useGenerateInvoice,
   type SalesOrderResponse,
 } from "@/hooks/useSalesOrder";
+import { printThermalReceipt, type ThermalReceiptData } from "@/components/inventory/pos/ThermalReceiptModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
@@ -33,6 +34,7 @@ import {
   X,
   CheckCircle2,
   AlertCircle,
+  ReceiptText,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────
@@ -255,7 +257,7 @@ function OrderCard({
         </>
       )}
 
-      {/* ── Actions (Print / Download PDF) ── */}
+      {/* ── Actions (Print / Download PDF / Thermal Print) ── */}
       {order.status === "COMPLETE" && (
         <div className="px-5 py-3 border-t border-border/40 flex items-center gap-2 bg-muted/5">
           {hasInvoice ? (
@@ -295,6 +297,32 @@ function OrderCard({
               Generate Invoice
             </button>
           )}
+          {/* Thermal Print Button */}
+          <button
+            onClick={() => {
+              const now = new Date(order.created_at);
+              const data: ThermalReceiptData = {
+                orderNumber: order.order_number,
+                date: now.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
+                time: now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+                customerName: order.customer_name,
+                lines: (order.lines || []).map((l) => ({
+                  variant_name: l.variant_name || "Product",
+                  variant_sku: l.variant_sku,
+                  quantity: l.quantity_ordered,
+                  unit_price: Number(l.unit_price),
+                  total: l.quantity_ordered * Number(l.unit_price),
+                })),
+                totalAmount: Number(order.total_amount),
+              };
+              printThermalReceipt(data, "Store", formatCurrency);
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-50 text-amber-700 rounded-lg text-[11px] font-bold hover:bg-amber-100 transition-all active:scale-[0.97] border border-amber-200"
+            title="Print thermal receipt"
+          >
+            <ReceiptText className="h-3.5 w-3.5" />
+            Thermal
+          </button>
         </div>
       )}
     </div>
