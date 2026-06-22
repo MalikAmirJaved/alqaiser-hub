@@ -37,7 +37,7 @@ export default function LoginPage() {
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-sidebar-primary text-sidebar-primary-foreground grid place-items-center font-bold">C</div>
           <div>
-            <div className="font-semibold">Al Qaiser IT Company</div>
+            <div className="font-semibold">Nexus ERP</div>
           </div>
         </div>
         <div>
@@ -52,7 +52,7 @@ export default function LoginPage() {
             ))}
           </div>
         </div>
-        <div className="text-xs text-muted-foreground">© {new Date().getFullYear()} Al Qaiser IT Company</div>
+        <div className="text-xs text-muted-foreground">© {new Date().getFullYear()} Nexus ERP</div>
       </div>
 
       <div className="flex items-center justify-center p-6">

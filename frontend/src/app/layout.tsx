@@ -10,8 +10,8 @@ import { NotificationProvider } from "@/contexts/NotificationContext";
 const inter = Inter({ subsets: ["latin"], display: "swap", variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "Al Qaiser IT Company",
-  description: "Internal Business Operating System for Al Qaiser IT Company.",
+  title: "Nexus ERP",
+  description: "Internal Business Operating System for Nexus ERP.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
