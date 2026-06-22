@@ -252,6 +252,27 @@ export function useUpdateSalesOrder() {
   });
 }
 
+/**
+ * Generate a CustomerInvoice for an existing completed SalesOrder
+ */
+export function useGenerateInvoice() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (orderId: string) => {
+      return api<{ status: string; message: string; invoice_id?: string }>(
+        `/api/inventory/sales-orders/${orderId}/generate_invoice/`,
+        { method: "POST" }
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
+      queryClient.invalidateQueries({ queryKey: ["finance_customer_invoices"] });
+    },
+  });
+}
+
 export function useDraftSalesOrders() {
   const api = useApi();
   return useQuery({

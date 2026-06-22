@@ -566,6 +566,49 @@ class SalesOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequir
         return Response(response_data)
 
     @action(detail=True, methods=['post'])
+    def generate_invoice(self, request, _id=None):
+        """
+        Generate a CustomerInvoice for an existing completed SalesOrder
+        that doesn't already have one.
+        """
+        order = self.get_object()
+        if order.status != 'COMPLETE':
+            return Response(
+                {'error': 'Invoice can only be generated for completed orders'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check if invoice already exists
+        from apps.finance.models import CustomerInvoice
+        existing = CustomerInvoice.objects.filter(
+            sales_order=order, is_deleted=False
+        ).first()
+        if existing:
+            return Response({
+                'status': 'success',
+                'message': 'Invoice already exists',
+                'invoice_id': str(existing._id),
+            })
+
+        try:
+            invoice = sync_sales_order_to_invoice(order, request.user, create_invoice=True)
+            if not invoice:
+                return Response(
+                    {'error': 'Failed to generate invoice'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            return Response({
+                'status': 'success',
+                'message': f'Invoice {invoice.invoice_number} generated',
+                'invoice_id': str(invoice._id),
+            })
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    @action(detail=True, methods=['post'])
     def cancel(self, request, _id=None):
         order = self.get_object()
         if order.status not in ['PENDING', 'DRAFT']:

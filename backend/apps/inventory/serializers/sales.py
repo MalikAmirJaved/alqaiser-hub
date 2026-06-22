@@ -59,12 +59,23 @@ class SalesOrderSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)
     customer_name = serializers.CharField(source='customer.name', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.warehouse_name', read_only=True)
+    invoice_id = serializers.SerializerMethodField()
     lines = SalesOrderLineSerializer(many=True, read_only=True)
     line_items = serializers.ListField(
         child=serializers.DictField(), write_only=True, required=False
     )
     created_by_info = serializers.SerializerMethodField()
     updated_by_info = serializers.SerializerMethodField()
+
+    def get_invoice_id(self, obj):
+        invoice = getattr(obj, '_invoice_cache', None)
+        if invoice is None:
+            from apps.finance.models import CustomerInvoice
+            invoice = CustomerInvoice.objects.filter(
+                sales_order=obj, is_deleted=False
+            ).first()
+            obj._invoice_cache = invoice
+        return str(invoice._id) if invoice else None
 
     class Meta:
         model = SalesOrder
@@ -73,7 +84,7 @@ class SalesOrderSerializer(serializers.ModelSerializer):
             'warehouse', 'warehouse_name', 'status',
             'payment_method', 'bank_account',
             'order_date', 'total_amount', 'notes',
-            'lines', 'line_items',
+            'lines', 'line_items', 'invoice_id',
             'created_at', 'updated_at', 'created_by_info', 'updated_by_info',
         ]
         read_only_fields = ['order_number', 'created_at', 'updated_at']
