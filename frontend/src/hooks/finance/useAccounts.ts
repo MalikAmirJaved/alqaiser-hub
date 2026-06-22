@@ -10,12 +10,24 @@ export interface Account {
   code: string;
   name: string;
   account_type: "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE";
-  parent: string | null;      // UUID of parent account (for creation/update)
-  parent_uuid: string | null; // read-only, for display only
+  parent: string | null;
+  parent_uuid: string | null;
   is_active: boolean;
   description: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface AccountBalance {
+  code: string;
+  name: string;
+  account_type: string;
+  balance: string;
+}
+
+export interface AccountBalancesResponse {
+  success: boolean;
+  data: Record<string, AccountBalance>;
 }
 
 interface PaginatedResponse<T> {
@@ -25,7 +37,6 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-// Omit parent_uuid from creation because it's not sent to backend
 type CreateAccountData = Omit<Account, "id" | "created_at" | "updated_at" | "company_id" | "branch_id" | "created_by" | "updated_by" | "parent_uuid">;
 type UpdateAccountData = Partial<Omit<Account, "id" | "created_at" | "updated_at" | "parent_uuid">>;
 
@@ -34,6 +45,7 @@ type UpdateAccountData = Partial<Omit<Account, "id" | "created_at" | "updated_at
 // ============================================
 
 const ACCOUNTS_QUERY_KEY = "finance_accounts";
+const BALANCES_QUERY_KEY = "finance_account_balances";
 
 async function getAllAccounts(params?: { search?: string; account_type?: string }) {
   const searchParams = new URLSearchParams();
@@ -65,6 +77,15 @@ async function deleteAccount(id: string) {
   return apiFetch<void>(`/api/finance/accounts/${id}/`, { method: "DELETE" });
 }
 
+/** Fetch live account balances from the chart-of-accounts mapping endpoint */
+export async function fetchAccountBalances(params?: { start_date?: string; end_date?: string }) {
+  const searchParams = new URLSearchParams();
+  if (params?.start_date) searchParams.append("start_date", params.start_date);
+  if (params?.end_date) searchParams.append("end_date", params.end_date);
+  const qs = searchParams.toString();
+  return apiFetch<AccountBalancesResponse>(`/api/finance/accounts/balances/${qs ? `?${qs}` : ""}`);
+}
+
 // ============================================
 // REACT HOOKS
 // ============================================
@@ -83,6 +104,16 @@ export function useAccount(id: string | null) {
     queryKey: [ACCOUNTS_QUERY_KEY, id],
     queryFn: () => getAccountById(id!),
     enabled: !!id,
+  });
+}
+
+/** Hook to fetch live account balances mapped by account code */
+export function useAccountBalances(dateRange?: { start_date?: string; end_date?: string }) {
+  return useQuery({
+    queryKey: [BALANCES_QUERY_KEY, dateRange],
+    queryFn: () => fetchAccountBalances(dateRange),
+    select: (response) => response.data,
+    staleTime: 30_000,
   });
 }
 

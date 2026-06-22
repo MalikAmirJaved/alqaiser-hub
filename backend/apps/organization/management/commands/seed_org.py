@@ -176,6 +176,7 @@ class Command(BaseCommand):
             ("RENT", "Rent Expense", "EXPENSE"),
             ("SALARIES", "Salaries Expense", "EXPENSE"),
             ("EQUITY", "Owner's Equity", "EQUITY"),
+            ("OTHER_EXPENSES", "Other Expenses", "EXPENSE"),
         ]
 
         created_count = 0
