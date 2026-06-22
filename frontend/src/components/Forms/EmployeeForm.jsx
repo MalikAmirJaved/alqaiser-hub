@@ -33,7 +33,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
     email: "",
     personal_email: "",
     address_line: "",
-    country: "PK",
+    country: "",
     state: "",
     city: "",
     postal_code: "",

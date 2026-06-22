@@ -130,7 +130,6 @@ export default function UsersPage() {
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
   const safePage = Math.min(page, totalPages);
   const paginatedUsers = filteredUsers.slice((safePage - 1) * pageSize, safePage * pageSize);
-
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
     { name: "is_active", label: "Status", type: "boolean" },
@@ -149,20 +148,20 @@ export default function UsersPage() {
       <PageHeader
         title="Users & Roles"
         subtitle="Manage system users"
-        actions={
-          permissions.create && (
-            <button
-              onClick={() => {
-                setEditingUser(null);
-                setStoredPrefill(null);
-                setModalOpen(true);
-              }}
-              className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm"
-            >
-              <Plus className="w-4 h-4" /> Add User
-            </button>
-          )
-        }
+        // actions={
+        //   permissions.create && (
+        //     <button
+        //       onClick={() => {
+        //         setEditingUser(null);
+        //         setStoredPrefill(null);
+        //         setModalOpen(true);
+        //       }}
+        //       className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm"
+        //     >
+        //       <Plus className="w-4 h-4" /> Add User
+        //     </button>
+        //   )
+        // }
       />
 
       {/* Filters */}
@@ -247,7 +246,7 @@ export default function UsersPage() {
                    )}
 
                    {/* Go to Employee: hidden if user already linked to an employee */}
-                   {permissions.create && !user.isfrom_employee_id && (
+                   {permissions.create && !user.isfrom_employee_id && user.role !== "COMPANY_ADMIN" && (
                      <button
                        onClick={() => {
                          const params = new URLSearchParams({
