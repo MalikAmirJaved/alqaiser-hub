@@ -11,7 +11,7 @@ class CustomerViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequired
     permission_module = 'INVENTORY'
     permission_resource = 'customer'
     action_permission_any_of = {
-        "": [("SALES", "sales_customer")],
+        "": [("SALES", "sales_customer"), ("FINANCE", "customer_invoice")],
     }
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer

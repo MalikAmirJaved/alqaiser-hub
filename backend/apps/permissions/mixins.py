@@ -241,7 +241,11 @@ class PermissionRequiredMixin:
 
         action = self.get_permission_action()
 
-        # ── Cross-module "any-of" check ───────────────────────────────────
+        # ── Standard single-resource check ───────────────────────────────
+        if check_permission(user, module, resource, action):
+            return
+
+        # ── Cross-module "any-of" check (fallback) ───────────────────────
         viewset_action = getattr(self, "action", None) or ""
         normalized_action = viewset_action.replace("-", "_")
         any_of = (
@@ -262,10 +266,6 @@ class PermissionRequiredMixin:
                     "action":           action,
                 }
             )
-
-        # ── Standard single-resource check ───────────────────────────────
-        if check_permission(user, module, resource, action):
-            return
 
         raise PermissionDenied(
             detail={
