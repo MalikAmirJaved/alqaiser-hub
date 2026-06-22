@@ -1,18 +1,21 @@
 "use client";
 
 import { useState } from "react";
+import { useSalesOrders, useGenerateInvoice, type SalesOrderResponse } from "@/hooks/useSalesOrder";
 import {
-  useSalesOrders,
-  useGenerateInvoice,
-  type SalesOrderResponse,
-} from "@/hooks/useSalesOrder";
-import { printThermalReceipt, type ThermalReceiptData } from "@/components/inventory/pos/ThermalReceiptModal";
+  printThermalReceipt,
+  type ThermalReceiptData,
+} from "@/components/inventory/pos/ThermalReceiptModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
-import { PrintPreviewModal, type QuoteInvoiceData, type DocCompany } from "@/components/common/QuoteInvoiceDocument";
+import {
+  PrintPreviewModal,
+  type QuoteInvoiceData,
+  type DocCompany,
+} from "@/components/common/QuoteInvoiceDocument";
 import {
   ChevronDown,
   ChevronUp,
@@ -108,9 +111,7 @@ function OrderCard({
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h4 className="text-sm font-bold text-foreground truncate">
-                {order.order_number}
-              </h4>
+              <h4 className="text-sm font-bold text-foreground truncate">{order.order_number}</h4>
               <span
                 className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${cfg.bg} ${cfg.color}`}
               >
@@ -156,10 +157,10 @@ function OrderCard({
             {order.customer_name}
           </span>
         )}
-        {order.warehouse_name && (
+        {order.warehouse?.warehouse_name && (
           <span className="flex items-center gap-1.5 bg-muted/30 px-2 py-1 rounded-lg">
             <Store className="h-3 w-3" />
-            {order.warehouse_name}
+            {order.warehouse.warehouse_name}
           </span>
         )}
         {!order.customer_name && (
@@ -173,9 +174,7 @@ function OrderCard({
       {/* ── Notes ── */}
       {order.notes && (
         <div className="px-5 pb-2">
-          <p className="text-[10px] text-muted-foreground/60 italic truncate">
-            {order.notes}
-          </p>
+          <p className="text-[10px] text-muted-foreground/60 italic truncate">{order.notes}</p>
         </div>
       )}
 
@@ -213,10 +212,7 @@ function OrderCard({
                       line.quantity_ordered * Number(line.unit_price) -
                       Number(line.discount_amount || 0);
                     return (
-                      <tr
-                        key={line.id}
-                        className="border-b border-border/20 hover:bg-muted/20"
-                      >
+                      <tr key={line.id} className="border-b border-border/20 hover:bg-muted/20">
                         <td className="px-5 py-2">
                           <div className="font-medium text-foreground">
                             {line.variant_name || "Product"}
@@ -303,7 +299,11 @@ function OrderCard({
               const now = new Date(order.created_at);
               const data: ThermalReceiptData = {
                 orderNumber: order.order_number,
-                date: now.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
+                date: now.toLocaleDateString("en-US", {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                }),
                 time: now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
                 customerName: order.customer_name,
                 lines: (order.lines || []).map((l) => ({
@@ -370,23 +370,20 @@ export function SalesListPanel() {
   };
 
   // Filter orders
-  const filteredOrders: OrderWithInvoice[] = (orders as OrderWithInvoice[]).filter(
-    (o) => {
-      if (statusFilter !== "ALL" && o.status !== statusFilter) return false;
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        const matchNumber = o.order_number.toLowerCase().includes(q);
-        const matchCustomer = o.customer_name?.toLowerCase().includes(q);
-        const matchProduct = o.lines?.some(
-          (l) =>
-            l.variant_name?.toLowerCase().includes(q) ||
-            l.variant_sku?.toLowerCase().includes(q)
-        );
-        if (!matchNumber && !matchCustomer && !matchProduct) return false;
-      }
-      return true;
+  const filteredOrders: OrderWithInvoice[] = (orders as OrderWithInvoice[]).filter((o) => {
+    if (statusFilter !== "ALL" && o.status !== statusFilter) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchNumber = o.order_number.toLowerCase().includes(q);
+      const matchCustomer = o.customer_name?.toLowerCase().includes(q);
+      const matchProduct = o.lines?.some(
+        (l) =>
+          l.variant_name?.toLowerCase().includes(q) || l.variant_sku?.toLowerCase().includes(q),
+      );
+      if (!matchNumber && !matchCustomer && !matchProduct) return false;
     }
-  );
+    return true;
+  });
 
   // Handle print invoice
   const handlePrintInvoice = async (order: OrderWithInvoice) => {
@@ -396,8 +393,7 @@ export function SalesListPanel() {
     try {
       const invoiceData = await queryClient.fetchQuery<any>({
         queryKey: ["finance_customer_invoices", order.invoice_id],
-        queryFn: () =>
-          apiFetch(`/api/finance/customer-invoices/${order.invoice_id}/`),
+        queryFn: () => apiFetch(`/api/finance/customer-invoices/${order.invoice_id}/`),
         staleTime: 0,
       });
 
@@ -419,10 +415,7 @@ export function SalesListPanel() {
         documentNumber: invoiceData?.invoice_number || order.order_number,
         date: invoiceData?.invoice_date || order.order_date,
         dueDate: invoiceData?.due_date || "",
-        customerName:
-          order.customer_name ||
-          invoiceData?.customer_name ||
-          "Walk-in Customer",
+        customerName: order.customer_name || invoiceData?.customer_name || "Walk-in Customer",
         customerEmail: invoiceData?.customer_email || "",
         customerPhone: invoiceData?.customer_phone || "",
         lines: (invoiceData?.lines || order.lines || []).map((l: any) => ({
@@ -472,9 +465,7 @@ export function SalesListPanel() {
       <div className="flex items-center justify-center py-24">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <span className="text-sm text-muted-foreground">
-            Loading sales orders...
-          </span>
+          <span className="text-sm text-muted-foreground">Loading sales orders...</span>
         </div>
       </div>
     );
@@ -490,9 +481,7 @@ export function SalesListPanel() {
               <ShoppingBag className="h-5 w-5 text-primary" />
               Recent Sales
             </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {orders.length} total orders
-            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">{orders.length} total orders</p>
           </div>
         </div>
 
@@ -526,9 +515,7 @@ export function SalesListPanel() {
                 {tab.count > 0 && (
                   <span
                     className={`text-[9px] px-1.5 py-0.5 rounded-full ${
-                      isActive
-                        ? "bg-primary-foreground/20"
-                        : "bg-muted-foreground/10"
+                      isActive ? "bg-primary-foreground/20" : "bg-muted-foreground/10"
                     }`}
                   >
                     {tab.count}
@@ -548,9 +535,7 @@ export function SalesListPanel() {
               <ShoppingBag className="h-8 w-8 text-muted-foreground/40" />
             </div>
             <p className="text-sm font-semibold text-foreground">
-              {searchQuery || statusFilter !== "ALL"
-                ? "No matching orders"
-                : "No sales yet"}
+              {searchQuery || statusFilter !== "ALL" ? "No matching orders" : "No sales yet"}
             </p>
             <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
               {searchQuery || statusFilter !== "ALL"
@@ -577,9 +562,7 @@ export function SalesListPanel() {
       {invoiceModalProps.data && (
         <PrintPreviewModal
           open={invoiceModalProps.open}
-          onClose={() =>
-            setInvoiceModalProps({ open: false, data: null })
-          }
+          onClose={() => setInvoiceModalProps({ open: false, data: null })}
           documentProps={{
             data: invoiceModalProps.data,
             company: {
