@@ -507,70 +507,12 @@ export function CartPanel({
                 ))}
               </div>
 
-              <div className="flex gap-1.5">
-                <input
-                  type="number"
-                  value={newPaymentAmt}
-                  onChange={(e) => setNewPaymentAmt(e.target.value)}
-                  placeholder="Amount"
-                  onKeyDown={(e) => e.key === "Enter" && addPayment()}
-                  className="flex-1 bg-muted rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 ring-primary"
-                />
-                <button
-                  onClick={() => setNewPaymentAmt(String(Math.max(0, remaining)))}
-                  className="px-2.5 py-2 bg-muted rounded-lg text-xs font-medium hover:bg-accent transition-colors"
-                  title="Fill exact amount"
-                >
-                  Exact
-                </button>
-                <button
-                  onClick={addPayment}
-                  className="px-3 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
-                >
-                  Add
-                </button>
-              </div>
-
-              {payments.length > 0 && (
-                <div className="bg-muted/40 rounded-lg px-3 py-2 space-y-1.5">
-                  {payments.map((p, i) => (
-                    <div key={i} className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs bg-muted rounded px-1.5 py-0.5 text-muted-foreground font-mono">{p.method}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{fmt(p.amount)}</span>
-                        <button onClick={() => removePayment(i)} className="text-muted-foreground hover:text-destructive transition-colors">
-                          <XIcon size={12} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  <div className="flex justify-between text-sm font-semibold border-t border-border pt-1.5">
-                    {change > 0 ? (
-                      <>
-                        <span className="text-success">Change</span>
-                        <span className="text-success">{fmt(change)}</span>
-                      </>
-                    ) : remaining > 0 ? (
-                      <>
-                        <span className="text-muted-foreground">Remaining</span>
-                        <span className="text-warning">{fmt(remaining)}</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="text-success">Paid in full</span>
-                        <span className="text-success">✓</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
           <div className="flex gap-2 pt-0.5">
             {canCreate && (
+              <div className="items-end flex">  
               <button
                 onClick={handleSave}
                 disabled={isSubmitting}
@@ -579,6 +521,7 @@ export function CartPanel({
                 <SaveIcon size={14} />
                 Hold
               </button>
+              </div>
             )}
             {canCreate && (
               <div className="flex-1 flex flex-col gap-1.5">
