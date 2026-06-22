@@ -191,7 +191,6 @@ export function useRecordExpensePayment() {
 export const expenseCategoryLabels: Record<string, string> = {
   RENT: "Rent",
   UTILITIES: "Utilities",
-  SALARIES: "Salaries",
   OFFICE_SUPPLIES: "Office Supplies",
   TRAVEL: "Travel",
   MARKETING: "Marketing",
