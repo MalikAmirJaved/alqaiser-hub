@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useFieldArray } from "react-hook-form";
 import VariantCard from "./VariantCard";
 import { useAutoCode } from "@/hooks/useAutoCode";
+import type { PendingFile } from "@/components/reuseable/FileUpload";
 
 interface VariantsStepProps {
   control: any;
@@ -18,6 +19,8 @@ interface VariantsStepProps {
   isLoading: boolean;
   productName: string;
   onBack: () => void;
+  pendingFiles: PendingFile[];
+  onPendingFilesChange: (files: PendingFile[]) => void;
 }
 
 export default function VariantsStep({
@@ -31,6 +34,8 @@ export default function VariantsStep({
   isLoading,
   productName,
   onBack,
+  pendingFiles,
+  onPendingFilesChange,
 }: VariantsStepProps) {
   const { fields, prepend, remove } = useFieldArray({ control, name: "variants" });
   const { generateCode } = useAutoCode("product_variant");
@@ -64,6 +69,17 @@ export default function VariantsStep({
       code = vals.sku + "-COPY";
     }
     prepend({ ...vals, sku: code, id: undefined });
+    // Re-index pending files: prepend shifts all existing indices by 1
+    onPendingFilesChange(
+      pendingFiles.map((pf) => {
+        const match = pf.fieldName.match(/^variants\.(\d+)/);
+        if (match) {
+          const oldIdx = parseInt(match[1], 10);
+          return { ...pf, fieldName: pf.fieldName.replace(`variants.${oldIdx}`, `variants.${oldIdx + 1}`) };
+        }
+        return pf;
+      })
+    );
   };
 
   return (
@@ -100,6 +116,8 @@ export default function VariantsStep({
             isEditing={isEditing}
             onRemove={() => fields.length > 1 && remove(i)}
             onDuplicate={() => duplicateVariant(i)}
+            pendingFiles={pendingFiles}
+            onPendingFilesChange={onPendingFilesChange}
           />
         ))}
       </div>

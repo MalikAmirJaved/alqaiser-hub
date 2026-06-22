@@ -14,6 +14,7 @@ class QuoteLineSerializer(serializers.ModelSerializer):
     variant_name = serializers.CharField(source='variant.product.product_name', read_only=True)
     subtotal = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     line_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    quantity = serializers.IntegerField(min_value=1)
 
     class Meta:
         model = QuoteLine
@@ -39,16 +40,31 @@ class QuoteSerializer(serializers.ModelSerializer):
         allow_null=True,
         required=False
     )
+    customer_name = serializers.SerializerMethodField()
+    customer_email = serializers.SerializerMethodField()
+    customer_phone = serializers.SerializerMethodField()
     new_customer = CustomerSerializer(required=False, write_only=True)
+    converted_invoice = serializers.UUIDField(source='converted_invoice._id', read_only=True, allow_null=True)
+    converted_invoice_number = serializers.CharField(source='converted_invoice.invoice_number', read_only=True, allow_null=True)
 
     class Meta:
         model = Quote
         fields = [
-            'id', 'quote_number', 'lead', 'customer', 'new_customer',
+            'id', 'quote_number', 'lead', 'customer', 'customer_name', 'customer_email', 'customer_phone', 'new_customer',
             'date', 'expiration_date', 'total_amount', 'status', 'source',
-            'notes', 'lines', 'created_at', 'updated_at'
+            'notes', 'lines', 'created_at', 'updated_at',
+            'converted_invoice', 'converted_invoice_number',
         ]
-        read_only_fields = ('id', 'quote_number', 'created_at', 'updated_at', 'company_id', 'branch_id', 'total_amount')
+        read_only_fields = ('id', 'quote_number', 'created_at', 'updated_at', 'company_id', 'branch_id', 'total_amount', 'status')
+
+    def get_customer_name(self, obj):
+        return obj.customer.name if obj.customer else None
+
+    def get_customer_email(self, obj):
+        return obj.customer.email if obj.customer else None
+
+    def get_customer_phone(self, obj):
+        return obj.customer.phone if obj.customer else None
 
     def create(self, validated_data):
         import time, random

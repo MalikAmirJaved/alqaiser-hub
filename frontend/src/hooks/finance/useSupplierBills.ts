@@ -42,8 +42,9 @@ type UpdateSupplierBillData = Partial<CreateSupplierBillData>;
 
 const SUPPLIER_BILLS_KEY = "finance_supplier_bills";
 
-async function getAllSupplierBills(params?: { status?: string; supplier?: string }) {
+async function getAllSupplierBills(params?: { search?: string; status?: string; supplier?: string }) {
   const searchParams = new URLSearchParams();
+  if (params?.search) searchParams.append("search", params.search);
   if (params?.status) searchParams.append("status", params.status);
   if (params?.supplier) searchParams.append("supplier", String(params.supplier));
   const url = `/api/finance/supplier-bills/${searchParams.toString() ? `?${searchParams}` : ""}`;
@@ -87,7 +88,7 @@ async function postSupplierBill(id: string) {
 // REACT HOOKS
 // ============================================
 
-export function useSupplierBills(filters?: { status?: string; supplier?: string }) {
+export function useSupplierBills(filters?: { search?: string; status?: string; supplier?: string }) {
   return useQuery({
     queryKey: [SUPPLIER_BILLS_KEY, filters],
     queryFn: () => getAllSupplierBills(filters),

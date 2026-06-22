@@ -6,6 +6,9 @@ import { DetailLayout, StandardSidebar, RelatedRecords, type DetailTab } from "@
 import { useCustomerInvoice, useUpdateCustomerInvoice, usePayCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
+import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
+import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
 import { StatusBadge } from "@/components/finance/ui";
 import CustomerInvoiceFormModal from "./CustomerInvoiceFormModal";
 import { FileText, Send, Printer, Download, Share2, Receipt } from "lucide-react";
@@ -28,10 +31,13 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const updateInvoice = useUpdateCustomerInvoice();
   const payInvoice = usePayCustomerInvoice();
   const permissions = useFeaturePermissions(moduleCode, "customer_invoice");
+  const { data: companySettings } = useCompanySettingsQuery();
+  const { terms: termsData } = useTermsAndConditions();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any>(null);
   const [posting, setPosting] = useState(false);
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
 
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!invoice) return <div className="p-8 text-center">Invoice not found</div>;
@@ -66,7 +72,11 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   };
 
   const handlePrint = () => {
-    window.print();
+    setShowPrintPreview(true);
+  };
+
+  const handleExportPdf = () => {
+    setShowPrintPreview(true);
   };
 
   const handleBack = () => {
@@ -261,6 +271,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
         onPrimaryAction={canPay ? handlePay : undefined}
         onEdit={canEdit ? handleEdit : undefined}
         onPrint={handlePrint}
+        onExport={handleExportPdf}
         permissions={{ edit: canEdit, submit: canPay }}
         tabs={tabs}
         sidebar={
@@ -290,6 +301,51 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
         initialData={editingInvoice}
         onSuccess={handleUpdateSuccess}
       />
+      {invoice && companySettings && (
+        <PrintPreviewModal
+          open={showPrintPreview}
+          onClose={() => setShowPrintPreview(false)}
+          documentProps={{
+            data: {
+              type: "INVOICE",
+              documentNumber: invoice.invoice_number,
+              date: invoice.invoice_date,
+              dueDate: invoice.due_date,
+              customerName: invoice.customer_name || "—",
+              customerEmail: (invoice as any).customer_email || "",
+              customerPhone: (invoice as any).customer_phone || "",
+              lines: (invoice.lines || []).map((l) => ({
+                variant_name: l.variant_name,
+                variant_sku: l.variant_sku,
+                quantity: l.quantity,
+                unit_price: l.unit_price,
+                tax_rate: l.tax_rate,
+                discount_amount: l.discount_amount,
+              })),
+              totalAmount: toNumber(invoice.amount),
+              status: invoice.status,
+              paymentStatus: invoice.payment_status,
+              notes: invoice.notes,
+            },
+            company: {
+              companyName: companySettings.companyName,
+              address: companySettings.address,
+              city: companySettings.city,
+              state: companySettings.state,
+              country: companySettings.country,
+              phone: companySettings.phone,
+              email: companySettings.email,
+              taxId: companySettings.taxId,
+              logo: (companySettings as any).logo || "",
+              logoUrl: (companySettings as any).logo
+                ? `${process.env.NEXT_PUBLIC_API_URL}${(companySettings as any).logo}`
+                : "",
+            },
+            termsContent: termsData?.invoice || "",
+            formatCurrency,
+          }}
+        />
+      )}
     </>
   );
 }

@@ -23,6 +23,7 @@ export default function ExpensesPage() {
   const { data: expenses, isLoading } = useExpenses(
     Object.keys(filters).length > 0
       ? {
+          search: filters.search || undefined,
           category: filters.category || undefined,
           paid: filters.paid ? filters.paid === "true" : undefined,
         }
@@ -30,6 +31,7 @@ export default function ExpensesPage() {
   );
   const deleteExpense = useDeleteExpense();
   const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
     { name: "category", label: "Category", type: "select", searchable: true, options: expenseCategoryOptions },
     { name: "paid", label: "Payment", type: "boolean" },
   ];
@@ -178,7 +180,6 @@ export default function ExpensesPage() {
     {
       key: "amount",
       label: "Amount",
-      align: "right" as const,
       sortable: true,
       render: (val: number) => formatCurrency(val),
     },

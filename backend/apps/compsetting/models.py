@@ -49,6 +49,7 @@ class CompanySettings(TimeStampedModel):
     default_start_time = models.TimeField(default="09:00")
     default_end_time = models.TimeField(default="18:00")
     working_hours_per_day = models.DecimalField(max_digits=4, decimal_places=2, default=8.00)
+    logo = models.CharField(max_length=500, blank=True, null=True)
     
     created_by = models.ForeignKey(
         django_settings.AUTH_USER_MODEL,
@@ -319,3 +320,59 @@ class Designation(TimeStampedModel):
 
     def __str__(self):
         return f"{self.name} - {self.department.name if self.department else 'General'}"
+
+
+class TermsAndCondition(TimeStampedModel):
+    """Company terms and conditions for quotes and invoices"""
+
+    TYPE_CHOICES = [
+        ('quote', 'Quote'),
+        ('invoice', 'Invoice'),
+    ]
+
+    id = models.BigAutoField(primary_key=True)
+    _id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+
+    company = models.ForeignKey(
+        'organization.Company',
+        on_delete=models.CASCADE,
+        related_name='terms_conditions'
+    )
+    branch = models.ForeignKey(
+        'organization.Branch',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='terms_conditions'
+    )
+
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    content = models.TextField(blank=True, default='')
+
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_terms_conditions'
+    )
+    updated_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_terms_conditions'
+    )
+
+    class Meta:
+        verbose_name = "Terms & Condition"
+        verbose_name_plural = "Terms & Conditions"
+        unique_together = [('company', 'type')]
+        indexes = [
+            models.Index(fields=['company', 'type']),
+            models.Index(fields=['company', 'is_deleted']),
+            models.Index(fields=['branch']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_type_display()} Terms - {self.company.name}"

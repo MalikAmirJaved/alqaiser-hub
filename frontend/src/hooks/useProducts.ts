@@ -12,6 +12,7 @@ export interface VariantAttribute {
 export interface VariantImage {
   id: string;
   image_url: string;
+  image_url_thumb?: string;
   sort_order: number;
   is_primary: boolean;
 }
@@ -77,7 +78,7 @@ export interface ProductVariantPayload {
   minStockLevel?: number;
   maxStockLevel?: number;
   attributes?: Array<{ key: string; value: string }>;
-  images?: string[];
+  images?: (string | { url: string; url_thumb: string })[];
 }
 
 export interface ProductPayload {

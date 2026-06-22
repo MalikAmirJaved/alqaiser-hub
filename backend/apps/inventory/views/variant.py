@@ -9,8 +9,9 @@ from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import ProductVariant
 from apps.inventory.serializers.variant import VariantDetailSerializer, VariantPOSSerializer
-from django.db.models import F
-from apps.inventory.models import PurchaseOrderLine
+from django.db.models import F, Sum, Value, OuterRef, Subquery, IntegerField
+from django.db.models.functions import Coalesce
+from apps.inventory.models import StockItem, PurchaseOrderLine
 
 
 class VariantViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ReadOnlyModelViewSet):
@@ -29,6 +30,16 @@ class VariantViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
         'active_only': 'product__is_active',
     }
 
+    def _annotate_stock(self, qs):
+        stock_subquery = StockItem.objects.filter(
+            variant=OuterRef('pk')
+        ).values('variant').annotate(
+            total=Sum('quantity_on_hand') - Sum('quantity_reserved')
+        ).values('total')[:1]
+        return qs.annotate(
+            total_stock=Coalesce(Subquery(stock_subquery, output_field=IntegerField()), Value(0))
+        )
+
     def get_serializer_class(self):
         """Return lightweight serializer for POS requests"""
         if self.request.query_params.get('pos') == 'true':
@@ -44,12 +55,12 @@ class VariantViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
         cached_qs_ids = cache.get(cache_key)
         
         if cached_qs_ids is not None:
-            # Return cached queryset
-            return ProductVariant.objects.filter(
+            qs = ProductVariant.objects.filter(
                 _id__in=cached_qs_ids,
                 company_id=company_id,
                 is_deleted=False
             ).select_related('product', 'product__category', 'product__brand')
+            return self._annotate_stock(qs)
 
         qs = ProductVariant.objects.filter(
             company_id=company_id,
@@ -80,7 +91,7 @@ class VariantViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
         # Cache the IDs for 30 seconds
         cache.set(cache_key, list(qs.values_list('_id', flat=True)), 30)
         
-        return qs
+        return self._annotate_stock(qs)
 
     @action(detail=False, methods=['post'], url_path='incoming-stock')
     def incoming_stock(self, request):

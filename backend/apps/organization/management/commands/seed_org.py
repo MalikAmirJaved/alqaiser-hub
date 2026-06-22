@@ -3,10 +3,14 @@ from django.core.management.base import BaseCommand
 from apps.organization.models import Company, Branch, User
 from apps.inventory.models import Warehouse
 from apps.compsetting.models import CompanySettings, WorkingDay
+from apps.finance.models import Account   # <-- new import
 
 
 class Command(BaseCommand):
-    help = 'Seed initial company, branch, admin user, default warehouse, and company settings'
+    help = (
+        "Seed initial company, branch, admin user, default warehouse, "
+        "company settings, working days, and chart of accounts"
+    )
 
     def handle(self, *args, **kwargs):
 
@@ -125,7 +129,6 @@ class Command(BaseCommand):
             self.stdout.write(f'— Company settings already exist for {company.name}')
 
         # Create default working days (Monday=0 .. Sunday=6)
-        # NOTE: WorkingDay model now uses 'company_settings' instead of 'settings'
         default_days = [
             {'day': 0, 'is_working': True,  'start_time': '09:00', 'end_time': '18:00'},
             {'day': 1, 'is_working': True,  'start_time': '09:00', 'end_time': '18:00'},
@@ -138,9 +141,8 @@ class Command(BaseCommand):
 
         working_days_created = 0
         for day_data in default_days:
-            # Use company_settings instead of settings
             obj, created = WorkingDay.objects.get_or_create(
-                company_settings=settings,  # ✅ Changed from 'settings' to 'company_settings'
+                company_settings=settings,
                 day=day_data['day'],
                 defaults={
                     'company': company,
@@ -159,5 +161,45 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f'✓ Created {working_days_created} default working days'))
         else:
             self.stdout.write('— Working days already exist')
+
+        # ------------------------------------------------------------
+        # CHART OF ACCOUNTS  (formerly seed_chart_of_accounts.py)
+        # ------------------------------------------------------------
+        accounts = [
+            ("CASH", "Cash", "ASSET"),
+            ("BANK", "Bank Account", "ASSET"),
+            ("INVENTORY", "Inventory Asset", "ASSET"),
+            ("AR", "Accounts Receivable", "ASSET"),
+            ("AP", "Accounts Payable", "LIABILITY"),
+            ("SALES", "Sales Revenue", "INCOME"),
+            ("COGS", "Cost of Goods Sold", "EXPENSE"),
+            ("RENT", "Rent Expense", "EXPENSE"),
+            ("SALARIES", "Salaries Expense", "EXPENSE"),
+            ("EQUITY", "Owner's Equity", "EQUITY"),
+            ("OTHER_EXPENSES", "Other Expenses", "EXPENSE"),
+        ]
+
+        created_count = 0
+        for code, name, typ in accounts:
+            obj, created = Account.objects.get_or_create(
+                company_id=company.id,
+                branch_id=branch.id,
+                code=code,
+                defaults={
+                    "name": name,
+                    "account_type": typ,
+                },
+            )
+            if created:
+                created_count += 1
+
+        if created_count:
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f'✓ Seeded {created_count} accounts for company={company.id}, branch={branch.id}'
+                )
+            )
+        else:
+            self.stdout.write('— Chart of accounts already exists')
 
         self.stdout.write(self.style.SUCCESS('\nSeeding completed successfully.'))

@@ -5,7 +5,7 @@
 // ============================================
 
 import { useEffect, useState } from "react";
-import { X, Users, Building2, Briefcase, UserCog, Clock, RotateCw } from "lucide-react";
+import { X, Users, Building2, Briefcase, UserCog, Clock, RotateCw, FileText } from "lucide-react";
 import { useShiftTemplates } from "@/hooks/useShiftTemplates";
 import { useAssetCategories } from "@/hooks/useAssetCategories";
 import { useDesignations } from "@/hooks/useDesignations";
@@ -17,6 +17,7 @@ import { useDepartments } from "@/hooks/useDepartments";
 import DepartmentFormModal from "@/components/settings/departments/DepartmentFormModal";
 import DesignationFormModal from "@/components/settings/designations/DesignationFormModal";
 import { useAutoCode } from "@/hooks/useAutoCode";
+import FileUpload, { uploadFiles, deleteUploadedFiles } from "../reuseable/FileUpload";
 
 export default function EmployeeForm({ initialData = null, onSubmit, onCancel }) {
   const [formData, setFormData] = useState({
@@ -32,7 +33,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
     email: "",
     personal_email: "",
     address_line: "",
-    country: "PK",
+    country: "",
     state: "",
     city: "",
     postal_code: "",
@@ -55,8 +56,12 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
     default_shift_id: "",
     asset_category_id: "",
     old_default_shift_id: "",
+    profile_picture: "",
+    education_documents: [],
+    experience_documents: [],
   });
   const [loading, setLoading] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState([]);
   const { generateCode, validateCode } = useAutoCode("employee");
   const [deptModalOpen, setDeptModalOpen] = useState(false);
   const [desigModalOpen, setDesigModalOpen] = useState(false);
@@ -108,7 +113,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const requiredFields = ["first_name", "phone", "department_id", "joining_date"];
     for (const field of requiredFields) {
@@ -117,49 +122,98 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
             return;
         }
     }
-    // Prepare clean payload
-    const payload = {
-        id: formData.id,          
-        employee_id: formData.employee_id,
-        first_name: formData.first_name,
-        last_name: formData.last_name,
-        father_name: formData.father_name,
-        cnic: formData.cnic,
-        date_of_birth: formData.date_of_birth,
-        gender: formData.gender,
-        marital_status: formData.marital_status,
-        phone: formData.phone,
-        email: formData.email,
-        personal_email: formData.personal_email,
-        address_line: formData.address_line,
-        country: formData.country,
-        state: formData.state,
-        city: formData.city,
-        postal_code: formData.postal_code,
-        emergency_contact_name: formData.emergency_contact_name,
-        emergency_contact_phone: formData.emergency_contact_phone,
-        emergency_contact_relation: formData.emergency_contact_relation,
-        department_id: formData.department_id || null,
-        designation_id: formData.designation_id || null,
-        employment_type: formData.employment_type,
-        employment_status: formData.employment_status,
-        joining_date: formData.joining_date,
-        confirmation_date: formData.confirmation_date || null,
-        probation_days: formData.probation_days,
-        work_location: formData.work_location,
-        reporting_manager_id: formData.reporting_manager_id || null,
-        bank_name: formData.bank_name,
-        bank_account_number: formData.bank_account_number,
-        bank_iban: formData.bank_iban,
-        salary: Number(formData.salary),
-        default_shift_id: formData.default_shift_id || null,
-        // Do NOT send: old_default_shift_id, asset_category_id, department_name, designation_name, etc.
-    };
-    // If it's an update, also send isfrom_user_id if you want to (re)link
-    if (formData.isfrom_user_id) {
-        payload.isfrom_user_id = formData.isfrom_user_id;
+
+    setLoading(true);
+    const uploadedUrls = [];
+    const educationDocs = [];
+    const experienceDocs = [];
+
+    try {
+        // Step 1: Upload all pending files
+        if (pendingFiles.length > 0) {
+            const results = await uploadFiles(pendingFiles);
+            for (const result of results) {
+                uploadedUrls.push(result.url);
+                const docData = {
+                    title: result.fieldName.includes('education') ? 'Education Document' : 'Experience Document',
+                    file_url: result.url,
+                    file_url_thumb: result.url_thumb,
+                    original_filename: result.url.split('/').pop(),
+                    file_size: 0,
+                    mime_type: '',
+                    sort_order: 0,
+                };
+                // Update formData with the uploaded URL
+                if (result.fieldName === "profile_picture") {
+                    formData.profile_picture = result.url;
+                    formData.profile_picture_thumb = result.url_thumb;
+                } else if (result.fieldName === "education_documents") {
+                    educationDocs.push(docData);
+                } else if (result.fieldName === "experience_documents") {
+                    experienceDocs.push(docData);
+                }
+            }
+        }
+
+        // Step 2: Prepare clean payload
+        const payload = {
+            id: formData.id,          
+            employee_id: formData.employee_id,
+            first_name: formData.first_name,
+            last_name: formData.last_name,
+            father_name: formData.father_name,
+            cnic: formData.cnic,
+            date_of_birth: formData.date_of_birth,
+            gender: formData.gender,
+            marital_status: formData.marital_status,
+            phone: formData.phone,
+            email: formData.email,
+            personal_email: formData.personal_email,
+            address_line: formData.address_line,
+            country: formData.country,
+            state: formData.state,
+            city: formData.city,
+            postal_code: formData.postal_code,
+            emergency_contact_name: formData.emergency_contact_name,
+            emergency_contact_phone: formData.emergency_contact_phone,
+            emergency_contact_relation: formData.emergency_contact_relation,
+            department_id: formData.department_id || null,
+            designation_id: formData.designation_id || null,
+            employment_type: formData.employment_type,
+            employment_status: formData.employment_status,
+            joining_date: formData.joining_date,
+            confirmation_date: formData.confirmation_date || null,
+            probation_days: formData.probation_days,
+            work_location: formData.work_location,
+            reporting_manager_id: formData.reporting_manager_id || null,
+            bank_name: formData.bank_name,
+            bank_account_number: formData.bank_account_number,
+            bank_iban: formData.bank_iban,
+            salary: Number(formData.salary),
+            default_shift_id: formData.default_shift_id || null,
+            profile_picture: formData.profile_picture || "",
+            profile_picture_thumb: formData.profile_picture_thumb || "",
+            education_documents: [...(formData.education_documents || []), ...educationDocs],
+            experience_documents: [...(formData.experience_documents || []), ...experienceDocs],
+        };
+        if (formData.isfrom_user_id) {
+            payload.isfrom_user_id = formData.isfrom_user_id;
+        }
+
+        // Step 3: Create/Update employee
+        await onSubmit(payload);
+        
+        // Step 4: Clear pending files on success
+        setPendingFiles([]);
+    } catch (error) {
+        // Step 5: Rollback - delete uploaded files if employee creation fails
+        if (uploadedUrls.length > 0) {
+            await deleteUploadedFiles(uploadedUrls);
+        }
+        throw error;
+    } finally {
+        setLoading(false);
     }
-    onSubmit(payload);
 };
 
   const activeShiftTemplates = shiftTemplates.filter(t => t.is_active);
@@ -183,6 +237,26 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
         </div>
 
         <div className="p-5">
+          {/* Profile Picture Section */}
+          <div className="mb-6 p-4 rounded-xl border border-border bg-muted/20">
+            <h3 className="text-sm font-semibold text-primary flex items-center gap-2 mb-3">
+              <Users className="w-4 h-4" />
+              Profile Picture
+            </h3>
+            <FileUpload
+              value={formData.profile_picture}
+              onChange={(url) => handleChange("profile_picture", url)}
+              module="employee"
+              submodule="profile"
+              type="image"
+              label=""
+              description="Upload a profile photo (JPG, PNG)"
+              pendingFiles={pendingFiles}
+              onPendingFilesChange={setPendingFiles}
+              fieldName="profile_picture"
+            />
+          </div>
+
           <div className="grid md:grid-cols-2 gap-4">
             {/* Personal Information Section (unchanged) */}
             <div className="space-y-3">
@@ -360,6 +434,50 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
             <div className="grid md:grid-cols-2 gap-3">
               <label className="text-sm flex flex-col gap-1"><span className="text-muted-foreground text-xs">IBAN</span><input type="text" value={formData.bank_iban} onChange={(e) => handleChange("bank_iban", e.target.value)} className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring" /></label>
               <label className="text-sm flex flex-col gap-1"><span className="text-muted-foreground text-xs">Basic Salary</span><input type="number" value={Number(formData.salary)} onChange={(e) => handleChange("salary", parseInt(e.target.value) || 0)} className="bg-muted/40 border border-border rounded-md h-9 px-2 outline-none focus:ring-2 focus:ring-ring" /></label>
+            </div>
+          </div>
+
+          {/* Employee Documents Section */}
+          <div className="mt-4 space-y-4">
+            <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              Employee Documents
+            </h3>
+            
+            {/* Education Documents */}
+            <div className="p-4 rounded-xl border border-border bg-muted/20">
+              <FileUpload
+                value={formData.education_documents}
+                onChange={(urls) => handleChange("education_documents", urls)}
+                module="employee"
+                submodule="education"
+                type="all"
+                multiple
+                label="Education Documents"
+                description="Upload degrees, certificates, transcripts (PDF, JPG, PNG)"
+                maxFiles={10}
+                pendingFiles={pendingFiles}
+                onPendingFilesChange={setPendingFiles}
+                fieldName="education_documents"
+              />
+            </div>
+
+            {/* Experience Documents */}
+            <div className="p-4 rounded-xl border border-border bg-muted/20">
+              <FileUpload
+                value={formData.experience_documents}
+                onChange={(urls) => handleChange("experience_documents", urls)}
+                module="employee"
+                submodule="experience"
+                type="all"
+                multiple
+                label="Experience Documents"
+                description="Upload experience letters, offer letters (PDF, JPG, PNG)"
+                maxFiles={10}
+                pendingFiles={pendingFiles}
+                onPendingFilesChange={setPendingFiles}
+                fieldName="experience_documents"
+              />
             </div>
           </div>
         </div>

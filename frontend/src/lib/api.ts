@@ -37,7 +37,6 @@ async function clearSessionCookies(): Promise<void> {
       credentials: "include",
     });
   } catch {
-    // force-clear via expired cookie
     document.cookie =
       "access_token=; path=/; max-age=0; SameSite=Lax";
     document.cookie =
@@ -47,13 +46,20 @@ async function clearSessionCookies(): Promise<void> {
   }
 }
 
+let refreshPromise: Promise<void> | null = null;
+
+const SKIP_REFRESH_ENDPOINTS = [
+  "/api/accounts/login/",
+  "/api/accounts/logout/",
+  "/api/accounts/token/refresh/",
+];
+
 export async function apiFetch<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit & { _skipRefresh?: boolean } = {}
 ): Promise<T> {
   const method = options.method?.toUpperCase() || "GET";
 
-  // APIs where toast should be disabled
   const disableToastEndpoints = [
     "/api/accounts/token/refresh/",
     "/api/inventory/stock/batch-stock/",
@@ -85,22 +91,45 @@ export async function apiFetch<T>(
         errorBody.error ||
         `Request failed with status ${res.status}`;
 
-      // ── Token error → clear cookies, show toast, redirect ──
-      if (res.status === 401 && isTokenError(errorMessage)) {
-        toast.error("Session expired. Please try again.", {
-          duration: 5000,
+      // ── Token error → silent refresh + retry ──
+      if (
+        res.status === 401 &&
+        isTokenError(errorMessage) &&
+        !options._skipRefresh &&
+        !SKIP_REFRESH_ENDPOINTS.includes(endpoint)
+      ) {
+        if (!refreshPromise) {
+          refreshPromise = (async () => {
+            const refreshRes = await fetch(
+              `${BASE_URL}/api/accounts/token/refresh/`,
+              {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+              }
+            );
+            if (!refreshRes.ok) {
+              await clearSessionCookies();
+              localStorage.removeItem("isAuthenticated");
+              sessionStorage.clear();
+              window.location.href = "/login";
+              throw new Error("Session expired");
+            }
+          })().finally(() => {
+            refreshPromise = null;
+          });
+        }
+
+        await refreshPromise;
+        return await apiFetch<T>(endpoint, {
+          ...options,
+          _skipRefresh: true,
         });
-        await clearSessionCookies();
-        localStorage.removeItem("isAuthenticated");
-        sessionStorage.clear();
-        window.location.href = "/login";
-        throw new Error(errorMessage);
       }
 
       const error = new Error(errorMessage) as any;
       error.status = res.status;
       error.response = errorBody;
-      // Error toast
       if (
         shouldShowToast &&
         ["POST", "PUT", "PATCH", "DELETE"].includes(method)

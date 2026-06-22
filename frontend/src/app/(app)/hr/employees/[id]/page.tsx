@@ -54,8 +54,11 @@ import {
   Layers,
   Tag,
   Percent,
+  Eye,
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { BASE_URL } from "@/lib/api";
+import DocumentViewer from "@/components/reuseable/DocumentViewer";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -138,6 +141,7 @@ const TABS = [
   { id: "loans", label: "Loans", icon: CreditCard },
   { id: "leaves", label: "Leaves", icon: Calendar },
   { id: "assets", label: "Assets", icon: Package },
+  { id: "documents", label: "Documents", icon: FileText },
   { id: "exit", label: "Exit", icon: LogOut },
 ];
 
@@ -148,6 +152,7 @@ export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("overview");
+  const [docViewer, setDocViewer] = useState<{ open: boolean; url: string; filename?: string; mimeType?: string; title?: string }>({ open: false, url: "" });
 
   // ── Data fetching ──────────────────────────────────────────────
   const { data: employees = [], isLoading: empLoading } = useEmployees();
@@ -544,6 +549,61 @@ export default function EmployeeDetailPage() {
       </div>
     ),
 
+    // ── DOCUMENTS ──
+    documents: (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <SectionCard title="Education Documents" icon={FileText}>
+          {(!employee.education_documents || employee.education_documents.length === 0) ? (
+            <EmptyState message="No education documents uploaded." />
+          ) : (
+            <div className="space-y-2">
+              {employee.education_documents.map((doc: any, idx: number) => (
+                <div
+                  key={doc.id || idx}
+                  className="flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-muted/30 transition-colors cursor-pointer"
+                  onClick={() => setDocViewer({ open: true, url: doc.file_url, filename: doc.original_filename, mimeType: doc.mime_type, title: doc.title })}
+                >
+                  <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                    <FileText className="w-4 h-4 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{doc.title || doc.original_filename}</p>
+                    <p className="text-xs text-muted-foreground truncate">{doc.original_filename}</p>
+                  </div>
+                  <Eye className="w-4 h-4 text-muted-foreground shrink-0" />
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard title="Experience Documents" icon={FileText}>
+          {(!employee.experience_documents || employee.experience_documents.length === 0) ? (
+            <EmptyState message="No experience documents uploaded." />
+          ) : (
+            <div className="space-y-2">
+              {employee.experience_documents.map((doc: any, idx: number) => (
+                <div
+                  key={doc.id || idx}
+                  className="flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-muted/30 transition-colors cursor-pointer"
+                  onClick={() => setDocViewer({ open: true, url: doc.file_url, filename: doc.original_filename, mimeType: doc.mime_type, title: doc.title })}
+                >
+                  <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                    <FileText className="w-4 h-4 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{doc.title || doc.original_filename}</p>
+                    <p className="text-xs text-muted-foreground truncate">{doc.original_filename}</p>
+                  </div>
+                  <Eye className="w-4 h-4 text-muted-foreground shrink-0" />
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionCard>
+      </div>
+    ),
+
     // ── EXIT ──
     exit: (
       <div className="space-y-5">
@@ -600,9 +660,18 @@ export default function EmployeeDetailPage() {
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mt-4">
             {/* Avatar */}
             <div className="flex items-end gap-4">
+              {employee.profile_picture ? (
+                <img
+                  src={`${BASE_URL}${employee.profile_picture_thumb || employee.profile_picture}`}
+                  alt={fullName}
+                  className="w-20 h-20 rounded-2xl border-4 border-card object-cover shadow-lg shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => setDocViewer({ open: true, url: employee.profile_picture, filename: `${fullName} Profile Picture`, mimeType: "image/jpeg", title: fullName })}
+                />
+              ) : (
               <div className="w-20 h-20 rounded-2xl border-4 border-card bg-gradient-to-br from-primary/40 to-primary/10 flex items-center justify-center text-2xl font-bold text-primary shadow-lg shrink-0">
                 {initials(employee.first_name, employee.last_name)}
               </div>
+              )}
               <div className="mb-1">
                 <h1 className="text-xl font-bold leading-tight">{fullName}</h1>
                 <p className="text-sm text-muted-foreground">{employee.designation_name || employee.department_name}</p>
@@ -690,6 +759,15 @@ export default function EmployeeDetailPage() {
       <div className="min-h-[300px]">
         {panels[activeTab]}
       </div>
+
+      <DocumentViewer
+        open={docViewer.open}
+        onClose={() => setDocViewer({ open: false, url: "" })}
+        url={docViewer.url}
+        filename={docViewer.filename}
+        mimeType={docViewer.mimeType}
+        title={docViewer.title}
+      />
     </div>
   );
 }

@@ -1,12 +1,17 @@
+from decimal import Decimal
+
+from django.db.models import Sum, Q
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db.models import Sum, Q
+
 from apps.common.baseauthentication import CompanyBranchMixin
-from apps.permissions.mixins import PermissionRequiredMixin
-from apps.finance.models import Account, JournalLine
-from apps.finance.serializers import AccountSerializer, JournalLineSerializer
 from apps.finance.mixins import CompanyBranchUserMixin, SoftDeleteMixin
+from apps.finance.models import Account, BankAccount, CustomerInvoice, Expense, JournalLine, Payment, SupplierBill
+from apps.finance.serializers import AccountSerializer, JournalLineSerializer
+from apps.finance.services.payable import get_outstanding
+from apps.hr.models import Asset
+from apps.permissions.mixins import PermissionRequiredMixin
 
 
 class AccountViewSet(
@@ -63,6 +68,187 @@ class AccountViewSet(
             },
             status=status.HTTP_200_OK
         )
+
+    @action(detail=False, methods=['get'])
+    def balances(self, request):
+        """
+        Return the computed live balance for each account by mapping account
+        codes to their actual transactional data sources.
+
+        Supports optional query params:
+          ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+
+        Mapping:
+          AP               → SupplierBill (unpaid / outstanding)
+          AR               → CustomerInvoice (unpaid / outstanding)
+          INVENTORY        → HR Asset (purchase_price × available_quantity)
+          SALES            → Confirmed RECEIPT payments
+          COGS             → Expenses with category 'COGS'
+          RENT             → Expenses with category 'RENT'
+          SALARIES         → Expenses with category 'SALARIES'
+          OTHER_EXPENSES   → Expenses with all OTHER categories combined
+          CASH / BANK      → BankAccount book_balance
+          EQUITY           → Journal-line credit – debit
+        """
+        company_id = request.user.company_id
+        branch_id = request.user.branch_id
+
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+
+        accounts = self.get_queryset()
+        mapping = {}
+
+        # Build date filter Q objects for reuse
+        date_filter = Q()
+        if start_date:
+            date_filter &= Q(expense_date__gte=start_date)
+        if end_date:
+            date_filter &= Q(expense_date__lte=end_date)
+
+        payment_date_filter = Q()
+        if start_date:
+            payment_date_filter &= Q(payment_date__gte=start_date)
+        if end_date:
+            payment_date_filter &= Q(payment_date__lte=end_date)
+
+        # Pre-fetch often-used querysets with the same filters
+        invoices_qs = CustomerInvoice.objects.filter(
+            company_id=company_id, branch_id=branch_id, is_deleted=False
+        ).exclude(status='CANCELLED')
+        bills_qs = SupplierBill.objects.filter(
+            company_id=company_id, branch_id=branch_id, is_deleted=False
+        ).exclude(status='CANCELLED')
+        expenses_qs = Expense.objects.filter(
+            company_id=company_id, branch_id=branch_id, is_deleted=False
+        )
+        if start_date or end_date:
+            expenses_qs = expenses_qs.filter(date_filter)
+            bills_qs = bills_qs.filter(
+                Q(bill_date__gte=start_date) if start_date else Q(),
+                Q(bill_date__lte=end_date) if end_date else Q(),
+            )
+            invoices_qs = invoices_qs.filter(
+                Q(invoice_date__gte=start_date) if start_date else Q(),
+                Q(invoice_date__lte=end_date) if end_date else Q(),
+            )
+
+        payments_qs = Payment.objects.filter(
+            company_id=company_id, branch_id=branch_id,
+            status='CONFIRMED', is_deleted=False,
+        )
+        if start_date or end_date:
+            payments_qs = payments_qs.filter(payment_date_filter)
+
+        for account in accounts:
+            code = account.code
+            balance = Decimal('0.00')
+
+            # --- Specific live-data mappings ---
+            if code == 'AR':
+                # Accounts Receivable = unpaid invoices
+                balance = sum(get_outstanding(inv) for inv in invoices_qs)
+
+            elif code == 'AP':
+                # Accounts Payable = unpaid supplier bills
+                balance = sum(get_outstanding(bill) for bill in bills_qs)
+
+            elif code == 'INVENTORY':
+                # Inventory Asset = HR office inventory value
+                assets = Asset.objects.filter(
+                    company_id=company_id, is_deleted=False
+                )
+                balance = sum(
+                    (asset.purchase_price or Decimal('0.00')) * asset.available_quantity
+                    for asset in assets
+                )
+
+            elif code == 'SALES':
+                # Sales Revenue = confirmed RECEIPT payments (paid invoices)
+                balance = payments_qs.filter(
+                    payment_type='RECEIPT',
+                ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+            elif code == 'RENT':
+                # Rent Expense = expenses with RENT category
+                balance = expenses_qs.filter(
+                    category='RENT'
+                ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+            elif code == 'SALARIES':
+                # Salaries Expense = expenses with SALARIES category
+                balance = expenses_qs.filter(
+                    category='SALARIES'
+                ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+            elif code in ('OTHER_EXPENSES', 'OTHER_EXPENSE'):
+                # Other Expenses = all expense categories except RENT & SALARIES
+                balance = expenses_qs.exclude(
+                    category__in=['RENT', 'SALARIES']
+                ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+            elif code == 'COGS':
+                # Cost of Goods Sold = expenses with COGS category (or journal lines)
+                balance = expenses_qs.filter(
+                    category='COGS'
+                ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+                if balance == Decimal('0.00'):
+                    lines = JournalLine.objects.filter(
+                        account=account,
+                        journal_entry__is_posted=True,
+                        company_id=company_id,
+                        branch_id=branch_id,
+                    )
+                    total_debit = lines.aggregate(total=Sum('debit'))['total'] or Decimal('0.00')
+                    total_credit = lines.aggregate(total=Sum('credit'))['total'] or Decimal('0.00')
+                    balance = total_debit - total_credit
+
+            elif code in ('CASH', 'BANK'):
+                # Cash / Bank = all active BankAccount book balances
+                balance = BankAccount.objects.filter(
+                    company_id=company_id, branch_id=branch_id,
+                    is_active=True, is_deleted=False,
+                ).aggregate(total=Sum('book_balance'))['total'] or Decimal('0.00')
+
+            elif code == 'EQUITY':
+                # Owner's Equity = net credit balance from journal lines
+                lines = JournalLine.objects.filter(
+                    account=account,
+                    journal_entry__is_posted=True,
+                    company_id=company_id,
+                    branch_id=branch_id,
+                )
+                total_debit = lines.aggregate(total=Sum('debit'))['total'] or Decimal('0.00')
+                total_credit = lines.aggregate(total=Sum('credit'))['total'] or Decimal('0.00')
+                balance = total_credit - total_debit
+
+            else:
+                # Fallback: derive from posted journal lines
+                lines = JournalLine.objects.filter(
+                    account=account,
+                    journal_entry__is_posted=True,
+                    company_id=company_id,
+                    branch_id=branch_id,
+                )
+                total_debit = lines.aggregate(total=Sum('debit'))['total'] or Decimal('0.00')
+                total_credit = lines.aggregate(total=Sum('credit'))['total'] or Decimal('0.00')
+
+                if account.account_type in ('ASSET', 'EXPENSE'):
+                    balance = total_debit - total_credit
+                elif account.account_type in ('LIABILITY', 'EQUITY', 'INCOME'):
+                    balance = total_credit - total_debit
+
+            mapping[code] = {
+                'code': code,
+                'name': account.name,
+                'account_type': account.account_type,
+                'balance': str(balance),
+            }
+
+        return Response({
+            'success': True,
+            'data': mapping,
+        })
 
     @action(detail=False, methods=['get'])
     def balances_by_type(self, request):

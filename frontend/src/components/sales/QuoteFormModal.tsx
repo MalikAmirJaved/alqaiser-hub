@@ -8,6 +8,7 @@ import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
 import { useCreateQuote, useUpdateQuote, Quote } from "@/hooks/sales/useQuotes";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import { toast } from "sonner";
 
 interface QuoteLine {
   variant: string;
@@ -17,6 +18,7 @@ interface QuoteLine {
   tax_rate: number;
   variant_name?: string;
   variant_sku?: string;
+  max_quantity?: number;
 }
 
 interface QuoteFormModalProps {
@@ -145,6 +147,7 @@ export default function QuoteFormModal({
           variant_name: variant.product_name,
           variant_sku: variant.sku,
           unit_price: variant.selling_price,
+          max_quantity: variant.total_stock,
         };
       } else {
         newLines[index] = { ...newLines[index], variant: value };
@@ -166,6 +169,7 @@ export default function QuoteFormModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     const payload: any = { ...formData };
 
     if (newCustomerInfo) {
@@ -177,7 +181,9 @@ export default function QuoteFormModal({
 
     if (!payload.expiration_date) delete payload.expiration_date;
     payload.lines = payload.lines.map((line: any) => ({
-      ...line,
+      variant: line.variant,
+      quantity: line.quantity,
+      unit_price: line.unit_price,
       discount_amount: line.discount_amount || 0,
       tax_rate: line.tax_rate || 0,
     }));
@@ -194,6 +200,11 @@ export default function QuoteFormModal({
     onSuccess?.(result);
     onClose();
   };
+
+  // Build set of already-selected variant IDs (excluding current row)
+  const selectedVariantIds = new Set(
+    formData.lines.filter((l) => l.variant).map((l) => l.variant),
+  );
 
   if (!open) return null;
 
@@ -316,20 +327,25 @@ export default function QuoteFormModal({
                                 onChange={(val) =>
                                   updateLine(idx, "variant", val)
                                 }
-                                options={variants.map((v) => ({ value: v.id, label: `${v.product_name} (${v.sku})` }))}
+                                options={variants
+                                  .filter((v) => !selectedVariantIds.has(v.id) || v.id === line.variant)
+                                  .map((v) => ({ value: v.id, label: `${v.product_name} (${v.sku}) — Stock: ${v.total_stock}` }))}
                                 placeholder="Select variant"
                               />
                             </td>
                             <td className="px-3 py-2">
-                              <input
-                                type="number"
-                                min="1"
-                                value={line.quantity}
-                                onChange={(e) =>
-                                  updateLine(idx, "quantity", parseInt(e.target.value) || 1)
-                                }
-                                className="w-full text-right bg-transparent focus:outline-none"
-                              />
+                              <div className="flex flex-col items-end">
+                                  <input
+                                  type="number"
+                                  min="1"
+                                  value={line.quantity}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value) || 1;
+                                    updateLine(idx, "quantity", val > 0 ? val : 1);
+                                  }}
+                                  className="w-full text-right bg-transparent focus:outline-none"
+                                />
+                              </div>
                             </td>
                             <td className="px-3 py-2">
                               <input

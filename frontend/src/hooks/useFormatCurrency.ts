@@ -7,10 +7,11 @@ export function useFormatCurrency() {
     if (amount == null) return currency;
     const num = typeof amount === "string" ? parseFloat(amount) : amount;
     if (isNaN(num)) return currency;
+    const safeDecimals = Math.max(0, Math.min(decimals, 20));
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency,
-      minimumFractionDigits: decimals,
+      minimumFractionDigits: safeDecimals,
     }).format(num);
   };
 }

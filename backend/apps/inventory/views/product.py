@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny, SAFE_METHODS
 from django.db import transaction
 from django.db.models import Q, F
 import uuid
@@ -29,9 +30,23 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
         'status': 'status',
     }
 
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [AllowAny()]
+        return super().get_permissions()
+
+    @staticmethod
+    def _image_url(img):
+        return img if isinstance(img, str) else img.get('url', '')
+
     def get_queryset(self):
-        qs = super().get_queryset()
         user = self.request.user
+        if not user.is_authenticated:
+            qs = Product.objects.all()
+            if hasattr(qs.model, 'is_deleted'):
+                qs = qs.filter(is_deleted=False)
+        else:
+            qs = super().get_queryset()
 
         qs = qs.prefetch_related(
             'variants',
@@ -120,12 +135,12 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
                 )
 
             # Images
-            for idx, url in enumerate(var_data.get('images', [])):
+            for idx, img in enumerate(var_data.get('images', [])):
                 VariantImage.objects.create(
                     variant=variant,
                     company_id=user.company_id,
                     branch_id=user.branch_id,
-                    image_url=url,
+                    image_url=self._image_url(img),
                     sort_order=idx,
                     is_primary=(idx == 0),
                     created_by=user,
@@ -232,12 +247,12 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
                 # Replace images
                 if 'images' in var_data:
                     variant.variant_images.all().delete()
-                    for idx, url in enumerate(var_data['images']):
+                    for idx, img in enumerate(var_data['images']):
                         VariantImage.objects.create(
                             variant=variant,
                             company_id=user.company_id,
                             branch_id=user.branch_id,
-                            image_url=url,
+                            image_url=self._image_url(img),
                             sort_order=idx,
                             is_primary=(idx == 0),
                             created_by=user,
@@ -273,12 +288,12 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
                     )
 
                 # Images
-                for idx, url in enumerate(var_data.get('images', [])):
+                for idx, img in enumerate(var_data.get('images', [])):
                     VariantImage.objects.create(
                         variant=new_variant,
                         company_id=user.company_id,
                         branch_id=user.branch_id,
-                        image_url=url,
+                        image_url=self._image_url(img),
                         sort_order=idx,
                         is_primary=(idx == 0),
                         created_by=user,

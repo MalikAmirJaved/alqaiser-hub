@@ -14,6 +14,7 @@ import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useAutoCode } from "@/hooks/useAutoCode";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import { toast } from "sonner";
 
 interface InvoiceLine {
   variant: string;
@@ -23,6 +24,7 @@ interface InvoiceLine {
   tax_rate: number;
   variant_name?: string;
   variant_sku?: string;
+  max_quantity?: number;
 }
 
 interface CustomerInvoiceFormData {
@@ -40,11 +42,12 @@ interface Props {
   open: boolean;
   onClose: () => void;
   initialData?: CustomerInvoice | null;
-  onSuccess?: () => void;
+  defaultValues?: Partial<CustomerInvoiceFormData> | null;
+  onSuccess?: (result?: any) => void;
   moduleCode?: "FINANCE" | "SALES";
 }
 
-export default function CustomerInvoiceFormModal({ open, onClose, initialData, onSuccess, moduleCode = "FINANCE" }: Props) {
+export default function CustomerInvoiceFormModal({ open, onClose, initialData, defaultValues, onSuccess, moduleCode = "FINANCE" }: Props) {
   const formatCurrency = useFormatCurrency();
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [newCustomerInfo, setNewCustomerInfo] = useState<any>(null);
@@ -116,6 +119,15 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
         }))
       );
       setNewCustomerInfo(null);
+    } else if (defaultValues) {
+      if (defaultValues.invoice_number !== undefined) setValue("invoice_number", defaultValues.invoice_number);
+      if (defaultValues.customer !== undefined) setValue("customer", defaultValues.customer);
+      if (defaultValues.invoice_date !== undefined) setValue("invoice_date", defaultValues.invoice_date);
+      if (defaultValues.due_date !== undefined) setValue("due_date", defaultValues.due_date);
+      if (defaultValues.amount !== undefined) setValue("amount", defaultValues.amount);
+      if (defaultValues.notes !== undefined) setValue("notes", defaultValues.notes);
+      if (defaultValues.lines !== undefined) setValue("lines", defaultValues.lines as any);
+      setNewCustomerInfo(null);
     } else {
       reset({
         invoice_number: "",
@@ -129,7 +141,7 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
       setNewCustomerInfo(null);
       generateCode().then(code => setValue("invoice_number", code)).catch(() => {});
     }
-  }, [initialData, setValue, reset, open]);
+  }, [initialData, defaultValues, setValue, reset, open]);
 
   const handleCustomerCreated = async (customerId: string, customerName: string, customerData: any) => {
     await refetchCustomers();
@@ -153,6 +165,7 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
           variant_name: variant.product_name,
           variant_sku: variant.sku,
           unit_price: variant.selling_price,
+          max_quantity: variant.total_stock,
         };
       } else {
         newLines[index] = { ...newLines[index], variant: value };
@@ -164,6 +177,19 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
   };
 
   const onSubmit = async (data: CustomerInvoiceFormData) => {
+    // ── Stock validation ──
+    for (const line of data.lines) {
+      if (line.variant && line.max_quantity !== undefined && line.quantity > line.max_quantity) {
+        const name = line.variant_name || line.variant_sku || line.variant;
+        toast.error(
+          `Insufficient stock for "${name}". ` +
+          `Requested ${line.quantity}, only ${line.max_quantity} available. ` +
+          `Please reduce the quantity or choose another item.`
+        );
+        return;
+      }
+    }
+
     const payload: any = { ...data };
     // Ensure amount is sent as number
     payload.amount = typeof payload.amount === "number" ? payload.amount : parseFloat(payload.amount);
@@ -186,22 +212,28 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
       tax_rate: line.tax_rate || 0,
     }));
 
+    let result: any;
     if (moduleCode === "SALES") {
-      if (initialData) {
-        await updateSalesInvoice.mutateAsync({ id: initialData.id, data: payload });
+      if (initialData?.id) {
+        result = await updateSalesInvoice.mutateAsync({ id: initialData.id, data: payload });
       } else {
-        await createSalesInvoice.mutateAsync(payload);
+        result = await createSalesInvoice.mutateAsync(payload);
       }
     } else {
-      if (initialData) {
-        await updateInvoice.mutateAsync({ id: initialData.id, data: payload });
+      if (initialData?.id) {
+        result = await updateInvoice.mutateAsync({ id: initialData.id, data: payload });
       } else {
-        await createInvoice.mutateAsync(payload);
+        result = await createInvoice.mutateAsync(payload);
       }
     }
-    onSuccess?.();
+    onSuccess?.(result);
     onClose();
   };
+
+  // Build set of already-selected variant IDs (excluding current row)
+  const selectedVariantIds = new Set(
+    (watchedLines || []).filter((l) => l.variant).map((l) => l.variant),
+  );
 
   if (!open) return null;
 
@@ -211,7 +243,7 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
         <div className="relative w-full max-w-5xl rounded-2xl border border-border bg-card shadow-2xl max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between border-b border-border p-4 sticky top-0 bg-card z-10">
             <h2 className="text-lg font-semibold">
-              {initialData ? "Edit Customer Invoice" : "New Customer Invoice"}
+              {initialData?.id ? "Edit Customer Invoice" : "New Customer Invoice"}
             </h2>
             <button onClick={onClose} className="p-1 rounded-md hover:bg-muted">
               <X className="w-4 h-4" />
@@ -346,18 +378,38 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, o
                               <SearchableSelect
                                 value={currentLine.variant || ""}
                                 onChange={(val) => updateLine(idx, "variant", val)}
-                                options={variants.map((v) => ({ value: v.id, label: `${v.product_name} (${v.sku})` }))}
+                                options={variants
+                                  .filter((v) => !selectedVariantIds.has(v.id) || v.id === currentLine.variant)
+                                  .map((v) => ({ value: v.id, label: `${v.product_name} (${v.sku}) — Stock: ${v.total_stock}` }))}
                                 placeholder="Select variant"
                               />
                             </td>
                             <td className="px-3 py-2">
-                              <input
-                                type="number"
-                                min="1"
-                                value={currentLine.quantity}
-                                onChange={(e) => updateLine(idx, "quantity", parseInt(e.target.value) || 1)}
-                                className="w-full text-right bg-transparent focus:outline-none"
-                              />
+                              <div className="flex flex-col items-end">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max={currentLine.max_quantity || 999999}
+                                  value={currentLine.quantity}
+                                  onChange={(e) => {
+                                    let val = parseInt(e.target.value) || 1;
+                                    if (val < 1) val = 1;
+                                    const max = currentLine.max_quantity;
+                                    if (max !== undefined && val > max) val = max;
+                                    updateLine(idx, "quantity", val);
+                                  }}
+                                  className={`w-full text-right bg-transparent focus:outline-none ${
+                                    currentLine.max_quantity && currentLine.quantity > currentLine.max_quantity
+                                      ? "text-destructive"
+                                      : ""
+                                  }`}
+                                />
+                                {currentLine.max_quantity !== undefined && currentLine.quantity > currentLine.max_quantity && (
+                                  <span className="text-[10px] text-destructive font-medium mt-0.5 whitespace-nowrap">
+                                    Only {currentLine.max_quantity} available
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="px-3 py-2">
                               <input

@@ -68,11 +68,11 @@ export default function LoginPage() {
 
           <div className="mt-5 space-y-3">
             <label className="block text-sm">
-              <span className="text-muted-foreground text-xs">Email</span>
+              <span className="text-muted-foreground text-xs">Username or Email</span>
               <div className="relative mt-1">
                 <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input
-                  type="email"
+                  type="text"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full bg-muted/40 border border-border rounded-md pl-9 pr-3 h-10 outline-none focus:ring-2 focus:ring-ring"

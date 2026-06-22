@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.db import transaction
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -11,6 +12,10 @@ from apps.finance.services.invoice_payment import pay_customer_invoice
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.sales.serializers.invoice import SalesInvoiceSerializer
 from rest_framework.exceptions import ValidationError
+from apps.inventory.services.stock_service import (
+    direct_deduct_stock,
+    direct_release_stock,
+)
 
 
 class SalesInvoiceViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
@@ -32,8 +37,9 @@ class SalesInvoiceViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequ
 
     def get_queryset(self):
         qs = super().get_queryset()
-        qs = qs.filter(source__in=['SALES_AGENT', 'SALES_QUOTE', 'SALES_POS'])
-        qs = qs.prefetch_related('lines__variant__product')
+        # Only show sales agent and quote invoices — NOT POS invoices
+        qs = qs.filter(source__in=['SALES_AGENT', 'SALES_QUOTE'])
+        qs = qs.select_related('customer').prefetch_related('lines__variant__product')
         return qs.order_by('-created_at')
 
     def perform_create(self, serializer):
@@ -47,6 +53,56 @@ class SalesInvoiceViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequ
             created_by=self.request.user,
             updated_by=self.request.user,
         )
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                self.perform_create(serializer)
+                invoice = serializer.instance
+                direct_deduct_stock(
+                    invoice.lines.all(),
+                    company_id=invoice.company_id,
+                    branch_id=invoice.branch_id,
+                    reference_id=invoice._id,
+                    user=request.user,
+                )
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'status': 'success',
+            'message': f'Invoice {serializer.instance.invoice_number} created',
+            'data': serializer.data,
+        }, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        if instance.status != 'DRAFT':
+            raise ValidationError('Only DRAFT invoices can be updated.')
+        if instance.payment_status == 'PAID':
+            raise ValidationError('Cannot edit a paid invoice.')
+        try:
+            with transaction.atomic():
+                direct_release_stock(instance._id, instance.company_id, request.user)
+                serializer = self.get_serializer(instance, data=request.data, partial=partial)
+                serializer.is_valid(raise_exception=True)
+                self.perform_update(serializer)
+                direct_deduct_stock(
+                    instance.lines.all(),
+                    company_id=instance.company_id,
+                    branch_id=instance.branch_id,
+                    reference_id=instance._id,
+                    user=request.user,
+                )
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'status': 'success',
+            'message': 'Invoice updated successfully',
+            'data': serializer.data,
+        })
 
     def perform_update(self, serializer):
         instance = serializer.instance
@@ -68,6 +124,7 @@ class SalesInvoiceViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequ
                 {'error': 'Cannot delete a paid invoice'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        direct_release_stock(instance._id, instance.company_id, request.user)
         instance.is_deleted = True
         instance.deleted_by = request.user
         instance.save(update_fields=['is_deleted', 'deleted_by'])

@@ -3,6 +3,16 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
+export interface EmployeeDocument {
+  id: string;
+  title?: string;
+  file_url: string;
+  file_url_thumb?: string;
+  original_filename: string;
+  file_size?: number;
+  mime_type?: string;
+}
+
 export interface Employee {
   id: string;
   employee_id: string;
@@ -43,6 +53,10 @@ export interface Employee {
   bank_account_number?: string;
   bank_iban?: string;
   salary: string;
+  profile_picture?: string;
+  profile_picture_thumb?: string;
+  education_documents?: EmployeeDocument[];
+  experience_documents?: EmployeeDocument[];
   isfrom_user_id?: string;
   isfrom_user_email?: string;
   createdAt?: string;

@@ -25,11 +25,39 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def sync_sales_order_to_invoice(order, user):
+def sync_sales_order_to_invoice(order, user, create_invoice=True):
+    """
+    Create a CustomerInvoice + payment for a completed SalesOrder.
+    
+    When create_invoice=False, creates only a standalone Payment record
+    linked to the SalesOrder (no CustomerInvoice).
+    """
     from apps.finance.models import CustomerInvoice, CustomerInvoiceLine
     from apps.finance.services.payable import create_payment_for, get_payments_queryset
     from django.utils import timezone
     from decimal import Decimal
+    
+    if not create_invoice:
+        # Create a standalone payment linked directly to the SalesOrder
+        # (no CustomerInvoice created)
+        if order.status == 'COMPLETE' and order.total_amount > 0:
+            if not get_payments_queryset(order).exists():
+                try:
+                    create_payment_for(
+                        order,
+                        amount=order.total_amount,
+                        payment_date=timezone.now().date(),
+                        payment_method=order.payment_method or 'CASH',
+                        bank_account=order.bank_account,
+                        user=user,
+                        auto_confirm=True,
+                    )
+                except ValueError as e:
+                    # If payment creation fails (e.g. missing account), log but don't block
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f'POS payment creation skipped: {e}')
+        return None
     
     # 1. Get or create CustomerInvoice
     invoice, created = CustomerInvoice.objects.get_or_create(
@@ -99,8 +127,8 @@ def sync_sales_order_to_invoice(order, user):
             except ObjectDoesNotExist:
                 raise Exception('AR or SALES account not found in Chart of Accounts. Cannot complete order.')
             
-        # 3. Auto-payment when bank account is set (immediate POS settlement)
-        if order.bank_account and not get_payments_queryset(invoice).exists():
+        # 3. Auto-payment for immediate POS settlement
+        if not get_payments_queryset(invoice).exists():
             create_payment_for(
                 invoice,
                 amount=order.total_amount,
@@ -110,6 +138,8 @@ def sync_sales_order_to_invoice(order, user):
                 user=user,
                 auto_confirm=True,
             )
+    
+    return invoice
 
 
 class SalesOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
@@ -130,24 +160,32 @@ class SalesOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequir
         return qs
 
     def create(self, request, *args, **kwargs):
-        # logger.error("request.data:: %s", request.data)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         status_val = serializer.validated_data.get('status', 'PENDING')
+        create_invoice = request.data.get('create_invoice', False)
+        invoice_id = None
+
         if status_val == 'COMPLETE':
             order = self._create_complete_order(serializer, request.user)
-            sync_sales_order_to_invoice(order, request.user)
+            invoice = sync_sales_order_to_invoice(order, request.user, create_invoice=create_invoice)
+            if invoice:
+                invoice_id = str(invoice._id)
         elif status_val == 'DRAFT':
             order = serializer.save()
             self._create_reservations(order, request.user)
         else:
             order = serializer.save()
 
+        response_data = SalesOrderSerializer(order, context={'request': request}).data
+        if invoice_id:
+            response_data['invoice_id'] = invoice_id
+        
         return Response({
             'status': 'success',
             'message': f'Sales order {order.order_number} created.',
-            'data': SalesOrderSerializer(order, context={'request': request}).data
+            'data': response_data
         }, status=status.HTTP_201_CREATED)
 
     def _create_complete_order(self, serializer, user):
@@ -281,9 +319,7 @@ class SalesOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequir
 
         user = request.user
         new_line_items = request.data.get('line_items', None)
-
-        if new_line_items is None:
-            return self._complete_without_changes(order, user)
+        create_invoice = request.data.get('create_invoice', False)
 
         existing_by_id = {str(line._id): line for line in order.lines.all()}
         existing_by_variant = {str(line.variant._id): line for line in order.lines.all()}
@@ -457,10 +493,14 @@ class SalesOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequir
             order.status = 'COMPLETE'
             order.save(update_fields=['total_amount', 'status'])
 
-        sync_sales_order_to_invoice(order, request.user)
-        return Response({'status': 'success', 'message': 'Order completed with modifications'})
+        invoice = sync_sales_order_to_invoice(order, request.user, create_invoice=create_invoice)
+        invoice_id = str(invoice._id) if invoice else None
+        response_data = {'status': 'success', 'message': 'Order completed with modifications'}
+        if invoice_id:
+            response_data['invoice_id'] = invoice_id
+        return Response(response_data)
 
-    def _complete_without_changes(self, order, user):
+    def _complete_without_changes(self, order, user, create_invoice=False):
         warehouse = order.warehouse
         company_id = user.company_id
 
@@ -518,8 +558,55 @@ class SalesOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequir
             order.status = 'COMPLETE'
             order.save(update_fields=['status'])
 
-        sync_sales_order_to_invoice(order, user)
-        return Response({'status': 'success', 'message': 'Order completed, stock deducted'})
+        invoice = sync_sales_order_to_invoice(order, user, create_invoice=create_invoice)
+        invoice_id = str(invoice._id) if invoice else None
+        response_data = {'status': 'success', 'message': 'Order completed, stock deducted'}
+        if invoice_id:
+            response_data['invoice_id'] = invoice_id
+        return Response(response_data)
+
+    @action(detail=True, methods=['post'])
+    def generate_invoice(self, request, _id=None):
+        """
+        Generate a CustomerInvoice for an existing completed SalesOrder
+        that doesn't already have one.
+        """
+        order = self.get_object()
+        if order.status != 'COMPLETE':
+            return Response(
+                {'error': 'Invoice can only be generated for completed orders'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check if invoice already exists
+        from apps.finance.models import CustomerInvoice
+        existing = CustomerInvoice.objects.filter(
+            sales_order=order, is_deleted=False
+        ).first()
+        if existing:
+            return Response({
+                'status': 'success',
+                'message': 'Invoice already exists',
+                'invoice_id': str(existing._id),
+            })
+
+        try:
+            invoice = sync_sales_order_to_invoice(order, request.user, create_invoice=True)
+            if not invoice:
+                return Response(
+                    {'error': 'Failed to generate invoice'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            return Response({
+                'status': 'success',
+                'message': f'Invoice {invoice.invoice_number} generated',
+                'invoice_id': str(invoice._id),
+            })
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     @action(detail=True, methods=['post'])
     def cancel(self, request, _id=None):

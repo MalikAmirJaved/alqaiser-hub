@@ -37,6 +37,8 @@ interface Actions<T> {
   onEdit?: (item: T) => void;
   onDelete?: (item: T) => void;
   onPost?: (item: T) => void;
+  canEdit?: (item: T) => boolean;
+  canDelete?: (item: T) => boolean;
   canPost?: (item: T) => boolean;
   postLabel?: string;
 }
@@ -245,9 +247,7 @@ export function DynamicModulePage<T>({
             {batchActions}
           </div>
         )}
-
         <Card>
-          <TableToolbar />
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-xs text-muted-foreground border-b border-border bg-surface/40">
@@ -339,7 +339,7 @@ export function DynamicModulePage<T>({
                                     <Send className="w-4 h-4" />
                                   </button>
                                 )}
-                              {actions?.onEdit && permissions.update && (
+                              {actions?.onEdit && permissions.update && (actions.canEdit?.(item) ?? true) && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -351,7 +351,7 @@ export function DynamicModulePage<T>({
                                   <Pencil className="w-4 h-4" />
                                 </button>
                               )}
-                              {actions?.onDelete && permissions.delete && (
+                              {actions?.onDelete && permissions.delete && (actions.canDelete?.(item) ?? true) && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();

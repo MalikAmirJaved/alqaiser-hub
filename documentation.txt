@@ -1,0 +1,2240 @@
+================================================================================
+                        AL QAISER BOS - COMPLETE USER GUIDE
+                     Business Operating System Documentation
+================================================================================
+
+
+================================================================================
+                              TABLE OF CONTENTS
+================================================================================
+
+  1.  System Overview
+  2.  Getting Started (First-Time Login)
+  3.  Company Profile Setup
+  4.  Settings Module
+  5.  Human Resources (HR) Module
+  6.  Inventory Module
+  7.  Sales Module
+  8.  Finance Module
+  9.  AI Monitoring Module
+  10. Notifications System
+  11. Permission & Access Control
+  12. Unified Dashboard
+  13. How Modules Link Together
+  14. Troubleshooting & FAQ
+
+
+================================================================================
+                         1. SYSTEM OVERVIEW
+================================================================================
+
+Al Qaiser BOS is a complete Business Operating System that manages:
+
+  - Human Resources (employees, payroll, leaves, shifts, assets)
+  - Inventory (products, stock, warehouses, purchase orders, POS)
+  - Sales (leads, quotes, invoices, customers)
+  - Finance (accounts, journal entries, invoices, expenses, budgets, forecasting)
+  - AI Monitoring (CCTV, camera feeds, alerts)
+  - Settings (company profile, users, permissions, departments, designations)
+
+URL: http://192.168.88.51:3000
+
+  Technology:
+  - Backend:  Django 6.0 + Django REST Framework + PostgreSQL + Redis
+  - Frontend: Next.js 14+ (App Router) + React 19 + TypeScript + Redux Toolkit + TanStack Query
+  - Auth:     JWT (HttpOnly cookies) with role-based access control (RBAC)
+  - Realtime: WebSocket notifications + Celery background tasks + HLS streaming
+  - Streaming: FFmpeg RTSP-to-HLS for CCTV camera feeds
+
+
+================================================================================
+                     2. GETTING STARTED (FIRST-TIME LOGIN)
+================================================================================
+
+---------------------------------------
+  IMPORTANT: SECURITY WARNING
+---------------------------------------
+
+  DO NOT share your login credentials with anyone.
+
+  The system ships with DEFAULT admin credentials. You MUST change them
+  immediately after your first login.
+
+  DEFAULT CREDENTIALS (CHANGE THESE IMMEDIATELY):
+  ------------------------------------------------
+    Username:  admin
+    Email:     admin@gmail.com
+    Password:  123456
+
+---------------------------------------
+  Step-by-Step: First-Time Login
+---------------------------------------
+
+  1. Open your browser and go to:
+     http://192.168.88.51:3000/login
+
+  2. Enter the default credentials above and click Login.
+
+  3. IMMEDIATELY go to Settings > Users and edit the admin account:
+     - Change the username to something unique
+     - Change the email to your real email
+     - Change the password to a strong password
+
+  4. Click Save.
+
+  Your admin account is now secured. Never use the defaults again.
+
+---------------------------------------
+  First-Time Setup Checklist (In Order)
+---------------------------------------
+
+  After changing your login credentials, complete these steps IN ORDER:
+
+  Step 1: Setup Company Profile
+    Go to: http://192.168.88.51:3000/settings/company
+    - Enter company name, logo, registration details
+    - Set global currency (used across all modules)
+    - Set company location (country, state, city)
+    - Configure working schedule (working days, hours)
+
+  Step 2: Create Departments
+    Go to: http://192.168.88.51:3000/settings/departments
+    - Create departments like: Sales, HR, Finance, Operations, IT
+    - Each department groups employees together
+
+  Step 3: Create Designations
+    Go to: http://192.168.88.51:3000/settings/designations
+    - Create job titles like: Manager, Executive, Intern, Director
+    - Designations define the role hierarchy
+
+  Step 4: Add Users (Optional - for multi-user access)
+    Go to: http://192.168.88.51:3000/settings/users
+    - Create user accounts for other team members
+    - Each user gets their own login credentials
+
+  Step 5: Assign Permissions
+    Go to: http://192.168.88.51:3000/settings/permissions
+    - Control which modules/submodules each user can access
+    - Set specific actions: view, create, update, delete, approve
+    - This ensures users only see what they need
+
+  Step 6: Add Employees
+    Go to: http://192.168.88.51:3000/hr/employees
+    - Add all your employees with their details
+
+
+================================================================================
+                        3. COMPANY PROFILE SETUP
+================================================================================
+
+  URL: http://192.168.88.51:3000/settings/company
+
+  This is the FIRST thing you configure after login. All other modules
+  depend on this setup.
+
+  What to Configure:
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ Setting               │ Description                            │
+  ├─────────────────────────────────────────────────────────────────┤
+  │ Company Name          │ Legal name of your business            │
+  │ Company Logo          │ Upload your logo (shown on documents)  │
+  │ Global Currency       │ Default currency for payroll/finance   │
+  │ Location              │ Country, State, City                   │
+  │ Working Schedule      │ Which days are workdays, work hours    │
+  │ Public Holidays       │ Define company holidays                │
+  └─────────────────────────────────────────────────────────────────┘
+
+  Why This Matters:
+  - The currency set here is used across payroll, finance, and sales
+  - Working days affect payroll salary calculations (30-day month rule)
+  - Public holidays affect leave and attendance tracking
+
+
+================================================================================
+                     4. SETTINGS MODULE
+================================================================================
+
+  Module Path: /settings/*
+
+  The Settings module is where you configure your entire system.
+  Access it from the sidebar under "Settings".
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ Submodule          │ URL                                        │
+  ├─────────────────────────────────────────────────────────────────┤
+  │ Company Profile    │ /settings/company                          │
+  │ Terms & Conditions │ /settings/terms                            │
+  │ Users & Roles      │ /settings/users                            │
+  │ Permissions        │ /settings/permissions                      │
+  │ Departments        │ /settings/departments                      │
+  │ Designations       │ /settings/designations                     │
+  │ Preferences        │ /settings/preferences                      │
+  └─────────────────────────────────────────────────────────────────┘
+
+---------------------------------------
+  4.1 Company Profile
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/settings/company
+
+  Purpose: Configure your company's basic information.
+
+  Actions:
+    CREATE  - Set up company for the first time
+    UPDATE  - Edit company details, logo, currency, location
+
+  Fields:
+    - Company Name, Logo, Email, Phone, Address
+    - Country, State, City, Zip Code
+    - Currency (affects all financial calculations)
+    - Working Days (Sun-Thu or Mon-Fri, etc.)
+    - Public Holidays (add/remove holidays)
+
+---------------------------------------
+  4.2 Terms & Conditions
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/settings/terms
+
+  Purpose: Configure default terms and conditions text for quotes and invoices.
+
+  Actions:
+    UPDATE  - Edit quote terms and invoice terms
+
+  What to Configure:
+    - Quote Terms: Default text shown on sales quotes
+    - Invoice Terms: Default text shown on customer invoices
+
+  Why This Matters:
+    - Terms auto-populate when creating quotes and invoices
+    - Ensures consistent legal language across documents
+    - Can be customized per company
+
+---------------------------------------
+  4.3 Users & Roles
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/settings/users
+
+  Purpose: Create user accounts so other people can log in.
+
+  Actions:
+    CREATE  - Add a new user with login credentials
+    UPDATE  - Edit user details or reset password
+    DELETE  - Disable a user account
+    TOGGLE  - Activate/Deactivate user status
+
+  How Users Work:
+    - Users are separate from employees
+    - A user represents a login account
+    - Users can be linked to employees (via "Give Login Access")
+    - Each user is assigned to a company and branch
+
+  User Roles (built-in):
+    - COMPANY_ADMIN  - Full access to everything
+    - BRANCH_ADMIN   - Access limited to their branch
+    - STAFF          - Minimal access
+
+  IMPORTANT: To give a user access to specific modules:
+    Go to Settings > Permissions and configure their permissions.
+
+---------------------------------------
+  4.4 Permissions
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/settings/permissions
+
+  Purpose: Control what each user can see and do in the system.
+
+  How It Works:
+    1. Each user is assigned one or more roles
+    2. Roles contain sets of permissions
+    3. Users can also have individual permission overrides
+    4. The system checks permissions before allowing any action
+    5. COMPANY_ADMIN role bypasses all permission checks
+
+  Steps to Configure:
+    1. Go to Settings > Permissions
+    2. Select a user
+    3. Assign a role (COMPANY_ADMIN, BRANCH_ADMIN, or STAFF)
+    4. Add/remove individual permissions as needed
+    5. Changes take effect immediately
+
+---------------------------------------
+  4.5 Departments
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/settings/departments
+
+  Purpose: Organize employees into departments.
+
+  Actions:
+    CREATE  - Add a new department
+    UPDATE  - Edit department name/details
+    DELETE  - Remove a department
+
+  How Departments Work:
+    - Departments group employees by function (Sales, HR, IT, etc.)
+    - Every employee must belong to a department
+    - Departments are used in:
+      * HR: Employee organization
+      * Finance: Department-based reporting
+      * Sales: Team assignment
+      * Policies: Department-specific policies
+
+  Example Workflow:
+    1. Create "Sales" department
+    2. Create "HR" department
+    3. Create "Finance" department
+    4. When adding employees, assign them to departments
+
+---------------------------------------
+  4.6 Designations
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/settings/designations
+
+  Purpose: Define job titles and hierarchy levels.
+
+  Actions:
+    CREATE  - Add a new designation
+    UPDATE  - Edit designation details
+    DELETE  - Remove a designation
+
+  How Designations Work:
+    - Designations represent job titles (Manager, Executive, Intern)
+    - They define the hierarchy in the organization
+    - Used in:
+      * Employee profiles
+      * Salary structures
+      * Recruitment
+      * Exit management
+
+  Example:
+    Director > Manager > Team Lead > Executive > Intern
+
+
+================================================================================
+                   5. HUMAN RESOURCES (HR) MODULE
+================================================================================
+
+  Module Path: /hr/*
+
+  The HR module is the most comprehensive module. It manages your entire
+  workforce from hiring to exit.
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ Submodule             │ URL                                     │
+  ├─────────────────────────────────────────────────────────────────┤
+  │ Employee Management   │ /hr/employees                           │
+  │ Payroll               │ /hr/payroll                             │
+  │ Employee Salary       │ /hr/salary/{id}                         │
+  │ Time & Attendance     │ /hr/attendance                          │
+  │ Leave Management      │ /hr/leave                               │
+  │ Shifts                │ /hr/shifts/list                         │
+  │ Shift Templates       │ /hr/shifts/templates                    │
+  │ Assets                │ /hr/assets/list                         │
+  │ Asset Kits            │ /hr/assets/kits                         │
+  │ Employee Assets       │ /hr/assets/employee-assets              │
+  │ Performance           │ /hr/performance                         │
+  │ Recruitment           │ /hr/recruitment                         │
+  │ Exit Management       │ /hr/exit                                │
+  │ HR Policies           │ /hr/policies                            │
+  │ Compensation & Loan   │ /hr/compensation                        │
+  └─────────────────────────────────────────────────────────────────┘
+
+---------------------------------------
+  5.1 Employee Management
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/hr/employees
+
+  Purpose: Manage all employee records in your organization.
+
+  Actions:
+    CREATE   - Add a new employee
+    UPDATE   - Edit employee details
+    DELETE   - Soft-delete an employee (not permanent)
+    VIEW     - See employee profile and details
+    EXPORT   - Export employee list
+
+  Employee Fields:
+    - Personal Info:  Name, email, phone, date of birth, gender, address
+    - Job Info:       Department, designation, join date, salary
+    - Status:         Active/Inactive, employment type
+    - Documents:      ID documents, certificates
+    - Reports To:     Reporting manager
+
+  How It Works:
+    1. Click "Create Employee" button
+    2. Fill in all required fields (personal, job, contact details)
+    3. Select department and designation
+    4. Save the employee
+
+  Give Login Access:
+    - On the employee list, click the employee name
+    - Click "Give Login Access" button
+    - You will be redirected to Settings > Users
+    - A form opens with employee data auto-populated
+    - Add username, email, and password
+    - The employee can now log in to the system
+
+  Stats Dashboard:
+    - Total Employees count
+    - Active Employees count
+    - Department-wise breakdown
+
+  Why This Matters:
+    - Employees are the foundation for payroll, leaves, shifts, assets, recruitment
+    - Every HR action (leave, payroll, shift assignment) links to an employee record
+    - Without employees, you cannot process payroll or manage leaves
+
+---------------------------------------
+  5.2 Employee Salary Detail
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/hr/salary/{id}
+
+  Purpose: Comprehensive salary overview for a single employee from joining to current.
+
+  Shows:
+    - Summary stats: Total Gross Paid, Total Deductions, Net Paid Out, Loans Outstanding
+    - Salary overview with money flow visualization
+    - Active compensation details and allowances breakdown
+    - Compensation payment status per month (PAID/PENDING badges)
+    - Full payroll history table with running totals
+    - Personal loans with progress bars
+    - Salary advances with deduction tracking
+    - Leave summary with deduction amounts
+    - Monthly timeline of all payroll events (latest 24 months)
+
+  How to Access:
+    1. Go to HR > Payroll
+    2. Click on an employee row
+    3. You are redirected to the salary detail page
+
+  Why This Matters:
+    - Complete financial picture for any employee
+    - Useful for salary negotiations, audits, and exit settlements
+    - Shows exactly how much has been paid, deducted, and outstanding
+
+---------------------------------------
+  5.3 Payroll
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/hr/payroll
+
+  Purpose: Process and manage employee salaries.
+
+  IMPORTANT: Payroll operates on a PREVIOUS MONTH basis.
+  When you open payroll, the default month selected is the PREVIOUS month
+  because most companies pay salaries after the month has ended.
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │              SALARY CALCULATION RULES                            │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  RULE #1: Fixed 30-Day Month                                   │
+  │  ─────────────────────────────                                  │
+  │  Days in month = 30 (FIXED)                                    │
+  │  This is a system rule. If you need to change this,            │
+  │  contact support.                                               │
+  │                                                                 │
+  │  RULE #2: Pro-Rated Salary for Mid-Month Joins                 │
+  │  ──────────────────────────────────────────                     │
+  │  If an employee joins DURING the payroll month:                 │
+  │                                                                 │
+  │    prorated_days = 30 - joining_day + 1                        │
+  │    factor = prorated_days / 30                                  │
+  │    base_salary = original_salary * factor                       │
+  │                                                                 │
+  │  The +1 means the joining day itself is PAID.                   │
+  │                                                                 │
+  │  Example 1: Employee joins on 1st                              │
+  │    prorated_days = 30 - 1 + 1 = 30                            │
+  │    factor = 30/30 = 1.0                                        │
+  │    Base Salary = 30,000 x 1.0 = 30,000 (FULL salary)          │
+  │                                                                 │
+  │  Example 2: Employee joins on 10th                             │
+  │    prorated_days = 30 - 10 + 1 = 21                           │
+  │    factor = 21/30 = 0.70                                       │
+  │    Base Salary = 30,000 x 0.70 = 21,000                       │
+  │    (Paid for days 10 through 30 = 21 days)                     │
+  │                                                                 │
+  │  RULE #3: Leave Deductions                                     │
+  │  ────────────────────────                                       │
+  │  Leave types and conversion:                                    │
+  │    2 short leaves = 1 half leave                               │
+  │    2 half leaves  = 1 full leave                               │
+  │                                                                 │
+  │  Full leave deduction calculation:                              │
+  │    total_full_leaves / 30 * monthly_salary                     │
+  │                                                                 │
+  │  RULE #4: Final Salary Formula                                 │
+  │  ─────────────────────────────                                  │
+  │  Base Salary = Base Salary                                     │
+  │               + Compensation (allowances)                       │
+  │               - Loan repayment                                  │
+  │               - Leave deductions (from Rule #3)                 │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  Payroll Workflow:
+    1. Go to Payroll page
+    2. System auto-selects previous month (can be changed)
+    3. Click "Process Payment" of user that want pay salary
+    4. System calculates salary for each employee:
+       - Base salary (pro-rated if joined mid-month)
+       - Add compensation/allowances
+       - Deduct approved leaves
+       - Deduct loan repayments
+    5. Review the preview
+    6. Process/Finalize the payroll
+    7. Employee salary is recorded
+
+  Stats:
+    - Total payroll amount
+    - Processed vs pending
+    - Average salary
+
+---------------------------------------
+  5.4 Leave Management
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/hr/leave
+
+  Purpose: Manage employee leave requests and approvals.
+
+  Actions:
+    CREATE   - Apply for leave (employee or admin)
+    APPROVE  - Confirm/reject a leave request
+    REJECT   - Reject a leave request
+
+  How to Apply for Leave:
+    1. Click "Apply for Leave" button
+    2. Select the Employee (who is requesting leave)
+    3. Select Period Type:
+       - Short Leave  (a few hours)
+       - Half Day     (half a day)
+       - Full Day     (entire day)
+    4. Select the Date
+    5. Add a Reason (required)
+    6. Click Create
+
+  Approval Tab:
+    - All pending leave requests appear here
+    - For each request, you can:
+      * Confirm (approve) - leaves are counted in payroll deductions
+      * Reject - leave is denied
+    - Once confirmed, the leave affects salary calculation
+
+  How Leaves Affect Payroll:
+    - Approved leaves are converted using the deduction rules
+    - 2 short leaves = 1 half leave
+    - 2 half leaves = 1 full leave
+    - Full leave deduction = (total full leaves / 30) x monthly salary
+
+  Stats:
+    - Total leave requests
+    - Pending approval count
+    - Approved vs rejected
+
+---------------------------------------
+  5.5 Shift Management
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/hr/shifts/list
+
+  Purpose: Manage employee work shifts and schedules.
+
+  The shift management page has TWO tabs:
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  TAB 1: CALENDAR VIEW                                          │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  Purpose: Visual calendar to manage shifts                     │
+  │                                                                 │
+  │  How to Create a Shift:                                        │
+  │    1. Click on a day in the calendar                           │
+  │    2. A form opens                                            │
+  │    3. Select the Employee                                     │
+  │    4. Select the Shift Template (e.g., Morning Shift 9-5)     │
+  │    5. Select the Date Range (default: 1 day)                  │
+  │    6. Click Create                                            │
+  │                                                                 │
+  │  How to View Shifts:                                           │
+  │    - Calendar shows all assigned shift templates               │
+  │    - Click on a template to see a popup with all employees    │
+  │      assigned to that shift                                    │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  TAB 2: EMPLOYEE LIST                                          │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  Purpose: Manage shifts from the employee's perspective        │
+  │                                                                 │
+  │  For each employee, you can:                                   │
+  │                                                                 │
+  │  1. SET DEFAULT SHIFT                                          │
+  │     - Click "Set Default" button                               │
+  │     - Select a shift template                                  │
+  │     - This becomes the employee's default shift               │
+  │     - Applied to all days unless overridden                    │
+  │                                                                 │
+  │  2. SCHEDULE (Override for specific days)                      │
+  │     - Click "Schedule" button                                  │
+  │     - Select a different shift for a specific date range      │
+  │     - This overrides the default for those days               │
+  │                                                                 │
+  │  3. HISTORY                                                    │
+  │     - Click "History" button                                   │
+  │     - View the complete shift history for that employee       │
+  │                                                                 │
+  │  HEADER: History Button                                         │
+  │    - Click the "History" button in the page header            │
+  │    - View overall shift history for ALL employees             │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  Actions:
+    CREATE   - Assign a shift to an employee
+    UPDATE   - Change shift assignment
+    DELETE   - Remove a shift assignment
+    BULK     - Assign shifts to multiple employees at once
+
+---------------------------------------
+  5.6 Shift Templates
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/hr/shifts/templates
+
+  Purpose: Create reusable shift definitions.
+
+  Actions:
+    CREATE   - Create a new shift template
+    UPDATE   - Edit shift template
+    DELETE   - Remove a shift template
+
+  What is a Shift Template:
+    - Defines a work schedule (start time, end time, break times)
+    - Example: "Morning Shift" = 9:00 AM to 5:00 PM
+    - Example: "Night Shift" = 10:00 PM to 6:00 AM
+    - Templates are used when assigning shifts to employees
+
+  Workflow:
+    1. Create shift templates first (Morning, Evening, Night)
+    2. Then assign templates to employees via Shift Management
+    3. Employees can have a default template + overrides
+
+  Why This Matters:
+    - Shifts define when employees work
+    - Shift data feeds into attendance tracking
+    - Shift patterns affect payroll calculations
+
+---------------------------------------
+  5.7 Inventory Assets
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/hr/assets/list
+
+  Purpose: Manage company assets (laptops, phones, equipment, etc.).
+
+  Actions:
+    CREATE   - Add a new asset
+    UPDATE   - Edit asset details
+    DELETE   - Remove an asset
+    REQUEST  - Request more of an existing asset
+
+  How to Create an Asset:
+    1. Click "Create Asset" button
+    2. Fill in asset details (name, category, value, status)
+    3. Save the asset
+
+  How to Request More Assets:
+    1. Click the 3-dot menu on an existing asset
+    2. Click "Request"
+    3. A popup form opens
+    4. Enter: Quantity needed, Reason, Required Date
+    5. Click Submit
+    6. This creates a purchase request for that asset
+
+  Asset Categories:
+    URL: http://192.168.88.51:3000/hr/assets/kits (Asset Kits)
+
+    Purpose: Group multiple assets into a kit/bundle.
+
+    How to Create a Kit:
+      1. Click "Create Kit" button
+      2. Enter a kit name (e.g., "Developer Workstation")
+      3. Select which assets to include
+      4. Save the kit
+
+    Why Use Kits:
+      - Assign multiple assets to an employee at once
+      - Track bundled equipment together
+      - Example: Laptop + Mouse + Headset = "Developer Kit"
+
+  Employee Asset Assignments:
+    URL: http://192.168.88.51:3000/hr/assets/employee-assets
+
+    Purpose: Track which assets are assigned to which employees.
+
+    Actions:
+      ASSIGN   - Give an asset to an employee
+      RETURN   - Take back an asset from an employee
+      VIEW     - See all assigned assets
+
+---------------------------------------
+  5.8 Performance
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/hr/performance
+
+  Purpose: Track and manage employee performance reviews.
+
+  Actions:
+    CREATE   - Create a performance review
+    UPDATE   - Edit performance records
+    DELETE   - Remove performance records
+
+---------------------------------------
+  5.9 Recruitment
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/hr/recruitment
+
+  Purpose: Manage the hiring pipeline from candidate to employee.
+
+  Actions:
+    CREATE   - Add a new candidate
+    UPDATE   - Edit candidate details
+    DELETE   - Remove a candidate
+    BULK     - Perform bulk actions on candidates
+    TRACK    - Track interview rounds and activities
+
+  How Recruitment Works:
+    1. Add candidates with their details
+    2. Create interview rounds for each candidate
+    3. Track activities and notes
+    4. Update round status (scheduled, completed, passed, failed)
+    5. When hired, candidate is converted to an employee
+
+  Interview Rounds:
+    - Each candidate can have multiple interview rounds
+    - Each round has: name, date, interviewer, status
+    - You can create rounds in bulk or individually
+    - Status can be updated in bulk
+
+  Activities:
+    - Log activities for each candidate (call, email, interview)
+    - Track the complete communication history
+
+---------------------------------------
+  5.10 Exit Management
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/hr/exit
+
+  Purpose: Manage employee offboarding when they leave the company.
+
+  Actions:
+    CREATE   - Initiate exit for an employee
+    UPDATE   - Edit exit details
+    DELETE   - Cancel exit process
+    SETTLE   - Process final settlement
+    RETURN   - Track asset returns
+    CLEAR    - Clear all dues
+
+  Exit Workflow:
+    1. Create an exit record for the employee
+    2. Add exit details (reason, last working day, notice period)
+    3. Process final settlement:
+       - Calculate pending salary
+       - Deduct any outstanding loans
+       - Add compensations owed
+    4. Track asset returns:
+       - System shows all assets assigned to the employee
+      - Mark each asset as returned
+    5. Clear all dues:
+       - Ensure all financial obligations are settled
+    6. Mark exit as complete
+
+  Exit Checklist:
+    - View and manage exit checklist items
+    - Track which tasks are completed
+
+  Bulk Actions:
+    - Process multiple exits at once
+
+---------------------------------------
+  5.11 HR Policies
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/hr/policies
+
+  Purpose: Create, manage, and version company HR policies.
+
+  Actions:
+    CREATE    - Create a new policy
+    UPDATE    - Edit policy content
+    DELETE    - Remove a policy
+    VERSION   - Create new versions of policies
+    BULK      - Bulk actions on policies
+    CATEGORIES - Organize policies by category
+
+  How Policies Work:
+    1. Create a policy category (e.g., "Leave Policy", "Work From Home")
+    2. Create policies under each category
+    3. Add content and details
+    4. Create versions when policies change
+    5. Version history is maintained
+
+  Policy Categories:
+    - Organize policies for easy navigation
+    - Examples: Leave Policy, Safety Policy, Code of Conduct
+
+---------------------------------------
+  5.12 Compensation & Loans
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/hr/compensation
+
+  Purpose: Manage employee compensation structures and loans.
+
+  COMPENSATION:
+    Purpose: Define allowance structures for employees.
+
+    Actions:
+      CREATE   - Create a compensation structure
+      UPDATE   - Edit compensation
+      DELETE   - Remove compensation
+
+    Types of Compensation:
+      - HRA (House Rent Allowance)
+      - Medical Allowance
+      - Transport Allowance
+      - Special Allowance
+      - Other custom allowances
+
+    How It Works:
+      1. Create a compensation record for an employee
+      2. Select which months the compensation applies to
+      3. Add individual allowance components
+      4. Compensation is added to salary during payroll processing
+
+  LOANS:
+    Purpose: Manage employee loans (personal, car, house, education).
+
+    Actions:
+      CREATE   - Create a new loan
+      UPDATE   - Edit loan details
+      DELETE   - Remove a loan
+      APPROVE  - Approve a loan request
+      PAY      - Record loan payment
+      STATUS   - Update loan status
+
+    Loan Types:
+      - Personal Loan
+      - Car Loan
+      - House Loan
+      - Education Loan
+      - Other
+
+    How Loans Work:
+      1. Create a loan record for an employee
+      2. Set the loan amount and type
+      3. Select which months to deduct from salary
+      4. Approve the loan
+      5. During payroll, loan amount is automatically deducted
+      6. Track payments until loan is fully repaid
+
+    Loan in Payroll:
+      - Approved loans are deducted from monthly salary
+      - Deduction happens automatically during payroll processing
+      - Remaining balance is tracked
+
+
+================================================================================
+                      6. INVENTORY MODULE
+================================================================================
+
+  Module Path: /inventory/*
+
+  The Inventory module manages your entire stock, products, suppliers,
+  purchases, and point-of-sale operations.
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ Submodule               │ URL                                   │
+  ├─────────────────────────────────────────────────────────────────┤
+  │ Inventory Dashboard     │ /inventory/dashboard                  │
+  │ Warehouse Management    │ /inventory/warehouses                 │
+  │ Categories              │ /inventory/categories                 │
+  │ Brands                  │ /inventory/brands                     │
+  │ Product Management      │ /inventory/products                   │
+  │ Suppliers & Vendors     │ /inventory/suppliers                  │
+  │ Customers               │ /inventory/customers                  │
+  │ Purchase Management     │ /inventory/purchases                  │
+  │ Stock Management        │ /inventory/stock                      │
+  │ Inventory Transfers     │ /inventory/transfers                  │
+  │ Barcode & QR            │ /inventory/barcode                    │
+  │ Selling / POS           │ /inventory/pos                        │
+  │ Alerts                  │ /inventory/alerts                     │
+  │ Inventory Audit Logs    │ /inventory/audit                      │
+  │ Reports                 │ /inventory/reports                    │
+  └─────────────────────────────────────────────────────────────────┘
+
+---------------------------------------
+  6.1 Inventory Dashboard
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/inventory/dashboard
+
+  Purpose: Overview of inventory health and key metrics.
+
+  Shows:
+    - Total products, total stock value
+    - Low stock alerts
+    - Recent transactions
+    - Warehouse utilization
+    - Top selling products
+
+---------------------------------------
+  6.2 Warehouse Management
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/inventory/warehouses
+
+  Purpose: Manage physical storage locations.
+
+  Actions:
+    CREATE   - Add a new warehouse
+    UPDATE   - Edit warehouse details
+    DELETE   - Remove a warehouse
+
+  How It Works:
+    - Each warehouse holds stock independently
+    - Stock can be transferred between warehouses
+    - Purchases are received into specific warehouses
+    - Sales are fulfilled from specific warehouses
+
+  Example Warehouses:
+    - Main Warehouse
+    - Downtown Store
+    - Online Fulfillment Center
+
+---------------------------------------
+  6.3 Categories
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/inventory/categories
+
+  Purpose: Organize products into categories.
+
+  Actions:
+    CREATE   - Add a category
+    UPDATE   - Edit category
+    DELETE   - Remove a category
+
+  Example Categories:
+    - Electronics, Clothing, Food & Beverage, Office Supplies
+
+---------------------------------------
+  6.4 Brands
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/inventory/brands
+
+  Purpose: Manage product brands.
+
+  Actions:
+    CREATE   - Add a brand
+    UPDATE   - Edit brand
+    DELETE   - Remove a brand
+
+---------------------------------------
+  6.5 Product Management
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/inventory/products
+
+  Purpose: Create and manage your product catalog.
+
+  Actions:
+    CREATE   - Add a new product
+    UPDATE   - Edit product details
+    DELETE   - Remove a product
+
+  How Products Work:
+    1. Create a product with basic info (name, category, brand)
+    2. Add product variants (size, color, model)
+    3. Each variant has its own stock, price, and SKU
+    4. Set pricing (cost price, selling price)
+    5. Assign to warehouses
+
+  Product Fields:
+    - Name, Description, Category, Brand
+    - Cost Price, Selling Price
+    - SKU, Barcode
+    - Variants (optional): Color, Size, etc.
+    - Images
+    - Minimum stock level (for alerts)
+
+  Product Variants:
+    - A product can have multiple variants
+    - Example: T-Shirt (Product) -> Red/Small, Blue/Large (Variants)
+    - Each variant tracks stock independently
+
+---------------------------------------
+  6.6 Suppliers & Vendors
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/inventory/suppliers
+
+  Purpose: Manage your product suppliers.
+
+  Actions:
+    CREATE   - Add a supplier
+    UPDATE   - Edit supplier details
+    DELETE   - Remove a supplier
+
+  How Suppliers Connect:
+    - Suppliers provide products via Purchase Orders
+    - Supplier bills are tracked in Finance module
+    - You can track supplier performance
+
+  Supplier Details:
+    - Company name, contact person
+    - Email, phone, address
+    - Payment terms
+    - Products they supply
+
+---------------------------------------
+  6.7 Customers
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/inventory/customers
+
+  Purpose: Manage your customers (for inventory sales).
+
+  Actions:
+    CREATE   - Add a customer
+    UPDATE   - Edit customer details
+    DELETE   - Remove a customer
+
+  How Customers Connect:
+    - Customers buy products via Sales Orders (POS)
+    - Customer invoices are tracked in Finance module
+    - Customer data is shared with Sales module
+
+---------------------------------------
+  6.8 Purchase Management
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/inventory/purchases
+
+  Purpose: Manage purchase orders to suppliers.
+
+  Actions:
+    CREATE   - Create a purchase order
+    UPDATE   - Edit purchase order
+    DELETE   - Cancel a purchase order
+    CONFIRM  - Confirm a purchase order
+    RECEIVE  - Receive goods against a purchase order
+
+  Purchase Order Workflow:
+    1. Create a PO with supplier, products, quantities
+    2. System auto-generates PO number
+    3. Confirm the PO (sends to supplier)
+    4. When goods arrive, click "Receive Goods"
+    5. Enter received quantities
+    6. Stock is automatically added to the warehouse
+    7. A Goods Receipt is created
+
+  Purchase Order Fields:
+    - Supplier, Warehouse, Expected Date
+    - Line items: Product, Variant, Quantity, Unit Price
+    - Total amount, Tax, Discount
+    - Status: Draft -> Confirmed -> Received
+
+  Goods Receipt:
+    - Created when you receive goods
+    - Records actual quantities received
+    - Updates stock levels in the warehouse
+
+  Asset Purchase Requests:
+    - HR assets can trigger purchase requests
+    - When HR requests an asset, a PO is created
+    - Link: HR Assets -> Asset Purchase Requests -> Inventory PO
+
+---------------------------------------
+  6.9 Stock Management
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/inventory/stock
+
+  Purpose: Track and manage stock levels across warehouses.
+
+  Actions:
+    VIEW     - See current stock levels
+    ADJUST   - Manually adjust stock
+    HISTORY  - View stock transaction history
+
+  How Stock Works:
+    - Stock is tracked per variant per warehouse
+    - Every purchase, sale, transfer, and adjustment changes stock
+    - Stock history logs all changes with reasons
+
+  Stock Adjustments:
+    1. Click "Adjust Stock" button
+    2. Select the product/variant
+    3. Select the warehouse
+    4. Enter new quantity or adjustment amount
+    5. Add a reason for the adjustment
+    6. Save
+
+  Stock Reports:
+    - Current stock levels
+    - Stock valuation
+    - Stock movement history
+    - Low stock alerts
+
+---------------------------------------
+  6.10 Inventory Transfers
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/inventory/transfers
+
+  Purpose: Move stock between warehouses.
+
+  Actions:
+    CREATE   - Create a transfer
+    UPDATE   - Edit transfer details
+    CONFIRM  - Confirm and execute transfer
+    CANCEL   - Cancel a transfer
+
+  Transfer Workflow:
+    1. Create a transfer (source warehouse, destination warehouse)
+    2. Add products and quantities to transfer
+    3. Confirm the transfer
+    4. Stock is deducted from source warehouse
+    5. Stock is added to destination warehouse
+    6. Transfer record is maintained
+
+  Why Use Transfers:
+    - Move stock from main warehouse to a branch
+    - Rebalance stock across locations
+    - Fulfill orders from different warehouses
+
+---------------------------------------
+  6.11 Barcode & QR
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/inventory/barcode
+
+  Purpose: Generate and manage barcodes for products.
+
+  Actions:
+    GENERATE - Create barcodes for products
+    VIEW     - See all generated barcodes
+    PRINT    - Print barcode labels
+
+---------------------------------------
+  6.12 Selling / POS
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/inventory/pos
+
+  Purpose: Point-of-sale interface for selling products.
+
+  How POS Works:
+    1. Product Search Panel - Find products by name/SKU/barcode
+    2. Cart Panel - Add products, set quantities, apply discounts
+    3. Select customer (optional)
+    4. Complete the sale
+    5. Stock is automatically deducted
+    6. A sales order is created
+    7. Optionally generate an invoice (linked to Finance)
+
+  POS Panels:
+    - ProductSearchPanel: Search and browse products
+    - CartPanel: Manage items in the sale
+    - SalesListPanel: View recent sales
+    - ReturnPanel: Process returns
+
+  Sales Order Workflow:
+    1. Create sales order in POS
+    2. Add products to cart
+    3. Select customer (optional)
+    4. Complete sale
+    5. Stock is deducted from warehouse
+    6. Order status changes to "Completed"
+
+  Sales Returns:
+    - Process returns for completed sales
+    - Stock is added back to warehouse
+    - Return record is created
+
+---------------------------------------
+  6.13 Alerts
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/inventory/alerts
+
+  Purpose: Monitor low stock and system alerts.
+
+  Alert Types:
+    - Low Stock: Product quantity below minimum level
+    - Out of Stock: Product quantity is zero
+    - Expiring Soon: Products approaching expiry date
+    - System Alerts: System-level notifications
+
+---------------------------------------
+  6.14 Inventory Audit Logs
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/inventory/audit
+
+  Purpose: Track all changes to inventory data.
+
+  Shows:
+    - Who made changes
+    - What was changed
+    - When it was changed
+    - Old vs new values
+
+---------------------------------------
+  6.15 Inventory Reports
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/inventory/reports
+
+  Purpose: Generate inventory analytics and reports.
+
+  Report Types:
+    - Stock Report: Current stock levels by warehouse
+    - Valuation Report: Total value of stock
+    - Movement Report: Stock in/out history
+    - Purchase Report: Purchase order summary
+    - Sales Report: Sales performance
+    - P&L Report: Profit and loss from inventory
+
+
+================================================================================
+                       7. SALES MODULE
+================================================================================
+
+  Module Path: /sales/*
+
+  The Sales module manages your sales pipeline from leads to invoices.
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ Submodule               │ URL                                   │
+  ├─────────────────────────────────────────────────────────────────┤
+  │ Sales Dashboard         │ /sales/dashboard                      │
+  │ Leads                   │ /sales/leads                          │
+  │ Quotes                  │ /sales/quotes                         │
+  │ Sales Customers         │ /sales/customers                      │
+  │ Invoices                │ /sales/customer-invoices              │
+  └─────────────────────────────────────────────────────────────────┘
+
+---------------------------------------
+  7.1 Sales Dashboard
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/sales/dashboard
+
+  Purpose: Overview of sales performance and pipeline.
+
+  Shows:
+    - Total sales value
+    - Conversion rate
+    - Pipeline value
+    - Recent activities
+
+---------------------------------------
+  7.2 Leads
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/sales/leads
+
+  Purpose: Manage potential customers and sales opportunities.
+
+  Actions:
+    CREATE   - Add a new lead
+    UPDATE   - Edit lead details
+    DELETE   - Remove a lead
+    CONVERT  - Convert lead to quote
+    ACCEPT   - Mark lead as accepted
+
+  How Leads Work:
+    1. Capture a potential customer (name, contact, requirements)
+    2. Track the lead through the sales pipeline
+    3. When ready, convert to a Quote
+    4. Quote goes through approval
+    5. Approved quote becomes an Invoice
+
+  Lead Pipeline:
+    New -> Contacted -> Qualified -> Proposal -> Negotiation -> Won/Lost
+
+  Lead Fields:
+    - Customer info, contact details
+    - Source (referral, website, cold call)
+    - Expected value, probability
+    - Notes and activities
+
+---------------------------------------
+  7.3 Quotes
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/sales/quotes
+
+  Purpose: Create and manage sales quotations.
+
+  Actions:
+    CREATE   - Create a new quote
+    UPDATE   - Edit quote
+    DELETE   - Remove quote
+    APPROVE  - Approve a quote
+    REJECT   - Reject a quote
+
+  How Quotes Work:
+    1. Create a quote (can be from a lead or standalone)
+    2. Add line items (products, quantities, prices)
+    3. System calculates totals, taxes, discounts
+    4. **Stock is automatically reserved** for the quote items
+    5. Send quote to customer
+    6. When approved, convert to Invoice
+    7. Invoice appears in Finance module
+    8. **Stock reservations transfer** from quote to invoice
+
+  Stock Reservation:
+    - On CREATE: Stock is reserved with reservation_type='QUOTE'
+    - On UPDATE: Reservations are adjusted to match new quantities
+    - On DELETE: All reserved stock is released
+    - On ACCEPT: Reservations transfer to the invoice
+    - On REJECT: All reserved stock is released
+
+  Quote Fields:
+    - Customer, Quote date, Valid until
+    - Line items: Product, Quantity, Unit Price, Discount, Tax
+    - Subtotal, Tax total, Discount total, Grand total
+    - Notes, Terms & Conditions
+
+---------------------------------------
+  7.4 Sales Customers
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/sales/customers
+
+  Purpose: Manage customers specific to sales operations.
+
+  Actions:
+    CREATE   - Add a customer
+    UPDATE   - Edit customer
+    DELETE   - Remove customer
+
+---------------------------------------
+  7.5 Sales Invoices
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/sales/customer-invoices
+
+  Purpose: Track invoices generated from approved quotes.
+
+  Actions:
+    CREATE   - Create an invoice
+    UPDATE   - Edit invoice
+    DELETE   - Remove invoice
+    PAY      - Record payment against invoice
+    POST     - Mark invoice as fully paid
+    PARTIAL  - Record partial payment
+
+  How Invoices Connect:
+    - Quotes (approved) -> Invoices -> Payments (Finance)
+    - Invoice data flows to Finance module
+    - Payment tracking happens in Finance > Payments
+
+  Invoice Payment Actions:
+    - Post Invoice: Marks the invoice as fully paid
+    - Record Payment: Records a partial payment against the invoice
+    - Paid invoices cannot be edited or deleted
+
+
+================================================================================
+                       8. FINANCE MODULE
+================================================================================
+
+  Module Path: /finance/*
+
+  The Finance module handles all accounting, billing, and financial tracking.
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ Submodule               │ URL                                   │
+  ├─────────────────────────────────────────────────────────────────┤
+  │ Finance Dashboard       │ /finance/dashboard                    │
+  │ Chart of Accounts       │ /finance/accounts                     │
+  │ Customer Invoices       │ /finance/customer-invoices            │
+  │ Expenses                │ /finance/expenses                     │
+  │ Journal Entries         │ /finance/journal-entries              │
+  │ Finance Reports         │ /finance/reports                      │
+  │ Budgets                 │ /finance/budgets                      │
+  │ Bank Accounts           │ /finance/bank-accounts                │
+  │ Supplier Bills          │ /finance/supplier-bills               │
+  │ Payments                │ /finance/payments                     │
+  │ Finance Payroll         │ /finance/payroll                      │
+  │ Taxes                   │ /finance/taxes                        │
+  │ Finance Audit Logs      │ /finance/audit                        │
+  │ Forecast                │ /finance/forecast                     │
+  └─────────────────────────────────────────────────────────────────┘
+
+---------------------------------------
+  8.1 Finance Dashboard
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/finance/dashboard
+
+  Purpose: Overview of financial health and key metrics.
+
+  Shows:
+    - Total revenue, total expenses
+    - Net profit
+    - Accounts receivable (money owed to you)
+    - Accounts payable (money you owe)
+    - Cash flow summary
+
+---------------------------------------
+  8.2 Chart of Accounts
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/finance/accounts
+
+  Purpose: Define your accounting structure.
+
+  Actions:
+    CREATE   - Add a new account
+    UPDATE   - Edit account
+    DELETE   - Remove account
+
+  Account Types:
+    - Assets:     Cash, Bank, Inventory, Receivables
+    - Liabilities: Loans, Payables
+    - Equity:     Owner's Equity, Retained Earnings
+    - Revenue:    Sales Revenue, Service Income
+    - Expenses:   Rent, Salaries, Utilities
+
+  How It Works:
+    - Every financial transaction creates journal entries
+    - Journal entries debit one account and credit another
+    - The Chart of Accounts is the foundation of your accounting
+
+---------------------------------------
+  8.3 Customer Invoices
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/finance/customer-invoices
+
+  Purpose: Track invoices sent to customers.
+
+  Actions:
+    CREATE   - Create a customer invoice
+    UPDATE   - Edit invoice
+    DELETE   - Remove invoice
+    PAY      - Record payment
+
+  How Invoices Flow:
+    - Sales Quotes (approved) -> Customer Invoices
+    - Manual invoice creation also supported
+    - Each invoice creates a journal entry
+    - Payments reduce the outstanding balance
+
+---------------------------------------
+  8.4 Expenses
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/finance/expenses
+
+  Purpose: Track and manage business expenses.
+
+  Actions:
+    CREATE   - Record an expense
+    UPDATE   - Edit expense
+    DELETE   - Remove expense
+
+  Expense Fields:
+    - Description, Amount, Date
+    - Category, Supplier (optional)
+    - Payment method, Receipt/Invoice attachment
+
+  How Expenses Work:
+    1. Record an expense with details
+    2. System creates a journal entry
+    3. Expense appears in reports
+    4. Can be linked to a supplier bill
+
+---------------------------------------
+  8.5 Journal Entries
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/finance/journal-entries
+
+  Purpose: Manual accounting entries (double-entry bookkeeping).
+
+  Actions:
+    CREATE   - Create a journal entry
+    UPDATE   - Edit journal entry
+    DELETE   - Remove journal entry
+
+  How Journal Entries Work:
+    - Every financial transaction is recorded as a journal entry
+    - Each entry has: Date, Description, Reference
+    - Each entry has debits and credits (must balance)
+    - Automatic entries are created by invoices, expenses, payments
+    - Manual entries are used for adjustments
+
+  Automatic Journal Entries:
+    - Customer Invoice -> Debit Receivable, Credit Revenue
+    - Supplier Bill -> Debit Expense, Credit Payable
+    - Payment -> Debit/Credit Bank, Credit/Debit Receivable/Payable
+    - Payroll -> Debit Salary Expense, Credit Payable
+
+---------------------------------------
+  8.6 Finance Reports
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/finance/reports
+
+  Purpose: Generate financial reports and analytics.
+
+  Report Types:
+    - Balance Sheet: Assets, Liabilities, Equity
+    - Trial Balance: All account balances
+    - Profit & Loss: Revenue minus Expenses
+    - Cash Flow: Cash in and out
+    - General Ledger: Complete transaction history
+    - Accounts Receivable Aging: Who owes you money
+    - Accounts Payable Aging: Who you owe money
+
+---------------------------------------
+  8.7 Budgets
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/finance/budgets
+
+  Purpose: Set and track financial budgets.
+
+  Actions:
+    CREATE   - Create a budget
+    UPDATE   - Edit budget
+    DELETE   - Remove budget
+
+  How Budgets Work:
+    1. Create a budget for an account (e.g., Marketing)
+    2. Set the budget amount for a period
+    3. Track actual spending against the budget
+    4. Alerts when spending exceeds budget
+
+---------------------------------------
+  8.8 Bank Accounts
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/finance/bank-accounts
+
+  Purpose: Manage company bank accounts.
+
+  Actions:
+    CREATE   - Add a bank account
+    UPDATE   - Edit bank account
+    DELETE   - Remove bank account
+
+  How Bank Accounts Connect:
+    - Payments are linked to bank accounts
+    - Bank transactions are tracked
+    - Used in cash flow reports
+
+---------------------------------------
+  8.9 Supplier Bills
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/finance/supplier-bills
+
+  Purpose: Track bills received from suppliers.
+
+  Actions:
+    CREATE   - Record a supplier bill
+    UPDATE   - Edit bill
+    DELETE   - Remove bill
+    PAY      - Record payment against bill
+
+  How Supplier Bills Connect:
+    - Purchase Orders -> Goods Receipts -> Supplier Bills
+    - Each bill creates a journal entry
+    - Payments reduce the outstanding balance
+
+---------------------------------------
+  8.10 Payments
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/finance/payments
+
+  Purpose: Record all incoming and outgoing payments.
+
+  Actions:
+    CREATE   - Record a payment
+    UPDATE   - Edit payment
+    CONFIRM  - Confirm a payment
+    CANCEL   - Cancel a payment
+
+  Payment Types:
+    - Customer Payment (incoming): Pays off a customer invoice
+    - Supplier Payment (outgoing): Pays off a supplier bill
+    - Expense Payment: Pays an expense
+    - Payroll Payment: Pays employee salaries
+
+  How Payments Work:
+    1. Create a payment with type (incoming/outgoing)
+    2. Link to the relevant invoice/bill
+    3. Select bank account
+    4. Enter amount and payment method
+    5. Confirm the payment
+    6. System creates journal entry
+    7. Outstanding balance is updated
+
+---------------------------------------
+  8.11 Finance Payroll
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/finance/payroll
+
+  Purpose: View payroll data from a finance perspective.
+
+  Shows:
+    - All processed payrolls
+    - Total salary expenses
+    - Payroll stats
+    - Loan deductions
+    - Compensation details
+
+  This is a READ-ONLY view of HR payroll data for financial tracking.
+
+---------------------------------------
+  8.12 Taxes
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/finance/taxes
+
+  Purpose: Manage tax rates and configurations.
+
+  Actions:
+    CREATE   - Add a tax rate
+    UPDATE   - Edit tax rate
+    DELETE   - Remove tax rate
+
+  Tax is applied to:
+    - Customer invoices
+    - Supplier bills
+    - Sales orders
+    - Purchase orders
+
+---------------------------------------
+  8.13 Finance Audit Logs
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/finance/audit
+
+  Purpose: Track all financial changes.
+
+  Shows:
+    - Who made changes
+    - What was changed
+    - When it was changed
+    - Old vs new values
+
+---------------------------------------
+  8.14 Forecast
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/finance/forecast
+
+  Purpose: AI-powered sales and stock forecasting with configurable methods.
+
+  Forecast Types:
+    - Sales Forecast: Predict future demand per product variant
+    - Stock Forecast: Predict stock needs and reorder quantities per warehouse
+
+  Forecasting Methods:
+    - Moving Average: Average of last N days of sales data
+    - Exponential Smoothing: Weighted average with configurable alpha factor
+    - Linear Regression: Trend-based prediction from historical data
+
+  How It Works:
+    1. Configure forecast parameters (method, window, horizon)
+    2. System analyzes historical sales data
+    3. Generates demand predictions with confidence bounds
+    4. Calculates stock projections and reorder quantities
+    5. View forecasts in charts and tables
+    6. Use for planning and procurement decisions
+
+  Configuration Options:
+    - Scope: GLOBAL (all products), VARIANT-specific, or CATEGORY-specific
+    - Method: Moving Average, Exponential Smoothing, or Linear Regression
+    - Window Days: How many days of history to use
+    - Forecast Horizon: How many days ahead to predict
+    - Smoothing Factor (alpha): For exponential smoothing only
+
+  Analytics Available:
+    - Sales Analytics: Timeline (daily/weekly/monthly), top SKUs, method distribution, confidence histogram
+    - Stock Summary: By-warehouse projections, top reorder items, total reorder quantities
+
+  Celery Tasks:
+    - Automatic periodic forecast generation for all companies
+    - Can be triggered manually via API
+
+  Why This Matters:
+    - Predict demand to avoid stockouts
+    - Plan procurement based on forecasted needs
+    - Identify trending products and seasonal patterns
+    - Optimize inventory levels across warehouses
+
+
+================================================================================
+                    9. AI MONITORING MODULE
+================================================================================
+
+  Module Path: /monitoring/*
+
+  The AI Monitoring module provides CCTV camera management with live
+  RTSP-to-HLS streaming.
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ Submodule               │ URL                                   │
+  ├─────────────────────────────────────────────────────────────────┤
+  │ Live Dashboard          │ /monitoring/dashboard                 │
+  │ Activity Tracking       │ /monitoring/activity-tracking         │
+  │ Inventory Monitoring    │ /monitoring/inventory-monitoring      │
+  │ Workforce Monitoring    │ /monitoring/workforce-monitoring      │
+  │ Alerts & Events         │ /monitoring/alerts-events             │
+  │ Reports & Insights      │ /monitoring/reports-insights          │
+  │ Camera Configuration    │ /monitoring/camera-configuration      │
+  │ Warehouse Monitoring    │ /monitoring/warehouse                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+---------------------------------------
+  9.1 Live Dashboard
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/monitoring/dashboard
+
+  Purpose: Real-time view of all camera feeds.
+
+  Shows:
+    - Live video feeds from all cameras
+    - Camera status (online/offline)
+    - Quick access to alerts
+
+---------------------------------------
+  9.2 Activity Tracking
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/monitoring/activity-tracking
+
+  Purpose: Track activities detected by cameras.
+
+  Shows:
+    - Motion detection events
+    - People counting
+    - Activity timeline
+    - Event details
+
+---------------------------------------
+  9.3 Inventory Monitoring
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/monitoring/inventory-monitoring
+
+  Purpose: Monitor inventory areas via cameras.
+
+  Shows:
+    - Warehouse camera feeds
+    - Stock movement alerts
+    - Shelf status
+
+---------------------------------------
+  9.4 Workforce Monitoring
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/monitoring/workforce-monitoring
+
+  Purpose: Monitor workforce activities.
+
+  Shows:
+    - Employee attendance via camera
+    - Work area activity
+    - Break time monitoring
+
+---------------------------------------
+  9.5 Alerts & Events
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/monitoring/alerts-events
+
+  Purpose: View and manage security alerts.
+
+  Alert Types:
+    - Motion detected in restricted area
+    - Camera offline
+    - After-hours activity
+    - Unusual behavior
+
+---------------------------------------
+  9.6 Reports & Insights
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/monitoring/reports-insights
+
+  Purpose: Generate monitoring analytics.
+
+  Reports:
+    - Activity reports by time/area
+    - Attendance reports
+    - Security incident reports
+
+---------------------------------------
+  9.7 Camera Configuration
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/monitoring/camera-configuration
+
+  Purpose: Configure camera systems and manage live streaming.
+
+  Actions:
+    CREATE   - Add a new camera/site/NVR
+    UPDATE   - Edit camera settings
+    DELETE   - Remove camera
+    STREAM   - Start/stop live stream
+
+  Camera Hierarchy:
+    Site -> NVR (Network Video Recorder) -> Camera
+
+  How It Works:
+    1. Create a Site (physical location)
+    2. Add NVRs to the site (IP address, port, credentials)
+    3. Add Cameras to each NVR (channel, zone, purpose)
+    4. Configure RTSP stream URLs
+    5. Start/stop streams as needed
+
+  Live Streaming:
+    - Uses FFmpeg to convert RTSP feeds to HLS (HTTP Live Streaming)
+    - Streams are accessible via browser as .m3u8 playlists
+    - Auto-restarts crashed streams (up to 5 retries)
+    - Background monitoring of stream health
+
+  Why This Matters:
+    - Monitor physical locations in real-time
+    - Track inventory areas and entry/exit points
+    - Review footage for security incidents
+
+---------------------------------------
+  9.8 Warehouse Monitoring
+---------------------------------------
+
+  URL: http://192.168.88.51:3000/monitoring/warehouse
+
+  Purpose: Monitor warehouse-specific camera feeds.
+
+  Shows:
+    - Warehouse camera feeds
+    - Entry/exit points
+    - Storage areas
+
+
+================================================================================
+                    10. NOTIFICATIONS SYSTEM
+================================================================================
+
+  The notification system provides real-time updates across the application.
+
+  Notification Bell:
+    - Located in the top bar
+    - Shows unread notification count
+    - Click to open notification panel
+
+  Notification Types:
+    - System notifications
+    - Approval requests
+    - Status updates
+    - Reminders
+    - Alerts
+
+  How Notifications Work:
+    1. Backend generates notifications for events
+    2. Notifications are sent via WebSocket
+    3. Frontend receives and displays in real-time
+    4. You can mark as read/unread
+    5. You can favorite important notifications
+    6. You can clear all or delete individual notifications
+
+  Notification Actions:
+    - Mark as Read / Unread
+    - Mark All as Read
+    - Toggle Favorite
+    - Delete notification
+    - Clear all notifications
+
+  Real-Time Updates:
+    - WebSocket connection delivers notifications instantly
+    - No need to refresh the page
+    - Data updates (e.g., new employee, processed payroll) also
+      trigger automatic page refreshes
+
+
+================================================================================
+                  11. PERMISSION & ACCESS CONTROL
+================================================================================
+
+  The system uses a Role-Based Access Control (RBAC) system.
+
+  Permission Format: MODULE:resource:action
+
+  Available Modules:
+    HR, INVENTORY, FINANCE, SALES, AI_MONITORING, NOTIFICATIONS, SETTINGS
+
+  Available Actions:
+    view, create, update, delete, approve, assign, export, import,
+    process, confirm, receive_goods, complete_sale, etc.
+
+  Examples:
+    HR:employee:view          - Can view employees
+    HR:employee:create        - Can create employees
+    HR:payroll:process        - Can process payroll
+    HR:leave:approve          - Can approve leaves
+    INVENTORY:product:create  - Can create products
+    FINANCE:payment:pay       - Can record payments
+    SALES:lead:convert        - Can convert leads to quotes
+
+  Roles:
+    - COMPANY_ADMIN: Has all permissions (bypasses checks)
+    - BRANCH_ADMIN: Configured per branch
+    - STAFF: Configured per user
+
+  How Permissions Work:
+    1. User logs in -> system loads their permissions
+    2. Permissions are stored in Redux (frontend state)
+    3. Sidebar filters menu items based on permissions
+    4. Each page checks permissions before showing actions
+    5. Backend validates permissions on every API request
+    6. Changes propagate in real-time via WebSocket
+
+  To Configure Permissions:
+    1. Go to Settings > Permissions
+    2. Select a user
+    3. Assign a role
+    4. Add/remove individual permissions
+    5. Changes take effect immediately
+
+
+================================================================================
+               12. UNIFIED DASHBOARD
+================================================================================
+
+  URL: http://192.168.88.51:3000/dashboard
+
+  Purpose: Cross-module overview combining Finance, Inventory, and Sales KPIs.
+
+  What It Shows:
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ Finance KPIs                                                     │
+  │   - Revenue (MTD), Expenses (MTD), Profit (MTD)                │
+  │   - Cash Position, Accounts Receivable, Accounts Payable        │
+  ├─────────────────────────────────────────────────────────────────┤
+  │ Inventory KPIs                                                   │
+  │   - Total Products, Total Stock Value                           │
+  │   - Low Stock Alerts                                            │
+  ├─────────────────────────────────────────────────────────────────┤
+  │ Sales KPIs                                                       │
+  │   - Total Leads, New Leads (MTD)                                │
+  │   - Total Quotes, Quote Value                                   │
+  │   - Total Customers, Invoice Total                              │
+  │   - Outstanding Amount, Paid (MTD)                              │
+  │   - Conversion Rate                                             │
+  ├─────────────────────────────────────────────────────────────────┤
+  │ 12-Month Trends                                                 │
+  │   - Revenue vs Expenses                                         │
+  │   - Sales vs Purchases                                          │
+  │   - Stock Movement (incoming/outgoing)                          │
+  ├─────────────────────────────────────────────────────────────────┤
+  │ Recent Activity                                                 │
+  │   - Last 5 payments, sales orders, stock transactions           │
+  │   - Last 5 leads and quotes                                     │
+  ├─────────────────────────────────────────────────────────────────┤
+  │ Critical Alerts                                                 │
+  │   - Low stock items                                             │
+  │   - Overdue invoices and bills                                  │
+  │   - Pending leads and quotes                                    │
+  └─────────────────────────────────────────────────────────────────┘
+
+  Why This Matters:
+    - Single view of business health across all modules
+    - Identify issues (low stock, overdue payments) at a glance
+    - Track trends over 12 months
+    - Access recent activity without navigating to each module
+
+
+================================================================================
+               13. HOW MODULES LINK TOGETHER
+================================================================================
+
+  The modules are deeply interconnected. Here's how data flows:
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                    MODULE CONNECTION MAP                         │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  SETTINGS ─────> All Modules                                   │
+  │    Company Profile sets currency, working days                  │
+  │    Departments & Designations used by HR, Sales, Finance       │
+  │    Users & Permissions control access to everything            │
+  │                                                                 │
+  │  HR EMPLOYEES ──> HR PAYROLL                                   │
+  │    Employee data feeds into payroll calculation                │
+  │    Salary, joins date, department, designation                 │
+  │                                                                 │
+  │  HR EMPLOYEES ──> HR LEAVES                                    │
+  │    Employees request leaves                                    │
+  │    Approved leaves affect payroll (deductions)                 │
+  │                                                                 │
+  │  HR EMPLOYEES ──> HR SHIFTS                                    │
+  │    Shifts are assigned to employees                            │
+  │    Default shifts + overrides per day                          │
+  │                                                                 │
+  │  HR EMPLOYEES ──> HR ASSETS                                    │
+  │    Assets are assigned to employees                            │
+  │    Tracked in Employee Asset Assignments                       │
+  │                                                                 │
+  │  HR COMPENSATION ──> HR PAYROLL                                │
+  │    Compensation/allowances added to salary                     │
+  │                                                                 │
+  │  HR LOANS ──> HR PAYROLL                                       │
+  │    Loan repayments deducted from salary                        │
+  │                                                                 │
+  │  HR LEAVES ──> HR PAYROLL                                      │
+  │    Approved leaves deducted from salary                        │
+  │                                                                 │
+  │  HR RECRUITMENT ──> HR EMPLOYEES                               │
+  │    Candidates converted to employees when hired                │
+  │                                                                 │
+  │  HR EXIT ──> HR EMPLOYEES                                      │
+  │    Exit process deactivates employees                          │
+  │    Asset returns tracked                                       │
+  │    Final settlement calculated                                 │
+  │                                                                 │
+  │  INVENTORY PRODUCTS ──> INVENTORY SALES (POS)                  │
+  │    Products are sold via POS                                   │
+  │    Stock automatically deducted                                │
+  │                                                                 │
+  │  INVENTORY PRODUCTS ──> INVENTORY PURCHASE ORDERS              │
+  │    Products ordered from suppliers                             │
+  │    Stock added on delivery                                     │
+  │                                                                 │
+  │  INVENTORY SUPPLIERS ──> INVENTORY PURCHASE ORDERS             │
+  │    Suppliers provide products                                  │
+  │                                                                 │
+  │  INVENTORY PURCHASE ──> FINANCE SUPPLIER BILLS                 │
+  │    Purchase orders generate supplier bills                     │
+  │    Creates accounts payable                                    │
+  │                                                                 │
+  │  SALES LEADS ──> SALES QUOTES                                  │
+  │    Leads converted to quotes                                   │
+  │                                                                 │
+  │  SALES QUOTES ──> SALES INVOICES                               │
+  │    Approved quotes become invoices                             │
+  │                                                                 │
+  │  SALES INVOICES ──> FINANCE CUSTOMER INVOICES                  │
+  │    Sales invoices appear in finance                            │
+  │    Creates accounts receivable                                 │
+  │                                                                 │
+  │  FINANCE PAYMENTS ──> FINANCE INVOICES / BILLS                 │
+  │    Payments reduce outstanding balances                        │
+  │                                                                 │
+  │  HR PAYROLL ──> FINANCE PAYROLL                                │
+  │    Processed payroll appears in finance                        │
+  │    Salary expenses recorded                                    │
+  │                                                                 │
+  │  HR PAYROLL ──> FINANCE PAYMENTS                               │
+  │    Salary payments recorded                                    │
+  │                                                                 │
+  │  MONITORING ──> INVENTORY / HR                                 │
+  │    CCTV monitoring of inventory areas                          │
+  │    Workforce monitoring via cameras                            │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  Data Flow Example: Complete Sales Cycle
+  ─────────────────────────────────────────
+  1. LEAD created in Sales module
+  2. LEAD converted to QUOTE
+  3. QUOTE approved -> becomes INVOICE
+  4. INVOICE appears in Finance module
+  5. CUSTOMER pays -> PAYMENT recorded in Finance
+  6. PAYMENT linked to INVOICE -> balance cleared
+
+  Data Flow Example: Employee Onboarding
+  ───────────────────────────────────────
+  1. EMPLOYEE created in HR module
+  2. DEPARTMENT and DESIGNATION assigned
+  3. USER account created (Give Login Access)
+  4. PERMISSIONS assigned
+  5. SHIFT TEMPLATE assigned
+  6. ASSETS assigned (laptop, phone)
+  7. COMPENSATION structure set up
+  8. Employee is ready to work
+
+  Data Flow Example: Payroll Processing
+  ──────────────────────────────────────
+  1. PAYROLL generated for previous month
+  2. System pulls: Base salary, Compensation, Loans, Leaves
+  3. Pro-rata calculation for mid-month joins
+  4. Leave deductions applied
+  5. Loan repayments deducted
+  6. Final salary calculated
+  7. Payroll recorded
+  8. Finance module receives salary expense entry
+  9. Payment recorded when salary is paid
+
+
+================================================================================
+                    14. TROUBLESHOOTING & FAQ
+================================================================================
+
+  Q: I can't see a module in the sidebar.
+  A: Your permissions may not include that module. Contact your admin
+     to grant access via Settings > Permissions.
+
+  Q: I'm getting "Unauthorized" errors.
+  A: Your session may have expired. Log out and log back in.
+     If it persists, clear your browser cookies.
+
+  Q: The page shows "Access Denied".
+  A: You don't have permission for that specific action.
+     Contact your admin to update your permissions.
+
+  Q: Payroll shows the wrong month.
+  A: Payroll defaults to the previous month by design.
+     You can change the month using the month selector.
+
+  Q: Stock shows negative numbers.
+  A: This can happen if sales exceed available stock.
+     Check stock adjustments and transfer history.
+
+  Q: Notifications are not showing.
+  A: Ensure WebSocket connection is active.
+     Check if notifications are enabled in your browser.
+
+  Q: How do I reset my password?
+  A: Ask your admin to edit your user account in
+     Settings > Users and set a new password.
+
+  Q: How do I add a new employee?
+  A: Go to HR > Employees > Create Employee.
+     Fill in all required fields and save.
+
+  Q: How do I process payroll?
+  A: Go to HR > Payroll > Generate Payroll.
+     Select the month, review the preview, then process.
+
+  Q: How do I approve a leave request?
+  A: Go to HR > Leave > Approval tab.
+     Click Confirm or Reject for each request.
+
+
+================================================================================
+                         QUICK REFERENCE LINKS
+================================================================================
+
+  All module URLs (base: http://192.168.88.51:3000)
+
+  DASHBOARD:        /dashboard
+
+  HR MODULE:
+    Employees:        /hr/employees
+    Payroll:          /hr/payroll
+    Salary Detail:    /hr/salary/{id}
+    Attendance:       /hr/attendance
+    Leave:            /hr/leave
+    Shifts:           /hr/shifts/list
+    Shift Templates:  /hr/shifts/templates
+    Assets:           /hr/assets/list
+    Asset Kits:       /hr/assets/kits
+    Employee Assets:  /hr/assets/employee-assets
+    Performance:      /hr/performance
+    Recruitment:      /hr/recruitment
+    Exit:             /hr/exit
+    Policies:         /hr/policies
+    Compensation:     /hr/compensation
+
+  INVENTORY MODULE:
+    Dashboard:        /inventory/dashboard
+    Warehouses:       /inventory/warehouses
+    Categories:       /inventory/categories
+    Brands:           /inventory/brands
+    Products:         /inventory/products
+    Suppliers:        /inventory/suppliers
+    Customers:        /inventory/customers
+    Purchases:        /inventory/purchases
+    Stock:            /inventory/stock
+    Transfers:        /inventory/transfers
+    Barcode:          /inventory/barcode
+    POS:              /inventory/pos
+    Alerts:           /inventory/alerts
+    Audit:            /inventory/audit
+    Reports:          /inventory/reports
+
+  SALES MODULE:
+    Dashboard:        /sales/dashboard
+    Leads:            /sales/leads
+    Quotes:           /sales/quotes
+    Customers:        /sales/customers
+    Invoices:         /sales/customer-invoices
+
+  FINANCE MODULE:
+    Dashboard:        /finance/dashboard
+    Accounts:         /finance/accounts
+    Customer Invoices:/finance/customer-invoices
+    Expenses:         /finance/expenses
+    Journal Entries:  /finance/journal-entries
+    Reports:          /finance/reports
+    Budgets:          /finance/budgets
+    Bank Accounts:    /finance/bank-accounts
+    Supplier Bills:   /finance/supplier-bills
+    Payments:         /finance/payments
+    Payroll:          /finance/payroll
+    Taxes:            /finance/taxes
+    Audit:            /finance/audit
+    Forecast:         /finance/forecast
+
+  MONITORING MODULE:
+    Dashboard:        /monitoring/dashboard
+    Activity:         /monitoring/activity-tracking
+    Inventory:        /monitoring/inventory-monitoring
+    Workforce:        /monitoring/workforce-monitoring
+    Alerts:           /monitoring/alerts-events
+    Reports:          /monitoring/reports-insights
+    Cameras:          /monitoring/camera-configuration
+    Warehouse:        /monitoring/warehouse
+
+  SETTINGS:
+    Company:          /settings/company
+    Terms:            /settings/terms
+    Users:            /settings/users
+    Permissions:      /settings/permissions
+    Departments:      /settings/departments
+    Designations:     /settings/designations
+    Preferences:      /settings/preferences
+
+
+================================================================================
+                           END OF DOCUMENT
+================================================================================

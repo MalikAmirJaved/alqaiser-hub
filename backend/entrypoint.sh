@@ -38,9 +38,6 @@ exec daphne -b 0.0.0.0 -p 8000 config.asgi:application
 # initilize the permissions
 # docker compose exec backend python manage.py seed_permissions
 
-# initilize the seed_chart_of_accounts
-# docker compose exec backend python manage.py seed_chart_of_accounts --company-id=1 --branch-id=1
-
 # for localy start backend server
 # daphne -b 0.0.0.0 -p 8000 config.asgi:application
 

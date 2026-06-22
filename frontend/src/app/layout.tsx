@@ -25,7 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               {children}
             </NotificationProvider>
             <Toaster
-              position="bottom-right"
+              position="top-right"
               richColors
               closeButton
               duration={4000}

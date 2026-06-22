@@ -1,8 +1,10 @@
 """Shared invoice/bill payment flows."""
 from decimal import Decimal
+import uuid
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from apps.finance.services.document import ensure_customer_invoice_journal, ensure_supplier_bill_journal

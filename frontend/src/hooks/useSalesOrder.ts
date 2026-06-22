@@ -20,6 +20,7 @@ export interface CreateSalesOrderParams {
   notes: string;
   line_items: SalesOrderLineItem[];
   status: "DRAFT" | "COMPLETE";
+  create_invoice?: boolean;
 }
 
 export interface ReturnLinePayload {
@@ -117,7 +118,7 @@ export function useCreateSalesOrder() {
 
   return useMutation({
     mutationFn: async (params: CreateSalesOrderParams) => {
-      const createPayload = {
+      const createPayload: Record<string, any> = {
         customer: params.customer,
         warehouse: params.warehouse,
         order_date: params.order_date,
@@ -125,6 +126,9 @@ export function useCreateSalesOrder() {
         line_items: params.line_items,
         status: params.status,
       };
+      if (params.create_invoice) {
+        createPayload.create_invoice = true;
+      }
       const resp = await api<ApiResponse<any>>("/api/inventory/sales-orders/", {
         method: "POST",
         body: JSON.stringify(createPayload),
@@ -145,8 +149,10 @@ export function useCompleteSalesOrder() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ orderId, line_items }: { orderId: string; line_items?: SalesOrderLineItem[] }) => {
-      const payload = line_items ? { line_items } : {};
+    mutationFn: async ({ orderId, line_items, create_invoice }: { orderId: string; line_items?: SalesOrderLineItem[]; create_invoice?: boolean }) => {
+      const payload: Record<string, any> = {};
+      if (line_items) payload.line_items = line_items;
+      if (create_invoice) payload.create_invoice = true;
       return api(`/api/inventory/sales-orders/${orderId}/complete/`, {
         method: "POST",
         body: JSON.stringify(payload),
@@ -242,6 +248,27 @@ export function useUpdateSalesOrder() {
       queryClient.invalidateQueries({ queryKey: ["salesOrder", orderId] });
       queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
       queryClient.invalidateQueries({ queryKey: ["batchStock"] });
+    },
+  });
+}
+
+/**
+ * Generate a CustomerInvoice for an existing completed SalesOrder
+ */
+export function useGenerateInvoice() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (orderId: string) => {
+      return api<{ status: string; message: string; invoice_id?: string }>(
+        `/api/inventory/sales-orders/${orderId}/generate_invoice/`,
+        { method: "POST" }
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
+      queryClient.invalidateQueries({ queryKey: ["finance_customer_invoices"] });
     },
   });
 }

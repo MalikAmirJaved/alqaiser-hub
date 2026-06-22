@@ -237,6 +237,25 @@ export function useClearExitDues() {
   });
 }
 
+// Clear positive settlement (company owes employee)
+export function useClearExitSettlement() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (exitId: string) =>
+      api("/api/hr/exits/clear-settlement/", {
+        method: "POST",
+        body: JSON.stringify({ exit_id: exitId }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["exitRecords"] });
+      queryClient.invalidateQueries({ queryKey: ["exitStats"] });
+      queryClient.invalidateQueries({ queryKey: ["exitRecord"] });
+    },
+  });
+}
+
 // Bulk action
 export function useBulkAction() {
   const api = useApi();

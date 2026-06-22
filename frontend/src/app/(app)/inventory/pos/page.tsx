@@ -12,18 +12,26 @@ import {
   cartToLineItems, CartLine
 } from "@/hooks/useSalesOrder";
 import { useAllVariantsSimple } from "@/hooks/useAllVariants";
+import { apiFetch } from "@/lib/api";
+import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
+import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { PrintPreviewModal, type QuoteInvoiceData, type DocCompany } from "@/components/common/QuoteInvoiceDocument";
 import { ProductSearchPanel } from "@/components/inventory/pos/ProductSearchPanel";
 import { CartPanel } from "@/components/inventory/pos/CartPanel";
 import { ReturnPanel } from "@/components/inventory/pos/ReturnPanel";
 import { SalesListPanel } from "@/components/inventory/pos/SalesListPanel";
-import { VariantDetailWithStock } from "@/hooks/useAllVariants";
+import ThermalReceiptModal, { type ThermalReceiptData, printThermalReceipt } from "@/components/inventory/pos/ThermalReceiptModal";
+import type { VariantDetailWithStock } from "@/hooks/useAllVariants";
 import { debounce } from "lodash";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type ActivePanel = "search" | "held" | "return" | "sales";
 
 export default function SalesPage() {
   const permissions = useFeaturePermissions("INVENTORY", "sales_order");
+  const formatCurrency = useFormatCurrency();
   const queryClient = useQueryClient();
   const { data: warehouses = [] } = useWarehouses({ is_active: true });
   const { data: draftOrders = [], refetch: refetchDrafts } = useDraftSalesOrders();
@@ -31,6 +39,8 @@ export default function SalesPage() {
   const { mutateAsync: completeOrder, isPending: isCompleting } = useCompleteSalesOrder();
   const { mutateAsync: cancelOrder, isPending: isCancelling } = useCancelSalesOrder();
   const { mutateAsync: updateSalesOrder } = useUpdateSalesOrder();
+  const { data: companySettings } = useCompanySettingsQuery();
+  const { terms: termsData } = useTermsAndConditions();
 
   const [cart, setCart] = useState<CartLine[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
@@ -38,6 +48,9 @@ export default function SalesPage() {
   const [activePanel, setActivePanel] = useState<ActivePanel>("search");
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const [orderNotes, setOrderNotes] = useState("");
+  const [invoiceModalProps, setInvoiceModalProps] = useState<{ open: boolean; data: QuoteInvoiceData | null }>({ open: false, data: null });
+  const [thermalReceiptData, setThermalReceiptData] = useState<ThermalReceiptData | null>(null);
+  const [thermalModalOpen, setThermalModalOpen] = useState(false);
 
   // Debounced draft updater
   const updateDraftDebounced = useRef(
@@ -99,11 +112,11 @@ export default function SalesPage() {
     if (!selectedWarehouse && warehouses.length > 0) setSelectedWarehouse(warehouses[0]);
   }, [warehouses, selectedWarehouse]);
 
-const clearCart = useCallback(() => {
-  setCart([]);
-  setActiveDraftId(null);
-  setOrderNotes("");
-}, []);
+  const clearCart = useCallback(() => {
+    setCart([]);
+    setActiveDraftId(null);
+    setOrderNotes("");
+  }, []);
 
   const loadDraftOrder = useCallback((order: any) => {
     const loadedCart: CartLine[] = (order.lines || []).map((line: any) => ({
@@ -128,7 +141,47 @@ const clearCart = useCallback(() => {
     setActivePanel("search");
   }, []);
 
-const handleCompleteSale = useCallback(async (notes: string, payments: any[], overrideCart?: CartLine[]) => {
+  // Build thermal receipt data from cart
+  const buildThermalReceipt = useCallback((
+    finalCart: CartLine[],
+    totalAmount: number,
+    orderNumber: string,
+  ): ThermalReceiptData => {
+    const now = new Date();
+    return {
+      orderNumber,
+      date: now.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
+      time: now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+      customerName: selectedCustomer?.name,
+      lines: finalCart.map((line) => ({
+        variant_name: line.variant.product_name || line.variant.sku || "Product",
+        variant_sku: line.variant.sku,
+        quantity: line.qty,
+        unit_price: line.unitPrice,
+        total: line.qty * line.unitPrice,
+      })),
+      totalAmount,
+    };
+  }, [selectedCustomer]);
+
+  // Show thermal receipt popup
+  const showThermalReceipt = useCallback((data: ThermalReceiptData) => {
+    setThermalReceiptData(data);
+    setThermalModalOpen(true);
+  }, []);
+
+  // Thermal print for cart (pre-sale) - shows preview
+  const handleCartThermalPrint = useCallback(() => {
+    if (cart.length === 0) return;
+    const orderNumber = `TEMP-${Date.now()}`;
+    const data = buildThermalReceipt(cart, 0, orderNumber);
+    // Calculate total using cart values
+    const total = cart.reduce((sum, l) => sum + (l.qty * l.unitPrice - (l.discountFixed > 0 ? l.discountFixed : (l.qty * l.unitPrice * l.discountPct / 100))), 0);
+    data.totalAmount = total;
+    showThermalReceipt(data);
+  }, [cart, buildThermalReceipt, showThermalReceipt]);
+
+const handleCompleteSale = useCallback(async (notes: string, payments: any[], overrideCart?: CartLine[], createInvoice?: boolean) => {
   const finalCart = overrideCart || cart;
   if (finalCart.length === 0) return;
   
@@ -137,28 +190,90 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
   
   const notesWithPayments = notes + (payments.length ? ` | Payments: ${payments.map(p => `${p.method}:${p.amount}`).join(", ")}` : "");
   try {
+    let result: any;
     if (activeDraftId) {
       const updatedLineItems = cartToLineItems(finalCart);
-      await completeOrder({ orderId: activeDraftId, line_items: updatedLineItems });
+      result = await completeOrder({ orderId: activeDraftId, line_items: updatedLineItems, create_invoice: createInvoice });
     } else {
-      await createSalesOrder({
+      result = await createSalesOrder({
         customer: customerId,
         warehouse: warehouseId,
         order_date: new Date().toISOString().split("T")[0],
         notes: notesWithPayments,
         line_items: cartToLineItems(finalCart),
         status: "COMPLETE",
+        create_invoice: createInvoice,
       });
     }
+    
+    const orderNumber = result?.data?.order_number || result?.order_number || "";
+    const totalAmount = result?.data?.total_amount || finalCart.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+    
     clearCart();
     refetchDrafts();
     await queryClient.refetchQueries({ queryKey: ["inventory_variant"] });
     await queryClient.refetchQueries({ queryKey: ["batchStock"] });
     queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
+    
+    // Auto-show thermal receipt popup
+    const receiptData = buildThermalReceipt(finalCart, totalAmount, orderNumber);
+    showThermalReceipt(receiptData);
+    
+    // If invoice was created, also show the A4 print modal
+    const invoiceId = result?.data?.invoice_id || result?.invoice_id;
+    if (createInvoice && invoiceId) {
+      try {
+        const invoiceData = await queryClient.fetchQuery<any>({
+          queryKey: ["finance_customer_invoices", invoiceId],
+          queryFn: () => apiFetch(`/api/finance/customer-invoices/${invoiceId}/`),
+          staleTime: 0,
+        });
+        
+        const company = companySettings;
+        const docCompany: DocCompany = {
+          companyName: company?.companyName || "",
+          address: company?.address || "",
+          city: company?.city || "",
+          state: company?.state || "",
+          country: company?.country || "",
+          phone: company?.phone || "",
+          email: company?.email || "",
+          taxId: company?.taxId || "",
+          logo: "",
+          logoUrl: "",
+        };
+        
+        const docData: QuoteInvoiceData = {
+          type: "INVOICE",
+          documentNumber: invoiceData?.invoice_number || "",
+          date: invoiceData?.invoice_date || new Date().toISOString().split("T")[0],
+          dueDate: invoiceData?.due_date || "",
+          customerName: selectedCustomer?.name || invoiceData?.customer_name || "",
+          customerEmail: selectedCustomer?.email || invoiceData?.customer_email || "",
+          customerPhone: selectedCustomer?.phone || invoiceData?.customer_phone || "",
+          lines: (invoiceData?.lines || []).map((l: any) => ({
+            variant_name: l.variant_name || "Product",
+            variant_sku: l.variant_sku || "",
+            quantity: l.quantity,
+            unit_price: Number(l.unit_price),
+            tax_rate: Number(l.tax_rate),
+            discount_amount: Number(l.discount_amount || 0),
+          })),
+          totalAmount: Number(invoiceData?.amount || 0),
+          status: invoiceData?.status || "DRAFT",
+          paymentStatus: invoiceData?.payment_status || "",
+          notes: invoiceData?.notes || "",
+        };
+        
+        setInvoiceModalProps({ open: true, data: docData });
+      } catch (err) {
+        console.error("Failed to load invoice for preview:", err);
+      }
+    }
   } catch (err: any) {
     console.error(err);
   }
-}, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, completeOrder, clearCart, refetchDrafts, queryClient]);
+}, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, completeOrder, clearCart, refetchDrafts, queryClient, companySettings, formatCurrency, buildThermalReceipt, showThermalReceipt]);
 
   const handleSaveDraft = useCallback(async (notes: string, overrideCart?: CartLine[]) => {
     const finalCart = overrideCart || cart;
@@ -242,19 +357,25 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
             ))}
           </nav>
 
-          <div className="flex items-center gap-3 bg-muted/40 rounded-xl px-4 py-2 border border-border/50 hover:bg-muted/60 transition-colors cursor-pointer group">
-            <WarehouseIcon className="text-muted-foreground group-hover:text-primary transition-colors" />
-            <div className="flex flex-col">
-              <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider leading-none mb-1">Station</span>
-              <select
-                value={selectedWarehouse?.id ?? ""}
-                onChange={(e) => setSelectedWarehouse(warehouses.find(w => String(w.id) === e.target.value) ?? null)}
-                className="bg-transparent text-xs font-black outline-none text-foreground cursor-pointer appearance-none pr-4"
-              >
-                {warehouses.map(w => <option key={w.id} value={w.id}>{w.warehouse_name}</option>)}
-              </select>
-            </div>
-          </div>
+          <Select
+            value={selectedWarehouse?.id ? String(selectedWarehouse.id) : ""}
+            onValueChange={(val) => setSelectedWarehouse(warehouses.find(w => String(w.id) === val) ?? null)}
+          >
+            <SelectTrigger className="flex items-center gap-3 bg-muted/40 rounded-xl px-4 py-2 border border-border/50 hover:bg-muted/60 transition-colors cursor-pointer group !h-auto w-auto data-[placeholder]:text-muted-foreground focus:ring-0 focus:ring-offset-0 shadow-none">
+              <WarehouseIcon className="text-muted-foreground group-hover:text-primary transition-colors" />
+              <div className="flex flex-col items-start">
+                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider leading-none mb-1">Station</span>
+                <SelectValue placeholder="Select station" className="text-xs font-black" />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              {warehouses.map(w => (
+                <SelectItem key={w.id} value={String(w.id)}>
+                  {w.warehouse_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Dynamic Content Panel */}
@@ -387,6 +508,7 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
           warehouses={warehouses}
           onSaveDraft={handleSaveDraft}
           onCompleteSale={handleCompleteSale}
+          onThermalPrint={handleCartThermalPrint}
           onCartChange={handleCartChange}
           isSubmitting={isCreatingOrder || isCompleting}
           activeDraftId={activeDraftId}
@@ -394,6 +516,42 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
           canUpdate={permissions.update}
         />
       </div>
+
+      {/* Invoice Print Modal (A4) */}
+      {invoiceModalProps.data && (
+        <PrintPreviewModal
+          open={invoiceModalProps.open}
+          onClose={() => setInvoiceModalProps({ open: false, data: null })}
+          documentProps={{
+            data: invoiceModalProps.data,
+            company: {
+              companyName: companySettings?.companyName || "",
+              address: companySettings?.address || "",
+              city: companySettings?.city || "",
+              state: companySettings?.state || "",
+              country: companySettings?.country || "",
+              phone: companySettings?.phone || "",
+              email: companySettings?.email || "",
+              taxId: companySettings?.taxId || "",
+              logo: "",
+              logoUrl: "",
+            },
+            termsContent: termsData?.invoice || "",
+            formatCurrency,
+          }}
+        />
+      )}
+
+      {/* Thermal Receipt Modal */}
+      {thermalReceiptData && (
+        <ThermalReceiptModal
+          open={thermalModalOpen}
+          onClose={() => setThermalModalOpen(false)}
+          data={thermalReceiptData}
+          companyName={companySettings?.companyName || "Store"}
+          formatCurrency={formatCurrency}
+        />
+      )}
     </div>
   );
 }

@@ -2,15 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuotes, useDeleteQuote, useAcceptQuote, useRejectQuote, Quote } from "@/hooks/sales/useQuotes";
+import { useQuotes, useSendQuote, useMarkViewedQuote, useApproveQuote, useRejectQuote, useMarkConvertedQuote, Quote } from "@/hooks/sales/useQuotes";
 import { DynamicModulePage, type ModulePermissions, type Kpi } from "@/components/reuseable/final/DynamicModulePage";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatusBadge } from "@/components/finance/ui";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
-import { CheckCircle, XCircle, Trash2 } from "lucide-react";
+import { CheckCircle, XCircle, FileText, ExternalLink } from "lucide-react";
 import QuoteFormModal from "./QuoteFormModal";
+import CustomerInvoiceFormModal from "@/components/finance/customer-invoices/CustomerInvoiceFormModal";
 
 export default function QuotesPanel() {
   const formatCurrency = useFormatCurrency();
@@ -19,14 +20,16 @@ export default function QuotesPanel() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [quoteToConvert, setQuoteToConvert] = useState<Quote | null>(null);
 
   const quoteStatusOptions = [
     { value: "DRAFT", label: "Draft" },
     { value: "SENT", label: "Sent" },
-    { value: "ACCEPTED", label: "Accepted" },
-    { value: "DECLINED", label: "Declined" },
-    { value: "EXPIRED", label: "Expired" },
+    { value: "VIEWED", label: "Viewed" },
+    { value: "APPROVED", label: "Approved" },
     { value: "REJECTED", label: "Rejected" },
+    { value: "CONVERTED", label: "Converted to Invoice" },
   ];
 
   const filterFields: FilterField[] = [
@@ -39,9 +42,11 @@ export default function QuotesPanel() {
       ? { status: filters.status || undefined, search: filters.search || undefined }
       : undefined
   );
-  const deleteQuote = useDeleteQuote();
-  const acceptQuote = useAcceptQuote();
+  const sendQuote = useSendQuote();
+  const markViewed = useMarkViewedQuote();
+  const approveQuote = useApproveQuote();
   const rejectQuote = useRejectQuote();
+  const markConverted = useMarkConvertedQuote();
   const permissions = useFeaturePermissions("SALES", "quote");
 
   const modulePermissions: ModulePermissions = {
@@ -52,25 +57,37 @@ export default function QuotesPanel() {
     export: permissions.export,
   };
 
-  const handleAccept = async (quote: Quote) => {
+  const handleSend = async (quote: Quote) => {
     try {
-      const res = await acceptQuote.mutateAsync(quote.id);
-      if (res.invoice_id) {
-        router.push(`/sales/customer-invoices/${res.invoice_id}`);
-      }
+      await sendQuote.mutateAsync(quote.id);
       refetch();
-    } catch (error: any) {
-      console.error("Accept failed", error);
-    }
+    } catch { /* toast from apiFetch */ }
+  };
+
+  const handleMarkViewed = async (quote: Quote) => {
+    try {
+      await markViewed.mutateAsync(quote.id);
+      refetch();
+    } catch { /* toast from apiFetch */ }
+  };
+
+  const handleApprove = async (quote: Quote) => {
+    try {
+      await approveQuote.mutateAsync(quote.id);
+      refetch();
+    } catch { /* toast from apiFetch */ }
   };
 
   const handleReject = async (quote: Quote) => {
     try {
       await rejectQuote.mutateAsync(quote.id);
       refetch();
-    } catch (error: any) {
-      console.error("Reject failed", error);
-    }
+    } catch { /* toast from apiFetch */ }
+  };
+
+  const handleConvertToInvoice = (quote: Quote) => {
+    setQuoteToConvert(quote);
+    setInvoiceModalOpen(true);
   };
 
   const handleCreate = () => {
@@ -89,49 +106,115 @@ export default function QuotesPanel() {
     setEditingQuote(null);
   };
 
+  const handleInvoiceSuccess = (result?: any) => {
+    const invoiceId = result?.data?.id || result?.id;
+    if (quoteToConvert && invoiceId) {
+      markConverted.mutate({ quoteId: quoteToConvert.id, invoiceId });
+    }
+    refetch();
+    setInvoiceModalOpen(false);
+    setQuoteToConvert(null);
+  };
+
   const computeKPIs = (data: Quote[]): Kpi[] => {
     const totalAmount = data.reduce((sum, q) => sum + Number(q.total_amount || 0), 0);
-    const acceptedAmount = data.filter(q => q.status === "ACCEPTED").reduce((sum, q) => sum + Number(q.total_amount || 0), 0);
-    const pendingCount = data.filter(q => q.status === "DRAFT" || q.status === "SENT").length;
-    const acceptedCount = data.filter(q => q.status === "ACCEPTED").length;
+    const acceptedAmount = data.filter(q => q.status === "APPROVED" || q.status === "CONVERTED").reduce((sum, q) => sum + Number(q.total_amount || 0), 0);
+    const pendingCount = data.filter(q => q.status === "DRAFT" || q.status === "SENT" || q.status === "VIEWED").length;
+    const acceptedCount = data.filter(q => q.status === "APPROVED" || q.status === "CONVERTED").length;
 
     return [
       { label: "Pipeline Value", value: totalAmount, sub: `${data.length} total quotes`, tone: "info" as const, isCurrency: true },
-      { label: "Pending Quotes", value: pendingCount, sub: "Awaiting approval", tone: "warning" as const, isCurrency: false },
-      { label: "Closed (Won)", value: acceptedAmount, sub: `${acceptedCount} quotes accepted`, tone: "success" as const, isCurrency: true },
+      { label: "Pending Quotes", value: pendingCount, sub: "Awaiting approval or sent", tone: "warning" as const, isCurrency: false },
+      { label: "Closed (Won)", value: acceptedAmount, sub: `${acceptedCount} quotes won`, tone: "success" as const, isCurrency: true },
       { label: "Win Rate", value: data.length > 0 ? `${((acceptedCount / data.length) * 100).toFixed(1)}%` : "0%", sub: "Accepted ratio", tone: "info" as const, isCurrency: false },
     ];
   };
+
+  const buildInvoiceInitialData = (quote: Quote): any => ({
+    customer: quote.customer || "",
+    invoice_date: new Date().toISOString().split("T")[0],
+    due_date: quote.expiration_date || "",
+    amount: Number(quote.total_amount),
+    notes: quote.notes || "",
+    lines: (quote.lines || []).map((line) => ({
+      variant: line.variant,
+      quantity: line.quantity,
+      unit_price: line.unit_price,
+      discount_amount: line.discount_amount || 0,
+      tax_rate: line.tax_rate || 0,
+      variant_name: line.variant_name,
+      variant_sku: line.variant_sku,
+    })),
+  });
 
   const columns = [
     { key: "quote_number", label: "Quote #", mono: true, sortable: true },
     { key: "customer_name", label: "Customer", sortable: true },
     { key: "date", label: "Issued Date", sortable: true },
-    { key: "total_amount", label: "Total Value", align: "right" as const, sortable: true, render: (val: number) => formatCurrency(val) },
+    { key: "total_amount", label: "Total Value", sortable: true, render: (val: number) => formatCurrency(val) },
     { key: "status", label: "Status", sortable: true, render: (val: string) => <StatusBadge status={val} /> },
     {
       key: "actions",
       label: "",
       align: "right" as const,
       render: (_: any, quote: Quote) => (
-        (quote.status === "DRAFT" || quote.status === "SENT") ? (
-          <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1">
+          {quote.status === "DRAFT" && (
             <button
-              onClick={(e) => { e.stopPropagation(); handleAccept(quote); }}
-              className="p-1.5 rounded-md hover:bg-success/10 text-success transition"
-              title="Approve & Invoice"
+              onClick={(e) => { e.stopPropagation(); handleSend(quote); }}
+              className="p-1.5 rounded-md hover:bg-info/10 text-info transition"
+              title="Send to Customer"
             >
-              <CheckCircle className="w-4 h-4" />
+              <FileText className="w-4 h-4" />
             </button>
+          )}
+          {quote.status === "SENT" && (
             <button
-              onClick={(e) => { e.stopPropagation(); handleReject(quote); }}
-              className="p-1.5 rounded-md hover:bg-destructive/10 text-destructive transition"
-              title="Reject Quote"
+              onClick={(e) => { e.stopPropagation(); handleMarkViewed(quote); }}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-info/10 text-info hover:bg-info/20 text-xs font-medium transition"
+              title="Mark as Viewed"
             >
-              <XCircle className="w-4 h-4" />
+              Viewed
             </button>
-          </div>
-        ) : null
+          )}
+          {quote.status === "VIEWED" && (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleApprove(quote); }}
+                className="p-1.5 rounded-md hover:bg-success/10 text-success transition"
+                title="Approve Quote"
+              >
+                <CheckCircle className="w-4 h-4" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleReject(quote); }}
+                className="p-1.5 rounded-md hover:bg-destructive/10 text-destructive transition"
+                title="Reject Quote"
+              >
+                <XCircle className="w-4 h-4" />
+              </button>
+            </>
+          )}
+          {quote.status === "APPROVED" && quote.converted_invoice ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); router.push(`/sales/customer-invoices/${quote.converted_invoice}`); }}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-success/10 text-success hover:bg-success/20 text-xs font-medium transition"
+              title="View converted invoice"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              {quote.converted_invoice_number || "Invoiced"}
+            </button>
+          ) : quote.status === "APPROVED" ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleConvertToInvoice(quote); }}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 text-xs font-medium transition"
+              title="Convert to Invoice"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              Invoice
+            </button>
+          ) : null}
+        </div>
       ),
     },
   ];
@@ -152,11 +235,10 @@ export default function QuotesPanel() {
         onCreate={handleCreate}
         actions={{
           onEdit: handleEdit,
-          onDelete: (quote) => deleteQuote.mutate(quote.id),
+          canEdit: (quote) => quote.status === "DRAFT"
         }}
         onRowClick={(quote) => router.push(`/sales/quotes/${quote.id}`)}
         exportEnabled={permissions.export}
-        onRowSelect={setSelectedIds}
         filterBar={
           <FilterBar
             fields={filterFields}
@@ -164,21 +246,22 @@ export default function QuotesPanel() {
             onChange={setFilters}
           />
         }
-        batchActions={
-          <button
-            onClick={() => selectedIds.forEach(id => deleteQuote.mutate(id))}
-            className="inline-flex items-center gap-1.5 text-sm text-destructive hover:text-destructive/80 transition"
-          >
-            <Trash2 className="w-4 h-4" />
-            Delete Selected
-          </button>
-        }
       />
       <QuoteFormModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         initialData={editingQuote}
         onSuccess={handleModalSuccess}
+      />
+      <CustomerInvoiceFormModal
+        open={invoiceModalOpen}
+        onClose={() => {
+          setInvoiceModalOpen(false);
+          setQuoteToConvert(null);
+        }}
+        defaultValues={quoteToConvert ? buildInvoiceInitialData(quoteToConvert) : null}
+        onSuccess={handleInvoiceSuccess}
+        moduleCode="SALES"
       />
     </>
   );

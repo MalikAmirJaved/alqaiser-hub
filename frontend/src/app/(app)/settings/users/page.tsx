@@ -9,11 +9,14 @@ import { Plus, Pencil, Trash2, UserPlus, ToggleRight } from "lucide-react";
 import UserForm from "@/components/Forms/UserForm";
 import UserStatusModal from "@/components/UserStatusModal";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function UsersPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const permissions = useFeaturePermissions("SETTINGS", "user");
+  const { user: currentUser } = useAuth();
+  const isCompanyAdmin = currentUser?.role === "COMPANY_ADMIN";
 
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [page, setPage] = useState(1);
@@ -62,6 +65,7 @@ export default function UsersPage() {
   const handleSave = async (userData: any) => {
     try {
       if (editingUser) {
+        if (editingUser.role === "COMPANY_ADMIN" && !isCompanyAdmin) return;
         await updateUser.mutateAsync({ id: editingUser.id, data: userData });
       } else {
         const payload = { ...userData };
@@ -80,6 +84,7 @@ export default function UsersPage() {
   };
 
   const handleDelete = async (user: any) => {
+    if (user.role === "COMPANY_ADMIN") return;
     if (!confirm(`Delete user "${user.username}"?`)) return;
     try {
       await deleteUser.mutateAsync(user.id);
@@ -94,6 +99,7 @@ export default function UsersPage() {
 
   const handleStatusChange = async (isActive: boolean) => {
     try {
+      if (selectedUserForStatus?.role === "COMPANY_ADMIN" && !isCompanyAdmin) return;
       await updateUser.mutateAsync({
         id: selectedUserForStatus.id,
         data: { is_active: isActive },
@@ -112,19 +118,18 @@ export default function UsersPage() {
 
   // Only is_active is client-side (backend doesn't support server-side status filter for users)
   const isActiveFilter = filters.is_active;
-  const filteredUsers = isActiveFilter
-    ? users.filter((u) => {
-        if (isActiveFilter === "true" && !u.is_active) return false;
-        if (isActiveFilter === "false" && u.is_active) return false;
-        return true;
-      })
-    : users;
+  const filteredUsers = users.filter((u) => {
+    // Hide company_admin users from non-company_admin viewers
+    if (!isCompanyAdmin && u.role === "COMPANY_ADMIN") return false;
+    if (isActiveFilter === "true" && !u.is_active) return false;
+    if (isActiveFilter === "false" && u.is_active) return false;
+    return true;
+  });
 
   // Paginate
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
   const safePage = Math.min(page, totalPages);
   const paginatedUsers = filteredUsers.slice((safePage - 1) * pageSize, safePage * pageSize);
-
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
     { name: "is_active", label: "Status", type: "boolean" },
@@ -143,20 +148,20 @@ export default function UsersPage() {
       <PageHeader
         title="Users & Roles"
         subtitle="Manage system users"
-        actions={
-          permissions.create && (
-            <button
-              onClick={() => {
-                setEditingUser(null);
-                setStoredPrefill(null);
-                setModalOpen(true);
-              }}
-              className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm"
-            >
-              <Plus className="w-4 h-4" /> Add User
-            </button>
-          )
-        }
+        // actions={
+        //   permissions.create && (
+        //     <button
+        //       onClick={() => {
+        //         setEditingUser(null);
+        //         setStoredPrefill(null);
+        //         setModalOpen(true);
+        //       }}
+        //       className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm"
+        //     >
+        //       <Plus className="w-4 h-4" /> Add User
+        //     </button>
+        //   )
+        // }
       />
 
       {/* Filters */}
@@ -199,49 +204,49 @@ export default function UsersPage() {
                   <td className="px-4 py-2.5">{user.department_name || user.department || "—"}</td>
                   <td className="px-4 py-2.5">
                    <button
-                     onClick={(e) => {
-                       e.stopPropagation();
-                       if (permissions.update) {
-                         openStatusModal(user);
-                       }
-                     }}
-                     className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border cursor-pointer hover:opacity-80 transition-opacity ${
-                       user.is_active
-                         ? "bg-success/15 text-success border-success/30"
-                         : "bg-destructive/15 text-destructive border-destructive/30"
-                     }`}
-                     title={permissions.update ? "Click to change status" : "No permission to change status"}
-                   >
-                     {user.is_active ? "Active" : "Inactive"}
-                   </button>
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (permissions.update && (isCompanyAdmin || user.role !== "COMPANY_ADMIN")) {
+                          openStatusModal(user);
+                        }
+                      }}
+                      className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border cursor-pointer hover:opacity-80 transition-opacity ${
+                        user.is_active
+                          ? "bg-success/15 text-success border-success/30"
+                          : "bg-destructive/15 text-destructive border-destructive/30"
+                      }`}
+                      title={permissions.update && (isCompanyAdmin || user.role !== "COMPANY_ADMIN") ? "Click to change status" : "No permission to change status"}
+                    >
+                      {user.is_active ? "Active" : "Inactive"}
+                    </button>
                   </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    {permissions.update && (
+                    {permissions.update && (isCompanyAdmin || user.role !== "COMPANY_ADMIN") && (
                       <button
                        onClick={() => openStatusModal(user)}
                        className="p-1.5 rounded-md hover:bg-blue-100 text-blue-600 transition-colors"
                        title="Change User Status"
                        aria-label="Change Status"
-                     >
-                       <ToggleRight className="w-4 h-4" />
-                     </button>
+                      >
+                        <ToggleRight className="w-4 h-4" />
+                      </button>
                    )}
 
-                   {permissions.update && (
-                     <button
-                       onClick={() => {
-                         setEditingUser(user);
-                         setStoredPrefill(null);
-                         setModalOpen(true);
-                       }}
-                       className="p-1.5 rounded-md hover:bg-muted"
-                     >
-                       <Pencil className="w-4 h-4" />
-                     </button>
+                   {permissions.update && (isCompanyAdmin || user.role !== "COMPANY_ADMIN") && (
+                      <button
+                        onClick={() => {
+                          setEditingUser(user);
+                          setStoredPrefill(null);
+                          setModalOpen(true);
+                        }}
+                        className="p-1.5 rounded-md hover:bg-muted"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
                    )}
 
                    {/* Go to Employee: hidden if user already linked to an employee */}
-                   {permissions.create && !user.isfrom_employee_id && (
+                   {permissions.create && !user.isfrom_employee_id && user.role !== "COMPANY_ADMIN" && (
                      <button
                        onClick={() => {
                          const params = new URLSearchParams({
@@ -263,13 +268,13 @@ export default function UsersPage() {
                      </button>
                    )}
 
-                   {permissions.delete && (
-                     <button
-                       onClick={() => handleDelete(user)}
-                       className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
-                     >
-                       <Trash2 className="w-4 h-4" />
-                     </button>
+                   {permissions.delete && user.role !== "COMPANY_ADMIN" && (
+                      <button
+                        onClick={() => handleDelete(user)}
+                        className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                    )}
                   </td>
                 </tr>

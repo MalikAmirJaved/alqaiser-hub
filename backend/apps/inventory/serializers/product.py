@@ -17,7 +17,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         child=serializers.DictField(), write_only=True, required=False
     )
     images = serializers.ListField(
-        child=serializers.CharField(), write_only=True, required=False
+        child=serializers.JSONField(), write_only=True, required=False
     )
     
     total_stock = serializers.SerializerMethodField()
@@ -60,12 +60,21 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             )
 
     def _create_images(self, variant, images_data, company_id, branch_id):
-        for idx, url in enumerate(images_data):
+        for idx, img in enumerate(images_data):
+            # Support both string URLs and {url, url_thumb} objects
+            if isinstance(img, str):
+                image_url = img
+                image_url_thumb = ''
+            else:
+                image_url = img.get('url', '')
+                image_url_thumb = img.get('url_thumb', '')
+            
             VariantImage.objects.create(
                 variant=variant,
                 company_id=company_id,
                 branch_id=branch_id,
-                image_url=url,
+                image_url=image_url,
+                image_url_thumb=image_url_thumb,
                 sort_order=idx,
                 is_primary=(idx == 0)
             )

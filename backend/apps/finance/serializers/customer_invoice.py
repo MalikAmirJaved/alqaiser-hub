@@ -13,6 +13,7 @@ class CustomerInvoiceLineSerializer(serializers.ModelSerializer):
     variant_name = serializers.CharField(source='variant.product.product_name', read_only=True)
     subtotal = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     line_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    quantity = serializers.IntegerField(min_value=1)
 
     class Meta:
         model = CustomerInvoiceLine
@@ -28,6 +29,9 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
     paid_amount = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     payment_status = serializers.CharField(read_only=True)
     outstanding = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    customer_name = serializers.SerializerMethodField()
+    customer_email = serializers.SerializerMethodField()
+    customer_phone = serializers.SerializerMethodField()
     lines = CustomerInvoiceLineSerializer(many=True, required=False)
     
     customer = serializers.SlugRelatedField(
@@ -57,6 +61,15 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
             'id', 'created_at', 'updated_at', 'company_id', 'branch_id',
             'paid_amount', 'payment_status', 'outstanding', 'status', 'journal_entry',
         )
+
+    def get_customer_name(self, obj):
+        return obj.customer.name if obj.customer else None
+
+    def get_customer_email(self, obj):
+        return obj.customer.email if obj.customer else None
+
+    def get_customer_phone(self, obj):
+        return obj.customer.phone if obj.customer else None
 
     def create(self, validated_data):
         lines_data = validated_data.pop('lines', [])

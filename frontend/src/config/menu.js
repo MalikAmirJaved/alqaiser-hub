@@ -144,6 +144,7 @@ children: [
     icon: Settings,
     children: [
       { title: "Company Profile", to: "/settings/company", icon: Building2 },
+      { title: "Terms & Conditions", to: "/settings/terms", icon: FileText },
       { title: "Users & Roles", to: "/settings/users", icon: UserCog },
       { title: "Permissions", to: "/settings/permissions", icon: Shield },
       { title: "Departments", to: "/settings/departments", icon: ClipboardList },

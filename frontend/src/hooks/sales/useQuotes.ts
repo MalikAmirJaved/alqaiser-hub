@@ -25,13 +25,15 @@ export interface Quote {
   date: string;
   expiration_date: string | null;
   total_amount: number | string;
-  status: "DRAFT" | "SENT" | "ACCEPTED" | "DECLINED" | "EXPIRED" | "REJECTED";
+  status: "DRAFT" | "SENT" | "VIEWED" | "APPROVED" | "REJECTED" | "CONVERTED";
   notes: string;
   lines: QuoteLine[];
   created_at?: string;
   updated_at?: string;
   created_by_name?: string;
   updated_by_name?: string;
+  converted_invoice?: string | null;
+  converted_invoice_number?: string | null;
 }
 
 interface PaginatedResponse<T> {
@@ -110,18 +112,47 @@ export function useDeleteQuote() {
   });
 }
 
-export function useAcceptQuote() {
+export function useSendQuote() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      api<{ status: string; message: string; invoice_id: string }>(
-        `/api/sales/quotes/${id}/accept/`,
+      api<{ status: string; message: string }>(
+        `/api/sales/quotes/${id}/send/`,
         { method: "POST" }
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });
-      queryClient.invalidateQueries({ queryKey: ["finance_customer_invoices"] });
+    },
+  });
+}
+
+export function useMarkViewedQuote() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<{ status: string; message: string }>(
+        `/api/sales/quotes/${id}/mark_viewed/`,
+        { method: "POST" }
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });
+    },
+  });
+}
+
+export function useApproveQuote() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<{ status: string; message: string }>(
+        `/api/sales/quotes/${id}/approve/`,
+        { method: "POST" }
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });
     },
   });
 }
@@ -134,6 +165,21 @@ export function useRejectQuote() {
       api<{ status: string; message: string }>(
         `/api/sales/quotes/${id}/reject/`,
         { method: "POST" }
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });
+    },
+  });
+}
+
+export function useMarkConvertedQuote() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ quoteId, invoiceId }: { quoteId: string; invoiceId: string }) =>
+      api<{ status: string; message: string }>(
+        `/api/sales/quotes/${quoteId}/mark_converted/`,
+        { method: "POST", body: JSON.stringify({ invoice_id: invoiceId }) }
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });

@@ -4,14 +4,14 @@ from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny, SAFE_METHODS
 from rest_framework import status
 from datetime import datetime, time
 
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.compsetting.models import (
     CompanySettings, WorkingDay, PublicHoliday,
-    CompanySettingHistory, Designation
+    CompanySettingHistory, Designation, TermsAndCondition
 )
 from apps.organization.models import Company
 from apps.hr.models import Employee
@@ -72,6 +72,11 @@ class BaseCompanyView(PermissionRequiredMixin, APIView):
 class CompanySettingsView(BaseCompanyView):
     """Main company settings CRUD"""
     permission_resource = 'company'
+
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [AllowAny()]
+        return super().get_permissions()
 
     def _get_or_create_settings(self, company, user):
         """Get or create settings with defaults"""
@@ -135,6 +140,7 @@ class CompanySettingsView(BaseCompanyView):
             "defaultStartTime": settings.default_start_time.strftime("%H:%M"),
             "defaultEndTime": settings.default_end_time.strftime("%H:%M"),
             "workingHoursPerDay": str(settings.working_hours_per_day),
+            "logo": settings.logo or "",
             "workingDays": [
                 {
                     "id": str(wd._id),
@@ -163,6 +169,18 @@ class CompanySettingsView(BaseCompanyView):
         }
 
     def get(self, request):
+        user = request.user
+        if not user.is_authenticated:
+            company_id = request.query_params.get('company_id')
+            if company_id:
+                company = get_object_or_404(Company, id=company_id, is_deleted=False)
+                settings, _ = CompanySettings.objects.get_or_create(company=company)
+                return Response(self._serialize_settings(company, settings))
+            company = Company.objects.filter(is_deleted=False).first()
+            if not company:
+                return Response({"error": "No company found"}, status=404)
+            settings, _ = CompanySettings.objects.get_or_create(company=company)
+            return Response(self._serialize_settings(company, settings))
         company, settings = self._get_settings(request.user)
         return Response(self._serialize_settings(company, settings))
 
@@ -202,6 +220,7 @@ class CompanySettingsView(BaseCompanyView):
             'defaultStartTime': 'default_start_time',
             'defaultEndTime': 'default_end_time',
             'workingHoursPerDay': 'working_hours_per_day',
+            'logo': 'logo',
         }
 
         for request_field, model_field in settings_fields.items():
@@ -564,6 +583,55 @@ class WelcomeDesignationSetupView(BaseCompanyView):
             'count': len(created)
         }, status=status.HTTP_201_CREATED if created else status.HTTP_400_BAD_REQUEST)
 
+
+
+class TermsAndConditionView(BaseCompanyView):
+    """Company terms & conditions for quotes and invoices"""
+    permission_resource = 'company'
+
+    def _get_or_create(self, company, type, user):
+        obj, _ = TermsAndCondition.objects.get_or_create(
+            company=company,
+            type=type,
+            defaults={
+                'content': '',
+                'created_by': user,
+                'updated_by': user,
+            }
+        )
+        return obj
+
+    def get(self, request):
+        company, _ = self._get_settings(request.user)
+        quote = self._get_or_create(company, 'quote', request.user)
+        invoice = self._get_or_create(company, 'invoice', request.user)
+        return Response({
+            'quote': quote.content,
+            'invoice': invoice.content,
+        })
+
+    def put(self, request):
+        company, _ = self._get_settings(request.user)
+        user = request.user
+
+        if 'quote' in request.data:
+            obj = self._get_or_create(company, 'quote', user)
+            obj.content = request.data['quote']
+            obj.updated_by = user
+            obj.save()
+
+        if 'invoice' in request.data:
+            obj = self._get_or_create(company, 'invoice', user)
+            obj.content = request.data['invoice']
+            obj.updated_by = user
+            obj.save()
+
+        quote = self._get_or_create(company, 'quote', user)
+        invoice = self._get_or_create(company, 'invoice', user)
+        return Response({
+            'quote': quote.content,
+            'invoice': invoice.content,
+        })
 
 
 class DesignationEmployeesView(BaseCompanyView):

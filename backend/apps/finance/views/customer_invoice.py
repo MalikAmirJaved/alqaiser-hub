@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
 from decimal import Decimal
 from rest_framework.exceptions import ValidationError
@@ -11,6 +12,10 @@ from apps.finance.models import CustomerInvoice, CustomerInvoiceLine
 from apps.finance.serializers import CustomerInvoiceSerializer
 from apps.finance.mixins import CompanyBranchUserMixin, SoftDeleteMixin
 from apps.finance.services.invoice_payment import pay_customer_invoice
+from apps.inventory.services.stock_service import (
+    direct_deduct_stock,
+    direct_release_stock,
+)
 
 
 class CustomerInvoiceViewSet(
@@ -33,19 +38,32 @@ class CustomerInvoiceViewSet(
     filter_fields = {
         'status': 'status',
         'customer': 'customer___id',
+        'source': 'source',
         'search': ['invoice_number', 'customer__name'],
     }
 
     def get_queryset(self):
         qs = super().get_queryset()
-        qs = qs.prefetch_related('lines__variant__product')
+        qs = qs.select_related('customer').prefetch_related('lines__variant__product')
         return qs.order_by('-created_at')
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        import time, random
-        self.perform_create(serializer)
+        try:
+            with transaction.atomic():
+                import time, random
+                self.perform_create(serializer)
+                invoice = serializer.instance
+                direct_deduct_stock(
+                    invoice.lines.all(),
+                    company_id=invoice.company_id,
+                    branch_id=invoice.branch_id,
+                    reference_id=invoice._id,
+                    user=request.user,
+                )
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({
             'status': 'success',
             'message': f'Invoice {serializer.instance.invoice_number} created',
@@ -70,9 +88,21 @@ class CustomerInvoiceViewSet(
             return Response({'error': 'Only DRAFT invoices can be updated.'}, status=status.HTTP_400_BAD_REQUEST)
         if instance.payment_status == 'PAID':
             return Response({'error': 'Cannot edit a paid invoice.'}, status=status.HTTP_400_BAD_REQUEST)
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
+        try:
+            with transaction.atomic():
+                direct_release_stock(instance._id, instance.company_id, request.user)
+                serializer = self.get_serializer(instance, data=request.data, partial=partial)
+                serializer.is_valid(raise_exception=True)
+                self.perform_update(serializer)
+                direct_deduct_stock(
+                    instance.lines.all(),
+                    company_id=instance.company_id,
+                    branch_id=instance.branch_id,
+                    reference_id=instance._id,
+                    user=request.user,
+                )
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({
             'status': 'success',
             'message': f'Invoice updated successfully',
@@ -89,17 +119,16 @@ class CustomerInvoiceViewSet(
                 {'error': 'Only DRAFT invoices can be deleted'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        # NEW: reject if already paid
         if instance.payment_status == 'PAID':
             return Response(
                 {'error': 'Cannot delete a paid invoice'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        direct_release_stock(instance._id, instance.company_id, request.user)
         instance.is_deleted = True
         instance.deleted_by = request.user
         instance.save(update_fields=['is_deleted', 'deleted_by'])
         return Response(status=status.HTTP_204_NO_CONTENT)
-
 
     def _pay_invoice(self, invoice, request, amount=None):
         try:

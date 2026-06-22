@@ -21,6 +21,7 @@ import {
   useDeleteExitRecord,
   useBulkAction,
   useClearExitDues,
+  useClearExitSettlement,
   useFinalSettlementPreview,
   useExitEmployeeAssets,
   useReturnExitAsset,
@@ -83,6 +84,7 @@ export default function ExitManagementPage() {
   const deleteMutation = useDeleteExitRecord();
   const bulkActionMutation = useBulkAction();
   const clearDuesMutation = useClearExitDues();
+  const clearSettlementMutation = useClearExitSettlement();
 
   const records = recordsData?.data || [];
 
@@ -373,6 +375,26 @@ export default function ExitManagementPage() {
                             }}
                             className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
                             title="Clear Dues (Employee Owes)"
+                          >
+                            <DollarSign className="w-4 h-4" />
+                          </button>
+                        )}
+                        {r.status_value === "CONFIRMED" && r.final_settlement > 0 && (
+                          <button
+                            onClick={() => {
+                              confirmationModal.confirm({
+                                title: "Clear Settlement",
+                                message: `This will pay ${formatCurrency(r.final_settlement)} settlement to the employee and create an expense record. Continue?`,
+                                type: "warning",
+                                confirmText: "Clear Settlement",
+                                onConfirm: async () => {
+                                  await clearSettlementMutation.mutateAsync(r.id);
+                                  await refetch();
+                                },
+                              });
+                            }}
+                            className="p-1.5 rounded-md hover:bg-success/15 text-success"
+                            title="Clear Settlement (Company Owes)"
                           >
                             <DollarSign className="w-4 h-4" />
                           </button>

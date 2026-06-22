@@ -12,6 +12,7 @@ class VariantDetailSerializer(serializers.ModelSerializer):
     unit = serializers.CharField(source='product.unit', read_only=True)
     is_active = serializers.BooleanField(source='product.is_active', read_only=True)
     attributes = serializers.SerializerMethodField()
+    total_stock = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = ProductVariant
@@ -21,6 +22,7 @@ class VariantDetailSerializer(serializers.ModelSerializer):
             'min_stock_level', 'max_stock_level',
             'is_deleted', 'attributes',
             'product_id', 'product_name', 'category_id', 'brand_id', 'unit', 'is_active',
+            'total_stock',
             'created_at', 'updated_at'
         ]
 

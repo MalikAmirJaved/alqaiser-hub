@@ -287,9 +287,6 @@ export function DetailLayout<T>({
                 Edit
               </ToolbarButton>
             )}
-            <ToolbarButton variant="ghost" icon={MoreHorizontal}>
-              More
-            </ToolbarButton>
             {propPermissions?.submit && onPrimaryAction && (
               <ToolbarButton variant="primary" icon={Send} onClick={onPrimaryAction}>
                 {primaryActionLabel}

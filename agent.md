@@ -29,7 +29,8 @@ All API routes are registered in `backend/config/urls.py`:
 | `/api/inventory/` | inventory | Products, variants, stock, warehouses, purchases, sales, brands, categories, customers, suppliers, transfers, barcode, alerts, audit |
 | `/api/finance/` | finance | Accounts, journal entries, payments, customer invoices, supplier bills, expenses, budgets, bank accounts, payroll, reports, dashboard, trial balance, P&L, balance sheet |
 | `/api/organization/` | organization | Company, branch, user management |
-| `/api/company/` | compsetting | Company settings, departments, designations |
+| `/api/company/` | compsetting | Company settings, departments, designations, terms & conditions |
+| `/api/monitoring/` | monitoring | AI monitoring (sites, NVRs, cameras, HLS streaming) |
 | `/api/notifications/` | notifications | WebSocket notifications |
 | `/api/permissions/` | permissions | RBAC (roles, permissions, modules, user overrides, role assignment) |
 | `/api/sales/` | sales | Leads, quotes, invoices, dashboard |
@@ -1851,3 +1852,247 @@ Added `self._is_month_paid()` check inside the per-month loop to skip already-pa
 
 #### Backend:
 - `backend/apps/hr/views/exit_management_views.py` — Rewrote `period_start` with walk-backwards logic; added paid-month skip in loop; fixed `prev_month_paid` NameError; fixed `final_payroll.transaction_number` AttributeError
+
+---
+
+## 24. Overall Dashboard (Unified KPI Dashboard) — IMPLEMENTED
+
+### Overview
+
+A cross-module dashboard that aggregates KPIs from Finance, Inventory, and Sales into a single view. The backend is in `apps/overall_dashboard/` and the frontend route is `/dashboard`.
+
+### API Endpoints
+
+| Method | URL | Permission | Description |
+|---|---|---|---|
+| GET | `/api/overall/dashboard/summary/` | Any of `FINANCE:dashboard`, `INVENTORY:report`, or `SALES:dashboard` | Unified KPI summary |
+| GET | `/api/overall/dashboard/trends/` | Same | 12-month revenue/expense/sales/purchase/stock trends |
+| GET | `/api/overall/dashboard/recent_activity/` | Same | Last 5 records from payments, sales orders, stock transactions, leads, quotes |
+| GET | `/api/overall/dashboard/alerts/` | Same | Low stock, overdue invoices/bills, pending leads/quotes |
+
+### Summary KPIs Returned
+
+| Category | Metrics |
+|---|---|
+| Finance | Revenue MTD, Expenses MTD, Profit MTD, Cash Position, Accounts Receivable, Accounts Payable |
+| Inventory | Total variants, Total stock value, Low stock count |
+| Sales | Total leads, New leads MTD, Total quotes, Quote value, Total customers, Invoice total, Outstanding, Paid MTD, Conversion rate, Leads/quotes by status |
+
+### Permission Pattern
+
+Uses `action_permission_any_of` — a custom permission pattern where the user needs **any one** of the listed module permissions to access each action (not all).
+
+### Frontend
+
+**Route:** `/dashboard`
+**File:** `frontend/src/app/(app)/dashboard/page.tsx`
+**Hook:** `frontend/src/hooks/overall/useOverallDashboard.ts`
+
+---
+
+## 25. Forecast App (Sales & Stock Forecasting) — IMPLEMENTED
+
+### Overview
+
+A standalone forecasting module with 3 models, 3 viewsets, 2 services (DemandForecaster, StockForecaster), 2 Celery tasks, and analytics endpoints. Uses moving average, exponential smoothing, or linear regression.
+
+### Models
+
+| Model | Table | Purpose |
+|---|---|---|
+| `ForecastConfiguration` | `forecast_configurations` | Per-scope config (GLOBAL/VARIANT/CATEGORY) with method, window, horizon, smoothing factor |
+| `SalesForecast` | `forecast_sales` | Predicted demand per variant per date with confidence bounds |
+| `StockForecast` | `forecast_stock` | Projected closing stock per variant/warehouse per date with reorder quantity |
+
+### API Endpoints
+
+| Method | URL | Description |
+|---|---|---|
+| GET | `/api/forecast/sales-forecast/` | List sales forecasts |
+| GET | `/api/forecast/sales-forecast/analytics/` | Aggregated analytics (timeline, top SKUs, method mix, confidence histogram) |
+| POST | `/api/forecast/sales-forecast/regenerate/` | Trigger full sales forecast regeneration |
+| GET | `/api/forecast/stock-forecast/` | List stock forecasts |
+| GET | `/api/forecast/stock-forecast/summary/` | Stock projection summary by warehouse |
+| POST | `/api/forecast/stock-forecast/regenerate/` | Trigger stock forecast refresh |
+| CRUD | `/api/forecast/forecast-config/` | Forecast configuration management |
+| POST | `/api/forecast/forecast-config/generate-sales/` | Generate sales forecasts |
+| POST | `/api/forecast/forecast-config/generate-stock/` | Generate stock forecasts |
+
+### Services
+
+| Service | Purpose |
+|---|---|
+| `DemandForecaster` | Fetches historical daily sales via `SalesOrderLine`, applies configured method (moving average / exponential smoothing / linear regression), generates `SalesForecast` records |
+| `StockForecaster` | Iterates variant/warehouse combos, reads current stock from `StockItem`, sums predicted demand, calculates reorder quantity |
+
+### Celery Tasks
+
+| Task | Purpose |
+|---|---|
+| `generate_sales_forecasts_for_all_companies` | Iterates all active companies/branches, runs DemandForecaster |
+| `generate_stock_forecasts_for_all_companies` | Iterates all active companies/branches, runs StockForecaster |
+
+### Files
+
+- `backend/apps/forecast/models.py` — ForecastConfiguration, SalesForecast, StockForecast
+- `backend/apps/forecast/services.py` — DemandForecaster, StockForecaster
+- `backend/apps/forecast/analytics.py` — build_sales_analytics(), build_stock_summary()
+- `backend/apps/forecast/tasks.py` — Celery periodic tasks
+- `backend/apps/forecast/views.py` — SalesForecastViewSet, StockForecastViewSet, ForecastConfigurationViewSet
+- `frontend/src/app/(app)/finance/forecast/page.tsx` — Forecast UI
+- `frontend/src/hooks/finance/useForecast.ts` — React Query hooks
+
+---
+
+## 26. Monitoring Streaming Infrastructure — IMPLEMENTED
+
+### Overview
+
+The monitoring app provides CCTV/NVR/Camera management with FFmpeg-based RTSP-to-HLS live streaming. The backend is in `apps/monitoring/`.
+
+### Models
+
+| Model | Table | Purpose |
+|---|---|---|
+| `Site` | `monitoring_sites` | Physical location (name, location, description) |
+| `Nvr` | `monitoring_nvrs` | Network Video Recorder (FK→Site, name, IP, port, credentials) |
+| `Camera` | `monitoring_cameras` | Camera (FK→NVR, channel, zone, purpose) |
+
+### API Endpoints
+
+| Method | URL | Description |
+|---|---|---|
+| CRUD | `/api/monitoring/sites/` | Site management |
+| CRUD | `/api/monitoring/nvrs/` | NVR management |
+| CRUD | `/api/monitoring/cameras/` | Camera management |
+| POST | `/api/monitoring/stream/start/` | Start RTSP→HLS stream |
+| POST | `/api/monitoring/stream/stop/` | Stop stream |
+| POST | `/api/monitoring/stream/status/` | Get stream status |
+
+### StreamManager (FFmpeg RTSP→HLS)
+
+**File:** `backend/apps/monitoring/stream_manager.py`
+
+The `StreamManager` class:
+- Converts RTSP camera feeds to HLS via FFmpeg subprocess
+- Generates HLS segments (`.m3u8` + `.ts` files) in `MEDIA_ROOT/streams/{stream_id}/`
+- Auto-restarts crashed FFmpeg processes (up to 5 retries)
+- Background watcher thread monitors each stream process
+- Thread-safe instance management with locking
+- Stale directory cleanup on startup
+
+### Frontend Hooks
+
+| Hook | API |
+|---|---|
+| `useSites` | `/api/monitoring/sites/` |
+| `useNvrs` | `/api/monitoring/nvrs/` |
+| `useCameras` | `/api/monitoring/cameras/` |
+| `useStream` | `/api/monitoring/stream/*` |
+
+---
+
+## 27. Terms & Conditions Module — IMPLEMENTED
+
+### Overview
+
+A company-level settings module for managing terms and conditions text used in quotes and invoices.
+
+### Backend
+
+**Model:** `TermsAndCondition` in `backend/apps/compsetting/models.py`
+
+| Field | Type | Notes |
+|---|---|---|
+| `company_settings` | FK → CompanySettings | CASCADE delete |
+| `quote_terms` | Text | Terms shown on sales quotes |
+| `invoice_terms` | Text | Terms shown on customer invoices |
+
+### API Endpoints
+
+| Method | URL | Description |
+|---|---|---|
+| GET | `/api/company/settings/terms/` | Get current T&C |
+| PUT | `/api/company/settings/terms/` | Update T&C |
+
+### Frontend
+
+**Route:** `/settings/terms`
+**Permission:** `SETTINGS:terms:view`
+**File:** `frontend/src/app/(app)/settings/terms/page.tsx`
+**Hook:** `frontend/src/hooks/useTermsAndConditions.ts`
+
+---
+
+## 28. Designation Management (compsetting) — IMPLEMENTED
+
+### Overview
+
+Designations (job titles) are now managed via the `compsetting` app instead of `organization`. This includes full CRUD, bulk setup, and employee-by-designation listing.
+
+### Backend
+
+**Model:** `Designation` in `backend/apps/compsetting/models.py`
+
+| Field | Type | Notes |
+|---|---|---|
+| `company_settings` | FK → CompanySettings | CASCADE delete |
+| `name` | CharField | Unique per company |
+| `department` | FK → Department | Nullable |
+
+### API Endpoints
+
+| Method | URL | Description |
+|---|---|---|
+| CRUD | `/api/company/designations/` | Full CRUD via DRF router |
+| POST | `/api/company/settings/designations/setup/` | Bulk create default designations |
+| GET | `/api/company/settings/designations/<uuid>/employees/` | List employees by designation |
+
+### Frontend
+
+**Route:** `/settings/designations`
+**Permission:** `SETTINGS:designation:view`
+**File:** `frontend/src/app/(app)/settings/designations/page.tsx`
+**Hook:** `frontend/src/hooks/useDesignations.ts`
+
+---
+
+## 29. Sales Stock Reservation System — IMPLEMENTED
+
+### Overview
+
+When sales quotes are created, stock is automatically reserved. When quotes are accepted, reservations transfer to invoices. When quotes are rejected, reservations are released.
+
+### Lifecycle
+
+| Event | Stock Action |
+|---|---|
+| Quote CREATE | `reserve_stock_for_lines()` — reserves stock with `reservation_type='QUOTE'` |
+| Quote UPDATE | `adjust_reservation()` — adjusts quantities to match updated lines |
+| Quote DELETE | `release_stock_for_reference()` — releases all reserved stock |
+| Quote ACCEPT | Re-points reservations from quote to invoice |
+| Quote REJECT | `release_stock_for_reference()` — releases all reserved stock |
+
+### Sales Invoice Actions
+
+| Action | URL | Description |
+|---|---|---|
+| `post_invoice` | `POST /api/sales/invoices/{id}/post_invoice/` | Pay invoice in full |
+| `record_payment` | `POST /api/sales/invoices/{id}/record_payment/` | Record partial payment |
+
+### Sales Dashboard Endpoints
+
+| Action | URL | Description |
+|---|---|---|
+| `summary` | `GET /api/sales/dashboard/summary/` | KPIs: total leads, quotes, customers, invoices, conversion rate |
+| `pipeline` | `GET /api/sales/dashboard/pipeline/` | Lead pipeline funnel by stage |
+| `recent_activity` | `GET /api/sales/dashboard/recent_activity/` | Last 5 leads and quotes |
+
+### Frontend Hooks
+
+| Hook | API |
+|---|---|
+| `useLeads` | `/api/sales/leads/` |
+| `useQuotes` | `/api/sales/quotes/` |
+| `useSalesInvoices` | `/api/sales/invoices/` |
+| `useSalesDashboard` | `/api/sales/dashboard/` |

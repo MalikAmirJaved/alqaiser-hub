@@ -55,15 +55,19 @@ export default function ProductsPage() {
     p.variants.reduce((s, v) => s + v.total_stock, 0);
 
   const enrichedProducts = useMemo(() =>
-    products.map(p => ({
-      ...p,
-      category_name: categories.find(c => c.id === p.category_id)?.name || "—",
-      brand_name: brands.find(b => b.id === p.brand_id)?.name || "—",
-      display_price: getProductPrice(p),
-      total_stock: getTotalStock(p),
-      main_image: p.variants[0]?.variant_images.find(i => i.is_primary)?.image_url
-        || p.variants[0]?.variant_images[0]?.image_url || "",
-    })),
+    products.map(p => {
+      const allImages = p.variants.flatMap(v => v.variant_images);
+      const primary = allImages.find(i => i.is_primary);
+      const first = allImages[0];
+      return {
+        ...p,
+        category_name: categories.find(c => c.id === p.category_id)?.name || "—",
+        brand_name: brands.find(b => b.id === p.brand_id)?.name || "—",
+        display_price: getProductPrice(p),
+        total_stock: getTotalStock(p),
+        main_image: primary?.image_url || first?.image_url || "",
+      };
+    }),
     [products, categories, brands]
   );
 
@@ -132,7 +136,7 @@ export default function ProductsPage() {
     {
       key: "main_image", label: "", width: "52px",
       render: (_, row: any) => row.main_image
-        ? <img src={row.main_image} alt="" className="w-9 h-9 object-cover rounded-lg border border-border" />
+        ? <img src={`${process.env.NEXT_PUBLIC_API_URL}${row.main_image}`} alt="" className="w-9 h-9 object-cover rounded-lg border border-border" />
         : <div className="w-9 h-9 rounded-lg bg-muted/30 flex items-center justify-center text-xs text-muted-foreground">—</div>,
     },
     {
@@ -189,7 +193,7 @@ export default function ProductsPage() {
     >
       <div className="h-36 bg-muted/20 overflow-hidden">
         {product.main_image
-          ? <img src={product.main_image} alt={product.product_name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          ? <img src={`${process.env.NEXT_PUBLIC_API_URL}${product.main_image}`} alt={product.product_name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
           : <div className="h-full flex items-center justify-center text-muted-foreground/30">
               <svg viewBox="0 0 48 48" className="w-10 h-10" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <rect x="8" y="8" width="32" height="32" rx="4" /><path d="M8 20h32M20 8v32" />

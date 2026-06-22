@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
-import { useCustomerInvoices, useDeleteCustomerInvoice, usePayCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
+import { useCustomerInvoices, usePayCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
+import { useSalesInvoices } from "@/hooks/sales/useSalesInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useCustomers } from "@/hooks/useCustomers";
 import CustomerInvoiceFormModal from "@/components/finance/customer-invoices/CustomerInvoiceFormModal";
@@ -11,7 +12,7 @@ import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatusBadge } from "@/components/finance/ui";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
-import { Trash2, Send } from "lucide-react";
+import { Send } from "lucide-react";
 
 interface CustomerInvoicesPanelProps {
   moduleCode: "FINANCE" | "SALES";
@@ -29,6 +30,7 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
   const customerOptions = customers.map(c => ({ value: c.id, label: c.name }));
 
   const filterFields: FilterField[] = [
+    { name: "search", label: "Search", type: "search" },
     { name: "customer", label: "Customer", type: "select", searchable: true, options: customerOptions },
     { name: "status", label: "Status", type: "status", options: [
       { value: "DRAFT", label: "Draft" },
@@ -36,15 +38,23 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
     ]},
   ];
 
-  const { data: invoices, isLoading } = useCustomerInvoices(
-    Object.keys(filters).length > 0
-      ? {
-          status: filters.status || undefined,
-          customer: filters.customer || undefined,
-        }
-      : undefined
-  );
-  const deleteInvoice = useDeleteCustomerInvoice();
+  // Use the correct API based on module code
+  // Both hooks are always called (React rules of hooks) but only the relevant one returns data
+  const isSales = moduleCode === "SALES";
+  const filterParams = Object.keys(filters).length > 0
+    ? {
+        search: filters.search || undefined,
+        status: filters.status || undefined,
+        customer: filters.customer || undefined,
+      }
+    : undefined;
+  
+  const { data: financeInvoices, isLoading: financeLoading } = useCustomerInvoices(filterParams);
+  const { data: salesInvoices, isLoading: salesLoading } = useSalesInvoices(filterParams);
+  
+  const invoices = isSales ? salesInvoices : financeInvoices;
+  const isLoading = isSales ? salesLoading : financeLoading;
+  
   const payInvoice = usePayCustomerInvoice();
 
   const resourceName = moduleCode === "SALES" ? "sales_customers_invoice" : "customer_invoice";
@@ -69,19 +79,10 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
     setModalOpen(true);
   };
 
-  const handleDelete = (invoice: any) => {
-    deleteInvoice.mutate(invoice.id);
-  };
-
   const handlePay = (invoice: any) => {
     if (invoice.payment_status !== "PAID" && invoice.status !== "CANCELLED") {
       payInvoice.mutate({ id: invoice.id });
     }
-  };
-
-  const handleBulkDelete = () => {
-    selectedIds.forEach((id) => deleteInvoice.mutate(id));
-    setSelectedIds([]);
   };
 
   const computeKPIs = (data: any[]) => {
@@ -167,7 +168,7 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
         }}
         actions={{
           onEdit: handleEdit,
-          onDelete: handleDelete,
+          canEdit: (invoice) => invoice.status === "DRAFT" && invoice.payment_status !== "PAID",
           onPost: handlePay,
           canPost: (invoice) => invoice.payment_status !== "PAID" && invoice.status !== "CANCELLED",
           postLabel: "Pay",
@@ -184,13 +185,6 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
         }
         batchActions={
           <>
-            <button
-              onClick={handleBulkDelete}
-              className="inline-flex items-center gap-1.5 text-sm text-destructive hover:text-destructive/80"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete Selected
-            </button>
             <button
               onClick={() => {
                 selectedIds.forEach((id) => payInvoice.mutate({ id }));

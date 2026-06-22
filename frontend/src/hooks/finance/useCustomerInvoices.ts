@@ -60,8 +60,9 @@ type UpdateCustomerInvoiceData = Partial<CreateCustomerInvoiceData>;
 
 const CUSTOMER_INVOICES_KEY = "finance_customer_invoices";
 
-async function getAllCustomerInvoices(params?: { status?: string; customer?: string }) {
+async function getAllCustomerInvoices(params?: { search?: string; status?: string; customer?: string }) {
   const searchParams = new URLSearchParams();
+  if (params?.search) searchParams.append("search", params.search);
   if (params?.status) searchParams.append("status", params.status);
   if (params?.customer) searchParams.append("customer", String(params.customer));
   const url = `/api/finance/customer-invoices/${searchParams.toString() ? `?${searchParams}` : ""}`;
@@ -106,7 +107,7 @@ async function postCustomerInvoice(id: string) {
 // REACT HOOKS
 // ============================================
 
-export function useCustomerInvoices(filters?: { status?: string; customer?: string }) {
+export function useCustomerInvoices(filters?: { search?: string; status?: string; customer?: string }) {
   return useQuery({
     queryKey: [CUSTOMER_INVOICES_KEY, filters],
     queryFn: () => getAllCustomerInvoices(filters),
@@ -129,6 +130,7 @@ export function useCreateCustomerInvoice() {
     mutationFn: createCustomerInvoice,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
     },
   });
 }
@@ -141,6 +143,7 @@ export function useUpdateCustomerInvoice() {
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY, id] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
     },
   });
 }
@@ -151,6 +154,7 @@ export function useDeleteCustomerInvoice() {
     mutationFn: deleteCustomerInvoice,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
     },
   });
 }

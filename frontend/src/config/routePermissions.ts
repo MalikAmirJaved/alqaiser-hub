@@ -80,6 +80,7 @@ export const routePermissions: Record<string, string> = {
 
   // Settings
   "/settings/company":      "SETTINGS:company:view",
+  "/settings/terms":        "SETTINGS:terms:view",
   "/settings/users":        "SETTINGS:user:view",
   "/settings/departments":  "SETTINGS:department:view",
   "/settings/designations": "SETTINGS:designation:view",
@@ -160,8 +161,9 @@ export const menuPermissionMapping: Record<string, string | null> = {
   "Camera Configuration":  "AI_MONITORING:site:view",
 
   // Settings
-  "Company Profile": "SETTINGS:company:view",
-  "Users & Roles":   "SETTINGS:user:view",
+  "Company Profile":     "SETTINGS:company:view",
+  "Terms & Conditions": "SETTINGS:terms:view",
+  "Users & Roles":      "SETTINGS:user:view",
   "Departments":     "SETTINGS:department:view",
   "Designations":    "SETTINGS:designation:view",
   "Preferences":     "SETTINGS:preference:view",

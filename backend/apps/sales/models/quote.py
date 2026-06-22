@@ -7,9 +7,10 @@ class Quote(BaseModel):
     STATUS_CHOICES = [
         ('DRAFT', 'Draft'),
         ('SENT', 'Sent'),
-        ('ACCEPTED', 'Accepted'),
-        ('DECLINED', 'Declined'),
-        ('EXPIRED', 'Expired'),
+        ('VIEWED', 'Viewed'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+        ('CONVERTED', 'Converted to Invoice'),
     ]
     quote_number = models.CharField(max_length=50, unique=True)
     lead = models.ForeignKey(
@@ -36,6 +37,13 @@ class Quote(BaseModel):
         ('SALES_AGENT', 'Sales Agent'),
     ], default='SALES_DESKTOP', db_index=True)
     notes = models.TextField(blank=True)
+    converted_invoice = models.ForeignKey(
+        'finance.CustomerInvoice',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='source_quotes',
+    )
 
     class Meta:
         db_table = 'sales_quotes'

@@ -1,5 +1,6 @@
 # apps/hr/views/exit_management_views.py
 
+import calendar
 import logging
 from datetime import datetime, date, timedelta
 from django.db import models
@@ -24,7 +25,7 @@ from apps.hr.models import (
     PayrollLoanDeduction,
     EmployeeAssetAssignment, Asset
 )
-from apps.finance.services.payable import create_payment_for
+from apps.finance.services.payable import create_payment_for, create_expense_for_payroll
 from apps.compsetting.models import CompanySettings, WorkingDay, PublicHoliday
 
 logger = logging.getLogger(__name__)
@@ -361,6 +362,18 @@ class ExitRecordView(BaseExitView):
             result['payment_id'] = str(payment._id)
             result['transaction_number'] = transaction_number
 
+            # Auto-create expense record for final settlement
+            create_expense_for_payroll(
+                company_id=company_id,
+                branch_id=branch_id,
+                category='SALARIES',
+                amount=Decimal(str(settlement_amount)),
+                description=f'Final settlement for {employee.full_name} - {exit_record.get_reason_display()}',
+                user=user,
+                notes=f'Transaction: {transaction_number}',
+                expense_date=date.today(),
+            )
+
             result['settlement_note'] = (
                 f'Settlement: {settlement_amount:.2f} | '
                 f'Loans settled: {total_loan_settled:.2f} | '
@@ -664,7 +677,12 @@ class ExitFinalSettlementView(BaseExitView):
                 month_end = min(period_end, date(year, month + 1, 1) - timedelta(days=1))
 
             calendar_days = (month_end - month_start).days + 1
-            prorated_days = min(calendar_days, days_in_month)
+            _, last_calendar_day = calendar.monthrange(year, month)
+            # Full calendar months always count as 30 days (not 28 for Feb)
+            if month_start.day == 1 and month_end.day == last_calendar_day:
+                prorated_days = days_in_month
+            else:
+                prorated_days = min(calendar_days, days_in_month)
             proration_factor = prorated_days / days_in_month
 
             total_base_salary += original_base_salary * proration_factor
@@ -694,13 +712,20 @@ class ExitFinalSettlementView(BaseExitView):
                     end_date__gte=month_start,
                     is_deleted=False
                 )
+                short_count = 0
+                half_count = 0
+                full_days = 0.0
                 for leave in approved_leaves:
-                    l_start = max(leave.start_date, month_start)
-                    l_end = min(leave.end_date, month_end)
-                    leave_working_days = self._count_working_days_in_range(company_id, l_start, l_end)
-                    if leave.is_half_day and leave_working_days == 1:
-                        leave_working_days = 0.5
-                    total_leave_deduction += leave_working_days * daily_rate
+                    if leave.leave_sub_type == 'SHORT':
+                        short_count += 1
+                    elif leave.leave_sub_type == 'HALF':
+                        half_count += 1
+                    else:  # FULL_DAY
+                        l_start = max(leave.start_date, month_start)
+                        l_end = min(leave.end_date, month_end)
+                        full_days += float((l_end - l_start).days + 1)
+                total_full_equivalent = full_days + half_count / 2.0 + short_count / 4.0
+                total_leave_deduction += total_full_equivalent * daily_rate
 
             if month == 12:
                 cursor = date(year + 1, 1, 1)
@@ -972,6 +997,73 @@ class ExitClearDuesView(BaseExitView):
             'message': f'Dues of {amount_due:.2f} cleared successfully',
             'payment_id': str(payment._id),
             'transaction_number': payment.reference_number,
+        }, status=status.HTTP_200_OK)
+
+
+class ExitClearSettlementView(BaseExitView):
+    """Clear positive settlement (company owes employee) by creating expense + payment"""
+
+    def get_permission_action(self):
+        return 'update'
+
+    @db_transaction.atomic
+    def post(self, request):
+        company_id, branch_id = self._get_company_context(request)
+
+        exit_uuid = request.data.get('exit_id')
+        if not exit_uuid:
+            return Response(
+                {'error': 'exit_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        exit_record = get_object_or_404(
+            ExitRecord,
+            _id=exit_uuid,
+            company_id=company_id,
+            is_deleted=False
+        )
+
+        if exit_record.status != 'CONFIRMED':
+            return Response(
+                {'error': 'Only CONFIRMED exit records can have settlement cleared'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if exit_record.final_settlement <= 0:
+            return Response(
+                {'error': 'No positive settlement to clear'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        amount = exit_record.final_settlement
+        employee = exit_record.employee
+
+        # Create expense with category EXIT_SETTLEMENT
+        expense = create_expense_for_payroll(
+            company_id=company_id,
+            branch_id=branch_id,
+            category='EXIT_SETTLEMENT',
+            amount=Decimal(str(amount)),
+            description=f'Exit settlement paid to {employee.full_name if employee else exit_record.employee_name}',
+            user=request.user,
+            notes=f'Exit settlement cleared for {exit_record._id}',
+            expense_date=date.today(),
+        )
+
+        # Update exit record
+        old_notes = exit_record.settlement_notes or ''
+        exit_record.final_settlement = 0
+        exit_record.settlement_notes = (
+            f'{old_notes} | Settlement cleared: {amount:.2f} paid on {date.today().isoformat()}'
+        )
+        exit_record.updated_by = request.user
+        exit_record.save(update_fields=['final_settlement', 'settlement_notes', 'updated_by'])
+
+        return Response({
+            'message': f'Settlement of {amount:.2f} cleared successfully',
+            'expense_id': str(expense._id),
+            'expense_number': expense.expense_number,
         }, status=status.HTTP_200_OK)
 
 

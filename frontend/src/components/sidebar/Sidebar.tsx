@@ -251,6 +251,15 @@ export default function Sidebar({ open, onClose }) {
             )
           )}
         </nav>
+
+        {/* Footer branding */}
+        <div className="px-4 py-3 border-t border-sidebar-border flex-shrink-0">
+          <p className="text-[11px] text-sidebar-foreground/50 text-center">
+            Powered by <span className="font-semibold text-sidebar-foreground/70">ClickMasters</span>
+            <span className="mx-1">·</span>
+            <span className="font-mono">v1.0</span>
+          </p>
+        </div>
       </aside>
     </>
   );

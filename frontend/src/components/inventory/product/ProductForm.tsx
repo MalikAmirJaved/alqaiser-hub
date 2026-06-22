@@ -12,6 +12,7 @@ import ProductInfoStep from "./ProductInfoStep";
 import VariantsStep from "./VariantsStep";
 import type { Product, ProductPayload } from "@/hooks/useProducts";
 import { useAutoCode } from "@/hooks/useAutoCode";
+import { type PendingFile, uploadFiles, deleteUploadedFiles } from "@/components/reuseable/FileUpload";
 
 // ──────────────────────────────────────────
 // Zod schema
@@ -36,7 +37,7 @@ const variantSchema = z.object({
     z.number().int().min(0).default(0),
   ),
   attributes: z.array(attributeSchema).default([]),
-  images: z.array(z.string()).default([]),
+          images: z.array(z.union([z.string(), z.object({ url: z.string(), url_thumb: z.string() })])).default([]),
 });
 
 const schema = z.object({
@@ -73,6 +74,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
   onCancel,
 }) => {
   const [step, setStep] = useState(0);
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [submitting, setSubmitting] = useState(false);
   const { generateCode } = useAutoCode("product_variant");
 
   const defaultValues = useMemo((): FormData => {
@@ -165,29 +168,68 @@ const ProductForm: React.FC<ProductFormProps> = ({
   };
 
   const onFormSubmit = async (data: FormData) => {
-    const payload: ProductPayload = {
-      productName: data.productName,
-      description: data.description || "",
-      category: data.category || null,
-      brand: data.brand || null,
-      unit: data.unit,
-      storageRequirement: data.storageRequirement,
-      taxRate: data.taxRate,
-      status: data.status,
-      is_active: data.is_active,
-      variants: data.variants.map((v) => ({
-        id: v.id,
-        sku: v.sku,
-        variantTitle: v.variantTitle || "",
-        barcode: v.barcode || "",
-        sellingPrice: v.sellingPrice,
-        minStockLevel: v.minStockLevel,
-        maxStockLevel: v.maxStockLevel,
-        attributes: v.attributes || [],
-        images: v.images || [],
-      })),
-    };
-    await onSubmit(payload);
+    setSubmitting(true);
+    const uploadedUrls: string[] = [];
+
+    try {
+      // Step 1: Upload all pending files
+      if (pendingFiles.length > 0) {
+        const results = await uploadFiles(pendingFiles);
+        
+        // Map uploaded URLs to their respective variants
+        for (const result of results) {
+          uploadedUrls.push(result.url);
+          const fieldNameParts = result.fieldName.split(".");
+          if (fieldNameParts.length >= 3) {
+            const variantIndex = parseInt(fieldNameParts[1]);
+            const currentImages = data.variants[variantIndex]?.images || [];
+            // Store as object with url and url_thumb
+            data.variants[variantIndex].images = [
+              ...currentImages,
+              { url: result.url, url_thumb: result.url_thumb }
+            ];
+          }
+        }
+      }
+
+      // Step 2: Prepare payload with uploaded URLs
+      const payload: ProductPayload = {
+        productName: data.productName,
+        description: data.description || "",
+        category: data.category || null,
+        brand: data.brand || null,
+        unit: data.unit,
+        storageRequirement: data.storageRequirement,
+        taxRate: data.taxRate,
+        status: data.status,
+        is_active: data.is_active,
+        variants: data.variants.map((v) => ({
+          id: v.id,
+          sku: v.sku,
+          variantTitle: v.variantTitle || "",
+          barcode: v.barcode || "",
+          sellingPrice: v.sellingPrice,
+          minStockLevel: v.minStockLevel,
+          maxStockLevel: v.maxStockLevel,
+          attributes: v.attributes || [],
+          images: v.images || [],
+        })),
+      };
+
+      // Step 3: Create/Update product
+      await onSubmit(payload);
+      
+      // Step 4: Clear pending files on success
+      setPendingFiles([]);
+    } catch (error) {
+      // Step 5: Rollback - delete uploaded files if product creation fails
+      if (uploadedUrls.length > 0) {
+        await deleteUploadedFiles(uploadedUrls);
+      }
+      throw error;
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -231,9 +273,11 @@ const ProductForm: React.FC<ProductFormProps> = ({
             setValue={setValue}
             trigger={trigger}
             isEditing={isEditing}
-            isLoading={isLoading}
+            isLoading={submitting || isLoading}
             productName={productName}
             onBack={() => setStep(0)}
+            pendingFiles={pendingFiles}
+            onPendingFilesChange={setPendingFiles}
           />
         )}
       </div>

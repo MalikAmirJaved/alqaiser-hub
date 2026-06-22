@@ -46,6 +46,7 @@ from apps.hr.views.exit_management_views import (
     ExitChecklistView,
     ExitBulkActionView,
     ExitClearDuesView,
+    ExitClearSettlementView,
     ExitEmployeeAssetsView,
     ExitReturnAssetView,
 )
@@ -145,6 +146,7 @@ urlpatterns = [
     path('exits/final-settlement/', ExitFinalSettlementView.as_view(), name='exit-final-settlement'),
     path('exits/checklist/', ExitChecklistView.as_view(), name='exit-checklist'),
     path('exits/clear-dues/', ExitClearDuesView.as_view(), name='exit-clear-dues'),
+    path('exits/clear-settlement/', ExitClearSettlementView.as_view(), name='exit-clear-settlement'),
     path('exits/bulk-action/', ExitBulkActionView.as_view(), name='exit-bulk-action'),
     path('exits/<str:exit_id>/assets/', ExitEmployeeAssetsView.as_view(), name='exit-employee-assets'),
     path('exits/<str:exit_id>/return-asset/', ExitReturnAssetView.as_view(), name='exit-return-asset'),

@@ -2,11 +2,11 @@ from decimal import Decimal
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
-from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import GenericFilterMixin
 from apps.finance.mixins import CompanyBranchUserMixin, SoftDeleteMixin
 from apps.finance.models import Payment, JournalEntry, JournalLine, Account, BankTransaction
 from apps.finance.serializers import PaymentSerializer
@@ -54,6 +54,12 @@ def _journal_description(payment):
     if model_name == 'payrollrecord':
         employee_name = payable.employee.full_name if payable.employee else 'Employee'
         return f'Payroll payment - {employee_name}'
+    if model_name == 'employeeloan':
+        employee_name = payable.employee.full_name if payable.employee else 'Employee'
+        return f'Loan disbursement - {employee_name}'
+    if model_name == 'salesorder':
+        customer_name = payable.customer.name if payable.customer else 'Walk-in'
+        return f'POS Sale - {customer_name} - {payable.order_number}'
     return 'Payment'
 
 
@@ -75,28 +81,50 @@ def _create_journal_entry(payment, user):
     )
 
     if payment.payment_type == 'RECEIPT':
-        ar = Account.objects.get(
-            code='AR',
-            company_id=payment.company_id,
-            branch_id=payment.branch_id,
-            is_deleted=False,
-        )
-        JournalLine.objects.create(
-            journal_entry=entry,
-            account=cash_bank,
-            debit=payment.amount,
-            credit=Decimal('0.00'),
-            company_id=payment.company_id,
-            branch_id=payment.branch_id,
-        )
-        JournalLine.objects.create(
-            journal_entry=entry,
-            account=ar,
-            debit=Decimal('0.00'),
-            credit=payment.amount,
-            company_id=payment.company_id,
-            branch_id=payment.branch_id,
-        )
+        # For SalesOrder-linked payments, use SALES_REVENUE account
+        if model_name == 'salesorder':
+            revenue_account = _get_or_create_account(
+                'SALES_REVENUE', 'Sales Revenue', 'REVENUE', payment
+            )
+            JournalLine.objects.create(
+                journal_entry=entry,
+                account=cash_bank,
+                debit=payment.amount,
+                credit=Decimal('0.00'),
+                company_id=payment.company_id,
+                branch_id=payment.branch_id,
+            )
+            JournalLine.objects.create(
+                journal_entry=entry,
+                account=revenue_account,
+                debit=Decimal('0.00'),
+                credit=payment.amount,
+                company_id=payment.company_id,
+                branch_id=payment.branch_id,
+            )
+        else:
+            ar = Account.objects.get(
+                code='AR',
+                company_id=payment.company_id,
+                branch_id=payment.branch_id,
+                is_deleted=False,
+            )
+            JournalLine.objects.create(
+                journal_entry=entry,
+                account=cash_bank,
+                debit=payment.amount,
+                credit=Decimal('0.00'),
+                company_id=payment.company_id,
+                branch_id=payment.branch_id,
+            )
+            JournalLine.objects.create(
+                journal_entry=entry,
+                account=ar,
+                debit=Decimal('0.00'),
+                credit=payment.amount,
+                company_id=payment.company_id,
+                branch_id=payment.branch_id,
+            )
     elif model_name == 'supplierbill':
         ap = Account.objects.get(
             code='AP',
@@ -147,6 +175,26 @@ def _create_journal_entry(payment, user):
         JournalLine.objects.create(
             journal_entry=entry,
             account=salaries_account,
+            debit=payment.amount,
+            credit=Decimal('0.00'),
+            company_id=payment.company_id,
+            branch_id=payment.branch_id,
+        )
+        JournalLine.objects.create(
+            journal_entry=entry,
+            account=cash_bank,
+            debit=Decimal('0.00'),
+            credit=payment.amount,
+            company_id=payment.company_id,
+            branch_id=payment.branch_id,
+        )
+    elif model_name == 'employeeloan':
+        loan_account = _get_or_create_account(
+            'LOANS', 'Employee Loans', 'ASSET', payment
+        )
+        JournalLine.objects.create(
+            journal_entry=entry,
+            account=loan_account,
             debit=payment.amount,
             credit=Decimal('0.00'),
             company_id=payment.company_id,
@@ -231,6 +279,7 @@ def confirm_payment_logic(payment, user):
 
 
 class PaymentViewSet(
+    GenericFilterMixin,
     CompanyBranchUserMixin,
     CompanyBranchMixin,
     PermissionRequiredMixin,
@@ -242,9 +291,14 @@ class PaymentViewSet(
     permission_module = 'FINANCE'
     permission_resource = 'payment'
     lookup_field = '_id'
-
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['payment_type', 'status', 'payment_method']
+    filter_fields = {
+        'search': ['reference_number', 'notes'],
+        'payment_type': 'payment_type',
+        'payment_method': 'payment_method',
+        'status': 'status',
+        'start_date': 'payment_date__gte',
+        'end_date': 'payment_date__lte',
+    }
 
     def get_queryset(self):
         qs = super().get_queryset()

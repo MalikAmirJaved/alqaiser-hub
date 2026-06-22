@@ -10,6 +10,7 @@ export interface User {
   email: string;
   first_name: string;
   last_name: string;
+  role: string;
   department: string;
   department_id?: string;
   department_name?: string;

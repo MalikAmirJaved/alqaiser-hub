@@ -18,7 +18,7 @@ interface ProductSearchPanelProps {
 type Tab = "products" | "variants";
 
 export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPanelProps) {
-  const [activeTab, setActiveTab] = useState<Tab>("products");
+  const [activeTab, setActiveTab] = useState<Tab>("variants");
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [brandId, setBrandId] = useState("");

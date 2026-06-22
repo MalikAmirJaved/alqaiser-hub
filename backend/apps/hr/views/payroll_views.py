@@ -23,6 +23,7 @@ from apps.finance.services.payable import (
     annotate_total_paid,
     get_latest_confirmed_payment,
     create_payment_for,
+    create_expense_for_payroll,
 )
 
 logger = logging.getLogger(__name__)
@@ -92,10 +93,9 @@ class PayrollView(PermissionRequiredMixin, APIView):
 
     def _get_leave_deduction(self, employee_id, company_id, year, month, daily_rate):
         """
-        Calculate deduction for approved leaves in the month,
-        counting ONLY working days within each leave period.
-        
-        Example: 8 calendar days off with 2 weekends = 6 working days deducted.
+        Calculate deduction for approved leaves using leave-type conversion:
+          2 short = 1 half, 2 half = 1 full
+          Full-day deduction = (total full-day equivalent / 30) * monthly salary
         """
         first_day, last_day = self._get_month_days(year, month)
         approved_leaves = LeaveRequest.objects.filter(
@@ -105,33 +105,31 @@ class PayrollView(PermissionRequiredMixin, APIView):
             end_date__gte=first_day,
             is_deleted=False
         )
-        total_working_days_on_leave = 0
-        
+        short_count = 0
+        half_count = 0
+        full_days = 0.0
+
         for leave in approved_leaves:
-            start = max(leave.start_date, first_day)
-            end = min(leave.end_date, last_day)
-            current = start
-            days_in_this_leave = 0
-            
-            # Count only working days in the leave period
-            while current <= end:
-                if self._is_working_day(company_id, current):
-                    days_in_this_leave += 1
-                current += timedelta(days=1)
-            
-            # Handle half-day leave (only if the leave is exactly 1 day)
-            if leave.is_half_day and days_in_this_leave == 1:
-                days_in_this_leave = 0.5
-            
-            total_working_days_on_leave += days_in_this_leave
-        
-        if total_working_days_on_leave > 0:
+            if leave.leave_sub_type == 'SHORT':
+                short_count += 1
+            elif leave.leave_sub_type == 'HALF':
+                half_count += 1
+            else:  # FULL_DAY
+                start = max(leave.start_date, first_day)
+                end = min(leave.end_date, last_day)
+                full_days += float((end - start).days + 1)
+
+        # Convert: 2 short → 1 half, 2 half → 1 full
+        total_full_equivalent = full_days + half_count / 2.0 + short_count / 4.0
+
+        if total_full_equivalent > 0:
             logger.info(
-                f"Working leave days for employee {employee_id} in {year}-{month}: "
-                f"{total_working_days_on_leave}, daily_rate: {daily_rate}"
+                f"Leave deduction for employee {employee_id} in {year}-{month}: "
+                f"{short_count} short + {half_count} half + {full_days} full days "
+                f"= {total_full_equivalent} full-day equivalent, daily_rate: {daily_rate}"
             )
-        
-        return total_working_days_on_leave * daily_rate
+
+        return total_full_equivalent * daily_rate
 
     # ------------------------------------------------------------------
     # Pro-rated salary helper (mid-month joining) - FIXED: includes joining day
@@ -682,6 +680,18 @@ class PayrollView(PermissionRequiredMixin, APIView):
         # Mark as confirmed without creating journal entries
         payment.status = 'CONFIRMED'
         payment.save(update_fields=['status', 'updated_at'])
+
+        # Auto-create expense record for salary payment
+        create_expense_for_payroll(
+            company_id=company_id,
+            branch_id=branch_id,
+            category='SALARIES',
+            amount=Decimal(str(net_salary)),
+            description=f'Salary payment for {employee.full_name} - {month}/{year}',
+            user=request.user,
+            notes=f'Transaction: {transaction_number}',
+            expense_date=date.today(),
+        )
         
         # ---------- Carryover advance: if net was negative, create advance for user-picked month ----------
         carryover_loan = None
@@ -1700,6 +1710,32 @@ class LoanPayView(PermissionRequiredMixin, APIView):
         loan.updated_by = request.user
         loan.save()
         
+        # Create a payment record so the loan appears in finance
+        payment = create_payment_for(
+            loan,
+            amount=Decimal(str(loan.total_payable)),
+            payment_date=date.today(),
+            user=request.user,
+            payment_method='BANK_TRANSFER',
+            reference_number=loan.transaction_number or '',
+            notes=f'Loan disbursement - {loan.get_loan_type_display()}',
+            auto_confirm=False,
+        )
+        payment.status = 'CONFIRMED'
+        payment.save(update_fields=['status', 'updated_at'])
+
+        # Auto-create expense record for loan payment
+        create_expense_for_payroll(
+            company_id=company_id,
+            branch_id=branch_id,
+            category='STAFF_LOAN',
+            amount=Decimal(str(loan.total_payable)),
+            description=f'Loan payment - {loan.get_loan_type_display()} for {loan.employee.full_name}',
+            user=request.user,
+            notes=f'Transaction: {loan.transaction_number}',
+            expense_date=date.today(),
+        )
+
         return Response({
             "message": "Loan paid successfully",
             "loan": {
@@ -2244,6 +2280,18 @@ class PayrollAdvanceView(PermissionRequiredMixin, APIView):
         )
         payment.status = 'CONFIRMED'
         payment.save(update_fields=['status', 'updated_at'])
+
+        # Auto-create expense record for advance salary
+        create_expense_for_payroll(
+            company_id=company_id,
+            branch_id=branch_id,
+            category='SALARIES',
+            amount=Decimal(str(net_amount)),
+            description=f'Advance salary for {employee.full_name} - {month}/{year}',
+            user=request.user,
+            notes=f'Transaction: {transaction_number}',
+            expense_date=date.today(),
+        )
 
         # Notify frontend to refresh both payroll and loans data
         broadcast_data_update(company_id, branch_id, 'payroll', 'create', advance_payroll._id)
