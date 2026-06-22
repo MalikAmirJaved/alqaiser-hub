@@ -10,6 +10,7 @@ import uuid
 from decimal import Decimal
 from django.db.models import F
 from rest_framework import viewsets, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.decorators import action
 
@@ -45,6 +46,35 @@ class PurchaseOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionReq
         qs = super().get_queryset()
         qs = qs.prefetch_related('lines__variant__product')
         return qs
+
+    def _check_can_modify(self, po):
+        """
+        Check if a purchase order can still be modified/updated/deleted.
+        Raises ValidationError if it's confirmed or has goods receipts.
+        """
+        if po.status != 'DRAFT':
+            raise ValidationError(
+                f'Cannot modify purchase order "{po.order_number}" — it is already {po.get_status_display().lower()}. Only draft orders can be edited.'
+            )
+        if po.goods_receipts.exists():
+            raise ValidationError(
+                f'Cannot modify purchase order "{po.order_number}" — goods receipt(s) have already been created against it.'
+            )
+
+    def update(self, request, *args, **kwargs):
+        po = self.get_object()
+        self._check_can_modify(po)
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        po = self.get_object()
+        self._check_can_modify(po)
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        po = self.get_object()
+        self._check_can_modify(po)
+        return super().destroy(request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -147,6 +177,12 @@ class GoodsReceiptViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequ
         po = goods_receipt.purchase_order
         inventory_type = po.inventory_type
 
+        # --- Check if PO can still receive goods ---
+        if po.status in ('FULLY_RECEIVED', 'CANCELLED'):
+            raise ValidationError(
+                f'Purchase order "{po.order_number}" is {po.get_status_display().lower()}. No more goods can be processed.'
+            )
+
         total_bill_amount = Decimal('0.00')
 
         # ============ FIRST PASS: Process all lines and accumulate bill amount ============
@@ -155,6 +191,22 @@ class GoodsReceiptViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequ
             qty = line.quantity_received
             unit_cost = line.unit_cost
             total_line = Decimal(qty) * Decimal(unit_cost)
+
+            # --- Skip lines that are already fully received ---
+            if po_line.status == 'FULLY_RECEIVED':
+                logger.warning(
+                    f"Skipping PO line {po_line._id} — already fully received "
+                    f"({po_line.quantity_received}/{po_line.quantity_ordered})"
+                )
+                continue
+
+            # --- Validate quantity doesn't exceed remaining ---
+            remaining = po_line.quantity_ordered - po_line.quantity_received
+            if qty > remaining:
+                raise ValidationError(
+                    f'Cannot receive {qty} units for line item — only {remaining} remaining '
+                    f'out of {po_line.quantity_ordered} ordered.'
+                )
 
             if inventory_type == 'FOR_SALE':
                 # --- Stock update for FOR_SALE items ---
