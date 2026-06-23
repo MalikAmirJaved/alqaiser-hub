@@ -1,7 +1,8 @@
 // src/app/(app)/hr/payroll/page.tsx
 "use client";
 import { useState, useEffect, useMemo } from "react";
-import { useActiveEmployees } from "@/hooks/useEmployees";
+import { useQuery } from "@tanstack/react-query";
+import { useApi } from "@/hooks/useApi";
 import { usePayroll, usePayrollStats, useEmployeeLoans, useCompensations } from "@/hooks/usePayroll";
 import { useLeaves } from "@/hooks/useLeaves";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
@@ -33,6 +34,7 @@ export function PayrollPage({
   permissionModule?: "HR" | "FINANCE";
 }) {
   const router = useRouter();
+  const api = useApi();
   const formatCurrency = useFormatCurrency();
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
@@ -49,21 +51,61 @@ export function PayrollPage({
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
-  useEffect(() => { setPage(1); }, [filters]);
+  useEffect(() => { setPage(1); }, [filters, selectedMonth, selectedYear]);
 
-  // Fetch data from backend
-  const { data: employees = [], isLoading: employeesLoading } = useActiveEmployees();
-  const { data: allLoans = [] } = useEmployeeLoans();
-  const { data: compensations = [] } = useCompensations();
-  const { data: leaves = [] } = useLeaves();
-  const { data: payrollRecords = [], isLoading: payrollLoading } = usePayroll({
+  // Fetch paginated employees from server (filtered by search + joining date)
+  const joiningDateLte = useMemo(() => {
+    const lastDay = new Date(selectedYear, selectedMonth, 0);
+    const y = lastDay.getFullYear();
+    const m = String(lastDay.getMonth() + 1).padStart(2, '0');
+    const d = String(lastDay.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }, [selectedMonth, selectedYear]);
+
+  const employeeParams = useMemo(() => ({
+    page: String(page),
+    page_size: String(pageSize),
+    ...(filters.search ? { search: filters.search } : {}),
+    joining_date__lte: joiningDateLte,
+    employment_status: "ACTIVE",
+  }), [page, pageSize, filters.search, joiningDateLte]);
+
+  const employeeQuery = useQuery<{
+    count: number;
+    total_pages: number;
+    current_page: number;
+    results: any[];
+  }>({
+    queryKey: ["payroll-employees", employeeParams],
+    queryFn: () => {
+      const qs = new URLSearchParams(employeeParams).toString();
+      return api(`/api/hr/employees/?${qs}`);
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
+
+  const employees = employeeQuery.data?.results ?? [];
+  const employeeTotal = employeeQuery.data?.count ?? 0;
+  const employeeTotalPages = employeeQuery.data?.total_pages ?? 0;
+
+  // Fetch supporting data (loans, compensations, leaves) filtered by selected month
+  const { data: allLoans = [] } = useEmployeeLoans({
+    advance_for_month: String(selectedMonth),
+    advance_for_year: String(selectedYear),
+  });
+  const { data: compensations = [] } = useCompensations({ month: String(selectedMonth), year: String(selectedYear) });
+  const { data: leaves = [] } = useLeaves({ month: String(selectedMonth), year: String(selectedYear) });
+
+  // Fetch ALL payroll records for this month (needed for status lookup across all displayed employees)
+  const payrollApiParams = useMemo(() => ({
     month: String(selectedMonth),
     year: String(selectedYear),
-  }, module);
-  const { data: stats, isLoading: statsLoading } = usePayrollStats({
-    month: String(selectedMonth),
-    year: String(selectedYear),
-  }, module);
+    ...(filters.search ? { search: filters.search } : {}),
+    page_size: "10000",
+  }), [selectedMonth, selectedYear, filters.search]);
+
+  const { data: payrollRecords = [], refetch } = usePayroll(payrollApiParams, module);
 
   const permissions = useSelector(
   (state: RootState) => state.permissions.permissions
@@ -163,44 +205,8 @@ const payrollPermissions = getPermissions(
     return false;
   };
 
-  // Filter employees by search, status, and joining date
-  const filteredEmployees = employees.filter(emp => {
-    // Exclude employees who haven't joined by the selected month
-    if (emp.joining_date) {
-      const joinDate = new Date(emp.joining_date);
-      const joinMonth = joinDate.getMonth() + 1;
-      const joinYear = joinDate.getFullYear();
-      if (joinYear > selectedYear || (joinYear === selectedYear && joinMonth > selectedMonth)) {
-        return false;
-      }
-    }
-
-    const searchTerm = (filters.search || "").toLowerCase();
-    const matchesSearch = !searchTerm ||
-      emp.first_name?.toLowerCase().includes(searchTerm) ||
-      emp.last_name?.toLowerCase().includes(searchTerm) ||
-      emp.department_name?.toLowerCase().includes(searchTerm) ||
-      emp.designation_name?.toLowerCase().includes(searchTerm) ||
-      emp.employee_id?.toLowerCase().includes(searchTerm);
-    
-    const statusFilter = filters.status || "";
-    const status = getPaymentStatus(emp.id);
-    const matchesStatus = !statusFilter || status === statusFilter.toUpperCase();
-    
-    return matchesSearch && matchesStatus;
-  });
-
-  const totalPages = Math.max(1, Math.ceil(filteredEmployees.length / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const paginatedEmployees = filteredEmployees.slice((safePage - 1) * pageSize, safePage * pageSize);
-
   const monthNames = ["January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"];
-
-const payrollQuery = usePayroll({
-  month: String(selectedMonth),
-  year: String(selectedYear),
-}, module);
 
 const statsQuery = usePayrollStats({
   month: String(selectedMonth),
@@ -208,31 +214,21 @@ const statsQuery = usePayrollStats({
 }, module);
 
 const handleRefresh = () => {
-  payrollQuery.refetch();
+  refetch();
   statsQuery.refetch();
 };
 
-  if ( employeesLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+  const paidCount = statsQuery.data?.paidCount ?? 0;
+  const pendingCount = statsQuery.data?.pendingCount ?? 0;
+  const totalPayroll = statsQuery.data?.totalPayroll ? parseFloat(statsQuery.data.totalPayroll) : 0;
+  const avgSalary = statsQuery.data?.avgSalary ? parseFloat(statsQuery.data.avgSalary) : 0;
+  const totalEmployees = statsQuery.data?.totalEmployees ?? 0;
 
-  const paidCount = stats?.paidCount || employees.filter(e => getPaymentStatus(e.id) === "PAID").length;
-  const pendingCount = employees.length - paidCount;
-  const totalPayroll = stats?.totalPayroll ? parseFloat(stats.totalPayroll) : employees.reduce((sum, e) => sum + (parseFloat(e.salary) || 0), 0);
-  const avgSalary = stats?.avgSalary ? parseFloat(stats.avgSalary) : (employees.length > 0 ? totalPayroll / employees.length : 0);
-
-  const overallPayable = employees.reduce((sum, employee) => {
-    if (getPaymentStatus(employee.id) === "PAID") return sum;
-    const record = getPayrollRecord(employee.id);
-    return sum + parseFloat(record?.net_salary || employee.salary || "0");
-  }, 0);
+  // Post-filter employees by payment status (client-side since status is computed from payroll records)
+  const displayEmployees = useMemo(() => {
+    if (!filters.status) return employees;
+    return employees.filter(e => getPaymentStatus(e.id) === filters.status.toUpperCase());
+  }, [employees, filters.status]);
 
   return (
     <div>
@@ -272,9 +268,9 @@ const handleRefresh = () => {
       id: "paid-employees",
       label: "Paid Employees",
       value:
-        employees.length > 0
+        totalEmployees > 0
           ? `${paidCount} (${Math.round(
-              (paidCount / employees.length) * 100
+              (paidCount / totalEmployees) * 100
             )}%)`
           : paidCount,
     },
@@ -287,11 +283,6 @@ const handleRefresh = () => {
       id: "avg-salary",
       label: "Avg. Salary",
       value: `${formatCurrency(avgSalary)}`,
-    },
-    {
-      id: "overall-payable",
-      label: "Overall Payable",
-      value: `${formatCurrency(overallPayable)}`,
     },
   ]}
 />
@@ -317,7 +308,7 @@ const handleRefresh = () => {
             { name: "status", label: "Payment", type: "status", options: [{ value: "pending", label: "Pending" }, { value: "paid", label: "Paid" }] },
           ]}
           filters={filters}
-          onChange={setFilters}
+          onChange={(f) => { setFilters(f); setPage(1); }}
         />
       </div>
 
@@ -338,14 +329,23 @@ const handleRefresh = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredEmployees.length === 0 && (
+              {employeeQuery.isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-t border-border animate-pulse">
+                    {Array.from({ length: 8 }).map((__, j) => (
+                      <td key={j} className="px-4 py-3">
+                        <div className="h-4 bg-muted rounded w-3/4" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : displayEmployees.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="text-center py-10 text-muted-foreground">
                     No employees found for {monthNames[selectedMonth - 1]}, {selectedYear}.
                   </td>
                 </tr>
-              )}
-              {paginatedEmployees.map((employee) => {
+              ) : displayEmployees.map((employee) => {
                 const status = getPaymentStatus(employee.id);
                 const isPaid = status === "PAID";
                 const payrollRecord = getPayrollRecord(employee.id);
@@ -439,25 +439,25 @@ const handleRefresh = () => {
         </div>
         <div className="p-3 border-t border-border flex items-center justify-between">
           <div className="text-xs text-muted-foreground">
-            Showing {filteredEmployees.length === 0 ? 0 : (safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filteredEmployees.length)} of {filteredEmployees.length} employees
+            Showing {employeeTotal === 0 ? 0 : (page - 1) * pageSize + 1}–{Math.min(page * pageSize, employeeTotal)} of {employeeTotal} employees
           </div>
           <div className="flex items-center gap-3">
             <div className="text-xs text-muted-foreground">
               Total Payroll: {formatCurrency(totalPayroll)}
             </div>
-            {filteredEmployees.length > pageSize && (
+            {employeeTotal > pageSize && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">Page {safePage} of {totalPages}</span>
+                <span className="text-xs text-muted-foreground">Page {page} of {employeeTotalPages}</span>
                 <button
                   onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={safePage <= 1}
+                  disabled={page <= 1}
                   className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setPage(p => p + 1)}
-                  disabled={safePage >= totalPages}
+                  disabled={page >= employeeTotalPages}
                   className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronRight className="w-4 h-4" />

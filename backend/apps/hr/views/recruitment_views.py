@@ -11,7 +11,9 @@ from datetime import datetime, date, timedelta
 import logging
 from django.db import models
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import FilterPaginationMixin
 from apps.permissions.mixins import PermissionRequiredMixin
+from apps.hr.filters import RecruitmentCandidateFilter
 from apps.hr.models import RecruitmentCandidate, RecruitmentActivityLog, Employee, InterviewRound
 from apps.hr.serializers.recruitment_serializers import (
     RoundBulkCreateSerializer,
@@ -26,11 +28,15 @@ def safe_date(value):
         return value.isoformat()
     return value
 
-class RecruitmentCandidateView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+class RecruitmentCandidateView(CompanyBranchMixin, PermissionRequiredMixin, FilterPaginationMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'recruitment'
     """CRUD operations for Recruitment Candidates with UUID support"""
     permission_classes = [IsAuthenticated]
+    filterset_class = RecruitmentCandidateFilter
+    search_fields = ['name', 'email', 'phone', 'position', 'current_company']
+    ordering_fields = ['name', 'position', 'department', 'stage', 'apply_date', 'interview_date', 'created_at']
+    ordering = ['-apply_date']
     
     def _serialize_candidate(self, candidate):
         """Serialize candidate with UUIDs"""
@@ -78,72 +84,16 @@ class RecruitmentCandidateView(CompanyBranchMixin, PermissionRequiredMixin, APIV
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        query = RecruitmentCandidate.objects.filter(
+        candidates = RecruitmentCandidate.objects.filter(
             company_id=company_id,
             is_deleted=False
         ).select_related('assigned_to', 'converted_employee', 'created_by', 'updated_by')
         
-        department = request.query_params.get('department')
-        if department:
-            query = query.filter(department=department)
-        
-        stage = request.query_params.get('stage')
-        if stage:
-            query = query.filter(stage=stage)
-        
-        status_filter = request.query_params.get('status')
-        if status_filter:
-            query = query.filter(status=status_filter)
-        
-        source = request.query_params.get('source')
-        if source:
-            query = query.filter(source=source)
-        
-        assigned_to_uuid = request.query_params.get('assigned_to')
-        if assigned_to_uuid:
-            assigned_to = get_object_or_404(Employee, _id=assigned_to_uuid, company_id=company_id, is_deleted=False)
-            query = query.filter(assigned_to=assigned_to)
-        
-        date_from = request.query_params.get('date_from')
-        date_to = request.query_params.get('date_to')
-        if date_from:
-            query = query.filter(apply_date__gte=date_from)
-        if date_to:
-            query = query.filter(apply_date__lte=date_to)
-        
-        search = request.query_params.get('search')
-        if search:
-            query = query.filter(
-                Q(name__icontains=search) |
-                Q(email__icontains=search) |
-                Q(phone__icontains=search) |
-                Q(position__icontains=search) |
-                Q(current_company__icontains=search)
-            )
-        
-        ordering = request.query_params.get('ordering', '-apply_date')
-        if ordering.lstrip('-') in ['name', 'position', 'department', 'stage', 'apply_date', 'interview_date', 'created_at']:
-            query = query.order_by(ordering)
-        else:
-            query = query.order_by('-apply_date')
-        
-        page = int(request.query_params.get('page', 1))
-        page_size = int(request.query_params.get('page_size', 50))
-        start = (page - 1) * page_size
-        end = start + page_size
-        
-        total = query.count()
-        candidates = query[start:end]
-        
-        return Response({
-            'data': [self._serialize_candidate(c) for c in candidates],
-            'pagination': {
-                'page': page,
-                'page_size': page_size,
-                'total': total,
-                'total_pages': (total + page_size - 1) // page_size
-            }
-        })
+        candidates = self.filter_queryset(candidates)
+        candidates = self.search_queryset(candidates)
+        candidates = self.order_queryset(candidates)
+        page = self.paginate_queryset(candidates)
+        return self.get_paginated_response([self._serialize_candidate(c) for c in page])
     
 
     def post(self, request):

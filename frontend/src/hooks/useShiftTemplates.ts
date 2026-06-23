@@ -16,16 +16,49 @@ export interface ShiftTemplate {
   updatedAt?: string;
 }
 
+interface PaginatedResponse<T> {
+  count: number;
+  total_pages: number;
+  current_page: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
 // Fetch all shift templates
 export function useShiftTemplates() {
   const api = useApi();
-  return useQuery<ShiftTemplate[]>({
+  const query = useQuery<PaginatedResponse<ShiftTemplate>>({
     queryKey: ["shiftTemplates"],
     queryFn: () => api("/api/hr/shift-templates/"),
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
   });
+  return {
+    ...query,
+    data: query.data?.results ?? [],
+  };
+}
+
+// Fetch shift templates with server-side pagination, search, and ordering
+export function useShiftTemplatesPaginated(params?: Record<string, string>) {
+  const api = useApi();
+  const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
+  const query = useQuery<PaginatedResponse<ShiftTemplate>>({
+    queryKey: ["shiftTemplatesPaginated", params],
+    queryFn: () => api(`/api/hr/shift-templates/${queryString}`),
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+  return {
+    ...query,
+    data: query.data?.results ?? [],
+    totalCount: query.data?.count ?? 0,
+    totalPages: query.data?.total_pages ?? 0,
+    currentPage: query.data?.current_page ?? 1,
+  };
 }
 
 // Create shift template

@@ -1,10 +1,11 @@
 // src/app/(app)/hr/leave/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useLeaves, useCreateLeaveRequest, useDeleteLeaveRequest, useApproveLeave, useLeaveStats, LEAVE_TYPES } from "@/hooks/useLeaves";
 import { useActiveEmployees } from "@/hooks/useEmployees";
+import { usePagination } from "@/hooks/usePagination";
 import PageHeader from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatsCards } from "@/components/reuseable/StatsCards";
@@ -57,6 +58,8 @@ export default function LeaveManagementPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedLeave, setSelectedLeave] = useState<any>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const pagination = usePagination();
+  const pageSize = 20;
 
   const leaveTypeOptions = LEAVE_TYPES.map(t => ({ value: t.value, label: t.label }));
 
@@ -83,10 +86,13 @@ const leavePermissions = getPermissions(
   "leave"
 );
 
+  const apiParams = useMemo(() => {
+    const params: Record<string, string> = { ...filters, page: String(pagination.page), page_size: String(pageSize) };
+    return Object.keys(filters).length > 0 ? params : { page: String(pagination.page), page_size: String(pageSize) };
+  }, [filters, pagination.page, pageSize]);
+
   // Fetch data with React Query
-  const { data: leaves = [], refetch: refetchLeaves, isLoading: leavesLoading } = useLeaves(
-    Object.keys(filters).length > 0 ? filters : undefined
-  );
+  const { data: leaves = [], totalCount, currentPage, refetch: refetchLeaves, isLoading: leavesLoading } = useLeaves(apiParams);
   const { data: employees = [] } = useActiveEmployees();
   const { data: stats, refetch: refetchStats } = useLeaveStats();
 
@@ -427,7 +433,7 @@ const leavePermissions = getPermissions(
         <FilterBar
           fields={filterFields}
           filters={filters}
-          onChange={setFilters}
+          onChange={(f) => { setFilters(f); pagination.resetPage(); }}
         />
       </div>
 
@@ -482,6 +488,9 @@ const leavePermissions = getPermissions(
               data={userLeaves}
               loading={leavesLoading}
               emptyMessage="No leave records found. Click 'Apply for Leave' to submit a request."
+              totalCount={totalCount}
+              currentPage={currentPage}
+              onPageChange={pagination.setPage}
               actions={(row) => (
                 <div className="flex items-center justify-end gap-1">
                   <button
@@ -516,6 +525,9 @@ const leavePermissions = getPermissions(
               data={pendingApprovals}
               loading={leavesLoading}
               emptyMessage="No pending leave requests."
+              totalCount={totalCount}
+              currentPage={currentPage}
+              onPageChange={pagination.setPage}
               actions={(row) => (
                 <ApprovalActions
                   onApprove={() => handleApproval(row.id, "APPROVED")}
@@ -558,6 +570,9 @@ const leavePermissions = getPermissions(
                 data={allLeaves}
                 loading={leavesLoading}
                 emptyMessage="No leave records found."
+                totalCount={totalCount}
+                currentPage={currentPage}
+                onPageChange={pagination.setPage}
                 actions={(row) => (
                   <div className="flex items-center justify-end gap-1">
                     <button

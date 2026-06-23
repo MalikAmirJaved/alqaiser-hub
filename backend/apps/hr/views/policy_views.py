@@ -9,11 +9,12 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.pagination import PageNumberPagination
 import logging
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import FilterPaginationMixin
 from apps.permissions.mixins import PermissionRequiredMixin
+from apps.hr.filters import PolicyFilter
 from apps.hr.models import (
     Policy, PolicyVersion, PolicyCategory, Employee
 )
@@ -38,60 +39,17 @@ def _resolve_policy(company_id, pk):
         return get_object_or_404(Policy, id=pk, company_id=company_id, is_deleted=False)
 
 
-class StandardResultsSetPagination(PageNumberPagination):
-    """Standard pagination for policy endpoints"""
-    page_size = 50
-    page_size_query_param = 'page_size'
-    max_page_size = 200
-
-
-class PolicyView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+class PolicyView(CompanyBranchMixin, PermissionRequiredMixin, FilterPaginationMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'policy'
     """
     CRUD operations for HR Policies with UUID support.
     """
     permission_classes = [IsAuthenticated]
-    pagination_class = StandardResultsSetPagination
-    
-    def _get_company_policies(self, user):
-        """Base queryset with company filtering"""
-        return Policy.objects.filter(
-            company_id=user.company_id,
-            is_deleted=False
-        ).select_related('approved_by', 'created_by', 'updated_by', 'department')
-    
-    def _apply_filters(self, queryset, request):
-        """Apply query parameter filters"""
-        search = request.query_params.get('search')
-        if search:
-            queryset = queryset.filter(
-                models.Q(title__icontains=search) |
-                models.Q(code__icontains=search) |
-                models.Q(content__icontains=search)
-            )
-        
-        status_filter = request.query_params.get('status')
-        if status_filter:
-            queryset = queryset.filter(status=status_filter.upper())
-        
-        category = request.query_params.get('category')
-        if category:
-            queryset = queryset.filter(category=category)
-        
-        department = request.query_params.get('department')
-        if department:
-            queryset = queryset.filter(
-                models.Q(department__name__icontains=department) | models.Q(department__isnull=True)
-            )
-        
-        employee_type = request.query_params.get('employeeType')
-        if employee_type:
-            queryset = queryset.filter(
-                models.Q(employee_type=employee_type) | models.Q(employee_type='ALL')
-            )
-        
-        return queryset
+    filterset_class = PolicyFilter
+    search_fields = ['title', 'code', 'content']
+    ordering_fields = ['code', 'title', 'version', 'status', 'created_at', 'updated_at']
+    ordering = ['-created_at']
     
     def get(self, request, pk=None):
         """
@@ -110,23 +68,17 @@ class PolicyView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
             serializer = PolicyDetailSerializer(policy)
             return Response(serializer.data)
         
-        queryset = self._get_company_policies(request.user)
-        queryset = self._apply_filters(queryset, request)
+        policies = Policy.objects.filter(
+            company_id=company_id,
+            is_deleted=False
+        ).select_related('approved_by', 'created_by', 'updated_by', 'department')
         
-        sort_by = request.query_params.get('sortBy', '-created_at')
-        valid_sort_fields = ['code', 'title', 'version', 'status', 
-                           'created_at', 'updated_at']
-        
-        if sort_by.lstrip('-') in valid_sort_fields:
-            queryset = queryset.order_by(sort_by)
-        else:
-            queryset = queryset.order_by('-created_at')
-        
-        paginator = self.pagination_class()
-        paginated_queryset = paginator.paginate_queryset(queryset, request)
-        
-        serializer = PolicyListSerializer(paginated_queryset, many=True)
-        return paginator.get_paginated_response(serializer.data)
+        policies = self.filter_queryset(policies)
+        policies = self.search_queryset(policies)
+        policies = self.order_queryset(policies)
+        page = self.paginate_queryset(policies)
+        serializer = PolicyListSerializer(page, many=True)
+        return self.get_paginated_response(serializer.data)
     
 
     def post(self, request):

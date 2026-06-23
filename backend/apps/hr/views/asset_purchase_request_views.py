@@ -6,40 +6,42 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import FilterPaginationMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import AssetPurchaseRequest
+from apps.hr.filters import AssetPurchaseRequestFilter
 from apps.hr.serializers.asset_purchase_request_serializers import AssetPurchaseRequestSerializer
 
 
-class AssetPurchaseRequestView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+class AssetPurchaseRequestView(CompanyBranchMixin, PermissionRequiredMixin, FilterPaginationMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'emp_asset'
     permission_classes = [IsAuthenticated]
     action_permission_any_of = {
         "": [("INVENTORY", "purchase_order")],
     }
+    filterset_class = AssetPurchaseRequestFilter
+    search_fields = ['asset__name', 'asset__serial_number']
+    ordering_fields = ['created_at', 'under_date']
+    ordering = ['-created_at']
 
     def get(self, request):
         company_id = request.user.company_id
         if not company_id:
             return Response({'error': 'User not associated with any company'}, status=400)
 
-        query = AssetPurchaseRequest.objects.filter(company_id=company_id, is_deleted=False)
+        requests = AssetPurchaseRequest.objects.filter(company_id=company_id, is_deleted=False)
 
         if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
-            query = query.filter(models.Q(branch_id=request.user.branch_id) | models.Q(branch_id__isnull=True))
+            requests = requests.filter(models.Q(branch_id=request.user.branch_id) | models.Q(branch_id__isnull=True))
 
-        status_filter = request.query_params.get('status')
-        if status_filter:
-            query = query.filter(status=status_filter)
-
-        asset_id = request.query_params.get('asset_id')
-        if asset_id:
-            query = query.filter(asset___id=asset_id)
-
-        query = query.select_related('asset', 'requested_by', 'purchase_order').order_by('-created_at')
-        serializer = AssetPurchaseRequestSerializer(query, many=True, context={'request': request})
-        return Response(serializer.data)
+        requests = requests.select_related('asset', 'requested_by', 'purchase_order')
+        requests = self.filter_queryset(requests)
+        requests = self.search_queryset(requests)
+        requests = self.order_queryset(requests)
+        page = self.paginate_queryset(requests)
+        serializer = AssetPurchaseRequestSerializer(page, many=True, context={'request': request})
+        return self.get_paginated_response(serializer.data)
 
     def post(self, request):
         company_id = request.user.company_id

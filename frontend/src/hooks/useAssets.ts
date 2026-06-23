@@ -36,19 +36,33 @@ export interface AssetStats {
   expiredWarranty: number;
 }
 
+interface PaginatedResponse<T> {
+  count: number;
+  total_pages: number;
+  current_page: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
 // Fetch all assets
 export function useAssets(params?: Record<string, string>) {
   const api = useApi();
   const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
-  
-  return useQuery<Asset[]>({
+  const query = useQuery<PaginatedResponse<Asset>>({
     queryKey: ["assets", params],
     queryFn: () => api(`/api/hr/assets/${queryString}`),
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
-    placeholderData: (previousData) => previousData,
   });
+  return {
+    ...query,
+    data: query.data?.results ?? [],
+    totalCount: query.data?.count ?? 0,
+    totalPages: query.data?.total_pages ?? 0,
+    currentPage: query.data?.current_page ?? 1,
+  };
 }
 
 export function useAsset(id: string | null) {

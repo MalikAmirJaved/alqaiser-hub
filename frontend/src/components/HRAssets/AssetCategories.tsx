@@ -1,6 +1,6 @@
 // components/hr/AssetCategories.tsx
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAssets } from "@/hooks/useAssets";
 import { 
   useAssetCategories, 
@@ -142,9 +142,16 @@ export default function AssetCategories() {
   const navigate = useRouter();
   
   const { data: assets = [] } = useAssets();
-  const { data: categories = [], isLoading } = useAssetCategories(
-    searchQuery ? { search: searchQuery } : undefined
-  );
+  const [page, setPage] = useState(1);
+  const pageSize = 9;
+
+  const apiParams = useMemo(() => {
+    const params: Record<string, string> = { page: String(page), page_size: String(pageSize) };
+    if (searchQuery) params.search = searchQuery;
+    return params;
+  }, [searchQuery, page, pageSize]);
+
+  const { data: categories = [], totalCount, totalPages, currentPage, isLoading } = useAssetCategories(apiParams);
   const { data: stats } = useAssetCategoryStats();
   const createCategory = useCreateAssetCategory();
   const updateCategory = useUpdateAssetCategory();
@@ -152,8 +159,6 @@ export default function AssetCategories() {
   
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<any>(null);
-  const [page, setPage] = useState(1);
-  const pageSize = 9;
 
   useEffect(() => { setPage(1); }, [searchQuery]);
   
@@ -162,10 +167,6 @@ export default function AssetCategories() {
     assetIds: [] as string[], 
     description: "" 
   });
-
-  const totalPages = Math.max(1, Math.ceil(categories.length / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const paginatedCategories = categories.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const handleSave = async () => {
     if (!form.name.trim()) {
@@ -306,7 +307,7 @@ export default function AssetCategories() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {paginatedCategories.map(cat => (
+              {categories.map(cat => (
                 <Card key={cat.id} className="hover:shadow-md transition-shadow">
                   <CardHeader className="pb-2">
                     <div className="flex items-start justify-between">
@@ -388,23 +389,23 @@ export default function AssetCategories() {
             </div>
           )}
         </CardContent>
-        {categories.length > pageSize && (
+        {totalPages > 1 && (
           <div className="flex items-center justify-between px-6 py-3 border-t border-border text-xs text-muted-foreground">
             <span>
-              {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, categories.length)} of {categories.length}
+              {totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, totalCount)} of {totalCount}
             </span>
             <div className="flex items-center gap-2">
-              <span>Page {safePage} of {totalPages}</span>
+              <span>Page {currentPage} of {totalPages}</span>
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={safePage <= 1}
+                disabled={currentPage <= 1}
                 className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setPage(p => p + 1)}
-                disabled={safePage >= totalPages}
+                disabled={currentPage >= totalPages}
                 className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronRight className="w-4 h-4" />

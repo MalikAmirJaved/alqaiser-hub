@@ -11,6 +11,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from django.db.models import Q
 import logging
+from apps.common.filters import FilterPaginationMixin
+from apps.hr.filters import PayrollFilter, EmployeeLoanFilter, CompensationFilter
 from apps.notifications.utils import broadcast_data_update
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import (
@@ -29,11 +31,15 @@ from apps.finance.services.payable import (
 logger = logging.getLogger(__name__)
 
 
-class PayrollView(PermissionRequiredMixin, APIView):
+class PayrollView(PermissionRequiredMixin, FilterPaginationMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'payroll'
     """Payroll management with UUID support - Leave deduction uses working days only"""
     permission_classes = [IsAuthenticated]
+    filterset_class = PayrollFilter
+    search_fields = ['employee__first_name', 'employee__last_name', 'employee__employee_id']
+    ordering_fields = ['month', 'year', 'created_at', 'net_salary']
+    ordering = ['-year', '-month', '-created_at']
 
     def get_permission_action(self):
         method = self.request.method.upper()
@@ -258,13 +264,9 @@ class PayrollView(PermissionRequiredMixin, APIView):
                 {'error': 'User is not associated with any company'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        month = request.query_params.get('month')
-        year = request.query_params.get('year')
-        employee_uuid = request.query_params.get('employee_id')
         status_filter = request.query_params.get('status')
-        search = request.query_params.get('search')
         
-        query = PayrollRecord.objects.filter(
+        records = PayrollRecord.objects.filter(
             company_id=company_id,
             is_deleted=False
         ).select_related('employee').prefetch_related(
@@ -274,44 +276,26 @@ class PayrollView(PermissionRequiredMixin, APIView):
             'payroll_leave_deductions',
         )
         
-        if month:
-            query = query.filter(month=int(month))
-        if year:
-            query = query.filter(year=int(year))
-        if employee_uuid:
-            employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
-            query = query.filter(employee=employee)
+        # Custom status filter (PAID/PENDING/PARTIAL/CANCELLED) uses annotation
         if status_filter:
             status_filter = status_filter.upper()
             if status_filter == 'CANCELLED':
-                query = query.filter(is_cancelled=True)
+                records = records.filter(is_cancelled=True)
             else:
-                query = annotate_total_paid(query, PayrollRecord).filter(is_cancelled=False)
+                records = annotate_total_paid(records, PayrollRecord).filter(is_cancelled=False)
                 if status_filter == 'PAID':
-                    query = query.filter(_total_paid__gte=models.F('net_salary'))
+                    records = records.filter(_total_paid__gte=models.F('net_salary'))
                 elif status_filter in ('PENDING', 'UNPAID'):
-                    query = query.filter(_total_paid=0)
+                    records = records.filter(_total_paid=0)
                 elif status_filter == 'PARTIAL':
-                    query = query.filter(_total_paid__gt=0, _total_paid__lt=models.F('net_salary'))
-        if search:
-            from django.contrib.contenttypes.models import ContentType
-            from apps.finance.models import Payment
-
-            ct = ContentType.objects.get_for_model(PayrollRecord)
-            payment_payroll_ids = Payment.objects.filter(
-                content_type=ct,
-                reference_number__icontains=search,
-                is_deleted=False,
-            ).values_list('object_id', flat=True)
-            query = query.filter(
-                Q(employee__first_name__icontains=search) |
-                Q(employee__last_name__icontains=search) |
-                Q(employee__employee_id__icontains=search) |
-                Q(pk__in=payment_payroll_ids)
-            )
+                    records = records.filter(_total_paid__gt=0, _total_paid__lt=models.F('net_salary'))
         
-        records = query.order_by('-year', '-month', '-created_at')
-        return Response([self._serialize_payroll(r) for r in records])
+        records = self.filter_queryset(records)
+        records = self.search_queryset(records)
+        records = self.order_queryset(records)
+        page = self.paginate_queryset(records)
+        serialized = [self._serialize_payroll(r) for r in page]
+        return self.get_paginated_response(serialized)
 
     # ------------------------------------------------------------------
     # POST (Process Payroll)
@@ -1069,11 +1053,15 @@ class PayrollStatsView(PermissionRequiredMixin, APIView):
         })
 
 
-class EmployeeLoanView(PermissionRequiredMixin, APIView):
+class EmployeeLoanView(PermissionRequiredMixin, FilterPaginationMixin, APIView):
     permission_module = 'HR'
-    permission_resource = 'compensation'
+    permission_resource = 'loan'
     """Employee loans management with UUID support"""
     permission_classes = [IsAuthenticated]
+    filterset_class = EmployeeLoanFilter
+    search_fields = ['employee__first_name', 'employee__last_name', 'loan_type', 'purpose']
+    ordering_fields = ['created_at', 'principal_amount', 'remaining_amount']
+    ordering = ['-created_at']
 
     def get_permission_action(self):
         method = self.request.method.upper()
@@ -1156,27 +1144,16 @@ class EmployeeLoanView(PermissionRequiredMixin, APIView):
                 is_deleted=False
             )
             return Response(self._serialize_loan(loan))
-        employee_uuid = request.query_params.get('employee_id')
-        status_filter = request.query_params.get('status')
-        search = request.query_params.get('search')
-        query = EmployeeLoan.objects.filter(
+        loans = EmployeeLoan.objects.filter(
             company_id=company_id,
             is_deleted=False
         ).select_related('employee').prefetch_related('selected_months', 'month_range')
-        if employee_uuid:
-            employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
-            query = query.filter(employee=employee)
-        if status_filter:
-            query = query.filter(status=status_filter)
-        if search:
-            query = query.filter(
-                Q(employee__first_name__icontains=search) |
-                Q(employee__last_name__icontains=search) |
-                Q(loan_type__icontains=search) |
-                Q(purpose__icontains=search)
-            )
-        loans = query.order_by('-created_at')
-        return Response([self._serialize_loan(l) for l in loans])
+        loans = self.filter_queryset(loans)
+        loans = self.search_queryset(loans)
+        loans = self.order_queryset(loans)
+        page = self.paginate_queryset(loans)
+        serialized = [self._serialize_loan(l) for l in page]
+        return self.get_paginated_response(serialized)
     
 
     @transaction.atomic
@@ -1753,10 +1730,14 @@ class LoanPayView(PermissionRequiredMixin, APIView):
         })
 
 
-class CompensationView(PermissionRequiredMixin, APIView):
+class CompensationView(PermissionRequiredMixin, FilterPaginationMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'compensation'
     permission_classes = [IsAuthenticated]
+    filterset_class = CompensationFilter
+    search_fields = ['employee__first_name', 'employee__last_name']
+    ordering_fields = ['created_at', 'review_date']
+    ordering = ['-created_at']
 
     def get_permission_action(self):
         method = self.request.method.upper()
@@ -1831,25 +1812,16 @@ class CompensationView(PermissionRequiredMixin, APIView):
                 is_deleted=False
             )
             return Response(self._serialize_compensation(compensation))
-        employee_uuid = request.query_params.get('employee_id')
-        search = request.query_params.get('search')
-        status_filter = request.query_params.get('status')
-        query = Compensation.objects.filter(
+        compensations = Compensation.objects.filter(
             company_id=company_id,
             is_deleted=False
         ).select_related('employee').prefetch_related('selected_months')
-        if employee_uuid:
-            employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
-            query = query.filter(employee=employee)
-        if status_filter:
-            query = query.filter(status=status_filter)
-        if search:
-            query = query.filter(
-                Q(employee__first_name__icontains=search) |
-                Q(employee__last_name__icontains=search)
-            )
-        compensations = query.order_by('-created_at')
-        return Response([self._serialize_compensation(c) for c in compensations])
+        compensations = self.filter_queryset(compensations)
+        compensations = self.search_queryset(compensations)
+        compensations = self.order_queryset(compensations)
+        page = self.paginate_queryset(compensations)
+        serialized = [self._serialize_compensation(c) for c in page]
+        return self.get_paginated_response(serialized)
     
 
     @transaction.atomic

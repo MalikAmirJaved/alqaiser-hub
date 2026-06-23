@@ -160,7 +160,7 @@ export default function RecruitmentPage() {
     setPage(1);
   }, []);
 
-  const { data: recruitmentData, isLoading: loading, refetch } = useRecruitment({
+  const { data: recruitmentData, totalCount, isLoading: loading, refetch } = useRecruitment({
     search: filters.search || undefined,
     department: filters.department || undefined,
     stage: filters.stage || undefined,
@@ -191,8 +191,8 @@ export default function RecruitmentPage() {
   const updateMutation = useUpdateRecruitmentCandidate();
   const deleteMutation = useDeleteRecruitmentCandidate();
 
-  const records = recruitmentData?.data || [];
-  const totalRecords = recruitmentData?.pagination?.total || 0;
+  const records = recruitmentData || [];
+  const totalRecords = totalCount || 0;
   const employees = employeesData || [];
   const totalPages = Math.ceil(totalRecords / pageSize);
 

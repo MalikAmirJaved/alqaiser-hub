@@ -74,14 +74,22 @@ export default function ExitManagementPage() {
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
-  useEffect(() => { setPage(1); }, [query, filterStatus, filterReason]);
-
   // Asset return modal state
   const [assetReturnExitId, setAssetReturnExitId] = useState<string | null>(null);
   const { data: assets = [], isLoading: assetsLoading } = useExitEmployeeAssets(assetReturnExitId);
   const returnAssetMutation = useReturnExitAsset();
 
-  const { data: recordsData, isLoading, refetch } = useExitRecords();
+  const apiParams = useMemo(() => ({
+    ...(query ? { search: query } : {}),
+    ...(filterStatus ? { status: filterStatus } : {}),
+    ...(filterReason ? { reason: filterReason } : {}),
+    page: String(page),
+    page_size: String(pageSize),
+  }), [query, filterStatus, filterReason, page, pageSize]);
+
+  useEffect(() => { setPage(1); }, [query, filterStatus, filterReason]);
+
+  const { data: records, totalCount, totalPages, currentPage, isLoading, refetch } = useExitRecords(apiParams);
   const { data: stats } = useExitStats();
   const createMutation = useCreateExitRecord();
   const updateMutation = useUpdateExitRecord();
@@ -89,22 +97,6 @@ export default function ExitManagementPage() {
   const bulkActionMutation = useBulkAction();
   const clearDuesMutation = useClearExitDues();
   const clearSettlementMutation = useClearExitSettlement();
-
-  const records = recordsData?.data || [];
-
-  const filteredRecords = useMemo(() => {
-    return records.filter(r => {
-      const matchesSearch = query === "" ||
-        r.employee_name.toLowerCase().includes(query.toLowerCase());
-      const matchesStatus = filterStatus === "" || r.status_value === filterStatus;
-      const matchesReason = filterReason === "" || r.reason_value === filterReason;
-      return matchesSearch && matchesStatus && matchesReason;
-    });
-  }, [records, query, filterStatus, filterReason]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredRecords.length / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const paginatedRecords = filteredRecords.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const handleSave = async (data: Partial<ExitRecord>) => {
     try {
@@ -272,10 +264,10 @@ export default function ExitManagementPage() {
                 <tr>
                   <th className="w-10 px-4 py-2.5">
                     <Checkbox
-                      checked={selectedRecords.size === filteredRecords.length && filteredRecords.length > 0}
-                      indeterminate={selectedRecords.size > 0 && selectedRecords.size < filteredRecords.length}
+                      checked={selectedRecords.size === records.length && records.length > 0}
+                      indeterminate={selectedRecords.size > 0 && selectedRecords.size < records.length}
                       onChange={(checked) => {
-                        if (checked) setSelectedRecords(new Set(filteredRecords.map(r => r.id)));
+                        if (checked) setSelectedRecords(new Set(records.map(r => r.id)));
                         else setSelectedRecords(new Set());
                       }}
                     />
@@ -290,7 +282,7 @@ export default function ExitManagementPage() {
                 </tr>
               </thead>
               <tbody>
-                {paginatedRecords.map(r => (
+                {records.map(r => (
                   <tr key={r.id} className="border-t border-border hover:bg-muted/30">
                     <td className="px-4 py-2.5">
                       <Checkbox
@@ -421,7 +413,7 @@ export default function ExitManagementPage() {
                     </td>
                   </tr>
                 ))}
-                {filteredRecords.length === 0 && (
+                {records.length === 0 && (
                   <tr>
                     <td colSpan={7} className="text-center py-10 text-muted-foreground">No exit records found.</td>
                   </tr>
@@ -434,7 +426,7 @@ export default function ExitManagementPage() {
         {viewMode === "kanban" && (
           <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
             {["PENDING", "CONFIRMED", "REJECTED"].map(status => {
-              const statusRecords = filteredRecords.filter(r => r.status_value === status);
+              const statusRecords = records.filter(r => r.status_value === status);
               return (
                 <div key={status} className="bg-muted/20 rounded-lg p-3">
                   <div className="flex justify-between mb-3">
@@ -466,21 +458,21 @@ export default function ExitManagementPage() {
 
         <div className="p-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
           <span>
-            {filteredRecords.length === 0 ? 0 : (safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filteredRecords.length)} of {filteredRecords.length} records
+            {totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, totalCount)} of {totalCount} records
           </span>
-          {filteredRecords.length > pageSize && (
+          {totalPages > 1 && (
             <div className="flex items-center gap-2">
-              <span>Page {safePage} of {totalPages}</span>
+              <span>Page {currentPage} of {totalPages}</span>
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={safePage <= 1}
+                disabled={currentPage <= 1}
                 className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setPage(p => p + 1)}
-                disabled={safePage >= totalPages}
+                disabled={currentPage >= totalPages}
                 className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronRight className="w-4 h-4" />

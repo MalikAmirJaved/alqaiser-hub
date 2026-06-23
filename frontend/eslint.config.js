@@ -1,12 +1,10 @@
 
 import js from "@eslint/js";
-import eslintPluginPrettier from "eslint-plugin-prettier/recommended";
 import globals from "globals";
 import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  // Ignore generated / build output directories
   { ignores: ["dist", ".next", "node_modules"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
@@ -22,10 +20,8 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "@typescript-eslint/no-unused-vars": "off",
       "@typescript-eslint/no-explicit-any": "off",
-      // Relax rules for JSX files during migration
       "@typescript-eslint/no-require-imports": "off",
     },
   },
-  eslintPluginPrettier,
 );
 

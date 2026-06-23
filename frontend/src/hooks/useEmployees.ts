@@ -145,8 +145,6 @@ export function useEmployees(params?: Record<string, string>) {
   const paramMap: Record<string, string> = {
     department_id: "department",
     designation_id: "designation",
-    employment_status: "status",
-    employment_type: "employmentType",
   };
 
   const apiParams = params

@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -34,7 +33,7 @@ export default function EmployeesPage() {
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [selectedEmployeeForStatus, setSelectedEmployeeForStatus] = useState<any>(null);
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
-  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [storedPrefillData, setStoredPrefillData] = useState<any>(null);
   const [promotionModalOpen, setPromotionModalOpen] = useState(false);
@@ -570,17 +569,6 @@ export default function EmployeesPage() {
       </div>
     );
   };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div>

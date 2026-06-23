@@ -1,7 +1,7 @@
 // src/app/(dashboard)/hr/shift-templates/page.tsx
 "use client";
-import { useState, useEffect } from "react";
-import { useShiftTemplates, useCreateShiftTemplate, useUpdateShiftTemplate, useDeleteShiftTemplate } from "@/hooks/useShiftTemplates";
+import { useState, useEffect, useMemo } from "react";
+import { useShiftTemplatesPaginated, useCreateShiftTemplate, useUpdateShiftTemplate, useDeleteShiftTemplate } from "@/hooks/useShiftTemplates";
 import PageHeader from "@/components/PageHeader";
 import { Plus, Clock, Edit, Trash2, Search, Palette, Shield, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,16 +10,23 @@ import { useAuth } from "@/hooks/useAuth";
 
 export default function ShiftTemplatesPage() {
   const { user } = useAuth();
-  const { data: templates = [], isLoading } = useShiftTemplates();
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 12;
+
+  const apiParams = useMemo(() => ({
+    ...(search ? { search } : {}),
+    page: String(page),
+    page_size: String(pageSize),
+  }), [search, page, pageSize]);
+
+  const { data: templates = [], totalCount, totalPages, currentPage, isLoading } = useShiftTemplatesPaginated(apiParams);
   const createTemplate = useCreateShiftTemplate();
   const updateTemplate = useUpdateShiftTemplate();
   const deleteTemplate = useDeleteShiftTemplate();
 
-  const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
-  const [page, setPage] = useState(1);
-  const pageSize = 12;
 
   useEffect(() => { setPage(1); }, [search]);
   const [formData, setFormData] = useState({
@@ -30,14 +37,6 @@ export default function ShiftTemplatesPage() {
     description: "",
     is_active: true,
   });
-
-  const filtered = templates.filter((t) =>
-    t.name.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const paginated = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const handleSave = async () => {
     if (!formData.name || !formData.startTime || !formData.endTime) {
@@ -120,7 +119,7 @@ export default function ShiftTemplatesPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {paginated.map((t) => (
+        {templates.map((t) => (
           <div
             key={t.id}
             className="group bg-card border border-border rounded-2xl p-5 hover:shadow-lg transition-all relative"
@@ -175,29 +174,29 @@ export default function ShiftTemplatesPage() {
         ))}
       </div>
 
-      {filtered.length === 0 && (
+      {templates.length === 0 && (
         <div className="text-center py-12 text-muted-foreground">
           <p>No templates found</p>
         </div>
       )}
 
-      {filtered.length > pageSize && (
+      {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4 text-xs text-muted-foreground">
           <span>
-            {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filtered.length)} of {filtered.length}
+            {totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, totalCount)} of {totalCount}
           </span>
           <div className="flex items-center gap-2">
-            <span>Page {safePage} of {totalPages}</span>
+            <span>Page {currentPage} of {totalPages}</span>
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={safePage <= 1}
+              disabled={currentPage <= 1}
               className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={() => setPage(p => p + 1)}
-              disabled={safePage >= totalPages}
+              disabled={currentPage >= totalPages}
               className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronRight className="w-4 h-4" />

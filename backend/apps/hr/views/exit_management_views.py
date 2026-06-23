@@ -13,7 +13,9 @@ from rest_framework import status
 from django.db.models import Count, Sum, Avg, Q
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import FilterPaginationMixin
 from apps.permissions.mixins import PermissionRequiredMixin
+from apps.hr.filters import ExitRecordFilter
 from decimal import Decimal
 from django.db import transaction as db_transaction
 
@@ -68,71 +70,35 @@ class BaseExitView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         }
 
 
-class ExitRecordView(BaseExitView):
+class ExitRecordView(FilterPaginationMixin, BaseExitView):
     """CRUD operations for exit records with UUID support"""
+    filterset_class = ExitRecordFilter
+    search_fields = ['employee_name', 'notes']
+    ordering_fields = ['created_at', 'exit_date', 'employee_name']
+    ordering = ['-created_at']
     
     def get(self, request):
         """Get all exit records with filtering"""
         company_id, branch_id = self._get_company_context(request)
         
-        query = ExitRecord.objects.filter(
+        records = ExitRecord.objects.filter(
             company_id=company_id,
             is_deleted=False
         ).select_related('employee')
         
         if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
-            query = query.filter(Q(branch_id=branch_id) | Q(branch_id__isnull=True))
-        
-        search = request.query_params.get('search')
-        if search:
-            query = query.filter(
-                Q(employee_name__icontains=search) |
-                Q(notes__icontains=search)
-            )
+            records = records.filter(Q(branch_id=branch_id) | Q(branch_id__isnull=True))
         
         # Support direct UUID lookup for detail page
         pk = request.query_params.get('pk')
         if pk:
-            query = query.filter(_id=pk)
+            records = records.filter(_id=pk)
         
-        status_filter = request.query_params.get('status')
-        reason_filter = request.query_params.get('reason')
-        date_from = request.query_params.get('date_from')
-        date_to = request.query_params.get('date_to')
-        
-        if status_filter:
-            query = query.filter(status=status_filter)
-        if reason_filter:
-            query = query.filter(reason=reason_filter)
-        if date_from:
-            query = query.filter(exit_date__gte=date_from)
-        if date_to:
-            query = query.filter(exit_date__lte=date_to)
-        
-        order_by = request.query_params.get('order_by', '-created_at')
-        allowed_order_fields = [
-            'created_at', '-created_at', 'exit_date', '-exit_date',
-            'employee_name', '-employee_name',
-        ]
-        if order_by in allowed_order_fields:
-            query = query.order_by(order_by)
-        
-        page = int(request.query_params.get('page', 1))
-        page_size = int(request.query_params.get('page_size', 25))
-        page_size = min(page_size, 100)
-        
-        total_count = query.count()
-        exit_records = query[(page - 1) * page_size:page * page_size]
-        
-        return Response({
-            "data": [self._serialize_exit_record(record) for record in exit_records],
-            "pagination": {
-                "page": page,
-                "page_size": page_size,
-                "total": total_count,
-                "total_pages": (total_count + page_size - 1) // page_size
-            }
-        })
+        records = self.filter_queryset(records)
+        records = self.search_queryset(records)
+        records = self.order_queryset(records)
+        page = self.paginate_queryset(records)
+        return self.get_paginated_response([self._serialize_exit_record(r) for r in page])
     
 
     def post(self, request):

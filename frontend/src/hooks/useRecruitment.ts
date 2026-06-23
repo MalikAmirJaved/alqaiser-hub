@@ -68,6 +68,15 @@ interface InterviewRound {
   meeting_link?: string;
 }
 
+interface PaginatedResponse<T> {
+  count: number;
+  total_pages: number;
+  current_page: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
 export function useRecruitment(params?: {
   department?: string;
   stage?: string;
@@ -91,13 +100,20 @@ export function useRecruitment(params?: {
       ).toString()
     : '';
   
-  return useQuery<{ data: RecruitmentCandidate[]; pagination: any }>({
+  const query = useQuery<PaginatedResponse<RecruitmentCandidate>>({
     queryKey: ["recruitment", params],
     queryFn: () => api(`/api/hr/recruitment/candidates/${queryString}`),
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 1,
   });
+  return {
+    ...query,
+    data: query.data?.results ?? [],
+    totalCount: query.data?.count ?? 0,
+    totalPages: query.data?.total_pages ?? 0,
+    currentPage: query.data?.current_page ?? 1,
+  };
 }
 
 export function useRecruitmentStats(params?: { date_from?: string; date_to?: string }) {

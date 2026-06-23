@@ -46,9 +46,16 @@ export default function AssetsPanel() {
   const permissions = useFeaturePermissions("HR", "emp_asset");
 
   const [searchQuery, setSearchQuery] = useState("");
-  const { data: assets = [], isLoading } = useAssets(
-    searchQuery ? { search: searchQuery } : undefined
-  );
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+
+  const apiParams = useMemo(() => {
+    const params: Record<string, string> = { page: String(page), page_size: String(pageSize) };
+    if (searchQuery) params.search = searchQuery;
+    return params;
+  }, [searchQuery, page, pageSize]);
+
+  const { data: assets = [], totalCount, totalPages, currentPage, isLoading } = useAssets(apiParams);
   const { data: stats } = useAssetStats();
   const createAsset = useCreateAsset();
   const updateAsset = useUpdateAsset();
@@ -57,8 +64,6 @@ export default function AssetsPanel() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [requestForAsset, setRequestForAsset] = useState<any>(null);
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
 
   useEffect(() => { setPage(1); }, [searchQuery]);
 
@@ -157,10 +162,6 @@ export default function AssetsPanel() {
     { label: "Active Warranty", value: stats?.activeWarranty || 0 },
   ];
 
-  const totalPages = Math.max(1, Math.ceil(assets.length / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const paginatedAssets = assets.slice((safePage - 1) * pageSize, safePage * pageSize);
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -228,7 +229,7 @@ export default function AssetsPanel() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedAssets.map((asset) => {
+                  {assets.map((asset) => {
                     const category = parseCategory(asset.description);
                     const totalQty = asset.total_quantity ?? 0;
                     const availableQty = asset.available_quantity ?? 0;
@@ -301,23 +302,23 @@ export default function AssetsPanel() {
             </div>
           )}
         </CardContent>
-        {assets.length > pageSize && (
+        {totalPages > 1 && (
           <div className="flex items-center justify-between px-6 py-3 border-t border-border text-xs text-muted-foreground">
             <span>
-              {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, assets.length)} of {assets.length}
+              {totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, totalCount)} of {totalCount}
             </span>
             <div className="flex items-center gap-2">
-              <span>Page {safePage} of {totalPages}</span>
+              <span>Page {currentPage} of {totalPages}</span>
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={safePage <= 1}
+                disabled={currentPage <= 1}
                 className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setPage(p => p + 1)}
-                disabled={safePage >= totalPages}
+                disabled={currentPage >= totalPages}
                 className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronRight className="w-4 h-4" />
