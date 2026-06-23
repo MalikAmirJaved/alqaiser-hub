@@ -45,6 +45,7 @@ interface PosCatalogResponse {
   page: number;
   page_size: number;
   results: PosCatalogProduct[];
+  variant_count: number;
 }
 
 // ---------- Hook ----------

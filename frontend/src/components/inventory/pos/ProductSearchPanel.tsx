@@ -1,6 +1,6 @@
 // src/components/inventory/pos/ProductSearchPanel.tsx
 "use client";
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef, useLayoutEffect } from "react";
 import { usePosCatalog, type PosCatalogProduct, type PosVariant } from "@/hooks/usePosCatalog";
 import { useCategories } from "@/hooks/useCategories";
 import { useBrands } from "@/hooks/useBrands";
@@ -30,7 +30,10 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
   const [allProducts, setAllProducts] = useState<PosCatalogProduct[]>([]);
   const [hasMore, setHasMore] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
+  const [totalVariantCount, setTotalVariantCount] = useState(0);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const prevFiltersRef = useRef({ warehouseId, debouncedSearch, categoryId, brandId });
 
   const resetInfiniteScroll = useCallback(() => {
     setPage(1);
@@ -38,6 +41,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
     setAllProducts([]);
     setHasMore(true);
     setTotalCount(0);
+    setTotalVariantCount(0);
   }, []);
 
   const catalogFilters = useMemo(() => ({
@@ -51,8 +55,25 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
 
   const { data: catalogResponse, isLoading, isFetching } = usePosCatalog(catalogFilters);
 
-  // Accumulate data when a new page arrives
+  // Accumulate data when a new page arrives; reset when filters change
   useEffect(() => {
+    const prev = prevFiltersRef.current;
+    const filtersChanged =
+      prev.warehouseId !== warehouseId ||
+      prev.debouncedSearch !== debouncedSearch ||
+      prev.categoryId !== categoryId ||
+      prev.brandId !== brandId;
+
+    if (filtersChanged) {
+      prevFiltersRef.current = { warehouseId, debouncedSearch, categoryId, brandId };
+      setAllVariants([]);
+      setAllProducts([]);
+      setPage(1);
+      setHasMore(true);
+      setTotalCount(0);
+      setTotalVariantCount(0);
+    }
+
     if (catalogResponse?.results && catalogResponse.page === page) {
       const newProducts = catalogResponse.results;
       const newVariants = newProducts.flatMap(p =>
@@ -68,31 +89,32 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
       }
 
       setTotalCount(catalogResponse.count);
+      setTotalVariantCount(catalogResponse.variant_count ?? 0);
       const totalPages = Math.ceil(catalogResponse.count / PAGE_SIZE);
       setHasMore(page < totalPages);
     }
-  }, [catalogResponse, page]);
+  }, [catalogResponse, page, warehouseId, debouncedSearch, categoryId, brandId]);
 
-  // Reset when filters change
-  useEffect(() => {
-    resetInfiniteScroll();
-  }, [warehouseId, debouncedSearch, categoryId, brandId]);
+  // ── Scroll-based infinite scroll ──
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || !hasMore || isFetching) return;
 
-  // ── IntersectionObserver for infinite scroll ──
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el || !hasMore || isFetching) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setPage(p => p + 1);
-        }
-      },
-      { threshold: 0.1, rootMargin: "300px" }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [hasMore, isFetching]);
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      if (scrollHeight - scrollTop - clientHeight < 400) {
+        setPage(p => p + 1);
+      }
+    };
+
+    handleScroll();
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    container.addEventListener("wheel", handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+      container.removeEventListener("wheel", handleScroll);
+    };
+  }, [hasMore, isFetching, page]);
 
   // ── Categories & Brands ──
   const { data: categories = [] } = useCategories();
@@ -136,7 +158,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
           <div className="flex items-center justify-between gap-4">
             <div className="flex bg-muted p-1 rounded-xl w-fit">
               <button
-                onClick={() => { setActiveTab("products"); setSelectedProduct(null); resetInfiniteScroll(); }}
+                onClick={() => { setActiveTab("products"); setSelectedProduct(null); }}
                 className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   activeTab === "products" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 }`}
@@ -144,7 +166,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
                 Products
               </button>
               <button
-                onClick={() => { setActiveTab("variants"); setSelectedProduct(null); resetInfiniteScroll(); }}
+                onClick={() => { setActiveTab("variants"); setSelectedProduct(null); }}
                 className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   activeTab === "variants" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 }`}
@@ -231,7 +253,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
       </div>
 
       {/* ── Main Content Area ── */}
-      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 custom-scrollbar">
         {isFirstLoad ? (
           <div className="flex flex-col items-center justify-center h-64 gap-3">
             <div className="relative w-10 h-10">
@@ -297,7 +319,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
 
                     {!hasMore && allVariants.length > 0 && (
                       <div className="text-center text-xs text-muted-foreground py-4">
-                        Showing all {totalCount} variants
+                        Showing all {totalVariantCount} variants
                       </div>
                     )}
                   </>
@@ -317,7 +339,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
             ) : selectedProduct ? (
               <span>{selectedProduct.variant_count} Variants</span>
             ) : (
-              <span>{totalCount} Variants total · Loaded {allVariants.length}</span>
+              <span>{totalVariantCount} Variants total · Loaded {allVariants.length}</span>
             )}
           </div>
           <div className="flex items-center gap-2">

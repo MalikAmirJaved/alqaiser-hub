@@ -387,12 +387,27 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
 
         # Build response with variants and stock data
         result = []
+        total_variant_count = 0
         for product in page_obj:
-            # Get variants for this product
-            variants = ProductVariant.objects.filter(
-                product=product,
-                company_id=company_id,
-            ).select_related('product').prefetch_related('variant_attributes', 'variant_images')
+            # Filter variants by warehouse stock when warehouse is selected
+            if warehouse:
+                has_variant_stock = Exists(
+                    StockItem.objects.filter(
+                        variant=OuterRef('pk'),
+                        warehouse=warehouse,
+                        company_id=company_id,
+                    )
+                )
+                variants = ProductVariant.objects.filter(
+                    has_variant_stock,
+                    product=product,
+                    company_id=company_id,
+                ).select_related('product').prefetch_related('variant_attributes', 'variant_images')
+            else:
+                variants = ProductVariant.objects.filter(
+                    product=product,
+                    company_id=company_id,
+                ).select_related('product').prefetch_related('variant_attributes', 'variant_images')
 
             variants_data = []
             for v in variants:
@@ -445,11 +460,9 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
                     ],
                 })
 
-            # Count total variants for this product
-            total_variant_count = ProductVariant.objects.filter(
-                product=product,
-                company_id=company_id,
-            ).count()
+            # Count variants for this product (already filtered by warehouse above)
+            product_variant_count = len(variants_data)
+            total_variant_count += product_variant_count
 
             result.append({
                 'id': str(product._id),
@@ -458,7 +471,7 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
                 'unit': product.unit,
                 'category_id': str(product.category._id) if product.category else None,
                 'brand_id': str(product.brand._id) if product.brand else None,
-                'variant_count': total_variant_count,
+                'variant_count': product_variant_count,
                 'variants': variants_data,
             })
 
@@ -467,4 +480,5 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
             'page': page,
             'page_size': page_size,
             'results': result,
+            'variant_count': total_variant_count,
         })
