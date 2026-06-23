@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
 import { useCustomerInvoices, usePayCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
@@ -13,6 +13,7 @@ import { StatusBadge } from "@/components/finance/ui";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
 import { Send } from "lucide-react";
+import { usePagination } from "@/hooks/usePagination";
 
 interface CustomerInvoicesPanelProps {
   moduleCode: "FINANCE" | "SALES";
@@ -25,6 +26,7 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
   const [editingInvoice, setEditingInvoice] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const pagination = usePagination();
 
   const { data: customers = [] } = useCustomers();
   const customerOptions = customers.map(c => ({ value: c.id, label: c.name }));
@@ -41,16 +43,18 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
   // Use the correct API based on module code
   // Both hooks are always called (React rules of hooks) but only the relevant one returns data
   const isSales = moduleCode === "SALES";
-  const filterParams = Object.keys(filters).length > 0
-    ? {
-        search: filters.search || undefined,
-        status: filters.status || undefined,
-        customer: filters.customer || undefined,
-      }
-    : undefined;
-  
-  const { data: financeInvoices, isLoading: financeLoading } = useCustomerInvoices(filterParams);
-  const { data: salesInvoices, isLoading: salesLoading } = useSalesInvoices(filterParams);
+
+  const filterParams = useMemo(() => ({
+    page: pagination.page,
+    ...(filters.search ? { search: filters.search } : {}),
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.customer ? { customer: filters.customer } : {}),
+  }), [filters, pagination.page]);
+
+  const { data: financeInvoices, isLoading: financeLoading, totalCount: financeTotalCount } = useCustomerInvoices(filterParams);
+  const { data: salesInvoices, isLoading: salesLoading, totalCount: salesTotalCount } = useSalesInvoices(filterParams);
+
+  const totalCount = isSales ? salesTotalCount : financeTotalCount;
   
   const invoices = isSales ? salesInvoices : financeInvoices;
   const isLoading = isSales ? salesLoading : financeLoading;
@@ -157,6 +161,9 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
         description="Issue, track, and reconcile customer invoices."
         data={invoices || []}
         isLoading={isLoading}
+        totalCount={totalCount}
+        currentPage={pagination.page}
+        onPageChange={pagination.setPage}
         columns={columns}
         kpis={computeKPIs}
         getRowId={(invoice) => invoice.id}
@@ -180,7 +187,7 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
           <FilterBar
             fields={filterFields}
             filters={filters}
-            onChange={setFilters}
+            onChange={(f) => { setFilters(f); pagination.resetPage(); }}
           />
         }
         batchActions={

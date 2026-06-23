@@ -1,13 +1,17 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
+import debounce from "lodash/debounce";
 import { DetailLayout, StandardSidebar } from "@/components/reuseable/final/DetailLayout";
 import { useWarehouse, useUpdateWarehouse, useDeleteWarehouse } from "@/hooks/useWarehouses";
 import { useCurrentStock, useStockHistory } from "@/hooks/useStockManagement";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { WarehouseForm } from "@/components/inventory/warehouse/WarehouseForm";
 import { ConfirmationModal, useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
+import { usePagination } from "@/hooks/usePagination";
+import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
 import { format } from "date-fns";
 
 export default function WarehouseDetailPage() {
@@ -21,25 +25,58 @@ export default function WarehouseDetailPage() {
   const { confirm, Modal: ConfirmationModal } = deleteConfirm;
 
   const [editing, setEditing] = useState(false);
-  const [stockPage, setStockPage] = useState(1);
-  const [historyPage, setHistoryPage] = useState(1);
+  const stockPagination = usePagination();
+  const historyPagination = usePagination();
+
+  // Stock tab search
+  const [stockSearchTerm, setStockSearchTerm] = useState("");
+  const [debouncedStockSearch, setDebouncedStockSearch] = useState("");
+
+  const debouncedSetStockSearch = useCallback(
+    debounce((value: string) => setDebouncedStockSearch(value), 300),
+    []
+  );
+
+  useEffect(() => {
+    return () => { debouncedSetStockSearch.cancel(); };
+  }, [debouncedSetStockSearch]);
+
+  // Reset pages when warehouse changes
+  useEffect(() => {
+    stockPagination.resetPage();
+    historyPagination.resetPage();
+    setDebouncedStockSearch("");
+    setStockSearchTerm("");
+  }, [id]);
+
+  // Reset stock page when search changes
+  useEffect(() => {
+    stockPagination.resetPage();
+  }, [debouncedStockSearch]);
 
   const { data: stockData, isLoading: stockLoading } = useCurrentStock({
     warehouse_id: id,
-    page: stockPage,
+    page: stockPagination.page,
     page_size: 20,
+    search: debouncedStockSearch || undefined,
   });
 
   const { data: historyData, isLoading: historyLoading } = useStockHistory({
     warehouse_id: id,
-    page: historyPage,
+    page: historyPagination.page,
     page_size: 20,
   });
 
   const totalStock = stockData?.count ?? 0;
-  const totalPages = Math.ceil(totalStock / 20);
+  const stockPageSize = stockData?.page_size ?? 20;
+  const totalPages = Math.ceil(totalStock / stockPageSize);
   const totalHistory = historyData?.count ?? 0;
-  const historyTotalPages = Math.ceil(totalHistory / 20);
+  const historyPageSize = historyData?.page_size ?? 20;
+  const historyTotalPages = Math.ceil(totalHistory / historyPageSize);
+
+  const lowStockCount = (stockData?.results || []).filter(
+    (item: any) => item.quantity_available <= 10
+  ).length;
 
   if (warehouseLoading || !warehouse) {
     return <div className="p-8 text-center">Loading...</div>;
@@ -84,7 +121,7 @@ export default function WarehouseDetailPage() {
           {
             label: "Stock Items",
             value: totalStock,
-            sub: `Across ${stockData?.page_size || 0} per page`,
+            sub: lowStockCount > 0 ? `${lowStockCount} low stock` : undefined,
           },
           {
             label: "Responsible",
@@ -168,14 +205,31 @@ export default function WarehouseDetailPage() {
             id: "stock",
             label: "Stock Items",
             count: totalStock,
-            render: () =>
-              stockLoading ? (
-                <div className="py-8 text-center text-sm text-muted-foreground">Loading stock...</div>
-              ) : !stockData || stockData.results.length === 0 ? (
-                <div className="py-8 text-center text-sm text-muted-foreground">No stock items</div>
-              ) : (
-                <div>
-                  <div className="overflow-x-auto">
+            render: () => (
+              <div>
+                {/* Search input */}
+                <div className="relative mb-4">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by product name, SKU, or barcode..."
+                    value={stockSearchTerm}
+                    onChange={(e) => {
+                      setStockSearchTerm(e.target.value);
+                      debouncedSetStockSearch(e.target.value);
+                    }}
+                    className="pl-9 h-9"
+                  />
+                </div>
+
+                {stockLoading ? (
+                  <div className="py-8 text-center text-sm text-muted-foreground">Loading stock...</div>
+                ) : !stockData || stockData.results.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-muted-foreground">
+                    {debouncedStockSearch ? "No stock items match your search" : "No stock items"}
+                  </div>
+                ) : (
+                  <div>
+                    <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead className="text-xs text-muted-foreground border-b border-border">
                         <tr className="text-left">
@@ -207,18 +261,18 @@ export default function WarehouseDetailPage() {
                   </div>
                   {totalPages > 1 && (
                     <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
-                      <span>Page {stockPage} of {totalPages}</span>
+                      <span>Page {stockPagination.page} of {totalPages}</span>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => setStockPage((p) => Math.max(1, p - 1))}
-                          disabled={stockPage <= 1}
+                          onClick={stockPagination.prevPage}
+                          disabled={stockPagination.page <= 1}
                           className="px-3 py-1 rounded-md bg-muted text-xs font-medium disabled:opacity-40 hover:bg-accent transition-colors"
                         >
                           Previous
                         </button>
                         <button
-                          onClick={() => setStockPage((p) => p + 1)}
-                          disabled={stockPage >= totalPages}
+                          onClick={stockPagination.nextPage}
+                          disabled={stockPagination.page >= totalPages}
                           className="px-3 py-1 rounded-md bg-muted text-xs font-medium disabled:opacity-40 hover:bg-accent transition-colors"
                         >
                           Next
@@ -227,7 +281,9 @@ export default function WarehouseDetailPage() {
                     </div>
                   )}
                 </div>
-              ),
+              )}
+            </div>
+          ),
           },
           {
             id: "history",
@@ -281,18 +337,18 @@ export default function WarehouseDetailPage() {
                   </div>
                   {historyTotalPages > 1 && (
                     <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
-                      <span>Page {historyPage} of {historyTotalPages}</span>
+                      <span>Page {historyPagination.page} of {historyTotalPages}</span>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
-                          disabled={historyPage <= 1}
+                          onClick={historyPagination.prevPage}
+                          disabled={historyPagination.page <= 1}
                           className="px-3 py-1 rounded-md bg-muted text-xs font-medium disabled:opacity-40 hover:bg-accent transition-colors"
                         >
                           Previous
                         </button>
                         <button
-                          onClick={() => setHistoryPage((p) => p + 1)}
-                          disabled={historyPage >= historyTotalPages}
+                          onClick={historyPagination.nextPage}
+                          disabled={historyPagination.page >= historyTotalPages}
                           className="px-3 py-1 rounded-md bg-muted text-xs font-medium disabled:opacity-40 hover:bg-accent transition-colors"
                         >
                           Next

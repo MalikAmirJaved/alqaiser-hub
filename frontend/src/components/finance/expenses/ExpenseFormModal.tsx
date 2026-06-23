@@ -17,7 +17,7 @@ interface ExpenseFormData {
   amount: number;
   description: string;
   notes: string;
-  supplier: string;         // UUID of the supplier
+  supplier?: string;         // UUID of the supplier
   pay_immediately: boolean;
 }
 
@@ -107,9 +107,6 @@ export default function ExpenseFormModal({
   }, [initialData, setValue, reset, open]);
 
   const onSubmit = async (data: ExpenseFormData) => {
-    if (!data.supplier) {
-      return;
-    }
     const payload = {
       ...data,
       amount: Number(data.amount),
@@ -182,7 +179,7 @@ export default function ExpenseFormModal({
             <SearchableSelect
               value={watch("supplier") || ""}
               onChange={(val) => setValue("supplier", val)}
-              required
+              // required
               options={(suppliers || []).map((s: any) => ({ value: s.id, label: s.name }))}
               placeholder="Select a vendor…"
               onAddNew={() => setShowSupplierForm(true)}

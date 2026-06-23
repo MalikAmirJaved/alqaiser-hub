@@ -60,11 +60,12 @@ type UpdateCustomerInvoiceData = Partial<CreateCustomerInvoiceData>;
 
 const CUSTOMER_INVOICES_KEY = "finance_customer_invoices";
 
-async function getAllCustomerInvoices(params?: { search?: string; status?: string; customer?: string }) {
+async function getAllCustomerInvoices(params?: { search?: string; status?: string; customer?: string; page?: number }) {
   const searchParams = new URLSearchParams();
   if (params?.search) searchParams.append("search", params.search);
   if (params?.status) searchParams.append("status", params.status);
   if (params?.customer) searchParams.append("customer", String(params.customer));
+  if (params?.page) searchParams.append("page", String(params.page));
   const url = `/api/finance/customer-invoices/${searchParams.toString() ? `?${searchParams}` : ""}`;
   return apiFetch<PaginatedResponse<CustomerInvoice>>(url);
 }
@@ -107,13 +108,13 @@ async function postCustomerInvoice(id: string) {
 // REACT HOOKS
 // ============================================
 
-export function useCustomerInvoices(filters?: { search?: string; status?: string; customer?: string }) {
-  return useQuery({
+export function useCustomerInvoices(filters?: { search?: string; status?: string; customer?: string; page?: number }) {
+  const query = useQuery({
     queryKey: [CUSTOMER_INVOICES_KEY, filters],
     queryFn: () => getAllCustomerInvoices(filters),
-    select: (data) => data.results,
     staleTime: 30_000,
   });
+  return { ...query, data: query.data?.results ?? [], totalCount: query.data?.count ?? 0 };
 }
 
 export function useCustomerInvoice(id: string | null) {

@@ -681,7 +681,7 @@ class PayrollView(PermissionRequiredMixin, APIView):
         payment.status = 'CONFIRMED'
         payment.save(update_fields=['status', 'updated_at'])
 
-        # Auto-create expense record for salary payment
+        # Auto-create expense record for salary payment (skip payment — already created above)
         create_expense_for_payroll(
             company_id=company_id,
             branch_id=branch_id,
@@ -691,6 +691,7 @@ class PayrollView(PermissionRequiredMixin, APIView):
             user=request.user,
             notes=f'Transaction: {transaction_number}',
             expense_date=date.today(),
+            skip_payment=True,
         )
         
         # ---------- Carryover advance: if net was negative, create advance for user-picked month ----------
@@ -1724,7 +1725,7 @@ class LoanPayView(PermissionRequiredMixin, APIView):
         payment.status = 'CONFIRMED'
         payment.save(update_fields=['status', 'updated_at'])
 
-        # Auto-create expense record for loan payment
+        # Auto-create expense record for loan payment (skip payment — already created above)
         create_expense_for_payroll(
             company_id=company_id,
             branch_id=branch_id,
@@ -1734,6 +1735,7 @@ class LoanPayView(PermissionRequiredMixin, APIView):
             user=request.user,
             notes=f'Transaction: {loan.transaction_number}',
             expense_date=date.today(),
+            skip_payment=True,
         )
 
         return Response({
@@ -2281,7 +2283,7 @@ class PayrollAdvanceView(PermissionRequiredMixin, APIView):
         payment.status = 'CONFIRMED'
         payment.save(update_fields=['status', 'updated_at'])
 
-        # Auto-create expense record for advance salary
+        # Auto-create expense record for advance salary (skip payment — already created above)
         create_expense_for_payroll(
             company_id=company_id,
             branch_id=branch_id,
@@ -2291,6 +2293,7 @@ class PayrollAdvanceView(PermissionRequiredMixin, APIView):
             user=request.user,
             notes=f'Transaction: {transaction_number}',
             expense_date=date.today(),
+            skip_payment=True,
         )
 
         # Notify frontend to refresh both payroll and loans data

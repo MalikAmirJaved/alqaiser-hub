@@ -10,18 +10,20 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-export function usePurchaseOrders(filters?: { status?: string; supplier?: string }) {
+export function usePurchaseOrders(filters?: { status?: string; supplier?: string; page?: number }) {
   const api = useApi();
   const params = new URLSearchParams();
   if (filters?.status) params.append('status', filters.status);
   if (filters?.supplier) params.append('supplier', filters.supplier);
+  if (filters?.page) params.append('page', String(filters.page));
   const url = `/api/inventory/purchase-orders/${params.toString() ? `?${params}` : ''}`;
 
-  return useQuery<PaginatedResponse<PurchaseOrder>, Error, PurchaseOrder[]>({
+  const query = useQuery<PaginatedResponse<PurchaseOrder>>({
     queryKey: ['inventory_purchase_order', filters],
     queryFn: () => api(url),
-    select: (data) => data.results,
   });
+
+  return { ...query, data: query.data?.results ?? [], totalCount: query.data?.count ?? 0 };
 }
 
 export function usePurchaseOrder(id: string | null) {

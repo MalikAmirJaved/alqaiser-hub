@@ -1,7 +1,7 @@
 // components/HRAssets/AssetsPanel.tsx
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAssets, useAssetStats, useCreateAsset, useUpdateAsset, useDeleteAsset } from "@/hooks/useAssets";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,8 @@ import {
   Package,
   Plus,
   Search,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   Card,
@@ -55,6 +57,10 @@ export default function AssetsPanel() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [requestForAsset, setRequestForAsset] = useState<any>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+
+  useEffect(() => { setPage(1); }, [searchQuery]);
 
   // Parse category from description
   const parseCategory = (description?: string) => {
@@ -151,6 +157,10 @@ export default function AssetsPanel() {
     { label: "Active Warranty", value: stats?.activeWarranty || 0 },
   ];
 
+  const totalPages = Math.max(1, Math.ceil(assets.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const paginatedAssets = assets.slice((safePage - 1) * pageSize, safePage * pageSize);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -218,7 +228,7 @@ export default function AssetsPanel() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {assets.map((asset) => {
+                  {paginatedAssets.map((asset) => {
                     const category = parseCategory(asset.description);
                     const totalQty = asset.total_quantity ?? 0;
                     const availableQty = asset.available_quantity ?? 0;
@@ -291,6 +301,30 @@ export default function AssetsPanel() {
             </div>
           )}
         </CardContent>
+        {assets.length > pageSize && (
+          <div className="flex items-center justify-between px-6 py-3 border-t border-border text-xs text-muted-foreground">
+            <span>
+              {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, assets.length)} of {assets.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <span>Page {safePage} of {totalPages}</span>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={safePage <= 1}
+                className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setPage(p => p + 1)}
+                disabled={safePage >= totalPages}
+                className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Asset Form Modal */}

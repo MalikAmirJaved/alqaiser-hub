@@ -96,9 +96,41 @@ export function useAllVariantsSimple(filters?: { search?: string; product_id?: s
     queryKey: ["inventory_variant", filters],
     queryFn: async () => {
       const response = await api<PaginatedResponse<VariantDetail>>(url);
+      console.log("response:: ", response)
       return response.results;
     },
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Fetch variants with server-side pagination. Returns { data, totalCount }.
+ */
+export function useVariantsPaginated(filters?: {
+  search?: string;
+  product_id?: string;
+  active_only?: boolean;
+  page?: number;
+  page_size?: number;
+}) {
+  const api = useApi();
+
+  const params = new URLSearchParams();
+  if (filters?.search) params.append("search", filters.search);
+  if (filters?.product_id) params.append("product_id", filters.product_id);
+  if (filters?.active_only !== undefined) params.append("active_only", String(filters.active_only));
+  if (filters?.page) params.append("page", String(filters.page));
+  if (filters?.page_size) params.append("page_size", String(filters.page_size));
+
+  const url = `/api/inventory/variants/?${params.toString()}`;
+
+  return useQuery<{ data: VariantDetail[]; totalCount: number }>({
+    queryKey: ["inventory_variant_paginated", filters],
+    queryFn: async () => {
+      const response = await api<PaginatedResponse<VariantDetail>>(url);
+      return { data: response.results, totalCount: response.count };
+    },
+    staleTime: 30 * 1000,
   });
 }
 

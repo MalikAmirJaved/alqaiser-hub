@@ -1,6 +1,6 @@
 // src/app/(app)/hr/payroll/page.tsx
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useActiveEmployees } from "@/hooks/useEmployees";
 import { usePayroll, usePayrollStats, useEmployeeLoans, useCompensations } from "@/hooks/usePayroll";
 import { useLeaves } from "@/hooks/useLeaves";
@@ -12,7 +12,7 @@ import MonthSelectorModal from "@/components/payroll/MonthSelectorModal";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
 import { useRouter } from "next/navigation";
-import { Eye, CreditCard, Calendar, RefreshCw, Info } from "lucide-react";
+import { Eye, CreditCard, Calendar, RefreshCw, Info, ChevronLeft, ChevronRight } from "lucide-react";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { getPermissions } from "@/lib/permissions";
 import { useSelector } from "react-redux";
@@ -46,6 +46,10 @@ export function PayrollPage({
   const [selectedMonth, setSelectedMonth] = useState(defaultPrevMonth);
   const [selectedYear, setSelectedYear] = useState(defaultPrevYear);
   const [monthSelectorOpen, setMonthSelectorOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+
+  useEffect(() => { setPage(1); }, [filters]);
 
   // Fetch data from backend
   const { data: employees = [], isLoading: employeesLoading } = useActiveEmployees();
@@ -185,6 +189,10 @@ const payrollPermissions = getPermissions(
     
     return matchesSearch && matchesStatus;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredEmployees.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const paginatedEmployees = filteredEmployees.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const monthNames = ["January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"];
@@ -337,7 +345,7 @@ const handleRefresh = () => {
                   </td>
                 </tr>
               )}
-              {filteredEmployees.map((employee) => {
+              {paginatedEmployees.map((employee) => {
                 const status = getPaymentStatus(employee.id);
                 const isPaid = status === "PAID";
                 const payrollRecord = getPayrollRecord(employee.id);
@@ -431,10 +439,31 @@ const handleRefresh = () => {
         </div>
         <div className="p-3 border-t border-border flex items-center justify-between">
           <div className="text-xs text-muted-foreground">
-            Showing {filteredEmployees.length} of {employees.length} employees
+            Showing {filteredEmployees.length === 0 ? 0 : (safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filteredEmployees.length)} of {filteredEmployees.length} employees
           </div>
-          <div className="text-xs text-muted-foreground">
-            Total Payroll: {formatCurrency(totalPayroll)}
+          <div className="flex items-center gap-3">
+            <div className="text-xs text-muted-foreground">
+              Total Payroll: {formatCurrency(totalPayroll)}
+            </div>
+            {filteredEmployees.length > pageSize && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Page {safePage} of {totalPages}</span>
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={safePage <= 1}
+                  className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setPage(p => p + 1)}
+                  disabled={safePage >= totalPages}
+                  className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

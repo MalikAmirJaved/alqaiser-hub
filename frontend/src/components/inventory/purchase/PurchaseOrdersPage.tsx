@@ -2,7 +2,8 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Package, Building2 } from 'lucide-react';
+import { Plus, Package, Building2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { usePagination } from '@/hooks/usePagination';
 import FilterBar from '@/components/reuseable/FilterBar';
 import type { FilterField } from '@/components/reuseable/FilterBar';
 import { useFeaturePermissions } from '@/hooks/useFeaturePermissions';
@@ -115,6 +116,7 @@ export default function PurchaseOrdersPage() {
     under_date: string;
   } | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const pagination = usePagination();
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = useMemo(() => ({
@@ -156,6 +158,13 @@ export default function PurchaseOrdersPage() {
       return matchQ && matchStatus && matchSupplier;
     });
   }, [orders, filters]);
+
+  const paginatedOrders = useMemo(() => {
+    const start = (pagination.page - 1) * pagination.pageSize;
+    return filtered.slice(start, start + pagination.pageSize);
+  }, [filtered, pagination.page, pagination.pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pagination.pageSize));
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleView = (order: PurchaseOrder) =>
@@ -264,7 +273,7 @@ export default function PurchaseOrdersPage() {
       <FilterBar
         fields={filterFields}
         filters={filters}
-        onChange={setFilters}
+        onChange={(f) => { setFilters(f); pagination.resetPage(); }}
       />
 
       {/* Table */}
@@ -301,7 +310,7 @@ export default function PurchaseOrdersPage() {
                 </td>
               </tr>
             )}
-            {filtered.map((order) => (
+            {paginatedOrders.map((order) => (
               <tr
                 key={order._id}
                 onClick={() => handleView(order)}
@@ -421,6 +430,21 @@ export default function PurchaseOrdersPage() {
         </table>
         </div>
       </div>
+
+      {filtered.length > pagination.pageSize && (
+        <div className="flex items-center justify-between px-4 py-3 border border-border rounded-xl text-xs text-muted-foreground bg-card">
+          <span>{(pagination.page - 1) * pagination.pageSize + 1}–{Math.min(pagination.page * pagination.pageSize, filtered.length)} of {filtered.length}</span>
+          <div className="flex items-center gap-2">
+            <span>Page {pagination.page} of {totalPages}</span>
+            <button onClick={pagination.prevPage} disabled={pagination.page <= 1} className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button onClick={pagination.nextPage} disabled={pagination.page >= totalPages} className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Asset Requests Panel */}
       {permissions.create && (

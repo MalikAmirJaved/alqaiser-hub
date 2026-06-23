@@ -109,15 +109,21 @@ export function useProducts(filters?: any) {
   if (filters?.category) params.append("category", filters.category);
   if (filters?.brand) params.append("brand", filters.brand);
   if (filters?.status) params.append("status", filters.status);
+  if (filters?.page) params.append("page", String(filters.page));
   const queryString = params.toString();
   if (queryString) url += `?${queryString}`;
 
-  return useQuery<PaginatedResponse<Product>, Error, Product[]>({
-    queryKey: ["inventory_product", filters],    // ✅ changed
+  const query = useQuery<PaginatedResponse<Product>, Error>({
+    queryKey: ["inventory_product", filters],
     queryFn: () => api<PaginatedResponse<Product>>(url),
-    select: (data) => data.results,
     staleTime: 30 * 1000,
   });
+
+  return {
+    ...query,
+    data: query.data?.results ?? [],
+    totalCount: query.data?.count ?? 0,
+  };
 }
 
 export function useProduct(id: string | null) {

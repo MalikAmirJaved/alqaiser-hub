@@ -16,6 +16,7 @@ import { useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier, 
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useRouter } from 'next/navigation';
 import { useAutoCode } from "@/hooks/useAutoCode";
+import { usePagination } from "@/hooks/usePagination";
 
 // Helper to render status badge
 const StatusBadge = ({ status }: { status: string }) => {
@@ -70,6 +71,12 @@ export default function SuppliersPage() {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const { confirm, Modal: ConfirmationModal } = useConfirmationModal();
   const router = useRouter();
+  const pagination = usePagination();
+
+  const filtersWithPage = useMemo(() => ({
+    ...filters,
+    page: String(pagination.page),
+  }), [filters, pagination.page]);
 
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
@@ -83,7 +90,7 @@ export default function SuppliersPage() {
   const { generateCode, validateCode } = useAutoCode("supplier");
 
   // Suppliers hooks
-  const { data: suppliers, isLoading: suppliersLoading } = useSuppliers(filters);
+  const { data: suppliers, isLoading: suppliersLoading, totalCount } = useSuppliers(filtersWithPage);
   const createSupplier = useCreateSupplier();
   const updateSupplier = useUpdateSupplier();
   const deleteSupplier = useDeleteSupplier();
@@ -175,7 +182,7 @@ export default function SuppliersPage() {
   const tableColumns = getTableColumns();
 
   return (
-    <div className="flex h-[calc(100vh-120px)] overflow-hidden">
+    <div className="">
       {/* Main content area */}
       <div className="flex-1 overflow-y-auto">
         <div>
@@ -195,7 +202,7 @@ export default function SuppliersPage() {
           <StatsCards stats={stats} className="mt-6" />
 
           <div className="mt-4">
-            <FilterBar fields={filterFields} filters={filters} onChange={setFilters} />
+            <FilterBar fields={filterFields} filters={filters} onChange={(f) => { setFilters(f); pagination.resetPage(); }} />
           </div>
 
           <div className="mt-4">
@@ -204,6 +211,9 @@ export default function SuppliersPage() {
               data={suppliers || []}
               loading={suppliersLoading}
               onRowClick={handleView}
+              totalCount={totalCount}
+              currentPage={pagination.page}
+              onPageChange={pagination.setPage}
               actions={(row) => (
                 <>
                   {permissions.update && (

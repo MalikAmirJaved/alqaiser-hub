@@ -28,13 +28,13 @@ import {
   Barcode as BarcodeIcon,
 } from "lucide-react";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { usePagination } from "@/hooks/usePagination";
 
 export default function BarcodesPage() {
   const permissions = useFeaturePermissions("INVENTORY", "barcode");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] =
     useState("");
-  const [page, setPage] = useState(1);
 
   const [
     selectedBarcode,
@@ -45,12 +45,12 @@ export default function BarcodesPage() {
   const barcodeRef =
     useRef<HTMLDivElement>(null);
 
-  const pageSize = 20;
+  const pagination = usePagination();
 
   const { data, isLoading } = useBarcodes(
     debouncedSearch,
-    page,
-    pageSize
+    pagination.page,
+    pagination.pageSize
   );
 
   const items = (data?.results || []) as (
@@ -92,7 +92,7 @@ export default function BarcodesPage() {
 
   const handleSearch = () => {
     setDebouncedSearch(search);
-    setPage(1);
+    pagination.resetPage();
   };
 
   const handleOpenBarcode = (
@@ -364,6 +364,9 @@ export default function BarcodesPage() {
         data={items}
         loading={isLoading}
         emptyMessage="No barcodes found."
+        totalCount={totalCount}
+        currentPage={pagination.page}
+        onPageChange={pagination.setPage}
       />
 
       {/* Barcode Popup */}

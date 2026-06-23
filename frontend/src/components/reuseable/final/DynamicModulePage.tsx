@@ -64,6 +64,9 @@ interface DynamicModulePageProps<T> {
   batchActions?: ReactNode;
   onRowClick?: (item: T) => void;
   filterBar?: ReactNode;
+  totalCount?: number;
+  currentPage?: number;
+  onPageChange?: (page: number) => void;
 }
 
 export function DynamicModulePage<T>({
@@ -86,6 +89,9 @@ export function DynamicModulePage<T>({
   batchActions,
   onRowClick,
   filterBar,
+  totalCount,
+  currentPage: serverPage,
+  onPageChange,
 }: DynamicModulePageProps<T>) {
   const formatCurrency = useFormatCurrency();
   const { confirm, Modal: ConfirmModal } = useConfirmationModal();
@@ -93,8 +99,12 @@ export function DynamicModulePage<T>({
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [page, setPage] = useState(1);
+  const [localPage, setLocalPage] = useState(1);
   const pageSize = 20;
+
+  const isServerPaginated = totalCount !== undefined && serverPage !== undefined && onPageChange !== undefined;
+  const page = isServerPaginated ? serverPage : localPage;
+  const setPage = isServerPaginated ? onPageChange : setLocalPage;
 
   const computedKpis = typeof kpis === "function" ? kpis(data) : kpis;
 
@@ -108,7 +118,7 @@ export function DynamicModulePage<T>({
   };
 
   // Reset page when data or sort key changes
-  useEffect(() => { setPage(1); }, [data, sortKey]);
+  useEffect(() => { if (!isServerPaginated) setLocalPage(1); }, [data, sortKey, isServerPaginated]);
 
   const sortedData = useMemo(() => {
     if (!sortKey) return [...data];
@@ -142,9 +152,10 @@ export function DynamicModulePage<T>({
   }, [data, sortKey, sortDir, columns]);
 
   // Paginate
-  const totalPages = Math.max(1, Math.ceil(sortedData.length / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const paginatedData = sortedData.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const effectiveTotal = isServerPaginated ? (totalCount ?? 0) : sortedData.length;
+  const totalPages = Math.max(1, Math.ceil(effectiveTotal / pageSize));
+  const safePage = isServerPaginated ? Math.min(page, totalPages) : Math.min(page, totalPages);
+  const paginatedData = isServerPaginated ? sortedData : sortedData.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const handleSelectRow = (id: string, checked: boolean) => {
     const newSelected = new Set(selectedIds);
@@ -373,24 +384,27 @@ export function DynamicModulePage<T>({
               </tbody>
             </table>
           </div>
-          {sortedData.length > pageSize && (
+          {effectiveTotal > pageSize && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-border text-xs text-muted-foreground">
               <span>
-                Showing {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, sortedData.length)} of {sortedData.length} records
+                Showing {isServerPaginated
+                  ? `${(safePage - 1) * pageSize + 1}–${Math.min(safePage * pageSize, effectiveTotal)} of ${effectiveTotal}`
+                  : `${(safePage - 1) * pageSize + 1}–${Math.min(safePage * pageSize, sortedData.length)} of ${sortedData.length}`
+                } records
               </span>
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground">
                   Page {safePage} of {totalPages}
                 </span>
                 <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  onClick={() => setPage(safePage - 1)}
                   disabled={safePage === 1}
                   className="px-2.5 py-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   Previous
                 </button>
                 <button
-                  onClick={() => setPage((p) => p + 1)}
+                  onClick={() => setPage(safePage + 1)}
                   disabled={safePage >= totalPages}
                   className="px-2.5 py-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >

@@ -1,7 +1,7 @@
 // src/components/transfers/TransferList.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useTransfers, useTransferStats, useConfirmTransfer, useCancelTransfer } from "@/hooks/useTransfers";
 import {TableView} from "@/components/reuseable/TableGridView";
 import {StatsCards} from "@/components/reuseable/StatsCards";
@@ -14,6 +14,7 @@ import { CheckCircle, Eye } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
 import type { PermissionActions } from "@/lib/permissions";
+import { usePagination } from "@/hooks/usePagination";
 
 interface TransferListProps {
   refreshTrigger?: number;
@@ -31,6 +32,12 @@ export default function TransferList({ refreshTrigger, onTransferCompleted, perm
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [selectedTransfer, setSelectedTransfer] = useState<any>(null);
   const [confirmAction, setConfirmAction] = useState<"confirm" | "cancel" | null>(null);
+  const pagination = usePagination();
+
+  const filtersWithPage = useMemo(() => ({
+    ...filters,
+    page: pagination.page,
+  }), [filters, pagination.page]);
 
   const statusOptions = [
     { value: "PENDING", label: "Pending" },
@@ -42,9 +49,7 @@ export default function TransferList({ refreshTrigger, onTransferCompleted, perm
     { name: "status", label: "Status", type: "status", options: statusOptions },
   ];
 
-  const { data: transfers = [], isLoading, refetch } = useTransfers({
-    status: filters.status || undefined,
-  });
+  const { data: transfers = [], isLoading, refetch, totalCount } = useTransfers(filtersWithPage);
   const { data: stats, refetch: refetchStats } = useTransferStats();
 
   const confirmMutation = useConfirmTransfer();
@@ -179,7 +184,7 @@ const columns = [
       <FilterBar
         fields={filterFields}
         filters={filters}
-        onChange={setFilters}
+        onChange={(f) => { setFilters(f); pagination.resetPage(); }}
       />
     </div>
   );
@@ -196,6 +201,9 @@ const columns = [
   actions={actions}
   loading={isLoading}
   emptyMessage="No stock transfers found"
+  totalCount={totalCount}
+  currentPage={pagination.page}
+  onPageChange={pagination.setPage}
 />
 
       <ConfirmationModal

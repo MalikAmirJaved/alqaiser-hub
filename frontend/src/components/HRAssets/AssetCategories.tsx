@@ -1,6 +1,6 @@
 // components/hr/AssetCategories.tsx
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAssets } from "@/hooks/useAssets";
 import { 
   useAssetCategories, 
@@ -27,7 +27,9 @@ import {
   MoreVertical,
   Package,
   Users,
-  Check
+  Check,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 import {
@@ -150,12 +152,20 @@ export default function AssetCategories() {
   
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 9;
+
+  useEffect(() => { setPage(1); }, [searchQuery]);
   
   const [form, setForm] = useState({ 
     name: "", 
     assetIds: [] as string[], 
     description: "" 
   });
+
+  const totalPages = Math.max(1, Math.ceil(categories.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const paginatedCategories = categories.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const handleSave = async () => {
     if (!form.name.trim()) {
@@ -296,7 +306,7 @@ export default function AssetCategories() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {categories.map(cat => (
+              {paginatedCategories.map(cat => (
                 <Card key={cat.id} className="hover:shadow-md transition-shadow">
                   <CardHeader className="pb-2">
                     <div className="flex items-start justify-between">
@@ -378,6 +388,30 @@ export default function AssetCategories() {
             </div>
           )}
         </CardContent>
+        {categories.length > pageSize && (
+          <div className="flex items-center justify-between px-6 py-3 border-t border-border text-xs text-muted-foreground">
+            <span>
+              {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, categories.length)} of {categories.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <span>Page {safePage} of {totalPages}</span>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={safePage <= 1}
+                className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setPage(p => p + 1)}
+                disabled={safePage >= totalPages}
+                className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Category Modal */}

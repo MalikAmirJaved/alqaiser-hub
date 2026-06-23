@@ -42,9 +42,11 @@ export default function CustomerDetail({ id, moduleCode, onBack }: CustomerDetai
   const { data: customer, refetch, isLoading: customerLoading } = useCustomer(id);
 
   // Fetch sales orders
-  const { data: allOrders = [], isLoading: ordersLoading } = useSalesOrders({
+  const { data: salesOrdersRes, isLoading: ordersLoading } = useSalesOrders({
     customer: id,
+    page_size: 10000,
   });
+  const allOrders = salesOrdersRes?.data ?? [];
 
   // Fetch invoices
   const { data: invoices = [], isLoading: invoicesLoading } = useCustomerInvoices({

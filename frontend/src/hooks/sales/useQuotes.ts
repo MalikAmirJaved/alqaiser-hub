@@ -43,21 +43,25 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-export function useQuotes(filters?: { status?: string; search?: string }) {
+export function useQuotes(filters?: { status?: string; search?: string; page?: string }) {
   const api = useApi();
   const searchParams = new URLSearchParams();
   if (filters?.status) searchParams.append("status", filters.status);
   if (filters?.search) searchParams.append("search", filters.search);
+  if (filters?.page) searchParams.append("page", filters.page);
   const url = `/api/sales/quotes/${searchParams.toString() ? `?${searchParams}` : ""}`;
 
-  return useQuery({
+  const query = useQuery<PaginatedResponse<Quote>>({
     queryKey: ["sales_quotes", filters],
-    queryFn: async () => {
-      const resp = await api<PaginatedResponse<Quote>>(url);
-      return resp.results;
-    },
+    queryFn: () => api<PaginatedResponse<Quote>>(url),
     staleTime: 30_000,
   });
+
+  return {
+    ...query,
+    data: query.data?.results ?? [],
+    totalCount: query.data?.count ?? 0,
+  };
 }
 
 export function useQuote(id: string | null) {

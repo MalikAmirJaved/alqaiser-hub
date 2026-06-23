@@ -55,6 +55,7 @@ async function getAllPayments(params?: {
   start_date?: string;
   supplier?: string;
   end_date?: string;
+  page?: string;
 }) {
   const searchParams = new URLSearchParams();
   if (params?.search) searchParams.append("search", params.search);
@@ -65,6 +66,7 @@ async function getAllPayments(params?: {
   if (params?.supplier) searchParams.append("supplier", params.supplier);
   if (params?.start_date) searchParams.append("start_date", params.start_date);
   if (params?.end_date) searchParams.append("end_date", params.end_date);
+  if (params?.page) searchParams.append("page", params.page);
   const url = `/api/finance/payments/${searchParams.toString() ? `?${searchParams}` : ""}`;
   return apiFetch<PaginatedResponse<Payment>>(url);
 }
@@ -104,13 +106,19 @@ export function usePayments(filters?: {
   start_date?: string;
   end_date?: string;
   supplier?: string;
+  page?: string;
 }) {
-  return useQuery({
+  const query = useQuery<PaginatedResponse<Payment>>({
     queryKey: [PAYMENTS_KEY, filters],
     queryFn: () => getAllPayments(filters),
-    select: (data) => data.results,
     staleTime: 30_000,
   });
+
+  return {
+    ...query,
+    data: query.data?.results ?? [],
+    totalCount: query.data?.count ?? 0,
+  };
 }
 
 export function usePayment(id: string | null) {

@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+from rest_framework.pagination import PageNumberPagination
 import logging
 import json
 from apps.common.baseauthentication import CompanyBranchMixin
@@ -168,7 +169,12 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 pass
 
         employees = query.order_by('first_name', 'last_name')
-        return Response([serialize_employee(e) for e in employees])
+
+        paginator = PageNumberPagination()
+        paginator.page_size = 20
+        page = paginator.paginate_queryset(employees, request)
+        serialized = [serialize_employee(e) for e in page]
+        return paginator.get_paginated_response(serialized)
 
 
     def post(self, request):

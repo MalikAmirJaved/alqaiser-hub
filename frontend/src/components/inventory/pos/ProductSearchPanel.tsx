@@ -1,17 +1,16 @@
 // src/components/inventory/pos/ProductSearchPanel.tsx
 "use client";
-import { useState, useMemo, useCallback, useEffect } from "react";
-import { useAllVariantsSimple, VariantDetail } from "@/hooks/useAllVariants";
-import { useProducts, Product } from "@/hooks/useProducts";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { usePosCatalog, type PosCatalogProduct, type PosVariant } from "@/hooks/usePosCatalog";
 import { useCategories } from "@/hooks/useCategories";
 import { useBrands } from "@/hooks/useBrands";
-import { useBatchStock } from "@/hooks/useBatchStock";
 import { ProductCard } from "./ProductCard";
-import { useIncomingStock } from "@/hooks/useIncomingStock";
 import debounce from "lodash/debounce";
 
+const PAGE_SIZE = 20;
+
 interface ProductSearchPanelProps {
-  onAddToCart: (variant: VariantDetail) => void;
+  onAddToCart: (variant: PosVariant & { product_name: string; product_id: string }) => void;
   warehouseId?: string;
 }
 
@@ -23,97 +22,121 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
   const [categoryId, setCategoryId] = useState("");
   const [brandId, setBrandId] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  
-  const { data: variants = [], isLoading: variantsLoading } = useAllVariantsSimple({
-    search: debouncedSearch || undefined,
-    active_only: true,
-    product_id: selectedProduct?.id,
-  });
+  const [selectedProduct, setSelectedProduct] = useState<PosCatalogProduct | null>(null);
 
-  const { data: allProducts = [], isLoading: productsLoading } = useProducts({
+  // ── Infinite scroll state ──
+  const [page, setPage] = useState(1);
+  const [allVariants, setAllVariants] = useState<(PosVariant & { product_name: string; product_id: string })[]>([]);
+  const [allProducts, setAllProducts] = useState<PosCatalogProduct[]>([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const resetInfiniteScroll = useCallback(() => {
+    setPage(1);
+    setAllVariants([]);
+    setAllProducts([]);
+    setHasMore(true);
+    setTotalCount(0);
+  }, []);
+
+  const catalogFilters = useMemo(() => ({
+    warehouse_id: warehouseId || "",
     search: debouncedSearch || undefined,
-    category: categoryId || undefined,
-    brand: brandId || undefined,
-    status: "active",
-  });
-  
+    category_id: categoryId || undefined,
+    brand_id: brandId || undefined,
+    page,
+    page_size: PAGE_SIZE,
+  }), [warehouseId, debouncedSearch, categoryId, brandId, page]);
+
+  const { data: catalogResponse, isLoading, isFetching } = usePosCatalog(catalogFilters);
+
+  // Accumulate data when a new page arrives
+  useEffect(() => {
+    if (catalogResponse?.results && catalogResponse.page === page) {
+      const newProducts = catalogResponse.results;
+      const newVariants = newProducts.flatMap(p =>
+        p.variants.map(v => ({ ...v, product_name: p.product_name, product_id: p.id }))
+      );
+
+      if (page === 1) {
+        setAllProducts(newProducts);
+        setAllVariants(newVariants);
+      } else {
+        setAllProducts(prev => [...prev, ...newProducts]);
+        setAllVariants(prev => [...prev, ...newVariants]);
+      }
+
+      setTotalCount(catalogResponse.count);
+      const totalPages = Math.ceil(catalogResponse.count / PAGE_SIZE);
+      setHasMore(page < totalPages);
+    }
+  }, [catalogResponse, page]);
+
+  // Reset when filters change
+  useEffect(() => {
+    resetInfiniteScroll();
+  }, [warehouseId, debouncedSearch, categoryId, brandId]);
+
+  // ── IntersectionObserver for infinite scroll ──
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMore || isFetching) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setPage(p => p + 1);
+        }
+      },
+      { threshold: 0.1, rootMargin: "300px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, isFetching]);
+
+  // ── Categories & Brands ──
   const { data: categories = [] } = useCategories();
   const { data: brands = [] } = useBrands();
-  
-  // Debounced search handler
+
+  // ── Search ──
   const debouncedSetSearch = useCallback(
     debounce((value: string) => setDebouncedSearch(value), 300),
     []
   );
-  
+
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearch(value);
+    resetInfiniteScroll();
     debouncedSetSearch(value);
   };
-  
-  // Cleanup debounce on unmount
+
   useEffect(() => {
-    return () => {
-      debouncedSetSearch.cancel();
-    };
+    return () => { debouncedSetSearch.cancel(); };
   }, [debouncedSetSearch]);
-  
-  // Filter variants (only if not filtering by product_id already)
-  const filteredVariants = useMemo(() => {
-    let filtered = variants;
-    if (!selectedProduct) {
-      if (categoryId) filtered = filtered.filter(v => v.category_id === categoryId);
-      if (brandId) filtered = filtered.filter(v => v.brand_id === brandId);
-    }
-    return filtered;
-  }, [variants, categoryId, brandId, selectedProduct]);
-  
-  // Collect visible variant IDs for batch stock fetch
-  const visibleVariantIds = useMemo(() => {
-    return filteredVariants.map(v => v.id);
-  }, [filteredVariants]);
 
-  const { data: incomingStockMap = {} } = useIncomingStock(visibleVariantIds);
-
-  // Batch stock fetch
-  const { data: stockMap, isLoading: stockLoading } = useBatchStock(
-    visibleVariantIds,
-    warehouseId || null
-  );
-  
-  // Combine variants with their stock data
-  const variantsWithStock = useMemo(() => {
-    return filteredVariants.map(variant => ({
-      ...variant,
-      stock: stockMap?.[variant.id] || { available: 0, reserved: 0, on_hand: 0 },
-      incoming: incomingStockMap[variant.id] || 0,   
-    }));
-  }, [filteredVariants, stockMap, incomingStockMap]);
-  
-  const isLoading = (activeTab === "variants" && variantsLoading) || 
-                    (activeTab === "products" && !selectedProduct && productsLoading) ||
-                    (selectedProduct && variantsLoading) ||
-                    (warehouseId && stockLoading && visibleVariantIds.length > 0);
-
-  const handleProductClick = (product: Product) => {
+  // ── Handlers ──
+  const handleProductClick = (product: PosCatalogProduct) => {
     setSelectedProduct(product);
+    resetInfiniteScroll();
   };
 
   const handleBackToProducts = () => {
     setSelectedProduct(null);
+    resetInfiniteScroll();
   };
+
+  const isFirstLoad = isLoading && page === 1;
 
   return (
     <div className="flex flex-col h-full bg-background">
-      {/* Header with Tabs and Search */}
+      {/* ── Header with Tabs and Search ── */}
       <div className="p-4 border-b border-border bg-card/50">
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between gap-4">
             <div className="flex bg-muted p-1 rounded-xl w-fit">
               <button
-                onClick={() => { setActiveTab("products"); setSelectedProduct(null); }}
+                onClick={() => { setActiveTab("products"); setSelectedProduct(null); resetInfiniteScroll(); }}
                 className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   activeTab === "products" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 }`}
@@ -121,7 +144,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
                 Products
               </button>
               <button
-                onClick={() => { setActiveTab("variants"); setSelectedProduct(null); }}
+                onClick={() => { setActiveTab("variants"); setSelectedProduct(null); resetInfiniteScroll(); }}
                 className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   activeTab === "variants" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 }`}
@@ -143,7 +166,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
               />
               {search && (
                 <button 
-                  onClick={() => { setSearch(""); setDebouncedSearch(""); }}
+                  onClick={() => { setSearch(""); setDebouncedSearch(""); resetInfiniteScroll(); }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded-full hover:bg-muted"
                 >
                   <XIcon size={14} />
@@ -207,23 +230,23 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
         </div>
       </div>
 
-      {/* Main Content Area */}
+      {/* ── Main Content Area ── */}
       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-        {isLoading ? (
+        {isFirstLoad ? (
           <div className="flex flex-col items-center justify-center h-64 gap-3">
             <div className="relative w-10 h-10">
-              <div className="absolute inset-0 border-4 border-primary/20 rounded-full"></div>
-              <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+              <div className="absolute inset-0 border-4 border-primary/20 rounded-full" />
+              <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin" />
             </div>
             <span className="text-xs font-medium text-muted-foreground animate-pulse">Loading items...</span>
           </div>
         ) : (
           <>
-            {/* Products Tab View */}
+            {/* ── Products Tab ── */}
             {activeTab === "products" && !selectedProduct && (
               <>
                 {allProducts.length === 0 ? (
-                  <EmptyState search={search} onClear={() => { setSearch(""); setDebouncedSearch(""); }} />
+                  <EmptyState search={search} onClear={() => { setSearch(""); setDebouncedSearch(""); resetInfiniteScroll(); }} />
                 ) : (
                   <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-in fade-in zoom-in-95 duration-200">
                     {allProducts.map((product) => (
@@ -238,26 +261,46 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
               </>
             )}
 
-            {/* Variants View (either all or for specific product) */}
+            {/* ── Variants Tab (default, also shown when product selected) ── */}
             {(activeTab === "variants" || selectedProduct) && (
               <>
-                {variantsWithStock.length === 0 ? (
+                {allVariants.length === 0 ? (
                   <EmptyState 
                     search={search} 
-                    onClear={() => { setSearch(""); setDebouncedSearch(""); }} 
+                    onClear={() => { setSearch(""); setDebouncedSearch(""); resetInfiniteScroll(); }} 
                     message={selectedProduct ? "No variants found for this product" : "No variants found"}
                   />
                 ) : (
-                  <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-in fade-in zoom-in-95 duration-200">
-                    {variantsWithStock.map((variant) => (
-                      <ProductCard 
-                        key={variant.id} 
-                        variant={variant}
-                        stockData={variant.stock}
-                        onAdd={() => onAddToCart(variant)} 
-                      />
-                    ))}
-                  </div>
+                  <>
+                    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-in fade-in zoom-in-95 duration-200">
+                      {allVariants.map((variant) => (
+                        <ProductCard 
+                          key={variant.id} 
+                          variant={variant}
+                          stockData={variant.stock}
+                          onAdd={() => onAddToCart(variant)} 
+                        />
+                      ))}
+                    </div>
+
+                    {/* Infinite scroll sentinel */}
+                    {hasMore && (
+                      <div ref={sentinelRef} className="h-10 flex items-center justify-center mt-4">
+                        {isFetching && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <div className="w-4 h-4 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
+                            Loading more...
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {!hasMore && allVariants.length > 0 && (
+                      <div className="text-center text-xs text-muted-foreground py-4">
+                        Showing all {totalCount} variants
+                      </div>
+                    )}
+                  </>
                 )}
               </>
             )}
@@ -265,19 +308,21 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
         )}
       </div>
 
-      {/* Footer Info */}
-      {!isLoading && (
+      {/* ── Footer Info ── */}
+      {!isFirstLoad && (
         <div className="px-4 py-3 border-t border-border bg-muted/30 backdrop-blur-sm flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
           <div className="flex items-center gap-4">
             {activeTab === "products" && !selectedProduct ? (
-              <span>{allProducts.length} Products Found</span>
+              <span>{totalCount} Products with stock</span>
+            ) : selectedProduct ? (
+              <span>{selectedProduct.variant_count} Variants</span>
             ) : (
-              <span>{variantsWithStock.length} Variants Shown</span>
+              <span>{totalCount} Variants total · Loaded {allVariants.length}</span>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-            Live Inventory
+            <div className={`w-1.5 h-1.5 rounded-full ${isFetching ? "bg-warning animate-pulse" : "bg-success"}`} />
+            {isFetching ? "Loading..." : "Live Inventory"}
           </div>
         </div>
       )}
@@ -285,10 +330,10 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
   );
 }
 
-// Sub-components
-function ProductListCard({ product, onClick }: { product: Product; onClick: () => void }) {
-  const variantCount = product.variants?.length || 0;
-  
+// ── Sub-components ──
+
+function ProductListCard({ product, onClick }: { product: PosCatalogProduct; onClick: () => void }) {
+  const variantCount = product.variant_count || 0;
   return (
     <button
       onClick={onClick}
@@ -307,16 +352,11 @@ function ProductListCard({ product, onClick }: { product: Product; onClick: () =
           {product.product_name}
         </h3>
         {product.description && (
-          <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 italic leading-relaxed">
-            {product.description}
-          </p>
+          <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 italic leading-relaxed">{product.description}</p>
         )}
       </div>
-      
       <div className="mt-4 pt-4 border-t border-border/50 flex items-center justify-between">
-        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-          {product.unit || "Units"}
-        </span>
+        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{product.unit || "Units"}</span>
         <ArrowRightIcon size={14} className="text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
       </div>
     </button>
@@ -334,10 +374,7 @@ function EmptyState({ search, onClear, message }: { search: string; onClear: () 
         {search ? `We couldn't find anything matching "${search}"` : "Try adjusting your filters or search terms"}
       </p>
       {search && (
-        <button
-          onClick={onClear}
-          className="mt-6 text-sm font-bold text-primary hover:underline flex items-center gap-2"
-        >
+        <button onClick={onClear} className="mt-6 text-sm font-bold text-primary hover:underline flex items-center gap-2">
           Clear search results
         </button>
       )}
@@ -345,44 +382,28 @@ function EmptyState({ search, onClear, message }: { search: string; onClear: () 
   );
 }
 
-// Icons
-function SearchIcon({ size = 16 }: { size?: number }) { 
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8" />
-    <path d="m21 21-4.35-4.35" />
-  </svg>; 
+// ── Icons ──
+
+function SearchIcon({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>;
 }
 
-function XIcon({ size = 16 }: { size?: number }) { 
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M18 6 6 18M6 6l12 12" />
-  </svg>; 
+function XIcon({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>;
 }
 
-function BoxIcon({ size = 20 }: { size?: number }) { 
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-    <line x1="12" y1="22.08" x2="12" y2="12" />
-  </svg>; 
+function BoxIcon({ size = 20 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>;
 }
 
 function FilterIcon({ size = 16, className = "" }: { size?: number; className?: string }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-  </svg>;
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>;
 }
 
 function ArrowLeftIcon({ size = 16 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="19" y1="12" x2="5" y2="12" />
-    <polyline points="12 19 5 12 12 5" />
-  </svg>;
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>;
 }
 
 function ArrowRightIcon({ size = 16, className = "" }: { size?: number; className?: string }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <line x1="5" y1="12" x2="19" y2="12" />
-    <polyline points="12 5 19 12 12 19" />
-  </svg>;
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>;
 }

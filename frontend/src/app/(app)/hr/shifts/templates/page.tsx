@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useShiftTemplates, useCreateShiftTemplate, useUpdateShiftTemplate, useDeleteShiftTemplate } from "@/hooks/useShiftTemplates";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Clock, Edit, Trash2, Search, Palette, Shield } from "lucide-react";
+import { Plus, Clock, Edit, Trash2, Search, Palette, Shield, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { useAuth } from "@/hooks/useAuth";
@@ -18,6 +18,10 @@ export default function ShiftTemplatesPage() {
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 12;
+
+  useEffect(() => { setPage(1); }, [search]);
   const [formData, setFormData] = useState({
     name: "",
     startTime: "09:00",
@@ -30,6 +34,10 @@ export default function ShiftTemplatesPage() {
   const filtered = templates.filter((t) =>
     t.name.toLowerCase().includes(search.toLowerCase())
   );
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const paginated = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const handleSave = async () => {
     if (!formData.name || !formData.startTime || !formData.endTime) {
@@ -112,7 +120,7 @@ export default function ShiftTemplatesPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {filtered.map((t) => (
+        {paginated.map((t) => (
           <div
             key={t.id}
             className="group bg-card border border-border rounded-2xl p-5 hover:shadow-lg transition-all relative"
@@ -166,6 +174,37 @@ export default function ShiftTemplatesPage() {
           </div>
         ))}
       </div>
+
+      {filtered.length === 0 && (
+        <div className="text-center py-12 text-muted-foreground">
+          <p>No templates found</p>
+        </div>
+      )}
+
+      {filtered.length > pageSize && (
+        <div className="flex items-center justify-between mt-4 text-xs text-muted-foreground">
+          <span>
+            {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filtered.length)} of {filtered.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <span>Page {safePage} of {totalPages}</span>
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={safePage <= 1}
+              className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setPage(p => p + 1)}
+              disabled={safePage >= totalPages}
+              className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {modalOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4">

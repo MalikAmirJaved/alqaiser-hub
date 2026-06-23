@@ -73,6 +73,10 @@ export default function ShiftsManagementPage() {
   const [historyPage, setHistoryPage] = useState(0);
   const [selectedEmployeeForHistory, setSelectedEmployeeForHistory] = useState<ActiveEmployee | null>(null);
   const [setDefaultModal, setSetDefaultModal] = useState<{ employee: ActiveEmployee; templateId: string } | null>(null);
+  const [listPage, setListPage] = useState(1);
+  const listPageSize = 20;
+
+  useEffect(() => { setListPage(1); }, [filters.search, filters.department]);
 
   // Queries
   const { data: employees = [], isLoading: employeesLoading } = useActiveEmployees();
@@ -88,6 +92,10 @@ export default function ShiftsManagementPage() {
       return matchesSearch && matchesDepartment;
     });
   }, [employees, filters.search, filters.department]);
+
+  const listTotalPages = Math.max(1, Math.ceil(filteredEmployees.length / listPageSize));
+  const listSafePage = Math.min(listPage, listTotalPages);
+  const paginatedListEmployees = filteredEmployees.slice((listSafePage - 1) * listPageSize, listSafePage * listPageSize);
   
   // Get selected date range for calendar
   const monthStart = startOfMonth(currentMonth);
@@ -613,7 +621,7 @@ export default function ShiftsManagementPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredEmployees.map(emp => {
+                  {paginatedListEmployees.map(emp => {
                     const today = format(new Date(), "yyyy-MM-dd");
                     const resolved = resolvedShifts[today]?.[emp.id];
                     const hasOverride = overrides.some(a => 
@@ -698,6 +706,30 @@ export default function ShiftsManagementPage() {
                 </div>
               )}
             </div>
+            {filteredEmployees.length > listPageSize && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-border text-xs text-muted-foreground">
+                <span>
+                  {(listSafePage - 1) * listPageSize + 1}–{Math.min(listSafePage * listPageSize, filteredEmployees.length)} of {filteredEmployees.length}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span>Page {listSafePage} of {listTotalPages}</span>
+                  <button
+                    onClick={() => setListPage(p => Math.max(1, p - 1))}
+                    disabled={listSafePage <= 1}
+                    className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setListPage(p => p + 1)}
+                    disabled={listSafePage >= listTotalPages}
+                    className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </TabsContent>
       </Tabs>

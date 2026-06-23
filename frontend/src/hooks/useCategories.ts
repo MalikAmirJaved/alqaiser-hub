@@ -39,18 +39,15 @@ export function useCategories(filters?: Record<string, string> | string) {
   const queryString = params.toString();
   const url = `/api/inventory/categories/${queryString ? `?${queryString}` : ""}`;
 
-  return useQuery<
-    PaginatedResponse<Category>,
-    Error,
-    Category[]
-  >({
+  const query = useQuery<PaginatedResponse<Category>>({
     queryKey: ["inventory_category", filters],
     queryFn: () => api<PaginatedResponse<Category>>(url),
-    select: (data) => data.results,
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
   });
+
+  return { ...query, data: query.data?.results ?? [], totalCount: query.data?.count ?? 0 };
 }
 
 

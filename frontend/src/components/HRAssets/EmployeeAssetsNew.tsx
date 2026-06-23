@@ -52,6 +52,7 @@ import {
   X,
   ChevronRight,
   ChevronDown,
+  ChevronLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -83,6 +84,10 @@ export default function EmployeeAssetsNew() {
 
   // Category filter for assets
   const [assetCategoryFilter, setAssetCategoryFilter] = useState<string>("all");
+  const [empPage, setEmpPage] = useState(1);
+  const empPageSize = 20;
+
+  useEffect(() => { setEmpPage(1); }, [searchQuery]);
 
   const { data: employees = [], isLoading: employeesLoading } = useActiveEmployees()
 
@@ -123,6 +128,19 @@ export default function EmployeeAssetsNew() {
     if (assetCategoryFilter === "all") return allAssets;
     return allAssets.filter(asset => asset.category === assetCategoryFilter);
   }, [allAssets, assetCategoryFilter]);
+
+  // Filtered & paginated employees for left panel
+  const filteredEmployees = useMemo(() => {
+    const term = searchQuery.toLowerCase();
+    return employees.filter(emp => {
+      const fullName = `${emp.first_name} ${emp.last_name || ''}`.toLowerCase();
+      return fullName.includes(term) || emp.department_name?.toLowerCase().includes(term);
+    });
+  }, [employees, searchQuery]);
+
+  const empTotalPages = Math.max(1, Math.ceil(filteredEmployees.length / empPageSize));
+  const empSafePage = Math.min(empPage, empTotalPages);
+  const paginatedEmployees = filteredEmployees.slice((empSafePage - 1) * empPageSize, empSafePage * empPageSize);
 
   // Reset all selection when modal opens
   useEffect(() => {
@@ -267,7 +285,7 @@ export default function EmployeeAssetsNew() {
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {employees.map((emp) => (
+              {paginatedEmployees.map((emp) => (
                 <button
                   key={emp.id}
                   onClick={() => {
@@ -298,6 +316,30 @@ export default function EmployeeAssetsNew() {
             </div>
           )}
         </div>
+        {filteredEmployees.length > empPageSize && (
+          <div className="flex items-center justify-between px-4 py-2 border-t border-border text-xs text-muted-foreground">
+            <span>
+              {(empSafePage - 1) * empPageSize + 1}–{Math.min(empSafePage * empPageSize, filteredEmployees.length)} of {filteredEmployees.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setEmpPage(p => Math.max(1, p - 1))}
+                disabled={empSafePage <= 1}
+                className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span>Page {empSafePage} of {empTotalPages}</span>
+              <button
+                onClick={() => setEmpPage(p => p + 1)}
+                disabled={empSafePage >= empTotalPages}
+                className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Right Panel - Employee Details & Assignments (unchanged) */}

@@ -362,7 +362,7 @@ class ExitRecordView(BaseExitView):
             result['payment_id'] = str(payment._id)
             result['transaction_number'] = transaction_number
 
-            # Auto-create expense record for final settlement
+            # Auto-create expense record for final settlement (skip payment — already created above)
             create_expense_for_payroll(
                 company_id=company_id,
                 branch_id=branch_id,
@@ -372,6 +372,7 @@ class ExitRecordView(BaseExitView):
                 user=user,
                 notes=f'Transaction: {transaction_number}',
                 expense_date=date.today(),
+                skip_payment=True,
             )
 
             result['settlement_note'] = (

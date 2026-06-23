@@ -38,13 +38,16 @@ export function useSuppliers(filters?: Record<string, string>) {
   }
   const url = `/api/inventory/suppliers/${params.toString() ? `?${params}` : ""}`;
 
-  return useQuery<Supplier[]>({
+  const query = useQuery<PaginatedResponse<Supplier>>({
     queryKey: ["inventory_supplier", filters],
-    queryFn: async () => {
-      const res = await api<PaginatedResponse<Supplier>>(url);
-      return res.results;
-    },
+    queryFn: () => api<PaginatedResponse<Supplier>>(url),
   });
+
+  return {
+    ...query,
+    data: query.data?.results ?? [],
+    totalCount: query.data?.count ?? 0,
+  };
 }
 
 // Create supplier

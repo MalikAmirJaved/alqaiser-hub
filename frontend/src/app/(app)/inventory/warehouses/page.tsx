@@ -21,6 +21,7 @@ import {
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { usePagination } from "@/hooks/usePagination";
 
 type ViewMode = "table" | "grid";
 
@@ -31,12 +32,14 @@ export default function WarehousesPage() {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null);
+  const pagination = usePagination();
 
-  const { data: warehouses = [], isLoading, refetch } = useWarehouses({
+  const { data: warehouses = [], isLoading, refetch, totalCount } = useWarehouses({
     search: filters.search || undefined,
     is_active: filters.is_active ? filters.is_active === 'true' : undefined,
     country: filters.country || undefined,
     city: filters.city || undefined,
+    page: String(pagination.page),
   });
   const { data: stats, isLoading: statsLoading } = useWarehouseStats();
   const createWarehouse = useCreateWarehouse();
@@ -338,7 +341,7 @@ export default function WarehousesPage() {
       {!statsLoading && statsData.length > 0 && <StatsCards stats={statsData} />}
 
       {/* Enhanced FilterBar */}
-      <FilterBar fields={filterFields} filters={filters} onChange={setFilters} />
+      <FilterBar fields={filterFields} filters={filters} onChange={(f) => { setFilters(f); pagination.resetPage(); }} />
 
       {/* Table / Grid */}
       {viewMode === "table" ? (
@@ -349,6 +352,9 @@ export default function WarehousesPage() {
           onRowClick={handleRowClick as any}
           actions={actions as any}
           emptyMessage="No warehouses found"
+          totalCount={totalCount}
+          currentPage={pagination.page}
+          onPageChange={pagination.setPage}
         />
       ) : (
         <GridView

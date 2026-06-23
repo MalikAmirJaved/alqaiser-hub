@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
 import { useJournalEntries, type JournalEntry } from "@/hooks/finance/useJournalEntries";
+import { usePagination } from "@/hooks/usePagination";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import FilterBar from "@/components/reuseable/FilterBar";
@@ -18,16 +19,17 @@ export default function JournalEntriesPage() {
   const router = useRouter();
   const [filters, setFilters] = useState<Record<string, string>>({});
 
+  const pagination = usePagination();
+
   // Build API filters from FilterBar state
-  const journalFilters = useMemo(() => {
-    const apiFilters: Record<string, string> = {};
-    if (filters.date__gte) apiFilters.date__gte = filters.date__gte;
-    if (filters.date__lte) apiFilters.date__lte = filters.date__lte;
-    if (filters.reference_type) apiFilters.reference_type = filters.reference_type;
-    if (filters.is_posted) apiFilters.is_posted = filters.is_posted;
-    apiFilters.ordering = "-date";
-    return apiFilters;
-  }, [filters]);
+  const journalFilters = useMemo(() => ({
+    page: pagination.page,
+    ordering: "-date" as const,
+    ...(filters.date__gte ? { date__gte: filters.date__gte } : {}),
+    ...(filters.date__lte ? { date__lte: filters.date__lte } : {}),
+    ...(filters.reference_type ? { reference_type: filters.reference_type } : {}),
+    ...(filters.is_posted ? { is_posted: filters.is_posted === "true" } : {}),
+  }), [filters, pagination.page]);
 
   const filterFields: FilterField[] = [
     { name: "date__gte", label: "From Date", type: "date" },
@@ -43,7 +45,7 @@ export default function JournalEntriesPage() {
     { name: "is_posted", label: "Status", type: "boolean" },
   ];
 
-  const { data: entries, isLoading } = useJournalEntries(journalFilters);
+  const { data: entries, isLoading, totalCount } = useJournalEntries(journalFilters);
 
   const permissions = useFeaturePermissions("FINANCE", "journal_entrie");
   const modulePermissions: ModulePermissions = {
@@ -118,6 +120,9 @@ export default function JournalEntriesPage() {
         description="View all double‑entry accounting records"
         data={entries || []}
         isLoading={isLoading}
+        totalCount={totalCount}
+        currentPage={pagination.page}
+        onPageChange={pagination.setPage}
         columns={columns}
         kpis={computeKPIs}
         getRowId={(entry) => entry.id}
@@ -131,7 +136,7 @@ export default function JournalEntriesPage() {
           <FilterBar
             fields={filterFields}
             filters={filters}
-            onChange={setFilters}
+            onChange={(f) => { setFilters(f); pagination.resetPage(); }}
           />
         }
         // No batch actions for journal entries

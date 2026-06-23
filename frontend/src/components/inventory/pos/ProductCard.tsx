@@ -1,6 +1,5 @@
 // src/components/inventory/pos/ProductCard.tsx
 "use client";
-import { VariantDetail } from "@/hooks/useAllVariants";
 import { memo } from "react";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
@@ -10,8 +9,22 @@ interface StockData {
   on_hand: number;
 }
 
+interface VariantLike {
+  id: string;
+  sku: string;
+  variant_title: string;
+  barcode: string;
+  selling_price: number;
+  min_stock_level: number;
+  unit?: string;
+  product_name?: string;
+  stock?: StockData;
+  incoming?: number;
+  attributes?: Array<{ key: string; value: string }>;
+}
+
 interface ProductCardProps {
-  variant: VariantDetail & { stock?: StockData; incoming?: number };
+  variant: VariantLike;
   onAdd: () => void;
   stockData?: StockData;
 }

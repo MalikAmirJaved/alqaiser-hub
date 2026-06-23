@@ -1,12 +1,13 @@
 // src/app/(app)/inventory/brands/page.tsx
 "use client";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Trash2, Pencil, Globe } from "lucide-react";
+import { Plus, Trash2, Pencil, Globe, ChevronLeft, ChevronRight } from "lucide-react";
 import BrandFormModal from "@/components/inventory/brand/BrandFormModal";
 import FilterBar, { FilterField } from "@/components/reuseable/FilterBar";
 import { useBrands, useDeleteBrand, Brand } from "@/hooks/useBrands";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { usePagination } from "@/hooks/usePagination";
 
 export default function BrandsPage() {
   const permissions = useFeaturePermissions("INVENTORY", "brand");
@@ -18,7 +19,11 @@ export default function BrandsPage() {
     { name: "search", label: "Search", type: "search" },
   ];
 
-  const { data: items = [], isLoading } = useBrands(filters);
+  const pagination = usePagination();
+
+  const filtersWithPage = useMemo(() => ({ ...filters, page: String(pagination.page) }), [filters, pagination.page]);
+
+  const { data: items = [], isLoading, totalCount } = useBrands(filtersWithPage);
   const deleteBrand = useDeleteBrand();
 
   const handleDelete = (id: string, name: string) => {
@@ -46,7 +51,7 @@ export default function BrandsPage() {
           )
         }
       />
-      <FilterBar fields={filterFields} filters={filters} onChange={setFilters} />
+      <FilterBar fields={filterFields} filters={filters} onChange={(f) => { setFilters(f); pagination.resetPage(); }} />
 
       <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
@@ -111,6 +116,20 @@ export default function BrandsPage() {
           </table>
         </div>
       </div>
+      {(totalCount ?? 0) > 20 && (
+        <div className="flex items-center justify-between px-4 py-3 border border-border rounded-2xl text-xs text-muted-foreground bg-card">
+          <span>{(pagination.page - 1) * 20 + 1}–{Math.min(pagination.page * 20, totalCount ?? 0)} of {totalCount ?? 0}</span>
+          <div className="flex items-center gap-2">
+            <span>Page {pagination.page} of {Math.max(1, Math.ceil((totalCount ?? 0) / 20))}</span>
+            <button onClick={pagination.prevPage} disabled={pagination.page <= 1} className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button onClick={pagination.nextPage} disabled={pagination.page >= Math.ceil((totalCount ?? 0) / 20)} className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
       {(modalOpen && (editing ? permissions.update : permissions.create)) && (
         <BrandFormModal
           isOpen={modalOpen}

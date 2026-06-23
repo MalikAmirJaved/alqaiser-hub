@@ -44,6 +44,7 @@ export function useJournalEntries(filters?: {
   reference_id?: string;
   is_posted?: boolean;
   ordering?: string;
+  page?: number;
 }) {
   const params = new URLSearchParams();
   if (filters?.date) params.append('date', filters.date);
@@ -54,13 +55,14 @@ export function useJournalEntries(filters?: {
   if (filters?.reference_id) params.append('reference_id', filters.reference_id);
   if (filters?.is_posted !== undefined) params.append('is_posted', String(filters.is_posted));
   if (filters?.ordering) params.append('ordering', filters.ordering);
+  if (filters?.page) params.append('page', String(filters.page));
   const url = `/api/finance/journal-entries/${params.toString() ? `?${params}` : ''}`;
-  return useQuery({
+  const query = useQuery({
     queryKey: ['finance_journal_entries', filters],
     queryFn: () => apiFetch<PaginatedResponse<JournalEntry>>(url),
-    select: (data) => data.results,
     staleTime: 30_000,
   });
+  return { ...query, data: query.data?.results ?? [], totalCount: query.data?.count ?? 0 };
 }
 
 // Add this function to fetch single journal entry

@@ -10,7 +10,7 @@ import { ConfirmationModal, useConfirmationModal } from "@/components/reuseable/
 import {
   Search, Plus, Pencil, Trash2, FileText,
   AlertCircle, X, BookOpen, Users,
-  CheckSquare, Square, RotateCcw, ChevronDown
+  CheckSquare, Square, RotateCcw, ChevronDown, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { toast } from "sonner";
 import { StatsCards } from "@/components/reuseable/StatsCards";
@@ -419,14 +419,26 @@ export default function HRPolicyPage() {
         {/* Footer with count and pagination */}
         <div className="p-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
           <span>Showing {records.length} of {totalCount} policies</span>
-          {policiesData?.next && (
-            <button
-              onClick={() => setFilters(prev => ({ ...prev, page: (prev.page || 1) + 1 }))}
-              className="px-3 h-7 rounded-md border border-border hover:bg-muted"
-            >
-              Next Page
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            <span>Page {filters.page ?? 1}</span>
+            {policiesData?.previous && (
+              <button
+                onClick={() => setFilters(prev => ({ ...prev, page: Math.max(1, (prev.page || 1) - 1) }))}
+                disabled={(filters.page ?? 1) <= 1}
+                className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            )}
+            {policiesData?.next && (
+              <button
+                onClick={() => setFilters(prev => ({ ...prev, page: (prev.page || 1) + 1 }))}
+                className="p-1 rounded-md border border-border hover:bg-muted transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
 import { useSupplierBills, useDeleteSupplierBill, usePaySupplierBill } from "@/hooks/finance/useSupplierBills";
@@ -12,6 +12,7 @@ import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
 import { Trash2, Send } from "lucide-react";
+import { usePagination } from "@/hooks/usePagination";
 
 
 export default function SupplierBillsPage() {
@@ -21,6 +22,15 @@ export default function SupplierBillsPage() {
   const [editingBill, setEditingBill] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filters, setFilters] = useState<Record<string, string>>({});
+
+  const pagination = usePagination();
+
+  const filtersWithPage = useMemo(() => ({
+    page: pagination.page,
+    ...(filters.search ? { search: filters.search } : {}),
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.supplier ? { supplier: filters.supplier } : {}),
+  }), [filters, pagination.page]);
 
   const { data: suppliers = [] } = useSuppliers();
   const supplierOptions = suppliers.map(s => ({ value: s.id, label: s.name }));
@@ -34,15 +44,7 @@ export default function SupplierBillsPage() {
     ]},
   ];
 
-  const { data: bills, isLoading } = useSupplierBills(
-    Object.keys(filters).length > 0
-      ? {
-          search: filters.search || undefined,
-          status: filters.status || undefined,
-          supplier: filters.supplier || undefined,
-        }
-      : undefined
-  );
+  const { data: bills, isLoading, totalCount } = useSupplierBills(filtersWithPage);
 
   const deleteBill = useDeleteSupplierBill();
   const payBill = usePaySupplierBill();
@@ -121,6 +123,9 @@ export default function SupplierBillsPage() {
         description="Manage bills from your suppliers (accounts payable)"
         data={bills || []}
         isLoading={isLoading}
+        totalCount={totalCount}
+        currentPage={pagination.page}
+        onPageChange={pagination.setPage}
         columns={columns}
         kpis={computeKPIs}
         getRowId={(bill) => bill.id}
@@ -144,7 +149,7 @@ export default function SupplierBillsPage() {
           <FilterBar
             fields={filterFields}
             filters={filters}
-            onChange={setFilters}
+            onChange={(f) => { setFilters(f); pagination.resetPage(); }}
           />
         }
         batchActions={

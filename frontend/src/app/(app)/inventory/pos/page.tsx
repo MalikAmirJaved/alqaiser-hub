@@ -1,7 +1,9 @@
 // src/app/(app)/inventory/pos/page.tsx
 "use client";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { usePagination } from "@/hooks/usePagination";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useWarehouses } from "@/hooks/useWarehouses";
 import {
   useCreateSalesOrder,
@@ -22,7 +24,7 @@ import { CartPanel } from "@/components/inventory/pos/CartPanel";
 import { ReturnPanel } from "@/components/inventory/pos/ReturnPanel";
 import { SalesListPanel } from "@/components/inventory/pos/SalesListPanel";
 import ThermalReceiptModal, { type ThermalReceiptData, printThermalReceipt } from "@/components/inventory/pos/ThermalReceiptModal";
-import type { VariantDetailWithStock } from "@/hooks/useAllVariants";
+import type { PosVariant } from "@/hooks/usePosCatalog";
 import { debounce } from "lodash";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -51,6 +53,7 @@ export default function SalesPage() {
   const [invoiceModalProps, setInvoiceModalProps] = useState<{ open: boolean; data: QuoteInvoiceData | null }>({ open: false, data: null });
   const [thermalReceiptData, setThermalReceiptData] = useState<ThermalReceiptData | null>(null);
   const [thermalModalOpen, setThermalModalOpen] = useState(false);
+  const heldPagination = usePagination();
 
   // Debounced draft updater
   const updateDraftDebounced = useRef(
@@ -108,8 +111,11 @@ export default function SalesPage() {
     });
   }, [queryClient]);
 
+  // Default: "All" stations (null = show products across all warehouses)
   useEffect(() => {
-    if (!selectedWarehouse && warehouses.length > 0) setSelectedWarehouse(warehouses[0]);
+    if (warehouses.length > 0 && selectedWarehouse === undefined) {
+      setSelectedWarehouse(null);
+    }
   }, [warehouses, selectedWarehouse]);
 
   const clearCart = useCallback(() => {
@@ -282,6 +288,10 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
       if (activeDraftId) {
         return;
       }
+      if (!selectedWarehouse) {
+        alert("Please select a station before saving a draft.");
+        return;
+      }
       await createSalesOrder({
         customer: selectedCustomer?.id ?? null,
         warehouse: selectedWarehouse.id,
@@ -358,8 +368,14 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
           </nav>
 
           <Select
-            value={selectedWarehouse?.id ? String(selectedWarehouse.id) : ""}
-            onValueChange={(val) => setSelectedWarehouse(warehouses.find(w => String(w.id) === val) ?? null)}
+            value={selectedWarehouse?.id ? String(selectedWarehouse.id) : "all"}
+            onValueChange={(val) => {
+              if (val === "all") {
+                setSelectedWarehouse(null);
+              } else {
+                setSelectedWarehouse(warehouses.find(w => String(w.id) === val) ?? null);
+              }
+            }}
           >
             <SelectTrigger className="flex items-center gap-3 bg-muted/40 rounded-xl px-4 py-2 border border-border/50 hover:bg-muted/60 transition-colors cursor-pointer group !h-auto w-auto data-[placeholder]:text-muted-foreground focus:ring-0 focus:ring-offset-0 shadow-none">
               <WarehouseIcon className="text-muted-foreground group-hover:text-primary transition-colors" />
@@ -369,6 +385,12 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
               </div>
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="all" className="font-bold text-primary">
+                <div className="flex items-center gap-2">
+                  <GlobeIcon size={14} />
+                  <span>All Stations</span>
+                </div>
+              </SelectItem>
               {warehouses.map(w => (
                 <SelectItem key={w.id} value={String(w.id)}>
                   {w.warehouse_name}
@@ -383,8 +405,8 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
           <div className="absolute inset-0 overflow-y-auto">
             {activePanel === "search" && (
               <ProductSearchPanel
-                onAddToCart={(v: VariantDetailWithStock) => {
-                  const availableStock = v.stock?.available ?? 0;
+                onAddToCart={(v: PosVariant & { product_name: string; product_id: string }) => {
+                  const availableStock = v.stock.available;
                   
                   if (availableStock <= 0) {
                     alert(`"${v.product_name}" is out of stock.`);
@@ -439,52 +461,89 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
                     <p className="text-sm text-muted-foreground mt-1">Pending transactions will appear here</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {draftOrders.map(order => (
-                      <div key={order.id} className="group bg-card border border-border rounded-[24px] p-5 hover:border-primary/40 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300">
-                        <div className="flex items-start justify-between mb-4">
-                          <div className="flex flex-col gap-1">
-                            <span className="text-[10px] font-black text-warning uppercase tracking-widest bg-warning/10 px-2 py-0.5 rounded-md w-fit">
-                              Draft
-                            </span>
-                            <p className="text-base font-black text-foreground group-hover:text-primary transition-colors">{order.order_number}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xs font-bold text-muted-foreground">{new Date(order.order_date).toLocaleDateString()}</p>
-                            <p className="text-[10px] font-bold text-muted-foreground/60 uppercase">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-3 mb-6 p-3 bg-muted/30 rounded-xl">
-                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-black">
-                            {(order.customer_name || "W").charAt(0).toUpperCase()}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold truncate">{order.customer_name || "Walk-in Customer"}</p>
-                            <p className="text-[10px] font-medium text-muted-foreground">{order.lines?.length || 0} Products</p>
-                          </div>
-                        </div>
+                  <>
+                    {(() => {
+                      const totalDraftPages = Math.max(1, Math.ceil(draftOrders.length / heldPagination.pageSize));
+                      const safeDraftPage = Math.min(heldPagination.page, totalDraftPages);
+                      const paginatedDrafts = draftOrders.slice(
+                        (safeDraftPage - 1) * heldPagination.pageSize,
+                        safeDraftPage * heldPagination.pageSize,
+                      );
+                      return (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {paginatedDrafts.map(order => (
+                            <div key={order.id} className="group bg-card border border-border rounded-[24px] p-5 hover:border-primary/40 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300">
+                              <div className="flex items-start justify-between mb-4">
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-[10px] font-black text-warning uppercase tracking-widest bg-warning/10 px-2 py-0.5 rounded-md w-fit">
+                                    Draft
+                                  </span>
+                                  <p className="text-base font-black text-foreground group-hover:text-primary transition-colors">{order.order_number}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-xs font-bold text-muted-foreground">{new Date(order.order_date).toLocaleDateString()}</p>
+                                  <p className="text-[10px] font-bold text-muted-foreground/60 uppercase">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-3 mb-6 p-3 bg-muted/30 rounded-xl">
+                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-black">
+                                  {(order.customer_name || "W").charAt(0).toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-bold truncate">{order.customer_name || "Walk-in Customer"}</p>
+                                  <p className="text-[10px] font-medium text-muted-foreground">{order.lines?.length || 0} Products</p>
+                                </div>
+                              </div>
 
-                        <div className="flex gap-2">
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => loadDraftOrder(order)}
+                                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl text-xs font-black hover:opacity-90 transition-all active:scale-[0.97]"
+                                >
+                                  <PlayIcon size={14} /> Resume Order
+                                </button>
+                                {permissions.delete && (
+                                  <button
+                                    onClick={() => handleCancelDraft(order.id)}
+                                    disabled={isCancelling}
+                                    className="w-10 flex items-center justify-center bg-destructive/10 text-destructive rounded-xl hover:bg-destructive hover:text-destructive-foreground transition-all disabled:opacity-50"
+                                  >
+                                    <XIcon size={14} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                    {draftOrders.length > heldPagination.pageSize && (
+                      <div className="flex items-center justify-between px-3 py-2 border border-border/60 bg-muted/10 rounded-lg">
+                        <span className="text-xs text-muted-foreground font-medium">
+                          {(Math.min(heldPagination.page, Math.max(1, Math.ceil(draftOrders.length / heldPagination.pageSize))) - 1) * heldPagination.pageSize + 1}-
+                          {Math.min(heldPagination.page * heldPagination.pageSize, draftOrders.length)} of{" "}
+                          {draftOrders.length}
+                        </span>
+                        <div className="flex items-center gap-1">
                           <button
-                            onClick={() => loadDraftOrder(order)}
-                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl text-xs font-black hover:opacity-90 transition-all active:scale-[0.97]"
+                            onClick={heldPagination.prevPage}
+                            disabled={heldPagination.page <= 1}
+                            className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 disabled:pointer-events-none transition-colors text-muted-foreground"
                           >
-                            <PlayIcon size={14} /> Resume Order
+                            <ChevronLeft className="h-4 w-4" />
                           </button>
-                          {permissions.delete && (
-                            <button
-                              onClick={() => handleCancelDraft(order.id)}
-                              disabled={isCancelling}
-                              className="w-10 flex items-center justify-center bg-destructive/10 text-destructive rounded-xl hover:bg-destructive hover:text-destructive-foreground transition-all disabled:opacity-50"
-                            >
-                              <XIcon size={14} />
-                            </button>
-                          )}
+                          <button
+                            onClick={heldPagination.nextPage}
+                            disabled={heldPagination.page >= Math.max(1, Math.ceil(draftOrders.length / heldPagination.pageSize))}
+                            className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 disabled:pointer-events-none transition-colors text-muted-foreground"
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -598,6 +657,14 @@ function WarehouseIcon({ className = "" }: { className?: string }) {
 function PlayIcon({ size = 14 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <polygon points="5 3 19 12 5 21 5 3" />
+  </svg>;
+}
+
+function GlobeIcon({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <line x1="2" y1="12" x2="22" y2="12" />
+    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
   </svg>;
 }
 

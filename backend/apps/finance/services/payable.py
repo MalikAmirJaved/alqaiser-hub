@@ -196,8 +196,14 @@ def create_expense_for_payroll(
     user,
     notes='',
     expense_date=None,
+    skip_payment=False,
 ):
-    """Auto-create an expense record with a confirmed payment for salary/loan payments."""
+    """Auto-create an expense record for salary/loan/exit payments.
+
+    When called from payroll or exit settlement (which already create a
+    payment for the source document), pass ``skip_payment=True`` to avoid
+    creating a duplicate payment for the expense itself.
+    """
     from datetime import date as _date
     from apps.finance.models import Expense
 
@@ -214,19 +220,20 @@ def create_expense_for_payroll(
         updated_by=user,
     )
 
-    # Create a confirmed payment so the expense shows as PAID
-    payment = create_payment_for(
-        expense,
-        amount=amount,
-        payment_date=expense_date or _date.today(),
-        user=user,
-        payment_method='BANK_TRANSFER',
-        reference_number=expense.expense_number,
-        notes=description,
-        auto_confirm=False,
-    )
-    payment.status = 'CONFIRMED'
-    payment.save(update_fields=['status', 'updated_at'])
+    if not skip_payment:
+        # Create a confirmed payment so the expense shows as PAID
+        payment = create_payment_for(
+            expense,
+            amount=amount,
+            payment_date=expense_date or _date.today(),
+            user=user,
+            payment_method='BANK_TRANSFER',
+            reference_number=expense.expense_number,
+            notes=description,
+            auto_confirm=False,
+        )
+        payment.status = 'CONFIRMED'
+        payment.save(update_fields=['status', 'updated_at'])
 
     return expense
 

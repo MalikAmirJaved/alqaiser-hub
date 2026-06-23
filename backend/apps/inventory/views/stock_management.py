@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.db import transaction
 from django.db.models import F, Sum
+from django.db import models
 from django.core.paginator import Paginator
 import uuid
 
@@ -17,6 +18,11 @@ from apps.inventory.serializers.stock_management import (
 )
 from .batch_stock import BatchStockMixin
 from django.core.cache import cache
+from django.db.models import Q, Exists, OuterRef, IntegerField, Value
+from django.db.models.functions import Coalesce
+from apps.inventory.models import Product
+from apps.inventory.serializers.product import ProductSerializer
+from apps.inventory.serializers.variant import VariantPOSSerializer
 
 class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchStockMixin, viewsets.GenericViewSet):
     permission_module = 'INVENTORY'
@@ -38,6 +44,11 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
             ('INVENTORY', 'product'),
         ],
         'variant_summary': [
+            ('INVENTORY', 'stock'),
+            ('INVENTORY', 'sales_order'),
+            ('INVENTORY', 'product'),
+        ],
+        'pos_catalog': [
             ('INVENTORY', 'stock'),
             ('INVENTORY', 'sales_order'),
             ('INVENTORY', 'product'),
@@ -134,6 +145,7 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
         variant_ids = request.query_params.getlist('variant_id') or request.query_params.get('variant_ids', '').split(',')
         warehouse_uuid = request.query_params.get('warehouse_id')
         low_stock = request.query_params.get('low_stock')
+        search_query = request.query_params.get('search', '').strip()
         
         # Build cache key (only for simple queries without low_stock)
         cache_key = None
@@ -165,6 +177,15 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
         # Prefetch related
         queryset = queryset.select_related('variant__product', 'warehouse')
         
+        # Search by variant SKU, barcode, title, or product name
+        if search_query:
+            queryset = queryset.filter(
+                models.Q(variant__sku__icontains=search_query) |
+                models.Q(variant__barcode__icontains=search_query) |
+                models.Q(variant__variant_title__icontains=search_query) |
+                models.Q(variant__product__product_name__icontains=search_query)
+            )
+
         # Pagination
         page = int(request.query_params.get('page', 1))
         page_size = int(request.query_params.get('page_size', 100))  # Increased default
@@ -293,3 +314,157 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
         summary['total_available'] = total_available
 
         return Response(summary)
+
+    # -------------------- POS CATALOG (unified) --------------------
+    @action(detail=False, methods=['get'], url_path='pos-catalog')
+    def pos_catalog(self, request):
+        """
+        Unified POS catalog endpoint.
+        Returns products with variants + per-warehouse stock data
+        in a single request, filtered by the selected warehouse.
+        """
+        user = request.user
+        company_id = user.company_id
+
+        search_query = request.query_params.get('search', '').strip()
+        category_id = request.query_params.get('category_id')
+        brand_id = request.query_params.get('brand_id')
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+
+        warehouse_uuid = request.query_params.get('warehouse_id')
+        warehouse = None
+        if warehouse_uuid:
+            try:
+                warehouse = Warehouse.objects.get(_id=warehouse_uuid, company_id=company_id)
+            except Warehouse.DoesNotExist:
+                return Response({'error': 'Warehouse not found'}, status=404)
+
+        # Build base query
+        products_qs = Product.objects.filter(company_id=company_id)
+
+        # When a warehouse is selected, only show products that have stock in that warehouse
+        if warehouse:
+            has_stock_in_warehouse = Exists(
+                StockItem.objects.filter(
+                    variant__product=OuterRef('pk'),
+                    warehouse=warehouse,
+                    company_id=company_id,
+                )
+            )
+            products_qs = products_qs.filter(has_stock_in_warehouse)
+        else:
+            # When "All" is selected, show products that have stock in ANY warehouse
+            has_stock_in_any_warehouse = Exists(
+                StockItem.objects.filter(
+                    variant__product=OuterRef('pk'),
+                    company_id=company_id,
+                )
+            )
+            products_qs = products_qs.filter(has_stock_in_any_warehouse)
+
+        # Category filter
+        if category_id:
+            products_qs = products_qs.filter(category___id=category_id)
+
+        # Brand filter
+        if brand_id:
+            products_qs = products_qs.filter(brand___id=brand_id)
+
+        # Search filter
+        if search_query:
+            products_qs = products_qs.filter(
+                Q(product_name__icontains=search_query) |
+                Q(variants__sku__icontains=search_query) |
+                Q(variants__barcode__icontains=search_query)
+            ).distinct()
+
+        products_qs = products_qs.order_by('product_name')
+
+        # Pagination
+        paginator = Paginator(products_qs, page_size)
+        page_obj = paginator.get_page(page)
+
+        # Build response with variants and stock data
+        result = []
+        for product in page_obj:
+            # Get variants for this product
+            variants = ProductVariant.objects.filter(
+                product=product,
+                company_id=company_id,
+            ).select_related('product').prefetch_related('variant_attributes', 'variant_images')
+
+            variants_data = []
+            for v in variants:
+                # Get stock data — either for specific warehouse or all warehouses summed
+                if warehouse:
+                    stock = StockItem.objects.filter(
+                        variant=v,
+                        warehouse=warehouse,
+                        company_id=company_id,
+                    ).first()
+                    available = (stock.quantity_on_hand - stock.quantity_reserved) if stock else 0
+                    on_hand = stock.quantity_on_hand if stock else 0
+                    reserved = stock.quantity_reserved if stock else 0
+                else:
+                    # Aggregate across all warehouses
+                    stock_agg = StockItem.objects.filter(
+                        variant=v,
+                        company_id=company_id,
+                    ).aggregate(
+                        total_on_hand=models.Sum('quantity_on_hand'),
+                        total_reserved=models.Sum('quantity_reserved'),
+                    )
+                    on_hand = stock_agg['total_on_hand'] or 0
+                    reserved = stock_agg['total_reserved'] or 0
+                    available = on_hand - reserved
+
+                # Get primary image
+                primary_image = v.variant_images.filter(is_primary=True).first() or v.variant_images.first()
+                image_url = primary_image.image_url if primary_image else ''
+
+                variants_data.append({
+                    'id': str(v._id),
+                    'sku': v.sku,
+                    'variant_title': v.variant_title,
+                    'barcode': v.barcode,
+                    'selling_price': float(v.selling_price),
+                    'min_stock_level': v.min_stock_level,
+                    'max_stock_level': v.max_stock_level,
+                    'unit': product.unit,
+                    'is_active': product.is_active,
+                    'image_url': image_url,
+                    'stock': {
+                        'available': available,
+                        'on_hand': on_hand,
+                        'reserved': reserved,
+                    },
+                    'attributes': [
+                        {'key': a.attribute_key, 'value': a.attribute_value}
+                        for a in v.variant_attributes.filter(is_deleted=False)
+                    ],
+                })
+
+            # Count total variants for this product
+            total_variant_count = ProductVariant.objects.filter(
+                product=product,
+                company_id=company_id,
+            ).count()
+
+            result.append({
+                'id': str(product._id),
+                'product_name': product.product_name,
+                'description': product.description,
+                'unit': product.unit,
+                'category_id': str(product.category._id) if product.category else None,
+                'brand_id': str(product.brand._id) if product.brand else None,
+                'variant_count': total_variant_count,
+                'variants': variants_data,
+            })
+
+        return Response({
+            'count': paginator.count,
+            'page': page,
+            'page_size': page_size,
+            'results': result,
+        })

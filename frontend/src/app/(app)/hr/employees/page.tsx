@@ -23,6 +23,7 @@ import { useSelector } from "react-redux";
 import { RootState } from "@/store";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import PromotionModal from "@/components/payroll/PromotionModal";
+import { usePagination } from "@/hooks/usePagination";
 
 
 export default function EmployeesPage() {
@@ -42,6 +43,7 @@ export default function EmployeesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefill = searchParams.get("prefill");
+  const pagination = usePagination();
 
   const { options: departmentOptions } = useDepartmentOptions();
   const { data: designations = [] } = useDesignations();
@@ -88,9 +90,12 @@ export default function EmployeesPage() {
     };
   }, [searchParams, prefill]);
 
-  const { data: employees = [], isLoading } = useEmployees(
-    Object.keys(filters).length > 0 ? filters : undefined
-  );
+  const filtersWithPage = useMemo(() => {
+    const base = Object.keys(filters).length > 0 ? filters : {};
+    return { ...base, page: String(pagination.page) };
+  }, [filters, pagination.page]);
+
+  const { data: employees = [], isLoading, totalCount } = useEmployees(filtersWithPage);
   const permissions = useSelector(
     (state: RootState) => state.permissions.permissions
   );
@@ -643,7 +648,7 @@ export default function EmployeesPage() {
         <FilterBar
           fields={filterFields}
           filters={filters}
-          onChange={setFilters}
+          onChange={(f) => { setFilters(f); pagination.resetPage(); }}
         />
       </div>
 
@@ -659,6 +664,9 @@ export default function EmployeesPage() {
           }}
           actions={renderActions || undefined}
           stickyHeader={true}
+          totalCount={totalCount}
+          currentPage={pagination.page}
+          onPageChange={pagination.setPage}
         />
       ) : (
         <GridView

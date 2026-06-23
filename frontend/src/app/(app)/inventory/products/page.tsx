@@ -15,6 +15,7 @@ import { useBrands } from "@/hooks/useBrands";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { usePagination } from "@/hooks/usePagination";
 
 export default function ProductsPage() {
   const router = useRouter();
@@ -24,8 +25,14 @@ export default function ProductsPage() {
   const [showProductModal, setShowProductModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | undefined>(undefined);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const pagination = usePagination();
 
-  const { data: products = [], isLoading, refetch } = useProducts(filters);
+  const filtersWithPage = useMemo(() => ({
+    ...filters,
+    page: String(pagination.page),
+  }), [filters, pagination.page]);
+
+  const { data: products = [], isLoading, refetch, totalCount } = useProducts(filtersWithPage);
   const { data: categories = [] } = useCategories();
   const { data: brands = [] } = useBrands();
 
@@ -275,7 +282,7 @@ export default function ProductsPage() {
       <StatsCards stats={stats} />
 
       {/* Filters */}
-      <FilterBar fields={filterFields} filters={filters} onChange={setFilters} />
+      <FilterBar fields={filterFields} filters={filters} onChange={(f) => { setFilters(f); pagination.resetPage(); }} />
 
       {/* Table / Grid */}
       {viewMode === "table" ? (
@@ -286,6 +293,9 @@ export default function ProductsPage() {
           onRowClick={(row) => handleViewDetails(row)}
           actions={actions}
           emptyMessage="No products found. Add your first product to get started."
+          totalCount={totalCount}
+          currentPage={pagination.page}
+          onPageChange={pagination.setPage}
         />
       ) : (
         <GridView

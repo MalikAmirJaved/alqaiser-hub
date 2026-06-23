@@ -42,11 +42,12 @@ type UpdateSupplierBillData = Partial<CreateSupplierBillData>;
 
 const SUPPLIER_BILLS_KEY = "finance_supplier_bills";
 
-async function getAllSupplierBills(params?: { search?: string; status?: string; supplier?: string }) {
+async function getAllSupplierBills(params?: { search?: string; status?: string; supplier?: string; page?: number }) {
   const searchParams = new URLSearchParams();
   if (params?.search) searchParams.append("search", params.search);
   if (params?.status) searchParams.append("status", params.status);
   if (params?.supplier) searchParams.append("supplier", String(params.supplier));
+  if (params?.page) searchParams.append("page", String(params.page));
   const url = `/api/finance/supplier-bills/${searchParams.toString() ? `?${searchParams}` : ""}`;
   return apiFetch<PaginatedResponse<SupplierBill>>(url);
 }
@@ -88,13 +89,13 @@ async function postSupplierBill(id: string) {
 // REACT HOOKS
 // ============================================
 
-export function useSupplierBills(filters?: { search?: string; status?: string; supplier?: string }) {
-  return useQuery({
+export function useSupplierBills(filters?: { search?: string; status?: string; supplier?: string; page?: number }) {
+  const query = useQuery({
     queryKey: [SUPPLIER_BILLS_KEY, filters],
     queryFn: () => getAllSupplierBills(filters),
-    select: (data) => data.results,
     staleTime: 30_000,
   });
+  return { ...query, data: query.data?.results ?? [], totalCount: query.data?.count ?? 0 };
 }
 
 export function useSupplierBill(id: string | null) {

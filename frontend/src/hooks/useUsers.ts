@@ -65,16 +65,19 @@ export function useUsers(filters?: Record<string, string>) {
     ? '?' + new URLSearchParams(filters).toString()
     : '';
 
-  return useQuery<User[]>({
+  const query = useQuery<PaginatedResponse<User>>({
     queryKey: ["users", filters],
-    queryFn: async () => {
-      const response = await api<PaginatedResponse<User>>(`/api/organization/users/${queryString}`);
-      return response.results || [];
-    },
+    queryFn: () => api<PaginatedResponse<User>>(`/api/organization/users/${queryString}`),
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
   });
+
+  return {
+    ...query,
+    data: query.data?.results ?? [],
+    totalCount: query.data?.count ?? 0,
+  };
 }
 
 // Fetch single user

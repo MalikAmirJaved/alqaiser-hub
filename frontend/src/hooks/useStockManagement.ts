@@ -74,15 +74,17 @@ export function useCurrentStock(filters?: {
   variant_id?: string;
   warehouse_id?: string;
   low_stock?: boolean;
+  search?: string;
   page?: number;
   page_size?: number;
 }) {
   const api = useApi();
 
   const params = new URLSearchParams();
-  if (filters?.variant_id) params.append("variant___id", filters.variant_id); // note: backend expects variant___id (three underscores)
-  if (filters?.warehouse_id) params.append("warehouse___id", filters.warehouse_id);
+  if (filters?.variant_id) params.append("variant_id", filters.variant_id);
+  if (filters?.warehouse_id) params.append("warehouse_id", filters.warehouse_id);
   if (filters?.low_stock) params.append("low_stock", "true");
+  if (filters?.search) params.append("search", filters.search);
   if (filters?.page) params.append("page", String(filters.page));
   if (filters?.page_size) params.append("page_size", String(filters.page_size));
 

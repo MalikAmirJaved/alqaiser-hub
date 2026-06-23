@@ -58,13 +58,14 @@ const EXPENSES_KEY = "finance_expenses";
 // API FUNCTIONS
 // ============================================
 
-async function getAllExpenses(params?: { search?: string; category?: string; paid?: boolean; start_date?: string; end_date?: string }) {
+async function getAllExpenses(params?: { search?: string; category?: string; paid?: boolean; start_date?: string; end_date?: string; page?: number }) {
   const searchParams = new URLSearchParams();
   if (params?.search) searchParams.append("search", params.search);
   if (params?.category) searchParams.append("category", params.category);
   if (params?.paid !== undefined) searchParams.append("paid", String(params.paid));
   if (params?.start_date) searchParams.append("start_date", params.start_date);
   if (params?.end_date) searchParams.append("end_date", params.end_date);
+  if (params?.page) searchParams.append("page", String(params.page));
   const url = `/api/finance/expenses/${searchParams.toString() ? `?${searchParams}` : ""}`;
   return apiFetch<PaginatedResponse<Expense>>(url);
 }
@@ -108,13 +109,13 @@ async function recordExpensePayment(id: string, paymentData: { payment_date: str
 // REACT HOOKS
 // ============================================
 
-export function useExpenses(filters?: { search?: string; category?: string; paid?: boolean; start_date?: string; end_date?: string }) {
-  return useQuery({
+export function useExpenses(filters?: { search?: string; category?: string; paid?: boolean; start_date?: string; end_date?: string; page?: number }) {
+  const query = useQuery({
     queryKey: [EXPENSES_KEY, filters],
     queryFn: () => getAllExpenses(filters),
-    select: (data) => data.results,
     staleTime: 30_000,
   });
+  return { ...query, data: query.data?.results ?? [], totalCount: query.data?.count ?? 0 };
 }
 
 export function useExpense(id: string | null) {

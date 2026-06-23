@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
 import { useBudgets, useDeleteBudget } from "@/hooks/finance/useBudgets";
 import { useAccounts, accountTypeOptions } from "@/hooks/finance/useAccounts";
@@ -9,6 +9,7 @@ import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
 import BudgetFormModal from "@/components/finance/budgets/BudgetFormModal";
+import { usePagination } from "@/hooks/usePagination";
 
 export default function BudgetsPage() {
     const formatCurrency = useFormatCurrency();
@@ -16,13 +17,18 @@ export default function BudgetsPage() {
   const [editingBudget, setEditingBudget] = useState<any>(null);
   const [year, setYear] = useState(new Date().getFullYear());
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const { data: accounts } = useAccounts();
-  const accountOptions = (accounts || []).map(a => ({ value: a.id, label: `${a.code} - ${a.name}` }));
-  const { data: budgets, isLoading } = useBudgets({
+  const pagination = usePagination();
+
+  const filtersWithPage = useMemo(() => ({
     year,
     account_id: filters.account_id || undefined,
     period_type: filters.period_type || undefined,
-  });
+    page: pagination.page,
+  }), [year, filters.account_id, filters.period_type, pagination.page]);
+
+  const { data: accounts } = useAccounts();
+  const accountOptions = (accounts || []).map(a => ({ value: a.id, label: `${a.code} - ${a.name}` }));
+  const { data: budgets, isLoading, totalCount } = useBudgets(filtersWithPage);
   const deleteBudget = useDeleteBudget();
   const permissions = useFeaturePermissions("FINANCE", "budget");
 
@@ -68,6 +74,9 @@ export default function BudgetsPage() {
         description="Set and track budget amounts per account"
         data={budgets || []}
         isLoading={isLoading}
+        totalCount={totalCount}
+        currentPage={pagination.page}
+        onPageChange={pagination.setPage}
         columns={columns}
         kpis={computeKPIs}
         getRowId={(b) => b.id}
@@ -88,7 +97,7 @@ export default function BudgetsPage() {
               <FilterBar
                 fields={filterFields}
                 filters={filters}
-                onChange={setFilters}
+                onChange={(f) => { setFilters(f); pagination.resetPage(); }}
               />
             </div>
             <input

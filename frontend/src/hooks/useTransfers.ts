@@ -44,22 +44,24 @@ interface CreateTransferPayload {
   notes?: string;
 }
 
-export function useTransfers(filters?: { status?: string; variant_id?: string; source_warehouse?: string; destination_warehouse?: string }) {
+export function useTransfers(filters?: { status?: string; variant_id?: string; source_warehouse?: string; destination_warehouse?: string; page?: number }) {
   const api = useApi();
   const params = new URLSearchParams();
   if (filters?.status) params.append("status", filters.status);
   if (filters?.variant_id) params.append("variant_id", filters.variant_id);
   if (filters?.source_warehouse) params.append("source_warehouse", filters.source_warehouse);
   if (filters?.destination_warehouse) params.append("destination_warehouse", filters.destination_warehouse);
+  if (filters?.page) params.append("page", String(filters.page));
   const queryString = params.toString();
   const url = `/api/inventory/transfers/${queryString ? `?${queryString}` : ""}`;
 
-  return useQuery<PaginatedResponse<StockTransfer>, Error, StockTransfer[]>({
+  const query = useQuery<PaginatedResponse<StockTransfer>>({
     queryKey: ["inventory_stock_transfer", filters],
     queryFn: () => api<PaginatedResponse<StockTransfer>>(url),
-    select: (data) => data.results,
     staleTime: 30 * 1000,
   });
+
+  return { ...query, data: query.data?.results ?? [], totalCount: query.data?.count ?? 0 };
 }
 
 export function useTransfer(id: string | null) {

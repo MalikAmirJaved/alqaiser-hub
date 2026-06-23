@@ -11,7 +11,7 @@ import ConfirmationModal, { useConfirmationModal } from "@/components/reuseable/
 import {
   Search, Plus, RefreshCw, Trash2, Pencil, LogOut, Briefcase,
   AlertTriangle, Clock, CheckCircle2, X, FileText, ShieldCheck,
-  Eye, Loader2, RotateCcw, DollarSign
+  Eye, Loader2, RotateCcw, DollarSign, ChevronLeft, ChevronRight
 } from "lucide-react";
 import {
   useExitRecords,
@@ -71,6 +71,10 @@ export default function ExitManagementPage() {
   const [editingRecord, setEditingRecord] = useState<ExitRecord | null>(null);
   const [settlementDialog, setSettlementDialog] = useState<{ recordId: string; status: string } | null>(null);
   const [settlementReason, setSettlementReason] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+
+  useEffect(() => { setPage(1); }, [query, filterStatus, filterReason]);
 
   // Asset return modal state
   const [assetReturnExitId, setAssetReturnExitId] = useState<string | null>(null);
@@ -97,6 +101,10 @@ export default function ExitManagementPage() {
       return matchesSearch && matchesStatus && matchesReason;
     });
   }, [records, query, filterStatus, filterReason]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRecords.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const paginatedRecords = filteredRecords.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const handleSave = async (data: Partial<ExitRecord>) => {
     try {
@@ -282,7 +290,7 @@ export default function ExitManagementPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredRecords.map(r => (
+                {paginatedRecords.map(r => (
                   <tr key={r.id} className="border-t border-border hover:bg-muted/30">
                     <td className="px-4 py-2.5">
                       <Checkbox
@@ -456,8 +464,29 @@ export default function ExitManagementPage() {
           </div>
         )}
 
-        <div className="p-3 border-t border-border text-xs text-muted-foreground text-center">
-          Showing {filteredRecords.length} of {records.length} records
+        <div className="p-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+          <span>
+            {filteredRecords.length === 0 ? 0 : (safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filteredRecords.length)} of {filteredRecords.length} records
+          </span>
+          {filteredRecords.length > pageSize && (
+            <div className="flex items-center gap-2">
+              <span>Page {safePage} of {totalPages}</span>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={safePage <= 1}
+                className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setPage(p => p + 1)}
+                disabled={safePage >= totalPages}
+                className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

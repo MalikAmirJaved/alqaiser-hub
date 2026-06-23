@@ -35,21 +35,25 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-export function useLeads(filters?: { status?: string; search?: string }) {
+export function useLeads(filters?: { status?: string; search?: string; page?: string }) {
   const api = useApi();
   const searchParams = new URLSearchParams();
   if (filters?.status) searchParams.append("status", filters.status);
   if (filters?.search) searchParams.append("search", filters.search);
+  if (filters?.page) searchParams.append("page", filters.page);
   const url = `/api/sales/leads/${searchParams.toString() ? `?${searchParams}` : ""}`;
 
-  return useQuery({
+  const query = useQuery<PaginatedResponse<Lead>>({
     queryKey: ["sales_leads", filters],
-    queryFn: async () => {
-      const resp = await api<PaginatedResponse<Lead>>(url);
-      return resp.results;
-    },
+    queryFn: () => api<PaginatedResponse<Lead>>(url),
     staleTime: 30_000,
   });
+
+  return {
+    ...query,
+    data: query.data?.results ?? [],
+    totalCount: query.data?.count ?? 0,
+  };
 }
 
 export function useLead(id: string | null) {

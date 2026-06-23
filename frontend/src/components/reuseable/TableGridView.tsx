@@ -29,6 +29,9 @@ export function TableView<T extends Record<string, unknown>>({
   className,
   stickyHeader = true,
   defaultPageSize = 20,
+  totalCount,
+  currentPage,
+  onPageChange,
 }: {
   columns: Column<T>[];
   data: T[];
@@ -41,13 +44,20 @@ export function TableView<T extends Record<string, unknown>>({
   className?: string;
   stickyHeader?: boolean;
   defaultPageSize?: number;
+  totalCount?: number;
+  currentPage?: number;
+  onPageChange?: (page: number) => void;
 }) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [page, setPage] = useState(1);
+  const [localPage, setLocalPage] = useState(1);
+
+  const isServerPaginated = totalCount !== undefined && currentPage !== undefined && onPageChange !== undefined;
+  const page = isServerPaginated ? currentPage : localPage;
+  const setPage = isServerPaginated ? onPageChange : setLocalPage;
 
   // Reset page when data changes
-  useEffect(() => { setPage(1); }, [data]);
+  useEffect(() => { if (!isServerPaginated) setLocalPage(1); }, [data, isServerPaginated]);
 
   function handleSort(key: string) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -83,9 +93,10 @@ export function TableView<T extends Record<string, unknown>>({
   }, [data, sortKey, sortDir]);
 
   // Paginate after sorting
-  const totalPages = Math.max(1, Math.ceil(sortedData.length / defaultPageSize));
-  const safePage = Math.min(page, totalPages);
-  const paginatedData = sortedData.slice((safePage - 1) * defaultPageSize, safePage * defaultPageSize);
+  const effectiveTotal = isServerPaginated ? (totalCount ?? 0) : sortedData.length;
+  const totalPages = Math.max(1, Math.ceil(effectiveTotal / defaultPageSize));
+  const safePage = isServerPaginated ? Math.min(page, totalPages) : Math.min(page, totalPages);
+  const paginatedData = isServerPaginated ? sortedData : sortedData.slice((safePage - 1) * defaultPageSize, safePage * defaultPageSize);
 
   // Get the original index for a sorted item
   const getOriginalIndex = (sortedIndex: number) => {
@@ -237,22 +248,25 @@ export function TableView<T extends Record<string, unknown>>({
           </tbody>
         </table>
       </div>
-      {sortedData.length > defaultPageSize && (
+      {effectiveTotal > defaultPageSize && (
         <div className="flex items-center justify-between px-4 py-3 border-t border-border text-xs text-muted-foreground">
           <span>
-            {(safePage - 1) * defaultPageSize + 1}–{Math.min(safePage * defaultPageSize, sortedData.length)} of {sortedData.length}
+            {isServerPaginated
+              ? `${(safePage - 1) * defaultPageSize + 1}–${Math.min(safePage * defaultPageSize, effectiveTotal)} of ${effectiveTotal}`
+              : `${(safePage - 1) * defaultPageSize + 1}–${Math.min(safePage * defaultPageSize, sortedData.length)} of ${sortedData.length}`
+            }
           </span>
           <div className="flex items-center gap-2">
             <span>Page {safePage} of {totalPages}</span>
             <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
+              onClick={() => setPage(safePage - 1)}
               disabled={safePage <= 1}
               className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
-              onClick={() => setPage(p => p + 1)}
+              onClick={() => setPage(safePage + 1)}
               disabled={safePage >= totalPages}
               className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >

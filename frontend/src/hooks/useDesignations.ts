@@ -35,22 +35,24 @@ export interface DesignationEmployee {
 }
 
 // Fetch all designations
-export function useDesignations(filters?: Record<string, string>) {
+export function useDesignations(filters?: { search?: string; department?: string; is_active?: boolean; page?: number }) {
   const api = useApi();
-  const queryString = filters && Object.keys(filters).length > 0
-    ? '?' + new URLSearchParams(filters).toString()
-    : '';
-  return useQuery<Designation[]>({
+  const params = new URLSearchParams();
+  if (filters?.search) params.append("search", filters.search);
+  if (filters?.department) params.append("department", filters.department);
+  if (filters?.is_active !== undefined) params.append("is_active", String(filters.is_active));
+  if (filters?.page) params.append("page", String(filters.page));
+  const queryString = params.toString() ? '?' + params.toString() : '';
+  const query = useQuery<{ count: number; results: Designation[] }>({
     queryKey: ["designations", filters],
     queryFn: async () => {
-      const response = await api(`/api/company/designations/${queryString}`) as any;
-      // If response has 'results' property (paginated), return that, else assume array
-      return response.results ?? response;
+      return await api(`/api/company/designations/${queryString}`);
     },
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
   });
+  return { ...query, data: query.data?.results ?? [], totalCount: query.data?.count ?? 0 };
 }
 
 

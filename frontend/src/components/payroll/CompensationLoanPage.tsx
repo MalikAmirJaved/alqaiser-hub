@@ -1,7 +1,7 @@
 // components/payroll/CompensationLoanPage.tsx
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useActiveEmployees } from "@/hooks/useEmployees";
 import {
   useCompensations,
@@ -16,7 +16,7 @@ import {
 } from "@/hooks/usePayroll";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { HandCoins, TrendingUp, Plus, Search } from "lucide-react";
+import { HandCoins, TrendingUp, Plus, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import CompensationForm from "./CompensationForm";
 import LoanForm from "./LoanForm";
@@ -52,6 +52,12 @@ export default function CompensationLoanPage({
   const [loanValidationErrors, setLoanValidationErrors] = useState<string[]>([]);
   const [payLoanModalOpen, setPayLoanModalOpen] = useState(false);
   const [payLoanItem, setPayLoanItem] = useState<any>(null);
+  const [compPage, setCompPage] = useState(1);
+  const [loanPage, setLoanPage] = useState(1);
+  const pageSize = 20;
+
+  useEffect(() => { setCompPage(1); }, [searchQuery]);
+  useEffect(() => { setLoanPage(1); }, [searchQuery, statusFilter]);
 
   const { data: employees = [] } = useActiveEmployees();
   const { data: compensations = [] } = useCompensations();
@@ -318,6 +324,15 @@ export default function CompensationLoanPage({
       (l) => statusFilter === "all" || l.status === statusFilter
     );
 
+  // Pagination
+  const compTotalPages = Math.max(1, Math.ceil(filteredCompensations.length / pageSize));
+  const compSafePage = Math.min(compPage, compTotalPages);
+  const paginatedCompensations = filteredCompensations.slice((compSafePage - 1) * pageSize, compSafePage * pageSize);
+
+  const loanTotalPages = Math.max(1, Math.ceil(filteredLoans.length / pageSize));
+  const loanSafePage = Math.min(loanPage, loanTotalPages);
+  const paginatedLoans = filteredLoans.slice((loanSafePage - 1) * pageSize, loanSafePage * pageSize);
+
   // -----------------------------
   // UI
   // -----------------------------
@@ -386,7 +401,7 @@ export default function CompensationLoanPage({
         {/* Tabs */}
         <TabsContent value="compensation">
           <CompensationTab
-            filteredCompensations={filteredCompensations}
+            filteredCompensations={paginatedCompensations}
             formatCurrency={formatCurrency}
             onEdit={
               permissions.update_compensation
@@ -409,11 +424,25 @@ export default function CompensationLoanPage({
                 : undefined
             }
           />
+          {filteredCompensations.length > pageSize && (
+            <div className="flex items-center justify-between mt-3 px-4 py-2 text-xs text-muted-foreground">
+              <span>{(compSafePage - 1) * pageSize + 1}–{Math.min(compSafePage * pageSize, filteredCompensations.length)} of {filteredCompensations.length}</span>
+              <div className="flex items-center gap-2">
+                <span>Page {compSafePage} of {compTotalPages}</span>
+                <button onClick={() => setCompPage(p => Math.max(1, p - 1))} disabled={compSafePage <= 1} className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button onClick={() => setCompPage(p => p + 1)} disabled={compSafePage >= compTotalPages} className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="loans">
           <LoanTab
-            filteredLoans={filteredLoans}
+            filteredLoans={paginatedLoans}
             formatCurrency={formatCurrency}
             onConfirm={
               permissions.approve_loan
@@ -431,6 +460,20 @@ export default function CompensationLoanPage({
                 : undefined
             }
           />
+          {filteredLoans.length > pageSize && (
+            <div className="flex items-center justify-between mt-3 px-4 py-2 text-xs text-muted-foreground">
+              <span>{(loanSafePage - 1) * pageSize + 1}–{Math.min(loanSafePage * pageSize, filteredLoans.length)} of {filteredLoans.length}</span>
+              <div className="flex items-center gap-2">
+                <span>Page {loanSafePage} of {loanTotalPages}</span>
+                <button onClick={() => setLoanPage(p => Math.max(1, p - 1))} disabled={loanSafePage <= 1} className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button onClick={() => setLoanPage(p => p + 1)} disabled={loanSafePage >= loanTotalPages} className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 

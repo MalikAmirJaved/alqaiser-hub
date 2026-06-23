@@ -119,6 +119,13 @@ export interface ActiveEmployee {
   updatedAt?: string;
 }
 
+interface PaginatedResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
 // Fetch only active employees (for dropdowns)
 export function useActiveEmployees() {
   const api = useApi();
@@ -155,14 +162,19 @@ export function useEmployees(params?: Record<string, string>) {
     ? "?" + new URLSearchParams(apiParams).toString()
     : "";
 
-  return useQuery<Employee[]>({
+  const query = useQuery<PaginatedResponse<Employee>>({
     queryKey: ["employees", apiParams],
     queryFn: () => api(`/api/hr/employees/${queryString}`),
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
-    placeholderData: (previousData) => previousData,
   });
+
+  return {
+    ...query,
+    data: query.data?.results ?? [],
+    totalCount: query.data?.count ?? 0,
+  };
 }
 
 // Fetch employee stats

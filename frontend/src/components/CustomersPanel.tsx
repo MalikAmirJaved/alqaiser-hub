@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useCustomers, useDeleteCustomer, Customer, useCreateCustomer, useUpdateCustomer } from "@/hooks/useCustomers";
 import { TableView, type Column } from "@/components/reuseable/TableGridView";
@@ -9,6 +9,7 @@ import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import { Plus, Eye, Edit, Trash2 } from "lucide-react";
 import CustomerForm from "@/components/inventory/customers/CustomerForm";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { usePagination } from "@/hooks/usePagination";
 
 interface CustomersPanelProps {
   moduleCode: "INVENTORY" | "SALES";
@@ -20,7 +21,15 @@ export default function CustomersPanel({ moduleCode }: CustomersPanelProps) {
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const { data: customers = [], isLoading, refetch } = useCustomers(search);
+  const pagination = usePagination();
+
+  const customerFilters = useMemo(() => {
+    const f: Record<string, string> = { page: String(pagination.page) };
+    if (search) f.search = search;
+    return f;
+  }, [search, pagination.page]);
+
+  const { data: customers = [], isLoading, refetch, totalCount } = useCustomers(customerFilters);
   const createCustomer = useCreateCustomer();
   const updateCustomer = useUpdateCustomer();
   const deleteCustomer = useDeleteCustomer();
@@ -106,7 +115,7 @@ export default function CustomersPanel({ moduleCode }: CustomersPanelProps) {
           type="text"
           placeholder="Search by name or email..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); pagination.resetPage(); }}
           className="max-w-sm rounded-lg border border-border bg-background px-3 py-2 text-sm"
         />
       </div>
@@ -116,6 +125,9 @@ export default function CustomersPanel({ moduleCode }: CustomersPanelProps) {
         data={customers}
         loading={isLoading}
         onRowClick={(row) => router.push(`${detailPathPrefix}/${row.id}`)}
+        totalCount={totalCount}
+        currentPage={pagination.page}
+        onPageChange={pagination.setPage}
         actions={(row) => (
           <>
             <button onClick={(e) => { e.stopPropagation(); router.push(`${detailPathPrefix}/${row.id}`); }} className="p-1 rounded hover:bg-muted">
