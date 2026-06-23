@@ -385,9 +385,28 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
         paginator = Paginator(products_qs, page_size)
         page_obj = paginator.get_page(page)
 
+        # Calculate total variant count across ALL filtered products (not just current page)
+        if warehouse:
+            has_variant_stock_all = Exists(
+                StockItem.objects.filter(
+                    variant=OuterRef('pk'),
+                    warehouse=warehouse,
+                    company_id=company_id,
+                )
+            )
+            total_variant_count = ProductVariant.objects.filter(
+                has_variant_stock_all,
+                product__in=products_qs,
+                company_id=company_id,
+            ).count()
+        else:
+            total_variant_count = ProductVariant.objects.filter(
+                product__in=products_qs,
+                company_id=company_id,
+            ).count()
+
         # Build response with variants and stock data
         result = []
-        total_variant_count = 0
         for product in page_obj:
             # Filter variants by warehouse stock when warehouse is selected
             if warehouse:
@@ -462,7 +481,6 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
 
             # Count variants for this product (already filtered by warehouse above)
             product_variant_count = len(variants_data)
-            total_variant_count += product_variant_count
 
             result.append({
                 'id': str(product._id),

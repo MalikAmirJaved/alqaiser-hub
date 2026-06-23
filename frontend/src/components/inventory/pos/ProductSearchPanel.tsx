@@ -34,6 +34,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
   const sentinelRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevFiltersRef = useRef({ warehouseId, debouncedSearch, categoryId, brandId });
+  const loadingRef = useRef(false);
 
   const resetInfiniteScroll = useCallback(() => {
     setPage(1);
@@ -72,26 +73,30 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
       setHasMore(true);
       setTotalCount(0);
       setTotalVariantCount(0);
+      loadingRef.current = false;
     }
 
-    if (catalogResponse?.results && catalogResponse.page === page) {
-      const newProducts = catalogResponse.results;
-      const newVariants = newProducts.flatMap(p =>
-        p.variants.map(v => ({ ...v, product_name: p.product_name, product_id: p.id }))
-      );
+    if (catalogResponse?.results) {
+      if (catalogResponse.page === page) {
+        const newProducts = catalogResponse.results;
+        const newVariants = newProducts.flatMap(p =>
+          p.variants.map(v => ({ ...v, product_name: p.product_name, product_id: p.id }))
+        );
 
-      if (page === 1) {
-        setAllProducts(newProducts);
-        setAllVariants(newVariants);
-      } else {
-        setAllProducts(prev => [...prev, ...newProducts]);
-        setAllVariants(prev => [...prev, ...newVariants]);
+        if (page === 1) {
+          setAllProducts(newProducts);
+          setAllVariants(newVariants);
+        } else {
+          setAllProducts(prev => [...prev, ...newProducts]);
+          setAllVariants(prev => [...prev, ...newVariants]);
+        }
+
+        setTotalCount(catalogResponse.count);
+        setTotalVariantCount(catalogResponse.variant_count ?? 0);
+        const totalPages = Math.ceil(catalogResponse.count / PAGE_SIZE);
+        setHasMore(page < totalPages);
       }
-
-      setTotalCount(catalogResponse.count);
-      setTotalVariantCount(catalogResponse.variant_count ?? 0);
-      const totalPages = Math.ceil(catalogResponse.count / PAGE_SIZE);
-      setHasMore(page < totalPages);
+      loadingRef.current = false;
     }
   }, [catalogResponse, page, warehouseId, debouncedSearch, categoryId, brandId]);
 
@@ -101,8 +106,10 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
     if (!container || !hasMore || isFetching) return;
 
     const handleScroll = () => {
+      if (loadingRef.current) return;
       const { scrollTop, scrollHeight, clientHeight } = container;
       if (scrollHeight - scrollTop - clientHeight < 400) {
+        loadingRef.current = true;
         setPage(p => p + 1);
       }
     };
@@ -317,7 +324,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
                       </div>
                     )}
 
-                    {!hasMore && allVariants.length > 0 && (
+                    {!hasMore && allVariants.length >= totalVariantCount && allVariants.length > 0 && (
                       <div className="text-center text-xs text-muted-foreground py-4">
                         Showing all {totalVariantCount} variants
                       </div>
