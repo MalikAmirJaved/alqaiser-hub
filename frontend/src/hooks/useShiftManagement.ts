@@ -93,8 +93,9 @@ export interface ResolvedShiftsResponse {
 }
 
 // Get resolved shifts for employees
+// When employeeIds is empty, returns shifts for ALL employees (server-side)
 export function useResolvedShifts(
-  employeeIds: string[], 
+  employeeIds: string[] = [], 
   date?: string, 
   startDate?: string, 
   endDate?: string
@@ -112,7 +113,7 @@ export function useResolvedShifts(
   return useQuery<ResolvedShiftsResponse>({
     queryKey,
     queryFn: () => api(`/api/hr/shifts/resolve/?${params.toString()}`),
-    enabled: employeeIds.length > 0 && !!(date || (startDate && endDate)),
+    enabled: !!(date || (startDate && endDate)),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }

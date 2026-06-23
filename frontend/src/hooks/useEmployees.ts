@@ -139,7 +139,7 @@ export function useActiveEmployees() {
 }
 
 // Fetch all employees
-export function useEmployees(params?: Record<string, string>) {
+export function useEmployees(params?: Record<string, string>, options?: { enabled?: boolean }) {
   const api = useApi();
 
   const paramMap: Record<string, string> = {
@@ -147,7 +147,9 @@ export function useEmployees(params?: Record<string, string>) {
     designation_id: "designation",
   };
 
-  const apiParams = params
+  const enabled = options?.enabled !== false;
+
+  const apiParams = enabled && params
     ? Object.fromEntries(
         Object.entries(params).map(([key, value]) => [
           paramMap[key] || key,
@@ -166,6 +168,7 @@ export function useEmployees(params?: Record<string, string>) {
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
+    enabled: enabled,
   });
 
   return {
