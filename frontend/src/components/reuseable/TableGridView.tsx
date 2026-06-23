@@ -25,6 +25,7 @@ export function TableView<T extends Record<string, unknown>>({
   onRowSelect,
   onRowClick,
   actions,
+  actionsWidth,
   emptyMessage = "No data found",
   className,
   stickyHeader = true,
@@ -40,6 +41,7 @@ export function TableView<T extends Record<string, unknown>>({
   onRowSelect?: (rows: Set<number>) => void;
   onRowClick?: (row: T, idx: number) => void;
   actions?: (row: T, idx: number) => React.ReactNode;
+  actionsWidth?: string;
   emptyMessage?: string;
   className?: string;
   stickyHeader?: boolean;
@@ -173,7 +175,7 @@ export function TableView<T extends Record<string, unknown>>({
                   </span>
                 </th>
               ))}
-              {actions && <th className="px-4 py-3 text-right text-[var(--muted-foreground)]">Actions</th>}
+              {actions && <th className="px-4 py-3 text-right text-[var(--muted-foreground)]" style={{ width: actionsWidth }}>Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border)]">
@@ -186,7 +188,7 @@ export function TableView<T extends Record<string, unknown>>({
                       <div className="h-4 rounded bg-[var(--muted)] animate-pulse" style={{ width: `${60 + Math.random() * 40}%` }} />
                     </td>
                   ))}
-                  {actions && <td className="px-4 py-3"><div className="h-4 w-16 rounded bg-[var(--muted)] animate-pulse ml-auto" /></td>}
+                  {actions && <td className="px-4 py-3" style={{ width: actionsWidth }}><div className="h-4 w-16 rounded bg-[var(--muted)] animate-pulse ml-auto" /></td>}
                 </tr>
               ))
             ) : paginatedData.length === 0 ? (
@@ -234,7 +236,7 @@ export function TableView<T extends Record<string, unknown>>({
                       </td>
                     ))}
                     {actions && (
-                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-4 py-3 text-right truncate max-w-0" onClick={(e) => e.stopPropagation()} style={{ width: actionsWidth }}>
                         <div className="flex items-center justify-end gap-1">
                           {actions(row, originalIdx)}
                         </div>

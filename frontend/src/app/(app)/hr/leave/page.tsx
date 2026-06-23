@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useLeaves, useCreateLeaveRequest, useDeleteLeaveRequest, useApproveLeave, useLeaveStats, LEAVE_TYPES } from "@/hooks/useLeaves";
 import { useActiveEmployees } from "@/hooks/useEmployees";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import { usePagination } from "@/hooks/usePagination";
 import PageHeader from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -59,6 +60,7 @@ export default function LeaveManagementPage() {
   const [selectedLeave, setSelectedLeave] = useState<any>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const pagination = usePagination();
+  const approvalPagination = usePagination();
   const pageSize = 20;
 
   const leaveTypeOptions = LEAVE_TYPES.map(t => ({ value: t.value, label: t.label }));
@@ -70,10 +72,21 @@ export default function LeaveManagementPage() {
     { value: "CANCELLED", label: "Cancelled" },
   ];
 
+  const fetchEmployees = useServerSearch("/api/hr/employees/", {
+    extraParams: { employment_status: "ACTIVE" },
+    transformOption: (e: any) => ({
+      value: e.id,
+      label: `${e.first_name} ${e.last_name || ""} (${e.employee_id || ""})`,
+    }),
+  });
+
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
+    { name: "employee", label: "Employee", type: "select", searchable: true, fetchOptions: fetchEmployees },
     { name: "leave_type", label: "Leave Type", type: "select", options: leaveTypeOptions },
     { name: "status", label: "Status", type: "status", options: leaveStatusOptions },
+    { name: "start_date__gte", label: "From Date", type: "date" },
+    { name: "end_date__lte", label: "To Date", type: "date" },
   ];
 
     const permissions = useSelector(
@@ -93,6 +106,19 @@ const leavePermissions = getPermissions(
 
   // Fetch data with React Query
   const { data: leaves = [], totalCount, currentPage, refetch: refetchLeaves, isLoading: leavesLoading } = useLeaves(apiParams);
+
+  // Separate query for Approvals tab — fetches only PENDING leaves with correct server-side pagination
+  const approvalApiParams = useMemo(() => {
+    const params: Record<string, string> = {
+      ...filters,
+      status: "PENDING",
+      page: String(approvalPagination.page),
+      page_size: String(pageSize),
+    };
+    return Object.keys(filters).length > 0 ? params : { status: "PENDING", page: String(approvalPagination.page), page_size: String(pageSize) };
+  }, [filters, approvalPagination.page, pageSize]);
+
+  const { data: pendingLeaves = [], totalCount: pendingTotalCount, currentPage: pendingCurrentPage, isLoading: pendingLoading } = useLeaves(approvalApiParams);
   const { data: employees = [] } = useActiveEmployees();
   const { data: stats, refetch: refetchStats } = useLeaveStats();
 
@@ -113,7 +139,7 @@ const leavePermissions = getPermissions(
   };
 
   const getPendingApprovals = () => {
-    return leaves.filter((l: any) => l.status === "PENDING");
+    return pendingLeaves;
   };
 
   const getAllLeavesForAdmin = () => {
@@ -308,9 +334,10 @@ const leavePermissions = getPermissions(
       key: "dates", 
       label: "Dates", 
       sortable: false,
+      width: "250px",
       render: (_: unknown, row: any) => `${row.start_date} → ${row.end_date}`
     },
-    { key: "total_days", label: "Days", sortable: true },
+    { key: "total_days", label: "Days", sortable: true,width: "80px", },
     { 
       key: "reason", 
       label: "Reason", 
@@ -325,6 +352,7 @@ const leavePermissions = getPermissions(
       key: "applied_at",
       label: "Applied On",
       sortable: true,
+      width: "200px",
       render: (value: unknown) => formatDateTime(String(value))
     },
   ];
@@ -433,7 +461,7 @@ const leavePermissions = getPermissions(
         <FilterBar
           fields={filterFields}
           filters={filters}
-          onChange={(f) => { setFilters(f); pagination.resetPage(); }}
+          onChange={(f) => { setFilters(f); pagination.resetPage(); approvalPagination.resetPage(); }}
         />
       </div>
 
@@ -523,11 +551,12 @@ const leavePermissions = getPermissions(
             <TableView
               columns={approvalsColumns}
               data={pendingApprovals}
-              loading={leavesLoading}
+              loading={pendingLoading || leavesLoading}
               emptyMessage="No pending leave requests."
-              totalCount={totalCount}
-              currentPage={currentPage}
-              onPageChange={pagination.setPage}
+              totalCount={pendingTotalCount}
+              currentPage={pendingCurrentPage}
+              onPageChange={approvalPagination.setPage}
+              actionsWidth={"250px"}
               actions={(row) => (
                 <ApprovalActions
                   onApprove={() => handleApproval(row.id, "APPROVED")}

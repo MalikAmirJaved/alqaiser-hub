@@ -24,7 +24,7 @@ class LeaveRequestView(CompanyBranchMixin, PermissionRequiredMixin, FilterPagina
     permission_module = 'HR'
     permission_resource = 'leave'
     filterset_class = LeaveRequestFilter
-    search_fields = ['reason']
+    search_fields = ['reason', 'employee__first_name', 'employee__last_name']
     ordering_fields = ['applied_at', 'start_date', 'end_date', 'created_at']
     ordering = ['-applied_at']
     
