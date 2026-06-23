@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { X, Plus } from "lucide-react";
 import { useCreateDesignation, useUpdateDesignation, type Designation } from "@/hooks/useDesignations";
 import DepartmentFormModal from "@/components/settings/departments/DepartmentFormModal";
-import { useDepartments } from "@/hooks/useDepartments";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
 interface DesignationFormData {
@@ -20,16 +20,19 @@ export default function DesignationFormModal({
   onClose,
   initialData,
   onSuccess,
-  departmentOptions,
 }: {
   open: boolean;
   onClose: () => void;
   initialData?: Designation | null;
   onSuccess?: () => void;
-  departmentOptions: { value: string; label: string }[];
 }) {
   const [deptModalOpen, setDeptModalOpen] = useState(false);
-  const { refetch: refetchDepartments } = useDepartments();
+  const fetchDepartments = useServerSearch("/api/organization/departments/", {
+    transformOption: (d: any) => ({
+      value: d.id,
+      label: d.name,
+    }),
+  });
 
   const { register, handleSubmit, reset, setValue, watch } = useForm<DesignationFormData>({
     defaultValues: {
@@ -104,8 +107,8 @@ export default function DesignationFormModal({
             <SearchableSelect
               value={watch("department") || ""}
               onChange={(val) => setValue("department", val)}
-              options={[{ value: "ALL", label: "All Departments" }, ...departmentOptions]}
-              placeholder="Select Department"
+              fetchOptions={fetchDepartments}
+              placeholder="Search departments..."
             />
           </div>
           <div>
@@ -138,7 +141,7 @@ export default function DesignationFormModal({
       <DepartmentFormModal
         open={deptModalOpen}
         onClose={() => setDeptModalOpen(false)}
-        onSuccess={() => { refetchDepartments(); setDeptModalOpen(false); }}
+        onSuccess={() => setDeptModalOpen(false)}
       />
     </div>
   );

@@ -598,7 +598,6 @@ const leavePermissions = getPermissions(
           isOpen={isApplyOpen}
           onClose={() => setIsApplyOpen(false)}
           onSubmit={handleApply}
-          employees={employees}
           isSubmitting={createLeave.isPending}
         />
       )}

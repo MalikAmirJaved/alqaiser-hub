@@ -6,6 +6,7 @@ import { usePolicies, usePolicyStats, useCreatePolicy, useUpdatePolicy, useDelet
 import type { PolicyRecord, PolicyFilters, PolicyFormData, BulkActionPayload } from "@/hooks/usePolicies";
 import PageHeader from "@/components/PageHeader";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import { ConfirmationModal, useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import {
   Search, Plus, Pencil, Trash2, FileText,
@@ -485,7 +486,13 @@ function PolicyFormModal({
   isSaving?: boolean;
 }) {
   const { generateCode, validateCode } = useAutoCode("policy", "POL");
-  const { options: departmentOptions, isLoading: deptsLoading } = useDepartmentOptions();
+
+  const fetchDepartments = useServerSearch("/api/organization/departments/", {
+    transformOption: (dept: any) => ({
+      value: dept.id,
+      label: dept.name,
+    }),
+  });
 
   const [codeLoading, setCodeLoading] = useState(false);
 
@@ -529,8 +536,6 @@ function PolicyFormModal({
     
     onSubmit(formData, isEditing);
   };
-
-  const allDeptOptions = [{ value: "", label: "All Departments" }, ...departmentOptions];
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4 overflow-y-auto">
@@ -621,8 +626,8 @@ function PolicyFormModal({
                 <SearchableSelect 
                   value={formData.department || ""} 
                   onChange={v => setFormData({...formData, department: v || null})} 
-                  options={allDeptOptions}
-                  disabled={deptsLoading}
+                  fetchOptions={fetchDepartments}
+                  placeholder="Search departments..."
                 />
               </label>
               <label className="text-sm flex flex-col gap-1">

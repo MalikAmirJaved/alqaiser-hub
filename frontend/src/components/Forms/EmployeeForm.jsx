@@ -6,14 +6,10 @@
 
 import { useEffect, useState } from "react";
 import { X, Users, Building2, Briefcase, UserCog, Clock, RotateCw, FileText } from "lucide-react";
-import { useShiftTemplates } from "@/hooks/useShiftTemplates";
-import { useAssetCategories } from "@/hooks/useAssetCategories";
-import { useDesignations } from "@/hooks/useDesignations";
-import { useActiveEmployees } from "@/hooks/useEmployees";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import { LocationGroup } from "../reuseable/LocationSelectors";
 import SearchableSelect from "../reuseable/SearchableSelect";
 import { DatePicker } from "@/components/reuseable/DatePicker";
-import { useDepartments } from "@/hooks/useDepartments";
 import DepartmentFormModal from "@/components/settings/departments/DepartmentFormModal";
 import DesignationFormModal from "@/components/settings/designations/DesignationFormModal";
 import { useAutoCode } from "@/hooks/useAutoCode";
@@ -65,19 +61,42 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
   const { generateCode, validateCode } = useAutoCode("employee");
   const [deptModalOpen, setDeptModalOpen] = useState(false);
   const [desigModalOpen, setDesigModalOpen] = useState(false);
-  // Departments
-  const { data: departments = [], refetch: refetchDepartments } = useDepartments();
-  const departmentOptions = departments
-    .filter(dept => dept.is_active)
-    .map(dept => ({ value: dept.id, label: dept.name }));
 
-  // Designations
-  const { data: designations = [], refetch: refetchDesignations } = useDesignations();
-  const designationOptions = designations.map(d => ({ value: d.id, label: d.name }));
+  const fetchDepartments = useServerSearch("/api/organization/departments/", {
+    transformOption: (dept) => ({
+      value: dept.id,
+      label: dept.name,
+    }),
+  });
 
-  const { data: shiftTemplates = [] } = useShiftTemplates();
-  const { data: assetCategories = [] } = useAssetCategories();
-  const { data: employees = [] } = useActiveEmployees();
+  const fetchDesignations = useServerSearch("/api/company/designations/", {
+    transformOption: (d) => ({
+      value: d.id,
+      label: d.name,
+    }),
+  });
+
+  const fetchShiftTemplates = useServerSearch("/api/hr/shift-templates/", {
+    transformOption: (tpl) => ({
+      value: tpl.id,
+      label: `${tpl.name} (${tpl.start_time || ""} - ${tpl.end_time || ""})`,
+    }),
+  });
+
+  const fetchAssetCategories = useServerSearch("/api/hr/asset-categories/", {
+    transformOption: (c) => ({
+      value: c.id,
+      label: c.name,
+    }),
+  });
+
+  const fetchEmployees = useServerSearch("/api/hr/employees/", {
+    extraParams: { employment_status: "ACTIVE" },
+    transformOption: (e) => ({
+      value: e.id,
+      label: `${e.first_name} ${e.last_name || ""} - ${e.designation_name || "Employee"}`,
+    }),
+  });
 
   // Load initial data
   useEffect(() => {
@@ -94,16 +113,6 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
       generateCode().then(code => setFormData(prev => ({ ...prev, employee_id: code }))).catch(() => {});
     }
   }, [initialData]);
-
-  const getManagerEmployees = () => {
-    return employees.filter(emp =>
-      emp.employment_status === 'ACTIVE' && (
-        emp.designation_name?.toLowerCase().includes('manager') ||
-        emp.designation_name?.toLowerCase().includes('lead') ||
-        emp.designation_name?.toLowerCase().includes('director')
-      )
-    );
-  };
 
   const handleChange = (field, value) => {
     setFormData(prev => ({
@@ -215,9 +224,6 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
         setLoading(false);
     }
 };
-
-  const activeShiftTemplates = shiftTemplates.filter(t => t.is_active);
-  const activeAssetCategories = assetCategories.filter(c => c.isActive);
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4 overflow-y-auto">
@@ -345,7 +351,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
 
                 <label className="text-sm flex flex-col gap-1">
                     <span className="text-muted-foreground text-xs">Department *</span>
-                    <SearchableSelect value={formData.department_id} onChange={(val) => handleChange("department_id", val)} options={departmentOptions} required placeholder="Select Department" onAddNew={() => setDeptModalOpen(true)} addNewLabel="+ New Department" />
+                    <SearchableSelect value={formData.department_id} onChange={(val) => handleChange("department_id", val)} fetchOptions={fetchDepartments} required placeholder="Search departments..." onAddNew={() => setDeptModalOpen(true)} addNewLabel="+ New Department" />
                   </label>
 
                 <label className="text-sm flex flex-col gap-1">
@@ -353,9 +359,9 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                   <SearchableSelect
                     value={formData.designation_id}
                     onChange={(val) => handleChange("designation_id", val)}
-                    options={designationOptions}
+                    fetchOptions={fetchDesignations}
                     disabled={!formData.department_id}
-                    placeholder="Select Designation"
+                    placeholder="Search designations..."
                     onAddNew={() => setDesigModalOpen(true)}
                     addNewLabel="+ New Designation"
                   />
@@ -397,19 +403,19 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
 
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs">Reporting Manager</span>
-                <SearchableSelect value={formData.reporting_manager_id || ""} onChange={(val) => handleChange("reporting_manager_id", val || null)} options={getManagerEmployees().map(emp => ({ value: emp.id, label: `${emp.first_name} ${emp.last_name || ""} - ${emp.designation_name || "Employee"}` }))} placeholder="Select Manager" />
+                <SearchableSelect value={formData.reporting_manager_id || ""} onChange={(val) => handleChange("reporting_manager_id", val || null)} fetchOptions={fetchEmployees} placeholder="Search managers..." />
               </label>
 
               {/* Default Shift Selection */}
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Default Shift</span>
-                <SearchableSelect value={formData.default_shift_id} onChange={(val) => handleChange("default_shift_id", val)} options={activeShiftTemplates.map(tpl => ({ value: tpl.id, label: `${tpl.name} (${tpl.startTime} - ${tpl.endTime})` }))} placeholder="Select default shift (optional)" />
+                <SearchableSelect value={formData.default_shift_id} onChange={(val) => handleChange("default_shift_id", val)} fetchOptions={fetchShiftTemplates} placeholder="Search shifts..." />
               </label>
 
               {/* Asset Kit Selection */}
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs flex items-center gap-1"><Briefcase className="w-3 h-3" /> Default Asset Kit</span>
-                <SearchableSelect value={formData.asset_category_id} onChange={(val) => handleChange("asset_category_id", val)} options={activeAssetCategories.map(c => ({ value: c.id, label: `${c.name} (${c.assetCount} items)` }))} placeholder="Select hardware kit to assign on creation" />
+                <SearchableSelect value={formData.asset_category_id} onChange={(val) => handleChange("asset_category_id", val)} fetchOptions={fetchAssetCategories} placeholder="Search asset kits..." />
               </label>
             </div>
           </div>
@@ -491,14 +497,13 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
       <DepartmentFormModal
         open={deptModalOpen}
         onClose={() => setDeptModalOpen(false)}
-        onSuccess={() => { refetchDepartments(); setDeptModalOpen(false); }}
+        onSuccess={() => setDeptModalOpen(false)}
       />
 
       <DesignationFormModal
         open={desigModalOpen}
         onClose={() => setDesigModalOpen(false)}
-        onSuccess={() => { refetchDesignations(); setDesigModalOpen(false); }}
-        departmentOptions={departmentOptions}
+        onSuccess={() => setDesigModalOpen(false)}
       />
     </div>
   );

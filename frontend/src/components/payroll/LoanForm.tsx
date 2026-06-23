@@ -11,13 +11,11 @@ import { FREQUENCY_TYPES, MONTHS, generateYearOptions, getMonthLabel } from "./t
 interface LoanFormProps {
   formData: any;
   setFormData: (data: any) => void;
-  employeeOptions: Array<{ value: string; label: string }>;
-  employees?: Array<{ id: string; bank_name?: string; bank_account_number?: string; bank_iban?: string }>;
+  fetchEmployeeOptions: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: Array<{ value: string; label: string }>; hasMore: boolean; totalCount: number }>;
   selectedEmployeeSalary: number;
   formatCurrency: (amount: number) => string;
   errors: string[];
   onValidationChange?: (hasErrors: boolean) => void;
-  employeeJoiningDate?: string | null;
 }
 
 function generateMonthList(startMonth: number, startYear: number, endMonth: number, endYear: number) {
@@ -37,13 +35,11 @@ function generateMonthList(startMonth: number, startYear: number, endMonth: numb
 export default function LoanForm({
   formData,
   setFormData,
-  employeeOptions,
-  employees = [],
+  fetchEmployeeOptions,
   selectedEmployeeSalary,
   formatCurrency,
   errors,
   onValidationChange,
-  employeeJoiningDate
 }: LoanFormProps) {
   const [localErrors, setLocalErrors] = useState<string[]>([]);
   const [freqExpanded, setFreqExpanded] = useState(true);
@@ -51,12 +47,12 @@ export default function LoanForm({
   const yearOptions = generateYearOptions();
   const frequencyType = formData.frequency_type || 'MONTH_RANGE';
 
-  // Get joining date components
+  // Get joining date components (optional - for month filtering)
   const joiningDate = useMemo(() => {
-    if (!employeeJoiningDate) return null;
-    const d = new Date(employeeJoiningDate);
+    if (!formData.employee_joining_date) return null;
+    const d = new Date(formData.employee_joining_date);
     return { month: d.getMonth() + 1, year: d.getFullYear() };
-  }, [employeeJoiningDate]);
+  }, [formData.employee_joining_date]);
 
   const principal = parseFloat(formData.principal_amount) || 0;
 
@@ -166,16 +162,7 @@ export default function LoanForm({
     if (currentId === prevEmployeeId.current && hasBankInfo) return;
 
     prevEmployeeId.current = currentId;
-    const employee = employees.find((e: any) => String(e.id) === String(currentId));
-    if (employee) {
-      setFormData({
-        ...formData,
-        bank_name: employee.bank_name || formData.bank_name || "",
-        bank_account_number: employee.bank_account_number || formData.bank_account_number || "",
-        bank_iban: employee.bank_iban || formData.bank_iban || "",
-      });
-    }
-  }, [formData.employee_id, employees]);
+  }, [formData.employee_id]);
 
   // Auto-calculate deduction per month for selected months (totalPayable / num months)
   const selectedMonthDeduction = useMemo(() => {
@@ -283,8 +270,8 @@ export default function LoanForm({
         <SearchableSelect
           value={formData.employee_id || ""}
           onChange={(employeeId) => setFormData({ ...formData, employee_id: employeeId })}
-          options={employeeOptions}
-          placeholder="Select Employee"
+          fetchOptions={fetchEmployeeOptions}
+          placeholder="Search employees..."
           required
         />
         {selectedEmployeeSalary > 0 && (

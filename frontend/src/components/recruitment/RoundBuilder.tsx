@@ -17,7 +17,7 @@ interface Round {
 interface RoundBuilderProps {
   onChange: (rounds: Round[]) => void;
   value?: Round[];
-  employees: any[];
+  fetchEmployees: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
 }
 
 const INTERVIEW_TYPES = [
@@ -32,14 +32,9 @@ const INTERVIEW_TYPES = [
   { value: "OTHER", label: "🔧 Other" },
 ];
 
-export function RoundBuilder({ onChange, value = [], employees }: RoundBuilderProps) {
+export function RoundBuilder({ onChange, value = [], fetchEmployees }: RoundBuilderProps) {
   const [roundCount, setRoundCount] = useState(value.length || 1);
   const [expandedRounds, setExpandedRounds] = useState<number[]>([]);
-
-  const employeeOptions = employees.map(emp => ({
-    value: emp.id.toString(),
-    label: `${emp.first_name} ${emp.last_name || ""} - ${emp.department_name || ""}`
-  }));
 
   const toggleRoundExpand = (roundNum: number) => {
     setExpandedRounds(prev =>
@@ -195,8 +190,8 @@ export function RoundBuilder({ onChange, value = [], employees }: RoundBuilderPr
                     <SearchableSelect
                       value={round.interviewer_id || ""}
                       onChange={(v) => updateRound(round.round_number, "interviewer_id", v ? v : undefined)}
-                      options={employeeOptions}
-                      placeholder="Assign interviewer"
+                      fetchOptions={fetchEmployees}
+                      placeholder="Search employees..."
                     />
                   </label>
 

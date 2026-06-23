@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useEmployees } from "@/hooks/useEmployees";
+import { useEmployee } from "@/hooks/useEmployees";
 import { useLeaves } from "@/hooks/useLeaves";
 import { usePayroll, useEmployeeLoans, useCompensations, computeTotalMonths } from "@/hooks/usePayroll";
 import { useEmployeeAssignments } from "@/hooks/useEmployeeAssets";
@@ -155,8 +155,7 @@ export default function EmployeeDetailPage() {
   const [docViewer, setDocViewer] = useState<{ open: boolean; url: string; filename?: string; mimeType?: string; title?: string }>({ open: false, url: "" });
 
   // ── Data fetching ──────────────────────────────────────────────
-  const { data: employees = [], isLoading: empLoading } = useEmployees();
-  const employee = employees.find((e) => e.id === id);
+  const { data: employee, isLoading: empLoading } = useEmployee(id);
 
   const { data: leaves = [] } = useLeaves(id ? { employee_id: id } : undefined);
   const { data: payrollRecords = [] } = usePayroll(id ? { employee_id: id } : undefined);

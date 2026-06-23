@@ -14,6 +14,7 @@ import {
   Loader2
 } from "lucide-react";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import { toast } from "sonner";
 
 // Import hooks
@@ -78,9 +79,25 @@ export default function ShiftsManagementPage() {
 
   useEffect(() => { setListPage(1); }, [filters.search, filters.department]);
 
-  // Queries
+  // Full data for calendar rendering
   const { data: employees = [], isLoading: employeesLoading } = useActiveEmployees();
   const { data: templates = [], isLoading: templatesLoading } = useShiftTemplates();
+
+  // Server-side search for dropdowns
+  const fetchEmployees = useServerSearch("/api/hr/employees/", {
+    extraParams: { employment_status: "ACTIVE" },
+    transformOption: (e: any) => ({
+      value: e.id,
+      label: `${e.first_name} ${e.last_name || ""} (${e.department_name || ""})`,
+    }),
+  });
+
+  const fetchShiftTemplates = useServerSearch("/api/hr/shift-templates/", {
+    transformOption: (t: any) => ({
+      value: t.id,
+      label: `${t.name} (${t.start_time || ""} - ${t.end_time || ""})`,
+    }),
+  });
   
   // Filtered employees (moved before useMemo that depends on it)
   const filteredEmployees = useMemo(() => {
@@ -476,8 +493,8 @@ export default function ShiftsManagementPage() {
               <SearchableSelect 
                 value={filters.templateId} 
                 onChange={(v) => setFilters({...filters, templateId: v})} 
-                options={templates.filter(t=>t.is_active).map(t => ({value: t.id, label: t.name}))} 
-                placeholder="Filter by Shift"
+                fetchOptions={fetchShiftTemplates}
+                placeholder="Search shifts..."
                 className="min-w-[150px]"
               />
               
@@ -780,8 +797,8 @@ export default function ShiftsManagementPage() {
                 <SearchableSelect 
                   value={scheduleFormData.template_id} 
                   onChange={(v) => setScheduleFormData({...scheduleFormData, template_id: v})} 
-                  options={templates.filter(t => t.is_active).map(t => ({value: t.id, label: `${t.name} (${t.startTime} - ${t.endTime})`}))} 
-                  placeholder="Select shift template"
+                  fetchOptions={fetchShiftTemplates}
+                  placeholder="Search shift templates..."
                 />
               </label>
               
@@ -1127,8 +1144,8 @@ export default function ShiftsManagementPage() {
                 <SearchableSelect 
                   value={setDefaultModal.templateId} 
                   onChange={(v) => setSetDefaultModal({ ...setDefaultModal, templateId: v })} 
-                  options={templates.filter(t => t.is_active).map(t => ({value: t.id, label: `${t.name} (${t.startTime} - ${t.endTime})`}))} 
-                  placeholder="Select shift template"
+                  fetchOptions={fetchShiftTemplates}
+                  placeholder="Search shift templates..."
                 />
               </div>
               

@@ -3,8 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useEmployees, useEmployeeStats, useCreateEmployee, useUpdateEmployee, useDeleteEmployee } from "@/hooks/useEmployees";
 import { useShiftTemplates } from "@/hooks/useShiftTemplates";
-import { useDepartmentOptions } from "@/hooks/useDepartments";
-import { useDesignations } from "@/hooks/useDesignations";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import PageHeader from "@/components/PageHeader";
 import EmployeeForm from "@/components/Forms/EmployeeForm";
 import EmployeeStatusModal from "@/components/EmployeeStatusModal";
@@ -44,12 +43,19 @@ export default function EmployeesPage() {
   const prefill = searchParams.get("prefill");
   const pagination = usePagination();
 
-  const { options: departmentOptions } = useDepartmentOptions();
-  const { data: designations = [] } = useDesignations();
+  const fetchDepartments = useServerSearch("/api/organization/departments/", {
+    transformOption: (d: any) => ({
+      value: d._id || d.id,
+      label: d.name,
+    }),
+  });
 
-  const designationOptions = (designations || [])
-    .filter(d => d.isActive)
-    .map(d => ({ value: d._id || d.id, label: d.name }));
+  const fetchDesignations = useServerSearch("/api/company/designations/", {
+    transformOption: (d: any) => ({
+      value: d._id || d.id,
+      label: d.name,
+    }),
+  });
 
   const employmentStatusOptions = [
     { value: "ACTIVE", label: "Active" },
@@ -68,8 +74,8 @@ export default function EmployeesPage() {
 
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
-    { name: "department_id", label: "Department", type: "select", searchable: true, options: departmentOptions },
-    { name: "designation_id", label: "Designation", type: "select", searchable: true, options: designationOptions },
+    { name: "department_id", label: "Department", type: "select", searchable: true, fetchOptions: fetchDepartments },
+    { name: "designation_id", label: "Designation", type: "select", searchable: true, fetchOptions: fetchDesignations },
     { name: "employment_status", label: "Status", type: "status", options: employmentStatusOptions },
     { name: "employment_type", label: "Type", type: "select", options: employmentTypeOptions },
   ];

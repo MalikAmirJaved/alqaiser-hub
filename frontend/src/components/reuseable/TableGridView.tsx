@@ -138,8 +138,7 @@ export function TableView<T extends Record<string, unknown>>({
 
   return (
     <div className={cn("rounded-[var(--radius-xl)] border border-[var(--border)] overflow-hidden", className)}>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto">            <table className="w-full text-sm table-fixed">
           <thead className={cn(
             "bg-[var(--muted)]/50 border-b border-[var(--border)]",
             stickyHeader && "sticky top-0 z-10"
@@ -159,7 +158,7 @@ export function TableView<T extends Record<string, unknown>>({
                   key={col.key}
                   style={{ width: col.width }}
                   className={cn(
-                    "px-4 py-3 text-left font-medium text-[var(--muted-foreground)] whitespace-nowrap",
+                    "px-4 py-3 text-left font-medium text-[var(--muted-foreground)] truncate",
                     col.sortable && "cursor-pointer select-none hover:text-[var(--foreground)] transition-colors"
                   )}
                   onClick={() => col.sortable && handleSort(col.key)}
@@ -230,7 +229,7 @@ export function TableView<T extends Record<string, unknown>>({
                       </td>
                     )}
                     {columns.map((col) => (
-                      <td key={col.key} className="px-4 py-3 text-[var(--foreground)] whitespace-nowrap">
+                      <td key={col.key} className="px-4 py-3 text-[var(--foreground)] truncate max-w-0">
                         {col.render ? col.render(row[col.key], row) : String(row[col.key] ?? "")}
                       </td>
                     ))}

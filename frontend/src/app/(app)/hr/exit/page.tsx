@@ -29,7 +29,7 @@ import {
   ExitEmployeeAsset,
   FinalSettlementPreview
 } from "@/hooks/useExitManagement";
-import { useActiveEmployees } from "@/hooks/useEmployees";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import { toast } from "sonner";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatsCards } from "@/components/reuseable/StatsCards";
@@ -60,7 +60,15 @@ export default function ExitManagementPage() {
   const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const permissions = useFeaturePermissions("HR", "exit");
-  const { data: employees = [] } = useActiveEmployees();
+
+  const fetchEmployees = useServerSearch("/api/hr/employees/", {
+    extraParams: { employment_status: "ACTIVE" },
+    transformOption: (e: any) => ({
+      value: e.id,
+      label: `${e.first_name} ${e.last_name || ""} (${e.department_name || "N/A"})`,
+    }),
+  });
+
   const confirmationModal = useConfirmationModal();
   const [query, setQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
@@ -485,7 +493,7 @@ export default function ExitManagementPage() {
       {(modalOpen && (editingRecord ? permissions.update : permissions.create)) && (
         <ExitFormModal
           formatCurrency={formatCurrency}
-          employees={employees}
+          fetchEmployees={fetchEmployees}
           exitRecords={records}
           initialData={editingRecord}
           onSubmit={handleSave}
@@ -566,14 +574,14 @@ export default function ExitManagementPage() {
 function ExitFormModal({
   formatCurrency,
   initialData,
-  employees,
+  fetchEmployees,
   exitRecords,
   onSubmit,
   onClose
 }: {
   formatCurrency: (amount?: number, decimals?: number) => string;
   initialData: ExitRecord | null;
-  employees: any[];
+  fetchEmployees: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: SearchableSelectOption[]; hasMore: boolean; totalCount: number }>;
   exitRecords: ExitRecord[];
   onSubmit: (d: any) => void;
   onClose: () => void;
@@ -608,22 +616,6 @@ function ExitFormModal({
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.employee_id, formData.last_working_day]);
-
-  const blockedEmployeeIds = new Set(
-    exitRecords
-      .filter(r => r.status_value !== 'REJECTED')
-      .map(r => r.employee_id)
-  );
-  const availableEmployees = initialData
-    ? employees.filter(e => String(e.id) === initialData.employee_id || !blockedEmployeeIds.has(String(e.id)))
-    : employees.filter(e => !blockedEmployeeIds.has(String(e.id)));
-  const employeeOpts: SearchableSelectOption[] = availableEmployees
-    .map((e: any) => ({
-      value: String(e.id),
-      label: `${e.first_name} ${e.last_name || ""} (${e.department_name || "N/A"})`
-    }));
-
-  const selectedEmployee = employees.find((e: any) => String(e.id) === formData.employee_id);
 
   const handleCalculateSettlement = async () => {
     if (!formData.employee_id || !formData.last_working_day) {
@@ -680,41 +672,11 @@ function ExitFormModal({
             <SearchableSelect
               value={formData.employee_id}
               onChange={v => setFormData({ ...formData, employee_id: v })}
-              options={employeeOpts}
-              placeholder="Select Employee"
+              fetchOptions={fetchEmployees}
+              placeholder="Search employees..."
               disabled={isLocked}
             />
           </label>
-
-          {selectedEmployee && (
-            <>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Department</span>
-                <input
-                  value={selectedEmployee.department_name || ""}
-                  className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none"
-                  readOnly
-                />
-              </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Designation</span>
-                <input
-                  value={selectedEmployee.designation_name || ""}
-                  className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none"
-                  readOnly
-                />
-              </label>
-              <label className="text-sm sm:col-span-2">
-                <div className="bg-muted/30 border border-border rounded-xl p-3">
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="w-4 h-4 text-primary" />
-                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Monthly Salary</span>
-                  </div>
-                  <div className="text-lg font-bold mt-1">{formatCurrency(parseFloat(selectedEmployee.salary || "0"))}</div>
-                </div>
-              </label>
-            </>
-          )}
 
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground">Exit Reason *</span>

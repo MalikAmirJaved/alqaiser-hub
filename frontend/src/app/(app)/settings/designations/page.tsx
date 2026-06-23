@@ -155,7 +155,6 @@ export default function DesignationsPage() {
         onClose={handleModalClose}
         initialData={editingDesignation}
         onSuccess={handleModalSuccess}
-        departmentOptions={departmentOptions}
       />
     </>
   );

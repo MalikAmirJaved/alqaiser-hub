@@ -2,8 +2,7 @@
 import { useState, useEffect } from "react";
 import { X, Eye, EyeOff } from "lucide-react";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
-import { useDepartments } from "@/hooks/useDepartments";
-import { useDesignations } from "@/hooks/useDesignations";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import DepartmentFormModal from "@/components/settings/departments/DepartmentFormModal";
 import DesignationFormModal from "@/components/settings/designations/DesignationFormModal";
 
@@ -36,13 +35,19 @@ export default function UserForm({
   const [deptModalOpen, setDeptModalOpen] = useState(false);
   const [desigModalOpen, setDesigModalOpen] = useState(false);
 
-  const { data: departments = [], refetch: refetchDepartments } = useDepartments();
-  const departmentOptions = departments
-    .filter((d: any) => d.is_active)
-    .map((d: any) => ({ value: d.id, label: d.name }));
+  const fetchDepartments = useServerSearch("/api/organization/departments/", {
+    transformOption: (d: any) => ({
+      value: d.id,
+      label: d.name,
+    }),
+  });
 
-  const { data: designations = [], refetch: refetchDesignations } = useDesignations();
-  const designationOptions = designations.map((d: any) => ({ value: d.id, label: d.name }));
+  const fetchDesignations = useServerSearch("/api/company/designations/", {
+    transformOption: (d: any) => ({
+      value: d.id,
+      label: d.name,
+    }),
+  });
 
   useEffect(() => {
     if (initialData) {
@@ -151,8 +156,8 @@ export default function UserForm({
               <SearchableSelect
                 value={formData.department}
                 onChange={(val) => handleChange("department", val)}
-                options={departmentOptions}
-                placeholder="Select department"
+                fetchOptions={fetchDepartments}
+                placeholder="Search departments..."
                 onAddNew={() => setDeptModalOpen(true)}
                 addNewLabel="+ New Department"
               />
@@ -162,9 +167,9 @@ export default function UserForm({
               <SearchableSelect
                 value={formData.designation}
                 onChange={(val) => handleChange("designation", val)}
-                options={designationOptions}
+                fetchOptions={fetchDesignations}
                 disabled={!formData.department}
-                placeholder="Select designation"
+                placeholder="Search designations..."
                 onAddNew={() => setDesigModalOpen(true)}
                 addNewLabel="+ New Designation"
               />
@@ -256,14 +261,13 @@ export default function UserForm({
       <DepartmentFormModal
         open={deptModalOpen}
         onClose={() => setDeptModalOpen(false)}
-        onSuccess={() => { refetchDepartments(); setDeptModalOpen(false); }}
+        onSuccess={() => setDeptModalOpen(false)}
       />
 
       <DesignationFormModal
         open={desigModalOpen}
         onClose={() => setDesigModalOpen(false)}
-        onSuccess={() => { refetchDesignations(); setDesigModalOpen(false); }}
-        departmentOptions={departmentOptions}
+        onSuccess={() => setDesigModalOpen(false)}
       />
     </div>
   );

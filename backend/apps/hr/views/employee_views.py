@@ -628,6 +628,36 @@ class EmployeeStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         })
 
 
+class EmployeeDetailView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'employee'
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        company_id = request.user.company_id
+        branch_id = request.user.branch_id
+
+        if not company_id:
+            return Response(
+                {'error': 'User is not associated with any company'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        filters = {
+            '_id': pk,
+            'company_id': company_id,
+            'is_deleted': False,
+        }
+
+        if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
+            filters['branch_id'] = branch_id
+
+        employee = get_object_or_404(Employee, **filters)
+
+        data = serialize_employee(employee)
+        return Response(data)
+
+
 class ActiveEmployeesView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'employee'

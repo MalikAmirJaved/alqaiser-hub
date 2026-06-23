@@ -5,7 +5,7 @@ import { Search, X, Filter, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import SearchableSelect, { SearchableSelectOption } from "@/components/reuseable/SearchableSelect";
 
 export interface FilterField {
   name: string;
@@ -16,6 +16,16 @@ export interface FilterField {
   searchable?: boolean;
   /** Static/simple selects (like status) use native select */
   static?: boolean;
+  /** Server-side fetch function for searchable selects — when provided, overrides options */
+  fetchOptions?: (params: {
+    search: string;
+    page: number;
+    pageSize: number;
+  }) => Promise<{
+    options: SearchableSelectOption[];
+    hasMore: boolean;
+    totalCount: number;
+  }>;
 }
 
 export interface FilterBarProps {
@@ -112,13 +122,14 @@ export default function FilterBar({ fields, filters, onChange }: FilterBarProps)
         <div className="flex flex-wrap items-center gap-2 ml-auto">
           {filterFields.map((field) => {
             if (field.type === "select" && field.searchable && !field.static) {
-              // Use SearchableSelect for dynamic/huge lists
+              // Use SearchableSelect for dynamic/huge lists — use fetchOptions if available
               return (
                 <div key={field.name} className="w-48">
                   <SearchableSelect
                     value={filters[field.name] || ""}
                     onChange={(val) => updateFilter(field.name, val)}
-                    options={field.options || []}
+                    options={field.fetchOptions ? undefined : (field.options || [])}
+                    fetchOptions={field.fetchOptions}
                     placeholder={field.label}
                   />
                 </div>

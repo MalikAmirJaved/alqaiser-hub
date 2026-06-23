@@ -4,7 +4,7 @@ from apps.hr.views.shift_template_views import ShiftTemplateView
 from apps.hr.views.asset_views import AssetView, AssetStatsView
 from apps.hr.views.asset_category_views import AssetCategoryView, AssetCategoryStatsView
 from apps.hr.views.asset_purchase_request_views import AssetPurchaseRequestView
-from apps.hr.views.employee_views import EmployeeView, EmployeeStatsView, ActiveEmployeesView
+from apps.hr.views.employee_views import EmployeeView, EmployeeStatsView, EmployeeDetailView, ActiveEmployeesView
 from apps.hr.views.payroll_views import (
     PayrollView, PayrollStatsView, PayrollPreviewView, PayrollAdvanceView,
     EmployeeLoanView, CompensationView, CompensationStatusUpdateView,
@@ -78,6 +78,7 @@ urlpatterns = [
     path('employees/active/', ActiveEmployeesView.as_view(), name='active-employees'),
     path('employees/', EmployeeView.as_view(), name='employees'),
     path('employees/stats/', EmployeeStatsView.as_view(), name='employee-stats'),
+    path('employees/<str:pk>/', EmployeeDetailView.as_view(), name='employee-detail'),
     
     # Promotions
     path('promotions/', PromotionView.as_view(), name='promotions'),

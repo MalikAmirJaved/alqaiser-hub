@@ -175,6 +175,20 @@ export function useEmployees(params?: Record<string, string>) {
   };
 }
 
+// Fetch a single employee by UUID (detail endpoint)
+export function useEmployee(id: string | undefined) {
+  const api = useApi();
+
+  return useQuery<Employee>({
+    queryKey: ["employee", id],
+    queryFn: () => api(`/api/hr/employees/${id}/`),
+    enabled: !!id,
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+}
+
 // Fetch employee stats
 export function useEmployeeStats() {
   const api = useApi();

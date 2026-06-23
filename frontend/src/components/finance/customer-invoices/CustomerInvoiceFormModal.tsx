@@ -9,6 +9,7 @@ import {
 } from "@/hooks/finance/useCustomerInvoices";
 import { useCreateSalesInvoice, useUpdateSalesInvoice } from "@/hooks/sales/useSalesInvoices";
 import { useCustomers } from "@/hooks/useCustomers";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import { useAllVariantsSimple } from "@/hooks/useAllVariants";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
@@ -51,7 +52,14 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
   const formatCurrency = useFormatCurrency();
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [newCustomerInfo, setNewCustomerInfo] = useState<any>(null);
-  const { data: customers = [], refetch: refetchCustomers } = useCustomers("");
+
+  const fetchCustomers = useServerSearch("/api/inventory/customers/", {
+    transformOption: (c: any) => ({
+      value: c.id,
+      label: `${c.name} (${c.customer_code || ""})`,
+    }),
+  });
+
   const { data: variants = [] } = useAllVariantsSimple({ active_only: true });
   const createInvoice = useCreateCustomerInvoice();
   const updateInvoice = useUpdateCustomerInvoice();
@@ -144,7 +152,6 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
   }, [initialData, defaultValues, setValue, reset, open]);
 
   const handleCustomerCreated = async (customerId: string, customerName: string, customerData: any) => {
-    await refetchCustomers();
     setNewCustomerInfo(customerData);
     setValue("customer", customerId);
   };
@@ -279,11 +286,8 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
                     <SearchableSelect
                       value={watch("customer") || ""}
                       onChange={(val) => setValue("customer", val)}
-                      options={customers.map((cust) => ({
-                        value: cust.id,
-                        label: `${cust.name} (${cust.customer_code})`,
-                      }))}
-                      placeholder="Select customer"
+                      fetchOptions={fetchCustomers}
+                      placeholder="Search customers..."
                       required={!newCustomerInfo}
                     />
                   </div>

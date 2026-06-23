@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { useActiveEmployees } from "@/hooks/useEmployees";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import {
   useCompensations,
   useCreateCompensation,
@@ -59,7 +59,22 @@ export default function CompensationLoanPage({
   useEffect(() => { setCompPage(1); }, [searchQuery]);
   useEffect(() => { setLoanPage(1); }, [searchQuery, statusFilter]);
 
-  const { data: employees = [] } = useActiveEmployees();
+  const fetchEmployees = useServerSearch("/api/hr/employees/", {
+    extraParams: { employment_status: "ACTIVE" },
+    transformOption: (e: any) => ({
+      value: e.id,
+      label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""} (${formatCurrency(parseFloat(e.salary || "0"))})`,
+    }),
+  });
+
+  const fetchEmployeesForCompensation = useServerSearch("/api/hr/employees/", {
+    extraParams: { employment_status: "ACTIVE" },
+    transformOption: (e: any) => ({
+      value: e.id,
+      label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""}`,
+    }),
+  });
+
   const { data: compensations = [] } = useCompensations();
   const { data: loans = [] } = useEmployeeLoans();
   const createCompensation = useCreateCompensation();
@@ -93,24 +108,6 @@ export default function CompensationLoanPage({
       .filter((c) => c.status === "CONFIRM" || c.status === "PENDING")
       .map((c) => c.employee_id);
   }, [compensations]);
-
-  const employeeOptionsForCompensation = employees
-    .filter(
-      (e) =>
-        !employeesWithCompensation.includes(e.id) ||
-        (editingItem && editingItem.employee_id === e.id)
-    )
-    .map((e) => ({
-      value: String(e.id),
-      label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""}`,
-    }));
-
-  const employeeOptionsForLoan = employees.map((e) => ({
-    value: String(e.id),
-    label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""} (${formatCurrency(
-      parseFloat(e.salary || "0")
-    )})`,
-  }));
 
   // -----------------------------
   // Actions
@@ -493,29 +490,18 @@ export default function CompensationLoanPage({
                 <CompensationForm
                   formData={formData}
                   setFormData={setFormData}
-                  employeeOptions={employeeOptionsForCompensation}
+                  fetchEmployeeOptions={fetchEmployeesForCompensation}
                   formatCurrency={formatCurrency}
-                  employeeJoiningDate={
-                    formData.employee_id
-                      ? employees.find((e: any) => String(e.id) === String(formData.employee_id))?.joining_date
-                      : null
-                  }
                 />
               ) : (
                 <LoanForm
                   formData={formData}
                   setFormData={setFormData}
-                  employeeOptions={employeeOptionsForLoan}
-                  employees={employees}
+                  fetchEmployeeOptions={fetchEmployees}
                   selectedEmployeeSalary={selectedEmployeeSalary}
                   formatCurrency={formatCurrency}
                   errors={[]}
                   onValidationChange={() => {}}
-                  employeeJoiningDate={
-                    formData.employee_id
-                      ? employees.find((e: any) => String(e.id) === String(formData.employee_id))?.joining_date
-                      : null
-                  }
                 />
               )}
             </div>
@@ -552,17 +538,11 @@ export default function CompensationLoanPage({
               <LoanForm
                 formData={formData}
                 setFormData={setFormData}
-                employeeOptions={employeeOptionsForLoan}
-                employees={employees}
+                fetchEmployeeOptions={fetchEmployees}
                 selectedEmployeeSalary={selectedEmployeeSalary}
                 formatCurrency={formatCurrency}
                 errors={[]}
                 onValidationChange={() => {}}
-                employeeJoiningDate={
-                  formData.employee_id
-                    ? employees.find((e: any) => String(e.id) === String(formData.employee_id))?.joining_date
-                    : null
-                }
               />
             </div>
             <div className="px-6 py-4 border-t flex justify-end gap-3 bg-muted/30">
