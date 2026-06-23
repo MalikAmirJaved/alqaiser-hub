@@ -13,6 +13,7 @@ import {
   AlertTriangle, Clock, CheckCircle2, X, FileText, ShieldCheck,
   Eye, Loader2, RotateCcw, DollarSign, ChevronLeft, ChevronRight
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   useExitRecords,
   useExitStats,
@@ -163,8 +164,40 @@ export default function ExitManagementPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+      <div className="space-y-5">
+        <PageHeader title="Exit Management" subtitle="Track employee offboarding and clearances" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-card border border-border rounded-xl p-4 space-y-2">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-8 w-12" />
+            </div>
+          ))}
+        </div>
+        <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+          <Skeleton className="h-12 m-3 rounded-md" />
+          <div className="overflow-x-auto p-4">
+            <table className="w-full text-sm">
+              <thead>
+                <tr>
+                  {[1,2,3,4,5,6,7,8].map(i => <th key={i} className="px-4 py-2.5"><Skeleton className="h-3 w-16" /></th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 5 }).map((_, r) => (
+                  <tr key={r} className="border-t border-border">
+                    {[1,2,3,4,5,6,7,8].map(c => (
+                      <td key={c} className="px-4 py-2.5">
+                        <Skeleton className={`h-4 ${c === 1 ? 'w-28' : c === 2 ? 'w-20' : c === 4 ? 'w-16' : c === 5 ? 'w-20' : c === 7 ? 'w-16' : 'w-12'}`} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Skeleton className="h-10 m-3 rounded-md" />
+        </div>
       </div>
     );
   }

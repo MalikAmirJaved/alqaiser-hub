@@ -75,8 +75,22 @@ export default function CompensationLoanPage({
     }),
   });
 
-  const { data: compensations = [] } = useCompensations();
-  const { data: loans = [] } = useEmployeeLoans();
+  // Server-side paginated queries
+  const compApiParams = useMemo(() => ({
+    page: String(compPage),
+    page_size: String(pageSize),
+    ...(searchQuery ? { search: searchQuery } : {}),
+  }), [compPage, pageSize, searchQuery]);
+
+  const loanApiParams = useMemo(() => ({
+    page: String(loanPage),
+    page_size: String(pageSize),
+    ...(searchQuery ? { search: searchQuery } : {}),
+    ...(statusFilter !== "all" ? { status: statusFilter } : {}),
+  }), [loanPage, pageSize, searchQuery, statusFilter]);
+
+  const { data: compensations = [], totalCount: compTotalCount } = useCompensations(compApiParams);
+  const { data: loans = [], totalCount: loanTotalCount } = useEmployeeLoans(loanApiParams);
   const createCompensation = useCreateCompensation();
   const updateCompensation = useUpdateCompensation();
   const deleteCompensation = useDeleteCompensation();
@@ -303,32 +317,13 @@ export default function CompensationLoanPage({
   };
 
   // -----------------------------
-  // Filters
+  // Pagination calculations (server handles filtering, client clamps page)
   // -----------------------------
-  const filteredCompensations = compensations.filter(
-    (c) =>
-      c.employee_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.employee_code?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const filteredLoans = loans
-    .filter(
-      (l) =>
-        l.employee_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        l.loan_type?.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-    .filter(
-      (l) => statusFilter === "all" || l.status === statusFilter
-    );
-
-  // Pagination
-  const compTotalPages = Math.max(1, Math.ceil(filteredCompensations.length / pageSize));
+  const compTotalPages = Math.max(1, Math.ceil((compTotalCount || 0) / pageSize));
   const compSafePage = Math.min(compPage, compTotalPages);
-  const paginatedCompensations = filteredCompensations.slice((compSafePage - 1) * pageSize, compSafePage * pageSize);
 
-  const loanTotalPages = Math.max(1, Math.ceil(filteredLoans.length / pageSize));
+  const loanTotalPages = Math.max(1, Math.ceil((loanTotalCount || 0) / pageSize));
   const loanSafePage = Math.min(loanPage, loanTotalPages);
-  const paginatedLoans = filteredLoans.slice((loanSafePage - 1) * pageSize, loanSafePage * pageSize);
 
   // -----------------------------
   // UI
@@ -398,7 +393,7 @@ export default function CompensationLoanPage({
         {/* Tabs */}
         <TabsContent value="compensation">
           <CompensationTab
-            filteredCompensations={paginatedCompensations}
+            filteredCompensations={compensations}
             formatCurrency={formatCurrency}
             onEdit={
               permissions.update_compensation
@@ -421,9 +416,9 @@ export default function CompensationLoanPage({
                 : undefined
             }
           />
-          {filteredCompensations.length > pageSize && (
+          {(compTotalCount || 0) > pageSize && (
             <div className="flex items-center justify-between mt-3 px-4 py-2 text-xs text-muted-foreground">
-              <span>{(compSafePage - 1) * pageSize + 1}–{Math.min(compSafePage * pageSize, filteredCompensations.length)} of {filteredCompensations.length}</span>
+              <span>{(compSafePage - 1) * pageSize + 1}–{Math.min(compSafePage * pageSize, compTotalCount || 0)} of {compTotalCount || 0}</span>
               <div className="flex items-center gap-2">
                 <span>Page {compSafePage} of {compTotalPages}</span>
                 <button onClick={() => setCompPage(p => Math.max(1, p - 1))} disabled={compSafePage <= 1} className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
@@ -439,7 +434,7 @@ export default function CompensationLoanPage({
 
         <TabsContent value="loans">
           <LoanTab
-            filteredLoans={paginatedLoans}
+            filteredLoans={loans}
             formatCurrency={formatCurrency}
             onConfirm={
               permissions.approve_loan
@@ -457,9 +452,9 @@ export default function CompensationLoanPage({
                 : undefined
             }
           />
-          {filteredLoans.length > pageSize && (
+          {(loanTotalCount || 0) > pageSize && (
             <div className="flex items-center justify-between mt-3 px-4 py-2 text-xs text-muted-foreground">
-              <span>{(loanSafePage - 1) * pageSize + 1}–{Math.min(loanSafePage * pageSize, filteredLoans.length)} of {filteredLoans.length}</span>
+              <span>{(loanSafePage - 1) * pageSize + 1}–{Math.min(loanSafePage * pageSize, loanTotalCount || 0)} of {loanTotalCount || 0}</span>
               <div className="flex items-center gap-2">
                 <span>Page {loanSafePage} of {loanTotalPages}</span>
                 <button onClick={() => setLoanPage(p => Math.max(1, p - 1))} disabled={loanSafePage <= 1} className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
