@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Card,
   CardContent,
@@ -146,14 +147,6 @@ export default function AssetsPanel() {
     };
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
-      </div>
-    );
-  }
-
   // Stats cards data
   const statsCards = [
     { label: "Total Assets", value: stats?.totalAssets || assets.length },
@@ -179,14 +172,25 @@ export default function AssetsPanel() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {statsCards.map((stat) => (
-          <Card key={stat.label}>
-            <CardContent className="p-4">
-              <div className="text-xs text-muted-foreground">{stat.label}</div>
-              <div className="text-2xl font-bold">{stat.value}</div>
-            </CardContent>
-          </Card>
-        ))}
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-4 space-y-2">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-8 w-16" />
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          statsCards.map((stat) => (
+            <Card key={stat.label}>
+              <CardContent className="p-4">
+                <div className="text-xs text-muted-foreground">{stat.label}</div>
+                <div className="text-2xl font-bold">{stat.value}</div>
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
 
       {/* Search and Table */}
@@ -206,7 +210,36 @@ export default function AssetsPanel() {
           </div>
         </CardHeader>
         <CardContent>
-          {assets.length === 0 ? (
+          {isLoading ? (
+            <div className="rounded-lg border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Brand</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>SKU</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Available</TableHead>
+                    <TableHead className="w-[80px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-8" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-8" /></TableCell>
+                      <TableCell><Skeleton className="h-8 w-8 rounded-md" /></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : assets.length === 0 ? (
             <div className="text-center py-12">
               <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium">No assets found</h3>
@@ -302,7 +335,7 @@ export default function AssetsPanel() {
             </div>
           )}
         </CardContent>
-        {totalPages > 1 && (
+        {!isLoading && totalPages > 1 && (
           <div className="flex items-center justify-between px-6 py-3 border-t border-border text-xs text-muted-foreground">
             <span>
               {totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, totalCount)} of {totalCount}

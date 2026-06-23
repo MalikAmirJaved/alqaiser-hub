@@ -1,7 +1,7 @@
 // components/HRAssets/EmployeeAssetsNew.tsx
 "use client";
 import { useState, useMemo, useEffect } from "react";
-import { useActiveEmployees } from "@/hooks/useEmployees";
+import { useEmployees } from "@/hooks/useEmployees";
 import {
   useEmployeeAssignments,
   useAvailableAssets,
@@ -54,6 +54,7 @@ import {
   ChevronDown,
   ChevronLeft,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
@@ -89,7 +90,15 @@ export default function EmployeeAssetsNew() {
 
   useEffect(() => { setEmpPage(1); }, [searchQuery]);
 
-  const { data: employees = [], isLoading: employeesLoading } = useActiveEmployees()
+  // Server-side paginated employee list (uses raw empPage — server handles clamping)
+  const empApiParams = useMemo(() => ({
+    page: String(empPage),
+    page_size: String(empPageSize),
+    employment_status: "ACTIVE",
+    ...(searchQuery ? { search: searchQuery } : {}),
+  }), [empPage, empPageSize, searchQuery]);
+
+  const { data: employees = [], totalCount: empTotalCount, isLoading: employeesLoading } = useEmployees(empApiParams);
 
   const { data: assignmentData, isLoading: assignmentsLoading } = useEmployeeAssignments(
     selectedEmployee?.id
@@ -129,18 +138,9 @@ export default function EmployeeAssetsNew() {
     return allAssets.filter(asset => asset.category === assetCategoryFilter);
   }, [allAssets, assetCategoryFilter]);
 
-  // Filtered & paginated employees for left panel
-  const filteredEmployees = useMemo(() => {
-    const term = searchQuery.toLowerCase();
-    return employees.filter(emp => {
-      const fullName = `${emp.first_name} ${emp.last_name || ''}`.toLowerCase();
-      return fullName.includes(term) || emp.department_name?.toLowerCase().includes(term);
-    });
-  }, [employees, searchQuery]);
-
-  const empTotalPages = Math.max(1, Math.ceil(filteredEmployees.length / empPageSize));
+  // Pagination display (clamped to valid range)
+  const empTotalPages = Math.max(1, Math.ceil((empTotalCount || 0) / empPageSize));
   const empSafePage = Math.min(empPage, empTotalPages);
-  const paginatedEmployees = filteredEmployees.slice((empSafePage - 1) * empPageSize, empSafePage * empPageSize);
 
   // Reset all selection when modal opens
   useEffect(() => {
@@ -280,12 +280,21 @@ export default function EmployeeAssetsNew() {
         </div>
         <div className="flex-1 overflow-y-auto">
           {employeesLoading ? (
-            <div className="flex items-center justify-center h-32">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+            <div className="divide-y divide-border">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="p-4 flex items-center gap-3">
+                  <Skeleton className="w-10 h-10 rounded-lg" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                  <Skeleton className="w-4 h-4" />
+                </div>
+              ))}
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {paginatedEmployees.map((emp) => (
+              {employees.map((emp) => (
                 <button
                   key={emp.id}
                   onClick={() => {
@@ -316,10 +325,10 @@ export default function EmployeeAssetsNew() {
             </div>
           )}
         </div>
-        {filteredEmployees.length > empPageSize && (
+        {(empTotalCount || 0) > empPageSize && (
           <div className="flex items-center justify-between px-4 py-2 border-t border-border text-xs text-muted-foreground">
             <span>
-              {(empSafePage - 1) * empPageSize + 1}–{Math.min(empSafePage * empPageSize, filteredEmployees.length)} of {filteredEmployees.length}
+              {(empSafePage - 1) * empPageSize + 1}–{Math.min(empSafePage * empPageSize, empTotalCount || 0)} of {empTotalCount || 0}
             </span>
             <div className="flex items-center gap-2">
               <button
@@ -388,8 +397,20 @@ export default function EmployeeAssetsNew() {
               </CardHeader>
               <CardContent>
                 {assignmentsLoading ? (
-                  <div className="flex items-center justify-center h-32">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+                  <div className="space-y-3 p-4">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="flex items-center gap-4">
+                        <Skeleton className="w-4 h-4 rounded" />
+                        <div className="flex-1 space-y-1">
+                          <Skeleton className="h-4 w-40" />
+                          <Skeleton className="h-3 w-24" />
+                        </div>
+                        <Skeleton className="h-4 w-8" />
+                        <Skeleton className="h-5 w-12 rounded-full" />
+                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="h-5 w-14 rounded-full" />
+                      </div>
+                    ))}
                   </div>
                 ) : !assignmentData?.active_assignments?.length ? (
                   <div className="text-center py-8">

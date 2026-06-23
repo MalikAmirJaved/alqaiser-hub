@@ -31,6 +31,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import {
   Dialog,
@@ -208,14 +209,6 @@ export default function AssetCategories() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader 
@@ -237,47 +230,65 @@ export default function AssetCategories() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Total Kits</p>
-                <p className="text-2xl font-bold">{stats?.totalCategories || categories.length}</p>
-              </div>
-              <div className="p-2 rounded-lg bg-purple-500/10">
-                <Layers className="w-5 h-5 text-purple-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Total Assets in Kits</p>
-                <p className="text-2xl font-bold">
-                  {stats?.totalAssetsInCategories || categories.reduce((sum, c) => sum + (c.assetCount || 0), 0)}
-                </p>
-              </div>
-              <div className="p-2 rounded-lg bg-blue-500/10">
-                <Package className="w-5 h-5 text-blue-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Assets Available</p>
-                <p className="text-2xl font-bold">{assets.length}</p>
-              </div>
-              <div className="p-2 rounded-lg bg-emerald-500/10">
-                <Package className="w-5 h-5 text-emerald-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {isLoading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-16" />
+                    <Skeleton className="h-8 w-12" />
+                  </div>
+                  <Skeleton className="w-10 h-10 rounded-lg" />
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total Kits</p>
+                    <p className="text-2xl font-bold">{stats?.totalCategories || categories.length}</p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-purple-500/10">
+                    <Layers className="w-5 h-5 text-purple-500" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total Assets in Kits</p>
+                    <p className="text-2xl font-bold">
+                      {stats?.totalAssetsInCategories || categories.reduce((sum, c) => sum + (c.assetCount || 0), 0)}
+                    </p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-blue-500/10">
+                    <Package className="w-5 h-5 text-blue-500" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Assets Available</p>
+                    <p className="text-2xl font-bold">{assets.length}</p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-emerald-500/10">
+                    <Package className="w-5 h-5 text-emerald-500" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
       {/* Search and Kits Grid */}
@@ -297,7 +308,37 @@ export default function AssetCategories() {
           </div>
         </CardHeader>
         <CardContent>
-          {categories.length === 0 ? (
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Card key={i}>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-2 flex-1">
+                        <Skeleton className="h-5 w-32" />
+                        <Skeleton className="h-3 w-48" />
+                      </div>
+                      <Skeleton className="h-8 w-8 rounded-md" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-3 w-20" />
+                      <Skeleton className="h-5 w-10 rounded-full" />
+                    </div>
+                    <div className="flex gap-1.5 flex-wrap">
+                      <Skeleton className="h-6 w-16 rounded-full" />
+                      <Skeleton className="h-6 w-20 rounded-full" />
+                      <Skeleton className="h-6 w-14 rounded-full" />
+                    </div>
+                  </CardContent>
+                  <CardFooter className="pt-0">
+                    <Skeleton className="h-9 w-full rounded-md" />
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          ) : categories.length === 0 ? (
             <div className="text-center py-12">
               <Layers className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium">No kits found</h3>

@@ -3,8 +3,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { useShiftTemplatesPaginated, useCreateShiftTemplate, useUpdateShiftTemplate, useDeleteShiftTemplate } from "@/hooks/useShiftTemplates";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Clock, Edit, Trash2, Search, Palette, Shield, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Clock, Edit, Trash2, Search, Palette, Shield, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -118,6 +119,30 @@ export default function ShiftTemplatesPage() {
         />
       </div>
 
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="bg-card border border-border rounded-2xl p-5 space-y-3">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="w-10 h-10 rounded-xl" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-5 w-32" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                </div>
+                <Skeleton className="h-5 w-16 rounded-full" />
+              </div>
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
+              <div className="flex gap-2 pt-3 border-t border-border">
+                <Skeleton className="h-8 w-16 rounded-md" />
+                <Skeleton className="h-8 w-16 rounded-md" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {templates.map((t) => (
           <div
@@ -173,8 +198,9 @@ export default function ShiftTemplatesPage() {
           </div>
         ))}
       </div>
+      )}
 
-      {templates.length === 0 && (
+      {!isLoading && templates.length === 0 && (
         <div className="text-center py-12 text-muted-foreground">
           <p>No templates found</p>
         </div>

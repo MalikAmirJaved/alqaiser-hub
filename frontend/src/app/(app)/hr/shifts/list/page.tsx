@@ -6,6 +6,7 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMont
 import { useQueryClient } from "@tanstack/react-query";
 import PageHeader from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { 
   CalendarDays, ListFilter, Search, Settings, UserPlus, X, 
@@ -567,9 +568,25 @@ export default function ShiftsManagementPage() {
             </div>
             
             {shiftsLoading ? (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              </div>
+              <>
+                <div className="grid grid-cols-7 bg-muted/20 rounded-t-xl">
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (
+                    <div key={day} className="py-2 text-center text-xs font-medium uppercase tracking-wider text-muted-foreground border-b border-border">
+                      {day}
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 divide-x divide-border border-x border-b rounded-b-xl">
+                  {days.map((_, i) => (
+                    <div key={i} className="min-h-[140px] p-2">
+                      <Skeleton className="w-6 h-6 rounded-full mb-2" />
+                      <Skeleton className="h-5 w-full rounded mb-1" />
+                      <Skeleton className="h-5 w-3/4 rounded" />
+                      <Skeleton className="h-5 w-1/2 rounded mt-1" />
+                    </div>
+                  ))}
+                </div>
+              </>
             ) : (
               <>
                 <div className="grid grid-cols-7 bg-muted/20 rounded-t-xl">
@@ -692,7 +709,20 @@ export default function ShiftsManagementPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {listEmployees.map(emp => {
+                  {listLoading ? (
+                    <>
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <tr key={i} className="border-t border-border">
+                          <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
+                          <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                          <td className="px-4 py-3"><Skeleton className="h-5 w-28 rounded" /></td>
+                          <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                          <td className="px-4 py-3 text-right"><Skeleton className="h-8 w-24 ml-auto rounded-md" /></td>
+                        </tr>
+                      ))}
+                    </>
+                  ) : (
+                    listEmployees.map(emp => {
                     const listResolved = listResolvedShiftsData?.[emp.id];
                     const resolved = listResolved ? { 
                       template: listResolved.shifts?.[today] ? templates.find(t => t.id === listResolved.shifts[today].template_id) || null : null,
@@ -769,11 +799,11 @@ export default function ShiftsManagementPage() {
                         </td>
                       </tr>
                     );
-                  })}
+                  }))}
                 </tbody>
               </table>
               
-              {listEmployees.length === 0 && !listLoading && (
+              {!listLoading && listEmployees.length === 0 && (
                 <div className="text-center py-12 text-muted-foreground">
                   <UsersIcon className="w-12 h-12 mx-auto mb-3 opacity-30" />
                   <p>No employees found matching your filters</p>
