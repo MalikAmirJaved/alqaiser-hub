@@ -89,8 +89,8 @@ export default function CompensationLoanPage({
     ...(statusFilter !== "all" ? { status: statusFilter } : {}),
   }), [loanPage, pageSize, searchQuery, statusFilter]);
 
-  const { data: compensations = [], totalCount: compTotalCount } = useCompensations(compApiParams);
-  const { data: loans = [], totalCount: loanTotalCount } = useEmployeeLoans(loanApiParams);
+  const { data: compensations = [], totalCount: compTotalCount, isLoading: compLoading } = useCompensations(compApiParams);
+  const { data: loans = [], totalCount: loanTotalCount, isLoading: loanLoading } = useEmployeeLoans(loanApiParams);
   const createCompensation = useCreateCompensation();
   const updateCompensation = useUpdateCompensation();
   const deleteCompensation = useDeleteCompensation();
@@ -395,6 +395,7 @@ export default function CompensationLoanPage({
           <CompensationTab
             filteredCompensations={compensations}
             formatCurrency={formatCurrency}
+            isLoading={compLoading}
             onEdit={
               permissions.update_compensation
                 ? (item) => openEditModal("compensation", item)
@@ -436,6 +437,7 @@ export default function CompensationLoanPage({
           <LoanTab
             filteredLoans={loans}
             formatCurrency={formatCurrency}
+            isLoading={loanLoading}
             onConfirm={
               permissions.approve_loan
                 ? handleConfirmLoan

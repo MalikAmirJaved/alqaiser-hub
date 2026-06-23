@@ -162,46 +162,6 @@ export default function ExitManagementPage() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-5">
-        <PageHeader title="Exit Management" subtitle="Track employee offboarding and clearances" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-card border border-border rounded-xl p-4 space-y-2">
-              <Skeleton className="h-3 w-16" />
-              <Skeleton className="h-8 w-12" />
-            </div>
-          ))}
-        </div>
-        <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
-          <Skeleton className="h-12 m-3 rounded-md" />
-          <div className="overflow-x-auto p-4">
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  {[1,2,3,4,5,6,7,8].map(i => <th key={i} className="px-4 py-2.5"><Skeleton className="h-3 w-16" /></th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: 5 }).map((_, r) => (
-                  <tr key={r} className="border-t border-border">
-                    {[1,2,3,4,5,6,7,8].map(c => (
-                      <td key={c} className="px-4 py-2.5">
-                        <Skeleton className={`h-4 ${c === 1 ? 'w-28' : c === 2 ? 'w-20' : c === 4 ? 'w-16' : c === 5 ? 'w-20' : c === 7 ? 'w-16' : 'w-12'}`} />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <Skeleton className="h-10 m-3 rounded-md" />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-5">
       <PageHeader
@@ -321,143 +281,156 @@ export default function ExitManagementPage() {
                   <th className="text-left px-4 py-2.5">Notes</th>
                   <th className="px-4 py-2.5 text-right">Actions</th>
                 </tr>
-              </thead>
-              <tbody>
-                {records.map(r => (
-                  <tr key={r.id} className="border-t border-border hover:bg-muted/30">
-                    <td className="px-4 py-2.5">
-                      <Checkbox
-                        checked={selectedRecords.has(r.id)}
-                        onChange={(checked) => {
-                          const newSet = new Set(selectedRecords);
-                          if (checked) newSet.add(r.id);
-                          else newSet.delete(r.id);
-                          setSelectedRecords(newSet);
-                        }}
-                      />
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <div className="font-medium">{r.employee_name}</div>
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <div className="text-xs">{r.exit_date || "—"}</div>
-                      <div className="text-[10px] text-muted-foreground">LWD: {r.last_working_day || "—"}</div>
-                    </td>
-                    <td className="px-4 py-2.5 text-xs">
-                      <span className="inline-flex px-2 py-0.5 text-[11px] rounded-full border bg-muted">
-                        {r.reason}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {permissions.update && r.status_value === "PENDING" ? (
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => { setSettlementDialog({ recordId: r.id, status: "CONFIRMED" }); setSettlementReason(""); }}
-                            className="text-[11px] font-medium rounded-full px-2 py-1 bg-success/15 text-success hover:bg-success/25"
-                          >
-                            Confirm
-                          </button>
-                          <button
-                            onClick={() => { setSettlementDialog({ recordId: r.id, status: "REJECTED" }); setSettlementReason(""); }}
-                            className="text-[11px] font-medium rounded-full px-2 py-1 bg-destructive/15 text-destructive hover:bg-destructive/25"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      ) : (
-                        <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full font-medium ${STATUS_STYLES[r.status_value] || 'bg-muted text-muted-foreground'}`}>
-                          {r.status}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-xs font-mono">
-                      {r.final_settlement < 0 ? (
-                        <span className="text-destructive font-bold" title="Employee owes company">
-                          -{formatCurrency(Math.abs(r.final_settlement))}
-                        </span>
-                      ) : (
-                        formatCurrency(r.final_settlement)
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-xs text-muted-foreground max-w-[200px] truncate">
-                      {r.settlement_notes || "—"}
-                    </td>
-                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                      <div className="flex justify-end gap-1">
-                        <button
-                          onClick={() => router.push(`/hr/exit/${r.id}`)}
-                          className="p-1.5 rounded-md hover:bg-muted"
-                          title="View Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {r.status_value === "CONFIRMED" && (
-                          <button
-                            onClick={() => setAssetReturnExitId(r.id)}
-                            className="p-1.5 rounded-md hover:bg-muted text-primary"
-                            title="Return Assets"
-                          >
-                            <RotateCcw className="w-4 h-4" />
-                          </button>
-                        )}
-                        {r.status_value === "CONFIRMED" && r.final_settlement < 0 && (
-                          <button
-                            onClick={() => {
-                              confirmationModal.confirm({
-                                title: "Clear Employee Dues",
-                                message: `This will record that the employee has returned ${formatCurrency(Math.abs(r.final_settlement))} to the company and create a finance receipt. Continue?`,
-                                type: "warning",
-                                confirmText: "Clear Dues",
-                                onConfirm: async () => {
-                                  await clearDuesMutation.mutateAsync(r.id);
-                                  await refetch();
-                                },
-                              });
-                            }}
-                            className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
-                            title="Clear Dues (Employee Owes)"
-                          >
-                            <DollarSign className="w-4 h-4" />
-                          </button>
-                        )}
-                        {r.status_value === "CONFIRMED" && r.final_settlement > 0 && (
-                          <button
-                            onClick={() => {
-                              confirmationModal.confirm({
-                                title: "Clear Settlement",
-                                message: `This will pay ${formatCurrency(r.final_settlement)} settlement to the employee and create an expense record. Continue?`,
-                                type: "warning",
-                                confirmText: "Clear Settlement",
-                                onConfirm: async () => {
-                                  await clearSettlementMutation.mutateAsync(r.id);
-                                  await refetch();
-                                },
-                              });
-                            }}
-                            className="p-1.5 rounded-md hover:bg-success/15 text-success"
-                            title="Clear Settlement (Company Owes)"
-                          >
-                            <DollarSign className="w-4 h-4" />
-                          </button>
-                        )}
-                        {permissions.update && (
-                          <button onClick={() => { setEditingRecord(r); setModalOpen(true); }} className="p-1.5 rounded-md hover:bg-muted">
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                        )}
-                        {permissions.delete && (
-                          <button onClick={() => handleDelete(r.id)} className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {records.length === 0 && (
+              </thead>              <tbody>
+                {isLoading ? (
+                  Array.from({ length: 5 }).map((_, r) => (
+                    <tr key={r} className="border-t border-border">
+                      <td className="px-4 py-2.5"><Skeleton className="h-4 w-4" /></td>
+                      <td className="px-4 py-2.5"><Skeleton className="h-4 w-28" /></td>
+                      <td className="px-4 py-2.5"><Skeleton className="h-4 w-20" /></td>
+                      <td className="px-4 py-2.5"><Skeleton className="h-4 w-16" /></td>
+                      <td className="px-4 py-2.5"><Skeleton className="h-5 w-20 rounded-full" /></td>
+                      <td className="px-4 py-2.5"><Skeleton className="h-4 w-16" /></td>
+                      <td className="px-4 py-2.5"><Skeleton className="h-4 w-16" /></td>
+                      <td className="px-4 py-2.5 text-right"><Skeleton className="h-8 w-24 ml-auto rounded-md" /></td>
+                    </tr>
+                  ))
+                ) : records.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-10 text-muted-foreground">No exit records found.</td>
+                    <td colSpan={8} className="text-center py-10 text-muted-foreground">No exit records found.</td>
                   </tr>
+                ) : (
+                  records.map(r => (
+                    <tr key={r.id} className="border-t border-border hover:bg-muted/30">
+                      <td className="px-4 py-2.5">
+                        <Checkbox
+                          checked={selectedRecords.has(r.id)}
+                          onChange={(checked) => {
+                            const newSet = new Set(selectedRecords);
+                            if (checked) newSet.add(r.id);
+                            else newSet.delete(r.id);
+                            setSelectedRecords(newSet);
+                          }}
+                        />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="font-medium">{r.employee_name}</div>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="text-xs">{r.exit_date || "—"}</div>
+                        <div className="text-[10px] text-muted-foreground">LWD: {r.last_working_day || "—"}</div>
+                      </td>
+                      <td className="px-4 py-2.5 text-xs">
+                        <span className="inline-flex px-2 py-0.5 text-[11px] rounded-full border bg-muted">
+                          {r.reason}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {permissions.update && r.status_value === "PENDING" ? (
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => { setSettlementDialog({ recordId: r.id, status: "CONFIRMED" }); setSettlementReason(""); }}
+                              className="text-[11px] font-medium rounded-full px-2 py-1 bg-success/15 text-success hover:bg-success/25"
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              onClick={() => { setSettlementDialog({ recordId: r.id, status: "REJECTED" }); setSettlementReason(""); }}
+                              className="text-[11px] font-medium rounded-full px-2 py-1 bg-destructive/15 text-destructive hover:bg-destructive/25"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        ) : (
+                          <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full font-medium ${STATUS_STYLES[r.status_value] || 'bg-muted text-muted-foreground'}`}>
+                            {r.status}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-xs font-mono">
+                        {r.final_settlement < 0 ? (
+                          <span className="text-destructive font-bold" title="Employee owes company">
+                            -{formatCurrency(Math.abs(r.final_settlement))}
+                          </span>
+                        ) : (
+                          formatCurrency(r.final_settlement)
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-muted-foreground max-w-[200px] truncate">
+                        {r.settlement_notes || "—"}
+                      </td>
+                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                        <div className="flex justify-end gap-1">
+                          <button
+                            onClick={() => router.push(`/hr/exit/${r.id}`)}
+                            className="p-1.5 rounded-md hover:bg-muted"
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          {r.status_value === "CONFIRMED" && (
+                            <button
+                              onClick={() => setAssetReturnExitId(r.id)}
+                              className="p-1.5 rounded-md hover:bg-muted text-primary"
+                              title="Return Assets"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </button>
+                          )}
+                          {r.status_value === "CONFIRMED" && r.final_settlement < 0 && (
+                            <button
+                              onClick={() => {
+                                confirmationModal.confirm({
+                                  title: "Clear Employee Dues",
+                                  message: `This will record that the employee has returned ${formatCurrency(Math.abs(r.final_settlement))} to the company and create a finance receipt. Continue?`,
+                                  type: "warning",
+                                  confirmText: "Clear Dues",
+                                  onConfirm: async () => {
+                                    await clearDuesMutation.mutateAsync(r.id);
+                                    await refetch();
+                                  },
+                                });
+                              }}
+                              className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
+                              title="Clear Dues (Employee Owes)"
+                            >
+                              <DollarSign className="w-4 h-4" />
+                            </button>
+                          )}
+                          {r.status_value === "CONFIRMED" && r.final_settlement > 0 && (
+                            <button
+                              onClick={() => {
+                                confirmationModal.confirm({
+                                  title: "Clear Settlement",
+                                  message: `This will pay ${formatCurrency(r.final_settlement)} settlement to the employee and create an expense record. Continue?`,
+                                  type: "warning",
+                                  confirmText: "Clear Settlement",
+                                  onConfirm: async () => {
+                                    await clearSettlementMutation.mutateAsync(r.id);
+                                    await refetch();
+                                  },
+                                });
+                              }}
+                              className="p-1.5 rounded-md hover:bg-success/15 text-success"
+                              title="Clear Settlement (Company Owes)"
+                            >
+                              <DollarSign className="w-4 h-4" />
+                            </button>
+                          )}
+                          {permissions.update && (
+                            <button onClick={() => { setEditingRecord(r); setModalOpen(true); }} className="p-1.5 rounded-md hover:bg-muted">
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
+                          {permissions.delete && (
+                            <button onClick={() => handleDelete(r.id)} className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>

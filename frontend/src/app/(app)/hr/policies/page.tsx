@@ -176,52 +176,6 @@ export default function HRPolicyPage() {
   // ==========================================
   // RENDER
   // ==========================================
-  if (loading) {
-    return (
-      <div className="space-y-5">
-        <PageHeader title="HR Policy Management" subtitle="Create, publish, and manage policies" />
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="bg-card border border-border rounded-xl p-4 space-y-2">
-              <Skeleton className="h-3 w-16" />
-              <Skeleton className="h-8 w-12" />
-            </div>
-          ))}
-        </div>
-        <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
-          <Skeleton className="h-12 m-3 rounded-md" />
-          <div className="overflow-x-auto p-4">
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  <th className="px-4 py-2.5"><Skeleton className="h-3 w-6" /></th>
-                  <th className="px-4 py-2.5"><Skeleton className="h-3 w-16" /></th>
-                  <th className="px-4 py-2.5"><Skeleton className="h-3 w-20" /></th>
-                  <th className="px-4 py-2.5"><Skeleton className="h-3 w-12" /></th>
-                  <th className="px-4 py-2.5"><Skeleton className="h-3 w-14" /></th>
-                  <th className="px-4 py-2.5 text-right"><Skeleton className="h-3 w-12 ml-auto" /></th>
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: 5 }).map((_, r) => (
-                  <tr key={r} className="border-t border-border">
-                    <td className="px-4 py-2.5"><Skeleton className="h-4 w-4" /></td>
-                    <td className="px-4 py-2.5"><Skeleton className="h-4 w-28" /></td>
-                    <td className="px-4 py-2.5"><Skeleton className="h-4 w-20" /></td>
-                    <td className="px-4 py-2.5"><Skeleton className="h-4 w-12" /></td>
-                    <td className="px-4 py-2.5"><Skeleton className="h-5 w-20 rounded-full" /></td>
-                    <td className="px-4 py-2.5 text-right"><Skeleton className="h-8 w-16 ml-auto rounded-md" /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <Skeleton className="h-10 m-3 rounded-md" />
-        </div>
-      </div>
-    );
-  }
-
   if (policiesError) {
     return (
       <div className="flex flex-col items-center justify-center h-96 gap-4">
@@ -367,7 +321,18 @@ export default function HRPolicyPage() {
               </tr>
             </thead>
             <tbody>
-              {records.length === 0 ? (
+              {loading ? (
+                Array.from({ length: 5 }).map((_, r) => (
+                  <tr key={r} className="border-t border-border">
+                    <td className="px-4 py-2.5"><Skeleton className="h-4 w-4" /></td>
+                    <td className="px-4 py-2.5"><Skeleton className="h-4 w-28" /></td>
+                    <td className="px-4 py-2.5"><Skeleton className="h-4 w-20" /></td>
+                    <td className="px-4 py-2.5"><Skeleton className="h-4 w-12" /></td>
+                    <td className="px-4 py-2.5"><Skeleton className="h-5 w-20 rounded-full" /></td>
+                    <td className="px-4 py-2.5 text-right"><Skeleton className="h-8 w-16 ml-auto rounded-md" /></td>
+                  </tr>
+                ))
+              ) : records.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-10 text-muted-foreground">
                     No policies found.

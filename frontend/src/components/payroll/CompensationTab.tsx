@@ -3,6 +3,7 @@
 
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2, TrendingUp, Clock, Eye, CheckCircle, XCircle } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { getFrequencyLabel, getFrequencyBadgeColor } from "./types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +12,7 @@ import { Button } from "@/components/ui/button";
 interface CompensationTabProps {
   filteredCompensations: any[];
   formatCurrency: (amount: number) => string;
+  isLoading?: boolean;
   onEdit?: (compensation: any) => void;
   onDelete?: (id: string) => void;
   onConfirm?: (id: string) => void;
@@ -27,7 +29,7 @@ const getStatusClassName = (status: string) => {
   }
 };
 
-export default function CompensationTab({ filteredCompensations, formatCurrency, onEdit, onDelete, onConfirm, onReject }: CompensationTabProps) {
+export default function CompensationTab({ filteredCompensations, formatCurrency, isLoading, onEdit, onDelete, onConfirm, onReject }: CompensationTabProps) {
   const router = useRouter();
   return (
     <div className="rounded-xl border bg-card overflow-hidden">
@@ -44,7 +46,19 @@ export default function CompensationTab({ filteredCompensations, formatCurrency,
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filteredCompensations.length === 0 ? (
+          {isLoading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <TableRow key={i}>
+                <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                <TableCell><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
+                <TableCell><Skeleton className="h-5 w-14 rounded-full" /></TableCell>
+                <TableCell className="text-right"><Skeleton className="h-8 w-20 ml-auto rounded-md" /></TableCell>
+              </TableRow>
+            ))
+          ) : filteredCompensations.length === 0 ? (
             <TableRow>
               <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                 <TrendingUp className="w-12 h-12 mx-auto mb-3 opacity-30" />
