@@ -17,6 +17,7 @@ import { LeaveFormModal } from "@/components/leave/LeaveFormModal";
 import { LeaveDetailDrawer } from "@/components/leave/LeaveDetailDrawer";
 import { LeaveCard } from "@/components/leave/LeaveCard";
 import { ApprovalActions } from "@/components/leave/ApprovalActions";
+import { ReasonInputModal } from "@/components/reuseable/ReasonInputModal";
 import { getPermissions } from "@/lib/permissions";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
@@ -58,6 +59,7 @@ export default function LeaveManagementPage() {
   const [isApplyOpen, setIsApplyOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedLeave, setSelectedLeave] = useState<any>(null);
+  const [rejectLeaveId, setRejectLeaveId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const pagination = usePagination();
   const approvalPagination = usePagination();
@@ -560,10 +562,7 @@ const leavePermissions = getPermissions(
               actions={(row) => (
                 <ApprovalActions
                   onApprove={() => handleApproval(row.id, "APPROVED")}
-                  onReject={() => {
-                    const reason = prompt("Rejection reason (optional):");
-                    handleApproval(row.id, "REJECTED", reason || undefined);
-                  }}
+                  onReject={() => setRejectLeaveId(row.id)}
                   onView={() => { setSelectedLeave(row); setIsDrawerOpen(true); }}
                 />
               )}
@@ -637,12 +636,20 @@ const leavePermissions = getPermissions(
         onClose={() => setIsDrawerOpen(false)}
         leave={selectedLeave}
         onApprove={() => selectedLeave && handleApproval(selectedLeave.id, "APPROVED")}
-        onReject={() => {
-          const reason = prompt("Rejection reason (optional):");
-          selectedLeave && handleApproval(selectedLeave.id, "REJECTED", reason || undefined);
-        }}
+        onReject={() => selectedLeave && setRejectLeaveId(selectedLeave.id)}
         canApprove={leavePermissions.approve}
         getStatusBadge={getStatusBadge}
+      />
+
+      {/* Rejection Reason Modal */}
+      <ReasonInputModal
+        isOpen={rejectLeaveId !== null}
+        onClose={() => setRejectLeaveId(null)}
+        onConfirm={(reason) => { if (rejectLeaveId) handleApproval(rejectLeaveId, "REJECTED", reason || undefined); }}
+        title="Rejection Reason"
+        placeholder="Enter reason for rejection (optional)..."
+        confirmText="Reject"
+        cancelText="Cancel"
       />
     </div>
   );
