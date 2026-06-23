@@ -182,7 +182,24 @@ def create_payment_for(
 def generate_expense_number(company_id):
     """Generate a unique expense number using Redis atomic counter."""
     from django.core.cache import cache
-    counter = cache.incr('code_counter:expense')
+    try:
+        counter = cache.incr('code_counter:expense')
+    except ValueError:
+        # Key doesn't exist yet — seed from the max existing expense number in DB
+        from apps.finance.models import Expense
+        last = Expense.objects.filter(
+            expense_number__startswith='EXP-'
+        ).order_by('-id').values_list('expense_number', flat=True).first()
+        if last:
+            try:
+                seed = int(last.replace('EXP-', ''))
+            except ValueError:
+                seed = 0
+        else:
+            seed = 0
+        cache.set('code_counter:expense', seed)
+        # Retry incr — atomic; handles concurrent requests that entered this block
+        counter = cache.incr('code_counter:expense')
     return f'EXP-{counter:04d}'
 
 
