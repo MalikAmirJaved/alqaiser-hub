@@ -6,7 +6,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions, type Kpi } from "@/components/reuseable/final/DynamicModulePage";
 import { usePayments, useDeletePayment, type Payment, paymentTypeOptions } from "@/hooks/finance/usePayments";
-import { useSuppliers } from "@/hooks/useSuppliers";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatusBadge } from "@/components/finance/ui";
@@ -46,8 +46,12 @@ export default function PaymentsPage() {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const pagination = usePagination();
 
-  const { data: suppliers = [] } = useSuppliers();
-  const supplierOptions = suppliers.map(s => ({ value: s.id, label: s.name }));
+  const fetchSuppliers = useServerSearch("/api/inventory/suppliers/", {
+    transformOption: (s: any) => ({
+      value: s.id,
+      label: s.name,
+    }),
+  });
 
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
@@ -57,7 +61,7 @@ export default function PaymentsPage() {
       { value: "DRAFT", label: "Unpaid" },
       { value: "CANCELLED", label: "Cancelled" },
     ]},
-    { name: "supplier", label: "Supplier/Customer", type: "select", searchable: true, options: supplierOptions },
+    { name: "supplier", label: "Supplier/Customer", type: "select", searchable: true, fetchOptions: fetchSuppliers },
     { name: "start_date", label: "From", type: "date" },
     { name: "end_date", label: "To", type: "date" },
   ];

@@ -31,6 +31,7 @@ import {
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useSearchParams } from "next/navigation";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import { useServerSearch } from "@/hooks/useServerSearch";
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const ACTION_COLORS: Record<string, string> = {
@@ -391,14 +392,21 @@ type Tab = "permissions" | "roles" | "overrides";
 
 export default function PermissionsPage() {
   const permissions = useFeaturePermissions("SETTINGS", "permissions");
-  const [search, setSearch] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("permissions");
   const [pendingChanges, setPendingChanges] = useState<Record<string, boolean>>({});
   const [wsOnline, setWsOnline] = useState(true);
   const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
-  const searchParams = useSearchParams(); 
-const urlUserId = searchParams.get("userId"); 
+  const searchParams = useSearchParams();  const urlUserId = searchParams.get("userId");
+
+  // Server-sde infinite scrolling user search
+  const fetchUsers = useServerSearch("/api/organization/users/", {
+    transformOption: (u: any) => ({
+      value: String(u.id),
+      label: `${u.first_name || ""} ${u.last_name || ""} (${u.username})`,
+    }),
+  });
+  
   // Hooks
   const { data: users = [], isLoading: usersLoading } = usePermissionUsers();
   const { data: modules = [], isLoading: modulesLoading, refetch: refetchModules } = useUserModules(selectedUserId);
@@ -411,18 +419,6 @@ const urlUserId = searchParams.get("userId");
   const selectedUser = users.find(u => u.id === selectedUserId);
   const hasPendingChanges = Object.keys(pendingChanges).length > 0;
 
-  const filteredUsers = useMemo(() =>
-    users.filter(u => {
-      const q = search.toLowerCase();
-      return (
-        u.username.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q) ||
-        `${u.first_name} ${u.last_name}`.toLowerCase().includes(q) ||
-        (u.department || "").toLowerCase().includes(q)
-      );
-    }),
-    [users, search]
-  );
     useEffect(() => {
     if (urlUserId && users.length > 0) {
       const id = parseInt(urlUserId, 10);
@@ -503,18 +499,18 @@ const urlUserId = searchParams.get("userId");
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* ── Left Panel: User List ─────────────────────────────────────────── */}
+        {/* ── Left Panel: User List (server-side search with infinite scroll) ── */}
         <div className="w-72 flex-shrink-0 border-r border-border flex flex-col overflow-hidden">
           <div className="py-3 pr-3 border-b border-border">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search users…"
-                className="w-full pl-8 pr-3 h-8 rounded-lg bg-muted/40 text-sm outline-none focus:ring-2 focus:ring-ring border border-border"
-              />
-            </div>
+            <SearchableSelect
+              value={selectedUserId ? String(selectedUserId) : ""}
+              onChange={(val) => {
+                if (val) setSelectedUserId(Number(val));
+              }}
+              fetchOptions={fetchUsers}
+              placeholder="Search users…"
+              pageSize={20}
+            />
           </div>
 
           <div className="flex-1 overflow-y-auto py-2 space-y-0.5">
@@ -522,10 +518,10 @@ const urlUserId = searchParams.get("userId");
               <div className="flex justify-center py-8">
                 <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
               </div>
-            ) : filteredUsers.length === 0 ? (
+            ) : users.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">No users found</p>
             ) : (
-              filteredUsers.map(user => (
+              users.map(user => (
                 <UserListItem
                   key={user.id}
                   user={user}

@@ -6,6 +6,7 @@ import PageHeader from "@/components/PageHeader";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
 import { Plus, Pencil, Trash2, UserPlus, ToggleRight } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import UserForm from "@/components/Forms/UserForm";
 import UserStatusModal from "@/components/UserStatusModal";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
@@ -131,24 +132,14 @@ export default function UsersPage() {
     return true;
   });
 
-  // Paginate
   const pageSize = 20;
   const effectiveTotal = totalCount ?? filteredUsers.length;
   const totalPages = Math.max(1, Math.ceil(effectiveTotal / pageSize));
   const safePage = Math.min(pagination.page, totalPages);
-  const paginatedUsers = filteredUsers;
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
     { name: "is_active", label: "Status", type: "boolean" },
   ];
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
 
   return (
     <div>
@@ -194,14 +185,25 @@ export default function UsersPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredUsers.length === 0 && (
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-b border-border/60">
+                    <td className="px-4 py-2.5"><Skeleton className="h-4 w-24" /></td>
+                    <td className="px-4 py-2.5"><Skeleton className="h-4 w-32" /></td>
+                    <td className="px-4 py-2.5"><Skeleton className="h-4 w-40" /></td>
+                    <td className="px-4 py-2.5"><Skeleton className="h-4 w-20" /></td>
+                    <td className="px-4 py-2.5"><Skeleton className="h-5 w-14 rounded-full" /></td>
+                    <td className="px-4 py-2.5 text-right"><Skeleton className="h-4 w-16 ml-auto" /></td>
+                  </tr>
+                ))
+              ) : filteredUsers.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-10 text-muted-foreground">
                     No users found.
                   </td>
                 </tr>
-              )}
-              {paginatedUsers.map((user) => (
+              ) : (
+                filteredUsers.map((user) => (
                 <tr key={user.id} className="border-t border-border hover:bg-muted/30">
                   <td className="px-4 py-2.5 font-mono text-xs">{user.username}</td>
                   <td className="px-4 py-2.5 font-medium">
@@ -285,7 +287,7 @@ export default function UsersPage() {
                    )}
                   </td>
                 </tr>
-              ))}
+              )))}
             </tbody>
           </table>
         </div>

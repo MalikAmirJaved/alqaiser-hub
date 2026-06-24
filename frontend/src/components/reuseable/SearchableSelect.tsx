@@ -69,6 +69,7 @@ export default function SearchableSelect({
   const asyncPageRef = useRef(asyncPage);
   const hasMoreRef = useRef(hasMore);
   const asyncOptionsRef = useRef(asyncOptions);
+  const initialLoadDoneRef = useRef(false);
   asyncPageRef.current = asyncPage;
   hasMoreRef.current = hasMore;
   asyncOptionsRef.current = asyncOptions;
@@ -116,6 +117,15 @@ export default function SearchableSelect({
     [doFetch, searchDebounceMs]
   );
 
+  // Load initial options when async and a value is set (e.g. edit form)
+  useEffect(() => {
+    if (isAsync && value && !initialLoadDoneRef.current) {
+      initialLoadDoneRef.current = true;
+      doFetch("", 1, false);
+    }
+  }, [isAsync, value, doFetch]);
+
+  // Fetch on dropdown open
   useEffect(() => {
     if (isOpen && isAsync) {
       setAsyncPage(1);

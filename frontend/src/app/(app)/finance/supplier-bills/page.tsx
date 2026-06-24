@@ -6,7 +6,7 @@ import { DynamicModulePage, type ModulePermissions } from "@/components/reuseabl
 import { useSupplierBills, useDeleteSupplierBill, usePaySupplierBill } from "@/hooks/finance/useSupplierBills";
 import { StatusBadge } from "@/components/finance/ui";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { useSuppliers } from "@/hooks/useSuppliers";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import SupplierBillFormModal from "@/components/finance/supplier-bills/SupplierBillFormModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import FilterBar from "@/components/reuseable/FilterBar";
@@ -32,12 +32,16 @@ export default function SupplierBillsPage() {
     ...(filters.supplier ? { supplier: filters.supplier } : {}),
   }), [filters, pagination.page]);
 
-  const { data: suppliers = [] } = useSuppliers();
-  const supplierOptions = suppliers.map(s => ({ value: s.id, label: s.name }));
+  const fetchSuppliers = useServerSearch("/api/inventory/suppliers/", {
+    transformOption: (s: any) => ({
+      value: s.id,
+      label: s.name,
+    }),
+  });
 
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
-    { name: "supplier", label: "Supplier", type: "select", searchable: true, options: supplierOptions },
+    { name: "supplier", label: "Supplier", type: "select", searchable: true, fetchOptions: fetchSuppliers },
     { name: "status", label: "Status", type: "status", options: [
       { value: "DRAFT", label: "Draft" },
       { value: "CANCELLED", label: "Cancelled" },

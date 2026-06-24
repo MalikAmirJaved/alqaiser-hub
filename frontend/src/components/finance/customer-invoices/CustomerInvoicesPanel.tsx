@@ -6,7 +6,7 @@ import { DynamicModulePage, type ModulePermissions } from "@/components/reuseabl
 import { useCustomerInvoices, usePayCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
 import { useSalesInvoices } from "@/hooks/sales/useSalesInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { useCustomers } from "@/hooks/useCustomers";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import CustomerInvoiceFormModal from "@/components/finance/customer-invoices/CustomerInvoiceFormModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatusBadge } from "@/components/finance/ui";
@@ -28,12 +28,15 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
   const [filters, setFilters] = useState<Record<string, string>>({});
   const pagination = usePagination();
 
-  const { data: customers = [] } = useCustomers();
-  const customerOptions = customers.map(c => ({ value: c.id, label: c.name }));
+  const fetchCustomers = useServerSearch("/api/finance/customers/", {
+    transformOption: (c: any) => ({
+      value: c.id,
+      label: c.name,
+    }),
+  });
 
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
-    { name: "customer", label: "Customer", type: "select", searchable: true, options: customerOptions },
     { name: "status", label: "Status", type: "status", options: [
       { value: "DRAFT", label: "Draft" },
       { value: "CANCELLED", label: "Cancelled" },
