@@ -354,6 +354,7 @@ export default function WarehousesPage() {
           setState={(val) => { setFilters(f => ({ ...f, state: val, city: "" })); pagination.resetPage(); }}
           city={filters.city || ""}
           setCity={(val) => { setFilters(f => ({ ...f, city: val })); pagination.resetPage(); }}
+          cssCol="3"
         />
       </div>
 
