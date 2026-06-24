@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CountrySelect, StateSelect, CitySelect } from "@/components/reuseable/LocationSelectors";
 import { Checkbox } from "@/components/reuseable/Checkbox";
-import { useActiveEmployees } from "@/hooks/useEmployees";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { useAutoCode } from "@/hooks/useAutoCode";
 
@@ -34,14 +33,15 @@ interface WarehouseFormProps {
   onSubmit: (data: WarehouseFormData) => void;
   onCancel: () => void;
   isLoading?: boolean;
+  fetchEmployeeOptions?: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
+  employeeDisplayLabel?: string;
 }
 
 function FieldWrapper({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <div className={`space-y-2 ${className}`}>{children}</div>;
 }
 
-export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: WarehouseFormProps) {
-  const { data: employees = [] } = useActiveEmployees();
+export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading, fetchEmployeeOptions, employeeDisplayLabel }: WarehouseFormProps) {
 
   const [formData, setFormData] = useState<WarehouseFormData>(() => {
     const initial = initialData as Record<string, any> | undefined;
@@ -70,11 +70,6 @@ export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: Wa
       generateCode().then(code => setFormData(prev => ({ ...prev, code }))).catch(() => {});
     }
   }, []);
-
-  const employeeOptions = employees.map((emp) => ({
-    value: emp.id,
-    label: `${emp.first_name} ${emp.last_name || ""} (${emp.department_name || "N/A"})`,
-  }));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,8 +132,9 @@ export function WarehouseForm({ initialData, onSubmit, onCancel, isLoading }: Wa
           <SearchableSelect
             value={formData.employee_uuid || ""}
             onChange={(val) => setFormData({ ...formData, employee_uuid: val || null })}
-            options={employeeOptions}
+            fetchOptions={fetchEmployeeOptions}
             placeholder="Select employee"
+            displayLabel={employeeDisplayLabel || ""}
           />
         </FieldWrapper>
 

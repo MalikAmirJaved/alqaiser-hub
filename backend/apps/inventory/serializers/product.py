@@ -123,19 +123,21 @@ class ProductSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)
     variants = ProductVariantSerializer(many=True, read_only=True)
     category_id = serializers.UUIDField(source='category._id', read_only=True, allow_null=True)
-    brand_id    = serializers.UUIDField(source='brand._id',    read_only=True, allow_null=True)
-    
-    # New fields for user info
+    category_name = serializers.CharField(source='category.name', read_only=True, default=None)
+    brand_id = serializers.UUIDField(source='brand._id', read_only=True, allow_null=True)
+    brand_name = serializers.CharField(source='brand.name', read_only=True, default=None)
+
     created_by_name = serializers.SerializerMethodField()
     updated_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
         fields = [
-            'id', 'product_name', 'description', 'category_id', 'brand_id',
+            'id', 'product_name', 'description', 'category_id', 'category_name',
+            'brand_id', 'brand_name',
             'unit', 'storage_requirement', 'tax_rate', 'status', 'is_active',
             'variants', 'created_at', 'updated_at',
-            'created_by_name', 'updated_by_name',  # add these
+            'created_by_name', 'updated_by_name',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 

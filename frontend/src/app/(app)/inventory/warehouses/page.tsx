@@ -22,6 +22,7 @@ import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { usePagination } from "@/hooks/usePagination";
+import { useServerSearch } from "@/hooks/useServerSearch";
 
 type ViewMode = "table" | "grid";
 
@@ -33,6 +34,14 @@ export default function WarehousesPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null);
   const pagination = usePagination();
+
+  const fetchEmployees = useServerSearch("/api/hr/employees/", {
+    extraParams: { employment_status: "ACTIVE" },
+    transformOption: (e: any) => ({
+      value: e.id,
+      label: `${e.first_name} ${e.last_name || ""} (${e.department_name || "N/A"})`,
+    }),
+  });
 
   const { data: warehouses = [], isLoading, refetch, totalCount } = useWarehouses({
     search: filters.search || undefined,
@@ -383,6 +392,8 @@ export default function WarehousesPage() {
                   setEditingWarehouse(null);
                 }}
                 isLoading={createWarehouse.isPending || updateWarehouse.isPending}
+                fetchEmployeeOptions={fetchEmployees}
+                employeeDisplayLabel={editingWarehouse?.employee_name || ""}
               />
             </div>
           </div>

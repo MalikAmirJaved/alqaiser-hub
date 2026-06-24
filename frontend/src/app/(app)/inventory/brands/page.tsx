@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import PageHeader from "@/components/PageHeader";
 import { Plus, Trash2, Pencil, Globe, ChevronLeft, ChevronRight } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import BrandFormModal from "@/components/inventory/brand/BrandFormModal";
 import FilterBar, { FilterField } from "@/components/reuseable/FilterBar";
 import { useBrands, useDeleteBrand, Brand } from "@/hooks/useBrands";
@@ -66,13 +67,15 @@ export default function BrandsPage() {
               </tr>
             </thead>
             <tbody>
-              {isLoading && (
-                <tr>
-                  <td colSpan={5} className="text-center py-12 text-muted-foreground">
-                    Loading...
-                  </td>
+              {isLoading && Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} className="border-t border-border">
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-48" /></td>
+                  <td className="px-4 py-3"><div className="flex justify-end gap-2"><Skeleton className="h-8 w-8 rounded-lg" /><Skeleton className="h-8 w-8 rounded-lg" /></div></td>
                 </tr>
-              )}
+              ))}
               {!isLoading && items.length === 0 && (
                 <tr>
                   <td colSpan={5} className="text-center py-12 text-muted-foreground">

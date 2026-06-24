@@ -47,7 +47,9 @@ export interface Product {
   product_name: string;
   description: string;
   category_id: string | null;
+  category_name?: string | null;
   brand_id: string | null;
+  brand_name?: string | null;
   unit: string;
   storage_requirement: string;
   tax_rate: number;

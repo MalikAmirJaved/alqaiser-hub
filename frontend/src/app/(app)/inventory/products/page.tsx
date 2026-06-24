@@ -10,12 +10,11 @@ import { StatsCards } from "@/components/reuseable/StatsCards";
 import FilterBar, { FilterField } from "@/components/reuseable/FilterBar";
 import ProductForm from "@/components/inventory/product/ProductForm";
 import { useProducts, useDeleteProduct, useCreateProduct, useUpdateProduct, Product, ProductPayload } from "@/hooks/useProducts";
-import { useCategories } from "@/hooks/useCategories";
-import { useBrands } from "@/hooks/useBrands";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { usePagination } from "@/hooks/usePagination";
+import { useServerSearch } from "@/hooks/useServerSearch";
 
 export default function ProductsPage() {
   const router = useRouter();
@@ -33,16 +32,19 @@ export default function ProductsPage() {
   }), [filters, pagination.page]);
 
   const { data: products = [], isLoading, refetch, totalCount } = useProducts(filtersWithPage);
-  const { data: categories = [] } = useCategories();
-  const { data: brands = [] } = useBrands();
 
-  // Build filter field options from fetched data
-  const categoryOpts = categories.map(c => ({ value: c.id, label: c.name }));
-  const brandOpts = brands.map(b => ({ value: b.id, label: b.name }));
+  const fetchCategories = useServerSearch("/api/inventory/categories/", {
+    transformOption: (c: any) => ({ value: c.id, label: c.name }),
+  });
+
+  const fetchBrands = useServerSearch("/api/inventory/brands/", {
+    transformOption: (b: any) => ({ value: b.id, label: b.name }),
+  });
+
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
-    { name: "category", label: "Category", type: "select", searchable: true, options: categoryOpts },
-    { name: "brand", label: "Brand", type: "select", searchable: true, options: brandOpts },
+    { name: "category", label: "Category", type: "select", searchable: true, fetchOptions: fetchCategories },
+    { name: "brand", label: "Brand", type: "select", searchable: true, fetchOptions: fetchBrands },
     { name: "status", label: "Status", type: "status", options: [
       { value: "active", label: "Active" },
       { value: "draft", label: "Draft" },
@@ -68,14 +70,14 @@ export default function ProductsPage() {
       const first = allImages[0];
       return {
         ...p,
-        category_name: categories.find(c => c.id === p.category_id)?.name || "—",
-        brand_name: brands.find(b => b.id === p.brand_id)?.name || "—",
+        category_name: p.category_name || "—",
+        brand_name: p.brand_name || "—",
         display_price: getProductPrice(p),
         total_stock: getTotalStock(p),
         main_image: primary?.image_url || first?.image_url || "",
       };
     }),
-    [products, categories, brands]
+    [products]
   );
 
   // ── Stats ──

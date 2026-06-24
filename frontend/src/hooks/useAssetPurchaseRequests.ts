@@ -29,7 +29,10 @@ export function useAssetPurchaseRequests(params?: Record<string, string>) {
 
   return useQuery<AssetPurchaseRequest[]>({
     queryKey: ["assetPurchaseRequests", params],
-    queryFn: () => api(`/api/hr/asset-purchase-requests/${queryString}`),
+    queryFn: async () => {
+      const data: any = await api(`/api/hr/asset-purchase-requests/${queryString}`);
+      return data?.results ?? (Array.isArray(data) ? data : []);
+    },
     staleTime: 30 * 1000,
   });
 }
