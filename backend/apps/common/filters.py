@@ -65,10 +65,14 @@ class FilterPaginationMixin:
     def search_queryset(self, queryset):
         search = self.request.query_params.get('search', '').strip()
         if search and self.search_fields:
-            q = Q()
-            for field in self.search_fields:
-                q |= Q(**{f'{field}__icontains': search})
-            queryset = queryset.filter(q)
+            terms = search.split()
+            combined_q = Q()
+            for term in terms:
+                term_q = Q()
+                for field in self.search_fields:
+                    term_q |= Q(**{f'{field}__icontains': term})
+                combined_q &= term_q
+            queryset = queryset.filter(combined_q)
         return queryset
 
     def order_queryset(self, queryset):
@@ -132,15 +136,19 @@ class GenericFilterMixin:
                 else:
                     continue  # skip invalid boolean values
 
-            # List of fields -> OR search across multiple fields
+            # List of fields -> multi-term search across multiple fields
             if isinstance(lookups, (list, tuple)):
-                q = Q()
-                for field in lookups:
-                    # Default to icontains for search fields if no explicit lookup
-                    if '__' not in field:
-                        field = f'{field}__icontains'
-                    q |= Q(**{field: value})
-                qs = qs.filter(q)
+                terms = str(value).split()
+                combined_q = Q()
+                for term in terms:
+                    term_q = Q()
+                    for field in lookups:
+                        # Default to icontains for search fields if no explicit lookup
+                        if '__' not in field:
+                            field = f'{field}__icontains'
+                        term_q |= Q(**{field: term})
+                    combined_q &= term_q
+                qs = qs.filter(combined_q)
             else:
                 # Single field lookup
                 qs = qs.filter(**{lookups: value})
