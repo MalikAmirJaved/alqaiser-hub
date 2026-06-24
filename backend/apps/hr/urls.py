@@ -19,7 +19,7 @@ from apps.hr.views.employee_asset_views import (
 from apps.hr.views.shift_management_views import (
     EmployeeShiftResolveView, ShiftOverrideView, ShiftDateRangeView,
     BulkShiftAssignmentView, ShiftHistoryView, ShiftStatisticsView,
-    ShiftScheduleGenerateView
+    ShiftScheduleGenerateView, ShiftMonthSummaryView, ShiftDayDetailView
 )
 
 from apps.hr.views.leave_views import (
@@ -118,6 +118,8 @@ urlpatterns = [
     path('shifts/history/', ShiftHistoryView.as_view(), name='shift-history'),
     path('shifts/stats/', ShiftStatisticsView.as_view(), name='shift-stats'),
     path('shifts/generate-schedule/', ShiftScheduleGenerateView.as_view(), name='shift-generate-schedule'),
+    path('shifts/month-summary/', ShiftMonthSummaryView.as_view(), name='shift-month-summary'),
+    path('shifts/day-detail/', ShiftDayDetailView.as_view(), name='shift-day-detail'),
 
     # leave Management
     path('leaves/', LeaveRequestView.as_view(), name='leave-requests'),
