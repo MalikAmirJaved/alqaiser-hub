@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { usePagination } from "@/hooks/usePagination";
-import debounce from "lodash/debounce";
 import { useSalesOrders, useGenerateInvoice, type SalesOrderResponse } from "@/hooks/useSalesOrder";
 import {
   printThermalReceipt,
@@ -18,6 +17,8 @@ import {
   type QuoteInvoiceData,
   type DocCompany,
 } from "@/components/common/QuoteInvoiceDocument";
+import { Skeleton } from "@/components/ui/skeleton";
+
 import {
   ChevronDown,
   ChevronUp,
@@ -343,15 +344,14 @@ export function SalesListPanel() {
 
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
   const pagination = usePagination();
 
   const orderFilters = useMemo(() => ({
     status: statusFilter,
-    search: debouncedSearch || undefined,
+    search: searchQuery || undefined,
     page: pagination.page,
     page_size: pagination.pageSize,
-  }), [statusFilter, debouncedSearch, pagination.page, pagination.pageSize]);
+  }), [statusFilter, searchQuery, pagination.page, pagination.pageSize]);
 
   const { data: ordersRes, isLoading } = useSalesOrders(orderFilters);
   const orders = (ordersRes?.data ?? []) as OrderWithInvoice[];
@@ -369,20 +369,10 @@ export function SalesListPanel() {
   const totalPages = Math.max(1, Math.ceil(totalCount / pagination.pageSize));
   const safePage = Math.min(pagination.page, totalPages);
 
-  // Debounced search
-  const debouncedSetSearch = useCallback(
-    debounce((value: string) => setDebouncedSearch(value), 300),
-    []
-  );
-
-  useEffect(() => {
-    return () => { debouncedSetSearch.cancel(); };
-  }, [debouncedSetSearch]);
-
   // Reset page on filter change
   useEffect(() => {
     pagination.resetPage();
-  }, [statusFilter, debouncedSearch]);
+  }, [statusFilter, searchQuery]);
 
   // Handle generate invoice
   const handleGenerateInvoice = async (order: OrderWithInvoice) => {
@@ -464,21 +454,10 @@ export function SalesListPanel() {
     { value: "CANCELLED", label: "Cancelled" },
   ];
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <span className="text-sm text-muted-foreground">Loading sales orders...</span>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* ── Header ── */}
-      <div className="px-6 py-4 border-b border-border/60 bg-card/30">
+      {/* ── Header (always visible, keeps search input focused) ── */}
+      <div className="px-6 py-4 border-b border-border/60 bg-card/30 shrink-0">
         <div className="flex items-center justify-between mb-3">
           <div>
             <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
@@ -496,7 +475,7 @@ export function SalesListPanel() {
             type="text"
             placeholder="Search by order#, customer, or product..."
             value={searchQuery}
-            onChange={(e) => { setSearchQuery(e.target.value); debouncedSetSearch(e.target.value); pagination.resetPage(); }}
+            onChange={(e) => { setSearchQuery(e.target.value); pagination.resetPage(); }}
             className="w-full h-9 pl-9 pr-3 text-xs rounded-xl border border-border bg-background outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
           />
         </div>
@@ -522,39 +501,73 @@ export function SalesListPanel() {
         </div>
       </div>
 
-      {/* ── Orders List ── */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {orders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="h-16 w-16 rounded-2xl bg-muted/30 flex items-center justify-center mb-4">
-              <ShoppingBag className="h-8 w-8 text-muted-foreground/40" />
+      {/* ── Orders List (skeleton when loading, actual cards when ready) ── */}
+      {isLoading ? (
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="bg-card border border-border rounded-2xl overflow-hidden">
+              <div className="px-5 py-4 flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3 min-w-0">
+                  <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-4 w-16 rounded-md" />
+                    </div>
+                    <Skeleton className="h-3 w-44" />
+                  </div>
+                </div>
+                <div className="text-right space-y-1">
+                  <Skeleton className="h-5 w-20 ml-auto" />
+                  <Skeleton className="h-3 w-12 ml-auto" />
+                </div>
+              </div>
+              <div className="px-5 pb-2">
+                <Skeleton className="h-5 w-32 rounded-lg" />
+              </div>
+              <div className="px-5 py-3 border-t border-border/40">
+                <div className="flex gap-2">
+                  <Skeleton className="h-7 w-28 rounded-lg" />
+                  <Skeleton className="h-7 w-16 rounded-lg" />
+                </div>
+              </div>
             </div>
-            <p className="text-sm font-semibold text-foreground">
-              {searchQuery || statusFilter !== "ALL" ? "No matching orders" : "No sales yet"}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
-              {searchQuery || statusFilter !== "ALL"
-                ? "Try a different search or filter"
-                : "Complete a sale to see it here"}
-            </p>
-          </div>
-        ) : (
-          orders.map((order) => (
-            <OrderCard
-              key={order.id}
-              order={order}
-              formatCurrency={formatCurrency}
-              onPrintInvoice={handlePrintInvoice}
-              onGenerateInvoice={handleGenerateInvoice}
-              pdfLoading={pdfLoading}
-              generatingId={generatingId}
-            />
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {orders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="h-16 w-16 rounded-2xl bg-muted/30 flex items-center justify-center mb-4">
+                <ShoppingBag className="h-8 w-8 text-muted-foreground/40" />
+              </div>
+              <p className="text-sm font-semibold text-foreground">
+                {searchQuery || statusFilter !== "ALL" ? "No matching orders" : "No sales yet"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
+                {searchQuery || statusFilter !== "ALL"
+                  ? "Try a different search or filter"
+                  : "Complete a sale to see it here"}
+              </p>
+            </div>
+          ) : (
+            orders.map((order) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                formatCurrency={formatCurrency}
+                onPrintInvoice={handlePrintInvoice}
+                onGenerateInvoice={handleGenerateInvoice}
+                pdfLoading={pdfLoading}
+                generatingId={generatingId}
+              />
+            ))
+          )}
+        </div>
+      )}
 
       {/* ── Pagination ── */}
-      {totalCount > pagination.pageSize && (
+      {!isLoading && totalCount > pagination.pageSize && (
         <div className="flex items-center justify-between px-5 py-3 border-t border-border/60 bg-muted/10">
           <span className="text-xs text-muted-foreground font-medium">
             {(safePage - 1) * pagination.pageSize + 1}-

@@ -11,6 +11,7 @@ import {
   useCancelSalesOrder,
   useUpdateSalesOrder,
   useDraftSalesOrders,
+  useSalesOrders,
   cartToLineItems, CartLine
 } from "@/hooks/useSalesOrder";
 import { useAllVariantsSimple } from "@/hooks/useAllVariants";
@@ -25,6 +26,7 @@ import { ReturnPanel } from "@/components/inventory/pos/ReturnPanel";
 import { SalesListPanel } from "@/components/inventory/pos/SalesListPanel";
 import ThermalReceiptModal, { type ThermalReceiptData, printThermalReceipt } from "@/components/inventory/pos/ThermalReceiptModal";
 import type { PosVariant } from "@/hooks/usePosCatalog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { debounce } from "lodash";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -54,6 +56,16 @@ export default function SalesPage() {
   const [thermalReceiptData, setThermalReceiptData] = useState<ThermalReceiptData | null>(null);
   const [thermalModalOpen, setThermalModalOpen] = useState(false);
   const heldPagination = usePagination();
+
+  const { data: heldOrdersRes, isLoading: isLoadingHeld } = useSalesOrders({
+    status: "DRAFT",
+    page: heldPagination.page,
+    page_size: heldPagination.pageSize,
+  });
+  const heldOrders = heldOrdersRes?.data ?? [];
+  const heldOrdersTotalCount = heldOrdersRes?.totalCount ?? 0;
+  const heldTotalPages = Math.max(1, Math.ceil(heldOrdersTotalCount / heldPagination.pageSize));
+  const safeHeldPage = Math.min(heldPagination.page, heldTotalPages);
 
   // Debounced draft updater
   const updateDraftDebounced = useRef(
@@ -445,10 +457,38 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
                 <div className="flex items-center justify-between mb-2">
                   <h2 className="text-xl font-black text-foreground">Held Transactions</h2>
                   <span className="text-xs font-bold text-muted-foreground bg-muted px-3 py-1 rounded-full uppercase tracking-widest">
-                    {draftOrders.length} Orders
+                    {heldOrdersTotalCount} Orders
                   </span>
                 </div>
-                {draftOrders.length === 0 ? (
+                {isLoadingHeld ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="bg-card border border-border rounded-[24px] p-5">
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex flex-col gap-2">
+                            <Skeleton className="h-3.5 w-12 rounded-md" />
+                            <Skeleton className="h-5 w-36" />
+                          </div>
+                          <div className="text-right space-y-1.5">
+                            <Skeleton className="h-3.5 w-20" />
+                            <Skeleton className="h-3 w-14 ml-auto" />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 mb-6">
+                          <Skeleton className="h-8 w-8 rounded-full" />
+                          <div className="space-y-1.5">
+                            <Skeleton className="h-3.5 w-28" />
+                            <Skeleton className="h-3 w-16" />
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Skeleton className="flex-1 h-10 rounded-xl" />
+                          <Skeleton className="w-10 h-10 rounded-xl" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : heldOrders.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20 bg-muted/20 rounded-[32px] border border-dashed border-border/60">
                     <div className="w-20 h-20 rounded-[28px] bg-muted/50 flex items-center justify-center text-muted-foreground mb-4">
                       <PauseIcon size={32} />
@@ -458,68 +498,58 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
                   </div>
                 ) : (
                   <>
-                    {(() => {
-                      const totalDraftPages = Math.max(1, Math.ceil(draftOrders.length / heldPagination.pageSize));
-                      const safeDraftPage = Math.min(heldPagination.page, totalDraftPages);
-                      const paginatedDrafts = draftOrders.slice(
-                        (safeDraftPage - 1) * heldPagination.pageSize,
-                        safeDraftPage * heldPagination.pageSize,
-                      );
-                      return (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {paginatedDrafts.map(order => (
-                            <div key={order.id} className="group bg-card border border-border rounded-[24px] p-5 hover:border-primary/40 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300">
-                              <div className="flex items-start justify-between mb-4">
-                                <div className="flex flex-col gap-1">
-                                  <span className="text-[10px] font-black text-warning uppercase tracking-widest bg-warning/10 px-2 py-0.5 rounded-md w-fit">
-                                    Draft
-                                  </span>
-                                  <p className="text-base font-black text-foreground group-hover:text-primary transition-colors">{order.order_number}</p>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-xs font-bold text-muted-foreground">{new Date(order.order_date).toLocaleDateString()}</p>
-                                  <p className="text-[10px] font-bold text-muted-foreground/60 uppercase">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                                </div>
-                              </div>
-                              
-                              <div className="flex items-center gap-3 mb-6 p-3 bg-muted/30 rounded-xl">
-                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-black">
-                                  {(order.customer_name || "W").charAt(0).toUpperCase()}
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="text-xs font-bold truncate">{order.customer_name || "Walk-in Customer"}</p>
-                                  <p className="text-[10px] font-medium text-muted-foreground">{order.lines?.length || 0} Products</p>
-                                </div>
-                              </div>
-
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => loadDraftOrder(order)}
-                                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl text-xs font-black hover:opacity-90 transition-all active:scale-[0.97]"
-                                >
-                                  <PlayIcon size={14} /> Resume Order
-                                </button>
-                                {permissions.delete && (
-                                  <button
-                                    onClick={() => handleCancelDraft(order.id)}
-                                    disabled={isCancelling}
-                                    className="w-10 flex items-center justify-center bg-destructive/10 text-destructive rounded-xl hover:bg-destructive hover:text-destructive-foreground transition-all disabled:opacity-50"
-                                  >
-                                    <XIcon size={14} />
-                                  </button>
-                                )}
-                              </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {heldOrders.map(order => (
+                        <div key={order.id} className="group bg-card border border-border rounded-[24px] p-5 hover:border-primary/40 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300">
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex flex-col gap-1">
+                              <span className="text-[10px] font-black text-warning uppercase tracking-widest bg-warning/10 px-2 py-0.5 rounded-md w-fit">
+                                Draft
+                              </span>
+                              <p className="text-base font-black text-foreground group-hover:text-primary transition-colors">{order.order_number}</p>
                             </div>
-                          ))}
+                            <div className="text-right">
+                              <p className="text-xs font-bold text-muted-foreground">{new Date(order.order_date).toLocaleDateString()}</p>
+                              <p className="text-[10px] font-bold text-muted-foreground/60 uppercase">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-3 mb-6 p-3 bg-muted/30 rounded-xl">
+                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-black">
+                              {(order.customer_name || "W").charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold truncate">{order.customer_name || "Walk-in Customer"}</p>
+                              <p className="text-[10px] font-medium text-muted-foreground">{order.lines?.length || 0} Products</p>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => loadDraftOrder(order)}
+                              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl text-xs font-black hover:opacity-90 transition-all active:scale-[0.97]"
+                            >
+                              <PlayIcon size={14} /> Resume Order
+                            </button>
+                            {permissions.delete && (
+                              <button
+                                onClick={() => handleCancelDraft(order.id)}
+                                disabled={isCancelling}
+                                className="w-10 flex items-center justify-center bg-destructive/10 text-destructive rounded-xl hover:bg-destructive hover:text-destructive-foreground transition-all disabled:opacity-50"
+                              >
+                                <XIcon size={14} />
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      );
-                    })()}
-                    {draftOrders.length > heldPagination.pageSize && (
+                      ))}
+                    </div>
+                    {heldOrdersTotalCount > heldPagination.pageSize && (
                       <div className="flex items-center justify-between px-3 py-2 border border-border/60 bg-muted/10 rounded-lg">
                         <span className="text-xs text-muted-foreground font-medium">
-                          {(Math.min(heldPagination.page, Math.max(1, Math.ceil(draftOrders.length / heldPagination.pageSize))) - 1) * heldPagination.pageSize + 1}-
-                          {Math.min(heldPagination.page * heldPagination.pageSize, draftOrders.length)} of{" "}
-                          {draftOrders.length}
+                          {(safeHeldPage - 1) * heldPagination.pageSize + 1}-
+                          {Math.min(safeHeldPage * heldPagination.pageSize, heldOrdersTotalCount)} of{" "}
+                          {heldOrdersTotalCount}
                         </span>
                         <div className="flex items-center gap-1">
                           <button
@@ -531,7 +561,7 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
                           </button>
                           <button
                             onClick={heldPagination.nextPage}
-                            disabled={heldPagination.page >= Math.max(1, Math.ceil(draftOrders.length / heldPagination.pageSize))}
+                            disabled={safeHeldPage >= heldTotalPages}
                             className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 disabled:pointer-events-none transition-colors text-muted-foreground"
                           >
                             <ChevronRight className="h-4 w-4" />
