@@ -284,30 +284,6 @@ export default function ChartOfAccountsPage() {
         breadcrumbs={["General Ledger", "Chart of Accounts"]}
         title="Chart of Accounts"
         description="Hierarchical account structure across Assets, Liabilities, Equity, Revenue, and Expense."
-        actions={
-          <>
-            <ToolbarButton icon={Upload} variant="ghost">
-              Import
-            </ToolbarButton>
-            {permissions.export && (
-              <ToolbarButton icon={Download} variant="ghost">
-                Export
-              </ToolbarButton>
-            )}
-            {permissions.create && (
-              <ToolbarButton
-                icon={Plus}
-                variant="primary"
-                onClick={() => {
-                  setEditingAccount(null);
-                  setModalOpen(true);
-                }}
-              >
-                New Account
-              </ToolbarButton>
-            )}
-          </>
-        }
       />
       <div className="p-6 space-y-4">
         {/* Summary cards */}
