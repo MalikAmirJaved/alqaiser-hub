@@ -191,8 +191,13 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
   const finalCart = overrideCart || cart;
   if (finalCart.length === 0) return;
   
+  if (!selectedWarehouse) {
+    alert("Please select a station/warehouse before completing the sale.");
+    return;
+  }
+  
   const customerId = selectedCustomer?.id ?? null;
-  const warehouseId = selectedWarehouse?.id;
+  const warehouseId = selectedWarehouse.id;
   
   const notesWithPayments = notes + (payments.length ? ` | Payments: ${payments.map(p => `${p.method}:${p.amount}`).join(", ")}` : "");
   try {
