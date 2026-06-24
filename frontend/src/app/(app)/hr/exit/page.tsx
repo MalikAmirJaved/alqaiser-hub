@@ -681,6 +681,7 @@ function ExitFormModal({
               fetchOptions={fetchEmployees}
               placeholder="Search employees..."
               disabled={isLocked}
+              displayLabel={initialData?.employee_name || ""}
             />
           </label>
 
