@@ -223,7 +223,8 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
     clearCart();
     refetchDrafts();
     await queryClient.refetchQueries({ queryKey: ["inventory_variant"] });
-    await queryClient.refetchQueries({ queryKey: ["batchStock"] });
+    await queryClient.refetchQueries({ queryKey: ["inventory_stock"] });
+    await queryClient.refetchQueries({ queryKey: ["pos_catalog"] });
     queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
     
     // Auto-show thermal receipt popup
@@ -308,7 +309,7 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
       clearCart();
       refetchDrafts();
       await queryClient.refetchQueries({ queryKey: ["inventory_variant"] });
-      await queryClient.refetchQueries({ queryKey: ["batchStock"] });
+      await queryClient.refetchQueries({ queryKey: ["inventory_stock"] });
     } catch (err: any) {
       console.error(err);
     }

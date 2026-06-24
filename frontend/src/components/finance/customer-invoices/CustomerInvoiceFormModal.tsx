@@ -1,7 +1,8 @@
 // components/finance/CustomerInvoiceFormModal.tsx
 import { useEffect, useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
-import { X, Plus, Trash2, Search, RotateCw } from "lucide-react";import { useQueryClient } from "@tanstack/react-query";
+import { X, Plus, Trash2, Search, RotateCw } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreateCustomerInvoice,
   useUpdateCustomerInvoice,
@@ -10,6 +11,7 @@ import {
 import { useCreateSalesInvoice, useUpdateSalesInvoice } from "@/hooks/sales/useSalesInvoices";
 import { useServerSearch } from "@/hooks/useServerSearch";
 import { useApi } from "@/hooks/useApi";
+import type { VariantDetail } from "@/hooks/useAllVariants";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useAutoCode } from "@/hooks/useAutoCode";
@@ -173,7 +175,7 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
       newLines[index] = { ...newLines[index], variant: value };
       if (value) {
         try {
-          const variant = await api(`/api/inventory/variants/${value}/`);
+          const variant = await api<VariantDetail>(`/api/inventory/variants/${value}/`);
           if (variant) {
             newLines[index] = {
               ...newLines[index],

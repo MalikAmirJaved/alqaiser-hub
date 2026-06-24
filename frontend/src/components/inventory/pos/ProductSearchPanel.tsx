@@ -26,8 +26,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
 
   // ── Infinite scroll state ──
   const [page, setPage] = useState(1);
-  const [allVariants, setAllVariants] = useState<(PosVariant & { product_name: string; product_id: string })[]>([]);
-  const [allProducts, setAllProducts] = useState<PosCatalogProduct[]>([]);
+  const [pageData, setPageData] = useState<Record<number, { products: PosCatalogProduct[]; variants: (PosVariant & { product_name: string; product_id: string })[] }>>({});
   const [hasMore, setHasMore] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
   const [totalVariantCount, setTotalVariantCount] = useState(0);
@@ -36,10 +35,22 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
   const prevFiltersRef = useRef({ warehouseId, debouncedSearch, categoryId, brandId });
   const loadingRef = useRef(false);
 
+  const allProducts = useMemo(() =>
+    Object.entries(pageData)
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .flatMap(([, data]) => data.products),
+    [pageData],
+  );
+  const allVariants = useMemo(() =>
+    Object.entries(pageData)
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .flatMap(([, data]) => data.variants),
+    [pageData],
+  );
+
   const resetInfiniteScroll = useCallback(() => {
     setPage(1);
-    setAllVariants([]);
-    setAllProducts([]);
+    setPageData({});
     setHasMore(true);
     setTotalCount(0);
     setTotalVariantCount(0);
@@ -56,7 +67,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
 
   const { data: catalogResponse, isLoading, isFetching } = usePosCatalog(catalogFilters);
 
-  // Accumulate data when a new page arrives; reset when filters change
+  // Accumulate data by page; refetches replace the page entry instead of appending
   useEffect(() => {
     const prev = prevFiltersRef.current;
     const filtersChanged =
@@ -67,8 +78,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
 
     if (filtersChanged) {
       prevFiltersRef.current = { warehouseId, debouncedSearch, categoryId, brandId };
-      setAllVariants([]);
-      setAllProducts([]);
+      setPageData({});
       setPage(1);
       setHasMore(true);
       setTotalCount(0);
@@ -83,13 +93,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
           p.variants.map(v => ({ ...v, product_name: p.product_name, product_id: p.id }))
         );
 
-        if (page === 1) {
-          setAllProducts(newProducts);
-          setAllVariants(newVariants);
-        } else {
-          setAllProducts(prev => [...prev, ...newProducts]);
-          setAllVariants(prev => [...prev, ...newVariants]);
-        }
+        setPageData(prev => ({ ...prev, [page]: { products: newProducts, variants: newVariants } }));
 
         setTotalCount(catalogResponse.count);
         setTotalVariantCount(catalogResponse.variant_count ?? 0);

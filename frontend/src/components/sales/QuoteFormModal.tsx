@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { X, Plus, Trash2, Search } from "lucide-react";
 import { useServerSearch } from "@/hooks/useServerSearch";
 import { useApi } from "@/hooks/useApi";
+import type { VariantDetail } from "@/hooks/useAllVariants";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
 import { useCreateQuote, useUpdateQuote, Quote } from "@/hooks/sales/useQuotes";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
@@ -156,7 +157,7 @@ export default function QuoteFormModal({
       newLines[index] = { ...newLines[index], variant: value };
       if (value) {
         try {
-          const variant = await api(`/api/inventory/variants/${value}/`);
+          const variant = await api<VariantDetail>(`/api/inventory/variants/${value}/`);
           if (variant) {
             newLines[index] = {
               ...newLines[index],
