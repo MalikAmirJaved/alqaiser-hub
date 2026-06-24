@@ -40,6 +40,7 @@ export function useWarehouses(filters?: {
   search?: string;
   is_active?: boolean;
   country?: string;
+  state?: string;
   city?: string;
   page?: string;
 }) {
@@ -48,6 +49,7 @@ export function useWarehouses(filters?: {
   if (filters?.search) params.append("search", filters.search);
   if (filters?.is_active !== undefined) params.append("is_active", String(filters.is_active));
   if (filters?.country) params.append("country", filters.country);
+  if (filters?.state) params.append("state", filters.state);
   if (filters?.city) params.append("city", filters.city);
   if (filters?.page) params.append("page", filters.page);
   const url = `/api/inventory/warehouses/${params.toString() ? `?${params}` : ""}`;

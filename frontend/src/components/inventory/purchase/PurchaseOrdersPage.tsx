@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Package, Building2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Package, Building2, ChevronLeft, ChevronRight, HandCoins, ShoppingCart } from 'lucide-react';
 import { usePagination } from '@/hooks/usePagination';
 import FilterBar from '@/components/reuseable/FilterBar';
 import type { FilterField } from '@/components/reuseable/FilterBar';
@@ -22,6 +22,7 @@ import type { PurchaseOrder, PurchaseOrderPayload, GoodsReceiptPayload } from '@
 import PageHeader from '@/components/PageHeader';
 import { StatsCards } from '@/components/reuseable/StatsCards';
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { useServerSearch } from '@/hooks/useServerSearch';
 
 // ─── Status config ───────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<
@@ -105,6 +106,7 @@ export default function PurchaseOrdersPage() {
   const createReceiptMutation = useCreateGoodsReceipt();
   const { confirm, Modal: ConfirmModal } = useConfirmationModal();
   const permissions = useFeaturePermissions("INVENTORY", "purchase_order");
+  const [activeTab, setActiveTab] = useState<"orders" | "requests">("orders");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<PurchaseOrder | undefined>();
   const [receiptOrder, setReceiptOrder] = useState<PurchaseOrder | null>(null);
@@ -118,6 +120,32 @@ export default function PurchaseOrdersPage() {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const pagination = usePagination();
 
+  const fetchSuppliers = useServerSearch("/api/inventory/suppliers/", {
+    extraParams: { status: "active" },
+    transformOption: (s: any) => ({ value: s.id, label: s.name }),
+  });
+
+  const fetchWarehouses = useServerSearch("/api/inventory/warehouses/", {
+    extraParams: { is_active: "true" },
+    transformOption: (w: any) => ({ value: w.id, label: w.warehouse_name }),
+  });
+
+  const fetchProducts = useServerSearch("/api/inventory/products/", {
+    transformOption: (p: any) => ({ value: p.id, label: p.product_name }),
+  });
+
+  const fetchAssets = useServerSearch("/api/hr/assets/", {
+    transformOption: (a: any) => ({ value: a.id, label: `${a.name}${a.brand ? ` (${a.brand})` : ""}${a.serial_number ? ` · SN: ${a.serial_number}` : ""}` }),
+  });
+
+  const fetchCategories = useServerSearch("/api/inventory/categories/", {
+    transformOption: (c: any) => ({ value: c.id, label: c.name }),
+  });
+
+  const fetchBrands = useServerSearch("/api/inventory/brands/", {
+    transformOption: (b: any) => ({ value: b.id, label: b.name }),
+  });
+
   // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = useMemo(() => ({
     total: orders.length,
@@ -127,19 +155,12 @@ export default function PurchaseOrdersPage() {
     cancelled: orders.filter((o) => o.status === 'CANCELLED').length,
   }), [orders]);
 
-  // ── Unique suppliers for filter dropdown ──────────────────────────────────
-  const suppliers = useMemo(() => {
-    const names = [...new Set(orders.map((o) => o.supplier_name).filter(Boolean))];
-    return names as string[];
-  }, [orders]);
-
   const statusOptions = Object.entries(STATUS_CONFIG).map(([val, { label }]) => ({ value: val, label }));
-  const supplierOptions = suppliers.map((s) => ({ value: s, label: s }));
 
   const filterFields: FilterField[] = [
     { name: 'search', label: 'Search', type: 'search' },
     { name: 'status', label: 'Status', type: 'status', options: statusOptions },
-    { name: 'supplier', label: 'Supplier', type: 'select', searchable: true, options: supplierOptions },
+    { name: 'supplier', label: 'Supplier', type: 'select', searchable: true, fetchOptions: fetchSuppliers },
   ];
 
   // ── Filtered orders ───────────────────────────────────────────────────────
@@ -269,185 +290,210 @@ export default function PurchaseOrdersPage() {
         ]}
       />
 
-      {/* FilterBar */}
-      <FilterBar
-        fields={filterFields}
-        filters={filters}
-        onChange={(f) => { setFilters(f); pagination.resetPage(); }}
-      />
-
-      {/* Table */}
-      <div className="bg-card border border-border rounded-xl">
-        <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="bg-muted/50 border-b border-border">
-              {['Order #', 'Supplier', 'Warehouse', 'Type', 'Order Date', 'Expected', 'Total', 'Status', 'Payment Status', 'Paid', 'Action'].map(
-                (h) => (
-                  <th
-                    key={h}
-                    className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap"
-                  >
-                    {h}
-                  </th>
-                )
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading && (
-              <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                  Loading…
-                </td>
-              </tr>
-            )}
-            {!isLoading && filtered.length === 0 && (
-              <tr>
-                <td colSpan={8} className="px-4 py-14 text-center">
-                  <Package className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
-                  <p className="text-sm text-muted-foreground">No purchase orders match your filters</p>
-                </td>
-              </tr>
-            )}
-            {paginatedOrders.map((order) => (
-              <tr
-                key={order._id}
-                onClick={() => handleView(order)}
-                className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
-              >
-                <td className="px-4 py-3 font-mono text-xs font-medium">
-                  {order.order_number}
-                </td>
-                <td className="px-4 py-3">{order.supplier_name}</td>
-                <td className="px-4 py-3 text-muted-foreground">{order.warehouse_name}</td>
-                <td className="px-4 py-3 text-muted-foreground"> {order.inventory_type === 'OFFICE_INVENTORY' ? (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-500/10 text-purple-600 border border-purple-200">
-      <Building2 className="w-3 h-3" />
-      Office Asset
-    </span>
-  ) : (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-500/10 text-blue-600 border border-blue-200">
-      <Package className="w-3 h-3" />
-      For Sale
-    </span>
-  )}</td>
-                <td className="px-4 py-3 tabular-nums text-muted-foreground">{fmt(order.order_date)}</td>
-                <td className="px-4 py-3 tabular-nums text-muted-foreground">{fmt(order.expected_delivery_date)}</td>
-                <td className="px-4 py-3 tabular-nums font-medium">{formatCurrency(order.total_amount)}</td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={order.status} />
-                </td>
-                <td className="px-4 py-3">
-                  {order.payment_status === 'PAID' ? (
-                    <span className="text-success">Paid</span>
-                  ) : order.payment_status === 'PARTIAL' ? (
-                    <span className="text-warning">Partial</span>
-                  ) : (
-                    <span className="text-muted-foreground">Unpaid</span>
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  {formatCurrency(order.total_paid)}
-                </td>
-                <td className="px-4 py-3">
-                  <div
-                    className="flex items-center justify-end gap-1"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {/* View */}
-                    <ActionBtn
-                      title="View details"
-                      onClick={() => handleView(order)}
-                      icon={
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                          <circle cx="12" cy="12" r="3" />
-                        </svg>
-                      }
-                    />
-                    {/* Draft actions */}
-                    {order.status === 'DRAFT' && (
-                      <>
-                        {permissions.update && (
-                          <ActionBtn
-                            title="Edit"
-                            onClick={() => handleEdit(order)}
-                            icon={
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                              </svg>
-                            }
-                          />
-                        )}
-                        {permissions.confirm && (
-                          <ActionBtn
-                            title="Confirm order"
-                            onClick={() => handleConfirm(order)}
-                            variant="success"
-                            icon={
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                                <polyline points="22 4 12 14.01 9 11.01" />
-                              </svg>
-                            }
-                          />
-                        )}
-                        {permissions.delete && (
-                          <ActionBtn
-                            title="Cancel order"
-                            onClick={() => handleCancel(order)}
-                            variant="danger"
-                            icon={
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                              </svg>
-                            }
-                          />
-                        )}
-                      </>
-                    )}
-                    {/* Receive */}
-                    {(order.status === 'CONFIRMED' || order.status === 'PARTIALLY_RECEIVED') && permissions.confirm && (
-                      <ActionBtn
-                        title="Receive goods"
-                        onClick={() => setReceiptOrder(order)}
-                        variant="receive"
-                        icon={
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <rect x="1" y="3" width="15" height="13" rx="1" />
-                            <path d="M16 8h4l3 3v5h-7V8z" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" />
-                          </svg>
-                        }
-                      />
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
+      {/* Tabs */}
+      <div className="flex items-center gap-1 bg-muted/40 rounded-lg p-1 w-fit">
+        <button
+          onClick={() => setActiveTab("orders")}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+            activeTab === "orders" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <ShoppingCart className="w-4 h-4" />
+          Orders
+        </button>
+        <button
+          onClick={() => setActiveTab("requests")}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+            activeTab === "requests" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <HandCoins className="w-4 h-4" />
+          Requests
+        </button>
       </div>
 
-      {filtered.length > pagination.pageSize && (
-        <div className="flex items-center justify-between px-4 py-3 border border-border rounded-xl text-xs text-muted-foreground bg-card">
-          <span>{(pagination.page - 1) * pagination.pageSize + 1}–{Math.min(pagination.page * pagination.pageSize, filtered.length)} of {filtered.length}</span>
-          <div className="flex items-center gap-2">
-            <span>Page {pagination.page} of {totalPages}</span>
-            <button onClick={pagination.prevPage} disabled={pagination.page <= 1} className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button onClick={pagination.nextPage} disabled={pagination.page >= totalPages} className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-              <ChevronRight className="w-4 h-4" />
-            </button>
+      {activeTab === "orders" && (
+        <>
+          {/* FilterBar */}
+          <FilterBar
+            fields={filterFields}
+            filters={filters}
+            onChange={(f) => { setFilters(f); pagination.resetPage(); }}
+          />
+
+          {/* Table */}
+          <div className="bg-card border border-border rounded-xl">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="bg-muted/50 border-b border-border">
+                  {['Order #', 'Supplier', 'Warehouse', 'Type', 'Order Date', 'Expected', 'Total', 'Status', 'Payment Status', 'Paid', 'Action'].map(
+                    (h) => (
+                      <th
+                        key={h}
+                        className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap"
+                      >
+                        {h}
+                      </th>
+                    )
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading && (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      Loading…
+                    </td>
+                  </tr>
+                )}
+                {!isLoading && filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-14 text-center">
+                      <Package className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+                      <p className="text-sm text-muted-foreground">No purchase orders match your filters</p>
+                    </td>
+                  </tr>
+                )}
+                {paginatedOrders.map((order) => (
+                  <tr
+                    key={order._id}
+                    onClick={() => handleView(order)}
+                    className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
+                  >
+                    <td className="px-4 py-3 font-mono text-xs font-medium">
+                      {order.order_number}
+                    </td>
+                    <td className="px-4 py-3">{order.supplier_name}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{order.warehouse_name}</td>
+                    <td className="px-4 py-3 text-muted-foreground"> {order.inventory_type === 'OFFICE_INVENTORY' ? (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-500/10 text-purple-600 border border-purple-200">
+          <Building2 className="w-3 h-3" />
+          Office Asset
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-500/10 text-blue-600 border border-blue-200">
+          <Package className="w-3 h-3" />
+          For Sale
+        </span>
+      )}</td>
+                    <td className="px-4 py-3 tabular-nums text-muted-foreground">{fmt(order.order_date)}</td>
+                    <td className="px-4 py-3 tabular-nums text-muted-foreground">{fmt(order.expected_delivery_date)}</td>
+                    <td className="px-4 py-3 tabular-nums font-medium">{formatCurrency(order.total_amount)}</td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={order.status} />
+                    </td>
+                    <td className="px-4 py-3">
+                      {order.payment_status === 'PAID' ? (
+                        <span className="text-success">Paid</span>
+                      ) : order.payment_status === 'PARTIAL' ? (
+                        <span className="text-warning">Partial</span>
+                      ) : (
+                        <span className="text-muted-foreground">Unpaid</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {formatCurrency(order.total_paid)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div
+                        className="flex items-center justify-end gap-1"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {/* View */}
+                        <ActionBtn
+                          title="View details"
+                          onClick={() => handleView(order)}
+                          icon={
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
+                          }
+                        />
+                        {/* Draft actions */}
+                        {order.status === 'DRAFT' && (
+                          <>
+                            {permissions.update && (
+                              <ActionBtn
+                                title="Edit"
+                                onClick={() => handleEdit(order)}
+                                icon={
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                  </svg>
+                                }
+                              />
+                            )}
+                            {permissions.confirm && (
+                              <ActionBtn
+                                title="Confirm order"
+                                onClick={() => handleConfirm(order)}
+                                variant="success"
+                                icon={
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                                    <polyline points="22 4 12 14.01 9 11.01" />
+                                  </svg>
+                                }
+                              />
+                            )}
+                            {permissions.delete && (
+                              <ActionBtn
+                                title="Cancel order"
+                                onClick={() => handleCancel(order)}
+                                variant="danger"
+                                icon={
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                                  </svg>
+                                }
+                              />
+                            )}
+                          </>
+                        )}
+                        {/* Receive */}
+                        {(order.status === 'CONFIRMED' || order.status === 'PARTIALLY_RECEIVED') && permissions.confirm && (
+                          <ActionBtn
+                            title="Receive goods"
+                            onClick={() => setReceiptOrder(order)}
+                            variant="receive"
+                            icon={
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <rect x="1" y="3" width="15" height="13" rx="1" />
+                                <path d="M16 8h4l3 3v5h-7V8z" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" />
+                              </svg>
+                            }
+                          />
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
           </div>
-        </div>
+
+          {filtered.length > pagination.pageSize && (
+            <div className="flex items-center justify-between px-4 py-3 border border-border rounded-xl text-xs text-muted-foreground bg-card">
+              <span>{(pagination.page - 1) * pagination.pageSize + 1}–{Math.min(pagination.page * pagination.pageSize, filtered.length)} of {filtered.length}</span>
+              <div className="flex items-center gap-2">
+                <span>Page {pagination.page} of {totalPages}</span>
+                <button onClick={pagination.prevPage} disabled={pagination.page <= 1} className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button onClick={pagination.nextPage} disabled={pagination.page >= totalPages} className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Asset Requests Panel */}
-      {permissions.create && (
+      {activeTab === "requests" && permissions.create && (
         <AssetRequestsPanel onConfirmRequest={handleConfirmRequest} />
       )}
 
@@ -460,6 +506,12 @@ export default function PurchaseOrdersPage() {
           initialData={editingOrder}
           prefillFromRequest={requestPrefill}
           loading={createMutation.isPending}
+          fetchSuppliers={fetchSuppliers}
+          fetchWarehouses={fetchWarehouses}
+          fetchProducts={fetchProducts}
+          fetchAssets={fetchAssets}
+          fetchCategories={fetchCategories}
+          fetchBrands={fetchBrands}
         />
       )}
       {receiptOrder && (

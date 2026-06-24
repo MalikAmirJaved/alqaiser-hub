@@ -9,9 +9,14 @@ import { Plus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import PageHeader from "@/components/PageHeader";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { useServerSearch } from "@/hooks/useServerSearch";
 
 export default function TransfersPage() {
   const permissions = useFeaturePermissions("INVENTORY", "stock_transfer");
+
+  const fetchProducts = useServerSearch("/api/inventory/products/", {
+    transformOption: (p: any) => ({ value: p.id, label: p.product_name }),
+  });
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -50,6 +55,7 @@ export default function TransfersPage() {
               handleRefresh();
             }}
             onCancel={() => setIsCreateModalOpen(false)}
+            fetchProducts={fetchProducts}
           />
         </DialogContent>
       </Dialog>

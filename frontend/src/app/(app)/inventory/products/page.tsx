@@ -320,6 +320,8 @@ export default function ProductsPage() {
               isLoading={createProduct.isPending || updateProduct.isPending}
               isEditing={!!selectedProduct}
               onCancel={() => setShowProductModal(false)}
+              fetchCategories={fetchCategories}
+              fetchBrands={fetchBrands}
             />
           </div>
         </div>

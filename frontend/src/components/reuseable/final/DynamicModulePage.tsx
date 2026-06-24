@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useState, useMemo, useEffect } from "react";
 import { PageHeader, Card, TableToolbar, ToolbarButton } from "@/components/finance/ui";
 import { Plus, Download, Pencil, Trash2, Send } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 
@@ -218,7 +219,15 @@ export function DynamicModulePage<T>({
       <div className="pt-6 space-y-6">
         {computedKpis && computedKpis.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {computedKpis.map((k) => {
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <Card key={i} className="px-5 py-4">
+                  <Skeleton className="h-3 w-20 mb-2" />
+                  <Skeleton className="h-7 w-16" />
+                  <Skeleton className="h-3 w-24 mt-2" />
+                </Card>
+              ))
+            ) : computedKpis.map((k) => {
               const toneColor =
                 k.tone === "success"
                   ? "text-success"
@@ -296,11 +305,21 @@ export function DynamicModulePage<T>({
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr>
-                    <td colSpan={columns.length + 2} className="px-4 py-8 text-center text-muted-foreground">
-                      Loading...
-                    </td>
-                  </tr>
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i} className="border-b border-border/60">
+                      {showCheckboxColumn && (
+                        <td className="px-4 py-2.5"><Skeleton className="h-4 w-4 rounded" /></td>
+                      )}
+                      {columns.map((col) => (
+                        <td key={col.key} className="px-4 py-2.5">
+                          <Skeleton className={`h-4 ${col.align === "right" ? "ml-auto w-16" : "w-24"}`} />
+                        </td>
+                      ))}
+                      {showActionsColumn && (
+                        <td className="px-4 py-2.5 text-right"><Skeleton className="h-4 w-8 ml-auto" /></td>
+                      )}
+                    </tr>
+                  ))
                 ) : paginatedData.length === 0 ? (
                   <tr>
                     <td colSpan={columns.length + 2} className="px-4 py-8 text-center text-muted-foreground">

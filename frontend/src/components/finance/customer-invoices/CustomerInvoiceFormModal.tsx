@@ -8,9 +8,8 @@ import {
   type CustomerInvoice,
 } from "@/hooks/finance/useCustomerInvoices";
 import { useCreateSalesInvoice, useUpdateSalesInvoice } from "@/hooks/sales/useSalesInvoices";
-import { useCustomers } from "@/hooks/useCustomers";
 import { useServerSearch } from "@/hooks/useServerSearch";
-import { useAllVariantsSimple } from "@/hooks/useAllVariants";
+import { useApi } from "@/hooks/useApi";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useAutoCode } from "@/hooks/useAutoCode";
@@ -60,12 +59,19 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
     }),
   });
 
-  const { data: variants = [] } = useAllVariantsSimple({ active_only: true });
+  const fetchVariants = useServerSearch("/api/inventory/variants/", {
+    extraParams: { active_only: "true" },
+    transformOption: (v: any) => ({
+      value: v.id,
+      label: `${v.product_name} (${v.sku}) — Stock: ${v.total_stock}`,
+    }),
+  });
   const createInvoice = useCreateCustomerInvoice();
   const updateInvoice = useUpdateCustomerInvoice();
   const createSalesInvoice = useCreateSalesInvoice();
   const updateSalesInvoice = useUpdateSalesInvoice();
   const queryClient = useQueryClient();
+  const api = useApi();
   const { generateCode, validateCode } = useAutoCode("customer_invoice");
 
   const { register, control, handleSubmit, reset, setValue, watch } = useForm<CustomerInvoiceFormData>({
@@ -160,22 +166,25 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
     append({ variant: "", quantity: 1, unit_price: 0, discount_amount: 0, tax_rate: 0 });
   };
 
-  const updateLine = (index: number, field: keyof InvoiceLine, value: any) => {
+  const updateLine = async (index: number, field: keyof InvoiceLine, value: any) => {
     const currentLines = watch("lines");
     const newLines = [...currentLines];
     if (field === "variant") {
-      const variant = variants.find((v) => v.id === value);
-      if (variant) {
-        newLines[index] = {
-          ...newLines[index],
-          variant: value,
-          variant_name: variant.product_name,
-          variant_sku: variant.sku,
-          unit_price: variant.selling_price,
-          max_quantity: variant.total_stock,
-        };
-      } else {
-        newLines[index] = { ...newLines[index], variant: value };
+      newLines[index] = { ...newLines[index], variant: value };
+      if (value) {
+        try {
+          const variant = await api(`/api/inventory/variants/${value}/`);
+          if (variant) {
+            newLines[index] = {
+              ...newLines[index],
+              variant: value,
+              variant_name: variant.product_name,
+              variant_sku: variant.sku,
+              unit_price: variant.selling_price,
+              max_quantity: variant.total_stock,
+            };
+          }
+        } catch {}
       }
     } else {
       newLines[index] = { ...newLines[index], [field]: value };
@@ -236,11 +245,6 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
     onSuccess?.(result);
     onClose();
   };
-
-  // Build set of already-selected variant IDs (excluding current row)
-  const selectedVariantIds = new Set(
-    (watchedLines || []).filter((l) => l.variant).map((l) => l.variant),
-  );
 
   if (!open) return null;
 
@@ -382,10 +386,8 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
                               <SearchableSelect
                                 value={currentLine.variant || ""}
                                 onChange={(val) => updateLine(idx, "variant", val)}
-                                options={variants
-                                  .filter((v) => !selectedVariantIds.has(v.id) || v.id === currentLine.variant)
-                                  .map((v) => ({ value: v.id, label: `${v.product_name} (${v.sku}) — Stock: ${v.total_stock}` }))}
-                                placeholder="Select variant"
+                                fetchOptions={fetchVariants}
+                                placeholder="Search variants..."
                               />
                             </td>
                             <td className="px-3 py-2">

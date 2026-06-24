@@ -1,13 +1,14 @@
 // src/components/transfers/CreateTransferForm.tsx
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useCreateTransfer } from "@/hooks/useTransfers";
-import { useProducts } from "@/hooks/useProducts";
+import { useApi } from "@/hooks/useApi";
 import { useWarehouses } from "@/hooks/useWarehouses";
+import type { Product } from "@/hooks/useProducts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,11 +33,14 @@ type TransferFormValues = z.infer<typeof transferSchema>;
 interface CreateTransferFormProps {
   onSuccess: () => void;
   onCancel: () => void;
+  fetchProducts?: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
+  fetchWarehouses?: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
 }
 
-export default function CreateTransferForm({ onSuccess, onCancel }: CreateTransferFormProps) {
+export default function CreateTransferForm({ onSuccess, onCancel, fetchProducts, fetchWarehouses }: CreateTransferFormProps) {
   const createTransfer = useCreateTransfer();
-  const { data: products = [], isLoading: productsLoading } = useProducts();
+  const api = useApi();
+  const [fullProduct, setFullProduct] = useState<Product | null>(null);
   const { data: allWarehouses = [] } = useWarehouses({ is_active: true });
 
   const {
@@ -58,10 +62,7 @@ export default function CreateTransferForm({ onSuccess, onCancel }: CreateTransf
   const selectedVariantId = watch("variant_id");
   const selectedSourceId = watch("source_warehouse_id");
 
-  const selectedProduct = useMemo(
-    () => products.find((p) => p.id === selectedProductId),
-    [products, selectedProductId]
-  );
+  const selectedProduct = fullProduct;
 
   const productVariants = useMemo(
     () => selectedProduct?.variants.filter((v) => !v.is_deleted) ?? [],
@@ -137,11 +138,21 @@ export default function CreateTransferForm({ onSuccess, onCancel }: CreateTransf
           render={({ field }) => (
             <SearchableSelect
               value={field.value || ""}
-              onChange={(value) => {
+              onChange={async (value) => {
                 field.onChange(value);
                 handleProductChange(value);
+                if (value) {
+                  try {
+                    const data: Product = await api(`/api/inventory/products/${value}/`);
+                    setFullProduct(data);
+                  } catch {
+                    setFullProduct(null);
+                  }
+                } else {
+                  setFullProduct(null);
+                }
               }}
-              options={products.map((product) => ({ value: product.id, label: product.product_name }))}
+              fetchOptions={fetchProducts}
               placeholder="Select product"
             />
           )}
