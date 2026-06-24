@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Search, X, Filter, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +37,12 @@ export interface FilterBarProps {
 export default function FilterBar({ fields, filters, onChange }: FilterBarProps) {
   const [activeFilterCount, setActiveFilterCount] = useState(0);
   const [localSearch, setLocalSearch] = useState(filters.search || "");
+  const filtersRef = useRef(filters);
+
+  // Keep ref in sync with latest filters so debounce callback doesn't capture stale closure
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
 
   useEffect(() => {
     let count = 0;
@@ -46,11 +52,11 @@ export default function FilterBar({ fields, filters, onChange }: FilterBarProps)
     setActiveFilterCount(count);
   }, [filters]);
 
-  // Debounce search
+  // Debounce search — uses filtersRef to avoid stale closure
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (localSearch !== (filters.search || "")) {
-        onChange({ ...filters, search: localSearch });
+      if (localSearch !== (filtersRef.current.search || "")) {
+        onChange({ ...filtersRef.current, search: localSearch });
       }
     }, 400);
     return () => clearTimeout(timer);

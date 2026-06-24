@@ -34,6 +34,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevFiltersRef = useRef({ warehouseId, debouncedSearch, categoryId, brandId });
   const loadingRef = useRef(false);
+  const hasContentRef = useRef(false);
 
   const allProducts = useMemo(() =>
     Object.entries(pageData)
@@ -47,6 +48,13 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
       .flatMap(([, data]) => data.variants),
     [pageData],
   );
+  // When a product is selected, only show its variants (filtered by product_id)
+  const currentVariants = useMemo(() =>
+    selectedProduct
+      ? allVariants.filter(v => v.product_id === selectedProduct.id)
+      : allVariants,
+    [allVariants, selectedProduct],
+  );
 
   const resetInfiniteScroll = useCallback(() => {
     setPage(1);
@@ -54,6 +62,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
     setHasMore(true);
     setTotalCount(0);
     setTotalVariantCount(0);
+    hasContentRef.current = false;
   }, []);
 
   const catalogFilters = useMemo(() => ({
@@ -84,6 +93,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
       setTotalCount(0);
       setTotalVariantCount(0);
       loadingRef.current = false;
+      hasContentRef.current = false;
     }
 
     if (catalogResponse?.results) {
@@ -99,6 +109,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
         setTotalVariantCount(catalogResponse.variant_count ?? 0);
         const totalPages = Math.ceil(catalogResponse.count / PAGE_SIZE);
         setHasMore(page < totalPages);
+        hasContentRef.current = newVariants.length > 0;
       }
       loadingRef.current = false;
     }
@@ -111,6 +122,8 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
 
     const handleScroll = () => {
       if (loadingRef.current) return;
+      // Don't load more pages if no content has been loaded yet (e.g. search still in progress)
+      if (!hasContentRef.current) return;
       const { scrollTop, scrollHeight, clientHeight } = container;
       if (scrollHeight - scrollTop - clientHeight < 400) {
         loadingRef.current = true;
@@ -140,7 +153,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearch(value);
-    resetInfiniteScroll();
+    hasContentRef.current = false;
     debouncedSetSearch(value);
   };
 
@@ -151,12 +164,10 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
   // ── Handlers ──
   const handleProductClick = (product: PosCatalogProduct) => {
     setSelectedProduct(product);
-    resetInfiniteScroll();
   };
 
   const handleBackToProducts = () => {
     setSelectedProduct(null);
-    resetInfiniteScroll();
   };
 
   const isFirstLoad = isLoading && page === 1;
@@ -278,7 +289,9 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
             {/* ── Products Tab ── */}
             {activeTab === "products" && !selectedProduct && (
               <>
-                {allProducts.length === 0 ? (
+                {allProducts.length === 0 && isFetching ? (
+                  <LoadingSearch />
+                ) : allProducts.length === 0 ? (
                   <EmptyState search={search} onClear={() => { setSearch(""); setDebouncedSearch(""); resetInfiniteScroll(); }} />
                 ) : (
                   <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-in fade-in zoom-in-95 duration-200">
@@ -297,7 +310,9 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
             {/* ── Variants Tab (default, also shown when product selected) ── */}
             {(activeTab === "variants" || selectedProduct) && (
               <>
-                {allVariants.length === 0 ? (
+                {currentVariants.length === 0 && isFetching ? (
+                  <LoadingSearch />
+                ) : currentVariants.length === 0 ? (
                   <EmptyState 
                     search={search} 
                     onClear={() => { setSearch(""); setDebouncedSearch(""); resetInfiniteScroll(); }} 
@@ -306,7 +321,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
                 ) : (
                   <>
                     <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-in fade-in zoom-in-95 duration-200">
-                      {allVariants.map((variant) => (
+                      {currentVariants.map((variant) => (
                         <ProductCard 
                           key={variant.id} 
                           variant={variant}
@@ -317,7 +332,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
                     </div>
 
                     {/* Infinite scroll sentinel */}
-                    {hasMore && (
+                    {!selectedProduct && hasMore && (
                       <div ref={sentinelRef} className="h-10 flex items-center justify-center mt-4">
                         {isFetching && (
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -328,7 +343,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
                       </div>
                     )}
 
-                    {!hasMore && allVariants.length >= totalVariantCount && allVariants.length > 0 && (
+                    {!hasMore && !selectedProduct && currentVariants.length >= totalVariantCount && currentVariants.length > 0 && (
                       <div className="text-center text-xs text-muted-foreground py-4">
                         Showing all {totalVariantCount} variants
                       </div>
@@ -393,6 +408,21 @@ function ProductListCard({ product, onClick }: { product: PosCatalogProduct; onC
         <ArrowRightIcon size={14} className="text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
       </div>
     </button>
+  );
+}
+
+function LoadingSearch() {
+  return (
+    <div className="flex flex-col items-center justify-center h-64 gap-4">
+      <div className="relative w-12 h-12">
+        <div className="absolute inset-0 border-[3px] border-primary/15 rounded-full" />
+        <div className="absolute inset-0 border-[3px] border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+      <div className="flex flex-col items-center gap-1">
+        <span className="text-sm font-bold text-foreground">Searching...</span>
+        <span className="text-xs text-muted-foreground animate-pulse">Finding matching products</span>
+      </div>
+    </div>
   );
 }
 

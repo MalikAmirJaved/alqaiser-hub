@@ -72,7 +72,7 @@ class FilterPaginationMixin:
                 for field in self.search_fields:
                     term_q |= Q(**{f'{field}__icontains': term})
                 combined_q &= term_q
-            queryset = queryset.filter(combined_q)
+            queryset = queryset.filter(combined_q).distinct()
         return queryset
 
     def order_queryset(self, queryset):
@@ -148,7 +148,7 @@ class GenericFilterMixin:
                             field = f'{field}__icontains'
                         term_q |= Q(**{field: term})
                     combined_q &= term_q
-                qs = qs.filter(combined_q)
+                qs = qs.filter(combined_q).distinct()
             else:
                 # Single field lookup
                 qs = qs.filter(**{lookups: value})
