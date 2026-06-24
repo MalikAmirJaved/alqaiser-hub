@@ -111,10 +111,10 @@ export default function SalesPage() {
     });
   }, [queryClient]);
 
-  // Default: "All" stations (null = show products across all warehouses)
+  // Default to first warehouse
   useEffect(() => {
-    if (warehouses.length > 0 && selectedWarehouse === undefined) {
-      setSelectedWarehouse(null);
+    if (warehouses.length > 0 && (!selectedWarehouse || selectedWarehouse === undefined)) {
+      setSelectedWarehouse(warehouses[0]);
     }
   }, [warehouses, selectedWarehouse]);
 
@@ -373,13 +373,9 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
           </nav>
 
           <Select
-            value={selectedWarehouse?.id ? String(selectedWarehouse.id) : "all"}
+            value={selectedWarehouse?.id ? String(selectedWarehouse.id) : ""}
             onValueChange={(val) => {
-              if (val === "all") {
-                setSelectedWarehouse(null);
-              } else {
-                setSelectedWarehouse(warehouses.find(w => String(w.id) === val) ?? null);
-              }
+              setSelectedWarehouse(warehouses.find(w => String(w.id) === val) ?? null);
             }}
           >
             <SelectTrigger className="flex items-center gap-3 bg-muted/40 rounded-xl px-4 py-2 border border-border/50 hover:bg-muted/60 transition-colors cursor-pointer group !h-auto w-auto data-[placeholder]:text-muted-foreground focus:ring-0 focus:ring-offset-0 shadow-none">
@@ -390,12 +386,6 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
               </div>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all" className="font-bold text-primary">
-                <div className="flex items-center gap-2">
-                  <GlobeIcon size={14} />
-                  <span>All Stations</span>
-                </div>
-              </SelectItem>
               {warehouses.map(w => (
                 <SelectItem key={w.id} value={String(w.id)}>
                   {w.warehouse_name}
@@ -662,14 +652,6 @@ function WarehouseIcon({ className = "" }: { className?: string }) {
 function PlayIcon({ size = 14 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <polygon points="5 3 19 12 5 21 5 3" />
-  </svg>;
-}
-
-function GlobeIcon({ size = 14 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10" />
-    <line x1="2" y1="12" x2="22" y2="12" />
-    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
   </svg>;
 }
 
