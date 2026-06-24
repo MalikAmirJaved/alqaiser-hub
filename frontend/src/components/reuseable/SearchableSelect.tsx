@@ -30,6 +30,7 @@ export interface SearchableSelectProps {
   className?: string;
   onAddNew?: () => void;
   addNewLabel?: string;
+  displayLabel?: string;
 }
 
 export default function SearchableSelect({
@@ -45,6 +46,7 @@ export default function SearchableSelect({
   className = "",
   onAddNew,
   addNewLabel = "Add New",
+  displayLabel,
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -80,9 +82,9 @@ export default function SearchableSelect({
     if (isOpen) {
       setQuery("");
     } else {
-      setQuery(selectedOption ? selectedOption.label : "");
+      setQuery(selectedOption ? selectedOption.label : displayLabel || "");
     }
-  }, [isOpen, selectedOption]);
+  }, [isOpen, selectedOption, displayLabel]);
 
   const doFetch = useCallback(
     async (search: string, page: number, append: boolean) => {
@@ -225,7 +227,7 @@ export default function SearchableSelect({
         <input
           ref={inputRef}
           type="text"
-          value={isOpen ? query : selectedOption?.label || ""}
+          value={isOpen ? query : selectedOption?.label || displayLabel || ""}
           placeholder={placeholder}
           disabled={disabled}
           required={required}

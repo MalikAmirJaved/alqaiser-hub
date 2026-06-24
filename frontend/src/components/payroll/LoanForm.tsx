@@ -273,6 +273,7 @@ export default function LoanForm({
           fetchOptions={fetchEmployeeOptions}
           placeholder="Search employees..."
           required
+          displayLabel={formData.employee_name || ""}
         />
         {selectedEmployeeSalary > 0 && (
           <div className="flex items-center gap-2 mt-2 p-3 bg-primary/10 rounded-lg text-sm border border-primary/20">
