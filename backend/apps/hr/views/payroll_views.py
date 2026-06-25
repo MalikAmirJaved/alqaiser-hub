@@ -1101,6 +1101,7 @@ class EmployeeLoanView(PermissionRequiredMixin, FilterPaginationMixin, APIView):
             "employee_code": loan.employee.employee_id if loan.employee else None,
             "department": loan.employee.department.name if loan.employee and loan.employee.department else None,
             "monthly_salary": str(loan.employee.salary) if loan.employee else "0",
+            "employee_joining_date": loan.employee.joining_date.isoformat() if loan.employee and loan.employee.joining_date else None,
             "loan_type": loan.loan_type,
             "loan_type_display": loan.get_loan_type_display(),
             "principal_amount": str(loan.principal_amount),

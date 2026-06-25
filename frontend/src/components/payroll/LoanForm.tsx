@@ -16,6 +16,7 @@ interface LoanFormProps {
   formatCurrency: (amount: number) => string;
   errors: string[];
   onValidationChange?: (hasErrors: boolean) => void;
+  disableEmployeeSelect?: boolean;
 }
 
 function generateMonthList(startMonth: number, startYear: number, endMonth: number, endYear: number) {
@@ -40,6 +41,7 @@ export default function LoanForm({
   formatCurrency,
   errors,
   onValidationChange,
+  disableEmployeeSelect = false,
 }: LoanFormProps) {
   const [localErrors, setLocalErrors] = useState<string[]>([]);
   const [freqExpanded, setFreqExpanded] = useState(true);
@@ -270,9 +272,11 @@ export default function LoanForm({
         <SearchableSelect
           value={formData.employee_id || ""}
           onChange={(employeeId) => setFormData({ ...formData, employee_id: employeeId })}
+          onOptionSelect={(option) => setFormData({ ...formData, employee_id: option.value, employee_joining_date: (option as any).joining_date || "" })}
           fetchOptions={fetchEmployeeOptions}
           placeholder="Search employees..."
           required
+          disabled={disableEmployeeSelect}
           displayLabel={formData.employee_name || ""}
         />
         {selectedEmployeeSalary > 0 && (

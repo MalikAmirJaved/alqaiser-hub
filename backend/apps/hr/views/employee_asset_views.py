@@ -198,6 +198,11 @@ class AvailableAssetsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     def get(self, request):
         company_id = request.user.company_id
         employee_uuid = request.query_params.get('employee_id')
+        search_query = request.query_params.get('search', '').strip()
+        asset_page = int(request.query_params.get('asset_page', 1))
+        asset_page_size = int(request.query_params.get('asset_page_size', 20))
+        kit_page = int(request.query_params.get('kit_page', 1))
+        kit_page_size = int(request.query_params.get('kit_page_size', 20))
         
         assigned_to_employee_ids = set()
         if employee_uuid:
@@ -207,17 +212,28 @@ class AvailableAssetsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 status='ACTIVE'
             ).values_list('asset_id', flat=True))
         
-        assets = Asset.objects.filter(
+        # Assets with search and pagination
+        assets_qs = Asset.objects.filter(
             company_id=company_id,
             is_deleted=False,
             is_active=True
-        ).order_by('name')
+        )
+        if search_query:
+            assets_qs = assets_qs.filter(name__icontains=search_query)
+        assets_total = assets_qs.count()
+        assets_qs = assets_qs.order_by('name')[(asset_page - 1) * asset_page_size:asset_page * asset_page_size]
         
-        kits = AssetCategory.objects.filter(
+        # Kits with search and pagination
+        kits_qs = AssetCategory.objects.filter(
             company_id=company_id,
             is_deleted=False,
             is_active=True
-        ).prefetch_related('assets')
+        )
+        if search_query:
+            kits_qs = kits_qs.filter(name__icontains=search_query)
+        kits_total = kits_qs.count()
+        kits_qs = kits_qs.order_by('name')[(kit_page - 1) * kit_page_size:kit_page * kit_page_size]
+        kits_qs = kits_qs.prefetch_related('assets')
         
         return Response({
             'assets': [
@@ -232,8 +248,11 @@ class AvailableAssetsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                     'total_quantity': a.total_quantity,
                     'already_assigned_to_employee': a.id in assigned_to_employee_ids,
                 }
-                for a in assets
+                for a in assets_qs
             ],
+            'assets_total': assets_total,
+            'assets_page': asset_page,
+            'assets_page_size': asset_page_size,
             'kits': [
                 {
                     'id': str(k._id),
@@ -255,8 +274,11 @@ class AvailableAssetsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                         for asset in k.assets.filter(is_deleted=False)
                     ]
                 }
-                for k in kits
-            ]
+                for k in kits_qs
+            ],
+            'kits_total': kits_total,
+            'kits_page': kit_page,
+            'kits_page_size': kit_page_size,
         })
 
 class BulkAssignmentView(CompanyBranchMixin, PermissionRequiredMixin, APIView):

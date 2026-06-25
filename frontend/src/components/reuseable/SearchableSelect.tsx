@@ -12,6 +12,7 @@ export interface SearchableSelectOption {
 export interface SearchableSelectProps {
   value: string;
   onChange: (value: string) => void;
+  onOptionSelect?: (option: SearchableSelectOption) => void;
   options?: SearchableSelectOption[];
   fetchOptions?: (params: {
     search: string;
@@ -36,6 +37,7 @@ export interface SearchableSelectProps {
 export default function SearchableSelect({
   value,
   onChange,
+  onOptionSelect,
   options: staticOptions,
   fetchOptions,
   pageSize = 20,
@@ -58,6 +60,9 @@ export default function SearchableSelect({
 
   const isAsync = typeof fetchOptions === "function";
 
+  const fetchOptionsRef = useRef(fetchOptions);
+  fetchOptionsRef.current = fetchOptions;
+
   // Async state
   const [asyncOptions, setAsyncOptions] = useState<SearchableSelectOption[]>([]);
   const [asyncLoading, setAsyncLoading] = useState(false);
@@ -66,18 +71,56 @@ export default function SearchableSelect({
   const [asyncSearch, setAsyncSearch] = useState("");
   const loadingMoreRef = useRef(false);
 
+  // Cache the last explicitly selected option so it survives page/search resets
+  const [cachedSelectedOption, setCachedSelectedOption] =
+    useState<SearchableSelectOption | null>(null);
+
   const asyncPageRef = useRef(asyncPage);
   const hasMoreRef = useRef(hasMore);
   const asyncOptionsRef = useRef(asyncOptions);
   const initialLoadDoneRef = useRef(false);
+  const prevValueRef = useRef(value);
   asyncPageRef.current = asyncPage;
   hasMoreRef.current = hasMore;
   asyncOptionsRef.current = asyncOptions;
 
+  // Reset initialLoadDone when value changes (for edit forms where value changes after mount)
+  useEffect(() => {
+    if (prevValueRef.current !== value) {
+      prevValueRef.current = value;
+      if (value) {
+        initialLoadDoneRef.current = false;
+      }
+    }
+  }, [value]);
+
+  // Seed the cache from displayLabel when value is pre-populated (edit forms)
+  // so the label shows correctly before the user ever opens the dropdown
+  useEffect(() => {
+    if (value && displayLabel && cachedSelectedOption?.value !== value) {
+      setCachedSelectedOption({ value, label: displayLabel });
+    }
+  }, [value, displayLabel]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clear the cache when value is cleared externally
+  useEffect(() => {
+    if (!value) {
+      setCachedSelectedOption(null);
+    }
+  }, [value]);
+
   const selectedOption = useMemo(() => {
-    if (isAsync) return asyncOptions.find((opt) => opt.value === value);
+    if (isAsync) {
+      // Prefer the live list (most up-to-date label)
+      const found = asyncOptions.find((opt) => opt.value === value);
+      if (found) return found;
+      // Fall back to the cached option so the display doesn't go blank
+      // after a search/scroll refreshes asyncOptions
+      if (cachedSelectedOption?.value === value) return cachedSelectedOption;
+      return undefined;
+    }
     return staticOptions?.find((opt) => opt.value === value);
-  }, [isAsync, asyncOptions, staticOptions, value]);
+  }, [isAsync, asyncOptions, staticOptions, value, cachedSelectedOption]);
 
   useEffect(() => {
     if (isOpen) {
@@ -89,10 +132,11 @@ export default function SearchableSelect({
 
   const doFetch = useCallback(
     async (search: string, page: number, append: boolean) => {
-      if (!fetchOptions) return;
+      const fn = fetchOptionsRef.current;
+      if (!fn) return;
       setAsyncLoading(true);
       try {
-        const result = await fetchOptions({ search, page, pageSize });
+        const result = await fn({ search, page, pageSize });
         setAsyncOptions((prev) =>
           append ? [...prev, ...result.options] : result.options
         );
@@ -105,7 +149,7 @@ export default function SearchableSelect({
         loadingMoreRef.current = false;
       }
     },
-    [fetchOptions, pageSize]
+    [pageSize]
   );
 
   const debouncedFetch = useMemo(
@@ -114,7 +158,8 @@ export default function SearchableSelect({
         setAsyncPage(1);
         doFetch(search, 1, false);
       }, searchDebounceMs),
-    [doFetch, searchDebounceMs]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [searchDebounceMs]
   );
 
   // Load initial options when async and a value is set (e.g. edit form)
@@ -133,9 +178,10 @@ export default function SearchableSelect({
       doFetch("", 1, false);
     }
     return () => {
-      if (isAsync) debouncedFetch.cancel();
+      debouncedFetch.cancel();
     };
-  }, [isOpen, isAsync, doFetch, debouncedFetch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, isAsync]);
 
   const filteredOptions = useMemo(() => {
     if (isAsync) return asyncOptions;
@@ -148,6 +194,12 @@ export default function SearchableSelect({
 
   const handleSelect = (option: SearchableSelectOption) => {
     onChange(option.value);
+    // Cache the selected option so it survives asyncOptions being refreshed
+    // (e.g. user searched or scrolled to find this item, then the list resets)
+    setCachedSelectedOption(option);
+    if (onOptionSelect) {
+      onOptionSelect(option);
+    }
     setIsOpen(false);
     setHighlightedIndex(-1);
   };
@@ -220,7 +272,8 @@ export default function SearchableSelect({
     const list = listRef.current;
     if (!list) return;
 
-    const nearBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 40;
+    const nearBottom =
+      list.scrollTop + list.clientHeight >= list.scrollHeight - 40;
     if (nearBottom) {
       loadingMoreRef.current = true;
       const nextPage = asyncPageRef.current + 1;
@@ -253,6 +306,7 @@ export default function SearchableSelect({
               type="button"
               onClick={() => {
                 onChange("");
+                setCachedSelectedOption(null);
                 setQuery("");
                 setIsOpen(false);
               }}
@@ -299,9 +353,7 @@ export default function SearchableSelect({
                     `}
                   >
                     {option.label}
-                    {isSelected && (
-                      <Check className="w-4 h-4 text-primary" />
-                    )}
+                    {isSelected && <Check className="w-4 h-4 text-primary" />}
                   </div>
                 );
               })

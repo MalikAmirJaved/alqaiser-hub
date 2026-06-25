@@ -32,6 +32,12 @@ export function useServerSearch(
   const endpointRef = useRef(endpoint);
   endpointRef.current = endpoint;
 
+  const transformOptionRef = useRef(transformOption);
+  transformOptionRef.current = transformOption;
+
+  const extraParamsRef = useRef(extraParams);
+  extraParamsRef.current = extraParams;
+
   const fetchOptions = useCallback(
     async (params: {
       search: string;
@@ -46,7 +52,7 @@ export function useServerSearch(
       url.searchParams.set("page", String(params.page));
       url.searchParams.set("page_size", String(params.pageSize));
 
-      Object.entries(extraParams).forEach(([key, val]) => {
+      Object.entries(extraParamsRef.current).forEach(([key, val]) => {
         if (val) url.searchParams.set(key, val);
       });
 
@@ -54,7 +60,7 @@ export function useServerSearch(
 
       const results = data?.results ?? (Array.isArray(data) ? data : []);
       const totalCount = data?.count ?? results.length;
-      const transformed = results.map(transformOption);
+      const transformed = results.map(transformOptionRef.current);
 
       return {
         options: transformed,
@@ -62,7 +68,7 @@ export function useServerSearch(
         totalCount,
       };
     },
-    [api, searchParam, extraParams, transformOption]
+    [api, searchParam]
   );
 
   return fetchOptions;

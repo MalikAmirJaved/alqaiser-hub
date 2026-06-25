@@ -64,6 +64,7 @@ export default function CompensationLoanPage({
     transformOption: (e: any) => ({
       value: e.id,
       label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""} (${formatCurrency(parseFloat(e.salary || "0"))})`,
+      joining_date: e.joining_date,
     }),
   });
 
@@ -72,6 +73,7 @@ export default function CompensationLoanPage({
     transformOption: (e: any) => ({
       value: e.id,
       label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""}`,
+      joining_date: e.joining_date,
     }),
   });
 
@@ -255,9 +257,11 @@ export default function CompensationLoanPage({
     setPayLoanItem(loan);
     setFormData({
       ...loan,
+      employee_joining_date: loan.employee_joining_date || "",
       selected_months: loan.selected_months || [],
       month_range: loan.month_range || null,
     });
+    setSelectedEmployeeSalary(parseFloat(loan.monthly_salary || "0"));
     setPayLoanModalOpen(true);
   };
 
@@ -540,6 +544,7 @@ export default function CompensationLoanPage({
                 formatCurrency={formatCurrency}
                 errors={[]}
                 onValidationChange={() => {}}
+                disableEmployeeSelect={true}
               />
             </div>
             <div className="px-6 py-4 border-t flex justify-end gap-3 bg-muted/30">

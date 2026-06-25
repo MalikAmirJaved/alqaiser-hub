@@ -105,6 +105,7 @@ export interface EmployeeLoan {
   bank_name?: string;
   bank_account_number?: string;
   bank_iban?: string;
+  employee_joining_date?: string | null;
   paid_months_set?: Array<[number, number]>;
   purpose?: string;
   transaction_number?: string;

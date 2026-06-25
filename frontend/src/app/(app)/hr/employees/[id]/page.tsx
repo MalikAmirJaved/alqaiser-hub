@@ -157,13 +157,13 @@ export default function EmployeeDetailPage() {
   // ── Data fetching ──────────────────────────────────────────────
   const { data: employee, isLoading: empLoading } = useEmployee(id);
 
-  const { data: leaves = [] } = useLeaves(id ? { employee_id: id } : undefined);
-  const { data: payrollRecords = [] } = usePayroll(id ? { employee_id: id } : undefined);
-  const { data: loans = [] } = useEmployeeLoans(id ? { employee_id: id } : undefined);
-  const { data: compensations = [] } = useCompensations(id ? { employee_id: id } : undefined);
+  const { data: leaves = [] } = useLeaves(id ? { employee: id } : undefined);
+  const { data: payrollRecords = [] } = usePayroll(id ? { employee: id } : undefined);
+  const { data: loans = [] } = useEmployeeLoans(id ? { employee: id } : undefined);
+  const { data: compensations = [] } = useCompensations(id ? { employee: id } : undefined);
   const { data: assignmentsData } = useEmployeeAssignments(id);
   const { data: shiftTemplates = [] } = useShiftTemplates();
-  const { data: exitData } = useExitRecords(id ? { employee_id: id } : undefined);
+  const { data: exitData } = useExitRecords(id ? { employee: id } : undefined);
 
   const shiftTemplate = shiftTemplates.find((t) => t.id === employee?.default_shift_id);
   const latestCompensation = compensations[0];

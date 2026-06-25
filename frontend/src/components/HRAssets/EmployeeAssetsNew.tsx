@@ -1,6 +1,6 @@
 // components/HRAssets/EmployeeAssetsNew.tsx
 "use client";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useEmployees } from "@/hooks/useEmployees";
 import {
   useEmployeeAssignments,
@@ -53,6 +53,7 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronLeft,
+  Loader2,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -88,6 +89,12 @@ export default function EmployeeAssetsNew() {
   const [empPage, setEmpPage] = useState(1);
   const empPageSize = 20;
 
+  // Server-side search for assets/kits in assign modal
+  const [assignSearch, setAssignSearch] = useState("");
+  const [assetPage, setAssetPage] = useState(1);
+  const [kitPage, setKitPage] = useState(1);
+  const assignSearchTimeoutRef = useRef<any>(null);
+
   useEffect(() => { setEmpPage(1); }, [searchQuery]);
 
   // Server-side paginated employee list (uses raw empPage — server handles clamping)
@@ -104,8 +111,21 @@ export default function EmployeeAssetsNew() {
     selectedEmployee?.id
   );
 
+  const availableParams = useMemo(() => {
+    if (!showAssignModal) return undefined;
+    const p: Record<string, string> = {
+      asset_page: String(assetPage),
+      asset_page_size: "20",
+      kit_page: String(kitPage),
+      kit_page_size: "20",
+    };
+    if (assignSearch) p.search = assignSearch;
+    return p;
+  }, [showAssignModal, assignSearch, assetPage, kitPage]);
+
   const { data: availableData } = useAvailableAssets(
-    showAssignModal ? selectedEmployee?.id : undefined
+    showAssignModal ? selectedEmployee?.id : undefined,
+    availableParams
   );
 
   const assignMutation = useAssignAssets();
@@ -151,6 +171,9 @@ export default function EmployeeAssetsNew() {
       setAssignmentNotes("");
       setAssignmentCondition("GOOD");
       setAssetCategoryFilter("all");
+      setAssignSearch("");
+      setAssetPage(1);
+      setKitPage(1);
     }
   }, [showAssignModal]);
 
@@ -576,6 +599,22 @@ export default function EmployeeAssetsNew() {
           </DialogHeader>
 
           <div className="space-y-6 py-4">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                value={assignSearch}
+                onChange={(e) => {
+                  setAssignSearch(e.target.value);
+                  setAssetPage(1);
+                  setKitPage(1);
+                }}
+                placeholder="Search assets and kits..."
+                className="w-full bg-muted/40 border border-border rounded-md h-9 pl-8 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+
             {/* Kits Section */}
             <div>
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
@@ -630,6 +669,30 @@ export default function EmployeeAssetsNew() {
                   </div>
                 ))}
               </div>
+              {/* Kits Pagination */}
+              {(availableData?.kits_total || 0) > (availableData?.kits_page_size || 20) && (
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
+                  <span className="text-xs text-muted-foreground">
+                    {kitPage} of {Math.ceil((availableData?.kits_total || 0) / (availableData?.kits_page_size || 20))} pages
+                  </span>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setKitPage(Math.max(1, kitPage - 1))}
+                      disabled={kitPage <= 1}
+                      className="px-2 py-1 text-xs border border-border rounded disabled:opacity-50 hover:bg-muted"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      onClick={() => setKitPage(kitPage + 1)}
+                      disabled={!availableData?.kits || availableData.kits.length < (availableData?.kits_page_size || 20)}
+                      className="px-2 py-1 text-xs border border-border rounded disabled:opacity-50 hover:bg-muted"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Individual Assets Section – includes all assets (kit assets too, but disabled if kit selected) */}
@@ -722,6 +785,30 @@ export default function EmployeeAssetsNew() {
                   })
                 )}
               </div>
+              {/* Assets Pagination */}
+              {(availableData?.assets_total || 0) > (availableData?.assets_page_size || 20) && (
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
+                  <span className="text-xs text-muted-foreground">
+                    {assetPage} of {Math.ceil((availableData?.assets_total || 0) / (availableData?.assets_page_size || 20))} pages
+                  </span>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setAssetPage(Math.max(1, assetPage - 1))}
+                      disabled={assetPage <= 1}
+                      className="px-2 py-1 text-xs border border-border rounded disabled:opacity-50 hover:bg-muted"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      onClick={() => setAssetPage(assetPage + 1)}
+                      disabled={!availableData?.assets || availableData.assets.length < (availableData?.assets_page_size || 20)}
+                      className="px-2 py-1 text-xs border border-border rounded disabled:opacity-50 hover:bg-muted"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Assignment Details (unchanged) */}

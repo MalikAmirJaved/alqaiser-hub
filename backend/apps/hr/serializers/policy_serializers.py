@@ -2,6 +2,7 @@
 from rest_framework import serializers
 from django.utils import timezone
 from apps.hr.models import Policy, PolicyVersion, PolicyCategory
+from apps.organization.models import Department
 
 
 class PolicyVersionSerializer(serializers.ModelSerializer):
@@ -90,7 +91,14 @@ class PolicyDetailSerializer(serializers.ModelSerializer):
 
 class PolicyCreateUpdateSerializer(serializers.ModelSerializer):
     """Serializer for creating and updating policies"""
-    
+
+    department = serializers.SlugRelatedField(
+        slug_field='_id',
+        queryset=Department.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
     class Meta:
         model = Policy
         fields = [

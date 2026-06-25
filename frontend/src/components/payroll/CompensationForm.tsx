@@ -145,6 +145,7 @@ export default function CompensationForm({ formData, setFormData, fetchEmployeeO
         <SearchableSelect
           value={formData.employee_id || ""}
           onChange={(val) => setFormData({ ...formData, employee_id: val })}
+          onOptionSelect={(option) => setFormData({ ...formData, employee_id: option.value, employee_joining_date: (option as any).joining_date || "" })}
           fetchOptions={fetchEmployeeOptions}
           placeholder="Search employees..."
           required

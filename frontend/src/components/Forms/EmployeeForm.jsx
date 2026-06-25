@@ -351,7 +351,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
 
                 <label className="text-sm flex flex-col gap-1">
                     <span className="text-muted-foreground text-xs">Department *</span>
-                    <SearchableSelect value={formData.department_id} onChange={(val) => handleChange("department_id", val)} fetchOptions={fetchDepartments} required placeholder="Search departments..." onAddNew={() => setDeptModalOpen(true)} addNewLabel="+ New Department" />
+                    <SearchableSelect value={formData.department_id} onChange={(val) => handleChange("department_id", val)} fetchOptions={fetchDepartments} required placeholder="Search departments..." onAddNew={() => setDeptModalOpen(true)} addNewLabel="+ New Department" displayLabel={initialData?.department_name || formData.department_name} />
                   </label>
 
                 <label className="text-sm flex flex-col gap-1">
@@ -364,6 +364,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                     placeholder="Search designations..."
                     onAddNew={() => setDesigModalOpen(true)}
                     addNewLabel="+ New Designation"
+                    displayLabel={initialData?.designation_name || formData.designation_name}
                   />
                 </label>
               </div>
@@ -403,19 +404,19 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
 
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs">Reporting Manager</span>
-                <SearchableSelect value={formData.reporting_manager_id || ""} onChange={(val) => handleChange("reporting_manager_id", val || null)} fetchOptions={fetchEmployees} placeholder="Search managers..." />
+                <SearchableSelect value={formData.reporting_manager_id || ""} onChange={(val) => handleChange("reporting_manager_id", val || null)} fetchOptions={fetchEmployees} placeholder="Search managers..." displayLabel={initialData?.reporting_manager_name || formData.reporting_manager_name} />
               </label>
 
               {/* Default Shift Selection */}
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Default Shift</span>
-                <SearchableSelect value={formData.default_shift_id} onChange={(val) => handleChange("default_shift_id", val)} fetchOptions={fetchShiftTemplates} placeholder="Search shifts..." />
+                <SearchableSelect value={formData.default_shift_id} onChange={(val) => handleChange("default_shift_id", val)} fetchOptions={fetchShiftTemplates} placeholder="Search shifts..." displayLabel={initialData?.default_shift_name || formData.default_shift_name} />
               </label>
 
               {/* Asset Kit Selection */}
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs flex items-center gap-1"><Briefcase className="w-3 h-3" /> Default Asset Kit</span>
-                <SearchableSelect value={formData.asset_category_id} onChange={(val) => handleChange("asset_category_id", val)} fetchOptions={fetchAssetCategories} placeholder="Search asset kits..." />
+                <SearchableSelect value={formData.asset_category_id} onChange={(val) => handleChange("asset_category_id", val)} fetchOptions={fetchAssetCategories} placeholder="Search asset kits..." displayLabel={initialData?.asset_category_name || formData.asset_category_name} />
               </label>
             </div>
           </div>

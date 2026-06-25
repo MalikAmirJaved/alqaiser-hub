@@ -1,6 +1,6 @@
 // components/hr/AssetCategories.tsx
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useAssets } from "@/hooks/useAssets";
 import { 
   useAssetCategories, 
@@ -30,6 +30,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -60,7 +61,7 @@ import { toast } from "sonner";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { cn } from "@/lib/utils";
 
-function AssetMultiSelect({ options, selected, onChange, assets }: any) {
+function AssetMultiSelect({ options, selected, onChange, assets, searchQuery, onSearchChange, loading }: any) {
   const toggle = (id: string) => {
     onChange(selected.includes(id) ? selected.filter((i: string) => i !== id) : [...selected, id]);
   };
@@ -72,6 +73,18 @@ function AssetMultiSelect({ options, selected, onChange, assets }: any) {
 
   return (
     <div className="space-y-3">
+      {/* Search Input */}
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Search assets..."
+          className="w-full bg-muted/40 border border-border rounded-md h-9 pl-8 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+        />
+      </div>
+
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">
           {selected.length} asset{selected.length !== 1 ? 's' : ''} selected
@@ -105,33 +118,42 @@ function AssetMultiSelect({ options, selected, onChange, assets }: any) {
       </div>
       
       <div className="max-h-48 overflow-y-auto border border-border rounded-lg divide-y divide-border">
-        {options.map((opt: any) => {
-          const asset = getAssetDetails(opt.value);
-          const isSelected = selected.includes(opt.value);
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => toggle(opt.value)}
-              className={cn(
-                "w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2 hover:bg-muted/50",
-                isSelected && "bg-primary/5"
-              )}
-            >
-              <div className={cn(
-                "w-4 h-4 rounded border flex items-center justify-center transition-colors",
-                isSelected ? "bg-primary border-primary" : "border-muted-foreground"
-              )}>
-                {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
-              </div>
-              <Package className="w-4 h-4 text-muted-foreground" />
-              <span className="flex-1">{opt.label}</span>
-              {asset?.brand && (
-                <span className="text-xs text-muted-foreground">{asset.brand}</span>
-              )}
-            </button>
-          );
-        })}
+        {loading ? (
+          <div className="flex items-center justify-center py-4 text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+            Loading assets...
+          </div>
+        ) : options.length === 0 ? (
+          <div className="text-center py-4 text-sm text-muted-foreground">No assets found</div>
+        ) : (
+          options.map((opt: any) => {
+            const asset = getAssetDetails(opt.value);
+            const isSelected = selected.includes(opt.value);
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => toggle(opt.value)}
+                className={cn(
+                  "w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2 hover:bg-muted/50",
+                  isSelected && "bg-primary/5"
+                )}
+              >
+                <div className={cn(
+                  "w-4 h-4 rounded border flex items-center justify-center transition-colors",
+                  isSelected ? "bg-primary border-primary" : "border-muted-foreground"
+                )}>
+                  {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
+                </div>
+                <Package className="w-4 h-4 text-muted-foreground" />
+                <span className="flex-1">{opt.label}</span>
+                {asset?.brand && (
+                  <span className="text-xs text-muted-foreground">{asset.brand}</span>
+                )}
+              </button>
+            );
+          })
+        )}
       </div>
     </div>
   );
@@ -142,7 +164,23 @@ export default function AssetCategories() {
   const [searchQuery, setSearchQuery] = useState("");
   const navigate = useRouter();
   
-  const { data: assets = [] } = useAssets();
+  const [assetSearch, setAssetSearch] = useState("");
+  const [assetPage, setAssetPage] = useState(1);
+  const assetSearchTimeoutRef = useRef<any>(null);
+
+  const handleAssetSearchChange = useCallback((val: string) => {
+    setAssetSearch(val);
+    setAssetPage(1);
+    if (assetSearchTimeoutRef.current) clearTimeout(assetSearchTimeoutRef.current);
+  }, []);
+
+  const assetApiParams = useMemo(() => {
+    const params: Record<string, string> = { page: String(assetPage), page_size: "50" };
+    if (assetSearch) params.search = assetSearch;
+    return params;
+  }, [assetSearch, assetPage]);
+
+  const { data: assets = [], isLoading: assetsLoading } = useAssets(assetApiParams);
   const [page, setPage] = useState(1);
   const pageSize = 9;
 
@@ -484,6 +522,9 @@ export default function AssetCategories() {
                 selected={form.assetIds}
                 onChange={(v: string[]) => setForm({ ...form, assetIds: v })}
                 assets={assets}
+                searchQuery={assetSearch}
+                onSearchChange={handleAssetSearchChange}
+                loading={assetsLoading}
               />
             </div>
             <div className="grid gap-2">

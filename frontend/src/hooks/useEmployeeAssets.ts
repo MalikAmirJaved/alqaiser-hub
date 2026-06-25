@@ -66,7 +66,13 @@ export interface AvailableKit {
 
 export interface AvailableAssetsData {
   assets: AvailableAsset[];
+  assets_total: number;
+  assets_page: number;
+  assets_page_size: number;
   kits: AvailableKit[];
+  kits_total: number;
+  kits_page: number;
+  kits_page_size: number;
 }
 
 // ---------- Hooks ----------
@@ -80,12 +86,16 @@ export function useEmployeeAssignments(employeeId?: string) {
   });
 }
 
-export function useAvailableAssets(employeeId?: string) {
+export function useAvailableAssets(employeeId?: string, params?: Record<string, string>) {
   const api = useApi();
-  const queryString = employeeId ? `?employee_id=${employeeId}` : '';
+  const queryParts: Record<string, string> = {};
+  if (employeeId) queryParts.employee_id = employeeId;
+  if (params) Object.assign(queryParts, params);
+  const queryString = Object.keys(queryParts).length > 0 ? '?' + new URLSearchParams(queryParts).toString() : '';
   return useQuery<AvailableAssetsData>({
-    queryKey: ["available-assets", employeeId],
+    queryKey: ["available-assets", employeeId, params],
     queryFn: () => api(`/api/hr/employee-assets/available/${queryString}`),
+    enabled: !!employeeId,
     staleTime: 30 * 1000,
   });
 }
