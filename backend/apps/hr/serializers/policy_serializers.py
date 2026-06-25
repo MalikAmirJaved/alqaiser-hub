@@ -29,6 +29,7 @@ class PolicyListSerializer(serializers.ModelSerializer):
     """Compact serializer for policy lists"""
     
     id = serializers.UUIDField(source='_id', read_only=True)
+    department = serializers.SerializerMethodField()
     department_name = serializers.SerializerMethodField()
     
     class Meta:
@@ -38,6 +39,11 @@ class PolicyListSerializer(serializers.ModelSerializer):
             'employee_type', 'version', 'status',
             'document_url', 'content', 'change_summary', 'created_at',
         ]
+    
+    def get_department(self, obj):
+        if obj.department:
+            return str(obj.department._id)
+        return None
     
     def get_department_name(self, obj):
         if obj.department:
@@ -53,6 +59,7 @@ class PolicyDetailSerializer(serializers.ModelSerializer):
     created_by_name = serializers.SerializerMethodField()
     updated_by_name = serializers.SerializerMethodField()
     versions = PolicyVersionSerializer(many=True, read_only=True)
+    department = serializers.SerializerMethodField()
     department_name = serializers.SerializerMethodField()
     
     class Meta:
@@ -67,6 +74,11 @@ class PolicyDetailSerializer(serializers.ModelSerializer):
             'versions',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_department(self, obj):
+        if obj.department:
+            return str(obj.department._id)
+        return None
     
     def get_department_name(self, obj):
         if obj.department:
