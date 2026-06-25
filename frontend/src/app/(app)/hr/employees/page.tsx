@@ -129,7 +129,9 @@ export default function EmployeesPage() {
       email: employee.email || "",
       phone_number: employee.phone || "",
       department_id: employee.department_id || "",
+      department_name: employee.department_name || "",
       designation_id: employee.designation_id || "",
+      designation_name: employee.designation_name || "",
       isfrom_employee_id: employee._id || employee.id || "",
     });
     return `/settings/users?${params.toString()}`;
