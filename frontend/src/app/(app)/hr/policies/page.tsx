@@ -631,6 +631,7 @@ function PolicyFormModal({
                   value={formData.department || ""} 
                   onChange={v => setFormData({...formData, department: v || null})} 
                   fetchOptions={fetchDepartments}
+                  displayLabel={initialData?.department_name || ""}
                   placeholder="Search departments..."
                 />
               </label>

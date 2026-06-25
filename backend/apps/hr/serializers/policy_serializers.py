@@ -36,7 +36,7 @@ class PolicyListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'code', 'title', 'category', 'department', 'department_name',
             'employee_type', 'version', 'status',
-            'document_url', 'created_at',
+            'document_url', 'content', 'change_summary', 'created_at',
         ]
     
     def get_department_name(self, obj):
