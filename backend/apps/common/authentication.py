@@ -27,7 +27,7 @@ class CookieJWTAuthentication(JWTAuthentication):
 
         try:
             validated_token = self.get_validated_token(raw_token)
-        except TokenError as e:
+        except (TokenError, InvalidToken) as e:
             logger.debug(f"Invalid JWT token in cookie: {e}")
             return None
 
