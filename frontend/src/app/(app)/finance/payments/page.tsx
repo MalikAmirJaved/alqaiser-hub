@@ -160,7 +160,7 @@ export default function PaymentsPage() {
         {val === "RECEIPT" ? "Money In" : "Money Out"}
       </span>
     ), sortable: true },
-    { key: "amount", label: "Amount", align: "right" as const, sortable: true, render: (val: number | string) => (
+    { key: "amount", label: "Amount",  sortable: true, render: (val: number | string) => (
       <span className="font-medium">{formatCurrency(toNumber(val))}</span>
     )},
     { key: "payable_type", label: "Source", render: (val: string | null, row: Payment) => {
