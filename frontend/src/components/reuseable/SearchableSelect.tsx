@@ -53,6 +53,8 @@ export default function SearchableSelect({
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  // Whether the dropdown should open upward (flip) instead of downward
+  const [dropUp, setDropUp] = useState(false);
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -245,6 +247,40 @@ export default function SearchableSelect({
     }
   };
 
+  // Trap wheel scroll inside the dropdown so it doesn't bubble to the page/modal
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list || !isOpen) return;
+
+    const onWheel = (e: WheelEvent) => {
+      const { scrollTop, scrollHeight, clientHeight } = list;
+      const atTop = scrollTop === 0 && e.deltaY < 0;
+      const atBottom = scrollTop + clientHeight >= scrollHeight && e.deltaY > 0;
+      // Stop propagation whenever the list is scrollable so the parent never moves
+      if (scrollHeight > clientHeight && !atTop && !atBottom) {
+        e.stopPropagation();
+      } else if (scrollHeight > clientHeight) {
+        // At a boundary — still stop so the parent form doesn't jump
+        e.stopPropagation();
+      }
+    };
+
+    list.addEventListener("wheel", onWheel, { passive: false });
+    return () => list.removeEventListener("wheel", onWheel);
+  }, [isOpen]);
+
+  // Detect available space below/above and flip the dropdown upward if needed
+  useEffect(() => {
+    if (!isOpen || !containerRef.current) return;
+
+    const DROPDOWN_HEIGHT = 260; // matches max-h-60 (240px) + border/padding buffer
+    const rect = containerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    setDropUp(spaceBelow < DROPDOWN_HEIGHT && spaceAbove > spaceBelow);
+  }, [isOpen]);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -320,9 +356,9 @@ export default function SearchableSelect({
         </div>
       </div>
 
-      {/* DROPDOWN */}
+      {/* DROPDOWN — flips upward when near bottom of viewport */}
       {isOpen && (
-        <div className="absolute z-50 mt-1 w-full bg-card border border-border rounded-md shadow-lg overflow-hidden">
+        <div className={`absolute z-50 w-full bg-card border border-border rounded-md shadow-lg overflow-hidden ${dropUp ? "bottom-full mb-1" : "top-full mt-1"}`}>
           {/* Scrollable Options Area */}
           <div
             ref={listRef}
