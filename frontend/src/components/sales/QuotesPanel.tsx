@@ -138,6 +138,7 @@ export default function QuotesPanel() {
 
   const buildInvoiceInitialData = (quote: Quote): any => ({
     customer: quote.customer || "",
+    customer_name: quote.customer_name || "",
     invoice_date: new Date().toISOString().split("T")[0],
     due_date: quote.expiration_date || "",
     amount: Number(quote.total_amount),

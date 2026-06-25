@@ -53,6 +53,8 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
   const formatCurrency = useFormatCurrency();
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [newCustomerInfo, setNewCustomerInfo] = useState<any>(null);
+  const [customerDisplayLabel, setCustomerDisplayLabel] = useState("");
+  const [variantDisplayLabels, setVariantDisplayLabels] = useState<Record<number, string>>({});
 
   const fetchCustomers = useServerSearch("/api/inventory/customers/", {
     transformOption: (c: any) => ({
@@ -134,6 +136,14 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
           variant_sku: line.variant_sku,
         }))
       );
+      setCustomerDisplayLabel((initialData as any).customer_name || "");
+      const labels: Record<number, string> = {};
+      (initialData.lines || []).forEach((line, idx) => {
+        if (line.variant_name || line.variant_sku) {
+          labels[idx] = line.variant_name || line.variant_sku || "";
+        }
+      });
+      setVariantDisplayLabels(labels);
       setNewCustomerInfo(null);
     } else if (defaultValues) {
       if (defaultValues.invoice_number !== undefined) setValue("invoice_number", defaultValues.invoice_number);
@@ -143,6 +153,14 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
       if (defaultValues.amount !== undefined) setValue("amount", defaultValues.amount);
       if (defaultValues.notes !== undefined) setValue("notes", defaultValues.notes);
       if (defaultValues.lines !== undefined) setValue("lines", defaultValues.lines as any);
+      setCustomerDisplayLabel((defaultValues as any).customer_name || "");
+      const labels: Record<number, string> = {};
+      ((defaultValues as any).lines || []).forEach((line: any, idx: number) => {
+        if (line.variant_name || line.variant_sku) {
+          labels[idx] = line.variant_name || line.variant_sku || "";
+        }
+      });
+      setVariantDisplayLabels(labels);
       setNewCustomerInfo(null);
     } else {
       reset({
@@ -154,6 +172,8 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
         notes: "",
         lines: [],
       });
+      setCustomerDisplayLabel("");
+      setVariantDisplayLabels({});
       setNewCustomerInfo(null);
       generateCode().then(code => setValue("invoice_number", code)).catch(() => {});
     }
@@ -295,6 +315,7 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
                       fetchOptions={fetchCustomers}
                       placeholder="Search customers..."
                       required={!newCustomerInfo}
+                      displayLabel={customerDisplayLabel}
                     />
                   </div>
                   <button
@@ -390,6 +411,7 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
                                 onChange={(val) => updateLine(idx, "variant", val)}
                                 fetchOptions={fetchVariants}
                                 placeholder="Search variants..."
+                                displayLabel={variantDisplayLabels[idx] || ""}
                               />
                             </td>
                             <td className="px-3 py-2">
