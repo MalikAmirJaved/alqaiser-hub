@@ -160,6 +160,7 @@ export default function UserForm({
                 placeholder="Search departments..."
                 onAddNew={() => setDeptModalOpen(true)}
                 addNewLabel="+ New Department"
+                displayLabel={initialData?.department_name || ""}
               />
             </label>
             <label className="text-sm flex flex-col gap-1">
@@ -172,6 +173,7 @@ export default function UserForm({
                 placeholder="Search designations..."
                 onAddNew={() => setDesigModalOpen(true)}
                 addNewLabel="+ New Designation"
+                displayLabel={initialData?.designation_name || ""}
               />
             </label>
           </div>
