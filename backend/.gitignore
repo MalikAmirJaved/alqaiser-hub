@@ -36,4 +36,8 @@ staticfiles/
 pip-log.txt
 pip-delete-this-directory.txt
 
+<<<<<<< Updated upstream
 upload/
+=======
+/upload
+>>>>>>> Stashed changes
