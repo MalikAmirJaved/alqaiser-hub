@@ -182,7 +182,24 @@ def create_payment_for(
 def generate_expense_number(company_id):
     """Generate a unique expense number using Redis atomic counter."""
     from django.core.cache import cache
-    counter = cache.incr('code_counter:expense')
+    try:
+        counter = cache.incr('code_counter:expense')
+    except ValueError:
+        # Key doesn't exist yet — seed from the max existing expense number in DB
+        from apps.finance.models import Expense
+        last = Expense.objects.filter(
+            expense_number__startswith='EXP-'
+        ).order_by('-id').values_list('expense_number', flat=True).first()
+        if last:
+            try:
+                seed = int(last.replace('EXP-', ''))
+            except ValueError:
+                seed = 0
+        else:
+            seed = 0
+        cache.set('code_counter:expense', seed)
+        # Retry incr — atomic; handles concurrent requests that entered this block
+        counter = cache.incr('code_counter:expense')
     return f'EXP-{counter:04d}'
 
 
@@ -196,8 +213,14 @@ def create_expense_for_payroll(
     user,
     notes='',
     expense_date=None,
+    skip_payment=False,
 ):
-    """Auto-create an expense record with a confirmed payment for salary/loan payments."""
+    """Auto-create an expense record for salary/loan/exit payments.
+
+    When called from payroll or exit settlement (which already create a
+    payment for the source document), pass ``skip_payment=True`` to avoid
+    creating a duplicate payment for the expense itself.
+    """
     from datetime import date as _date
     from apps.finance.models import Expense
 
@@ -214,19 +237,20 @@ def create_expense_for_payroll(
         updated_by=user,
     )
 
-    # Create a confirmed payment so the expense shows as PAID
-    payment = create_payment_for(
-        expense,
-        amount=amount,
-        payment_date=expense_date or _date.today(),
-        user=user,
-        payment_method='BANK_TRANSFER',
-        reference_number=expense.expense_number,
-        notes=description,
-        auto_confirm=False,
-    )
-    payment.status = 'CONFIRMED'
-    payment.save(update_fields=['status', 'updated_at'])
+    if not skip_payment:
+        # Create a confirmed payment so the expense shows as PAID
+        payment = create_payment_for(
+            expense,
+            amount=amount,
+            payment_date=expense_date or _date.today(),
+            user=user,
+            payment_method='BANK_TRANSFER',
+            reference_number=expense.expense_number,
+            notes=description,
+            auto_confirm=False,
+        )
+        payment.status = 'CONFIRMED'
+        payment.save(update_fields=['status', 'updated_at'])
 
     return expense
 

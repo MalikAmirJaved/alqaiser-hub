@@ -1,8 +1,8 @@
 // components/payroll/CompensationLoanPage.tsx
 "use client";
 
-import { useState, useMemo } from "react";
-import { useActiveEmployees } from "@/hooks/useEmployees";
+import { useState, useMemo, useEffect } from "react";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import {
   useCompensations,
   useCreateCompensation,
@@ -16,7 +16,7 @@ import {
 } from "@/hooks/usePayroll";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { HandCoins, TrendingUp, Plus, Search } from "lucide-react";
+import { HandCoins, TrendingUp, Plus, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import CompensationForm from "./CompensationForm";
 import LoanForm from "./LoanForm";
@@ -52,10 +52,47 @@ export default function CompensationLoanPage({
   const [loanValidationErrors, setLoanValidationErrors] = useState<string[]>([]);
   const [payLoanModalOpen, setPayLoanModalOpen] = useState(false);
   const [payLoanItem, setPayLoanItem] = useState<any>(null);
+  const [compPage, setCompPage] = useState(1);
+  const [loanPage, setLoanPage] = useState(1);
+  const pageSize = 20;
 
-  const { data: employees = [] } = useActiveEmployees();
-  const { data: compensations = [] } = useCompensations();
-  const { data: loans = [] } = useEmployeeLoans();
+  useEffect(() => { setCompPage(1); }, [searchQuery]);
+  useEffect(() => { setLoanPage(1); }, [searchQuery, statusFilter]);
+
+  const fetchEmployees = useServerSearch("/api/hr/employees/", {
+    extraParams: { employment_status: "ACTIVE" },
+    transformOption: (e: any) => ({
+      value: e.id,
+      label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""} (${formatCurrency(parseFloat(e.salary || "0"))})`,
+      joining_date: e.joining_date,
+    }),
+  });
+
+  const fetchEmployeesForCompensation = useServerSearch("/api/hr/employees/", {
+    extraParams: { employment_status: "ACTIVE" },
+    transformOption: (e: any) => ({
+      value: e.id,
+      label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""}`,
+      joining_date: e.joining_date,
+    }),
+  });
+
+  // Server-side paginated queries
+  const compApiParams = useMemo(() => ({
+    page: String(compPage),
+    page_size: String(pageSize),
+    ...(searchQuery ? { search: searchQuery } : {}),
+  }), [compPage, pageSize, searchQuery]);
+
+  const loanApiParams = useMemo(() => ({
+    page: String(loanPage),
+    page_size: String(pageSize),
+    ...(searchQuery ? { search: searchQuery } : {}),
+    ...(statusFilter !== "all" ? { status: statusFilter } : {}),
+  }), [loanPage, pageSize, searchQuery, statusFilter]);
+
+  const { data: compensations = [], totalCount: compTotalCount, isLoading: compLoading } = useCompensations(compApiParams);
+  const { data: loans = [], totalCount: loanTotalCount, isLoading: loanLoading } = useEmployeeLoans(loanApiParams);
   const createCompensation = useCreateCompensation();
   const updateCompensation = useUpdateCompensation();
   const deleteCompensation = useDeleteCompensation();
@@ -87,24 +124,6 @@ export default function CompensationLoanPage({
       .filter((c) => c.status === "CONFIRM" || c.status === "PENDING")
       .map((c) => c.employee_id);
   }, [compensations]);
-
-  const employeeOptionsForCompensation = employees
-    .filter(
-      (e) =>
-        !employeesWithCompensation.includes(e.id) ||
-        (editingItem && editingItem.employee_id === e.id)
-    )
-    .map((e) => ({
-      value: String(e.id),
-      label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""}`,
-    }));
-
-  const employeeOptionsForLoan = employees.map((e) => ({
-    value: String(e.id),
-    label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""} (${formatCurrency(
-      parseFloat(e.salary || "0")
-    )})`,
-  }));
 
   // -----------------------------
   // Actions
@@ -238,9 +257,11 @@ export default function CompensationLoanPage({
     setPayLoanItem(loan);
     setFormData({
       ...loan,
+      employee_joining_date: loan.employee_joining_date || "",
       selected_months: loan.selected_months || [],
       month_range: loan.month_range || null,
     });
+    setSelectedEmployeeSalary(parseFloat(loan.monthly_salary || "0"));
     setPayLoanModalOpen(true);
   };
 
@@ -300,23 +321,13 @@ export default function CompensationLoanPage({
   };
 
   // -----------------------------
-  // Filters
+  // Pagination calculations (server handles filtering, client clamps page)
   // -----------------------------
-  const filteredCompensations = compensations.filter(
-    (c) =>
-      c.employee_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.employee_code?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const compTotalPages = Math.max(1, Math.ceil((compTotalCount || 0) / pageSize));
+  const compSafePage = Math.min(compPage, compTotalPages);
 
-  const filteredLoans = loans
-    .filter(
-      (l) =>
-        l.employee_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        l.loan_type?.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-    .filter(
-      (l) => statusFilter === "all" || l.status === statusFilter
-    );
+  const loanTotalPages = Math.max(1, Math.ceil((loanTotalCount || 0) / pageSize));
+  const loanSafePage = Math.min(loanPage, loanTotalPages);
 
   // -----------------------------
   // UI
@@ -386,8 +397,9 @@ export default function CompensationLoanPage({
         {/* Tabs */}
         <TabsContent value="compensation">
           <CompensationTab
-            filteredCompensations={filteredCompensations}
+            filteredCompensations={compensations}
             formatCurrency={formatCurrency}
+            isLoading={compLoading}
             onEdit={
               permissions.update_compensation
                 ? (item) => openEditModal("compensation", item)
@@ -409,12 +421,27 @@ export default function CompensationLoanPage({
                 : undefined
             }
           />
+          {(compTotalCount || 0) > pageSize && (
+            <div className="flex items-center justify-between mt-3 px-4 py-2 text-xs text-muted-foreground">
+              <span>{(compSafePage - 1) * pageSize + 1}–{Math.min(compSafePage * pageSize, compTotalCount || 0)} of {compTotalCount || 0}</span>
+              <div className="flex items-center gap-2">
+                <span>Page {compSafePage} of {compTotalPages}</span>
+                <button onClick={() => setCompPage(p => Math.max(1, p - 1))} disabled={compSafePage <= 1} className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button onClick={() => setCompPage(p => p + 1)} disabled={compSafePage >= compTotalPages} className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="loans">
           <LoanTab
-            filteredLoans={filteredLoans}
+            filteredLoans={loans}
             formatCurrency={formatCurrency}
+            isLoading={loanLoading}
             onConfirm={
               permissions.approve_loan
                 ? handleConfirmLoan
@@ -431,6 +458,20 @@ export default function CompensationLoanPage({
                 : undefined
             }
           />
+          {(loanTotalCount || 0) > pageSize && (
+            <div className="flex items-center justify-between mt-3 px-4 py-2 text-xs text-muted-foreground">
+              <span>{(loanSafePage - 1) * pageSize + 1}–{Math.min(loanSafePage * pageSize, loanTotalCount || 0)} of {loanTotalCount || 0}</span>
+              <div className="flex items-center gap-2">
+                <span>Page {loanSafePage} of {loanTotalPages}</span>
+                <button onClick={() => setLoanPage(p => Math.max(1, p - 1))} disabled={loanSafePage <= 1} className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button onClick={() => setLoanPage(p => p + 1)} disabled={loanSafePage >= loanTotalPages} className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 
@@ -450,29 +491,18 @@ export default function CompensationLoanPage({
                 <CompensationForm
                   formData={formData}
                   setFormData={setFormData}
-                  employeeOptions={employeeOptionsForCompensation}
+                  fetchEmployeeOptions={fetchEmployeesForCompensation}
                   formatCurrency={formatCurrency}
-                  employeeJoiningDate={
-                    formData.employee_id
-                      ? employees.find((e: any) => String(e.id) === String(formData.employee_id))?.joining_date
-                      : null
-                  }
                 />
               ) : (
                 <LoanForm
                   formData={formData}
                   setFormData={setFormData}
-                  employeeOptions={employeeOptionsForLoan}
-                  employees={employees}
+                  fetchEmployeeOptions={fetchEmployees}
                   selectedEmployeeSalary={selectedEmployeeSalary}
                   formatCurrency={formatCurrency}
                   errors={[]}
                   onValidationChange={() => {}}
-                  employeeJoiningDate={
-                    formData.employee_id
-                      ? employees.find((e: any) => String(e.id) === String(formData.employee_id))?.joining_date
-                      : null
-                  }
                 />
               )}
             </div>
@@ -509,17 +539,12 @@ export default function CompensationLoanPage({
               <LoanForm
                 formData={formData}
                 setFormData={setFormData}
-                employeeOptions={employeeOptionsForLoan}
-                employees={employees}
+                fetchEmployeeOptions={fetchEmployees}
                 selectedEmployeeSalary={selectedEmployeeSalary}
                 formatCurrency={formatCurrency}
                 errors={[]}
                 onValidationChange={() => {}}
-                employeeJoiningDate={
-                  formData.employee_id
-                    ? employees.find((e: any) => String(e.id) === String(formData.employee_id))?.joining_date
-                    : null
-                }
+                disableEmployeeSelect={true}
               />
             </div>
             <div className="px-6 py-4 border-t flex justify-end gap-3 bg-muted/30">

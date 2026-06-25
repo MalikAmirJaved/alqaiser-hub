@@ -4,7 +4,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, List, Grid, MapPin, Phone, Building2, User } from "lucide-react";
+import { Plus, List, Grid, MapPin, Phone, Building2, User, LocateFixed } from "lucide-react";
 import { TableView, GridView } from "@/components/reuseable/TableGridView";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
@@ -21,6 +21,9 @@ import {
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { usePagination } from "@/hooks/usePagination";
+import { useServerSearch } from "@/hooks/useServerSearch";
+import { LocationGroup } from "@/components/reuseable/LocationSelectors";
 
 type ViewMode = "table" | "grid";
 
@@ -31,12 +34,23 @@ export default function WarehousesPage() {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null);
+  const pagination = usePagination();
 
-  const { data: warehouses = [], isLoading, refetch } = useWarehouses({
+  const fetchEmployees = useServerSearch("/api/hr/employees/", {
+    extraParams: { employment_status: "ACTIVE" },
+    transformOption: (e: any) => ({
+      value: e.id,
+      label: `${e.first_name} ${e.last_name || ""} (${e.department_name || "N/A"})`,
+    }),
+  });
+
+  const { data: warehouses = [], isLoading, refetch, totalCount } = useWarehouses({
     search: filters.search || undefined,
     is_active: filters.is_active ? filters.is_active === 'true' : undefined,
     country: filters.country || undefined,
+    state: filters.state || undefined,
     city: filters.city || undefined,
+    page: String(pagination.page),
   });
   const { data: stats, isLoading: statsLoading } = useWarehouseStats();
   const createWarehouse = useCreateWarehouse();
@@ -44,22 +58,9 @@ export default function WarehousesPage() {
   const deleteWarehouse = useDeleteWarehouse();
   const deleteConfirm = useConfirmationModal();
 
-  // ── Dynamic filter options from data ──
-  const countryOptions = useMemo(() => {
-    const unique = [...new Set(warehouses.map((w) => w.country).filter(Boolean))];
-    return unique.map((c) => ({ value: c, label: c }));
-  }, [warehouses]);
-
-  const cityOptions = useMemo(() => {
-    const unique = [...new Set(warehouses.map((w) => w.city).filter(Boolean))];
-    return unique.map((c) => ({ value: c, label: c }));
-  }, [warehouses]);
-
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
     { name: "is_active", label: "Status", type: "boolean" },
-    { name: "country", label: "Country", type: "select", searchable: true, options: countryOptions },
-    { name: "city", label: "City", type: "select", searchable: true, options: cityOptions },
   ];
 
   const statsData = stats
@@ -338,7 +339,24 @@ export default function WarehousesPage() {
       {!statsLoading && statsData.length > 0 && <StatsCards stats={statsData} />}
 
       {/* Enhanced FilterBar */}
-      <FilterBar fields={filterFields} filters={filters} onChange={setFilters} />
+      <FilterBar fields={filterFields} filters={filters} onChange={(f) => { setFilters(f); pagination.resetPage(); }} />
+
+      {/* Location Filters */}
+      <div className="bg-card border border-border rounded-xl p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <LocateFixed className="w-4 h-4 text-primary" />
+          <span className="text-sm font-medium">Location Filters</span>
+        </div>
+        <LocationGroup
+          country={filters.country || ""}
+          setCountry={(val) => { setFilters(f => ({ ...f, country: val, state: "", city: "" })); pagination.resetPage(); }}
+          state={filters.state || ""}
+          setState={(val) => { setFilters(f => ({ ...f, state: val, city: "" })); pagination.resetPage(); }}
+          city={filters.city || ""}
+          setCity={(val) => { setFilters(f => ({ ...f, city: val })); pagination.resetPage(); }}
+          cssCol="3"
+        />
+      </div>
 
       {/* Table / Grid */}
       {viewMode === "table" ? (
@@ -349,6 +367,9 @@ export default function WarehousesPage() {
           onRowClick={handleRowClick as any}
           actions={actions as any}
           emptyMessage="No warehouses found"
+          totalCount={totalCount}
+          currentPage={pagination.page}
+          onPageChange={pagination.setPage}
         />
       ) : (
         <GridView
@@ -377,6 +398,8 @@ export default function WarehousesPage() {
                   setEditingWarehouse(null);
                 }}
                 isLoading={createWarehouse.isPending || updateWarehouse.isPending}
+                fetchEmployeeOptions={fetchEmployees}
+                employeeDisplayLabel={editingWarehouse?.employee_name || ""}
               />
             </div>
           </div>

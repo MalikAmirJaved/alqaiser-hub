@@ -6,12 +6,14 @@ import { usePolicies, usePolicyStats, useCreatePolicy, useUpdatePolicy, useDelet
 import type { PolicyRecord, PolicyFilters, PolicyFormData, BulkActionPayload } from "@/hooks/usePolicies";
 import PageHeader from "@/components/PageHeader";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import { ConfirmationModal, useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import {
   Search, Plus, Pencil, Trash2, FileText,
   AlertCircle, X, BookOpen, Users,
-  CheckSquare, Square, RotateCcw, ChevronDown
+  CheckSquare, Square, RotateCcw, ChevronDown, ChevronLeft, ChevronRight
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
@@ -174,14 +176,6 @@ export default function HRPolicyPage() {
   // ==========================================
   // RENDER
   // ==========================================
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"/>
-      </div>
-    );
-  }
-
   if (policiesError) {
     return (
       <div className="flex flex-col items-center justify-center h-96 gap-4">
@@ -327,7 +321,18 @@ export default function HRPolicyPage() {
               </tr>
             </thead>
             <tbody>
-              {records.length === 0 ? (
+              {loading ? (
+                Array.from({ length: 5 }).map((_, r) => (
+                  <tr key={r} className="border-t border-border">
+                    <td className="px-4 py-2.5"><Skeleton className="h-4 w-4" /></td>
+                    <td className="px-4 py-2.5"><Skeleton className="h-4 w-28" /></td>
+                    <td className="px-4 py-2.5"><Skeleton className="h-4 w-20" /></td>
+                    <td className="px-4 py-2.5"><Skeleton className="h-4 w-12" /></td>
+                    <td className="px-4 py-2.5"><Skeleton className="h-5 w-20 rounded-full" /></td>
+                    <td className="px-4 py-2.5 text-right"><Skeleton className="h-8 w-16 ml-auto rounded-md" /></td>
+                  </tr>
+                ))
+              ) : records.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-10 text-muted-foreground">
                     No policies found.
@@ -419,14 +424,26 @@ export default function HRPolicyPage() {
         {/* Footer with count and pagination */}
         <div className="p-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
           <span>Showing {records.length} of {totalCount} policies</span>
-          {policiesData?.next && (
-            <button
-              onClick={() => setFilters(prev => ({ ...prev, page: (prev.page || 1) + 1 }))}
-              className="px-3 h-7 rounded-md border border-border hover:bg-muted"
-            >
-              Next Page
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            <span>Page {filters.page ?? 1}</span>
+            {policiesData?.previous && (
+              <button
+                onClick={() => setFilters(prev => ({ ...prev, page: Math.max(1, (prev.page || 1) - 1) }))}
+                disabled={(filters.page ?? 1) <= 1}
+                className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            )}
+            {policiesData?.next && (
+              <button
+                onClick={() => setFilters(prev => ({ ...prev, page: (prev.page || 1) + 1 }))}
+                className="p-1 rounded-md border border-border hover:bg-muted transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -473,7 +490,13 @@ function PolicyFormModal({
   isSaving?: boolean;
 }) {
   const { generateCode, validateCode } = useAutoCode("policy", "POL");
-  const { options: departmentOptions, isLoading: deptsLoading } = useDepartmentOptions();
+
+  const fetchDepartments = useServerSearch("/api/organization/departments/", {
+    transformOption: (dept: any) => ({
+      value: dept.id,
+      label: dept.name,
+    }),
+  });
 
   const [codeLoading, setCodeLoading] = useState(false);
 
@@ -517,8 +540,6 @@ function PolicyFormModal({
     
     onSubmit(formData, isEditing);
   };
-
-  const allDeptOptions = [{ value: "", label: "All Departments" }, ...departmentOptions];
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4 overflow-y-auto">
@@ -609,8 +630,9 @@ function PolicyFormModal({
                 <SearchableSelect 
                   value={formData.department || ""} 
                   onChange={v => setFormData({...formData, department: v || null})} 
-                  options={allDeptOptions}
-                  disabled={deptsLoading}
+                  fetchOptions={fetchDepartments}
+                  displayLabel={initialData?.department_name || ""}
+                  placeholder="Search departments..."
                 />
               </label>
               <label className="text-sm flex flex-col gap-1">

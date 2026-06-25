@@ -83,30 +83,46 @@ export interface FinalSettlementPreview {
 }
 
 // Fetch all exit records
+interface PaginatedResponse<T> {
+  count: number;
+  total_pages: number;
+  current_page: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
 export function useExitRecords(params?: Record<string, string>) {
   const api = useApi();
   const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
 
-  return useQuery<{ data: ExitRecord[]; pagination: any }>({
+  const query = useQuery<PaginatedResponse<ExitRecord>>({
     queryKey: ["exitRecords", params],
     queryFn: () => api(`/api/hr/exits/${queryString}`),
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
   });
+  return {
+    ...query,
+    data: query.data?.results ?? [],
+    totalCount: query.data?.count ?? 0,
+    totalPages: query.data?.total_pages ?? 0,
+    currentPage: query.data?.current_page ?? 1,
+  };
 }
 
 // Fetch single exit record
 export function useExitRecord(id: string | null) {
   const api = useApi();
-  return useQuery<ExitRecord>({
+  return useQuery<PaginatedResponse<ExitRecord>, Error, ExitRecord>({
     queryKey: ["exitRecord", id],
     queryFn: () => api(`/api/hr/exits/?pk=${id}`),
     enabled: !!id,
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
-    select: (data: any) => {
-      const records = data?.data || [];
+    select: (data: PaginatedResponse<ExitRecord>) => {
+      const records = data?.results || [];
       return records.find((r: ExitRecord) => r.id === id) || records[0] || null;
     },
   });

@@ -12,6 +12,10 @@ from apps.inventory.serializers import WarehouseSerializer
 class WarehouseViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'INVENTORY'
     permission_resource = 'warehouse'
+    action_permission_any_of = {
+        "list": [("INVENTORY", "sales_order")],
+        "retrieve": [("INVENTORY", "sales_order")],
+    }
     queryset = Warehouse.objects.all()
     serializer_class = WarehouseSerializer
     lookup_field = '_id'

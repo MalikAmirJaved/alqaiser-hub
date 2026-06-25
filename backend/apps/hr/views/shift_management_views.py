@@ -1,6 +1,6 @@
 # apps/hr/views/shift_management_views.py
 from datetime import date, datetime, timedelta
-from django.db.models import Q, Count, F
+from django.db.models import Q, Count, Prefetch
 from django.core.cache import cache
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+from collections import defaultdict
 import logging
 
 from apps.common.baseauthentication import CompanyBranchMixin
@@ -630,61 +631,65 @@ class ShiftStatisticsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     
     def get(self, request):
         company_id = request.user.company_id
-        
+
         if not company_id:
             return Response(
                 {'error': 'User is not associated with any company'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         date_param = request.query_params.get('date', date.today().isoformat())
         date_obj = datetime.strptime(date_param, '%Y-%m-%d').date()
-        
+
         employees = Employee.objects.filter(company_id=company_id, is_deleted=False)
-        
+        employee_ids = list(employees.values_list('id', flat=True))
+
+        # Use bulk resolver instead of per-employee N+1 queries
+        resolved_batch = ShiftResolutionService.get_resolved_shifts_for_day(employee_ids, date_obj)
+
         shift_distribution = {}
         employees_without_shift = 0
-        
-        for employee in employees:
-            resolved = ShiftResolutionService.get_resolved_shift(employee.id, date_obj)
-            template_id = resolved.get('template_id')
-            
-            if template_id:
-                template_uuid = str(ShiftTemplate.objects.get(id=template_id)._id) if template_id else None
-                shift_distribution[template_uuid] = shift_distribution.get(template_uuid, 0) + 1
+        for r in resolved_batch:
+            tpl = r.get('template')
+            if tpl:
+                tid = str(tpl._id)
+                shift_distribution[tid] = shift_distribution.get(tid, 0) + 1
             else:
                 employees_without_shift += 1
-        
-        template_stats = []
+
+        # Bulk template stats using aggregation
         templates = ShiftTemplate.objects.filter(company_id=company_id, is_deleted=False)
-        
-        for template in templates:
-            overrides_count = ShiftOverride.objects.filter(
-                shift_template=template,
-                date__gte=date_obj
-            ).count()
-            
-            date_range_count = ShiftDateRangeAssignment.objects.filter(
-                shift_template=template,
-                is_active=True,
-                end_date__gte=date_obj
-            ).count()
-            
-            default_count = EmployeeDefaultShift.objects.filter(
-                template=template,
-                effective_from__lte=date_obj
+        override_counts = dict(
+            ShiftOverride.objects.filter(
+                shift_template__in=templates, date__gte=date_obj
+            ).values_list('shift_template_id').annotate(count=Count('id'))
+        )
+        date_range_counts = dict(
+            ShiftDateRangeAssignment.objects.filter(
+                shift_template__in=templates, is_active=True, end_date__gte=date_obj
+            ).values_list('shift_template_id').annotate(count=Count('id'))
+        )
+        default_counts = dict(
+            EmployeeDefaultShift.objects.filter(
+                template__in=templates, effective_from__lte=date_obj
             ).filter(
                 Q(effective_to__isnull=True) | Q(effective_to__gte=date_obj)
-            ).count()
-            
+            ).values_list('template_id').annotate(count=Count('id'))
+        )
+
+        template_stats = []
+        for template in templates:
+            oc = override_counts.get(template.id, 0)
+            drc = date_range_counts.get(template.id, 0)
+            dc = default_counts.get(template.id, 0)
             template_stats.append({
                 'template_id': str(template._id),
                 'template_name': template.name,
                 'is_active': template.is_active,
-                'overrides_count': overrides_count,
-                'date_range_count': date_range_count,
-                'default_count': default_count,
-                'total_usage': overrides_count + date_range_count + default_count
+                'overrides_count': oc,
+                'date_range_count': drc,
+                'default_count': dc,
+                'total_usage': oc + drc + dc,
             })
         
         recent_activity = ShiftChangeHistory.objects.filter(
@@ -704,6 +709,136 @@ class ShiftStatisticsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 company_id=company_id,
                 date=date_obj
             ).count(),
+        })
+
+
+class ShiftMonthSummaryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'shift_override'
+    """Lightweight aggregated month summary for the calendar view — returns template counts per day (no per-employee data). Cache-friendly."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        company_id = request.user.company_id
+        if not company_id:
+            return Response({'error': 'User is not associated with any company'}, status=400)
+
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        if not start_date or not end_date:
+            return Response({'error': 'start_date and end_date are required'}, status=400)
+
+        start = datetime.strptime(start_date, '%Y-%m-%d').date()
+        end = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+        cache_key = f"shift_month_summary_{company_id}_{start_date}_{end_date}"
+        cached = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
+        employees = Employee.objects.filter(company_id=company_id, is_deleted=False)
+        employee_ids = list(employees.values_list('id', flat=True))
+
+        # Pre-load template metadata
+        templates = ShiftTemplate.objects.filter(company_id=company_id, is_deleted=False)
+        template_meta = {}
+        for t in templates:
+            template_meta[t.id] = {
+                'template_id': str(t._id),
+                'template_name': t.name,
+                'start_time': t.start_time.strftime('%H:%M'),
+                'end_time': t.end_time.strftime('%H:%M'),
+                'break_minutes': t.break_minutes,
+            }
+
+        # Use the (now optimized) batch resolver for the month
+        resolved = ShiftResolutionService.get_resolved_shifts_batch(employee_ids, start, end)
+
+        # Aggregate: date → template_id → count
+        summary = defaultdict(lambda: defaultdict(int))
+        date_keys = [(start + timedelta(days=i)).isoformat() for i in range((end - start).days + 1)]
+        for dt_str in date_keys:
+            for emp_id, emp_shifts in resolved.items():
+                shift = emp_shifts.get(dt_str, {})
+                template = shift.get('template')
+                if template:
+                    summary[dt_str][template.id] += 1
+
+        # Shape into final response
+        result = {}
+        for dt_str in date_keys:
+            tpl_list = []
+            for t_id, count in summary[dt_str].items():
+                meta = template_meta.get(t_id, {})
+                tpl_list.append({**meta, 'employee_count': count})
+            result[dt_str] = tpl_list
+
+        cache.set(cache_key, result, 60)
+        return Response(result)
+
+
+class ShiftDayDetailView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'shift_override'
+    """Full shift details for a single day — used by the 'See more' popup. Fetched lazily."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        company_id = request.user.company_id
+        if not company_id:
+            return Response({'error': 'User is not associated with any company'}, status=400)
+
+        date_param = request.query_params.get('date')
+        if not date_param:
+            return Response({'error': 'date is required'}, status=400)
+
+        date_obj = datetime.strptime(date_param, '%Y-%m-%d').date()
+
+        employees = Employee.objects.filter(
+            company_id=company_id, is_deleted=False,
+            employment_status='ACTIVE'
+        )
+        employee_ids = list(employees.values_list('id', flat=True))
+
+        # Use the optimized single-day resolver
+        resolved = ShiftResolutionService.get_resolved_shifts_for_day(employee_ids, date_obj)
+
+        # Group by template
+        template_groups = defaultdict(list)
+        for r in resolved:
+            tpl = r.get('template')
+            if tpl:
+                template_groups[tpl.id].append({
+                    'employee_id': str(r['employee']._id),
+                    'employee_name': r['employee'].full_name,
+                    'department_name': str(r['employee'].department) if r['employee'].department else None,
+                    'source_type': r['source_type'],
+                })
+
+        # Build response with template details + employee lists
+        result = []
+        templates = ShiftTemplate.objects.filter(company_id=company_id, is_deleted=False)
+        template_map = {t.id: t for t in templates}
+
+        for t_id, emp_list in template_groups.items():
+            tpl = template_map.get(t_id)
+            if tpl:
+                result.append({
+                    'template_id': str(tpl._id),
+                    'template_name': tpl.name,
+                    'start_time': tpl.start_time.strftime('%H:%M'),
+                    'end_time': tpl.end_time.strftime('%H:%M'),
+                    'break_minutes': tpl.break_minutes,
+                    'employee_count': len(emp_list),
+                    'employees': emp_list,
+                })
+
+        result.sort(key=lambda x: x['employee_count'], reverse=True)
+
+        return Response({
+            'date': date_param,
+            'shifts': result,
+            'total_employees': len(employee_ids),
         })
 
 

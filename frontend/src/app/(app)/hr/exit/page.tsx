@@ -11,8 +11,9 @@ import ConfirmationModal, { useConfirmationModal } from "@/components/reuseable/
 import {
   Search, Plus, RefreshCw, Trash2, Pencil, LogOut, Briefcase,
   AlertTriangle, Clock, CheckCircle2, X, FileText, ShieldCheck,
-  Eye, Loader2, RotateCcw, DollarSign
+  Eye, Loader2, RotateCcw, DollarSign, ChevronLeft, ChevronRight
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   useExitRecords,
   useExitStats,
@@ -29,7 +30,7 @@ import {
   ExitEmployeeAsset,
   FinalSettlementPreview
 } from "@/hooks/useExitManagement";
-import { useActiveEmployees } from "@/hooks/useEmployees";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import { toast } from "sonner";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatsCards } from "@/components/reuseable/StatsCards";
@@ -60,7 +61,15 @@ export default function ExitManagementPage() {
   const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const permissions = useFeaturePermissions("HR", "exit");
-  const { data: employees = [] } = useActiveEmployees();
+
+  const fetchEmployees = useServerSearch("/api/hr/employees/", {
+    extraParams: { employment_status: "ACTIVE" },
+    transformOption: (e: any) => ({
+      value: e.id,
+      label: `${e.first_name} ${e.last_name || ""} (${e.department_name || "N/A"})`,
+    }),
+  });
+
   const confirmationModal = useConfirmationModal();
   const [query, setQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
@@ -71,13 +80,25 @@ export default function ExitManagementPage() {
   const [editingRecord, setEditingRecord] = useState<ExitRecord | null>(null);
   const [settlementDialog, setSettlementDialog] = useState<{ recordId: string; status: string } | null>(null);
   const [settlementReason, setSettlementReason] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
 
   // Asset return modal state
   const [assetReturnExitId, setAssetReturnExitId] = useState<string | null>(null);
   const { data: assets = [], isLoading: assetsLoading } = useExitEmployeeAssets(assetReturnExitId);
   const returnAssetMutation = useReturnExitAsset();
 
-  const { data: recordsData, isLoading, refetch } = useExitRecords();
+  const apiParams = useMemo(() => ({
+    ...(query ? { search: query } : {}),
+    ...(filterStatus ? { status: filterStatus } : {}),
+    ...(filterReason ? { reason: filterReason } : {}),
+    page: String(page),
+    page_size: String(pageSize),
+  }), [query, filterStatus, filterReason, page, pageSize]);
+
+  useEffect(() => { setPage(1); }, [query, filterStatus, filterReason]);
+
+  const { data: records, totalCount, totalPages, currentPage, isLoading, refetch } = useExitRecords(apiParams);
   const { data: stats } = useExitStats();
   const createMutation = useCreateExitRecord();
   const updateMutation = useUpdateExitRecord();
@@ -85,18 +106,6 @@ export default function ExitManagementPage() {
   const bulkActionMutation = useBulkAction();
   const clearDuesMutation = useClearExitDues();
   const clearSettlementMutation = useClearExitSettlement();
-
-  const records = recordsData?.data || [];
-
-  const filteredRecords = useMemo(() => {
-    return records.filter(r => {
-      const matchesSearch = query === "" ||
-        r.employee_name.toLowerCase().includes(query.toLowerCase());
-      const matchesStatus = filterStatus === "" || r.status_value === filterStatus;
-      const matchesReason = filterReason === "" || r.reason_value === filterReason;
-      return matchesSearch && matchesStatus && matchesReason;
-    });
-  }, [records, query, filterStatus, filterReason]);
 
   const handleSave = async (data: Partial<ExitRecord>) => {
     try {
@@ -152,14 +161,6 @@ export default function ExitManagementPage() {
     } catch (error: any) {
     }
   };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-5">
@@ -264,10 +265,10 @@ export default function ExitManagementPage() {
                 <tr>
                   <th className="w-10 px-4 py-2.5">
                     <Checkbox
-                      checked={selectedRecords.size === filteredRecords.length && filteredRecords.length > 0}
-                      indeterminate={selectedRecords.size > 0 && selectedRecords.size < filteredRecords.length}
+                      checked={selectedRecords.size === records.length && records.length > 0}
+                      indeterminate={selectedRecords.size > 0 && selectedRecords.size < records.length}
                       onChange={(checked) => {
-                        if (checked) setSelectedRecords(new Set(filteredRecords.map(r => r.id)));
+                        if (checked) setSelectedRecords(new Set(records.map(r => r.id)));
                         else setSelectedRecords(new Set());
                       }}
                     />
@@ -280,143 +281,156 @@ export default function ExitManagementPage() {
                   <th className="text-left px-4 py-2.5">Notes</th>
                   <th className="px-4 py-2.5 text-right">Actions</th>
                 </tr>
-              </thead>
-              <tbody>
-                {filteredRecords.map(r => (
-                  <tr key={r.id} className="border-t border-border hover:bg-muted/30">
-                    <td className="px-4 py-2.5">
-                      <Checkbox
-                        checked={selectedRecords.has(r.id)}
-                        onChange={(checked) => {
-                          const newSet = new Set(selectedRecords);
-                          if (checked) newSet.add(r.id);
-                          else newSet.delete(r.id);
-                          setSelectedRecords(newSet);
-                        }}
-                      />
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <div className="font-medium">{r.employee_name}</div>
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <div className="text-xs">{r.exit_date || "—"}</div>
-                      <div className="text-[10px] text-muted-foreground">LWD: {r.last_working_day || "—"}</div>
-                    </td>
-                    <td className="px-4 py-2.5 text-xs">
-                      <span className="inline-flex px-2 py-0.5 text-[11px] rounded-full border bg-muted">
-                        {r.reason}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {permissions.update && r.status_value === "PENDING" ? (
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => { setSettlementDialog({ recordId: r.id, status: "CONFIRMED" }); setSettlementReason(""); }}
-                            className="text-[11px] font-medium rounded-full px-2 py-1 bg-success/15 text-success hover:bg-success/25"
-                          >
-                            Confirm
-                          </button>
-                          <button
-                            onClick={() => { setSettlementDialog({ recordId: r.id, status: "REJECTED" }); setSettlementReason(""); }}
-                            className="text-[11px] font-medium rounded-full px-2 py-1 bg-destructive/15 text-destructive hover:bg-destructive/25"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      ) : (
-                        <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full font-medium ${STATUS_STYLES[r.status_value] || 'bg-muted text-muted-foreground'}`}>
-                          {r.status}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-xs font-mono">
-                      {r.final_settlement < 0 ? (
-                        <span className="text-destructive font-bold" title="Employee owes company">
-                          -{formatCurrency(Math.abs(r.final_settlement))}
-                        </span>
-                      ) : (
-                        formatCurrency(r.final_settlement)
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-xs text-muted-foreground max-w-[200px] truncate">
-                      {r.settlement_notes || "—"}
-                    </td>
-                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                      <div className="flex justify-end gap-1">
-                        <button
-                          onClick={() => router.push(`/hr/exit/${r.id}`)}
-                          className="p-1.5 rounded-md hover:bg-muted"
-                          title="View Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {r.status_value === "CONFIRMED" && (
-                          <button
-                            onClick={() => setAssetReturnExitId(r.id)}
-                            className="p-1.5 rounded-md hover:bg-muted text-primary"
-                            title="Return Assets"
-                          >
-                            <RotateCcw className="w-4 h-4" />
-                          </button>
-                        )}
-                        {r.status_value === "CONFIRMED" && r.final_settlement < 0 && (
-                          <button
-                            onClick={() => {
-                              confirmationModal.confirm({
-                                title: "Clear Employee Dues",
-                                message: `This will record that the employee has returned ${formatCurrency(Math.abs(r.final_settlement))} to the company and create a finance receipt. Continue?`,
-                                type: "warning",
-                                confirmText: "Clear Dues",
-                                onConfirm: async () => {
-                                  await clearDuesMutation.mutateAsync(r.id);
-                                  await refetch();
-                                },
-                              });
-                            }}
-                            className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
-                            title="Clear Dues (Employee Owes)"
-                          >
-                            <DollarSign className="w-4 h-4" />
-                          </button>
-                        )}
-                        {r.status_value === "CONFIRMED" && r.final_settlement > 0 && (
-                          <button
-                            onClick={() => {
-                              confirmationModal.confirm({
-                                title: "Clear Settlement",
-                                message: `This will pay ${formatCurrency(r.final_settlement)} settlement to the employee and create an expense record. Continue?`,
-                                type: "warning",
-                                confirmText: "Clear Settlement",
-                                onConfirm: async () => {
-                                  await clearSettlementMutation.mutateAsync(r.id);
-                                  await refetch();
-                                },
-                              });
-                            }}
-                            className="p-1.5 rounded-md hover:bg-success/15 text-success"
-                            title="Clear Settlement (Company Owes)"
-                          >
-                            <DollarSign className="w-4 h-4" />
-                          </button>
-                        )}
-                        {permissions.update && (
-                          <button onClick={() => { setEditingRecord(r); setModalOpen(true); }} className="p-1.5 rounded-md hover:bg-muted">
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                        )}
-                        {permissions.delete && (
-                          <button onClick={() => handleDelete(r.id)} className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {filteredRecords.length === 0 && (
+              </thead>              <tbody>
+                {isLoading ? (
+                  Array.from({ length: 5 }).map((_, r) => (
+                    <tr key={r} className="border-t border-border">
+                      <td className="px-4 py-2.5"><Skeleton className="h-4 w-4" /></td>
+                      <td className="px-4 py-2.5"><Skeleton className="h-4 w-28" /></td>
+                      <td className="px-4 py-2.5"><Skeleton className="h-4 w-20" /></td>
+                      <td className="px-4 py-2.5"><Skeleton className="h-4 w-16" /></td>
+                      <td className="px-4 py-2.5"><Skeleton className="h-5 w-20 rounded-full" /></td>
+                      <td className="px-4 py-2.5"><Skeleton className="h-4 w-16" /></td>
+                      <td className="px-4 py-2.5"><Skeleton className="h-4 w-16" /></td>
+                      <td className="px-4 py-2.5 text-right"><Skeleton className="h-8 w-24 ml-auto rounded-md" /></td>
+                    </tr>
+                  ))
+                ) : records.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-10 text-muted-foreground">No exit records found.</td>
+                    <td colSpan={8} className="text-center py-10 text-muted-foreground">No exit records found.</td>
                   </tr>
+                ) : (
+                  records.map(r => (
+                    <tr key={r.id} className="border-t border-border hover:bg-muted/30">
+                      <td className="px-4 py-2.5">
+                        <Checkbox
+                          checked={selectedRecords.has(r.id)}
+                          onChange={(checked) => {
+                            const newSet = new Set(selectedRecords);
+                            if (checked) newSet.add(r.id);
+                            else newSet.delete(r.id);
+                            setSelectedRecords(newSet);
+                          }}
+                        />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="font-medium">{r.employee_name}</div>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="text-xs">{r.exit_date || "—"}</div>
+                        <div className="text-[10px] text-muted-foreground">LWD: {r.last_working_day || "—"}</div>
+                      </td>
+                      <td className="px-4 py-2.5 text-xs">
+                        <span className="inline-flex px-2 py-0.5 text-[11px] rounded-full border bg-muted">
+                          {r.reason}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {permissions.update && r.status_value === "PENDING" ? (
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => { setSettlementDialog({ recordId: r.id, status: "CONFIRMED" }); setSettlementReason(""); }}
+                              className="text-[11px] font-medium rounded-full px-2 py-1 bg-success/15 text-success hover:bg-success/25"
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              onClick={() => { setSettlementDialog({ recordId: r.id, status: "REJECTED" }); setSettlementReason(""); }}
+                              className="text-[11px] font-medium rounded-full px-2 py-1 bg-destructive/15 text-destructive hover:bg-destructive/25"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        ) : (
+                          <span className={`inline-flex px-2 py-0.5 text-[11px] rounded-full font-medium ${STATUS_STYLES[r.status_value] || 'bg-muted text-muted-foreground'}`}>
+                            {r.status}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-xs font-mono">
+                        {r.final_settlement < 0 ? (
+                          <span className="text-destructive font-bold" title="Employee owes company">
+                            -{formatCurrency(Math.abs(r.final_settlement))}
+                          </span>
+                        ) : (
+                          formatCurrency(r.final_settlement)
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-muted-foreground max-w-[200px] truncate">
+                        {r.settlement_notes || "—"}
+                      </td>
+                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                        <div className="flex justify-end gap-1">
+                          <button
+                            onClick={() => router.push(`/hr/exit/${r.id}`)}
+                            className="p-1.5 rounded-md hover:bg-muted"
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          {r.status_value === "CONFIRMED" && (
+                            <button
+                              onClick={() => setAssetReturnExitId(r.id)}
+                              className="p-1.5 rounded-md hover:bg-muted text-primary"
+                              title="Return Assets"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </button>
+                          )}
+                          {r.status_value === "CONFIRMED" && r.final_settlement < 0 && (
+                            <button
+                              onClick={() => {
+                                confirmationModal.confirm({
+                                  title: "Clear Employee Dues",
+                                  message: `This will record that the employee has returned ${formatCurrency(Math.abs(r.final_settlement))} to the company and create a finance receipt. Continue?`,
+                                  type: "warning",
+                                  confirmText: "Clear Dues",
+                                  onConfirm: async () => {
+                                    await clearDuesMutation.mutateAsync(r.id);
+                                    await refetch();
+                                  },
+                                });
+                              }}
+                              className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive"
+                              title="Clear Dues (Employee Owes)"
+                            >
+                              <DollarSign className="w-4 h-4" />
+                            </button>
+                          )}
+                          {r.status_value === "CONFIRMED" && r.final_settlement > 0 && (
+                            <button
+                              onClick={() => {
+                                confirmationModal.confirm({
+                                  title: "Clear Settlement",
+                                  message: `This will pay ${formatCurrency(r.final_settlement)} settlement to the employee and create an expense record. Continue?`,
+                                  type: "warning",
+                                  confirmText: "Clear Settlement",
+                                  onConfirm: async () => {
+                                    await clearSettlementMutation.mutateAsync(r.id);
+                                    await refetch();
+                                  },
+                                });
+                              }}
+                              className="p-1.5 rounded-md hover:bg-success/15 text-success"
+                              title="Clear Settlement (Company Owes)"
+                            >
+                              <DollarSign className="w-4 h-4" />
+                            </button>
+                          )}
+                          {permissions.update && (
+                            <button onClick={() => { setEditingRecord(r); setModalOpen(true); }} className="p-1.5 rounded-md hover:bg-muted">
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
+                          {permissions.delete && (
+                            <button onClick={() => handleDelete(r.id)} className="p-1.5 rounded-md hover:bg-destructive/15 text-destructive">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>
@@ -426,7 +440,7 @@ export default function ExitManagementPage() {
         {viewMode === "kanban" && (
           <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
             {["PENDING", "CONFIRMED", "REJECTED"].map(status => {
-              const statusRecords = filteredRecords.filter(r => r.status_value === status);
+              const statusRecords = records.filter(r => r.status_value === status);
               return (
                 <div key={status} className="bg-muted/20 rounded-lg p-3">
                   <div className="flex justify-between mb-3">
@@ -456,15 +470,36 @@ export default function ExitManagementPage() {
           </div>
         )}
 
-        <div className="p-3 border-t border-border text-xs text-muted-foreground text-center">
-          Showing {filteredRecords.length} of {records.length} records
+        <div className="p-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+          <span>
+            {totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, totalCount)} of {totalCount} records
+          </span>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <span>Page {currentPage} of {totalPages}</span>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setPage(p => p + 1)}
+                disabled={currentPage >= totalPages}
+                className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {(modalOpen && (editingRecord ? permissions.update : permissions.create)) && (
         <ExitFormModal
           formatCurrency={formatCurrency}
-          employees={employees}
+          fetchEmployees={fetchEmployees}
           exitRecords={records}
           initialData={editingRecord}
           onSubmit={handleSave}
@@ -545,14 +580,14 @@ export default function ExitManagementPage() {
 function ExitFormModal({
   formatCurrency,
   initialData,
-  employees,
+  fetchEmployees,
   exitRecords,
   onSubmit,
   onClose
 }: {
   formatCurrency: (amount?: number, decimals?: number) => string;
   initialData: ExitRecord | null;
-  employees: any[];
+  fetchEmployees: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: SearchableSelectOption[]; hasMore: boolean; totalCount: number }>;
   exitRecords: ExitRecord[];
   onSubmit: (d: any) => void;
   onClose: () => void;
@@ -587,22 +622,6 @@ function ExitFormModal({
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.employee_id, formData.last_working_day]);
-
-  const blockedEmployeeIds = new Set(
-    exitRecords
-      .filter(r => r.status_value !== 'REJECTED')
-      .map(r => r.employee_id)
-  );
-  const availableEmployees = initialData
-    ? employees.filter(e => String(e.id) === initialData.employee_id || !blockedEmployeeIds.has(String(e.id)))
-    : employees.filter(e => !blockedEmployeeIds.has(String(e.id)));
-  const employeeOpts: SearchableSelectOption[] = availableEmployees
-    .map((e: any) => ({
-      value: String(e.id),
-      label: `${e.first_name} ${e.last_name || ""} (${e.department_name || "N/A"})`
-    }));
-
-  const selectedEmployee = employees.find((e: any) => String(e.id) === formData.employee_id);
 
   const handleCalculateSettlement = async () => {
     if (!formData.employee_id || !formData.last_working_day) {
@@ -659,41 +678,12 @@ function ExitFormModal({
             <SearchableSelect
               value={formData.employee_id}
               onChange={v => setFormData({ ...formData, employee_id: v })}
-              options={employeeOpts}
-              placeholder="Select Employee"
+              fetchOptions={fetchEmployees}
+              placeholder="Search employees..."
               disabled={isLocked}
+              displayLabel={initialData?.employee_name || ""}
             />
           </label>
-
-          {selectedEmployee && (
-            <>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Department</span>
-                <input
-                  value={selectedEmployee.department_name || ""}
-                  className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none"
-                  readOnly
-                />
-              </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground">Designation</span>
-                <input
-                  value={selectedEmployee.designation_name || ""}
-                  className="bg-muted/40 border border-border rounded-md h-9 px-3 outline-none"
-                  readOnly
-                />
-              </label>
-              <label className="text-sm sm:col-span-2">
-                <div className="bg-muted/30 border border-border rounded-xl p-3">
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="w-4 h-4 text-primary" />
-                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Monthly Salary</span>
-                  </div>
-                  <div className="text-lg font-bold mt-1">{formatCurrency(parseFloat(selectedEmployee.salary || "0"))}</div>
-                </div>
-              </label>
-            </>
-          )}
 
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground">Exit Reason *</span>

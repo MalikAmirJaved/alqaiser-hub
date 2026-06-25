@@ -36,19 +36,20 @@ export interface SalesInvoice {
 /**
  * List sales invoices (SALES module only - excludes POS)
  */
-export function useSalesInvoices(filters?: { search?: string; status?: string; customer?: string }) {
+export function useSalesInvoices(filters?: { search?: string; status?: string; customer?: string; page?: number }) {
   const searchParams = new URLSearchParams();
   if (filters?.search) searchParams.append("search", filters.search);
   if (filters?.status) searchParams.append("status", filters.status);
   if (filters?.customer) searchParams.append("customer", String(filters.customer));
+  if (filters?.page) searchParams.append("page", String(filters.page));
   const url = `/api/sales/invoices/${searchParams.toString() ? `?${searchParams}` : ""}`;
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ["sales_invoices", filters],
     queryFn: () => apiFetch<PaginatedResponse<SalesInvoice>>(url),
-    select: (data) => data.results,
     staleTime: 30_000,
   });
+  return { ...query, data: query.data?.results ?? [], totalCount: query.data?.count ?? 0 };
 }
 
 /**

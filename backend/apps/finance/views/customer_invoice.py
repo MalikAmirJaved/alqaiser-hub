@@ -33,6 +33,9 @@ class CustomerInvoiceViewSet(
     serializer_class = CustomerInvoiceSerializer
     permission_module = 'FINANCE'
     permission_resource = 'customer_invoice'
+    action_permission_any_of = {
+        "": [("SALES", "sales_customers_invoice")],
+    }
     lookup_field = '_id'
     lookup_url_kwarg = '_id'
     filter_fields = {

@@ -119,6 +119,13 @@ export interface ActiveEmployee {
   updatedAt?: string;
 }
 
+interface PaginatedResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
 // Fetch only active employees (for dropdowns)
 export function useActiveEmployees() {
   const api = useApi();
@@ -132,17 +139,17 @@ export function useActiveEmployees() {
 }
 
 // Fetch all employees
-export function useEmployees(params?: Record<string, string>) {
+export function useEmployees(params?: Record<string, string>, options?: { enabled?: boolean }) {
   const api = useApi();
 
   const paramMap: Record<string, string> = {
     department_id: "department",
     designation_id: "designation",
-    employment_status: "status",
-    employment_type: "employmentType",
   };
 
-  const apiParams = params
+  const enabled = options?.enabled !== false;
+
+  const apiParams = enabled && params
     ? Object.fromEntries(
         Object.entries(params).map(([key, value]) => [
           paramMap[key] || key,
@@ -155,13 +162,33 @@ export function useEmployees(params?: Record<string, string>) {
     ? "?" + new URLSearchParams(apiParams).toString()
     : "";
 
-  return useQuery<Employee[]>({
+  const query = useQuery<PaginatedResponse<Employee>>({
     queryKey: ["employees", apiParams],
     queryFn: () => api(`/api/hr/employees/${queryString}`),
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
-    placeholderData: (previousData) => previousData,
+    enabled: enabled,
+  });
+
+  return {
+    ...query,
+    data: query.data?.results ?? [],
+    totalCount: query.data?.count ?? 0,
+  };
+}
+
+// Fetch a single employee by UUID (detail endpoint)
+export function useEmployee(id: string | undefined) {
+  const api = useApi();
+
+  return useQuery<Employee>({
+    queryKey: ["employee", id],
+    queryFn: () => api(`/api/hr/employees/${id}/`),
+    enabled: !!id,
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: 2,
   });
 }
 

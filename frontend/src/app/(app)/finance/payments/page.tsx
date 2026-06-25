@@ -2,17 +2,18 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions, type Kpi } from "@/components/reuseable/final/DynamicModulePage";
 import { usePayments, useDeletePayment, type Payment, paymentTypeOptions } from "@/hooks/finance/usePayments";
-import { useSuppliers } from "@/hooks/useSuppliers";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatusBadge } from "@/components/finance/ui";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
 import PaymentFormModal from "@/components/finance/payments/PaymentFormModal";
+import { usePagination } from "@/hooks/usePagination";
 
 const toNumber = (amount: number | string): number => {
   return typeof amount === "string" ? parseFloat(amount) : amount;
@@ -43,9 +44,14 @@ export default function PaymentsPage() {
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const pagination = usePagination();
 
-  const { data: suppliers = [] } = useSuppliers();
-  const supplierOptions = suppliers.map(s => ({ value: s.id, label: s.name }));
+  const fetchSuppliers = useServerSearch("/api/inventory/suppliers/", {
+    transformOption: (s: any) => ({
+      value: s.id,
+      label: s.name,
+    }),
+  });
 
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
@@ -55,22 +61,24 @@ export default function PaymentsPage() {
       { value: "DRAFT", label: "Unpaid" },
       { value: "CANCELLED", label: "Cancelled" },
     ]},
-    { name: "supplier", label: "Supplier/Customer", type: "select", searchable: true, options: supplierOptions },
+    { name: "supplier", label: "Supplier/Customer", type: "select", searchable: true, fetchOptions: fetchSuppliers },
     { name: "start_date", label: "From", type: "date" },
     { name: "end_date", label: "To", type: "date" },
   ];
 
-  const { data: payments, isLoading } = usePayments(
-    Object.keys(filters).length > 0
-      ? {
-          search: filters.search || undefined,
-          payment_type: (filters.payment_type as "RECEIPT" | "PAYMENT") || undefined,
-          status: filters.status || undefined,
-          supplier: filters.supplier || undefined,
-          start_date: filters.start_date || undefined,
-          end_date: filters.end_date || undefined,
-        }
-      : undefined
+  const paymentFilters = useMemo(() => {
+    const f: Record<string, string> = { page: String(pagination.page) };
+    if (filters.search) f.search = filters.search;
+    if (filters.payment_type) f.payment_type = filters.payment_type;
+    if (filters.status) f.status = filters.status;
+    if (filters.supplier) f.supplier = filters.supplier;
+    if (filters.start_date) f.start_date = filters.start_date;
+    if (filters.end_date) f.end_date = filters.end_date;
+    return f;
+  }, [filters, pagination.page]);
+
+  const { data: payments, isLoading, totalCount } = usePayments(
+    Object.keys(paymentFilters).length > 1 ? paymentFilters : { page: paymentFilters.page }
   );
   const deletePayment = useDeletePayment();
   const permissions = useFeaturePermissions("FINANCE", "payment");
@@ -152,7 +160,7 @@ export default function PaymentsPage() {
         {val === "RECEIPT" ? "Money In" : "Money Out"}
       </span>
     ), sortable: true },
-    { key: "amount", label: "Amount", align: "right" as const, sortable: true, render: (val: number | string) => (
+    { key: "amount", label: "Amount",  sortable: true, render: (val: number | string) => (
       <span className="font-medium">{formatCurrency(toNumber(val))}</span>
     )},
     { key: "payable_type", label: "Source", render: (val: string | null, row: Payment) => {
@@ -210,11 +218,14 @@ export default function PaymentsPage() {
         onRowClick={handleRowClick}
         exportEnabled={permissions.export}
         onRowSelect={setSelectedIds}
+        totalCount={totalCount}
+        currentPage={pagination.page}
+        onPageChange={pagination.setPage}
         filterBar={
           <FilterBar
             fields={filterFields}
             filters={filters}
-            onChange={setFilters}
+            onChange={(f) => { setFilters(f); pagination.resetPage(); }}
           />
         }
         batchActions={

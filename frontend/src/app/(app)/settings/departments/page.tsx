@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
 import {
   useDepartments,
@@ -15,20 +15,26 @@ import type { FilterField } from "@/components/reuseable/FilterBar";
 import DepartmentFormModal from "@/components/settings/departments/DepartmentFormModal";
 import { Switch } from "@/components/ui/switch";
 import { useRouter } from "next/navigation";
+import { usePagination } from "@/hooks/usePagination";
 
 export default function DepartmentsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const pagination = usePagination();
 
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
     { name: "is_active", label: "Status", type: "boolean" },
   ];
 
-  const { data: departments = [], isLoading, refetch } = useDepartments(
-    filters.search ? { search: filters.search } : undefined
-  );
+  const filtersWithPage = useMemo(() => ({
+    page: pagination.page,
+    ...(filters.search ? { search: filters.search } : {}),
+    ...(filters.is_active !== undefined ? { is_active: filters.is_active === "true" } : {}),
+  }), [filters, pagination.page]);
+
+  const { data: departments = [], isLoading, totalCount, refetch } = useDepartments(filtersWithPage);
   const createDepartment = useCreateDepartment();
   const updateDepartment = useUpdateDepartment();
   const deleteDepartment = useDeleteDepartment();
@@ -112,6 +118,9 @@ export default function DepartmentsPage() {
         description="Manage company departments (HR, Inventory, Finance, etc.)"
         data={departments}
         isLoading={isLoading}
+        totalCount={totalCount}
+        currentPage={pagination.page}
+        onPageChange={pagination.setPage}
         columns={columns}
         getRowId={(dept) => dept.id}
         onRowClick={(dept) => router.push(`/settings/departments/${dept.id}`)}
@@ -127,7 +136,7 @@ export default function DepartmentsPage() {
           <FilterBar
             fields={filterFields}
             filters={filters}
-            onChange={setFilters}
+            onChange={(f) => { setFilters(f); pagination.resetPage(); }}
           />
         }
       />

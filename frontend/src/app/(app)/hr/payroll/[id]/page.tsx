@@ -2,7 +2,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEmployees } from "@/hooks/useEmployees";
+import { useEmployee } from "@/hooks/useEmployees";
 import { usePayroll, useEmployeeLoans, useCompensations, computeTotalMonths } from "@/hooks/usePayroll";
 import { useLeaves } from "@/hooks/useLeaves";
 import { cn } from "@/lib/utils";
@@ -138,15 +138,14 @@ export default function EmployeeSalaryDetailPage() {
   const router = useRouter();
 
   // ── Data Fetching ──────────────────────────────────────────────
-  const { data: employees = [], isLoading: empLoading } = useEmployees();
-  const employee = employees.find((e) => e.id === id);
+  const { data: employee, isLoading: empLoading } = useEmployee(id);
 
   const { data: payrollRecords = [], isLoading: payrollLoading } = usePayroll(
-    id ? { employee_id: id } : undefined
+    id ? { employee: id } : undefined
   );
-  const { data: loans = [] } = useEmployeeLoans(id ? { employee_id: id } : undefined);
-  const { data: compensations = [] } = useCompensations(id ? { employee_id: id } : undefined);
-  const { data: leaves = [] } = useLeaves(id ? { employee_id: id } : undefined);
+  const { data: loans = [] } = useEmployeeLoans(id ? { employee: id } : undefined);
+  const { data: compensations = [] } = useCompensations(id ? { employee: id } : undefined);
+  const { data: leaves = [] } = useLeaves(id ? { employee: id } : undefined);
 
   const activeCompensation = compensations.find((c) => c.status === "CONFIRM");
   const isLoading = empLoading || payrollLoading;

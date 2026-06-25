@@ -9,6 +9,7 @@ import {
   type SupplierBill,
 } from "@/hooks/finance/useSupplierBills";
 import { useSuppliers } from "@/hooks/useSuppliers";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import { useAutoCode } from "@/hooks/useAutoCode";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 
@@ -48,9 +49,15 @@ export default function SupplierBillFormModal({ open, onClose, initialData, onSu
   });
   const createBill = useCreateSupplierBill();
   const updateBill = useUpdateSupplierBill();
-  const { data: suppliers } = useSuppliers({
-  status: "active",
-});
+
+  const fetchSuppliers = useServerSearch("/api/inventory/suppliers/", {
+    extraParams: { is_active: "true" },
+    transformOption: (s: any) => ({
+      value: s.id,
+      label: `${s.name} (${s.code || ""})`,
+    }),
+  });
+
   const { generateCode, validateCode } = useAutoCode("supplier_bill");
 
   useEffect(() => {
@@ -127,8 +134,8 @@ export default function SupplierBillFormModal({ open, onClose, initialData, onSu
             <SearchableSelect
               value={watch("supplier") || ""}
               onChange={(val) => setValue("supplier", val)}
-              options={(suppliers || []).map((s) => ({ value: s.id, label: `${s.name} (${s.code})` }))}
-              placeholder="Select supplier"
+              fetchOptions={fetchSuppliers}
+              placeholder="Search suppliers..."
               required
             />
           </div>

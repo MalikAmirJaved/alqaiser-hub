@@ -36,18 +36,20 @@ interface PaginatedResponse<T> {
 }
 
 // Fetch all departments (raw)
-export function useDepartments(filters?: { search?: string }) {
+export function useDepartments(filters?: { search?: string; is_active?: boolean; page?: number }) {
   const api = useApi();
   const params = new URLSearchParams();
   if (filters?.search) params.append("search", filters.search);
+  if (filters?.is_active !== undefined) params.append("is_active", String(filters.is_active));
+  if (filters?.page) params.append("page", String(filters.page));
   const url = `/api/organization/departments/${params.toString() ? `?${params}` : ""}`;
 
-  return useQuery<PaginatedResponse<Department>, Error, Department[]>({
+  const query = useQuery<PaginatedResponse<Department>>({
     queryKey: ["departments", filters],
     queryFn: () => api(url),
-    select: (data) => data.results,
     staleTime: 30_000,
   });
+  return { ...query, data: query.data?.results ?? [], totalCount: query.data?.count ?? 0 };
 }
 
 // Helper hook: returns department options for dropdowns

@@ -354,8 +354,52 @@ When creating models, make sure to:
     permission_module = 'INVENTORY'
     permission_resource = 'brand'
     ```
-4.  Audit logging is automatic via signals (no manual action needed) — models with `_id` UUID fields are tracked by `apps/audit/signals.py`.
-5.  For real-time cache invalidation, send WebSocket `data_update` events from your views after mutations (see rule #4 above).
+4.  For APIViews (e.g. HR module), inherit from [FilterPaginationMixin](file:///home/devteam/Documents/Projects/alqaiser/backend/apps/common/filters.py) to get server-side django-filter integration, text search, ordering, and pagination:
+    ```python
+    class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, FilterPaginationMixin, APIView):
+        filterset_class = EmployeeFilter
+        search_fields = ['first_name', 'last_name', 'email']
+        ordering_fields = ['first_name', 'joining_date', 'created_at']
+        ordering = ['first_name', 'last_name']
+
+        def get(self, request):
+            qs = self.get_queryset()
+            qs = self.filter_queryset(qs)
+            qs = self.search_queryset(qs)
+            qs = self.order_queryset(qs)
+            page = self.paginate_queryset(qs)
+            return self.get_paginated_response(serialized_data)
+    ```
+5.  For ModelViewSets (e.g. Inventory, Finance, Sales), use DRF's standard filter backends configured globally:
+    ```python
+    REST_FRAMEWORK = {
+        'DEFAULT_FILTER_BACKENDS': [
+            'django_filters.rest_framework.DjangoFilterBackend',
+            'rest_framework.filters.SearchFilter',
+            'rest_framework.filters.OrderingFilter',
+        ],
+    }
+    ```
+    Add `filterset_class`, `search_fields`, `ordering_fields` directly to your ViewSet.
+6.  Create `FilterSet` classes in `apps/<app>/filters.py` using django-filter:
+    ```python
+    import django_filters
+    from django_filters import rest_framework as filters
+
+    class ProductFilter(filters.FilterSet):
+        category = filters.UUIDFilter(field_name='category___id')
+        brand = filters.UUIDFilter(field_name='brand___id')
+
+        class Meta:
+            model = Product
+            fields = {
+                'status': ['exact'],
+                'selling_price': ['gte', 'lte'],
+                'created_at': ['gte', 'lte'],
+            }
+    ```
+7.  Audit logging is automatic via signals (no manual action needed) — models with `_id` UUID fields are tracked by `apps/audit/signals.py`.
+8.  For real-time cache invalidation, send WebSocket `data_update` events from your views after mutations (see rule #4 above).
 
 ### Employee API Serialization
 
@@ -611,7 +655,9 @@ When implementing data mutations or real-time features:
 - The resource name in `useFeaturePermissions(MODULE, resource)` must match the exact snake_case code in `seed_permissions.py` (e.g. `"supplier_bill"` not `"supplierbill"`, `"journal_entrie"` not `"journal"`, `"customer_invoice"` not `"customerinvoice"`).
 
 #### **7. API Response Structure**
-All backend API responses should follow this pattern:
+All backend API responses should follow these patterns:
+
+**Single/Mutation response:**
 ```json
 {
   "id": "UUID (exposed as _id in serializers)",
@@ -620,6 +666,24 @@ All backend API responses should follow this pattern:
   "data": { /* main response body */ },
   "errors": { /* field-level validation errors (POST/PUT/PATCH) */ }
 }
+```
+
+**Paginated list response (via StandardPagination):**
+```json
+{
+  "count": 100,
+  "total_pages": 5,
+  "current_page": 1,
+  "next": "http://...?page=2",
+  "previous": null,
+  "results": [ /* array of records */ ]
+}
+```
+
+**Frontend hooks** extract this pattern via:
+```typescript
+const { data, totalCount, totalPages, currentPage } = useHook(params);
+// data = results array, totalCount = count, totalPages = total_pages
 ```
 
 #### **8. React Query & TanStack Query**

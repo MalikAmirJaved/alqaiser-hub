@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useQuotes, useSendQuote, useMarkViewedQuote, useApproveQuote, useRejectQuote, useMarkConvertedQuote, Quote } from "@/hooks/sales/useQuotes";
 import { DynamicModulePage, type ModulePermissions, type Kpi } from "@/components/reuseable/final/DynamicModulePage";
@@ -12,6 +12,7 @@ import type { FilterField } from "@/components/reuseable/FilterBar";
 import { CheckCircle, XCircle, FileText, ExternalLink } from "lucide-react";
 import QuoteFormModal from "./QuoteFormModal";
 import CustomerInvoiceFormModal from "@/components/finance/customer-invoices/CustomerInvoiceFormModal";
+import { usePagination } from "@/hooks/usePagination";
 
 export default function QuotesPanel() {
   const formatCurrency = useFormatCurrency();
@@ -22,6 +23,7 @@ export default function QuotesPanel() {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [quoteToConvert, setQuoteToConvert] = useState<Quote | null>(null);
+  const pagination = usePagination();
 
   const quoteStatusOptions = [
     { value: "DRAFT", label: "Draft" },
@@ -37,11 +39,15 @@ export default function QuotesPanel() {
     { name: "status", label: "Status", type: "status", options: quoteStatusOptions },
   ];
 
-  const { data: quotes = [], isLoading, refetch } = useQuotes(
-    Object.keys(filters).length > 0
-      ? { status: filters.status || undefined, search: filters.search || undefined }
-      : undefined
-  );
+  const quoteFilters = useMemo(() => {
+    const f: { status?: string; search?: string; page?: string } = {};
+    if (filters.status) f.status = filters.status;
+    if (filters.search) f.search = filters.search;
+    f.page = String(pagination.page);
+    return f;
+  }, [filters, pagination.page]);
+
+  const { data: quotes = [], isLoading, refetch, totalCount } = useQuotes(quoteFilters);
   const sendQuote = useSendQuote();
   const markViewed = useMarkViewedQuote();
   const approveQuote = useApproveQuote();
@@ -132,6 +138,7 @@ export default function QuotesPanel() {
 
   const buildInvoiceInitialData = (quote: Quote): any => ({
     customer: quote.customer || "",
+    customer_name: quote.customer_name || "",
     invoice_date: new Date().toISOString().split("T")[0],
     due_date: quote.expiration_date || "",
     amount: Number(quote.total_amount),
@@ -239,11 +246,14 @@ export default function QuotesPanel() {
         }}
         onRowClick={(quote) => router.push(`/sales/quotes/${quote.id}`)}
         exportEnabled={permissions.export}
+        totalCount={totalCount}
+        currentPage={pagination.page}
+        onPageChange={pagination.setPage}
         filterBar={
           <FilterBar
             fields={filterFields}
             filters={filters}
-            onChange={setFilters}
+            onChange={(f) => { setFilters(f); pagination.resetPage(); }}
           />
         }
       />

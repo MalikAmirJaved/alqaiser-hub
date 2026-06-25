@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { usePagination } from "@/hooks/usePagination";
 import { useSalesOrders, useGenerateInvoice, type SalesOrderResponse } from "@/hooks/useSalesOrder";
 import {
   printThermalReceipt,
@@ -16,9 +17,13 @@ import {
   type QuoteInvoiceData,
   type DocCompany,
 } from "@/components/common/QuoteInvoiceDocument";
+import { Skeleton } from "@/components/ui/skeleton";
+
 import {
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Printer,
   Download,
   FileText,
@@ -337,9 +342,21 @@ export function SalesListPanel() {
   const { terms: termsData } = useTermsAndConditions();
   const queryClient = useQueryClient();
 
-  const { data: orders = [], isLoading } = useSalesOrders();
-  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState("");
+  const pagination = usePagination();
+
+  const orderFilters = useMemo(() => ({
+    status: statusFilter,
+    search: searchQuery || undefined,
+    page: pagination.page,
+    page_size: pagination.pageSize,
+  }), [statusFilter, searchQuery, pagination.page, pagination.pageSize]);
+
+  const { data: ordersRes, isLoading } = useSalesOrders(orderFilters);
+  const orders = (ordersRes?.data ?? []) as OrderWithInvoice[];
+  const totalCount = ordersRes?.totalCount ?? 0;
+
   const [invoiceModalProps, setInvoiceModalProps] = useState<{
     open: boolean;
     data: QuoteInvoiceData | null;
@@ -349,17 +366,23 @@ export function SalesListPanel() {
 
   const { mutateAsync: generateInvoice, isPending: isGenerating } = useGenerateInvoice();
 
+  const totalPages = Math.max(1, Math.ceil(totalCount / pagination.pageSize));
+  const safePage = Math.min(pagination.page, totalPages);
+
+  // Reset page on filter change
+  useEffect(() => {
+    pagination.resetPage();
+  }, [statusFilter, searchQuery]);
+
   // Handle generate invoice
   const handleGenerateInvoice = async (order: OrderWithInvoice) => {
     setGeneratingId(order.id);
     try {
       const result = await generateInvoice(order.id);
       if (result?.invoice_id) {
-        // Refresh orders to get updated invoice_id
         await queryClient.invalidateQueries({
           queryKey: ["inventory_sales_order"],
         });
-        // Fetch invoice and open print modal
         await handlePrintInvoice({ ...order, invoice_id: result.invoice_id });
       }
     } catch (err) {
@@ -368,22 +391,6 @@ export function SalesListPanel() {
       setGeneratingId(null);
     }
   };
-
-  // Filter orders
-  const filteredOrders: OrderWithInvoice[] = (orders as OrderWithInvoice[]).filter((o) => {
-    if (statusFilter !== "ALL" && o.status !== statusFilter) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const matchNumber = o.order_number.toLowerCase().includes(q);
-      const matchCustomer = o.customer_name?.toLowerCase().includes(q);
-      const matchProduct = o.lines?.some(
-        (l) =>
-          l.variant_name?.toLowerCase().includes(q) || l.variant_sku?.toLowerCase().includes(q),
-      );
-      if (!matchNumber && !matchCustomer && !matchProduct) return false;
-    }
-    return true;
-  });
 
   // Handle print invoice
   const handlePrintInvoice = async (order: OrderWithInvoice) => {
@@ -440,48 +447,24 @@ export function SalesListPanel() {
     }
   };
 
-  // Filter status tabs
   const statusTabs = [
-    { value: "ALL", label: "All", count: orders.length },
-    {
-      value: "COMPLETE",
-      label: "Complete",
-      count: orders.filter((o) => o.status === "COMPLETE").length,
-    },
-    {
-      value: "DRAFT",
-      label: "Draft",
-      count: orders.filter((o) => o.status === "DRAFT").length,
-    },
-    {
-      value: "CANCELLED",
-      label: "Cancelled",
-      count: orders.filter((o) => o.status === "CANCELLED").length,
-    },
+    { value: undefined as string | undefined, label: "All" },
+    { value: "COMPLETE", label: "Complete" },
+    { value: "DRAFT", label: "Draft" },
+    { value: "CANCELLED", label: "Cancelled" },
   ];
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <span className="text-sm text-muted-foreground">Loading sales orders...</span>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* ── Header ── */}
-      <div className="px-6 py-4 border-b border-border/60 bg-card/30">
+      {/* ── Header (always visible, keeps search input focused) ── */}
+      <div className="px-6 py-4 border-b border-border/60 bg-card/30 shrink-0">
         <div className="flex items-center justify-between mb-3">
           <div>
             <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
               <ShoppingBag className="h-5 w-5 text-primary" />
               Recent Sales
             </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">{orders.length} total orders</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{totalCount} total orders</p>
           </div>
         </div>
 
@@ -492,7 +475,7 @@ export function SalesListPanel() {
             type="text"
             placeholder="Search by order#, customer, or product..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => { setSearchQuery(e.target.value); pagination.resetPage(); }}
             className="w-full h-9 pl-9 pr-3 text-xs rounded-xl border border-border bg-background outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
           />
         </div>
@@ -504,7 +487,7 @@ export function SalesListPanel() {
             return (
               <button
                 key={tab.value}
-                onClick={() => setStatusFilter(tab.value)}
+                onClick={() => { setStatusFilter(tab.value); pagination.resetPage(); }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all ${
                   isActive
                     ? "bg-primary text-primary-foreground shadow-sm"
@@ -512,51 +495,103 @@ export function SalesListPanel() {
                 }`}
               >
                 {tab.label}
-                {tab.count > 0 && (
-                  <span
-                    className={`text-[9px] px-1.5 py-0.5 rounded-full ${
-                      isActive ? "bg-primary-foreground/20" : "bg-muted-foreground/10"
-                    }`}
-                  >
-                    {tab.count}
-                  </span>
-                )}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* ── Orders List ── */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {filteredOrders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="h-16 w-16 rounded-2xl bg-muted/30 flex items-center justify-center mb-4">
-              <ShoppingBag className="h-8 w-8 text-muted-foreground/40" />
+      {/* ── Orders List (skeleton when loading, actual cards when ready) ── */}
+      {isLoading ? (
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="bg-card border border-border rounded-2xl overflow-hidden">
+              <div className="px-5 py-4 flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3 min-w-0">
+                  <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-4 w-16 rounded-md" />
+                    </div>
+                    <Skeleton className="h-3 w-44" />
+                  </div>
+                </div>
+                <div className="text-right space-y-1">
+                  <Skeleton className="h-5 w-20 ml-auto" />
+                  <Skeleton className="h-3 w-12 ml-auto" />
+                </div>
+              </div>
+              <div className="px-5 pb-2">
+                <Skeleton className="h-5 w-32 rounded-lg" />
+              </div>
+              <div className="px-5 py-3 border-t border-border/40">
+                <div className="flex gap-2">
+                  <Skeleton className="h-7 w-28 rounded-lg" />
+                  <Skeleton className="h-7 w-16 rounded-lg" />
+                </div>
+              </div>
             </div>
-            <p className="text-sm font-semibold text-foreground">
-              {searchQuery || statusFilter !== "ALL" ? "No matching orders" : "No sales yet"}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
-              {searchQuery || statusFilter !== "ALL"
-                ? "Try a different search or filter"
-                : "Complete a sale to see it here"}
-            </p>
+          ))}
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {orders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="h-16 w-16 rounded-2xl bg-muted/30 flex items-center justify-center mb-4">
+                <ShoppingBag className="h-8 w-8 text-muted-foreground/40" />
+              </div>
+              <p className="text-sm font-semibold text-foreground">
+                {searchQuery || statusFilter !== "ALL" ? "No matching orders" : "No sales yet"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
+                {searchQuery || statusFilter !== "ALL"
+                  ? "Try a different search or filter"
+                  : "Complete a sale to see it here"}
+              </p>
+            </div>
+          ) : (
+            orders.map((order) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                formatCurrency={formatCurrency}
+                onPrintInvoice={handlePrintInvoice}
+                onGenerateInvoice={handleGenerateInvoice}
+                pdfLoading={pdfLoading}
+                generatingId={generatingId}
+              />
+            ))
+          )}
+        </div>
+      )}
+
+      {/* ── Pagination ── */}
+      {!isLoading && totalCount > pagination.pageSize && (
+        <div className="flex items-center justify-between px-5 py-3 border-t border-border/60 bg-muted/10">
+          <span className="text-xs text-muted-foreground font-medium">
+            {(safePage - 1) * pagination.pageSize + 1}-
+            {Math.min(safePage * pagination.pageSize, totalCount)} of{" "}
+            {totalCount}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={pagination.prevPage}
+              disabled={safePage <= 1}
+              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 disabled:pointer-events-none transition-colors text-muted-foreground"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              onClick={pagination.nextPage}
+              disabled={safePage >= totalPages}
+              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 disabled:pointer-events-none transition-colors text-muted-foreground"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
-        ) : (
-          filteredOrders.map((order) => (
-            <OrderCard
-              key={order.id}
-              order={order}
-              formatCurrency={formatCurrency}
-              onPrintInvoice={handlePrintInvoice}
-              onGenerateInvoice={handleGenerateInvoice}
-              pdfLoading={pdfLoading}
-              generatingId={generatingId}
-            />
-          ))
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ── Invoice Print Modal ── */}
       {invoiceModalProps.data && (

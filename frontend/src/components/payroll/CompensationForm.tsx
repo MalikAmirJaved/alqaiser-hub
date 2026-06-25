@@ -10,12 +10,11 @@ import { FREQUENCY_TYPES, MONTHS, generateYearOptions, getMonthLabel } from "./t
 interface CompensationFormProps {
   formData: any;
   setFormData: (data: any) => void;
-  employeeOptions: Array<{ value: string; label: string }>;
+  fetchEmployeeOptions: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: Array<{ value: string; label: string }>; hasMore: boolean; totalCount: number }>;
   formatCurrency: (amount: number) => string;
-  employeeJoiningDate?: string | null;
 }
 
-export default function CompensationForm({ formData, setFormData, employeeOptions, formatCurrency, employeeJoiningDate }: CompensationFormProps) {
+export default function CompensationForm({ formData, setFormData, fetchEmployeeOptions, formatCurrency }: CompensationFormProps) {
   const allowanceFields = [
     { key: 'house_rent_allowance', label: 'House Rent Allowance', icon: Home, placeholder: 'Monthly HRA' },
     { key: 'medical_allowance', label: 'Medical Allowance', icon: Plus, placeholder: 'Monthly medical' },
@@ -38,12 +37,12 @@ export default function CompensationForm({ formData, setFormData, employeeOption
   const frequencyType = formData.frequency_type || 'MONTH_RANGE';
   const [freqExpanded, setFreqExpanded] = useState(true);
 
-  // Get joining date components
+  // Get joining date components (optional - for month filtering)
   const joiningDate = useMemo(() => {
-    if (!employeeJoiningDate) return null;
-    const d = new Date(employeeJoiningDate);
+    if (!formData.employee_joining_date) return null;
+    const d = new Date(formData.employee_joining_date);
     return { month: d.getMonth() + 1, year: d.getFullYear() };
-  }, [employeeJoiningDate]);
+  }, [formData.employee_joining_date]);
 
   const mr = formData.month_range || {};
 
@@ -146,8 +145,9 @@ export default function CompensationForm({ formData, setFormData, employeeOption
         <SearchableSelect
           value={formData.employee_id || ""}
           onChange={(val) => setFormData({ ...formData, employee_id: val })}
-          options={employeeOptions}
-          placeholder="Select Employee"
+          onOptionSelect={(option) => setFormData({ ...formData, employee_id: option.value, employee_joining_date: (option as any).joining_date || "" })}
+          fetchOptions={fetchEmployeeOptions}
+          placeholder="Search employees..."
           required
         />
       </div>

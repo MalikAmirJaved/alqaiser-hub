@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAuditLogs, type AuditLog } from "@/hooks/useAuditLogs";
 import {
   TableView,
@@ -14,10 +14,11 @@ import { format } from "date-fns";
 import Link from "next/link";
 import { Eye } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
+import { usePagination } from "@/hooks/usePagination";
 
 export default function AuditLogsPage() {
   const [filterState, setFilterState] = useState<Record<string, string>>({});
-  const [page, setPage] = useState(1);
+  const pagination = usePagination();
 
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
@@ -41,15 +42,15 @@ export default function AuditLogsPage() {
     { name: "end_date", label: "To", type: "date" },
   ];
 
-  const apiFilters = {
+  const apiFilters = useMemo(() => ({
     search: filterState.search || undefined,
     action: filterState.action || undefined,
     entity_type: filterState.entity_type || undefined,
     start_date: filterState.start_date || undefined,
     end_date: filterState.end_date || undefined,
-    page,
-    page_size: 20,
-  };
+    page: pagination.page,
+    page_size: pagination.pageSize,
+  }), [filterState, pagination.page, pagination.pageSize]);
 
   const { data, isLoading } = useAuditLogs(apiFilters);
 
@@ -145,7 +146,7 @@ export default function AuditLogsPage() {
       <FilterBar
         fields={filterFields}
         filters={filterState}
-        onChange={setFilterState}
+        onChange={(f) => { setFilterState(f); pagination.resetPage(); }}
       />
 
       <TableView
@@ -153,6 +154,9 @@ export default function AuditLogsPage() {
         data={logs}
         loading={isLoading}
         emptyMessage="No audit logs found."
+        totalCount={totalCount}
+        currentPage={pagination.page}
+        onPageChange={pagination.setPage}
       />
     </div>
   );

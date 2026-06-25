@@ -2,6 +2,7 @@
 from rest_framework import serializers
 from django.utils import timezone
 from apps.hr.models import Policy, PolicyVersion, PolicyCategory
+from apps.organization.models import Department
 
 
 class PolicyVersionSerializer(serializers.ModelSerializer):
@@ -28,6 +29,7 @@ class PolicyListSerializer(serializers.ModelSerializer):
     """Compact serializer for policy lists"""
     
     id = serializers.UUIDField(source='_id', read_only=True)
+    department = serializers.SerializerMethodField()
     department_name = serializers.SerializerMethodField()
     
     class Meta:
@@ -35,8 +37,13 @@ class PolicyListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'code', 'title', 'category', 'department', 'department_name',
             'employee_type', 'version', 'status',
-            'document_url', 'created_at',
+            'document_url', 'content', 'change_summary', 'created_at',
         ]
+    
+    def get_department(self, obj):
+        if obj.department:
+            return str(obj.department._id)
+        return None
     
     def get_department_name(self, obj):
         if obj.department:
@@ -52,6 +59,7 @@ class PolicyDetailSerializer(serializers.ModelSerializer):
     created_by_name = serializers.SerializerMethodField()
     updated_by_name = serializers.SerializerMethodField()
     versions = PolicyVersionSerializer(many=True, read_only=True)
+    department = serializers.SerializerMethodField()
     department_name = serializers.SerializerMethodField()
     
     class Meta:
@@ -66,6 +74,11 @@ class PolicyDetailSerializer(serializers.ModelSerializer):
             'versions',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_department(self, obj):
+        if obj.department:
+            return str(obj.department._id)
+        return None
     
     def get_department_name(self, obj):
         if obj.department:
@@ -90,7 +103,14 @@ class PolicyDetailSerializer(serializers.ModelSerializer):
 
 class PolicyCreateUpdateSerializer(serializers.ModelSerializer):
     """Serializer for creating and updating policies"""
-    
+
+    department = serializers.SlugRelatedField(
+        slug_field='_id',
+        queryset=Department.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
     class Meta:
         model = Policy
         fields = [

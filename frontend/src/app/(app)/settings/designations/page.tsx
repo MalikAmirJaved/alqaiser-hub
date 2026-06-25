@@ -11,12 +11,21 @@ import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
 import { Switch } from "@/components/ui/switch";
 import DesignationFormModal from "@/components/settings/designations/DesignationFormModal";
+import { usePagination } from "@/hooks/usePagination";
 
 export default function DesignationsPage() {
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingDesignation, setEditingDesignation] = useState<Designation | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const pagination = usePagination();
+
+  const filtersWithPage = useMemo(() => ({
+    page: pagination.page,
+    ...(filters.search ? { search: filters.search } : {}),
+    ...(filters.department ? { department: filters.department } : {}),
+    ...(filters.is_active ? { is_active: filters.is_active === "true" } : {}),
+  }), [filters, pagination.page]);
 
   const { options: departmentOptions } = useDepartmentOptions();
 
@@ -26,13 +35,7 @@ export default function DesignationsPage() {
     { name: "is_active", label: "Status", type: "boolean" },
   ];
 
-  const { data: designations = [], isLoading, refetch } = useDesignations(
-    Object.keys(filters).length > 0
-      ? Object.fromEntries(
-          Object.entries(filters).filter(([_, v]) => v !== "")
-        )
-      : undefined
-  );
+  const { data: designations = [], isLoading, totalCount, refetch } = useDesignations(filtersWithPage);
 
   const createDesignation = useCreateDesignation();
   const updateDesignation = useUpdateDesignation();
@@ -125,6 +128,9 @@ export default function DesignationsPage() {
         description="Manage job titles and designations across departments"
         data={designations}
         isLoading={isLoading}
+        totalCount={totalCount}
+        currentPage={pagination.page}
+        onPageChange={pagination.setPage}
         columns={columns}
         getRowId={(des) => des.id}
         onRowClick={(des) => router.push(`/settings/designations/${des.id}`)}
@@ -140,7 +146,7 @@ export default function DesignationsPage() {
           <FilterBar
             fields={filterFields}
             filters={filters}
-            onChange={setFilters}
+            onChange={(f) => { setFilters(f); pagination.resetPage(); }}
           />
         }
       />
@@ -149,7 +155,6 @@ export default function DesignationsPage() {
         onClose={handleModalClose}
         initialData={editingDesignation}
         onSuccess={handleModalSuccess}
-        departmentOptions={departmentOptions}
       />
     </>
   );

@@ -1,11 +1,12 @@
 "use client";
 // FILE: app/hr/shifts/list/page.tsx (FIXED TYPESCRIPT VERSION)
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isToday, parseISO } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 import PageHeader from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { 
   CalendarDays, ListFilter, Search, Settings, UserPlus, X, 
@@ -14,10 +15,11 @@ import {
   Loader2
 } from "lucide-react";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import { toast } from "sonner";
 
 // Import hooks
-import { useActiveEmployees, useUpdateEmployee, type ActiveEmployee } from "@/hooks/useEmployees";
+import { useEmployees, useUpdateEmployee, type Employee } from "@/hooks/useEmployees";
 import { useShiftTemplates, type ShiftTemplate } from "@/hooks/useShiftTemplates";
 import { 
   useResolvedShifts, 
@@ -28,7 +30,11 @@ import {
   useShiftHistory,
   useShiftStatistics,
   useGenerateShiftSchedule,
-  type ResolvedShiftsResponse
+  useShiftMonthSummary,
+  useShiftDayDetail,
+  type ResolvedShiftsResponse,
+  type MonthSummaryTemplate,
+  type DayDetailResponse,
 } from "@/hooks/useShiftManagement";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
@@ -57,12 +63,13 @@ export default function ShiftsManagementPage() {
     search: "", 
     templateId: "", 
     department: "",
+    designation: "",
   });
   
   // Modal states
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [showShiftDetailModal, setShowShiftDetailModal] = useState<{ date: string; template: ShiftTemplate } | null>(null);
+  const [showDayDetailModal, setShowDayDetailModal] = useState<string | null>(null);
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [scheduleFormData, setScheduleFormData] = useState({
     template_id: "",
@@ -71,46 +78,96 @@ export default function ShiftsManagementPage() {
     assignment_type: "OVERRIDE" as "OVERRIDE" | "DATE_RANGE"
   });
   const [historyPage, setHistoryPage] = useState(0);
-  const [selectedEmployeeForHistory, setSelectedEmployeeForHistory] = useState<ActiveEmployee | null>(null);
-  const [setDefaultModal, setSetDefaultModal] = useState<{ employee: ActiveEmployee; templateId: string } | null>(null);
+  const [selectedEmployeeForHistory, setSelectedEmployeeForHistory] = useState<Employee | null>(null);
+  const [setDefaultModal, setSetDefaultModal] = useState<{ employee: Employee; templateId: string } | null>(null);
+  const [listPage, setListPage] = useState(1);
+  const listPageSize = 20;
 
-  // Queries
-  const { data: employees = [], isLoading: employeesLoading } = useActiveEmployees();
   const { data: templates = [], isLoading: templatesLoading } = useShiftTemplates();
-  
-  // Filtered employees (moved before useMemo that depends on it)
-  const filteredEmployees = useMemo(() => {
-    return employees.filter(e => {
-      const fullName = `${e.first_name} ${e.last_name || ''}`.toLowerCase();
-      const matchesSearch = fullName.includes(filters.search.toLowerCase()) || 
-                           e.department_name?.toLowerCase().includes(filters.search.toLowerCase());
-      const matchesDepartment = !filters.department || e.department_name === filters.department;
-      return matchesSearch && matchesDepartment;
-    });
-  }, [employees, filters.search, filters.department]);
-  
-  // Get selected date range for calendar
+
+  // Server-side search for dropdowns (shared across tabs)
+  const fetchEmployees = useServerSearch("/api/hr/employees/", {
+    extraParams: { employment_status: "ACTIVE" },
+    transformOption: (e: any) => ({
+      value: e.id,
+      label: `${e.first_name} ${e.last_name || ""} (${e.department_name || ""})`,
+    }),
+  });
+
+  const fetchShiftTemplates = useServerSearch("/api/hr/shift-templates/", {
+    transformOption: (t: any) => ({
+      value: t.id,
+      label: `${t.name} (${t.start_time || ""} - ${t.end_time || ""})`,
+    }),
+  });
+
+  const fetchDesignations = useServerSearch("/api/company/designations/", {
+    transformOption: (d: any) => ({
+      value: d._id || d.id,
+      label: d.name,
+    }),
+  });
+
+  const fetchDepartments = useServerSearch("/api/organization/departments/", {
+    transformOption: (d: any) => ({ value: d._id || d.id, label: d.name }),
+  });
+
+  // ─── CALENDAR TAB DATA ────────────────────────────────────────
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
-  
-  // Get employee IDs for resolved shifts query
-  const employeeIds = useMemo(() => {
-    return filteredEmployees.map(e => e.id);
-  }, [filteredEmployees]);
-  
-  // Query resolved shifts for the month
+
+  // Lightweight month summary — aggregated template counts per day (NO per-employee data)
   const { 
-    data: resolvedShiftsData, 
+    data: monthSummary, 
     isLoading: shiftsLoading,
-    refetch: refetchShifts 
-  } = useResolvedShifts(
-    employeeIds,
-    undefined,
-    format(monthStart, "yyyy-MM-dd"),
-    format(monthEnd, "yyyy-MM-dd")
+    refetch: refetchMonthSummary 
+  } = useShiftMonthSummary(
+    activeTab === "calendar" ? format(monthStart, "yyyy-MM-dd") : undefined,
+    activeTab === "calendar" ? format(monthEnd, "yyyy-MM-dd") : undefined
   );
-  
+
+  // Day detail for the "See more" popup (fetched lazily when modal opens)
+  const { 
+    data: dayDetail, 
+    isFetching: dayDetailLoading,
+    refetch: refetchDayDetail 
+  } = useShiftDayDetail(showDayDetailModal ?? undefined);
+
+  // All active employees for the schedule modal (server-side paginated from list tab)
+  const { data: allActiveEmployees = [] } = useEmployees(
+    { employment_status: "ACTIVE", page_size: "500" },
+    { enabled: activeTab === "calendar" }
+  );
+
+  // ─── LIST TAB DATA ────────────────────────────────────────────
+  const listFilters = useMemo(() => {
+    const params: Record<string, string> = {
+      page: String(listPage),
+      page_size: String(listPageSize),
+      employment_status: "ACTIVE",
+    };
+    if (filters.department) params.department_id = filters.department;
+    if (filters.designation) params.designation_id = filters.designation;
+    if (filters.search) params.search = filters.search;
+    return params;
+  }, [filters, listPage]);
+
+  const { data: listEmployees = [], totalCount: listTotalCount, isLoading: listLoading } = useEmployees(
+    activeTab === "list" ? listFilters : undefined,
+    { enabled: activeTab === "list" }
+  );
+
+  // Today's resolved shifts for list view
+  const today = format(new Date(), "yyyy-MM-dd");
+  const listEmployeeIds = useMemo(() => listEmployees.map(e => e.id), [listEmployees]);
+
+  const { data: listResolvedShiftsData, refetch: refetchListShifts } = useResolvedShifts(
+    activeTab === "list" ? listEmployeeIds : [],
+    activeTab === "list" ? today : undefined
+  );
+
+  // ─── SHARED DATA ──────────────────────────────────────────────
   // Query shift overrides
   const { data: overrides = [], refetch: refetchOverrides } = useShiftOverrides(
     undefined,
@@ -138,68 +195,6 @@ export default function ShiftsManagementPage() {
   const bulkAssign = useBulkShiftAssignment();
   const generateSchedule = useGenerateShiftSchedule();
   const updateEmployee = useUpdateEmployee();
-  
-  // Departments list
-  const departments = useMemo(() => {
-    const depts = new Set(employees.map(e => e.department_name).filter((d): d is string => !!d));
-    return Array.from(depts);
-  }, [employees]);
-  
-  // Parse resolved shifts data
-  const resolvedShifts = useMemo(() => {
-    const result: Record<string, Record<string, { template: ShiftTemplate | null; isOverride: boolean }>> = {};
-    
-    if (!resolvedShiftsData) return result;
-    
-    days.forEach(day => {
-      const dateStr = format(day, "yyyy-MM-dd");
-      result[dateStr] = {};
-      
-      filteredEmployees.forEach(emp => {
-        const empData = resolvedShiftsData[emp.id];
-        
-        if (empData && empData.shifts && empData.shifts[dateStr]) {
-          const shiftData = empData.shifts[dateStr];
-          const template = templates.find(t => t.id === shiftData.template_id);
-          
-          result[dateStr][emp.id] = {
-            template: template || null,
-            isOverride: shiftData.source_type !== 'DEFAULT'
-          };
-        } else {
-          result[dateStr][emp.id] = { template: null, isOverride: false };
-        }
-      });
-    });
-    
-    return result;
-  }, [resolvedShiftsData, filteredEmployees, templates, days]);
-  
-  // Get employees for a specific shift on a date
-  const getEmployeesForShift = useCallback((dateStr: string, templateId: string) => {
-    if (!resolvedShifts[dateStr]) return [];
-    
-    return filteredEmployees.filter(emp => {
-      const resolved = resolvedShifts[dateStr]?.[emp.id]?.template;
-      return resolved?.id === templateId;
-    });
-  }, [resolvedShifts, filteredEmployees]);
-  
-  // Get shifts on a date
-  const getShiftsOnDate = useCallback((dateStr: string) => {
-    if (!resolvedShifts[dateStr]) return [];
-    
-    const shiftsMap = new Map<string, ShiftTemplate>();
-    
-    filteredEmployees.forEach(emp => {
-      const resolved = resolvedShifts[dateStr]?.[emp.id]?.template;
-      if (resolved && !shiftsMap.has(resolved.id)) {
-        shiftsMap.set(resolved.id, resolved);
-      }
-    });
-    
-    return Array.from(shiftsMap.values());
-  }, [resolvedShifts, filteredEmployees]);
   
   // Generate date range array helper
   const getDateRangeArray = (startDate: string, endDate: string): string[] => {
@@ -232,10 +227,7 @@ export default function ShiftsManagementPage() {
     const startDate = scheduleFormData.date_range.start;
     const endDate = scheduleFormData.date_range.end || scheduleFormData.date_range.start;
     const templateId = scheduleFormData.template_id;
-    const template = templates.find(t => t.id === templateId);
-    
-    if (!template) return;
-    
+      
     try {
       if (scheduleFormData.assignment_type === "OVERRIDE") {
         const dates = getDateRangeArray(startDate, endDate);
@@ -265,7 +257,7 @@ export default function ShiftsManagementPage() {
       }
       
       // Refresh data
-      refetchShifts();
+      refetchMonthSummary();
       refetchOverrides();
       refetchStatistics();
       
@@ -282,7 +274,7 @@ export default function ShiftsManagementPage() {
     
     try {
       await deleteOverride.mutateAsync(overrideId);
-      refetchShifts();
+      refetchMonthSummary();
       refetchOverrides();
     } catch (error: any) {
     }
@@ -308,7 +300,7 @@ export default function ShiftsManagementPage() {
       for (const override of overridesToDelete) {
         await deleteOverride.mutateAsync(override.id);
       }
-      refetchShifts();
+      refetchMonthSummary();
       refetchOverrides();
     } catch (error: any) {
     }
@@ -321,7 +313,7 @@ export default function ShiftsManagementPage() {
     
     try {
       await generateSchedule.mutateAsync({ start_date: startDate, end_date: endDate });
-      refetchShifts();
+      refetchMonthSummary();
     } catch (error: any) {
     }
   };
@@ -334,14 +326,14 @@ export default function ShiftsManagementPage() {
         id:setDefaultModal.employee.id,
         default_shift_id: setDefaultModal.templateId || undefined,
       });
-      refetchShifts();
+      refetchMonthSummary();
       setSetDefaultModal(null);
     } catch (error: any) {
     }
   };
   
   // Loading state
-  if (employeesLoading || templatesLoading) {
+  if (templatesLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
@@ -446,37 +438,19 @@ export default function ShiftsManagementPage() {
         {/* CALENDAR VIEW */}
         <TabsContent value="calendar" className="m-0 space-y-4">
           <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
-            <div className="flex flex-wrap gap-3 mb-4">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <input 
-                  value={filters.search} 
-                  onChange={(e) => setFilters({...filters, search: e.target.value})} 
-                  placeholder="Search employees by name or department..." 
-                  className="w-full bg-muted/40 pl-9 pr-3 h-9 rounded-md text-sm outline-none focus:ring-2 focus:ring-ring" 
-                />
-              </div>
-              
-              <SearchableSelect 
-                value={filters.department} 
-                onChange={(v) => setFilters({...filters, department: v})} 
-                options={departments.map(d => ({value: d, label: d}))} 
-                placeholder="All Departments"
-                className="min-w-[150px]"
-              />
-              
+            <div className="flex flex-wrap items-center gap-3 mb-4">
               <SearchableSelect 
                 value={filters.templateId} 
                 onChange={(v) => setFilters({...filters, templateId: v})} 
-                options={templates.filter(t=>t.is_active).map(t => ({value: t.id, label: t.name}))} 
-                placeholder="Filter by Shift"
-                className="min-w-[150px]"
+                fetchOptions={fetchShiftTemplates}
+                placeholder="Search shifts..."
+                className="min-w-[180px]"
               />
               
               <Button 
                 variant="outline" 
                 size="sm"
-                onClick={() => refetchShifts()}
+                onClick={() => refetchMonthSummary()}
                 disabled={shiftsLoading}
               >
                 <RefreshCw className={`w-4 h-4 ${shiftsLoading ? 'animate-spin' : ''}`} />
@@ -499,14 +473,30 @@ export default function ShiftsManagementPage() {
                 </div>
               </div>
               <div className="text-xs text-muted-foreground">
-                {filteredEmployees.length} employees • {templates.length} shift templates
+                {templates.length} shift templates
               </div>
             </div>
             
             {shiftsLoading ? (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              </div>
+              <>
+                <div className="grid grid-cols-7 bg-muted/20 rounded-t-xl">
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (
+                    <div key={day} className="py-2 text-center text-xs font-medium uppercase tracking-wider text-muted-foreground border-b border-border">
+                      {day}
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 divide-x divide-border border-x border-b rounded-b-xl">
+                  {days.map((_, i) => (
+                    <div key={i} className="min-h-[140px] p-2">
+                      <Skeleton className="w-6 h-6 rounded-full mb-2" />
+                      <Skeleton className="h-5 w-full rounded mb-1" />
+                      <Skeleton className="h-5 w-3/4 rounded" />
+                      <Skeleton className="h-5 w-1/2 rounded mt-1" />
+                    </div>
+                  ))}
+                </div>
+              </>
             ) : (
               <>
                 <div className="grid grid-cols-7 bg-muted/20 rounded-t-xl">
@@ -522,10 +512,10 @@ export default function ShiftsManagementPage() {
                     const dayStr = format(day, "yyyy-MM-dd");
                     const isCurrentMonth = day.getMonth() === currentMonth.getMonth();
                     const isTod = isToday(day);
-                    const shiftsOnDay = getShiftsOnDate(dayStr);
-                    const filteredShifts = filters.templateId 
-                      ? shiftsOnDay.filter(s => s.id === filters.templateId)
-                      : shiftsOnDay;
+                    const dayData = monthSummary?.[dayStr] || [];
+                    const filteredDayData = filters.templateId 
+                      ? dayData.filter(s => s.template_id === filters.templateId)
+                      : dayData;
                     
                     return (
                       <div 
@@ -545,39 +535,45 @@ export default function ShiftsManagementPage() {
                           <span className={isTod ? "bg-primary text-primary-foreground w-6 h-6 rounded-full grid place-items-center" : "text-muted-foreground"}>
                             {format(day, "d")}
                           </span>
-                          {shiftsOnDay.length > 0 && (
+                          {dayData.length > 0 && (
                             <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
-                              {shiftsOnDay.length} shift{shiftsOnDay.length > 1 ? 's' : ''}
+                              {dayData.reduce((sum, s) => sum + s.employee_count, 0)} assigned
                             </span>
                           )}
                         </div>
                         
                         <div className="space-y-1.5">
-                          {filteredShifts.map(tpl => {
-                            const employeesOnShift = getEmployeesForShift(dayStr, tpl.id);
-                            if (employeesOnShift.length === 0) return null;
-                            
-                            return (
-                              <div 
-                                key={tpl.id} 
-                                className="text-[11px] px-2 py-1 rounded cursor-pointer transition-transform hover:scale-[1.02] shadow-sm"
-                                style={{ backgroundColor: `#3b82f620`, borderLeft: `3px solid #3b82f6` }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setShowShiftDetailModal({ date: dayStr, template: tpl });
-                                }}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <span className="font-medium truncate">
-                                    {tpl.name}
-                                  </span>
-                                  <span className="text-[10px] text-muted-foreground">
-                                    {employeesOnShift.length}
-                                  </span>
-                                </div>
+                          {filteredDayData.slice(0, 5).map(tpl => (
+                            <div 
+                              key={tpl.template_id} 
+                              className="text-[11px] px-2 py-1 rounded cursor-pointer transition-transform hover:scale-[1.02] shadow-sm"
+                              style={{ backgroundColor: `#3b82f620`, borderLeft: `3px solid #3b82f6` }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowDayDetailModal(dayStr);
+                              }}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-medium truncate">
+                                  {tpl.template_name}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  {tpl.employee_count}
+                                </span>
                               </div>
-                            );
-                          })}
+                            </div>
+                          ))}
+                          {filteredDayData.length > 5 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowDayDetailModal(dayStr);
+                              }}
+                              className="text-[11px] w-full text-center py-1 rounded bg-muted/30 hover:bg-muted/50 text-muted-foreground transition-colors"
+                            >
+                              See {filteredDayData.length - 5} more...
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -591,13 +587,29 @@ export default function ShiftsManagementPage() {
         {/* EMPLOYEE LIST VIEW */}
         <TabsContent value="list" className="m-0 space-y-4">
           <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
-            <div className="relative mb-4">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input 
-                value={filters.search} 
-                onChange={(e) => setFilters({...filters, search: e.target.value})} 
-                placeholder="Search employees..." 
-                className="w-full bg-muted/40 pl-9 pr-3 h-9 rounded-md text-sm outline-none focus:ring-2 focus:ring-ring" 
+            <div className="flex flex-wrap gap-3 mb-4">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input 
+                  value={filters.search} 
+                  onChange={(e) => { setFilters({...filters, search: e.target.value}); setListPage(1); }} 
+                  placeholder="Search employees..." 
+                  className="w-full bg-muted/40 pl-9 pr-3 h-9 rounded-md text-sm outline-none focus:ring-2 focus:ring-ring" 
+                />
+              </div>
+              <SearchableSelect 
+                value={filters.department || ""} 
+                onChange={(v) => { setFilters({...filters, department: v, designation: ""}); setListPage(1); }} 
+                fetchOptions={fetchDepartments}
+                placeholder="All Departments"
+                className="min-w-[150px]"
+              />
+              <SearchableSelect 
+                value={filters.designation || ""} 
+                onChange={(v) => { setFilters({...filters, designation: v}); setListPage(1); }} 
+                fetchOptions={fetchDesignations}
+                placeholder="All Designations"
+                className="min-w-[150px]"
               />
             </div>
             
@@ -613,9 +625,31 @@ export default function ShiftsManagementPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredEmployees.map(emp => {
-                    const today = format(new Date(), "yyyy-MM-dd");
-                    const resolved = resolvedShifts[today]?.[emp.id];
+                  {listLoading ? (
+                    <>
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <tr key={i} className="border-t border-border">
+                          <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
+                          <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                          <td className="px-4 py-3"><Skeleton className="h-5 w-28 rounded" /></td>
+                          <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                          <td className="px-4 py-3 text-right"><Skeleton className="h-8 w-24 ml-auto rounded-md" /></td>
+                        </tr>
+                      ))}
+                    </>
+                  ) : (
+                    listEmployees.map(emp => {
+                    const todayShiftData = listResolvedShiftsData?.[emp.id]?.shifts?.[today];
+                    let resolved: { template: ShiftTemplate | null; isOverride: boolean } | null = null;
+                    if (todayShiftData?.template_id) {
+                      const t = templates.find(tpl => tpl.id === todayShiftData.template_id);
+                      if (t) resolved = { template: t, isOverride: todayShiftData.source_type !== 'DEFAULT' };
+                    }
+                    if (!resolved && emp.default_shift_id) {
+                      const defTpl = templates.find(tpl => tpl.id === emp.default_shift_id);
+                      if (defTpl) resolved = { template: defTpl, isOverride: false };
+                    }
+                    // No fallback needed — schedule override or default shift already checked above
                     const hasOverride = overrides.some(a => 
                       a.date === today && a.employee_id === emp.id
                     );
@@ -687,17 +721,41 @@ export default function ShiftsManagementPage() {
                         </td>
                       </tr>
                     );
-                  })}
+                  }))}
                 </tbody>
               </table>
               
-              {filteredEmployees.length === 0 && (
+              {!listLoading && listEmployees.length === 0 && (
                 <div className="text-center py-12 text-muted-foreground">
                   <UsersIcon className="w-12 h-12 mx-auto mb-3 opacity-30" />
                   <p>No employees found matching your filters</p>
                 </div>
               )}
             </div>
+            {(listTotalCount || 0) > listPageSize && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-border text-xs text-muted-foreground">
+                <span>
+                  {(listPage - 1) * listPageSize + 1}–{Math.min(listPage * listPageSize, listTotalCount || 0)} of {listTotalCount || 0}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span>Page {listPage} of {Math.max(1, Math.ceil((listTotalCount || 0) / listPageSize))}</span>
+                  <button
+                    onClick={() => setListPage(p => Math.max(1, p - 1))}
+                    disabled={listPage <= 1}
+                    className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setListPage(p => p + 1)}
+                    disabled={listPage >= Math.max(1, Math.ceil((listTotalCount || 0) / listPageSize))}
+                    className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </TabsContent>
       </Tabs>
@@ -719,7 +777,7 @@ export default function ShiftsManagementPage() {
               <div>
                 <label className="text-sm text-muted-foreground mb-1 block">Select Employees *</label>
                 <div className="bg-muted/40 border border-border rounded-md p-2 max-h-48 overflow-y-auto space-y-1">
-                  {filteredEmployees.map(emp => (
+                  {(activeTab === "calendar" ? allActiveEmployees : listEmployees).map(emp => (
                     <label key={emp.id} className="flex items-center gap-2 p-1.5 hover:bg-muted/30 rounded cursor-pointer">
                       <input 
                         type="checkbox" 
@@ -748,8 +806,8 @@ export default function ShiftsManagementPage() {
                 <SearchableSelect 
                   value={scheduleFormData.template_id} 
                   onChange={(v) => setScheduleFormData({...scheduleFormData, template_id: v})} 
-                  options={templates.filter(t => t.is_active).map(t => ({value: t.id, label: `${t.name} (${t.startTime} - ${t.endTime})`}))} 
-                  placeholder="Select shift template"
+                  fetchOptions={fetchShiftTemplates}
+                  placeholder="Search shift templates..."
                 />
               </label>
               
@@ -833,131 +891,94 @@ export default function ShiftsManagementPage() {
         </div>
       )}
       
-      {/* SHIFT DETAIL MODAL */}
-      {showShiftDetailModal && (
+      {/* SHIFT DETAIL MODAL — removed, day detail modal handles all shift viewing */}
+      
+      {/* DAY DETAIL MODAL */}
+      {showDayDetailModal && (
         <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center p-4">
-          <div className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-md">
-            <div className="p-4 border-b border-border flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-primary" />
-                <h2 className="font-semibold">{showShiftDetailModal.template.name}</h2>
-              </div>
-              <button onClick={() => setShowShiftDetailModal(null)} className="p-1.5 hover:bg-muted rounded">
+          <div className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-lg max-h-[80vh] overflow-y-auto">
+            <div className="p-4 border-b border-border flex justify-between items-center sticky top-0 bg-card">
+              <h2 className="font-semibold flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-primary" /> All Shifts — {format(parseISO(showDayDetailModal), "MMMM d, yyyy")}
+              </h2>
+              <button onClick={() => setShowDayDetailModal(null)} className="p-1.5 hover:bg-muted rounded">
                 <X className="w-4 h-4" />
               </button>
             </div>
             
-            <div className="p-4 space-y-4">
-              <div className="bg-muted/40 rounded-lg p-3">
-                <div className="text-xs text-muted-foreground mb-1">Date</div>
-                <div className="font-medium">
-                  {format(parseISO(showShiftDetailModal.date), "EEEE, MMMM d, yyyy")}
+            <div className="p-4 space-y-3">
+              {dayDetailLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 </div>
-              </div>
-              
-              <div className="bg-muted/40 rounded-lg p-3">
-                <div className="text-xs text-muted-foreground mb-1">Shift Timing</div>
-                <div className="font-medium flex items-center gap-2">
-                  <Clock className="w-4 h-4" />
-                  {showShiftDetailModal.template.startTime} - {showShiftDetailModal.template.endTime}
-                  {showShiftDetailModal.template.breakMinutes > 0 && (
-                    <span className="text-xs text-muted-foreground ml-2">
-                      ({showShiftDetailModal.template.breakMinutes} min break)
-                    </span>
-                  )}
+              ) : !dayDetail?.shifts?.length ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <CalendarDays className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p>No shifts scheduled for this day</p>
                 </div>
-              </div>
-              
-              <div>
-                <div className="text-xs text-muted-foreground mb-2 flex items-center justify-between">
-                  <span>Employees on this shift</span>
-                  {permissions.delete && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-6 text-xs text-destructive hover:text-destructive"
-                      onClick={() => {
-                        if (confirm(`Remove all employees from this shift on ${showShiftDetailModal.date}?`)) {
-                          handleClearDateAssignments(showShiftDetailModal.date);
-                          setShowShiftDetailModal(null);
-                        }
-                      }}
-                    >
-                      <Trash2 className="w-3 h-3 mr-1" /> Clear All
-                    </Button>
-                  )}
-                </div>
-                <div className="space-y-1 max-h-64 overflow-y-auto">
-                  {getEmployeesForShift(showShiftDetailModal.date, showShiftDetailModal.template.id).map(emp => {
-                    const isOverride = resolvedShifts[showShiftDetailModal.date]?.[emp.id]?.isOverride;
-                    const overrideRecord = overrides.find(o => 
-                      o.date === showShiftDetailModal.date && 
-                      o.employee_id === emp.id
-                    );
-                    
-                    return (
-                      <div key={emp.id} className="flex items-center justify-between p-2 bg-muted/20 rounded-lg">
+              ) : (
+                dayDetail.shifts.map(shift => (
+                  <div key={shift.template_id} className="border border-border rounded-xl overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 bg-muted/10">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-primary" />
                         <div>
-                          <div className="font-medium text-sm">
-                            {emp.first_name} {emp.last_name || ''}
+                          <div className="font-medium text-sm">{shift.template_name}</div>
+                          <div className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {shift.start_time} - {shift.end_time}
+                            {shift.break_minutes > 0 && ` (${shift.break_minutes}min break)`}
                           </div>
-                          <div className="text-xs text-muted-foreground">{emp.department_name}</div>
-                        </div>
-                        <div className="flex gap-1">
-                          {isOverride && (
-                            <span className="text-[10px] bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 px-1.5 py-0.5 rounded-full">Override</span>
-                          )}
-                          {permissions.delete && (
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                              onClick={() => {
-                                if (confirm(`Remove ${emp.first_name} ${emp.last_name} from this shift?`)) {
-                                  if (overrideRecord) {
-                                    handleDeleteAssignment(overrideRecord.id);
-                                  } else {
-                                    handleClearDateAssignments(showShiftDetailModal.date, emp.id);
-                                  }
-                                  setShowShiftDetailModal(null);
-                                }
-                              }}
-                            >
-                              <X className="w-3 h-3" />
-                            </Button>
-                          )}
                         </div>
                       </div>
-                    );
-                  })}
-                  {getEmployeesForShift(showShiftDetailModal.date, showShiftDetailModal.template.id).length === 0 && (
-                    <div className="text-center py-4 text-muted-foreground text-sm">
-                      No employees assigned to this shift on this date
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs bg-muted/40 px-2 py-0.5 rounded-full">
+                          {shift.employee_count} employee{shift.employee_count > 1 ? 's' : ''}
+                        </span>
+                      </div>
                     </div>
-                  )}
-                </div>
-              </div>
+                    <div className="border-t border-border divide-y divide-border">
+                      {shift.employees.map(emp => (
+                        <div key={emp.employee_id} className="flex items-center justify-between px-4 py-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">
+                              {`${emp.employee_name?.[0] || ''}${emp.employee_name?.split(' ')[1]?.[0] || ''}`.toUpperCase()}
+                            </div>
+                            <span className="text-sm">{emp.employee_name}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">{emp.department_name}</span>
+                            {emp.source_type !== 'DEFAULT' && (
+                              <span className="text-[10px] bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 px-1.5 py-0.5 rounded-full">
+                                {emp.source_type}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
             
             <div className="p-4 border-t border-border flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowShiftDetailModal(null)}>Close</Button>
-              {permissions.create && (
-                <Button 
-                  onClick={() => {
-                    setShowShiftDetailModal(null);
-                    setSelectedEmployees([]);
-                    setScheduleFormData({
-                      template_id: showShiftDetailModal.template.id,
-                      date_range: { start: showShiftDetailModal.date, end: "" },
-                      reason: "",
-                      assignment_type: "OVERRIDE"
-                    });
-                    setShowScheduleModal(true);
-                  }}
-                >
-                  <UserPlus className="w-3.5 h-3.5 mr-1.5" /> Add Employees
-                </Button>
-              )}
+              <Button variant="outline" onClick={() => setShowDayDetailModal(null)}>Close</Button>
+              <Button
+                onClick={() => {
+                  setShowDayDetailModal(null);
+                  setSelectedEmployees([]);
+                  setScheduleFormData({
+                    template_id: "",
+                    date_range: { start: showDayDetailModal, end: "" },
+                    reason: "",
+                    assignment_type: "OVERRIDE"
+                  });
+                  setShowScheduleModal(true);
+                }}
+              >
+                <CalendarRange className="w-3.5 h-3.5 mr-1.5" /> Schedule Shift
+              </Button>
             </div>
           </div>
         </div>
@@ -1095,8 +1116,8 @@ export default function ShiftsManagementPage() {
                 <SearchableSelect 
                   value={setDefaultModal.templateId} 
                   onChange={(v) => setSetDefaultModal({ ...setDefaultModal, templateId: v })} 
-                  options={templates.filter(t => t.is_active).map(t => ({value: t.id, label: `${t.name} (${t.startTime} - ${t.endTime})`}))} 
-                  placeholder="Select shift template"
+                  fetchOptions={fetchShiftTemplates}
+                  placeholder="Search shift templates..."
                 />
               </div>
               

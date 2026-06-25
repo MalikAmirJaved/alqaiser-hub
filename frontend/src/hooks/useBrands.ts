@@ -40,18 +40,15 @@ export function useBrands(filters?: Record<string, string> | string) {
   const queryString = params.toString();
   const url = `/api/inventory/brands/${queryString ? `?${queryString}` : ""}`;
 
-  return useQuery<
-    PaginatedResponse<Brand>,
-    Error,
-    Brand[]
-  >({
+  const query = useQuery<PaginatedResponse<Brand>>({
     queryKey: ["inventory_brand", filters],
     queryFn: () => api<PaginatedResponse<Brand>>(url),
-    select: (data) => data.results,
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
   });
+
+  return { ...query, data: query.data?.results ?? [], totalCount: query.data?.count ?? 0 };
 }
 
   

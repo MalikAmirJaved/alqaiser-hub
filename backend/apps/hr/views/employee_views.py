@@ -10,11 +10,12 @@ from rest_framework import status
 import logging
 import json
 from apps.common.baseauthentication import CompanyBranchMixin
-from apps.common.filters import GenericFilterMixin
+from apps.common.filters import FilterPaginationMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import Employee, EmployeeDefaultShift, EmployeeAssetAssignment, AssetCategory, RecruitmentCandidate, EmployeeDocument
+from apps.hr.filters import EmployeeFilter
 from apps.organization.models import Department
-from apps.compsetting.models import Designation   # <-- ADDED
+from apps.compsetting.models import Designation
 import traceback
 
 logger = logging.getLogger(__name__)
@@ -108,10 +109,14 @@ def serialize_employee(employee):
     }
 
 
-class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, FilterPaginationMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'employee'
     permission_classes = [IsAuthenticated]
+    filterset_class = EmployeeFilter
+    search_fields = ['employee_id', 'first_name', 'last_name', 'email', 'phone']
+    ordering_fields = ['first_name', 'last_name', 'joining_date', 'created_at', 'salary']
+    ordering = ['first_name', 'last_name']
 
     def get(self, request):
         company_id = request.user.company_id
@@ -123,52 +128,19 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        query = Employee.objects.filter(company_id=company_id, is_deleted=False).select_related(
+        employees = Employee.objects.filter(company_id=company_id, is_deleted=False).select_related(
             'default_shift', 'reporting_manager', 'department', 'designation'
         )
 
         if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
-            query = query.filter(models.Q(branch_id=branch_id) | models.Q(branch_id__isnull=True))
+            employees = employees.filter(models.Q(branch_id=branch_id) | models.Q(branch_id__isnull=True))
 
-        # Apply filters using GenericFilterMixin logic
-        search = request.query_params.get('search')
-        if search:
-            query = query.filter(
-                models.Q(employee_id__icontains=search) |
-                models.Q(first_name__icontains=search) |
-                models.Q(last_name__icontains=search) |
-                models.Q(department__name__icontains=search) |
-                models.Q(designation__name__icontains=search) |
-                models.Q(email__icontains=search)
-            )
-
-        # Support UUID-based department filter (department___id)
-        department_uuid = request.query_params.get('department')
-        if department_uuid:
-            try:
-                dept = Department.objects.get(_id=department_uuid, company_id=company_id, is_deleted=False)
-                query = query.filter(department=dept)
-            except Department.DoesNotExist:
-                pass
-
-        status_filter = request.query_params.get('status')
-        if status_filter:
-            query = query.filter(employment_status=status_filter)
-
-        employment_type = request.query_params.get('employmentType')
-        if employment_type:
-            query = query.filter(employment_type=employment_type)
-
-        designation_uuid = request.query_params.get('designation')
-        if designation_uuid:
-            try:
-                desig = Designation.objects.get(_id=designation_uuid, company_id=company_id, is_deleted=False)
-                query = query.filter(designation=desig)
-            except Designation.DoesNotExist:
-                pass
-
-        employees = query.order_by('first_name', 'last_name')
-        return Response([serialize_employee(e) for e in employees])
+        employees = self.filter_queryset(employees)
+        employees = self.search_queryset(employees)
+        employees = self.order_queryset(employees)
+        page = self.paginate_queryset(employees)
+        serialized = [serialize_employee(e) for e in page]
+        return self.get_paginated_response(serialized)
 
 
     def post(self, request):
@@ -656,10 +628,43 @@ class EmployeeStatsView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
         })
 
 
+class EmployeeDetailView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+    permission_module = 'HR'
+    permission_resource = 'employee'
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        company_id = request.user.company_id
+        branch_id = request.user.branch_id
+
+        if not company_id:
+            return Response(
+                {'error': 'User is not associated with any company'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        filters = {
+            '_id': pk,
+            'company_id': company_id,
+            'is_deleted': False,
+        }
+
+        if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
+            filters['branch_id'] = branch_id
+
+        employee = get_object_or_404(Employee, **filters)
+
+        data = serialize_employee(employee)
+        return Response(data)
+
+
 class ActiveEmployeesView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'employee'
     permission_classes = [IsAuthenticated]
+    action_permission_any_of = {
+        "": [("INVENTORY", "warehouse"), ("INVENTORY", "purchase_order")],
+    }
 
     def get(self, request):
         company_id = request.user.company_id

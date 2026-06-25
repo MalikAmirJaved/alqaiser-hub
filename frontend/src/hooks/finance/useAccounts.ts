@@ -47,10 +47,11 @@ type UpdateAccountData = Partial<Omit<Account, "id" | "created_at" | "updated_at
 const ACCOUNTS_QUERY_KEY = "finance_accounts";
 const BALANCES_QUERY_KEY = "finance_account_balances";
 
-async function getAllAccounts(params?: { search?: string; account_type?: string }) {
+async function getAllAccounts(params?: { search?: string; account_type?: string; page?: string }) {
   const searchParams = new URLSearchParams();
   if (params?.search) searchParams.append("search", params.search);
   if (params?.account_type) searchParams.append("account_type", params.account_type);
+  if (params?.page) searchParams.append("page", params.page);
   const url = `/api/finance/accounts/${searchParams.toString() ? `?${searchParams}` : ""}`;
   return apiFetch<PaginatedResponse<Account>>(url);
 }
@@ -90,13 +91,18 @@ export async function fetchAccountBalances(params?: { start_date?: string; end_d
 // REACT HOOKS
 // ============================================
 
-export function useAccounts(filters?: { search?: string; account_type?: string }) {
-  return useQuery({
+export function useAccounts(filters?: { search?: string; account_type?: string; page?: string }) {
+  const query = useQuery<PaginatedResponse<Account>>({
     queryKey: [ACCOUNTS_QUERY_KEY, filters],
     queryFn: () => getAllAccounts(filters),
-    select: (data) => data.results,
     staleTime: 30_000,
   });
+
+  return {
+    ...query,
+    data: query.data?.results ?? [],
+    totalCount: query.data?.count ?? 0,
+  };
 }
 
 export function useAccount(id: string | null) {

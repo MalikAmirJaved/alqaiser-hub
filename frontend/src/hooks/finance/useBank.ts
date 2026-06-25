@@ -74,10 +74,11 @@ const BANK_ACCOUNTS_KEY = "finance_bank_accounts";
 const BANK_TRANSACTIONS_KEY = "finance_bank_transactions";
 
 // Bank Accounts
-async function getAllBankAccounts(params?: { search?: string; is_active?: boolean }) {
+async function getAllBankAccounts(params?: { search?: string; is_active?: boolean; page?: number }) {
   const searchParams = new URLSearchParams();
   if (params?.search) searchParams.append("search", params.search);
   if (params?.is_active !== undefined) searchParams.append("is_active", String(params.is_active));
+  if (params?.page) searchParams.append("page", String(params.page));
   const url = `/api/finance/bank-accounts/${searchParams.toString() ? `?${searchParams}` : ""}`;
   return apiFetch<PaginatedResponse<BankAccount>>(url);
 }
@@ -153,13 +154,13 @@ async function reconcileBankTransaction(id: string, paymentId: string) {
 // REACT HOOKS - Bank Accounts
 // ============================================
 
-export function useBankAccounts(filters?: { search?: string; is_active?: boolean }) {
-  return useQuery({
+export function useBankAccounts(filters?: { search?: string; is_active?: boolean; page?: number }) {
+  const query = useQuery({
     queryKey: [BANK_ACCOUNTS_KEY, filters],
     queryFn: () => getAllBankAccounts(filters),
-    select: (data) => data.results,
     staleTime: 30_000,
   });
+  return { ...query, data: query.data?.results ?? [], totalCount: query.data?.count ?? 0 };
 }
 
 export function useBankAccount(id: string | null) {

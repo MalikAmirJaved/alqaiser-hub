@@ -1,7 +1,7 @@
 // components/HRAssets/EmployeeAssetsNew.tsx
 "use client";
-import { useState, useMemo, useEffect } from "react";
-import { useActiveEmployees } from "@/hooks/useEmployees";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { useEmployees } from "@/hooks/useEmployees";
 import {
   useEmployeeAssignments,
   useAvailableAssets,
@@ -52,7 +52,10 @@ import {
   X,
   ChevronRight,
   ChevronDown,
+  ChevronLeft,
+  Loader2,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
@@ -83,15 +86,46 @@ export default function EmployeeAssetsNew() {
 
   // Category filter for assets
   const [assetCategoryFilter, setAssetCategoryFilter] = useState<string>("all");
+  const [empPage, setEmpPage] = useState(1);
+  const empPageSize = 20;
 
-  const { data: employees = [], isLoading: employeesLoading } = useActiveEmployees()
+  // Server-side search for assets/kits in assign modal
+  const [assignSearch, setAssignSearch] = useState("");
+  const [assetPage, setAssetPage] = useState(1);
+  const [kitPage, setKitPage] = useState(1);
+  const assignSearchTimeoutRef = useRef<any>(null);
+
+  useEffect(() => { setEmpPage(1); }, [searchQuery]);
+
+  // Server-side paginated employee list (uses raw empPage — server handles clamping)
+  const empApiParams = useMemo(() => ({
+    page: String(empPage),
+    page_size: String(empPageSize),
+    employment_status: "ACTIVE",
+    ...(searchQuery ? { search: searchQuery } : {}),
+  }), [empPage, empPageSize, searchQuery]);
+
+  const { data: employees = [], totalCount: empTotalCount, isLoading: employeesLoading } = useEmployees(empApiParams);
 
   const { data: assignmentData, isLoading: assignmentsLoading } = useEmployeeAssignments(
     selectedEmployee?.id
   );
 
+  const availableParams = useMemo(() => {
+    if (!showAssignModal) return undefined;
+    const p: Record<string, string> = {
+      asset_page: String(assetPage),
+      asset_page_size: "20",
+      kit_page: String(kitPage),
+      kit_page_size: "20",
+    };
+    if (assignSearch) p.search = assignSearch;
+    return p;
+  }, [showAssignModal, assignSearch, assetPage, kitPage]);
+
   const { data: availableData } = useAvailableAssets(
-    showAssignModal ? selectedEmployee?.id : undefined
+    showAssignModal ? selectedEmployee?.id : undefined,
+    availableParams
   );
 
   const assignMutation = useAssignAssets();
@@ -124,6 +158,10 @@ export default function EmployeeAssetsNew() {
     return allAssets.filter(asset => asset.category === assetCategoryFilter);
   }, [allAssets, assetCategoryFilter]);
 
+  // Pagination display (clamped to valid range)
+  const empTotalPages = Math.max(1, Math.ceil((empTotalCount || 0) / empPageSize));
+  const empSafePage = Math.min(empPage, empTotalPages);
+
   // Reset all selection when modal opens
   useEffect(() => {
     if (showAssignModal) {
@@ -133,6 +171,9 @@ export default function EmployeeAssetsNew() {
       setAssignmentNotes("");
       setAssignmentCondition("GOOD");
       setAssetCategoryFilter("all");
+      setAssignSearch("");
+      setAssetPage(1);
+      setKitPage(1);
     }
   }, [showAssignModal]);
 
@@ -262,8 +303,17 @@ export default function EmployeeAssetsNew() {
         </div>
         <div className="flex-1 overflow-y-auto">
           {employeesLoading ? (
-            <div className="flex items-center justify-center h-32">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+            <div className="divide-y divide-border">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="p-4 flex items-center gap-3">
+                  <Skeleton className="w-10 h-10 rounded-lg" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                  <Skeleton className="w-4 h-4" />
+                </div>
+              ))}
             </div>
           ) : (
             <div className="divide-y divide-border">
@@ -298,6 +348,30 @@ export default function EmployeeAssetsNew() {
             </div>
           )}
         </div>
+        {(empTotalCount || 0) > empPageSize && (
+          <div className="flex items-center justify-between px-4 py-2 border-t border-border text-xs text-muted-foreground">
+            <span>
+              {(empSafePage - 1) * empPageSize + 1}–{Math.min(empSafePage * empPageSize, empTotalCount || 0)} of {empTotalCount || 0}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setEmpPage(p => Math.max(1, p - 1))}
+                disabled={empSafePage <= 1}
+                className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span>Page {empSafePage} of {empTotalPages}</span>
+              <button
+                onClick={() => setEmpPage(p => p + 1)}
+                disabled={empSafePage >= empTotalPages}
+                className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Right Panel - Employee Details & Assignments (unchanged) */}
@@ -346,8 +420,20 @@ export default function EmployeeAssetsNew() {
               </CardHeader>
               <CardContent>
                 {assignmentsLoading ? (
-                  <div className="flex items-center justify-center h-32">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+                  <div className="space-y-3 p-4">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="flex items-center gap-4">
+                        <Skeleton className="w-4 h-4 rounded" />
+                        <div className="flex-1 space-y-1">
+                          <Skeleton className="h-4 w-40" />
+                          <Skeleton className="h-3 w-24" />
+                        </div>
+                        <Skeleton className="h-4 w-8" />
+                        <Skeleton className="h-5 w-12 rounded-full" />
+                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="h-5 w-14 rounded-full" />
+                      </div>
+                    ))}
                   </div>
                 ) : !assignmentData?.active_assignments?.length ? (
                   <div className="text-center py-8">
@@ -513,6 +599,22 @@ export default function EmployeeAssetsNew() {
           </DialogHeader>
 
           <div className="space-y-6 py-4">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                value={assignSearch}
+                onChange={(e) => {
+                  setAssignSearch(e.target.value);
+                  setAssetPage(1);
+                  setKitPage(1);
+                }}
+                placeholder="Search assets and kits..."
+                className="w-full bg-muted/40 border border-border rounded-md h-9 pl-8 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+
             {/* Kits Section */}
             <div>
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
@@ -567,6 +669,30 @@ export default function EmployeeAssetsNew() {
                   </div>
                 ))}
               </div>
+              {/* Kits Pagination */}
+              {(availableData?.kits_total || 0) > (availableData?.kits_page_size || 20) && (
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
+                  <span className="text-xs text-muted-foreground">
+                    {kitPage} of {Math.ceil((availableData?.kits_total || 0) / (availableData?.kits_page_size || 20))} pages
+                  </span>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setKitPage(Math.max(1, kitPage - 1))}
+                      disabled={kitPage <= 1}
+                      className="px-2 py-1 text-xs border border-border rounded disabled:opacity-50 hover:bg-muted"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      onClick={() => setKitPage(kitPage + 1)}
+                      disabled={!availableData?.kits || availableData.kits.length < (availableData?.kits_page_size || 20)}
+                      className="px-2 py-1 text-xs border border-border rounded disabled:opacity-50 hover:bg-muted"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Individual Assets Section – includes all assets (kit assets too, but disabled if kit selected) */}
@@ -659,6 +785,30 @@ export default function EmployeeAssetsNew() {
                   })
                 )}
               </div>
+              {/* Assets Pagination */}
+              {(availableData?.assets_total || 0) > (availableData?.assets_page_size || 20) && (
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
+                  <span className="text-xs text-muted-foreground">
+                    {assetPage} of {Math.ceil((availableData?.assets_total || 0) / (availableData?.assets_page_size || 20))} pages
+                  </span>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setAssetPage(Math.max(1, assetPage - 1))}
+                      disabled={assetPage <= 1}
+                      className="px-2 py-1 text-xs border border-border rounded disabled:opacity-50 hover:bg-muted"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      onClick={() => setAssetPage(assetPage + 1)}
+                      disabled={!availableData?.assets || availableData.assets.length < (availableData?.assets_page_size || 20)}
+                      className="px-2 py-1 text-xs border border-border rounded disabled:opacity-50 hover:bg-muted"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Assignment Details (unchanged) */}

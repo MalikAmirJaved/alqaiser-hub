@@ -182,7 +182,7 @@ class AssetCategory(BaseModel):
         ]
     
     def __str__(self):
-        return f"{self.name} ({self.assets.count()} assets)"
+        return self.name
     
     def get_asset_ids(self):
         return list(self.assets.values_list('id', flat=True))

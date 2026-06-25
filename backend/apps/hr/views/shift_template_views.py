@@ -4,15 +4,19 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import FilterPaginationMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import ShiftTemplate
 from django.utils import timezone
 
-class ShiftTemplateView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+class ShiftTemplateView(CompanyBranchMixin, PermissionRequiredMixin, FilterPaginationMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'shift_template'
     """CRUD for shift templates with UUID support"""
     lookup_field = '_id'
+    search_fields = ['name', 'description']
+    ordering_fields = ['name', 'created_at']
+    ordering = ['name']
     
     def _format_time(self, time_obj):
         if isinstance(time_obj, str):
@@ -40,18 +44,19 @@ class ShiftTemplateView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Use the mixin's filtering (already applied via get_queryset pattern)
         from django.db.models import Q
-        query = ShiftTemplate.objects.filter(company_id=company_id, is_deleted=False)
+        templates = ShiftTemplate.objects.filter(company_id=company_id, is_deleted=False)
         
         if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
-            query = query.filter(Q(branch_id=branch_id) | Q(branch_id__isnull=True))
+            templates = templates.filter(Q(branch_id=branch_id) | Q(branch_id__isnull=True))
         
-        templates = query.order_by('name')
+        templates = self.search_queryset(templates)
+        templates = self.order_queryset(templates)
+        page = self.paginate_queryset(templates)
         
-        return Response([
+        data = [
             {
-                "id": str(t._id),  # Return UUID as string
+                "id": str(t._id),
                 "name": t.name,
                 "startTime": self._format_time(t.start_time),
                 "endTime": self._format_time(t.end_time),
@@ -62,8 +67,9 @@ class ShiftTemplateView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 "createdAt": t.created_at.isoformat() if t.created_at else None,
                 "updatedAt": t.updated_at.isoformat() if t.updated_at else None,
             }
-            for t in templates
-        ])
+            for t in page
+        ]
+        return self.get_paginated_response(data)
     
 
     def post(self, request):

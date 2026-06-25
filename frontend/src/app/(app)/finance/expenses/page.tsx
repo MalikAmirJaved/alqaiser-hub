@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
 import { useExpenses, useDeleteExpense, expenseCategoryLabels, expenseCategoryOptions } from "@/hooks/finance/useExpenses";
@@ -11,6 +11,8 @@ import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
 import { Trash2, Send } from "lucide-react";
 import ExpenseFormModal from "@/components/finance/expenses/ExpenseFormModal";
+import ExpensePaymentModal from "@/components/finance/expenses/ExpensePaymentModal";
+import { usePagination } from "@/hooks/usePagination";
 
 export default function ExpensesPage() {
     const formatCurrency = useFormatCurrency();
@@ -19,16 +21,19 @@ export default function ExpensesPage() {
   const [editingExpense, setEditingExpense] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [payModalOpen, setPayModalOpen] = useState(false);
+  const [expenseToPay, setExpenseToPay] = useState<any>(null);
+  const pagination = usePagination();
+
+  const filtersWithPage = useMemo(() => ({
+    page: pagination.page,
+    ...(filters.search ? { search: filters.search } : {}),
+    ...(filters.category ? { category: filters.category } : {}),
+    ...(filters.paid !== undefined ? { paid: filters.paid === "true" } : {}),
+  }), [filters, pagination.page]);
+
   const paySupplierBill = usePaySupplierBill();
-  const { data: expenses, isLoading } = useExpenses(
-    Object.keys(filters).length > 0
-      ? {
-          search: filters.search || undefined,
-          category: filters.category || undefined,
-          paid: filters.paid ? filters.paid === "true" : undefined,
-        }
-      : undefined
-  );
+  const { data: expenses, isLoading, totalCount } = useExpenses(filtersWithPage);
   const deleteExpense = useDeleteExpense();
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
@@ -71,11 +76,9 @@ export default function ExpensesPage() {
 
   // Payment should only happen for expenses WITHOUT a supplier bill
   const handleRecordPayment = (expense: any) => {
-    if (!expense.supplier_bill_id) {
-      // For manual expenses, you may still want direct payment (if you have that endpoint)
-      // For now, we use the supplier bill payment endpoint, but for manual expenses there is no bill.
-      // Alternative: create a direct expense payment endpoint (not implemented)
-      console.warn("Manual expense payment not implemented via this button");
+    if (!expense.supplier_bill_id && !expense.paid) {
+      setExpenseToPay(expense);
+      setPayModalOpen(true);
     }
   };
 
@@ -205,6 +208,9 @@ export default function ExpensesPage() {
         description="Record and track company expenses"
         data={expenses || []}
         isLoading={isLoading}
+        totalCount={totalCount}
+        currentPage={pagination.page}
+        onPageChange={pagination.setPage}
         columns={columns}
         kpis={computeKPIs}
         getRowId={(expense) => expense.id}
@@ -217,7 +223,9 @@ export default function ExpensesPage() {
         actions={{
           onEdit: handleEdit,
           onDelete: handleDelete,
-          // No "Post" action for expenses – payment is only via supplier bills
+          onPost: handleRecordPayment,
+          canPost: (expense: any) => !expense.supplier_bill_id && !expense.paid,
+          postLabel: "Pay",
         }}
         onRowClick={handleRowClick}
         exportEnabled={permissions.export}
@@ -226,7 +234,7 @@ export default function ExpensesPage() {
           <FilterBar
             fields={filterFields}
             filters={filters}
-            onChange={setFilters}
+            onChange={(f) => { setFilters(f); pagination.resetPage(); }}
           />
         }
         batchActions={
@@ -256,6 +264,18 @@ export default function ExpensesPage() {
         }}
         initialData={editingExpense}
       />
+      {expenseToPay && (
+        <ExpensePaymentModal
+          open={payModalOpen}
+          onClose={() => {
+            setPayModalOpen(false);
+            setExpenseToPay(null);
+          }}
+          expenseId={expenseToPay.id}
+          expenseNumber={expenseToPay.expense_number}
+          amount={expenseToPay.amount}
+        />
+      )}
     </>
   );
 }

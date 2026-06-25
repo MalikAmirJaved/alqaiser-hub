@@ -1,15 +1,17 @@
 // components/finance/CustomerInvoiceFormModal.tsx
 import { useEffect, useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
-import { X, Plus, Trash2, Search, RotateCw } from "lucide-react";import { useQueryClient } from "@tanstack/react-query";
+import { X, Plus, Trash2, Search, RotateCw } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreateCustomerInvoice,
   useUpdateCustomerInvoice,
   type CustomerInvoice,
 } from "@/hooks/finance/useCustomerInvoices";
 import { useCreateSalesInvoice, useUpdateSalesInvoice } from "@/hooks/sales/useSalesInvoices";
-import { useCustomers } from "@/hooks/useCustomers";
-import { useAllVariantsSimple } from "@/hooks/useAllVariants";
+import { useServerSearch } from "@/hooks/useServerSearch";
+import { useApi } from "@/hooks/useApi";
+import type { VariantDetail } from "@/hooks/useAllVariants";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useAutoCode } from "@/hooks/useAutoCode";
@@ -51,13 +53,29 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
   const formatCurrency = useFormatCurrency();
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [newCustomerInfo, setNewCustomerInfo] = useState<any>(null);
-  const { data: customers = [], refetch: refetchCustomers } = useCustomers("");
-  const { data: variants = [] } = useAllVariantsSimple({ active_only: true });
+  const [customerDisplayLabel, setCustomerDisplayLabel] = useState("");
+  const [variantDisplayLabels, setVariantDisplayLabels] = useState<Record<number, string>>({});
+
+  const fetchCustomers = useServerSearch("/api/inventory/customers/", {
+    transformOption: (c: any) => ({
+      value: c.id,
+      label: `${c.name} (${c.customer_code || ""})`,
+    }),
+  });
+
+  const fetchVariants = useServerSearch("/api/inventory/variants/", {
+    extraParams: { active_only: "true" },
+    transformOption: (v: any) => ({
+      value: v.id,
+      label: `${v.product_name} (${v.sku}) — Stock: ${v.total_stock}`,
+    }),
+  });
   const createInvoice = useCreateCustomerInvoice();
   const updateInvoice = useUpdateCustomerInvoice();
   const createSalesInvoice = useCreateSalesInvoice();
   const updateSalesInvoice = useUpdateSalesInvoice();
   const queryClient = useQueryClient();
+  const api = useApi();
   const { generateCode, validateCode } = useAutoCode("customer_invoice");
 
   const { register, control, handleSubmit, reset, setValue, watch } = useForm<CustomerInvoiceFormData>({
@@ -118,6 +136,14 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
           variant_sku: line.variant_sku,
         }))
       );
+      setCustomerDisplayLabel((initialData as any).customer_name || "");
+      const labels: Record<number, string> = {};
+      (initialData.lines || []).forEach((line, idx) => {
+        if (line.variant_name || line.variant_sku) {
+          labels[idx] = line.variant_name || line.variant_sku || "";
+        }
+      });
+      setVariantDisplayLabels(labels);
       setNewCustomerInfo(null);
     } else if (defaultValues) {
       if (defaultValues.invoice_number !== undefined) setValue("invoice_number", defaultValues.invoice_number);
@@ -127,6 +153,14 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
       if (defaultValues.amount !== undefined) setValue("amount", defaultValues.amount);
       if (defaultValues.notes !== undefined) setValue("notes", defaultValues.notes);
       if (defaultValues.lines !== undefined) setValue("lines", defaultValues.lines as any);
+      setCustomerDisplayLabel((defaultValues as any).customer_name || "");
+      const labels: Record<number, string> = {};
+      ((defaultValues as any).lines || []).forEach((line: any, idx: number) => {
+        if (line.variant_name || line.variant_sku) {
+          labels[idx] = line.variant_name || line.variant_sku || "";
+        }
+      });
+      setVariantDisplayLabels(labels);
       setNewCustomerInfo(null);
     } else {
       reset({
@@ -138,13 +172,14 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
         notes: "",
         lines: [],
       });
+      setCustomerDisplayLabel("");
+      setVariantDisplayLabels({});
       setNewCustomerInfo(null);
       generateCode().then(code => setValue("invoice_number", code)).catch(() => {});
     }
   }, [initialData, defaultValues, setValue, reset, open]);
 
   const handleCustomerCreated = async (customerId: string, customerName: string, customerData: any) => {
-    await refetchCustomers();
     setNewCustomerInfo(customerData);
     setValue("customer", customerId);
   };
@@ -153,22 +188,25 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
     append({ variant: "", quantity: 1, unit_price: 0, discount_amount: 0, tax_rate: 0 });
   };
 
-  const updateLine = (index: number, field: keyof InvoiceLine, value: any) => {
+  const updateLine = async (index: number, field: keyof InvoiceLine, value: any) => {
     const currentLines = watch("lines");
     const newLines = [...currentLines];
     if (field === "variant") {
-      const variant = variants.find((v) => v.id === value);
-      if (variant) {
-        newLines[index] = {
-          ...newLines[index],
-          variant: value,
-          variant_name: variant.product_name,
-          variant_sku: variant.sku,
-          unit_price: variant.selling_price,
-          max_quantity: variant.total_stock,
-        };
-      } else {
-        newLines[index] = { ...newLines[index], variant: value };
+      newLines[index] = { ...newLines[index], variant: value };
+      if (value) {
+        try {
+          const variant = await api<VariantDetail>(`/api/inventory/variants/${value}/`);
+          if (variant) {
+            newLines[index] = {
+              ...newLines[index],
+              variant: value,
+              variant_name: variant.product_name,
+              variant_sku: variant.sku,
+              unit_price: variant.selling_price,
+              max_quantity: variant.total_stock,
+            };
+          }
+        } catch {}
       }
     } else {
       newLines[index] = { ...newLines[index], [field]: value };
@@ -230,11 +268,6 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
     onClose();
   };
 
-  // Build set of already-selected variant IDs (excluding current row)
-  const selectedVariantIds = new Set(
-    (watchedLines || []).filter((l) => l.variant).map((l) => l.variant),
-  );
-
   if (!open) return null;
 
   return (
@@ -279,12 +312,10 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
                     <SearchableSelect
                       value={watch("customer") || ""}
                       onChange={(val) => setValue("customer", val)}
-                      options={customers.map((cust) => ({
-                        value: cust.id,
-                        label: `${cust.name} (${cust.customer_code})`,
-                      }))}
-                      placeholder="Select customer"
+                      fetchOptions={fetchCustomers}
+                      placeholder="Search customers..."
                       required={!newCustomerInfo}
+                      displayLabel={customerDisplayLabel}
                     />
                   </div>
                   <button
@@ -378,10 +409,9 @@ export default function CustomerInvoiceFormModal({ open, onClose, initialData, d
                               <SearchableSelect
                                 value={currentLine.variant || ""}
                                 onChange={(val) => updateLine(idx, "variant", val)}
-                                options={variants
-                                  .filter((v) => !selectedVariantIds.has(v.id) || v.id === currentLine.variant)
-                                  .map((v) => ({ value: v.id, label: `${v.product_name} (${v.sku}) — Stock: ${v.total_stock}` }))}
-                                placeholder="Select variant"
+                                fetchOptions={fetchVariants}
+                                placeholder="Search variants..."
+                                displayLabel={variantDisplayLabels[idx] || ""}
                               />
                             </td>
                             <td className="px-3 py-2">

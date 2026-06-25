@@ -82,16 +82,22 @@ class ShiftResolutionService:
         overrides_by_employee = defaultdict(dict)
         for override in overrides:
             overrides_by_employee[override.employee_id][override.date] = override
-        
-        date_range_by_employee = defaultdict(list)
+
+        # Build date-indexed lookup for date ranges (O(1) per date check instead of O(A))
+        date_range_lookup = defaultdict(dict)
         for dra in date_range_assignments:
-            date_range_by_employee[dra.employee_id].append(dra)
-        
+            d = max(dra.start_date, start_date)
+            e = min(dra.end_date, end_date)
+            while d <= e:
+                if d not in date_range_lookup[dra.employee_id]:
+                    date_range_lookup[dra.employee_id][d] = dra
+                d += timedelta(days=1)
+
         default_by_employee = {}
         for default in default_shifts:
             if default.employee_id not in default_by_employee:
                 default_by_employee[default.employee_id] = default
-        
+
         # Resolve for each employee and date
         for employee in employees:
             employee_dict = {}
@@ -105,14 +111,10 @@ class ShiftResolutionService:
                         'source_type': 'OVERRIDE'
                     }
                     continue
-                
-                # Priority 2: Date range assignment
-                dra_match = None
-                for dra in date_range_by_employee[employee.id]:
-                    if dra.start_date <= date_check <= dra.end_date:
-                        dra_match = dra
-                        break
-                
+
+                # Priority 2: Date range assignment (O(1) lookup)
+                dra_match = date_range_lookup.get(employee.id, {}).get(date_check)
+
                 if dra_match:
                     employee_dict[date_check.isoformat()] = {
                         'template': dra_match.shift_template,
@@ -120,7 +122,7 @@ class ShiftResolutionService:
                         'source_type': 'DATE_RANGE'
                     }
                     continue
-                
+
                 # Priority 3: Default shift
                 default = default_by_employee.get(employee.id)
                 if default and default.effective_from <= date_check:
@@ -130,7 +132,7 @@ class ShiftResolutionService:
                         'source_type': 'DEFAULT'
                     }
                     continue
-                
+
                 # Priority 4: Employee default_shift field
                 if employee.default_shift:
                     employee_dict[date_check.isoformat()] = {
@@ -139,17 +141,66 @@ class ShiftResolutionService:
                         'source_type': 'DEFAULT'
                     }
                     continue
-                
+
                 # No shift assigned
                 employee_dict[date_check.isoformat()] = {
                     'template': None,
                     'is_override': False,
                     'source_type': 'NONE'
                 }
-            
+
             result[employee.id] = employee_dict
-        
+
         return result
+
+    @classmethod
+    def get_resolved_shifts_for_day(cls, employee_ids, date_obj):
+        """Optimized bulk resolution for a single day — used by day-detail popup"""
+        employees = Employee.objects.filter(id__in=employee_ids).select_related('default_shift')
+
+        overrides = ShiftOverride.objects.filter(
+            employee_id__in=employee_ids, date=date_obj
+        ).select_related('shift_template')
+
+        date_range_assignments = ShiftDateRangeAssignment.objects.filter(
+            employee_id__in=employee_ids,
+            start_date__lte=date_obj, end_date__gte=date_obj, is_active=True
+        ).select_related('shift_template')
+
+        default_shifts = EmployeeDefaultShift.objects.filter(
+            employee_id__in=employee_ids,
+            effective_from__lte=date_obj
+        ).filter(
+            Q(effective_to__isnull=True) | Q(effective_to__gte=date_obj)
+        ).select_related('template')
+
+        override_map = {o.employee_id: o for o in overrides}
+        range_map = {}
+        for dra in date_range_assignments:
+            if dra.employee_id not in range_map:
+                range_map[dra.employee_id] = dra
+        default_map = {}
+        for ds in default_shifts:
+            if ds.employee_id not in default_map:
+                default_map[ds.employee_id] = ds
+
+        results = []
+        for emp in employees:
+            if emp.id in override_map:
+                o = override_map[emp.id]
+                results.append({'employee': emp, 'template': o.shift_template, 'source_type': 'OVERRIDE'})
+            elif emp.id in range_map:
+                dra = range_map[emp.id]
+                results.append({'employee': emp, 'template': dra.shift_template, 'source_type': 'DATE_RANGE'})
+            elif emp.id in default_map:
+                ds = default_map[emp.id]
+                results.append({'employee': emp, 'template': ds.template, 'source_type': 'DEFAULT'})
+            elif emp.default_shift:
+                results.append({'employee': emp, 'template': emp.default_shift, 'source_type': 'DEFAULT'})
+            else:
+                results.append({'employee': emp, 'template': None, 'source_type': 'NONE'})
+
+        return results
     
     @classmethod
     def _resolve_employee_shift(cls, employee_id: int, date_obj: date) -> Dict:

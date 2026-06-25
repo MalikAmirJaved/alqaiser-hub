@@ -284,20 +284,27 @@ export function useDraftSalesOrders() {
 }
 
 
-export function useSalesOrders(filters?: { status?: string; customer?: string }) {
+export function useSalesOrders(filters?: {
+  status?: string;
+  customer?: string;
+  search?: string;
+  page?: number;
+  page_size?: number;
+}) {
   const api = useApi();
   const params = new URLSearchParams();
   if (filters?.status) params.append("status", filters.status);
   if (filters?.customer) params.append("customer", filters.customer);
+  if (filters?.search) params.append("search", filters.search);
+  if (filters?.page) params.append("page", String(filters.page));
+  if (filters?.page_size) params.append("page_size", String(filters.page_size));
   const url = `/api/inventory/sales-orders/${params.toString() ? `?${params}` : ""}`;
-  return useQuery<
-  { results: SalesOrderResponse[] }, // queryFn return type
-  Error,
-  SalesOrderResponse[]               // final selected type
->({
+  return useQuery<{ data: SalesOrderResponse[]; totalCount: number }>({
     queryKey: ["inventory_sales_order", filters],
-    queryFn: () => api(url),
-    select: (data) => data.results,
+    queryFn: async () => {
+      const response = await api<{ count: number; results: SalesOrderResponse[] }>(url);
+      return { data: response.results, totalCount: response.count };
+    },
     staleTime: 30_000,
   });
 }

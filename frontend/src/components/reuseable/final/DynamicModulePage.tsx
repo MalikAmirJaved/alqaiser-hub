@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useState, useMemo, useEffect } from "react";
 import { PageHeader, Card, TableToolbar, ToolbarButton } from "@/components/finance/ui";
 import { Plus, Download, Pencil, Trash2, Send } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 
@@ -64,6 +65,9 @@ interface DynamicModulePageProps<T> {
   batchActions?: ReactNode;
   onRowClick?: (item: T) => void;
   filterBar?: ReactNode;
+  totalCount?: number;
+  currentPage?: number;
+  onPageChange?: (page: number) => void;
 }
 
 export function DynamicModulePage<T>({
@@ -86,6 +90,9 @@ export function DynamicModulePage<T>({
   batchActions,
   onRowClick,
   filterBar,
+  totalCount,
+  currentPage: serverPage,
+  onPageChange,
 }: DynamicModulePageProps<T>) {
   const formatCurrency = useFormatCurrency();
   const { confirm, Modal: ConfirmModal } = useConfirmationModal();
@@ -93,8 +100,12 @@ export function DynamicModulePage<T>({
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [page, setPage] = useState(1);
+  const [localPage, setLocalPage] = useState(1);
   const pageSize = 20;
+
+  const isServerPaginated = totalCount !== undefined && serverPage !== undefined && onPageChange !== undefined;
+  const page = isServerPaginated ? serverPage : localPage;
+  const setPage = isServerPaginated ? onPageChange : setLocalPage;
 
   const computedKpis = typeof kpis === "function" ? kpis(data) : kpis;
 
@@ -108,7 +119,7 @@ export function DynamicModulePage<T>({
   };
 
   // Reset page when data or sort key changes
-  useEffect(() => { setPage(1); }, [data, sortKey]);
+  useEffect(() => { if (!isServerPaginated) setLocalPage(1); }, [data, sortKey, isServerPaginated]);
 
   const sortedData = useMemo(() => {
     if (!sortKey) return [...data];
@@ -142,9 +153,10 @@ export function DynamicModulePage<T>({
   }, [data, sortKey, sortDir, columns]);
 
   // Paginate
-  const totalPages = Math.max(1, Math.ceil(sortedData.length / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const paginatedData = sortedData.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const effectiveTotal = isServerPaginated ? (totalCount ?? 0) : sortedData.length;
+  const totalPages = Math.max(1, Math.ceil(effectiveTotal / pageSize));
+  const safePage = isServerPaginated ? Math.min(page, totalPages) : Math.min(page, totalPages);
+  const paginatedData = isServerPaginated ? sortedData : sortedData.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const handleSelectRow = (id: string, checked: boolean) => {
     const newSelected = new Set(selectedIds);
@@ -207,7 +219,15 @@ export function DynamicModulePage<T>({
       <div className="pt-6 space-y-6">
         {computedKpis && computedKpis.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {computedKpis.map((k) => {
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <Card key={i} className="px-5 py-4">
+                  <Skeleton className="h-3 w-20 mb-2" />
+                  <Skeleton className="h-7 w-16" />
+                  <Skeleton className="h-3 w-24 mt-2" />
+                </Card>
+              ))
+            ) : computedKpis.map((k) => {
               const toneColor =
                 k.tone === "success"
                   ? "text-success"
@@ -285,11 +305,21 @@ export function DynamicModulePage<T>({
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr>
-                    <td colSpan={columns.length + 2} className="px-4 py-8 text-center text-muted-foreground">
-                      Loading...
-                    </td>
-                  </tr>
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i} className="border-b border-border/60">
+                      {showCheckboxColumn && (
+                        <td className="px-4 py-2.5"><Skeleton className="h-4 w-4 rounded" /></td>
+                      )}
+                      {columns.map((col) => (
+                        <td key={col.key} className="px-4 py-2.5">
+                          <Skeleton className={`h-4 ${col.align === "right" ? "ml-auto w-16" : "w-24"}`} />
+                        </td>
+                      ))}
+                      {showActionsColumn && (
+                        <td className="px-4 py-2.5 text-right"><Skeleton className="h-4 w-8 ml-auto" /></td>
+                      )}
+                    </tr>
+                  ))
                 ) : paginatedData.length === 0 ? (
                   <tr>
                     <td colSpan={columns.length + 2} className="px-4 py-8 text-center text-muted-foreground">
@@ -373,24 +403,27 @@ export function DynamicModulePage<T>({
               </tbody>
             </table>
           </div>
-          {sortedData.length > pageSize && (
+          {effectiveTotal > pageSize && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-border text-xs text-muted-foreground">
               <span>
-                Showing {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, sortedData.length)} of {sortedData.length} records
+                Showing {isServerPaginated
+                  ? `${(safePage - 1) * pageSize + 1}–${Math.min(safePage * pageSize, effectiveTotal)} of ${effectiveTotal}`
+                  : `${(safePage - 1) * pageSize + 1}–${Math.min(safePage * pageSize, sortedData.length)} of ${sortedData.length}`
+                } records
               </span>
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground">
                   Page {safePage} of {totalPages}
                 </span>
                 <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  onClick={() => setPage(safePage - 1)}
                   disabled={safePage === 1}
                   className="px-2.5 py-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   Previous
                 </button>
                 <button
-                  onClick={() => setPage((p) => p + 1)}
+                  onClick={() => setPage(safePage + 1)}
                   disabled={safePage >= totalPages}
                   className="px-2.5 py-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >

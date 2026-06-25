@@ -3,6 +3,38 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "@/hooks/useApi";
 
+export interface MonthSummaryTemplate {
+  template_id: string;
+  template_name: string;
+  start_time: string;
+  end_time: string;
+  break_minutes: number;
+  employee_count: number;
+}
+
+export interface DayDetailEmployee {
+  employee_id: string;
+  employee_name: string;
+  department_name: string | null;
+  source_type: string;
+}
+
+export interface DayDetailShift {
+  template_id: string;
+  template_name: string;
+  start_time: string;
+  end_time: string;
+  break_minutes: number;
+  employee_count: number;
+  employees: DayDetailEmployee[];
+}
+
+export interface DayDetailResponse {
+  date: string;
+  shifts: DayDetailShift[];
+  total_employees: number;
+}
+
 export interface ResolvedShift {
   employee_id: string;
   employee_name: string;
@@ -93,8 +125,9 @@ export interface ResolvedShiftsResponse {
 }
 
 // Get resolved shifts for employees
+// When employeeIds is empty, returns shifts for ALL employees (server-side)
 export function useResolvedShifts(
-  employeeIds: string[], 
+  employeeIds: string[] = [], 
   date?: string, 
   startDate?: string, 
   endDate?: string
@@ -112,7 +145,7 @@ export function useResolvedShifts(
   return useQuery<ResolvedShiftsResponse>({
     queryKey,
     queryFn: () => api(`/api/hr/shifts/resolve/?${params.toString()}`),
-    enabled: employeeIds.length > 0 && !!(date || (startDate && endDate)),
+    enabled: !!(date || (startDate && endDate)),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
@@ -160,6 +193,8 @@ export function useCreateShiftOverride() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shiftOverrides'] });
       queryClient.invalidateQueries({ queryKey: ['resolvedShifts'] });
+      queryClient.invalidateQueries({ queryKey: ['shiftMonthSummary'] });
+      queryClient.invalidateQueries({ queryKey: ['shiftDayDetail'] });
       queryClient.invalidateQueries({ queryKey: ['shiftStatistics'] });
     },
   });
@@ -179,6 +214,8 @@ export function useUpdateShiftOverride() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shiftOverrides'] });
       queryClient.invalidateQueries({ queryKey: ['resolvedShifts'] });
+      queryClient.invalidateQueries({ queryKey: ['shiftMonthSummary'] });
+      queryClient.invalidateQueries({ queryKey: ['shiftDayDetail'] });
     },
   });
 }
@@ -197,6 +234,8 @@ export function useDeleteShiftOverride() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shiftOverrides'] });
       queryClient.invalidateQueries({ queryKey: ['resolvedShifts'] });
+      queryClient.invalidateQueries({ queryKey: ['shiftMonthSummary'] });
+      queryClient.invalidateQueries({ queryKey: ['shiftDayDetail'] });
       queryClient.invalidateQueries({ queryKey: ['shiftStatistics'] });
       queryClient.invalidateQueries({ queryKey: ['shiftHistory'] });
     },
@@ -217,6 +256,8 @@ export function useCreateDateRangeAssignment() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shiftDateRange'] });
       queryClient.invalidateQueries({ queryKey: ['resolvedShifts'] });
+      queryClient.invalidateQueries({ queryKey: ['shiftMonthSummary'] });
+      queryClient.invalidateQueries({ queryKey: ['shiftDayDetail'] });
       queryClient.invalidateQueries({ queryKey: ['shiftStatistics'] });
     },
   });
@@ -236,6 +277,8 @@ export function useUpdateDateRangeAssignment() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shiftDateRange'] });
       queryClient.invalidateQueries({ queryKey: ['resolvedShifts'] });
+      queryClient.invalidateQueries({ queryKey: ['shiftMonthSummary'] });
+      queryClient.invalidateQueries({ queryKey: ['shiftDayDetail'] });
     },
   });
 }
@@ -254,6 +297,8 @@ export function useDeleteDateRangeAssignment() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shiftDateRange'] });
       queryClient.invalidateQueries({ queryKey: ['resolvedShifts'] });
+      queryClient.invalidateQueries({ queryKey: ['shiftMonthSummary'] });
+      queryClient.invalidateQueries({ queryKey: ['shiftDayDetail'] });
       queryClient.invalidateQueries({ queryKey: ['shiftStatistics'] });
     },
   });
@@ -281,6 +326,8 @@ export function useBulkShiftAssignment() {
       queryClient.invalidateQueries({ queryKey: ['shiftOverrides'] });
       queryClient.invalidateQueries({ queryKey: ['shiftDateRange'] });
       queryClient.invalidateQueries({ queryKey: ['resolvedShifts'] });
+      queryClient.invalidateQueries({ queryKey: ['shiftMonthSummary'] });
+      queryClient.invalidateQueries({ queryKey: ['shiftDayDetail'] });
       queryClient.invalidateQueries({ queryKey: ['shiftStatistics'] });
       queryClient.invalidateQueries({ queryKey: ['shiftHistory'] });
     },
@@ -315,6 +362,38 @@ export function useShiftStatistics(date?: string) {
   });
 }
 
+// Get lightweight month summary for calendar view (aggregated, no per-employee data)
+export function useShiftMonthSummary(startDate?: string, endDate?: string) {
+  const api = useApi();
+
+  const params = new URLSearchParams();
+  if (startDate) params.append('start_date', startDate);
+  if (endDate) params.append('end_date', endDate);
+
+  const queryKey = ['shiftMonthSummary', { startDate, endDate }];
+
+  return useQuery<Record<string, MonthSummaryTemplate[]>>({
+    queryKey,
+    queryFn: () => api(`/api/hr/shifts/month-summary/?${params.toString()}`),
+    enabled: !!(startDate && endDate),
+    staleTime: 30 * 1000,
+    gcTime: 2 * 60 * 1000,
+  });
+}
+
+// Get full day detail for the "See more" popup (fetched lazily)
+export function useShiftDayDetail(date?: string) {
+  const api = useApi();
+
+  return useQuery<DayDetailResponse>({
+    queryKey: ['shiftDayDetail', date],
+    queryFn: () => api(`/api/hr/shifts/day-detail/?date=${date}`),
+    enabled: !!date,
+    staleTime: 30 * 1000,
+    gcTime: 2 * 60 * 1000,
+  });
+}
+
 // Generate shift schedule (for performance optimization)
 export function useGenerateShiftSchedule() {
   const api = useApi();
@@ -328,6 +407,8 @@ export function useGenerateShiftSchedule() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['resolvedShifts'] });
+      queryClient.invalidateQueries({ queryKey: ['shiftMonthSummary'] });
+      queryClient.invalidateQueries({ queryKey: ['shiftDayDetail'] });
     },
   });
 }

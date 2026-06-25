@@ -1,7 +1,7 @@
 // src/app/inventory/stock/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { TableView, Column } from "@/components/reuseable/TableGridView";
 import { Button } from "@/components/ui/button";
@@ -16,12 +16,15 @@ import { StockAdjustModal } from "@/components/inventory/stock/StockAdjustModal"
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import PageHeader from "@/components/PageHeader";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { usePagination } from "@/hooks/usePagination";
+import debounce from "lodash/debounce";
 
 export default function StockManagementPage() {
   const router = useRouter();
   const permissions = useFeaturePermissions("INVENTORY", "stock");
-  const [page, setPage] = useState(1);
+  const pagination = usePagination();
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("all");
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState<{
@@ -32,21 +35,40 @@ export default function StockManagementPage() {
   } | null>(null);
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
 
+  // Debounced search handler
+  const debouncedSetSearch = useCallback(
+    debounce((value: string) => setDebouncedSearch(value), 300),
+    []
+  );
+
+  useEffect(() => {
+    return () => { debouncedSetSearch.cancel(); };
+  }, [debouncedSetSearch]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    pagination.resetPage();
+  }, [debouncedSearch, selectedWarehouseId, lowStockOnly]);
+
   // Fetch warehouses for filter dropdown
   const { data: warehouses } = useWarehouses({ is_active: true });
 
   // Fetch stock data with filters
   const { data, isLoading } = useCurrentStock({
-    page,
+    page: pagination.page,
     page_size: 20,
     warehouse_id: selectedWarehouseId !== "all" ? selectedWarehouseId : undefined,
     low_stock: lowStockOnly,
+    search: debouncedSearch || undefined,
   });
 
-  // Optional: compute total stock value / low stock count from data
-  const totalOnHand = data?.results.reduce((sum, item) => sum + item.quantity_on_hand, 0) || 0;
-  const totalReserved = data?.results.reduce((sum, item) => sum + item.quantity_reserved, 0) || 0;
-  const lowStockCount = data?.results.filter((item) => item.quantity_available <= 5).length || 0;
+  const stockResults = data?.results || [];
+  const totalCount = data?.count || 0;
+
+  // Compute totals from current page for stats cards
+  const totalOnHand = stockResults.reduce((sum, item) => sum + item.quantity_on_hand, 0);
+  const totalReserved = stockResults.reduce((sum, item) => sum + item.quantity_reserved, 0);
+  const lowStockCount = stockResults.filter((item) => item.quantity_available <= 5).length;
 
   const stats = [
     { id: "total_on_hand", label: "Total Units On Hand", value: totalOnHand },
@@ -134,7 +156,7 @@ export default function StockManagementPage() {
             id="search"
             placeholder="Type to filter..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => { setSearchTerm(e.target.value); debouncedSetSearch(e.target.value); }}
             className="h-9"
           />
         </div>
@@ -156,43 +178,26 @@ export default function StockManagementPage() {
         </div>
         <Button variant="outline" size="sm" onClick={() => {
           setSearchTerm("");
-          setSelectedWarehouseId("");
+          setDebouncedSearch("");
+          setSelectedWarehouseId("all");
           setLowStockOnly(false);
-          setPage(1);
+          pagination.resetPage();
         }} className="h-9">
           Clear filters
         </Button>
       </div>
 
-      {/* Stock Table */}
+      {/* Stock Table — with server-side pagination */}
       <TableView<StockItem>
         columns={columns}
-        data={data?.results || []}
+        data={stockResults}
         loading={isLoading}
         actions={actions}
         emptyMessage="No stock records found"
+        totalCount={totalCount}
+        currentPage={pagination.page}
+        onPageChange={pagination.setPage}
       />
-      {/* Pagination */}
-      {data && data.count > data.page_size && (
-        <div className="flex justify-between items-center pt-2">
-          <div className="text-sm text-muted-foreground">
-            Showing {data.results.length} of {data.count} items
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => p + 1)}
-              disabled={!data.results.length || data.results.length < data.page_size}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
 
       {/* Modals */}
       {selectedVariant && permissions.adjust && (

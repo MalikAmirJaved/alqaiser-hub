@@ -1,12 +1,13 @@
 // frontend/src/app/(app)/finance/bank-accounts/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { DynamicModulePage, type ModulePermissions, type Kpi } from "@/components/reuseable/final/DynamicModulePage";
 import { useBankAccounts, useDeleteBankAccount } from "@/hooks/finance/useBank";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import BankAccountFormModal from "@/components/finance/bank/BankAccountFormModal";
+import { usePagination } from "@/hooks/usePagination";
 
 const toNumber = (value: number | string | undefined): number => {
   if (value === undefined || value === null) return 0;
@@ -18,8 +19,11 @@ export default function BankAccountsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const pagination = usePagination();
 
-  const { data: accounts, isLoading } = useBankAccounts();
+  const filtersWithPage = useMemo(() => ({ page: pagination.page }), [pagination.page]);
+
+  const { data: accounts, isLoading, totalCount } = useBankAccounts(filtersWithPage);
   const deleteAccount = useDeleteBankAccount();
   const permissions = useFeaturePermissions("FINANCE", "bank_account");
 
@@ -89,6 +93,9 @@ export default function BankAccountsPage() {
         description="Manage company bank accounts with dual balance tracking (book vs cleared)"
         data={accounts || []}
         isLoading={isLoading}
+        totalCount={totalCount}
+        currentPage={pagination.page}
+        onPageChange={pagination.setPage}
         columns={columns}
         kpis={computeKPIs}
         getRowId={(a) => a.id}

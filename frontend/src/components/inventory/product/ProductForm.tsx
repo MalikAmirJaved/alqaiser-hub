@@ -61,6 +61,8 @@ interface ProductFormProps {
   isLoading: boolean;
   isEditing: boolean;
   onCancel?: () => void;
+  fetchCategories?: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
+  fetchBrands?: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
 }
 
 // ──────────────────────────────────────────
@@ -72,6 +74,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
   isLoading,
   isEditing,
   onCancel,
+  fetchCategories,
+  fetchBrands,
 }) => {
   const [step, setStep] = useState(0);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
@@ -261,6 +265,10 @@ const ProductForm: React.FC<ProductFormProps> = ({
             register={register}
             errors={errors}
             onNext={goNext}
+            fetchCategories={fetchCategories}
+            fetchBrands={fetchBrands}
+            displayCategoryLabel={isEditing && initialData?.category_name ? initialData.category_name : undefined}
+            displayBrandLabel={isEditing && initialData?.brand_name ? initialData.brand_name : undefined}
           />
         )}
 

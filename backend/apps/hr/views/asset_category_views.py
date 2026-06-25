@@ -10,18 +10,24 @@ from rest_framework import status
 import logging
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import FilterPaginationMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import AssetCategory, Asset
+from apps.hr.filters import AssetCategoryFilter
 
 logger = logging.getLogger(__name__)
 
 
-class AssetCategoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+class AssetCategoryView(CompanyBranchMixin, PermissionRequiredMixin, FilterPaginationMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'asset_kit'
     """CRUD for Asset Categories/Kits with UUID support"""
     permission_classes = [IsAuthenticated]
-    
+    filterset_class = AssetCategoryFilter
+    search_fields = ['name', 'description']
+    ordering_fields = ['name', 'created_at']
+    ordering = ['name']
+
     def get(self, request):
         """Get all asset categories for user's company"""
         company_id = request.user.company_id
@@ -33,26 +39,22 @@ class AssetCategoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        query = AssetCategory.objects.filter(
+        categories = AssetCategory.objects.filter(
             company_id=company_id,
             is_deleted=False
         ).prefetch_related('assets')
         
         if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
-            query = query.filter(
+            categories = categories.filter(
                 models.Q(branch_id=branch_id) | models.Q(branch_id__isnull=True)
             )
         
-        search = request.query_params.get('search')
-        if search:
-            query = query.filter(
-                models.Q(name__icontains=search) |
-                models.Q(description__icontains=search)
-            )
+        categories = self.filter_queryset(categories)
+        categories = self.search_queryset(categories)
+        categories = self.order_queryset(categories)
+        page = self.paginate_queryset(categories)
         
-        categories = query.order_by('name')
-        
-        return Response([
+        data = [
             {
                 "id": str(c._id),
                 "name": c.name,
@@ -73,8 +75,9 @@ class AssetCategoryView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 "createdAt": c.created_at.isoformat() if c.created_at else None,
                 "updatedAt": c.updated_at.isoformat() if c.updated_at else None,
             }
-            for c in categories
-        ])
+            for c in page
+        ]
+        return self.get_paginated_response(data)
     
 
     def post(self, request):

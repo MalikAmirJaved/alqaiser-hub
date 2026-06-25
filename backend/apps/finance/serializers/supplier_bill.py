@@ -7,6 +7,7 @@ class SupplierBillSerializer(serializers.ModelSerializer):
     paid_amount = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     payment_status = serializers.CharField(read_only=True)
     outstanding = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    supplier_name = serializers.CharField(source='supplier.name', read_only=True)
     
     # Foreign keys accept UUID
     supplier = serializers.SlugRelatedField(

@@ -5,7 +5,7 @@
 // Features: user list, role assignment, per-permission toggles, real-time WS
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Shield, Search, ChevronDown, ChevronRight, Check, X,
@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 
 import {
-  usePermissionUsers,
   useUserModules,
   useUserRoles,
   useUserOverrides,
@@ -31,6 +30,8 @@ import {
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useSearchParams } from "next/navigation";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import { useServerSearch } from "@/hooks/useServerSearch";
+import { useApi } from "@/hooks/useApi";
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const ACTION_COLORS: Record<string, string> = {
@@ -391,16 +392,94 @@ type Tab = "permissions" | "roles" | "overrides";
 
 export default function PermissionsPage() {
   const permissions = useFeaturePermissions("SETTINGS", "permissions");
-  const [search, setSearch] = useState("");
+  const api = useApi();
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("permissions");
   const [pendingChanges, setPendingChanges] = useState<Record<string, boolean>>({});
   const [wsOnline, setWsOnline] = useState(true);
   const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
-  const searchParams = useSearchParams(); 
-const urlUserId = searchParams.get("userId"); 
-  // Hooks
-  const { data: users = [], isLoading: usersLoading } = usePermissionUsers();
+  const searchParams = useSearchParams();  const urlUserId = searchParams.get("userId");
+
+  // Server-side infinite scrolling user search (for SearchableSelect)
+  const fetchUsers = useServerSearch("/api/organization/users/", {
+    transformOption: (u: any) => ({
+      value: String(u.id),
+      label: `${u.first_name || ""} ${u.last_name || ""} (${u.username})`,
+    }),
+  });
+
+  // ── Infinite-scroll user list for sidebar ──
+  const USERS_PAGE_SIZE = 20;
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [usersTotalCount, setUsersTotalCount] = useState(0);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [hasMoreUsers, setHasMoreUsers] = useState(true);
+  const usersPageRef = useRef(1);
+  const loadingUsersRef = useRef(false);
+  const allUsersRef = useRef<any[]>([]);
+  const userListRef = useRef<HTMLDivElement>(null);
+  const urlHandledRef = useRef(false);
+
+  // Keep ref in sync with allUsers (for use inside callbacks without stale closure)
+  allUsersRef.current = allUsers;
+
+  const loadUserPage = useCallback(async (page: number, append: boolean) => {
+    if (loadingUsersRef.current) return;
+    loadingUsersRef.current = true;
+    setUsersLoading(true);
+    try {
+      const res = await api<any>(`/api/organization/users/?page=${page}&page_size=${USERS_PAGE_SIZE}`);
+      const items = res?.results ?? [];
+      setAllUsers(prev => append ? [...prev, ...items] : items);
+      setUsersTotalCount(res?.count ?? items.length);
+      setHasMoreUsers(items.length >= USERS_PAGE_SIZE);
+      // Handle URL userId selection on initial load
+      if (!append && urlUserId && !urlHandledRef.current) {
+        urlHandledRef.current = true;
+        const id = parseInt(urlUserId, 10);
+        if (items.find((u: any) => u.id === id)) {
+          setSelectedUserId(id);
+        } else {
+          // URL user not on first page — fetch individually
+          fetchAndAddUserById(id);
+        }
+      }
+    } catch {
+      setHasMoreUsers(false);
+    } finally {
+      setUsersLoading(false);
+      loadingUsersRef.current = false;
+    }
+  }, [api, urlUserId]);
+
+  // Fetch a single user by ID and add to the sidebar list
+  const fetchAndAddUserById = useCallback(async (userId: number) => {
+    if (allUsersRef.current.find((u: any) => u.id === userId)) return;
+    try {
+      const user = await api<any>(`/api/organization/users/${userId}/`);
+      if (user && user.id) {
+        setAllUsers(prev => [user, ...prev]);
+        setSelectedUserId(userId);
+      }
+    } catch {}
+  }, [api]);
+
+  // Load first page on mount
+  useEffect(() => {
+    usersPageRef.current = 1;
+    loadUserPage(1, false);
+  }, [loadUserPage]);
+
+  // Scroll handler to load more pages
+  const handleUserListScroll = useCallback(() => {
+    const el = userListRef.current;
+    if (!el || !hasMoreUsers || loadingUsersRef.current) return;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 150) {
+      const nextPage = usersPageRef.current + 1;
+      usersPageRef.current = nextPage;
+      loadUserPage(nextPage, true);
+    }
+  }, [hasMoreUsers, loadUserPage]);
   const { data: modules = [], isLoading: modulesLoading, refetch: refetchModules } = useUserModules(selectedUserId);
   const { data: overrides = [] } = useUserOverrides(selectedUserId);
   const bulkSet = useBulkSetPermissions();
@@ -408,31 +487,8 @@ const urlUserId = searchParams.get("userId");
   
   // Real-time WebSocket
   usePermissionSocket(selectedUserId);
-  const selectedUser = users.find(u => u.id === selectedUserId);
+  const selectedUser = allUsers.find((u: any) => u.id === selectedUserId);
   const hasPendingChanges = Object.keys(pendingChanges).length > 0;
-
-  const filteredUsers = useMemo(() =>
-    users.filter(u => {
-      const q = search.toLowerCase();
-      return (
-        u.username.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q) ||
-        `${u.first_name} ${u.last_name}`.toLowerCase().includes(q) ||
-        (u.department || "").toLowerCase().includes(q)
-      );
-    }),
-    [users, search]
-  );
-    useEffect(() => {
-    if (urlUserId && users.length > 0) {
-      const id = parseInt(urlUserId, 10);
-      if (users.find(u => u.id === id)) {
-        setSelectedUserId(id);
-        // Optionally remove the query param from URL to avoid re-selecting on refresh
-        // window.history.replaceState({}, '', '/settings/permissions');
-      }
-    }
-  }, [urlUserId, users]);
   // Reset pending when user changes
   useEffect(() => {
     setPendingChanges({});
@@ -503,41 +559,59 @@ const urlUserId = searchParams.get("userId");
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* ── Left Panel: User List ─────────────────────────────────────────── */}
+        {/* ── Left Panel: User List (server-side search with infinite scroll) ── */}
         <div className="w-72 flex-shrink-0 border-r border-border flex flex-col overflow-hidden">
           <div className="py-3 pr-3 border-b border-border">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search users…"
-                className="w-full pl-8 pr-3 h-8 rounded-lg bg-muted/40 text-sm outline-none focus:ring-2 focus:ring-ring border border-border"
-              />
-            </div>
+            <SearchableSelect
+              value={selectedUserId ? String(selectedUserId) : ""}
+              onChange={(val) => {
+                if (val) {
+                  const id = Number(val);
+                  if (allUsersRef.current.find((u: any) => u.id === id)) {
+                    setSelectedUserId(id);
+                  } else {
+                    fetchAndAddUserById(id);
+                  }
+                }
+              }}
+              fetchOptions={fetchUsers}
+              placeholder="Search users…"
+              pageSize={20}
+            />
           </div>
 
-          <div className="flex-1 overflow-y-auto py-2 space-y-0.5">
-            {usersLoading ? (
+          <div
+            ref={userListRef}
+            onScroll={handleUserListScroll}
+            className="flex-1 overflow-y-auto py-2 space-y-0.5"
+          >
+            {allUsers.length === 0 && usersLoading ? (
               <div className="flex justify-center py-8">
                 <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
               </div>
-            ) : filteredUsers.length === 0 ? (
+            ) : allUsers.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">No users found</p>
             ) : (
-              filteredUsers.map(user => (
-                <UserListItem
-                  key={user.id}
-                  user={user}
-                  selected={selectedUserId === user.id}
-                  onClick={() => setSelectedUserId(user.id)}
-                />
-              ))
+              <>
+                {allUsers.map((user: any) => (
+                  <UserListItem
+                    key={user.id}
+                    user={user}
+                    selected={selectedUserId === user.id}
+                    onClick={() => setSelectedUserId(user.id)}
+                  />
+                ))}
+                {usersLoading && (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                  </div>
+                )}
+              </>
             )}
           </div>
 
           <div className="py-3 border-t border-border text-xs text-muted-foreground">
-            {users.length} user{users.length !== 1 ? "s" : ""} total
+            {allUsers.length} of {usersTotalCount} user{usersTotalCount !== 1 ? "s" : ""}
           </div>
         </div>
 

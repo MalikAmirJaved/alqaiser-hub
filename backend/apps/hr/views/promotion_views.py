@@ -7,14 +7,18 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+from apps.common.filters import FilterPaginationMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import Employee, EmployeePromotion
 
 
-class PromotionView(PermissionRequiredMixin, APIView):
+class PromotionView(PermissionRequiredMixin, FilterPaginationMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'employee'
     permission_classes = [IsAuthenticated]
+    search_fields = ['employee__first_name', 'employee__last_name']
+    ordering_fields = ['effective_date', 'created_at']
+    ordering = ['-effective_date', '-created_at']
 
     def get_permission_action(self):
         method = self.request.method.upper()
@@ -45,13 +49,12 @@ class PromotionView(PermissionRequiredMixin, APIView):
             promotion = get_object_or_404(EmployeePromotion, _id=pk, company_id=company_id, is_deleted=False)
             return Response(self._serialize_promotion(promotion))
 
-        employee_uuid = request.query_params.get('employee_id')
-        query = EmployeePromotion.objects.filter(company_id=company_id, is_deleted=False).select_related('employee')
-        if employee_uuid:
-            employee = get_object_or_404(Employee, _id=employee_uuid, company_id=company_id, is_deleted=False)
-            query = query.filter(employee=employee)
-        promotions = query.order_by('-effective_date', '-created_at')
-        return Response([self._serialize_promotion(p) for p in promotions])
+        promotions = EmployeePromotion.objects.filter(company_id=company_id, is_deleted=False).select_related('employee')
+        promotions = self.filter_queryset(promotions)
+        promotions = self.search_queryset(promotions)
+        promotions = self.order_queryset(promotions)
+        page = self.paginate_queryset(promotions)
+        return self.get_paginated_response([self._serialize_promotion(p) for p in page])
 
     @transaction.atomic
     def post(self, request):

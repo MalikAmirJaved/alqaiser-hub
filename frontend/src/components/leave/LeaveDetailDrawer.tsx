@@ -23,7 +23,7 @@ export function LeaveDetailDrawer({
   getStatusBadge,
 }: LeaveDetailDrawerProps) {
   if (!isOpen || !leave) return null;
-
+console.log("::: ", leave)
   const DetailRow = ({ label, value, icon: Icon }: { label: string; value: React.ReactNode; icon?: any }) => (
     <div className="flex items-start gap-3 py-2 border-b border-border last:border-0">
       {Icon && <Icon className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />}
@@ -72,7 +72,7 @@ export function LeaveDetailDrawer({
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {/* Basic Information */}
             <Section title="Basic Information">
-              <DetailRow label="Leave Type" value={leave.leave_type_name} icon={Calendar} />
+              <DetailRow label="Leave Type" value={leave.leave_type} icon={Calendar} />
               <DetailRow
                 label="Period"
                 value={`${leave.start_date} → ${leave.end_date}`}

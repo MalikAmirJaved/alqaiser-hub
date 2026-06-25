@@ -1,10 +1,12 @@
 // src/app/(app)/hr/leave/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useLeaves, useCreateLeaveRequest, useDeleteLeaveRequest, useApproveLeave, useLeaveStats, LEAVE_TYPES } from "@/hooks/useLeaves";
 import { useActiveEmployees } from "@/hooks/useEmployees";
+import { useServerSearch } from "@/hooks/useServerSearch";
+import { usePagination } from "@/hooks/usePagination";
 import PageHeader from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatsCards } from "@/components/reuseable/StatsCards";
@@ -15,6 +17,7 @@ import { LeaveFormModal } from "@/components/leave/LeaveFormModal";
 import { LeaveDetailDrawer } from "@/components/leave/LeaveDetailDrawer";
 import { LeaveCard } from "@/components/leave/LeaveCard";
 import { ApprovalActions } from "@/components/leave/ApprovalActions";
+import { ReasonInputModal } from "@/components/reuseable/ReasonInputModal";
 import { getPermissions } from "@/lib/permissions";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
@@ -56,7 +59,11 @@ export default function LeaveManagementPage() {
   const [isApplyOpen, setIsApplyOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedLeave, setSelectedLeave] = useState<any>(null);
+  const [rejectLeaveId, setRejectLeaveId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const pagination = usePagination();
+  const approvalPagination = usePagination();
+  const pageSize = 20;
 
   const leaveTypeOptions = LEAVE_TYPES.map(t => ({ value: t.value, label: t.label }));
 
@@ -67,10 +74,21 @@ export default function LeaveManagementPage() {
     { value: "CANCELLED", label: "Cancelled" },
   ];
 
+  const fetchEmployees = useServerSearch("/api/hr/employees/", {
+    extraParams: { employment_status: "ACTIVE" },
+    transformOption: (e: any) => ({
+      value: e.id,
+      label: `${e.first_name} ${e.last_name || ""} (${e.employee_id || ""})`,
+    }),
+  });
+
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
+    { name: "employee", label: "Employee", type: "select", searchable: true, fetchOptions: fetchEmployees },
     { name: "leave_type", label: "Leave Type", type: "select", options: leaveTypeOptions },
     { name: "status", label: "Status", type: "status", options: leaveStatusOptions },
+    { name: "start_date__gte", label: "From Date", type: "date" },
+    { name: "end_date__lte", label: "To Date", type: "date" },
   ];
 
     const permissions = useSelector(
@@ -83,10 +101,26 @@ const leavePermissions = getPermissions(
   "leave"
 );
 
+  const apiParams = useMemo(() => {
+    const params: Record<string, string> = { ...filters, page: String(pagination.page), page_size: String(pageSize) };
+    return Object.keys(filters).length > 0 ? params : { page: String(pagination.page), page_size: String(pageSize) };
+  }, [filters, pagination.page, pageSize]);
+
   // Fetch data with React Query
-  const { data: leaves = [], refetch: refetchLeaves, isLoading: leavesLoading } = useLeaves(
-    Object.keys(filters).length > 0 ? filters : undefined
-  );
+  const { data: leaves = [], totalCount, currentPage, refetch: refetchLeaves, isLoading: leavesLoading } = useLeaves(apiParams);
+
+  // Separate query for Approvals tab — fetches only PENDING leaves with correct server-side pagination
+  const approvalApiParams = useMemo(() => {
+    const params: Record<string, string> = {
+      ...filters,
+      status: "PENDING",
+      page: String(approvalPagination.page),
+      page_size: String(pageSize),
+    };
+    return Object.keys(filters).length > 0 ? params : { status: "PENDING", page: String(approvalPagination.page), page_size: String(pageSize) };
+  }, [filters, approvalPagination.page, pageSize]);
+
+  const { data: pendingLeaves = [], totalCount: pendingTotalCount, currentPage: pendingCurrentPage, isLoading: pendingLoading } = useLeaves(approvalApiParams);
   const { data: employees = [] } = useActiveEmployees();
   const { data: stats, refetch: refetchStats } = useLeaveStats();
 
@@ -107,7 +141,7 @@ const leavePermissions = getPermissions(
   };
 
   const getPendingApprovals = () => {
-    return leaves.filter((l: any) => l.status === "PENDING");
+    return pendingLeaves;
   };
 
   const getAllLeavesForAdmin = () => {
@@ -302,9 +336,10 @@ const leavePermissions = getPermissions(
       key: "dates", 
       label: "Dates", 
       sortable: false,
+      width: "250px",
       render: (_: unknown, row: any) => `${row.start_date} → ${row.end_date}`
     },
-    { key: "total_days", label: "Days", sortable: true },
+    { key: "total_days", label: "Days", sortable: true,width: "80px", },
     { 
       key: "reason", 
       label: "Reason", 
@@ -319,6 +354,7 @@ const leavePermissions = getPermissions(
       key: "applied_at",
       label: "Applied On",
       sortable: true,
+      width: "200px",
       render: (value: unknown) => formatDateTime(String(value))
     },
   ];
@@ -427,7 +463,7 @@ const leavePermissions = getPermissions(
         <FilterBar
           fields={filterFields}
           filters={filters}
-          onChange={setFilters}
+          onChange={(f) => { setFilters(f); pagination.resetPage(); approvalPagination.resetPage(); }}
         />
       </div>
 
@@ -482,6 +518,9 @@ const leavePermissions = getPermissions(
               data={userLeaves}
               loading={leavesLoading}
               emptyMessage="No leave records found. Click 'Apply for Leave' to submit a request."
+              totalCount={totalCount}
+              currentPage={currentPage}
+              onPageChange={pagination.setPage}
               actions={(row) => (
                 <div className="flex items-center justify-end gap-1">
                   <button
@@ -514,15 +553,16 @@ const leavePermissions = getPermissions(
             <TableView
               columns={approvalsColumns}
               data={pendingApprovals}
-              loading={leavesLoading}
+              loading={pendingLoading || leavesLoading}
               emptyMessage="No pending leave requests."
+              totalCount={pendingTotalCount}
+              currentPage={pendingCurrentPage}
+              onPageChange={approvalPagination.setPage}
+              actionsWidth={"250px"}
               actions={(row) => (
                 <ApprovalActions
                   onApprove={() => handleApproval(row.id, "APPROVED")}
-                  onReject={() => {
-                    const reason = prompt("Rejection reason (optional):");
-                    handleApproval(row.id, "REJECTED", reason || undefined);
-                  }}
+                  onReject={() => setRejectLeaveId(row.id)}
                   onView={() => { setSelectedLeave(row); setIsDrawerOpen(true); }}
                 />
               )}
@@ -558,6 +598,9 @@ const leavePermissions = getPermissions(
                 data={allLeaves}
                 loading={leavesLoading}
                 emptyMessage="No leave records found."
+                totalCount={totalCount}
+                currentPage={currentPage}
+                onPageChange={pagination.setPage}
                 actions={(row) => (
                   <div className="flex items-center justify-end gap-1">
                     <button
@@ -583,7 +626,6 @@ const leavePermissions = getPermissions(
           isOpen={isApplyOpen}
           onClose={() => setIsApplyOpen(false)}
           onSubmit={handleApply}
-          employees={employees}
           isSubmitting={createLeave.isPending}
         />
       )}
@@ -594,12 +636,20 @@ const leavePermissions = getPermissions(
         onClose={() => setIsDrawerOpen(false)}
         leave={selectedLeave}
         onApprove={() => selectedLeave && handleApproval(selectedLeave.id, "APPROVED")}
-        onReject={() => {
-          const reason = prompt("Rejection reason (optional):");
-          selectedLeave && handleApproval(selectedLeave.id, "REJECTED", reason || undefined);
-        }}
+        onReject={() => selectedLeave && setRejectLeaveId(selectedLeave.id)}
         canApprove={leavePermissions.approve}
         getStatusBadge={getStatusBadge}
+      />
+
+      {/* Rejection Reason Modal */}
+      <ReasonInputModal
+        isOpen={rejectLeaveId !== null}
+        onClose={() => setRejectLeaveId(null)}
+        onConfirm={(reason) => { if (rejectLeaveId) handleApproval(rejectLeaveId, "REJECTED", reason || undefined); }}
+        title="Rejection Reason"
+        placeholder="Enter reason for rejection (optional)..."
+        confirmText="Reject"
+        cancelText="Cancel"
       />
     </div>
   );

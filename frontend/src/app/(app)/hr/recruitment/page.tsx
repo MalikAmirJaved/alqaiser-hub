@@ -20,7 +20,7 @@ import {
   useUpdateRecruitmentCandidate,
   useDeleteRecruitmentCandidate,
 } from "@/hooks/useRecruitment";
-import { useActiveEmployees } from "@/hooks/useEmployees";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import { useDepartments } from "@/hooks/useDepartments";
 import { toast } from "sonner";
 import { RoundBuilder } from "@/components/recruitment/RoundBuilder";
@@ -160,7 +160,7 @@ export default function RecruitmentPage() {
     setPage(1);
   }, []);
 
-  const { data: recruitmentData, isLoading: loading, refetch } = useRecruitment({
+  const { data: recruitmentData, totalCount, isLoading: loading, refetch } = useRecruitment({
     search: filters.search || undefined,
     department: filters.department || undefined,
     stage: filters.stage || undefined,
@@ -169,17 +169,26 @@ export default function RecruitmentPage() {
   });
 
   const { data: statsData } = useRecruitmentStats();
-  const { data: employeesData } = useActiveEmployees();
-  const { data: departments } = useDepartments();
-  const departmentOptions = useMemo(() => (departments || [])
-    .filter(d => d.is_active)
-    .map(d => ({ value: d.code, label: d.name })), [departments]);
+
+  const fetchEmployees = useServerSearch("/api/hr/employees/", {
+    extraParams: { employment_status: "ACTIVE" },
+    transformOption: (e: any) => ({
+      value: e.id,
+      label: `${e.first_name} ${e.last_name || ""}`,
+    }),
+  });
+
+  const fetchDepartments = useServerSearch("/api/organization/departments/", {
+    transformOption: (d: any) => ({
+      value: d.code || d.name,
+      label: d.name,
+    }),
+  });
 
   const filterFields: FilterField[] = useMemo(() => [
     { name: "search", label: "Search", type: "search" },
-    { name: "department", label: "Department", type: "select", searchable: true, options: departmentOptions },
     { name: "stage", label: "Stage", type: "select", options: STAGES },
-  ], [departmentOptions]);
+  ], []);
 
   const { data: roundsData, refetch: refetchRounds } = useInterviewRounds(
     roundsModalOpen && selectedCandidate?.id ? selectedCandidate.id : undefined
@@ -191,9 +200,8 @@ export default function RecruitmentPage() {
   const updateMutation = useUpdateRecruitmentCandidate();
   const deleteMutation = useDeleteRecruitmentCandidate();
 
-  const records = recruitmentData?.data || [];
-  const totalRecords = recruitmentData?.pagination?.total || 0;
-  const employees = employeesData || [];
+  const records = recruitmentData || [];
+  const totalRecords = totalCount || 0;
   const totalPages = Math.ceil(totalRecords / pageSize);
 
   const stats = useMemo(() => [
@@ -538,9 +546,9 @@ export default function RecruitmentPage() {
       {/* Candidate Form Modal */}
       {(modalOpen && (editingRecord ? permissions.update : permissions.create)) && (
         <CandidateFormModal
-          employeeOptions={employees}
+          fetchEmployees={fetchEmployees}
+          fetchDepartments={fetchDepartments}
           initialData={editingRecord}
-          departmentOptions={departmentOptions}
           onSubmit={handleSave}
           onClose={() => { setModalOpen(false); setEditingRecord(null); }}
         />
@@ -576,14 +584,14 @@ export default function RecruitmentPage() {
 // ==========================================
 function CandidateFormModal({
   initialData,
-  employeeOptions,
-  departmentOptions,
+  fetchEmployees,
+  fetchDepartments,
   onSubmit,
   onClose,
 }: {
   initialData: RecruitmentRecord | null;
-  employeeOptions: any[];
-  departmentOptions: { value: string; label: string }[];
+  fetchEmployees: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
+  fetchDepartments: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
   onSubmit: (d: Partial<RecruitmentRecord>, rounds?: any[]) => void;
   onClose: () => void;
 }) {
@@ -608,11 +616,6 @@ function CandidateFormModal({
 
   const isEditing = !!initialData;
 
-  const employeeOpts = employeeOptions.map(e => ({
-    value: e.id.toString(),
-    label: `${e.first_name} ${e.last_name || ""} (${e.department_name || "N/A"})`,
-  }));
-
   const update = (field: keyof RecruitmentRecord, value: any) =>
     setFormData(prev => ({ ...prev, [field]: value }));
 
@@ -625,11 +628,10 @@ function CandidateFormModal({
     }
 
     setLoading(true);
-    const assigned = employeeOptions.find(emp => emp.id.toString() === assignedId);
     const submitData = {
       ...formData,
       assigned_to_id: assignedId ? assignedId : undefined,
-      assigned_name: assigned ? `${assigned.first_name} ${assigned.last_name}` : undefined,
+      assigned_name: undefined,
     };
     const roundsToSubmit = !isEditing && rounds.length > 0 ? rounds : undefined;
     await onSubmit(submitData, roundsToSubmit);
@@ -687,7 +689,7 @@ function CandidateFormModal({
                 <input required value={formData.position || ""} onChange={e => update("position", e.target.value)} placeholder="e.g. Senior Frontend Engineer" className={inputCls} />
               </Field>
               <Field label="Department" required>
-                <SearchableSelect value={formData.department || ""} onChange={v => update("department", v)} options={departmentOptions} placeholder="Select department" />
+                <SearchableSelect value={formData.department || ""} onChange={v => update("department", v)} fetchOptions={fetchDepartments} placeholder="Search departments..." />
               </Field>
               <Field label="Current Company">
                 <input value={formData.current_company || ""} onChange={e => update("current_company", e.target.value)} placeholder="Previous employer" className={inputCls} />
@@ -733,7 +735,7 @@ function CandidateFormModal({
           <Section icon={<UserCheck className="w-4 h-4" />} title="Assignment">
             <div className="grid sm:grid-cols-2 gap-4">
               <Field label="Assigned To">
-                <SearchableSelect value={assignedId} onChange={setAssignedId} options={employeeOpts} placeholder="Assign to an employee" />
+                <SearchableSelect value={assignedId} onChange={setAssignedId} fetchOptions={fetchEmployees} placeholder="Search employees..." />
               </Field>
               <Field label="Resume / Portfolio URL">
                 <input type="url" value={formData.resume_url || ""} onChange={e => update("resume_url", e.target.value)} placeholder="https://…" className={inputCls} />
@@ -759,7 +761,7 @@ function CandidateFormModal({
               </div>
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">Configure the interview rounds for this candidate. You can update round statuses later.</p>
-                <RoundBuilder value={rounds} onChange={setRounds} employees={employeeOptions} />
+                <RoundBuilder value={rounds} onChange={setRounds} fetchEmployees={fetchEmployees} />
               </div>
             </section>
           )}

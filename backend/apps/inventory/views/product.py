@@ -19,6 +19,9 @@ from apps.inventory.serializers import ProductSerializer
 class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'INVENTORY'
     permission_resource = 'product'
+    action_permission_any_of = {
+        "": [("SALES", "sales_customer"), ("SALES", "lead"), ("SALES", "quote"), ("FINANCE", "customer_invoice")],
+    }
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
     lookup_field = '_id'

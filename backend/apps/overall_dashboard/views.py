@@ -297,11 +297,14 @@ class OverallDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
 
         alerts = []
 
-        # Low stock items
+        # Low stock items (top 5)
         low_stock_items = StockItem.objects.filter(
             company_id=company_id,
             quantity_on_hand__lt=F('variant__min_stock_level')
-        ).select_related('variant', 'warehouse')[:10]
+        ).select_related('variant', 'warehouse').only(
+            'quantity_on_hand', 'variant__sku', 'variant__min_stock_level',
+            'variant___id', 'warehouse__warehouse_name'
+        )[:5]
         for item in low_stock_items:
             alerts.append({
                 'type': 'LOW_STOCK',
@@ -312,11 +315,13 @@ class OverallDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
                 'entity_id': str(item.variant._id),
             })
 
-        # Overdue invoices (unpaid)
+        # Overdue invoices (top 5 unpaid)
         overdue_invoices = CustomerInvoice.objects.filter(
             company_id=company_id, branch_id=branch_id,
             due_date__lt=today, is_deleted=False
-        ).exclude(status='CANCELLED')
+        ).exclude(status='CANCELLED').only(
+            'invoice_number', 'due_date', '_id'
+        )[:5]
         for inv in overdue_invoices:
             if inv.outstanding > 0:
                 alerts.append({
@@ -328,11 +333,13 @@ class OverallDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
                     'entity_id': str(inv._id),
                 })
 
-        # Overdue bills
+        # Overdue bills (top 5 unpaid)
         overdue_bills = SupplierBill.objects.filter(
             company_id=company_id, branch_id=branch_id,
             due_date__lt=today, is_deleted=False
-        ).exclude(status='CANCELLED')
+        ).exclude(status='CANCELLED').only(
+            'bill_number', 'due_date', '_id'
+        )[:5]
         for bill in overdue_bills:
             if bill.outstanding > 0:
                 alerts.append({

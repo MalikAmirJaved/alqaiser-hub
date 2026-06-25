@@ -14,6 +14,7 @@ import { PageHeader, Card, ToolbarButton } from "@/components/finance/ui";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
 import { Plus, Download, Upload, ChevronRight, ChevronDown } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import AccountFormModal from "@/components/finance/accounts/AccountFormModal";
 
 interface AccountNode {
@@ -284,30 +285,6 @@ export default function ChartOfAccountsPage() {
         breadcrumbs={["General Ledger", "Chart of Accounts"]}
         title="Chart of Accounts"
         description="Hierarchical account structure across Assets, Liabilities, Equity, Revenue, and Expense."
-        actions={
-          <>
-            <ToolbarButton icon={Upload} variant="ghost">
-              Import
-            </ToolbarButton>
-            {permissions.export && (
-              <ToolbarButton icon={Download} variant="ghost">
-                Export
-              </ToolbarButton>
-            )}
-            {permissions.create && (
-              <ToolbarButton
-                icon={Plus}
-                variant="primary"
-                onClick={() => {
-                  setEditingAccount(null);
-                  setModalOpen(true);
-                }}
-              >
-                New Account
-              </ToolbarButton>
-            )}
-          </>
-        }
       />
       <div className="p-6 space-y-4">
         {/* Summary cards */}
@@ -349,14 +326,21 @@ export default function ChartOfAccountsPage() {
               </thead>
               <tbody>
                 {accountsLoading || balancesLoading ? (
-                  <tr>
-                    <td
-                      colSpan={5}
-                      className="px-4 py-8 text-center text-muted-foreground"
-                    >
-                      Loading...
-                    </td>
-                  </tr>
+                  Array.from({ length: 8 }).map((_, i) => (
+                    <tr key={i} className="border-b border-border/60">
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-3.5 w-3.5 rounded" />
+                          <Skeleton className="h-3.5 w-16" />
+                          <Skeleton className="h-4 w-32" />
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5"><Skeleton className="h-5 w-16 rounded-full" /></td>
+                      <td className="px-4 py-2.5"><Skeleton className="h-4 w-20 ml-auto" /></td>
+                      <td className="px-4 py-2.5"><Skeleton className="h-4 w-14" /></td>
+                      <td className="px-4 py-2.5"><Skeleton className="h-4 w-8" /></td>
+                    </tr>
+                  ))
                 ) : tree.length === 0 ? (
                   <tr>
                     <td

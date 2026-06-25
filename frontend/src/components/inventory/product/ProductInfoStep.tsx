@@ -1,7 +1,7 @@
 // src/components/inventory/product/ProductInfoStep.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,8 +11,6 @@ import { Controller } from "react-hook-form";
 import { Switch } from "@/components/ui/switch";
 import FormField from "@/components/reuseable/FormField";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
-import { useCategories, Category } from "@/hooks/useCategories";
-import { useBrands, Brand } from "@/hooks/useBrands";
 import CategoryFormModal from "@/components/inventory/category/CategoryFormModal";
 import BrandFormModal from "@/components/inventory/brand/BrandFormModal";
 
@@ -21,6 +19,10 @@ interface ProductInfoStepProps {
   register: any;
   errors: any;
   onNext: () => void;
+  fetchCategories?: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
+  fetchBrands?: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
+  displayCategoryLabel?: string;
+  displayBrandLabel?: string;
 }
 
 export default function ProductInfoStep({
@@ -28,21 +30,13 @@ export default function ProductInfoStep({
   register,
   errors,
   onNext,
+  fetchCategories,
+  fetchBrands,
+  displayCategoryLabel,
+  displayBrandLabel,
 }: ProductInfoStepProps) {
-  const { data: categories = [], refetch: refetchCategories } = useCategories();
-  const { data: brands = [], refetch: refetchBrands } = useBrands();
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showBrandModal, setShowBrandModal] = useState(false);
-
-  const categoryOptions = useMemo(
-    () =>
-      categories.map((c: Category) => ({ value: String(c.id), label: `${c.name} (${c.code})` })),
-    [categories],
-  );
-  const brandOptions = useMemo(
-    () => brands.map((b: Brand) => ({ value: String(b.id), label: `${b.name} (${b.code})` })),
-    [brands],
-  );
 
   return (
     <>
@@ -56,7 +50,8 @@ export default function ProductInfoStep({
                 <SearchableSelect
                   value={field.value || ""}
                   onChange={(v) => field.onChange(v || null)}
-                  options={categoryOptions}
+                  fetchOptions={fetchCategories}
+                  displayLabel={displayCategoryLabel}
                   placeholder="Select category"
                   onAddNew={() => setShowCategoryModal(true)}
                   addNewLabel="+ Add New Category"
@@ -72,7 +67,8 @@ export default function ProductInfoStep({
                 <SearchableSelect
                   value={field.value || ""}
                   onChange={(v) => field.onChange(v || null)}
-                  options={brandOptions}
+                  fetchOptions={fetchBrands}
+                  displayLabel={displayBrandLabel}
                   placeholder="Select brand"
                   onAddNew={() => setShowBrandModal(true)}
                   addNewLabel="+ Add New Brand"
@@ -201,17 +197,11 @@ export default function ProductInfoStep({
 
       <CategoryFormModal
         isOpen={showCategoryModal}
-        onClose={() => {
-          setShowCategoryModal(false);
-          refetchCategories();
-        }}
+        onClose={() => setShowCategoryModal(false)}
       />
       <BrandFormModal
         isOpen={showBrandModal}
-        onClose={() => {
-          setShowBrandModal(false);
-          refetchBrands();
-        }}
+        onClose={() => setShowBrandModal(false)}
       />
     </>
   );

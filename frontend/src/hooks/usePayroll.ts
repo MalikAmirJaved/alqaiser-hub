@@ -105,6 +105,7 @@ export interface EmployeeLoan {
   bank_name?: string;
   bank_account_number?: string;
   bank_iban?: string;
+  employee_joining_date?: string | null;
   paid_months_set?: Array<[number, number]>;
   purpose?: string;
   transaction_number?: string;
@@ -208,17 +209,33 @@ function payrollBase(module: PayrollApiBase = "hr") {
 }
 
 // ===== Payroll Hooks =====
+interface PaginatedResponse<T> {
+  count: number;
+  total_pages: number;
+  current_page: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
 export function usePayroll(params?: Record<string, string>, module: PayrollApiBase = "hr") {
   const api = useApi();
   const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
   const base = payrollBase(module);
-  return useQuery<PayrollRecord[]>({
+  const query = useQuery<PaginatedResponse<PayrollRecord>>({
     queryKey: ["payroll", module, params],
     queryFn: () => api(`${base}/${queryString}`),
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
   });
+  return {
+    ...query,
+    data: query.data?.results ?? [],
+    totalCount: query.data?.count ?? 0,
+    totalPages: query.data?.total_pages ?? 0,
+    currentPage: query.data?.current_page ?? 1,
+  };
 }
 
 export function usePayrollStats(params?: Record<string, string>, module: PayrollApiBase = "hr") {
@@ -266,13 +283,20 @@ export function useProcessPayrollAdvance(module: PayrollApiBase = "hr") {
 export function useEmployeeLoans(params?: Record<string, string>) {
   const api = useApi();
   const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
-  return useQuery<EmployeeLoan[]>({
+  const query = useQuery<PaginatedResponse<EmployeeLoan>>({
     queryKey: ["employeeLoans", params],
     queryFn: () => api(`/api/hr/loans/${queryString}`),
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
   });
+  return {
+    ...query,
+    data: query.data?.results ?? [],
+    totalCount: query.data?.count ?? 0,
+    totalPages: query.data?.total_pages ?? 0,
+    currentPage: query.data?.current_page ?? 1,
+  };
 }
 
 export function useEmployeeLoan(id: string | null) {
@@ -326,13 +350,20 @@ export function useDeleteEmployeeLoan() {
 export function useCompensations(params?: Record<string, string>) {
   const api = useApi();
   const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
-  return useQuery<Compensation[]>({
+  const query = useQuery<PaginatedResponse<Compensation>>({
     queryKey: ["compensations", params],
     queryFn: () => api(`/api/hr/compensations/${queryString}`),
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
   });
+  return {
+    ...query,
+    data: query.data?.results ?? [],
+    totalCount: query.data?.count ?? 0,
+    totalPages: query.data?.total_pages ?? 0,
+    currentPage: query.data?.current_page ?? 1,
+  };
 }
 
 export function useCompensation(id: string | null) {

@@ -17,6 +17,9 @@ from apps.inventory.models import StockItem, PurchaseOrderLine
 class VariantViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ReadOnlyModelViewSet):
     permission_module = 'INVENTORY'
     permission_resource = 'product'
+    action_permission_any_of = {
+        "": [("SALES", "sales_customer"), ("SALES", "lead"), ("SALES", "quote"), ("FINANCE", "customer_invoice")],
+    }
     """
     Read-only endpoint for product variants.
     Supports filtering by product, search, active status, etc.

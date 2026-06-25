@@ -10,17 +10,26 @@ from rest_framework import status
 import logging
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import FilterPaginationMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import Asset
+from apps.hr.filters import AssetFilter
 from apps.hr.serializers.asset_serializers import AssetSerializer
 
 logger = logging.getLogger(__name__)
 
 
-class AssetView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+class AssetView(CompanyBranchMixin, PermissionRequiredMixin, FilterPaginationMixin, APIView):
     permission_module = 'HR'
     permission_resource = 'emp_asset'
     permission_classes = [IsAuthenticated]
+    action_permission_any_of = {
+        "": [("INVENTORY", "purchase_order")],
+    }
+    filterset_class = AssetFilter
+    search_fields = ['name', 'brand', 'model', 'serial_number', 'vendor', 'category']
+    ordering_fields = ['name', 'purchase_date', 'created_at', 'purchase_price']
+    ordering = ['-created_at']
 
     def get(self, request):
         """Get all assets for user's company"""
@@ -33,35 +42,17 @@ class AssetView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        query = Asset.objects.filter(company_id=company_id, is_deleted=False)
+        assets = Asset.objects.filter(company_id=company_id, is_deleted=False)
         
         if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
-            query = query.filter(models.Q(branch_id=branch_id) | models.Q(branch_id__isnull=True))
+            assets = assets.filter(models.Q(branch_id=branch_id) | models.Q(branch_id__isnull=True))
         
-        vendor = request.query_params.get('vendor')
-        is_assigned = request.query_params.get('is_assigned')
-        category = request.query_params.get('category')
-        search = request.query_params.get('search')
-        
-        if vendor:
-            query = query.filter(vendor__iexact=vendor)
-        if is_assigned is not None:
-            query = query.filter(is_assigned=is_assigned.lower() == 'true')
-        if category:
-            query = query.filter(category__iexact=category)
-        if search:
-            query = query.filter(
-                models.Q(name__icontains=search) |
-                models.Q(brand__icontains=search) |
-                models.Q(model__icontains=search) |
-                models.Q(serial_number__icontains=search) |
-                models.Q(vendor__icontains=search) |
-                models.Q(category__icontains=search)
-            )
-        
-        assets = query.order_by('-created_at')
-        serializer = AssetSerializer(assets, many=True)
-        return Response(serializer.data)
+        assets = self.filter_queryset(assets)
+        assets = self.search_queryset(assets)
+        assets = self.order_queryset(assets)
+        page = self.paginate_queryset(assets)
+        serializer = AssetSerializer(page, many=True)
+        return self.get_paginated_response(serializer.data)
     
 
     def post(self, request):

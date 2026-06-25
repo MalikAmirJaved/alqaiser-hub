@@ -47,13 +47,18 @@ export function useCustomers(filters?: Record<string, string> | string) {
   const queryString = params.toString();
   const url = `/api/inventory/customers/${queryString ? `?${queryString}` : ""}`;
 
-  return useQuery<PaginatedResponse<Customer>, Error, Customer[]>({
+  const query = useQuery<PaginatedResponse<Customer>, Error>({
     queryKey: ["customers", filters],
     queryFn: () => api<PaginatedResponse<Customer>>(url),
-    select: (data) => data.results,
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
   });
+
+  return {
+    ...query,
+    data: query.data?.results ?? [],
+    totalCount: query.data?.count ?? 0,
+  };
 }
 
 // Create customer

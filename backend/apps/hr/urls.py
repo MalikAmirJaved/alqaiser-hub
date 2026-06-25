@@ -4,7 +4,7 @@ from apps.hr.views.shift_template_views import ShiftTemplateView
 from apps.hr.views.asset_views import AssetView, AssetStatsView
 from apps.hr.views.asset_category_views import AssetCategoryView, AssetCategoryStatsView
 from apps.hr.views.asset_purchase_request_views import AssetPurchaseRequestView
-from apps.hr.views.employee_views import EmployeeView, EmployeeStatsView, ActiveEmployeesView
+from apps.hr.views.employee_views import EmployeeView, EmployeeStatsView, EmployeeDetailView, ActiveEmployeesView
 from apps.hr.views.payroll_views import (
     PayrollView, PayrollStatsView, PayrollPreviewView, PayrollAdvanceView,
     EmployeeLoanView, CompensationView, CompensationStatusUpdateView,
@@ -19,7 +19,7 @@ from apps.hr.views.employee_asset_views import (
 from apps.hr.views.shift_management_views import (
     EmployeeShiftResolveView, ShiftOverrideView, ShiftDateRangeView,
     BulkShiftAssignmentView, ShiftHistoryView, ShiftStatisticsView,
-    ShiftScheduleGenerateView
+    ShiftScheduleGenerateView, ShiftMonthSummaryView, ShiftDayDetailView
 )
 
 from apps.hr.views.leave_views import (
@@ -78,6 +78,7 @@ urlpatterns = [
     path('employees/active/', ActiveEmployeesView.as_view(), name='active-employees'),
     path('employees/', EmployeeView.as_view(), name='employees'),
     path('employees/stats/', EmployeeStatsView.as_view(), name='employee-stats'),
+    path('employees/<str:pk>/', EmployeeDetailView.as_view(), name='employee-detail'),
     
     # Promotions
     path('promotions/', PromotionView.as_view(), name='promotions'),
@@ -117,6 +118,8 @@ urlpatterns = [
     path('shifts/history/', ShiftHistoryView.as_view(), name='shift-history'),
     path('shifts/stats/', ShiftStatisticsView.as_view(), name='shift-stats'),
     path('shifts/generate-schedule/', ShiftScheduleGenerateView.as_view(), name='shift-generate-schedule'),
+    path('shifts/month-summary/', ShiftMonthSummaryView.as_view(), name='shift-month-summary'),
+    path('shifts/day-detail/', ShiftDayDetailView.as_view(), name='shift-day-detail'),
 
     # leave Management
     path('leaves/', LeaveRequestView.as_view(), name='leave-requests'),

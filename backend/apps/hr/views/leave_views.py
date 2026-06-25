@@ -10,17 +10,23 @@ from rest_framework import status
 import logging
 from django.db import models
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.filters import FilterPaginationMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import Employee, LeaveRequest
+from apps.hr.filters import LeaveRequestFilter
 
 logger = logging.getLogger(__name__)
 
 
-class LeaveRequestView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
+class LeaveRequestView(CompanyBranchMixin, PermissionRequiredMixin, FilterPaginationMixin, APIView):
     """CRUD operations for leave requests with UUID support - Simplified"""
     permission_classes = [IsAuthenticated]
     permission_module = 'HR'
     permission_resource = 'leave'
+    filterset_class = LeaveRequestFilter
+    search_fields = ['reason', 'employee__first_name', 'employee__last_name']
+    ordering_fields = ['applied_at', 'start_date', 'end_date', 'created_at']
+    ordering = ['-applied_at']
     
     def _serialize_leave(self, leave: LeaveRequest) -> dict:
         """Serialize leave request with UUIDs"""
@@ -61,51 +67,25 @@ class LeaveRequestView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        query = LeaveRequest.objects.filter(
+        leaves = LeaveRequest.objects.filter(
             company_id=company_id, 
             is_deleted=False
         ).select_related('employee', 'approved_by')
-        
-        # Filter by employee (UUID)
-        employee_uuid = request.query_params.get('employee_id')
-        if employee_uuid:
-            employee = get_object_or_404(
-                Employee, 
-                _id=employee_uuid, 
-                company_id=company_id, 
-                is_deleted=False
-            )
-            query = query.filter(employee=employee)
-        
-        # Filter by status
-        status_filter = request.query_params.get('status')
-        if status_filter:
-            query = query.filter(status=status_filter)
-        
-        # Filter by leave type
-        leave_type_filter = request.query_params.get('leave_type')
-        if leave_type_filter:
-            query = query.filter(leave_type=leave_type_filter)
-        
-        # Filter by date range
-        start_date = request.query_params.get('start_date')
-        end_date = request.query_params.get('end_date')
-        if start_date:
-            query = query.filter(start_date__gte=start_date)
-        if end_date:
-            query = query.filter(end_date__lte=end_date)
         
         # Role-based filtering
         if request.user.role not in ['COMPANY_ADMIN', 'SUPER_ADMIN']:
             try:
                 employee = Employee.objects.get(email=request.user.email, company_id=company_id)
-                query = query.filter(employee=employee)
+                leaves = leaves.filter(employee=employee)
             except Employee.DoesNotExist:
-                query = query.filter(created_by=request.user)
+                leaves = leaves.filter(created_by=request.user)
         
-        query = query.order_by('-applied_at')
-        
-        return Response([self._serialize_leave(l) for l in query])
+        leaves = self.filter_queryset(leaves)
+        leaves = self.search_queryset(leaves)
+        leaves = self.order_queryset(leaves)
+        page = self.paginate_queryset(leaves)
+        serialized = [self._serialize_leave(l) for l in page]
+        return self.get_paginated_response(serialized)
     
 
     def post(self, request):

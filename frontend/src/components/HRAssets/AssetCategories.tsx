@@ -1,6 +1,6 @@
 // components/hr/AssetCategories.tsx
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useAssets } from "@/hooks/useAssets";
 import { 
   useAssetCategories, 
@@ -27,8 +27,12 @@ import {
   MoreVertical,
   Package,
   Users,
-  Check
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import {
   Dialog,
@@ -57,7 +61,7 @@ import { toast } from "sonner";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { cn } from "@/lib/utils";
 
-function AssetMultiSelect({ options, selected, onChange, assets }: any) {
+function AssetMultiSelect({ options, selected, onChange, assets, searchQuery, onSearchChange, loading }: any) {
   const toggle = (id: string) => {
     onChange(selected.includes(id) ? selected.filter((i: string) => i !== id) : [...selected, id]);
   };
@@ -69,6 +73,18 @@ function AssetMultiSelect({ options, selected, onChange, assets }: any) {
 
   return (
     <div className="space-y-3">
+      {/* Search Input */}
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Search assets..."
+          className="w-full bg-muted/40 border border-border rounded-md h-9 pl-8 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+        />
+      </div>
+
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">
           {selected.length} asset{selected.length !== 1 ? 's' : ''} selected
@@ -102,33 +118,42 @@ function AssetMultiSelect({ options, selected, onChange, assets }: any) {
       </div>
       
       <div className="max-h-48 overflow-y-auto border border-border rounded-lg divide-y divide-border">
-        {options.map((opt: any) => {
-          const asset = getAssetDetails(opt.value);
-          const isSelected = selected.includes(opt.value);
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => toggle(opt.value)}
-              className={cn(
-                "w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2 hover:bg-muted/50",
-                isSelected && "bg-primary/5"
-              )}
-            >
-              <div className={cn(
-                "w-4 h-4 rounded border flex items-center justify-center transition-colors",
-                isSelected ? "bg-primary border-primary" : "border-muted-foreground"
-              )}>
-                {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
-              </div>
-              <Package className="w-4 h-4 text-muted-foreground" />
-              <span className="flex-1">{opt.label}</span>
-              {asset?.brand && (
-                <span className="text-xs text-muted-foreground">{asset.brand}</span>
-              )}
-            </button>
-          );
-        })}
+        {loading ? (
+          <div className="flex items-center justify-center py-4 text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+            Loading assets...
+          </div>
+        ) : options.length === 0 ? (
+          <div className="text-center py-4 text-sm text-muted-foreground">No assets found</div>
+        ) : (
+          options.map((opt: any) => {
+            const asset = getAssetDetails(opt.value);
+            const isSelected = selected.includes(opt.value);
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => toggle(opt.value)}
+                className={cn(
+                  "w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2 hover:bg-muted/50",
+                  isSelected && "bg-primary/5"
+                )}
+              >
+                <div className={cn(
+                  "w-4 h-4 rounded border flex items-center justify-center transition-colors",
+                  isSelected ? "bg-primary border-primary" : "border-muted-foreground"
+                )}>
+                  {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
+                </div>
+                <Package className="w-4 h-4 text-muted-foreground" />
+                <span className="flex-1">{opt.label}</span>
+                {asset?.brand && (
+                  <span className="text-xs text-muted-foreground">{asset.brand}</span>
+                )}
+              </button>
+            );
+          })
+        )}
       </div>
     </div>
   );
@@ -139,10 +164,33 @@ export default function AssetCategories() {
   const [searchQuery, setSearchQuery] = useState("");
   const navigate = useRouter();
   
-  const { data: assets = [] } = useAssets();
-  const { data: categories = [], isLoading } = useAssetCategories(
-    searchQuery ? { search: searchQuery } : undefined
-  );
+  const [assetSearch, setAssetSearch] = useState("");
+  const [assetPage, setAssetPage] = useState(1);
+  const assetSearchTimeoutRef = useRef<any>(null);
+
+  const handleAssetSearchChange = useCallback((val: string) => {
+    setAssetSearch(val);
+    setAssetPage(1);
+    if (assetSearchTimeoutRef.current) clearTimeout(assetSearchTimeoutRef.current);
+  }, []);
+
+  const assetApiParams = useMemo(() => {
+    const params: Record<string, string> = { page: String(assetPage), page_size: "50" };
+    if (assetSearch) params.search = assetSearch;
+    return params;
+  }, [assetSearch, assetPage]);
+
+  const { data: assets = [], isLoading: assetsLoading } = useAssets(assetApiParams);
+  const [page, setPage] = useState(1);
+  const pageSize = 9;
+
+  const apiParams = useMemo(() => {
+    const params: Record<string, string> = { page: String(page), page_size: String(pageSize) };
+    if (searchQuery) params.search = searchQuery;
+    return params;
+  }, [searchQuery, page, pageSize]);
+
+  const { data: categories = [], totalCount, totalPages, currentPage, isLoading } = useAssetCategories(apiParams);
   const { data: stats } = useAssetCategoryStats();
   const createCategory = useCreateAssetCategory();
   const updateCategory = useUpdateAssetCategory();
@@ -150,6 +198,8 @@ export default function AssetCategories() {
   
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+
+  useEffect(() => { setPage(1); }, [searchQuery]);
   
   const [form, setForm] = useState({ 
     name: "", 
@@ -197,14 +247,6 @@ export default function AssetCategories() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader 
@@ -226,47 +268,65 @@ export default function AssetCategories() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Total Kits</p>
-                <p className="text-2xl font-bold">{stats?.totalCategories || categories.length}</p>
-              </div>
-              <div className="p-2 rounded-lg bg-purple-500/10">
-                <Layers className="w-5 h-5 text-purple-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Total Assets in Kits</p>
-                <p className="text-2xl font-bold">
-                  {stats?.totalAssetsInCategories || categories.reduce((sum, c) => sum + (c.assetCount || 0), 0)}
-                </p>
-              </div>
-              <div className="p-2 rounded-lg bg-blue-500/10">
-                <Package className="w-5 h-5 text-blue-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Assets Available</p>
-                <p className="text-2xl font-bold">{assets.length}</p>
-              </div>
-              <div className="p-2 rounded-lg bg-emerald-500/10">
-                <Package className="w-5 h-5 text-emerald-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {isLoading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-16" />
+                    <Skeleton className="h-8 w-12" />
+                  </div>
+                  <Skeleton className="w-10 h-10 rounded-lg" />
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total Kits</p>
+                    <p className="text-2xl font-bold">{stats?.totalCategories || categories.length}</p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-purple-500/10">
+                    <Layers className="w-5 h-5 text-purple-500" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total Assets in Kits</p>
+                    <p className="text-2xl font-bold">
+                      {stats?.totalAssetsInCategories || categories.reduce((sum, c) => sum + (c.assetCount || 0), 0)}
+                    </p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-blue-500/10">
+                    <Package className="w-5 h-5 text-blue-500" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Assets Available</p>
+                    <p className="text-2xl font-bold">{assets.length}</p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-emerald-500/10">
+                    <Package className="w-5 h-5 text-emerald-500" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
       {/* Search and Kits Grid */}
@@ -286,7 +346,37 @@ export default function AssetCategories() {
           </div>
         </CardHeader>
         <CardContent>
-          {categories.length === 0 ? (
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Card key={i}>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-2 flex-1">
+                        <Skeleton className="h-5 w-32" />
+                        <Skeleton className="h-3 w-48" />
+                      </div>
+                      <Skeleton className="h-8 w-8 rounded-md" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-3 w-20" />
+                      <Skeleton className="h-5 w-10 rounded-full" />
+                    </div>
+                    <div className="flex gap-1.5 flex-wrap">
+                      <Skeleton className="h-6 w-16 rounded-full" />
+                      <Skeleton className="h-6 w-20 rounded-full" />
+                      <Skeleton className="h-6 w-14 rounded-full" />
+                    </div>
+                  </CardContent>
+                  <CardFooter className="pt-0">
+                    <Skeleton className="h-9 w-full rounded-md" />
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          ) : categories.length === 0 ? (
             <div className="text-center py-12">
               <Layers className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium">No kits found</h3>
@@ -378,6 +468,30 @@ export default function AssetCategories() {
             </div>
           )}
         </CardContent>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-6 py-3 border-t border-border text-xs text-muted-foreground">
+            <span>
+              {totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, totalCount)} of {totalCount}
+            </span>
+            <div className="flex items-center gap-2">
+              <span>Page {currentPage} of {totalPages}</span>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setPage(p => p + 1)}
+                disabled={currentPage >= totalPages}
+                className="p-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Category Modal */}
@@ -408,6 +522,9 @@ export default function AssetCategories() {
                 selected={form.assetIds}
                 onChange={(v: string[]) => setForm({ ...form, assetIds: v })}
                 assets={assets}
+                searchQuery={assetSearch}
+                onSearchChange={handleAssetSearchChange}
+                loading={assetsLoading}
               />
             </div>
             <div className="grid gap-2">

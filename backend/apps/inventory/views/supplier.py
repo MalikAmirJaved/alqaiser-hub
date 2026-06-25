@@ -9,6 +9,9 @@ from apps.inventory.serializers import SupplierSerializer
 
 class BaseSupplierViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
     permission_module = 'INVENTORY'
+    action_permission_any_of = {
+        "": [("FINANCE", "supplier_bill"), ("FINANCE", "expense")],
+    }
     queryset = Supplier.objects.all()
     serializer_class = SupplierSerializer
     lookup_field = '_id'

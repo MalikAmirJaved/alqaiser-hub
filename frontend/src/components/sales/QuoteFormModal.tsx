@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { X, Plus, Trash2, Search } from "lucide-react";
-import { useCustomers } from "@/hooks/useCustomers";
-import { useAllVariantsSimple } from "@/hooks/useAllVariants";
+import { useServerSearch } from "@/hooks/useServerSearch";
+import { useApi } from "@/hooks/useApi";
+import type { VariantDetail } from "@/hooks/useAllVariants";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
 import { useCreateQuote, useUpdateQuote, Quote } from "@/hooks/sales/useQuotes";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
@@ -39,10 +40,25 @@ export default function QuoteFormModal({
   const formatCurrency = useFormatCurrency();
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [newCustomerInfo, setNewCustomerInfo] = useState<any>(null);
-  const { data: customers = [], refetch: refetchCustomers } = useCustomers("");
-  const { data: variants = [] } = useAllVariantsSimple({ active_only: true });
+
+  const fetchCustomers = useServerSearch("/api/inventory/customers/", {
+    transformOption: (c: any) => ({
+      value: c.id,
+      label: c.name,
+    }),
+  });
+
+  const fetchVariants = useServerSearch("/api/inventory/variants/", {
+    extraParams: { active_only: "true" },
+    transformOption: (v: any) => ({
+      value: v.id,
+      label: `${v.product_name} (${v.sku}) — Stock: ${v.total_stock}`,
+    }),
+  });
+
   const createQuote = useCreateQuote();
   const updateQuote = useUpdateQuote();
+  const api = useApi();
 
   const [formData, setFormData] = useState({
     customer: "",
@@ -98,7 +114,6 @@ export default function QuoteFormModal({
     customerName: string,
     customerData: any
   ) => {
-    await refetchCustomers();
     setNewCustomerInfo(customerData);
     setFormData((prev) => ({
       ...prev,
@@ -136,21 +151,24 @@ export default function QuoteFormModal({
     }));
   };
 
-  const updateLine = (index: number, field: keyof QuoteLine, value: any) => {
+  const updateLine = async (index: number, field: keyof QuoteLine, value: any) => {
     const newLines = [...formData.lines];
     if (field === "variant") {
-      const variant = variants.find((v) => v.id === value);
-      if (variant) {
-        newLines[index] = {
-          ...newLines[index],
-          variant: value,
-          variant_name: variant.product_name,
-          variant_sku: variant.sku,
-          unit_price: variant.selling_price,
-          max_quantity: variant.total_stock,
-        };
-      } else {
-        newLines[index] = { ...newLines[index], variant: value };
+      newLines[index] = { ...newLines[index], variant: value };
+      if (value) {
+        try {
+          const variant = await api<VariantDetail>(`/api/inventory/variants/${value}/`);
+          if (variant) {
+            newLines[index] = {
+              ...newLines[index],
+              variant: value,
+              variant_name: variant.product_name,
+              variant_sku: variant.sku,
+              unit_price: variant.selling_price,
+              max_quantity: variant.total_stock,
+            };
+          }
+        } catch {}
       }
     } else {
       newLines[index] = { ...newLines[index], [field]: value };
@@ -201,11 +219,6 @@ export default function QuoteFormModal({
     onClose();
   };
 
-  // Build set of already-selected variant IDs (excluding current row)
-  const selectedVariantIds = new Set(
-    formData.lines.filter((l) => l.variant).map((l) => l.variant),
-  );
-
   if (!open) return null;
 
   return (
@@ -231,8 +244,8 @@ export default function QuoteFormModal({
                     <SearchableSelect
                       value={formData.customer}
                       onChange={handleCustomerSelect}
-                      options={customers.map((c) => ({ value: c.id, label: c.name }))}
-                      placeholder="Select customer"
+                      fetchOptions={fetchCustomers}
+                      placeholder="Search customers..."
                       required
                     />
                   </div>
@@ -327,10 +340,8 @@ export default function QuoteFormModal({
                                 onChange={(val) =>
                                   updateLine(idx, "variant", val)
                                 }
-                                options={variants
-                                  .filter((v) => !selectedVariantIds.has(v.id) || v.id === line.variant)
-                                  .map((v) => ({ value: v.id, label: `${v.product_name} (${v.sku}) — Stock: ${v.total_stock}` }))}
-                                placeholder="Select variant"
+                                fetchOptions={fetchVariants}
+                                placeholder="Search variants..."
                               />
                             </td>
                             <td className="px-3 py-2">

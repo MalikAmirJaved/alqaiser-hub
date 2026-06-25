@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import { DateRangePickerRac } from "@/components/reuseable/DateRangePickerRac";
 import { DatePicker } from "@/components/reuseable/DatePicker";
 import { X, CalendarDays } from "lucide-react";
@@ -12,7 +13,6 @@ interface LeaveFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: any) => void;
-  employees: any[];
   isSubmitting: boolean;
 }
 
@@ -20,9 +20,16 @@ export function LeaveFormModal({
   isOpen,
   onClose,
   onSubmit,
-  employees,
   isSubmitting,
 }: LeaveFormModalProps) {
+  const fetchEmployees = useServerSearch("/api/hr/employees/", {
+    extraParams: { employment_status: "ACTIVE" },
+    transformOption: (e: any) => ({
+      value: e.id,
+      label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""} (${e.department_name || ""})`,
+    }),
+  });
+
   const [formData, setFormData] = useState({
     employee_id: "",
     leave_type: "CASUAL",
@@ -99,11 +106,6 @@ export function LeaveFormModal({
 
   if (!isOpen) return null;
 
-  const employeeOptions = employees.map((e: any) => ({
-    value: e.id,
-    label: `${e.employee_id} - ${e.first_name} ${e.last_name || ""} (${e.department_name || ""})`
-  }));
-
   const leaveTypeOptions = LEAVE_TYPES.map((t) => ({
     value: t.value,
     label: t.label
@@ -135,9 +137,9 @@ export function LeaveFormModal({
               <SearchableSelect
                 value={formData.employee_id}
                 onChange={(val) => setFormData({ ...formData, employee_id: val })}
-                options={employeeOptions}
+                fetchOptions={fetchEmployees}
                 required
-                placeholder="Select Employee"
+                placeholder="Search employees..."
               />
               {errors.employee_id && (
                 <p className="text-xs text-red-500 mt-1">{errors.employee_id}</p>

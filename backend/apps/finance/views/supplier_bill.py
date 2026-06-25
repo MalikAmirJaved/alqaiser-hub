@@ -23,7 +23,7 @@ class SupplierBillViewSet(
     SoftDeleteMixin,
     viewsets.ModelViewSet
 ):
-    queryset = SupplierBill.objects.all()
+    queryset = SupplierBill.objects.select_related('supplier').all()
     serializer_class = SupplierBillSerializer
     permission_module = 'FINANCE'
     permission_resource = 'supplier_bill'

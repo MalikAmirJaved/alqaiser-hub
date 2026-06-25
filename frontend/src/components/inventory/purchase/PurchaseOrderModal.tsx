@@ -6,12 +6,13 @@ import {
   ChevronDown, ShoppingCart, Warehouse, CalendarDays, FileText,
   Tag, AlertCircle,
 } from 'lucide-react';
-import { useSuppliers, useCreateSupplier } from '@/hooks/useSuppliers';
-import { useWarehouses, useCreateWarehouse } from '@/hooks/useWarehouses';
-import { useProducts, useCreateProduct, useUpdateProduct } from '@/hooks/useProducts';
-import { useAssets, useCreateAsset } from '@/hooks/useAssets';
+import { useCreateSupplier } from '@/hooks/useSuppliers';
+import { useCreateWarehouse } from '@/hooks/useWarehouses';
+import { useCreateProduct, useUpdateProduct } from '@/hooks/useProducts';
+import { useCreateAsset } from '@/hooks/useAssets';
 import type { PurchaseOrder, PurchaseOrderPayload } from '@/types/purchase';
 import type { Product, ProductVariant, ProductPayload } from '@/hooks/useProducts';
+import type { Asset } from '@/hooks/useAssets';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { toast } from 'sonner';
 import SearchableSelect from '@/components/reuseable/SearchableSelect';
@@ -21,6 +22,7 @@ import { FormModal } from '@/components/inventory/supplier/FormModal';
 import { WarehouseForm } from '@/components/inventory/warehouse/WarehouseForm';
 import { AssetForm } from '@/components/HRAssets/AssetForm';
 import { useAutoCode } from '@/hooks/useAutoCode';
+import { useApi } from '@/hooks/useApi';
 import { useQueryClient } from '@tanstack/react-query';
 
 /* ─── Types ─────────────────────────────────────────────── */
@@ -37,20 +39,21 @@ interface PurchaseOrderModalProps {
     under_date: string;
   } | null;
   loading?: boolean;
+  fetchSuppliers?: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
+  fetchWarehouses?: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
+  fetchProducts?: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
+  fetchAssets?: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
+  fetchCategories?: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
+  fetchBrands?: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
 }
 
 interface LineItem {
   id: number;
   selectedId: string;
+  selectedLabel?: string;
   quantity_ordered: number;
   unit_cost: number;
   tax_rate: number;
-}
-
-interface SelectOption {
-  id: string;
-  label: string;
-  buying_price: number;
 }
 
 type InventoryType = 'FOR_SALE' | 'OFFICE_INVENTORY';
@@ -106,13 +109,14 @@ export function PurchaseOrderModal({
   initialData,
   prefillFromRequest,
   loading,
+  fetchSuppliers,
+  fetchWarehouses,
+  fetchProducts,
+  fetchAssets,
+  fetchCategories,
+  fetchBrands,
 }: PurchaseOrderModalProps) {
-  const { data: suppliers = [] } = useSuppliers({
-  status: "active",
-});
-  const { data: warehouses = [] } = useWarehouses();
-  const { data: products = [], refetch: refetchProducts } = useProducts();
-  const { data: assets = [] } = useAssets();
+  const api = useApi();
   const { CurrencyCode } = useCompanySettings();
   const queryClient = useQueryClient();
   const createProduct = useCreateProduct();
@@ -121,6 +125,9 @@ export function PurchaseOrderModal({
   const createWarehouse = useCreateWarehouse();
   const createAsset = useCreateAsset();
   const { generateCode: genSupplierCode } = useAutoCode('supplier');
+
+  const [productCache, setProductCache] = useState<Record<string, Product>>({});
+  const [assetCache, setAssetCache] = useState<Record<string, Asset>>({});
 
   const [supplierId, setSupplierId] = useState('');
   const [warehouseId, setWarehouseId] = useState('');
@@ -139,26 +146,9 @@ export function PurchaseOrderModal({
   const [collapsedProductIds, setCollapsedProductIds] = useState<string[]>([]);
 
   const selectedProducts = useMemo(
-    () => products.filter((p) => selectedProductIds.includes(p.id)),
-    [products, selectedProductIds],
+    () => selectedProductIds.map((id) => productCache[id]).filter(Boolean) as Product[],
+    [productCache, selectedProductIds],
   );
-
-  const variantOptions = useMemo<SelectOption[]>(() => {
-    if (inventoryType === 'FOR_SALE') {
-      return products.flatMap((p) =>
-        p.variants.map((v) => ({
-          id: v.id,
-          label: `${v.sku} — ${p.product_name}`,
-          buying_price: v.buying_price || 0,
-        })),
-      );
-    }
-    return assets.map((a) => ({
-      id: a.id,
-      label: `${a.name}${a.brand ? ` (${a.brand})` : ''}${a.serial_number ? ` · SN: ${a.serial_number}` : ''}`,
-      buying_price: a.purchase_price || 0,
-    }));
-  }, [inventoryType, products, assets]);
 
   const initialDerivedRef = useRef(false);
 
@@ -190,6 +180,7 @@ export function PurchaseOrderModal({
       setLineItems([{
         id: nextLineId(),
         selectedId: prefillFromRequest.asset,
+        selectedLabel: prefillFromRequest.asset_name,
         quantity_ordered: prefillFromRequest.quantity,
         unit_cost: 0,
         tax_rate: 0,
@@ -207,16 +198,18 @@ export function PurchaseOrderModal({
   }, [initialData, prefillFromRequest]);
 
   useEffect(() => {
-    if (!initialData || products.length === 0 || initialDerivedRef.current) return;
+    if (!initialData || initialDerivedRef.current) return;
     initialDerivedRef.current = true;
     const pIds = new Set<string>();
     for (const line of initialData.lines || []) {
       if (!line.variant) continue;
-      const p = products.find((prod) => prod.variants.some((v) => v.id === line.variant));
+      const p = Object.values(productCache).find((prod) =>
+        prod.variants.some((v) => v.id === line.variant)
+      );
       if (p) pIds.add(p.id);
     }
     if (pIds.size > 0) setSelectedProductIds(Array.from(pIds));
-  }, [initialData, products]);
+  }, [initialData, productCache]);
 
   const handleTypeChange = (type: InventoryType) => {
     setInventoryType(type);
@@ -224,9 +217,31 @@ export function PurchaseOrderModal({
     setSelectedProductIds([]);
   };
 
-  const handleAddProduct = (productId: string) => {
+  const fetchProductDetail = async (productId: string) => {
+    if (productCache[productId]) return productCache[productId];
+    try {
+      const data: Product = await api(`/api/inventory/products/${productId}/`);
+      setProductCache((prev) => ({ ...prev, [productId]: data }));
+      return data;
+    } catch {
+      return null;
+    }
+  };
+
+  const fetchAssetDetail = async (assetId: string) => {
+    if (assetCache[assetId]) return assetCache[assetId];
+    try {
+      const data: Asset = await api(`/api/hr/assets/${assetId}/`);
+      setAssetCache((prev) => ({ ...prev, [assetId]: data }));
+      return data;
+    } catch {
+      return null;
+    }
+  };
+
+  const handleAddProduct = async (productId: string) => {
     if (!productId || selectedProductIds.includes(productId)) return;
-    const product = products.find((p) => p.id === productId);
+    const product = await fetchProductDetail(productId);
     if (!product) return;
     setSelectedProductIds((prev) => [...prev, productId]);
     const newLines: LineItem[] = product.variants.map((v) => ({
@@ -244,7 +259,7 @@ export function PurchaseOrderModal({
 
   const handleRemoveProduct = (productId: string) => {
     setSelectedProductIds((prev) => prev.filter((id) => id !== productId));
-    const product = products.find((p) => p.id === productId);
+    const product = productCache[productId];
     if (!product) return;
     const variantIds = new Set(product.variants.map((v) => v.id));
     setLineItems((prev) => {
@@ -274,7 +289,7 @@ export function PurchaseOrderModal({
   };
 
   const findVariant = (variantId: string): ProductVariant | undefined => {
-    for (const p of products) {
+    for (const p of Object.values(productCache)) {
       const v = p.variants.find((v) => v.id === variantId);
       if (v) return v;
     }
@@ -295,10 +310,14 @@ export function PurchaseOrderModal({
     setLineItems((prev) => prev.map((l) => (l.id === id ? { ...l, [field]: value } : l)));
   };
 
-  const handleSelectChange = (id: number, selectedId: string) => {
-    const selected = variantOptions.find((opt) => opt.id === selectedId);
+  const handleSelectChange = async (id: number, selectedId: string) => {
     updateLine(id, 'selectedId', selectedId as any);
-    if (selected && selected.buying_price > 0) updateLine(id, 'unit_cost', selected.buying_price as any);
+    if (selectedId) {
+      const asset = await fetchAssetDetail(selectedId);
+      if (asset && (asset.purchase_price || 0) > 0) {
+        updateLine(id, 'unit_cost', (asset.purchase_price || 0) as any);
+      }
+    }
   };
 
   const addLine = () => setLineItems((prev) => [...prev, emptyLine()]);
@@ -308,13 +327,13 @@ export function PurchaseOrderModal({
   const handleCreateProductSubmit = async (data: ProductPayload) => {
     const result = await createProduct.mutateAsync(data);
     setShowCreateProduct(false);
-    await refetchProducts();
+    setProductCache((prev) => ({ ...prev, [result.data.id]: result.data }));
     setSelectedProductIds((prev) => [...prev, result.data.id]);
   };
 
   const handleCreateVariant = async (data: VariantFormData) => {
     if (!variantFormProductId) return;
-    const product = products.find((p) => p.id === variantFormProductId);
+    const product = productCache[variantFormProductId];
     if (!product) return;
     const payload: ProductPayload = {
       productName: product.product_name,
@@ -335,10 +354,10 @@ export function PurchaseOrderModal({
         { sku: data.sku, variantTitle: data.variantTitle, barcode: data.barcode, sellingPrice: data.sellingPrice, minStockLevel: data.minStockLevel, maxStockLevel: data.maxStockLevel, attributes: data.attributes },
       ],
     };
-    await updateProduct.mutateAsync({ id: variantFormProductId, ...payload });
+    const updated = await updateProduct.mutateAsync({ id: variantFormProductId, ...payload });
     setShowVariantForm(false);
     setVariantFormProductId(null);
-    await refetchProducts();
+    setProductCache((prev) => ({ ...prev, [variantFormProductId]: updated.data }));
   };
 
   const handleCreateSupplier = async (data: any) => {
@@ -357,14 +376,17 @@ export function PurchaseOrderModal({
     const finalDescription = data.category
       ? `Category: ${data.category}\n${data.description || ''}`
       : data.description || '';
-    await createAsset.mutateAsync({
+    const result: any = await createAsset.mutateAsync({
       name: data.name, brand: data.brand || undefined, serial_number: data.sku || undefined,
       description: finalDescription, is_active: true,
       purchase_date: new Date().toISOString().split('T')[0],
       purchase_price: 0, total_quantity: 1, available_quantity: 1,
     });
     setShowAssetForm(false);
-    await queryClient.invalidateQueries({ queryKey: ['assets'] });
+    const asset = result?.data ?? result;
+    if (asset?.id) {
+      setAssetCache((prev) => ({ ...prev, [asset.id]: asset }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -464,7 +486,7 @@ export function PurchaseOrderModal({
                       <SearchableSelect
                         value={supplierId}
                         onChange={(val) => setSupplierId(val)}
-                        options={suppliers.map((s) => ({ value: s.id, label: s.name }))}
+                        fetchOptions={fetchSuppliers}
                         placeholder="Select supplier…"
                       />
                       <button
@@ -485,7 +507,7 @@ export function PurchaseOrderModal({
                         <SearchableSelect
                           value={warehouseId}
                           onChange={(val) => setWarehouseId(val)}
-                          options={warehouses.map((w) => ({ value: w.id, label: w.warehouse_name }))}
+                          fetchOptions={fetchWarehouses}
                           placeholder="Select warehouse…"
                         />
                         <button
@@ -540,7 +562,6 @@ export function PurchaseOrderModal({
 
                 {inventoryType === 'FOR_SALE' ? (
                   <ProductVariantSelector
-                    products={products}
                     selectedProducts={selectedProducts}
                     onAddProduct={handleAddProduct}
                     onRemoveProduct={handleRemoveProduct}
@@ -554,17 +575,18 @@ export function PurchaseOrderModal({
                     onCreateVariant={(productId) => { setVariantFormProductId(productId); setShowVariantForm(true); }}
                     collapsedProductIds={collapsedProductIds}
                     onToggleCollapse={toggleCollapseProduct}
+                    fetchProducts={fetchProducts}
                   />
                 ) : (
                   <AssetLineItems
                     lineItems={lineItems}
-                    options={variantOptions}
                     onSelectChange={handleSelectChange}
                     onChange={updateLine}
                     onRemove={removeLine}
                     onAdd={addLine}
                     currencySymbol={sym}
                     onCreateAsset={() => setShowAssetForm(true)}
+                    fetchAssets={fetchAssets}
                   />
                 )}
 
@@ -1029,7 +1051,7 @@ export function PurchaseOrderModal({
       {showCreateProduct && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-4xl bg-card rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <ProductForm onSubmit={handleCreateProductSubmit} isLoading={createProduct.isPending} isEditing={false} onCancel={() => setShowCreateProduct(false)} />
+            <ProductForm onSubmit={handleCreateProductSubmit} isLoading={createProduct.isPending} isEditing={false} onCancel={() => setShowCreateProduct(false)} fetchCategories={fetchCategories} fetchBrands={fetchBrands} />
           </div>
         </div>
       )}
@@ -1118,16 +1140,16 @@ function FieldGroup({
 
 /* ── Asset Line Items ─────────────────────────────────────── */
 function AssetLineItems({
-  lineItems, options, onSelectChange, onChange, onRemove, onAdd, currencySymbol, onCreateAsset,
+  lineItems, onSelectChange, onChange, onRemove, onAdd, currencySymbol, onCreateAsset, fetchAssets,
 }: {
   lineItems: LineItem[];
-  options: SelectOption[];
   onSelectChange: (id: number, selectedId: string) => void;
   onChange: <K extends keyof LineItem>(id: number, field: K, value: LineItem[K]) => void;
   onRemove: (id: number) => void;
   onAdd: () => void;
   currencySymbol: string;
   onCreateAsset: () => void;
+  fetchAssets?: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
 }) {
   const selectedIds = new Set(
     lineItems.filter((l) => l.selectedId).map((l) => l.selectedId),
@@ -1166,10 +1188,9 @@ function AssetLineItems({
               <SearchableSelect
                 value={line.selectedId}
                 onChange={(val) => onSelectChange(line.id, val)}
-                options={options
-                  .filter((opt) => !selectedIds.has(opt.id) || opt.id === line.selectedId)
-                  .map((opt) => ({ value: opt.id, label: opt.label }))}
+                fetchOptions={fetchAssets}
                 placeholder="Select asset…"
+                displayLabel={line.selectedLabel}
               />
 
               <input
@@ -1220,11 +1241,11 @@ function AssetLineItems({
 
 /* ── Product Variant Selector ─────────────────────────────── */
 function ProductVariantSelector({
-  products, selectedProducts, onAddProduct, onRemoveProduct,
+  selectedProducts, onAddProduct, onRemoveProduct,
   lineItems, activeLineIds, onToggleVariant, onUpdateLine, onRemoveLine,
   currencySymbol, onCreateProduct, onCreateVariant, collapsedProductIds, onToggleCollapse,
+  fetchProducts,
 }: {
-  products: Product[];
   selectedProducts: Product[];
   onAddProduct: (id: string) => void;
   onRemoveProduct: (id: string) => void;
@@ -1238,13 +1259,8 @@ function ProductVariantSelector({
   onCreateVariant: (productId: string) => void;
   collapsedProductIds: string[];
   onToggleCollapse: (productId: string) => void;
+  fetchProducts?: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
 }) {
-  const productOptions = useMemo(
-    () => products
-      .filter((p) => !selectedProducts.some((sp) => sp.id === p.id))
-      .map((p) => ({ value: p.id, label: p.product_name })),
-    [products, selectedProducts],
-  );
 
   return (
     <div className="space-y-3">
@@ -1259,7 +1275,7 @@ function ProductVariantSelector({
         <SearchableSelect
           value=""
           onChange={onAddProduct}
-          options={productOptions}
+          fetchOptions={fetchProducts}
           placeholder="Search products…"
           onAddNew={onCreateProduct}
           addNewLabel="+ Create New Product"

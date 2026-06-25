@@ -1,11 +1,9 @@
-// @ts-nocheck
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useEmployees, useEmployeeStats, useCreateEmployee, useUpdateEmployee, useDeleteEmployee } from "@/hooks/useEmployees";
 import { useShiftTemplates } from "@/hooks/useShiftTemplates";
-import { useDepartmentOptions } from "@/hooks/useDepartments";
-import { useDesignations } from "@/hooks/useDesignations";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import PageHeader from "@/components/PageHeader";
 import EmployeeForm from "@/components/Forms/EmployeeForm";
 import EmployeeStatusModal from "@/components/EmployeeStatusModal";
@@ -23,6 +21,7 @@ import { useSelector } from "react-redux";
 import { RootState } from "@/store";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import PromotionModal from "@/components/payroll/PromotionModal";
+import { usePagination } from "@/hooks/usePagination";
 
 
 export default function EmployeesPage() {
@@ -33,7 +32,7 @@ export default function EmployeesPage() {
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [selectedEmployeeForStatus, setSelectedEmployeeForStatus] = useState<any>(null);
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
-  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [storedPrefillData, setStoredPrefillData] = useState<any>(null);
   const [promotionModalOpen, setPromotionModalOpen] = useState(false);
@@ -42,13 +41,21 @@ export default function EmployeesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefill = searchParams.get("prefill");
+  const pagination = usePagination();
 
-  const { options: departmentOptions } = useDepartmentOptions();
-  const { data: designations = [] } = useDesignations();
+  const fetchDepartments = useServerSearch("/api/organization/departments/", {
+    transformOption: (d: any) => ({
+      value: d._id || d.id,
+      label: d.name,
+    }),
+  });
 
-  const designationOptions = (designations || [])
-    .filter(d => d.isActive)
-    .map(d => ({ value: d._id || d.id, label: d.name }));
+  const fetchDesignations = useServerSearch("/api/company/designations/", {
+    transformOption: (d: any) => ({
+      value: d._id || d.id,
+      label: d.name,
+    }),
+  });
 
   const employmentStatusOptions = [
     { value: "ACTIVE", label: "Active" },
@@ -67,8 +74,8 @@ export default function EmployeesPage() {
 
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
-    { name: "department_id", label: "Department", type: "select", searchable: true, options: departmentOptions },
-    { name: "designation_id", label: "Designation", type: "select", searchable: true, options: designationOptions },
+    { name: "department_id", label: "Department", type: "select", searchable: true, fetchOptions: fetchDepartments },
+    { name: "designation_id", label: "Designation", type: "select", searchable: true, fetchOptions: fetchDesignations },
     { name: "employment_status", label: "Status", type: "status", options: employmentStatusOptions },
     { name: "employment_type", label: "Type", type: "select", options: employmentTypeOptions },
   ];
@@ -88,9 +95,12 @@ export default function EmployeesPage() {
     };
   }, [searchParams, prefill]);
 
-  const { data: employees = [], isLoading } = useEmployees(
-    Object.keys(filters).length > 0 ? filters : undefined
-  );
+  const filtersWithPage = useMemo(() => {
+    const base = Object.keys(filters).length > 0 ? filters : {};
+    return { ...base, page: String(pagination.page) };
+  }, [filters, pagination.page]);
+
+  const { data: employees = [], isLoading, totalCount } = useEmployees(filtersWithPage);
   const permissions = useSelector(
     (state: RootState) => state.permissions.permissions
   );
@@ -119,7 +129,9 @@ export default function EmployeesPage() {
       email: employee.email || "",
       phone_number: employee.phone || "",
       department_id: employee.department_id || "",
+      department_name: employee.department_name || "",
       designation_id: employee.designation_id || "",
+      designation_name: employee.designation_name || "",
       isfrom_employee_id: employee._id || employee.id || "",
     });
     return `/settings/users?${params.toString()}`;
@@ -566,17 +578,6 @@ export default function EmployeesPage() {
     );
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div>
       <PageHeader
@@ -643,7 +644,7 @@ export default function EmployeesPage() {
         <FilterBar
           fields={filterFields}
           filters={filters}
-          onChange={setFilters}
+          onChange={(f) => { setFilters(f); pagination.resetPage(); }}
         />
       </div>
 
@@ -659,6 +660,9 @@ export default function EmployeesPage() {
           }}
           actions={renderActions || undefined}
           stickyHeader={true}
+          totalCount={totalCount}
+          currentPage={pagination.page}
+          onPageChange={pagination.setPage}
         />
       ) : (
         <GridView

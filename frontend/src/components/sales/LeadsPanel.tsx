@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   useLeads, useDeleteLead,
@@ -17,6 +17,7 @@ import { Trash2, Phone, Calendar, ThumbsUp, UserPlus, XCircle, FileText, Loader2
 import LeadFormModal from "./LeadFormModal";
 import QuoteFormModal from "./QuoteFormModal";
 import { toast } from "sonner";
+import { usePagination } from "@/hooks/usePagination";
 
 function FollowUpModal({
   open, lead, onClose, onSuccess,
@@ -133,6 +134,7 @@ export default function LeadsPanel() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const pagination = usePagination();
 
   const [followUpLead, setFollowUpLead] = useState<Lead | null>(null);
   const [lostLead, setLostLead] = useState<Lead | null>(null);
@@ -153,11 +155,15 @@ export default function LeadsPanel() {
     { name: "status", label: "Status", type: "status", options: leadStatusOptions },
   ];
 
-  const { data: leads = [], isLoading, refetch } = useLeads(
-    Object.keys(filters).length > 0
-      ? { status: filters.status || undefined, search: filters.search || undefined }
-      : undefined
-  );
+  const leadFilters = useMemo(() => {
+    const f: { status?: string; search?: string; page?: string } = {};
+    if (filters.status) f.status = filters.status;
+    if (filters.search) f.search = filters.search;
+    f.page = String(pagination.page);
+    return f;
+  }, [filters, pagination.page]);
+
+  const { data: leads = [], isLoading, refetch, totalCount } = useLeads(leadFilters);
   const deleteLead = useDeleteLead();
   const contactLead = useContactLead();
   const qualifyLead = useQualifyLead();
@@ -337,8 +343,11 @@ export default function LeadsPanel() {
         onRowClick={(lead) => router.push(`/sales/leads/${lead.id}`)}
         exportEnabled={permissions.export}
         onRowSelect={setSelectedIds}
+        totalCount={totalCount}
+        currentPage={pagination.page}
+        onPageChange={pagination.setPage}
         filterBar={
-          <FilterBar fields={filterFields} filters={filters} onChange={setFilters} />
+          <FilterBar fields={filterFields} filters={filters} onChange={(f) => { setFilters(f); pagination.resetPage(); }} />
         }
         batchActions={
           <button

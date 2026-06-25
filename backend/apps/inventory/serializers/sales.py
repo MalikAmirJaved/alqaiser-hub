@@ -53,7 +53,7 @@ class SalesOrderLineSerializer(serializers.ModelSerializer):
 
 
 class SalesOrderSerializer(serializers.ModelSerializer):
-    customer = UUIDForeignRelatedField(queryset=Customer.objects.all(), allow_null=True)
+    customer = UUIDForeignRelatedField(queryset=Customer.objects.all(), allow_null=True, required=False)
     warehouse = UUIDForeignRelatedField(queryset=Warehouse.objects.all())
     bank_account = UUIDForeignRelatedField(queryset=BankAccount.objects.all(), allow_null=True, required=False)
     id = serializers.UUIDField(source='_id', read_only=True)

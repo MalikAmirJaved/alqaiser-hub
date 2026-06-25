@@ -12,6 +12,7 @@ import { useARAging, useAPAging } from "@/hooks/finance/useAgingReports";
 import { useExpenseReport } from "@/hooks/finance/useExpenseReport";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Download, Printer, Calendar, FileText, BarChart3, PieChart, Scale,
   Banknote, Receipt, Building2, Percent, TrendingUp, TrendingDown,
@@ -95,10 +96,44 @@ function ProgressBar({ value, max, color = "bg-primary" }: {
 
 function LoadingState() {
   return (
-    <div className="flex items-center justify-center py-16">
-      <div className="flex flex-col items-center gap-3">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        <span className="text-sm text-muted-foreground">Loading report data...</span>
+    <div className="space-y-6">
+      {/* Summary stat cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="rounded-lg border border-border bg-card p-4">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-9 w-9 rounded-md" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-5 w-28" />
+                <Skeleton className="h-2.5 w-16" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* Section card skeletons */}
+      <div className="rounded-lg border border-border bg-card">
+        <div className="px-5 py-3 border-b border-border">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-3 w-24 mt-1" />
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="space-y-2">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-2 w-full rounded-full" />
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-3 w-3/4" />
+            <Skeleton className="h-2 w-3/4 rounded-full" />
+          </div>
+          {/* Table skeleton */}
+          <div className="pt-3">
+            <Skeleton className="h-3 w-full mb-2" />
+            <Skeleton className="h-3 w-full mb-2" />
+            <Skeleton className="h-3 w-2/3" />
+          </div>
+        </div>
       </div>
     </div>
   );

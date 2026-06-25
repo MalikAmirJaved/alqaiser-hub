@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { X, RotateCw } from "lucide-react";
 import { useCreateExpense, useUpdateExpense, expenseCategoryOptions } from "@/hooks/finance/useExpenses";
 import { useSuppliers, useCreateSupplier } from "@/hooks/useSuppliers";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import { useAutoCode } from "@/hooks/useAutoCode";
 import { useQueryClient } from "@tanstack/react-query";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
@@ -17,7 +18,7 @@ interface ExpenseFormData {
   amount: number;
   description: string;
   notes: string;
-  supplier: string;         // UUID of the supplier
+  supplier?: string;         // UUID of the supplier
   pay_immediately: boolean;
 }
 
@@ -82,9 +83,15 @@ export default function ExpenseFormModal({
   });
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();
-  const { data: suppliers, isLoading: suppliersLoading } = useSuppliers({
-  status: "active",
-});
+
+  const fetchSuppliers = useServerSearch("/api/inventory/suppliers/", {
+    extraParams: { is_active: "true" },
+    transformOption: (s: any) => ({
+      value: s.id,
+      label: s.name,
+    }),
+  });
+
   const { generateCode, validateCode } = useAutoCode("expense");
 
   const supplierValue = watch("supplier");
@@ -107,9 +114,6 @@ export default function ExpenseFormModal({
   }, [initialData, setValue, reset, open]);
 
   const onSubmit = async (data: ExpenseFormData) => {
-    if (!data.supplier) {
-      return;
-    }
     const payload = {
       ...data,
       amount: Number(data.amount),
@@ -182,9 +186,8 @@ export default function ExpenseFormModal({
             <SearchableSelect
               value={watch("supplier") || ""}
               onChange={(val) => setValue("supplier", val)}
-              required
-              options={(suppliers || []).map((s: any) => ({ value: s.id, label: s.name }))}
-              placeholder="Select a vendor…"
+              fetchOptions={fetchSuppliers}
+              placeholder="Search suppliers..."
               onAddNew={() => setShowSupplierForm(true)}
               addNewLabel="+ Create New Vendor"
             />

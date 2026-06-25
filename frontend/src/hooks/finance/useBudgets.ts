@@ -35,11 +35,12 @@ type UpdateBudgetData = Partial<CreateBudgetData>;
 
 const BUDGETS_KEY = "finance_budgets";
 
-async function getAllBudgets(params?: { account_id?: string; year?: number; period_type?: string }) {
+async function getAllBudgets(params?: { account_id?: string; year?: number; period_type?: string; page?: number }) {
   const searchParams = new URLSearchParams();
   if (params?.account_id) searchParams.append("account_id", params.account_id);
   if (params?.year) searchParams.append("year", String(params.year));
   if (params?.period_type) searchParams.append("period_type", params.period_type);
+  if (params?.page) searchParams.append("page", String(params.page));
   const url = `/api/finance/budgets/${searchParams.toString() ? `?${searchParams}` : ""}`;
   return apiFetch<PaginatedResponse<Budget>>(url);
 }
@@ -60,13 +61,13 @@ async function getVarianceReport(year: number, period_type: string) {
   return apiFetch<{ success: boolean; data: any[] }>(`/api/finance/budgets/variance_report/?year=${year}&period_type=${period_type}`);
 }
 
-export function useBudgets(filters?: { account_id?: string; year?: number; period_type?: string }) {
-  return useQuery({
+export function useBudgets(filters?: { account_id?: string; year?: number; period_type?: string; page?: number }) {
+  const query = useQuery({
     queryKey: [BUDGETS_KEY, filters],
     queryFn: () => getAllBudgets(filters),
-    select: (data) => data.results,
     staleTime: 30_000,
   });
+  return { ...query, data: query.data?.results ?? [], totalCount: query.data?.count ?? 0 };
 }
 
 export function useCreateBudget() {

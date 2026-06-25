@@ -40,22 +40,31 @@ export function useWarehouses(filters?: {
   search?: string;
   is_active?: boolean;
   country?: string;
+  state?: string;
   city?: string;
+  page?: string;
 }) {
   const api = useApi();
   const params = new URLSearchParams();
   if (filters?.search) params.append("search", filters.search);
   if (filters?.is_active !== undefined) params.append("is_active", String(filters.is_active));
   if (filters?.country) params.append("country", filters.country);
+  if (filters?.state) params.append("state", filters.state);
   if (filters?.city) params.append("city", filters.city);
+  if (filters?.page) params.append("page", filters.page);
   const url = `/api/inventory/warehouses/${params.toString() ? `?${params}` : ""}`;
 
-  return useQuery<PaginatedResponse<Warehouse>, Error, Warehouse[]>({
+  const query = useQuery<PaginatedResponse<Warehouse>, Error>({
     queryKey: ["inventory_warehouse", filters],
     queryFn: () => api(url),
-    select: (data) => data.results,
     staleTime: 30_000,
   });
+
+  return {
+    ...query,
+    data: query.data?.results ?? [],
+    totalCount: query.data?.count ?? 0,
+  };
 }
 
 // Fetch single warehouse

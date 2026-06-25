@@ -19,13 +19,13 @@ export default function PayslipModal({
   onClose: () => void 
 }) {
   const { data: payrollRecords = [] } = usePayroll(
-    isOpen && employee ? { employee_id: String(employee.id) } : undefined
+    isOpen && employee ? { employee: String(employee.id) } : undefined
   );
   const { data: loans = [] } = useEmployeeLoans(
-    isOpen && employee ? { employee_id: String(employee.id) } : undefined
+    isOpen && employee ? { employee: String(employee.id) } : undefined
   );
   const { data: compensations = [] } = useCompensations(
-    isOpen && employee ? { employee_id: String(employee.id) } : undefined
+    isOpen && employee ? { employee: String(employee.id) } : undefined
   );
 
   const router = useRouter();

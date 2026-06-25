@@ -47,11 +47,12 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   inventory_category: ["inventory_category"],
   inventory_brand: ["inventory_brand"],
   inventory_warehouse: ["inventory_warehouse"],
-  inventory_product: ["inventory_product"],
+  inventory_product: ["inventory_product", "pos_catalog"],
   inventory_supplier: ["inventory_supplier"],
-  inventory_variant: ["inventory_variant", "batchStock"],
-  inventory_stock: ["inventory_stock", "batchStock"],
+  inventory_variant: ["inventory_variant", "pos_catalog"],
+  inventory_stock: ["inventory_stock", "pos_catalog"],
   inventory_sales_order: ["inventory_sales_order"],
+  pos_catalog: ["pos_catalog"],
   inventory_stock_transfer: ["inventory_stock_transfer"],
   inventory_purchase_order: ["inventory_purchase_order"],
 
@@ -185,9 +186,9 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
 
       const companyId = user?.companyId;
       const branchId = user?.branchId;
-      if (!companyId || !branchId) {
+      if (!companyId) {
         console.warn(
-          "[NotificationContext] Missing company or branch ID – waiting for user data. Retry will happen when user loads."
+          "[NotificationContext] Missing company ID – waiting for user data. Retry will happen when user loads."
         );
         return;
       }
@@ -328,8 +329,8 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
     let pollInterval: NodeJS.Timeout;
     if (!isConnected) {
       pollInterval = setInterval(() => {
-        queryClient.invalidateQueries({ queryKey: ["salesOrders"] });
-        queryClient.invalidateQueries({ queryKey: ["currentStock"] });
+        queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
+        queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
         queryClient.invalidateQueries({ queryKey: ["companySettings"] });
       }, 30000);
     }

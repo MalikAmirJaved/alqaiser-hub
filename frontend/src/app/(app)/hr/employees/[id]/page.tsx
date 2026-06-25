@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useEmployees } from "@/hooks/useEmployees";
+import { useEmployee } from "@/hooks/useEmployees";
 import { useLeaves } from "@/hooks/useLeaves";
 import { usePayroll, useEmployeeLoans, useCompensations, computeTotalMonths } from "@/hooks/usePayroll";
 import { useEmployeeAssignments } from "@/hooks/useEmployeeAssets";
@@ -155,16 +155,15 @@ export default function EmployeeDetailPage() {
   const [docViewer, setDocViewer] = useState<{ open: boolean; url: string; filename?: string; mimeType?: string; title?: string }>({ open: false, url: "" });
 
   // ── Data fetching ──────────────────────────────────────────────
-  const { data: employees = [], isLoading: empLoading } = useEmployees();
-  const employee = employees.find((e) => e.id === id);
+  const { data: employee, isLoading: empLoading } = useEmployee(id);
 
-  const { data: leaves = [] } = useLeaves(id ? { employee_id: id } : undefined);
-  const { data: payrollRecords = [] } = usePayroll(id ? { employee_id: id } : undefined);
-  const { data: loans = [] } = useEmployeeLoans(id ? { employee_id: id } : undefined);
-  const { data: compensations = [] } = useCompensations(id ? { employee_id: id } : undefined);
+  const { data: leaves = [] } = useLeaves(id ? { employee: id } : undefined);
+  const { data: payrollRecords = [] } = usePayroll(id ? { employee: id } : undefined);
+  const { data: loans = [] } = useEmployeeLoans(id ? { employee: id } : undefined);
+  const { data: compensations = [] } = useCompensations(id ? { employee: id } : undefined);
   const { data: assignmentsData } = useEmployeeAssignments(id);
   const { data: shiftTemplates = [] } = useShiftTemplates();
-  const { data: exitData } = useExitRecords(id ? { employee_id: id } : undefined);
+  const { data: exitData } = useExitRecords(id ? { employee: id } : undefined);
 
   const shiftTemplate = shiftTemplates.find((t) => t.id === employee?.default_shift_id);
   const latestCompensation = compensations[0];
