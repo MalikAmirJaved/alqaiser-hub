@@ -50,6 +50,7 @@ interface PurchaseOrderModalProps {
 interface LineItem {
   id: number;
   selectedId: string;
+  selectedLabel?: string;
   quantity_ordered: number;
   unit_cost: number;
   tax_rate: number;
@@ -179,6 +180,7 @@ export function PurchaseOrderModal({
       setLineItems([{
         id: nextLineId(),
         selectedId: prefillFromRequest.asset,
+        selectedLabel: prefillFromRequest.asset_name,
         quantity_ordered: prefillFromRequest.quantity,
         unit_cost: 0,
         tax_rate: 0,
@@ -1188,6 +1190,7 @@ function AssetLineItems({
                 onChange={(val) => onSelectChange(line.id, val)}
                 fetchOptions={fetchAssets}
                 placeholder="Select asset…"
+                displayLabel={line.selectedLabel}
               />
 
               <input
