@@ -36,6 +36,8 @@ class Quote(BaseModel):
         ('SALES_POS', 'Sales POS'),
         ('SALES_AGENT', 'Sales Agent'),
     ], default='SALES_DESKTOP', db_index=True)
+    overall_discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    overall_tax_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
     notes = models.TextField(blank=True)
     converted_invoice = models.ForeignKey(
         'finance.CustomerInvoice',

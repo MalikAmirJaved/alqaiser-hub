@@ -142,6 +142,8 @@ export default function QuotesPanel() {
     invoice_date: new Date().toISOString().split("T")[0],
     due_date: quote.expiration_date || "",
     amount: Number(quote.total_amount),
+    overall_discount_percent: Number((quote as any).overall_discount_percent || 0),
+    overall_tax_percent: Number((quote as any).overall_tax_percent || 0),
     notes: quote.notes || "",
     lines: (quote.lines || []).map((line) => ({
       variant: line.variant,

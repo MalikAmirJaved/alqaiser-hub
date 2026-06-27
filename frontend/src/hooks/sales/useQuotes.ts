@@ -30,6 +30,8 @@ export interface Quote {
   date: string;
   expiration_date: string | null;
   total_amount: number | string;
+  overall_discount_percent?: number | string;
+  overall_tax_percent?: number | string;
   status: "DRAFT" | "SENT" | "VIEWED" | "APPROVED" | "REJECTED" | "CONVERTED";
   notes: string;
   lines: QuoteLine[];

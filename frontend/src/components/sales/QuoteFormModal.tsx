@@ -77,6 +77,8 @@ export default function QuoteFormModal({
     customer: "",
     date: new Date().toISOString().split("T")[0],
     expiration_date: "",
+    overall_discount_percent: 0,
+    overall_tax_percent: 0,
     notes: "",
     lines: [] as QuoteLine[],
   });
@@ -87,6 +89,8 @@ export default function QuoteFormModal({
         customer: initialData.customer || "",
         date: initialData.date || new Date().toISOString().split("T")[0],
         expiration_date: initialData.expiration_date || "",
+        overall_discount_percent: Number(initialData.overall_discount_percent || 0),
+        overall_tax_percent: Number(initialData.overall_tax_percent || 0),
         notes: initialData.notes || "",
         lines: (initialData.lines || []).map((line) => ({
           variant: line.variant,
@@ -120,6 +124,8 @@ export default function QuoteFormModal({
       customer: "",
       date: new Date().toISOString().split("T")[0],
       expiration_date: "",
+      overall_discount_percent: 0,
+      overall_tax_percent: 0,
       notes: "",
       lines: [],
     });
@@ -205,9 +211,6 @@ export default function QuoteFormModal({
     return subtotal - discount + tax;
   };
 
-  const calculateTotal = () =>
-    formData.lines.reduce((sum, line) => sum + calculateLineTotal(line), 0);
-
   const subtotal = formData.lines.reduce((s, l) => s + l.quantity * l.unit_price, 0);
   const totalDiscount = formData.lines.reduce((s, l) => s + (l.discount_amount || 0), 0);
   const totalTax = formData.lines.reduce((s, l) => {
@@ -215,6 +218,13 @@ export default function QuoteFormModal({
     const disc = l.discount_amount || 0;
     return s + (sub - disc) * (l.tax_rate / 100);
   }, 0);
+
+  const overallDiscountPercent = Number(formData.overall_discount_percent) || 0;
+  const overallTaxPercent = Number(formData.overall_tax_percent) || 0;
+  const overallDiscountAmount = subtotal * (overallDiscountPercent / 100);
+  const totalBeforeTax = subtotal - totalDiscount - overallDiscountAmount;
+  const overallTaxAmount = totalBeforeTax * (overallTaxPercent / 100);
+  const calculateTotal = () => totalBeforeTax + overallTaxAmount;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -226,6 +236,9 @@ export default function QuoteFormModal({
       delete payload.customer;
     }
     if (!payload.expiration_date) delete payload.expiration_date;
+
+    payload.overall_discount_percent = Number(formData.overall_discount_percent) || 0;
+    payload.overall_tax_percent = Number(formData.overall_tax_percent) || 0;
 
     payload.lines = payload.lines.map((line: any) => {
       const cleaned: any = {
@@ -261,7 +274,7 @@ export default function QuoteFormModal({
     <>
       {/* ── Backdrop ── */}
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-        <div className="relative w-full max-w-5xl rounded-2xl border border-border bg-card shadow-2xl flex flex-col max-h-[92vh]">
+        <div className="relative w-full max-w-6xl rounded-2xl border border-border bg-card shadow-2xl flex flex-col max-h-[92vh]">
 
           {/* ── Header ── */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
@@ -527,6 +540,7 @@ export default function QuoteFormModal({
                                 <input
                                   type="number"
                                   step="0.01"
+                                  min="0.01"
                                   value={line.unit_price}
                                   onChange={(e) =>
                                     updateLine(idx, "unit_price", parseFloat(e.target.value) || 0)
@@ -622,22 +636,65 @@ export default function QuoteFormModal({
                 </div>
 
                 {/* Totals summary */}
-                <div className="md:w-56 shrink-0">
+                <div className="md:w-82 shrink-0">
                   <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-2.5">
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>Subtotal</span>
                       <span className="font-mono">{formatCurrency(subtotal)}</span>
                     </div>
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Discount</span>
-                      <span className="font-mono text-destructive">
-                        −{formatCurrency(totalDiscount)}
+
+                    {/* Overall discount % */}
+                    <div className="flex justify-between items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm text-muted-foreground">Discount</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={formData.overall_discount_percent}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              overall_discount_percent: parseFloat(e.target.value) || 0,
+                            }))
+                          }
+                          className="w-14 h-6 text-xs text-right bg-muted/40 border border-border rounded px-1 focus:outline-none focus:ring-1 focus:ring-ring"
+                          placeholder="0"
+                        />
+                        <span className="text-[10px] text-muted-foreground">%</span>
+                      </div>
+                      <span className="font-mono text-sm text-destructive">
+                        −{formatCurrency(overallDiscountAmount)}
                       </span>
                     </div>
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Tax</span>
-                      <span className="font-mono">{formatCurrency(totalTax)}</span>
+
+                    {/* Overall tax % */}
+                    <div className="flex justify-between items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm text-muted-foreground">Tax</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={formData.overall_tax_percent}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              overall_tax_percent: parseFloat(e.target.value) || 0,
+                            }))
+                          }
+                          className="w-14 h-6 text-xs text-right bg-muted/40 border border-border rounded px-1 focus:outline-none focus:ring-1 focus:ring-ring"
+                          placeholder="0"
+                        />
+                        <span className="text-[10px] text-muted-foreground">%</span>
+                      </div>
+                      <span className="font-mono text-sm">
+                        {formatCurrency(overallTaxAmount)}
+                      </span>
                     </div>
+
                     <div className="flex justify-between items-center pt-2.5 border-t border-border">
                       <span className="text-sm font-semibold">Total</span>
                       <span className="text-lg font-bold font-mono">

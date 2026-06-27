@@ -1,5 +1,10 @@
+import time
+import random
+from decimal import Decimal
+
 from rest_framework import serializers
-from apps.finance.models import CustomerInvoice, CustomerInvoiceLine, BankAccount
+
+from apps.finance.models import CustomerInvoice, CustomerInvoiceLine, BankAccount, SupplierBill
 from apps.inventory.models import Customer, SalesOrder, ProductVariant, Supplier
 from apps.inventory.serializers.customer import CustomerSerializer
 
@@ -107,7 +112,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = (
             'id', 'created_at', 'updated_at', 'company_id', 'branch_id',
-            'paid_amount', 'payment_status', 'outstanding', 'status', 'journal_entry',
+            'paid_amount', 'payment_status', 'outstanding', 'status', 'journal_entry', 'amount',
         )
 
     def get_customer_name(self, obj):
@@ -138,10 +143,14 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
         validated_data.setdefault('created_by', user)
         validated_data.setdefault('updated_by', user)
 
-        invoice = CustomerInvoice.objects.create(**validated_data)
+        # amount is read_only so it gets stripped from validated_data.
+        # Pass a placeholder since the real amount is calculated below.
+        invoice = CustomerInvoice.objects.create(**validated_data, amount=Decimal('0'))
         
+        subtotal = Decimal('0')
+        per_line_discounts = Decimal('0')
         for line_item in lines_data:
-            CustomerInvoiceLine.objects.create(
+            line = CustomerInvoiceLine.objects.create(
                 customer_invoice=invoice,
                 company_id=invoice.company_id,
                 branch_id=invoice.branch_id,
@@ -149,6 +158,49 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
                 updated_by=invoice.updated_by,
                 **line_item
             )
+            subtotal += line.quantity * line.unit_price
+            per_line_discounts += Decimal(str(line.discount_amount or 0))
+        
+        overall_discount_percent = Decimal(str(validated_data.get('overall_discount_percent', 0) or 0))
+        overall_tax_percent = Decimal(str(validated_data.get('overall_tax_percent', 0) or 0))
+        overall_discount = subtotal * (overall_discount_percent / Decimal('100'))
+        total_before_tax = subtotal - per_line_discounts - overall_discount
+        overall_tax = total_before_tax * (overall_tax_percent / Decimal('100'))
+        invoice.amount = total_before_tax + overall_tax
+        invoice.save(update_fields=['amount'])
+
+        # ── Auto-create unpaid SupplierBill for manual-entry lines with vendor + cost_price ──
+        vendor_bills: dict[str, dict] = {}
+        for line_item in lines_data:
+            if line_item.get('is_manual_entry') and line_item.get('vendor') and line_item.get('cost_price') is not None:
+                vendor_id = str(line_item['vendor']._id)
+                cost = Decimal(str(line_item['quantity'])) * Decimal(str(line_item['cost_price']))
+                if vendor_id in vendor_bills:
+                    vendor_bills[vendor_id]['amount'] += cost
+                else:
+                    vendor_bills[vendor_id] = {
+                        'vendor': line_item['vendor'],
+                        'amount': cost,
+                    }
+
+        for vdata in vendor_bills.values():
+            bill_number = f"BILL-INV-{int(time.time())}-{random.randint(1000, 9999)}"
+            bill_date = invoice.invoice_date
+            due_date = invoice.due_date or bill_date
+            SupplierBill.objects.create(
+                bill_number=bill_number,
+                supplier=vdata['vendor'],
+                bill_date=bill_date,
+                due_date=due_date,
+                amount=vdata['amount'],
+                status='DRAFT',
+                notes=f"Auto-created from invoice {invoice.invoice_number}",
+                company_id=invoice.company_id,
+                branch_id=invoice.branch_id,
+                created_by=user,
+                updated_by=user,
+            )
+
         return invoice
 
     def update(self, instance, validated_data):
@@ -159,8 +211,10 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
 
         if lines_data is not None:
             instance.lines.all().update(is_deleted=True)
+            subtotal = Decimal('0')
+            per_line_discounts = Decimal('0')
             for line_item in lines_data:
-                CustomerInvoiceLine.objects.create(
+                line = CustomerInvoiceLine.objects.create(
                     customer_invoice=instance,
                     company_id=instance.company_id,
                     branch_id=instance.branch_id,
@@ -168,4 +222,13 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
                     updated_by=instance.updated_by or instance.created_by,
                     **line_item
                 )
+                subtotal += line.quantity * line.unit_price
+                per_line_discounts += Decimal(str(line.discount_amount or 0))
+            overall_discount_percent = Decimal(str(validated_data.get('overall_discount_percent', instance.overall_discount_percent or 0)))
+            overall_tax_percent = Decimal(str(validated_data.get('overall_tax_percent', instance.overall_tax_percent or 0)))
+            overall_discount = subtotal * (overall_discount_percent / Decimal('100'))
+            total_before_tax = subtotal - per_line_discounts - overall_discount
+            overall_tax = total_before_tax * (overall_tax_percent / Decimal('100'))
+            instance.amount = total_before_tax + overall_tax
+            instance.save(update_fields=['amount'])
         return instance

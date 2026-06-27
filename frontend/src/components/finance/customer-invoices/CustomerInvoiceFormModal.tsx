@@ -1,6 +1,6 @@
 // components/finance/CustomerInvoiceFormModal.tsx
 import { useEffect, useState, useCallback, memo } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { X, Plus, Trash2, RotateCw, Package, Type, FileText, AlertCircle, ChevronDown } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -41,6 +41,8 @@ interface CustomerInvoiceFormData {
   invoice_date: string;
   due_date: string;
   amount: number;
+  overall_discount_percent: number;
+  overall_tax_percent: number;
   notes: string;
   lines: InvoiceLine[];
   new_customer?: any;
@@ -66,6 +68,7 @@ interface ManualEntryFieldsProps {
   sku: string;
   costPrice: number | undefined;
   vendorValue: string;
+  vendorName: string;
   fetchVendors: any;
   onNameBlur: (val: string) => void;
   onSkuBlur: (val: string) => void;
@@ -78,6 +81,7 @@ const ManualEntryFields = memo(function ManualEntryFields({
   sku,
   costPrice,
   vendorValue,
+  vendorName,
   fetchVendors,
   onNameBlur,
   onSkuBlur,
@@ -125,6 +129,7 @@ const ManualEntryFields = memo(function ManualEntryFields({
             onChange={onVendorChange}
             fetchOptions={fetchVendors}
             placeholder="Vendor…"
+            displayLabel={vendorName}
           />
         </div>
       </div>
@@ -203,6 +208,8 @@ export default function CustomerInvoiceFormModal({
         invoice_date: new Date().toISOString().split("T")[0],
         due_date: "",
         amount: 0,
+        overall_discount_percent: 0,
+        overall_tax_percent: 0,
         notes: "",
         lines: [],
       },
@@ -222,20 +229,25 @@ export default function CustomerInvoiceFormModal({
     return subtotal - discount + tax;
   };
 
-  const calculateOverallTotal = () =>
-    (watchedLines || []).reduce((sum, line) => sum + calculateLineTotal(line), 0);
 
-  const subtotal = (watchedLines || []).reduce((s, l) => s + l.quantity * l.unit_price, 0);
-  const totalDiscount = (watchedLines || []).reduce((s, l) => s + (l.discount_amount || 0), 0);
+
+  const overallDiscountPct = Number(useWatch({ control, name: "overall_discount_percent" })) || 0;
+  const overallTaxPct = Number(useWatch({ control, name: "overall_tax_percent" })) || 0;
+
+  const subtotal = (watchedLines || []).reduce((s, l) => s + Number(l.quantity) * Number(l.unit_price), 0);
+  const totalDiscount = (watchedLines || []).reduce((s, l) => s + (Number(l.discount_amount) || 0), 0);
   const totalTax = (watchedLines || []).reduce((s, l) => {
-    const sub = l.quantity * l.unit_price;
-    const disc = l.discount_amount || 0;
-    return s + (sub - disc) * (l.tax_rate / 100);
+    const sub = Number(l.quantity) * Number(l.unit_price);
+    const disc = Number(l.discount_amount) || 0;
+    return s + (sub - disc) * ((Number(l.tax_rate) || 0) / 100);
   }, 0);
+  const overallDiscountAmt = (subtotal || 0) * (overallDiscountPct / 100);
+  const totalBeforeTax = (subtotal || 0) - (totalDiscount || 0) - (overallDiscountAmt || 0);
+  const overallTaxAmt = (totalBeforeTax || 0) * (overallTaxPct / 100);
 
   useEffect(() => {
-    setValue("amount", calculateOverallTotal());
-  }, [watchedLines, setValue]);
+    setValue("amount", (totalBeforeTax || 0) + (overallTaxAmt || 0));
+  }, [watchedLines, setValue, watch("overall_discount_percent"), watch("overall_tax_percent")]);
 
   useEffect(() => {
     if (initialData) {
@@ -248,6 +260,14 @@ export default function CustomerInvoiceFormModal({
         typeof initialData.amount === "string"
           ? parseFloat(initialData.amount)
           : initialData.amount
+      );
+      setValue(
+        "overall_discount_percent",
+        Number((initialData as any).overall_discount_percent || 0)
+      );
+      setValue(
+        "overall_tax_percent",
+        Number((initialData as any).overall_tax_percent || 0)
       );
       setValue("notes", initialData.notes);
       setValue(
@@ -283,6 +303,8 @@ export default function CustomerInvoiceFormModal({
       if (defaultValues.invoice_date !== undefined) setValue("invoice_date", defaultValues.invoice_date);
       if (defaultValues.due_date !== undefined) setValue("due_date", defaultValues.due_date);
       if (defaultValues.amount !== undefined) setValue("amount", defaultValues.amount);
+      if (defaultValues.overall_discount_percent !== undefined) setValue("overall_discount_percent", defaultValues.overall_discount_percent);
+      if (defaultValues.overall_tax_percent !== undefined) setValue("overall_tax_percent", defaultValues.overall_tax_percent);
       if (defaultValues.notes !== undefined) setValue("notes", defaultValues.notes);
       if (defaultValues.lines !== undefined) setValue("lines", defaultValues.lines as any);
       setCustomerDisplayLabel((defaultValues as any).customer_name || "");
@@ -300,6 +322,8 @@ export default function CustomerInvoiceFormModal({
         invoice_date: new Date().toISOString().split("T")[0],
         due_date: "",
         amount: 0,
+        overall_discount_percent: 0,
+        overall_tax_percent: 0,
         notes: "",
         lines: [],
       });
@@ -360,6 +384,10 @@ export default function CustomerInvoiceFormModal({
               unit_price: variant.selling_price,
               max_quantity: variant.total_stock,
             });
+            setVariantDisplayLabels((prev) => ({
+              ...prev,
+              [index]: `${variant.product_name} (${variant.sku})`,
+            }));
           }
         } catch {}
       } else {
@@ -416,6 +444,9 @@ export default function CustomerInvoiceFormModal({
     }
     if (!payload.due_date) payload.due_date = null;
 
+    payload.overall_discount_percent = Number(data.overall_discount_percent) || 0;
+    payload.overall_tax_percent = Number(data.overall_tax_percent) || 0;
+
     payload.lines = payload.lines.map((line: any) => {
       const cleaned: any = {
         quantity: line.quantity,
@@ -462,7 +493,7 @@ export default function CustomerInvoiceFormModal({
     <>
       {/* ── Backdrop ── */}
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-        <div className="relative w-full max-w-5xl rounded-2xl border border-border bg-card shadow-2xl flex flex-col max-h-[92vh]">
+        <div className="relative w-full max-w-6xl rounded-2xl border border-border bg-card shadow-2xl flex flex-col max-h-[92vh]">
 
           {/* ── Header ── */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
@@ -731,6 +762,7 @@ export default function CustomerInvoiceFormModal({
                                     sku={currentLine.manual_variant_sku || ""}
                                     costPrice={currentLine.cost_price}
                                     vendorValue={currentLine.vendor || ""}
+                                    vendorName={currentLine.vendor_name || ""}
                                     fetchVendors={fetchVendors}
                                     onNameBlur={(val) => updateLine(idx, "manual_variant_name", val)}
                                     onSkuBlur={(val) => updateLine(idx, "manual_variant_sku", val)}
@@ -867,27 +899,77 @@ export default function CustomerInvoiceFormModal({
                 </div>
 
                 {/* Totals summary */}
-                <div className="md:w-56 shrink-0">
+                <div className="md:w-82 shrink-0">
                   <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-2.5">
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>Subtotal</span>
                       <span className="font-mono">{formatCurrency(subtotal)}</span>
                     </div>
                     <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Discount</span>
+                      <span>Discount (line)</span>
                       <span className="font-mono text-destructive">
                         −{formatCurrency(totalDiscount)}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Tax</span>
+                      <span>Tax (line)</span>
                       <span className="font-mono">{formatCurrency(totalTax)}</span>
                     </div>
+                    {overallDiscountPct > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          Overall discount ({overallDiscountPct}%)
+                        </span>
+                        <span className="font-mono text-destructive">
+                          −{formatCurrency(overallDiscountAmt)}
+                        </span>
+                      </div>
+                    )}
+                    {overallTaxPct > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          Overall tax ({overallTaxPct}%)
+                        </span>
+                        <span className="font-mono">
+                          +{formatCurrency(overallTaxAmt)}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center pt-2.5 border-t border-border">
                       <span className="text-sm font-semibold">Total</span>
                       <span className="text-lg font-bold font-mono">
-                        {formatCurrency(calculateOverallTotal())}
+                        {formatCurrency((totalBeforeTax || 0) + (overallTaxAmt || 0))}
                       </span>
+                    </div>
+                  </div>
+
+                  {/* Overall discount & tax inputs */}
+                  <div className="rounded-xl border border-border bg-muted/20 p-3 mt-1.5">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] text-muted-foreground font-medium">Discount %</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={overallDiscountPct}
+                          onChange={(e) => setValue("overall_discount_percent", parseFloat(e.target.value) || 0)}
+                          className="w-14 h-7 text-xs text-right bg-background border border-border rounded-md px-1.5 focus:outline-none focus:ring-1 focus:ring-ring"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] text-muted-foreground font-medium">Tax %</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={overallTaxPct}
+                          onChange={(e) => setValue("overall_tax_percent", parseFloat(e.target.value) || 0)}
+                          className="w-14 h-7 text-xs text-right bg-background border border-border rounded-md px-1.5 focus:outline-none focus:ring-1 focus:ring-ring"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -900,7 +982,7 @@ export default function CustomerInvoiceFormModal({
             <p className="text-xs text-muted-foreground">
               {fields.length === 0
                 ? "No items added yet"
-                : `${fields.length} item${fields.length !== 1 ? "s" : ""} · Total ${formatCurrency(calculateOverallTotal())}`}
+                : `${fields.length} item${fields.length !== 1 ? "s" : ""} · Total ${formatCurrency((totalBeforeTax || 0) + (overallTaxAmt || 0))}`}
             </p>
             <div className="flex gap-2">
               <button

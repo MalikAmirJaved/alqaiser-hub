@@ -59,6 +59,8 @@ class CustomerInvoice(PayableModelMixin, BaseModel):
         default='FINANCE',
         db_index=True,
     )
+    overall_discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    overall_tax_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
     notes = models.TextField(blank=True)
 
     class Meta:

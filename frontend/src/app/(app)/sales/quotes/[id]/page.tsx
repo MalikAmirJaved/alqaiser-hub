@@ -122,7 +122,47 @@ export default function QuoteDetailPage() {
               )}
             </tbody>
             <tfoot className="border-t-2 border-border">
-              <tr>
+              {(quote as any).lines?.length > 0 && (
+                <>
+                  <tr>
+                    <td colSpan={4} className="px-4 py-2 text-right text-sm text-muted-foreground">Subtotal</td>
+                    <td className="px-4 py-2 text-right text-sm">
+                      {formatCurrency(
+                        (quote.lines || []).reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0)
+                      )}
+                    </td>
+                  </tr>
+                  {(quote as any).overall_discount_percent > 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                        Discount ({(quote as any).overall_discount_percent}%)
+                      </td>
+                      <td className="px-4 py-2 text-right text-sm text-destructive">
+                        -{formatCurrency(
+                          ((quote.lines || []).reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0)) *
+                          (Number((quote as any).overall_discount_percent) / 100)
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  {(quote as any).overall_tax_percent > 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                        Tax ({(quote as any).overall_tax_percent}%)
+                      </td>
+                      <td className="px-4 py-2 text-right text-sm">
+                        {formatCurrency(
+                          ((quote.lines || []).reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0) -
+                            ((quote.lines || []).reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0)) *
+                            (Number((quote as any).overall_discount_percent) / 100)) *
+                          (Number((quote as any).overall_tax_percent) / 100)
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </>
+              )}
+              <tr className="border-t-2 border-border">
                 <td colSpan={4} className="px-4 py-3 text-right font-semibold">Total</td>
                 <td className="px-4 py-3 text-right font-bold text-primary">{formatCurrency(quote.total_amount)}</td>
               </tr>
@@ -164,6 +204,8 @@ export default function QuoteDetailPage() {
             ["Customer", quote.customer_name || "—"],
             ["Date", quote.date],
             ["Expiration Date", quote.expiration_date || "—"],
+            ["Discount %", (quote as any).overall_discount_percent ? `${(quote as any).overall_discount_percent}%` : "—"],
+            ["Tax %", (quote as any).overall_tax_percent ? `${(quote as any).overall_tax_percent}%` : "—"],
             ["Status", quote.status],
             ["Notes", quote.notes || "—"],
             ["Created", new Date(String(quote.created_at)).toLocaleDateString()],
@@ -317,6 +359,8 @@ export default function QuoteDetailPage() {
                 typeof quote.total_amount === "string"
                   ? parseFloat(quote.total_amount)
                   : quote.total_amount,
+              overallDiscountPercent: Number((quote as any).overall_discount_percent || 0),
+              overallTaxPercent: Number((quote as any).overall_tax_percent || 0),
               status: quote.status,
               notes: quote.notes,
             },

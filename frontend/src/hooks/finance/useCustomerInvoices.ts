@@ -33,6 +33,8 @@ export interface CustomerInvoice {
   amount: number | string;
   paid_amount: number | string;
   outstanding: number | string;
+  overall_discount_percent?: number | string;
+  overall_tax_percent?: number | string;
   status: "DRAFT" | "CANCELLED";
   payment_status?: "UNPAID" | "PARTIAL" | "PAID";
   journal_entry: number | string | null;

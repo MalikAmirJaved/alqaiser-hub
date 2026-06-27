@@ -160,15 +160,47 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
               )}
             </tbody>
             <tfoot className="border-t-2 border-border">
-              <tr>
-                <td colSpan={5} className="px-4 py-3 text-right font-semibold">Subtotal</td>
-                <td className="px-4 py-3 text-right">{formatCurrency(amount)}</td>
-              </tr>
-              <tr className="border-t border-border/60">
-                <td colSpan={5} className="px-4 py-3 text-right font-semibold">Tax</td>
-                <td className="px-4 py-3 text-right">{formatCurrency(amount * 0.08)}</td>
-              </tr>
-              <tr className="border-t border-border/60">
+              {invoice.lines && invoice.lines.length > 0 && (
+                <>
+                  <tr>
+                    <td colSpan={5} className="px-4 py-2 text-right text-sm text-muted-foreground">Subtotal</td>
+                    <td className="px-4 py-2 text-right text-sm">
+                      {formatCurrency(
+                        invoice.lines.reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0)
+                      )}
+                    </td>
+                  </tr>
+                  {(invoice as any).overall_discount_percent > 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                        Discount ({(invoice as any).overall_discount_percent}%)
+                      </td>
+                      <td className="px-4 py-2 text-right text-sm text-destructive">
+                        -{formatCurrency(
+                          invoice.lines.reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0) *
+                          (Number((invoice as any).overall_discount_percent) / 100)
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  {(invoice as any).overall_tax_percent > 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                        Tax ({(invoice as any).overall_tax_percent}%)
+                      </td>
+                      <td className="px-4 py-2 text-right text-sm">
+                        {formatCurrency(
+                          (invoice.lines.reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0) -
+                            invoice.lines.reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0) *
+                            (Number((invoice as any).overall_discount_percent) / 100)) *
+                          (Number((invoice as any).overall_tax_percent) / 100)
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </>
+              )}
+              <tr className="border-t-2 border-border">
                 <td colSpan={5} className="px-4 py-3 text-right font-bold">Total</td>
                 <td className="px-4 py-3 text-right font-bold text-primary">{formatCurrency(amount)}</td>
               </tr>
@@ -187,6 +219,8 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
             ["Customer", invoice.customer_name || "—"],
             ["Invoice Date", invoice.invoice_date],
             ["Due Date", invoice.due_date],
+            ["Discount %", (invoice as any).overall_discount_percent ? `${(invoice as any).overall_discount_percent}%` : "—"],
+            ["Tax %", (invoice as any).overall_tax_percent ? `${(invoice as any).overall_tax_percent}%` : "—"],
             ["Status", invoice.status],
             ["Source", invoice.source || "Manual"],
             ["Payment Method", invoice.payment_method || "—"],
@@ -323,6 +357,8 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
                 discount_amount: l.discount_amount,
               })),
               totalAmount: toNumber(invoice.amount),
+              overallDiscountPercent: Number((invoice as any).overall_discount_percent || 0),
+              overallTaxPercent: Number((invoice as any).overall_tax_percent || 0),
               status: invoice.status,
               paymentStatus: invoice.payment_status,
               notes: invoice.notes,

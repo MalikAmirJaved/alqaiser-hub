@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework import serializers
 from apps.sales.models.quote import Quote, QuoteLine
 from apps.sales.models.lead import Lead
@@ -45,6 +46,11 @@ class QuoteLineSerializer(serializers.ModelSerializer):
             return obj.manual_variant_name or ''
         return obj.variant.product.product_name if obj.variant else ''
 
+    def validate_unit_price(self, value):
+        if value is None or value <= 0:
+            raise serializers.ValidationError('Unit price must be greater than 0.')
+        return value
+
 
 class QuoteSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)
@@ -72,7 +78,7 @@ class QuoteSerializer(serializers.ModelSerializer):
         model = Quote
         fields = [
             'id', 'quote_number', 'lead', 'customer', 'customer_name', 'customer_email', 'customer_phone', 'new_customer',
-            'date', 'expiration_date', 'total_amount', 'status', 'source',
+            'date', 'expiration_date', 'total_amount', 'overall_discount_percent', 'overall_tax_percent', 'status', 'source',
             'notes', 'lines', 'created_at', 'updated_at',
             'converted_invoice', 'converted_invoice_number',
         ]
@@ -115,7 +121,8 @@ class QuoteSerializer(serializers.ModelSerializer):
 
         quote = Quote.objects.create(**validated_data)
         
-        total_amount = 0
+        subtotal = Decimal('0')
+        per_line_discounts = Decimal('0')
         for line_item in lines_data:
             line = QuoteLine.objects.create(
                 quote=quote,
@@ -125,9 +132,15 @@ class QuoteSerializer(serializers.ModelSerializer):
                 updated_by=quote.updated_by,
                 **line_item
             )
-            total_amount += line.line_total
+            subtotal += line.quantity * line.unit_price
+            per_line_discounts += Decimal(str(line.discount_amount or 0))
             
-        quote.total_amount = total_amount
+        overall_discount_percent = Decimal(str(validated_data.get('overall_discount_percent', 0) or 0))
+        overall_tax_percent = Decimal(str(validated_data.get('overall_tax_percent', 0) or 0))
+        overall_discount = subtotal * (overall_discount_percent / Decimal('100'))
+        total_before_tax = subtotal - per_line_discounts - overall_discount
+        overall_tax = total_before_tax * (overall_tax_percent / Decimal('100'))
+        quote.total_amount = total_before_tax + overall_tax
         quote.save(update_fields=['total_amount'])
         return quote
 
@@ -142,7 +155,8 @@ class QuoteSerializer(serializers.ModelSerializer):
 
         if lines_data is not None:
             instance.lines.all().update(is_deleted=True)
-            total_amount = 0
+            subtotal = Decimal('0')
+            per_line_discounts = Decimal('0')
             for line_item in lines_data:
                 line = QuoteLine.objects.create(
                     quote=instance,
@@ -152,8 +166,14 @@ class QuoteSerializer(serializers.ModelSerializer):
                     updated_by=instance.updated_by or instance.created_by,
                     **line_item
                 )
-                total_amount += line.line_total
-            instance.total_amount = total_amount
+                subtotal += line.quantity * line.unit_price
+                per_line_discounts += Decimal(str(line.discount_amount or 0))
+            overall_discount_percent = Decimal(str(validated_data.get('overall_discount_percent', instance.overall_discount_percent or 0)))
+            overall_tax_percent = Decimal(str(validated_data.get('overall_tax_percent', instance.overall_tax_percent or 0)))
+            overall_discount = subtotal * (overall_discount_percent / Decimal('100'))
+            total_before_tax = subtotal - per_line_discounts - overall_discount
+            overall_tax = total_before_tax * (overall_tax_percent / Decimal('100'))
+            instance.total_amount = total_before_tax + overall_tax
             instance.save(update_fields=['total_amount'])
             
         return instance
