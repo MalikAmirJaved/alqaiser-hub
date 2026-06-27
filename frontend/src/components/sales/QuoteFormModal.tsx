@@ -46,6 +46,7 @@ export default function QuoteFormModal({
   const formatCurrency = useFormatCurrency();
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [newCustomerInfo, setNewCustomerInfo] = useState<any>(null);
+  const [customerDisplayLabel, setCustomerDisplayLabel] = useState("");
 
   const fetchCustomers = useServerSearch("/api/inventory/customers/", {
     transformOption: (c: any) => ({
@@ -107,6 +108,7 @@ export default function QuoteFormModal({
           vendor_name: line.vendor_name || "",
         })),
       });
+      setCustomerDisplayLabel(initialData.customer_name || "");
     } else {
       resetForm();
     }
@@ -116,6 +118,10 @@ export default function QuoteFormModal({
     if (initialCustomerId && !initialData && open) {
       setFormData((prev) => ({ ...prev, customer: initialCustomerId }));
       setNewCustomerInfo(null);
+      // Fetch customer name for the displayLabel
+      api(`/api/inventory/customers/${initialCustomerId}/`)
+        .then((c: any) => setCustomerDisplayLabel(c.name || ""))
+        .catch(() => {});
     }
   }, [initialCustomerId, initialData, open]);
 
@@ -130,6 +136,7 @@ export default function QuoteFormModal({
       lines: [],
     });
     setNewCustomerInfo(null);
+    setCustomerDisplayLabel("");
   };
 
   const handleCustomerCreated = async (
@@ -139,6 +146,7 @@ export default function QuoteFormModal({
   ) => {
     setNewCustomerInfo(customerData);
     setFormData((prev) => ({ ...prev, customer: customerId }));
+    setCustomerDisplayLabel(customerName);
   };
 
   const handleCustomerSelect = (customerId: string) => {
@@ -323,9 +331,11 @@ export default function QuoteFormModal({
                         <SearchableSelect
                           value={formData.customer}
                           onChange={handleCustomerSelect}
+                          onOptionSelect={(option) => setCustomerDisplayLabel(option.label)}
                           fetchOptions={fetchCustomers}
                           placeholder="Search customers…"
                           required={!newCustomerInfo}
+                          displayLabel={customerDisplayLabel}
                         />
                       </div>
                       <button
