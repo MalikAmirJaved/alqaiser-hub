@@ -299,7 +299,7 @@ const LineRow = memo(function LineRow({
             onChange={(val) => onUpdateLine(index, "quantity", val)}
             min={1}
             max={currentLine.max_quantity || 999999}
-            className={`w-full text-right bg-transparent focus:outline-none text-sm ${
+            className={`w-full h-8 px-2 bg-transparent hover:bg-muted/30 focus:bg-background border border-transparent focus:border-primary/50 rounded-md text-right text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 ${
               isOverStock ? "text-destructive font-medium" : ""
             }`}
           />
@@ -318,7 +318,7 @@ const LineRow = memo(function LineRow({
           value={Number(currentLine.unit_price) || 0}
           onChange={(val) => onUpdateLine(index, "unit_price", val)}
           step="0.01"
-          className="w-full text-right bg-transparent focus:outline-none text-sm"
+          className="w-full h-8 px-2 bg-transparent hover:bg-muted/30 focus:bg-background border border-transparent focus:border-primary/50 rounded-md text-right text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20"
         />
       </td>
 
@@ -328,7 +328,7 @@ const LineRow = memo(function LineRow({
           value={Number(currentLine.discount_amount) || 0}
           onChange={(val) => onUpdateLine(index, "discount_amount", val)}
           step="0.01"
-          className="w-full text-right bg-transparent focus:outline-none text-sm text-destructive"
+          className="w-full h-8 px-2 bg-transparent hover:bg-muted/30 focus:bg-background border border-transparent focus:border-primary/50 rounded-md text-right text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 text-destructive placeholder:text-destructive/50"
           placeholder="0.00"
         />
       </td>
@@ -339,7 +339,7 @@ const LineRow = memo(function LineRow({
           value={Number(currentLine.tax_rate) || 0}
           onChange={(val) => onUpdateLine(index, "tax_rate", val)}
           step="0.01"
-          className="w-full text-right bg-transparent focus:outline-none text-sm"
+          className="w-full h-8 px-2 bg-transparent hover:bg-muted/30 focus:bg-background border border-transparent focus:border-primary/50 rounded-md text-right text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20"
           placeholder="0"
         />
       </td>
@@ -751,9 +751,12 @@ export default function CustomerInvoiceFormModal({
 
               {/* ── Section 1: Document details ── */}
               <section>
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">
-                  Document details
-                </p>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-1.5 h-4 bg-primary rounded-full"></div>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-foreground">
+                    Document details
+                  </h3>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium">
@@ -806,9 +809,12 @@ export default function CustomerInvoiceFormModal({
 
               {/* ── Section 2: Customer ── */}
               <section>
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">
-                  Customer
-                </p>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-1.5 h-4 bg-primary rounded-full"></div>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-foreground">
+                    Customer
+                  </h3>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium">
@@ -857,10 +863,13 @@ export default function CustomerInvoiceFormModal({
 
               {/* ── Section 3: Line items ── */}
               <section>
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                    Line items
-                  </p>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-4 bg-primary rounded-full"></div>
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-foreground">
+                      Line items
+                    </h3>
+                  </div>
                   <button
                     type="button"
                     onClick={addLine}
@@ -889,7 +898,7 @@ export default function CustomerInvoiceFormModal({
                   <div className="rounded-xl border border-border overflow-visible">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="bg-muted/50 border-b border-border">
+                        <tr className="bg-muted/40 border-b-2 border-border/60">
                           <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
                             Product / Service
                           </th>
@@ -939,9 +948,9 @@ export default function CustomerInvoiceFormModal({
                     <button
                       type="button"
                       onClick={addLine}
-                      className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-muted-foreground hover:text-primary hover:bg-muted/40 border-t border-border transition-colors"
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 text-xs font-medium text-primary hover:bg-primary/5 border-t border-border transition-colors rounded-b-xl"
                     >
-                      <Plus className="w-3.5 h-3.5" />
+                      <Plus className="w-4 h-4" />
                       Add another item
                     </button>
                   </div>
@@ -963,8 +972,8 @@ export default function CustomerInvoiceFormModal({
                   />
                 </div>
 
-                <div className="md:w-82 shrink-0">
-                  <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-2.5">
+                <div className="md:w-[340px] shrink-0">
+                  <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>Subtotal</span>
                       <span className="font-mono">{formatCurrency(subtotal)}</span>
@@ -977,30 +986,11 @@ export default function CustomerInvoiceFormModal({
                       <span>Tax (line)</span>
                       <span className="font-mono">{formatCurrency(totalTax)}</span>
                     </div>
-                    {overallDiscountPct > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Overall discount ({overallDiscountPct}%)</span>
-                        <span className="font-mono text-destructive">−{formatCurrency(overallDiscountAmt)}</span>
-                      </div>
-                    )}
-                    {overallTaxPct > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Overall tax ({overallTaxPct}%)</span>
-                        <span className="font-mono">+{formatCurrency(overallTaxAmt)}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between items-center pt-2.5 border-t border-border">
-                      <span className="text-sm font-semibold">Total</span>
-                      <span className="text-lg font-bold font-mono">
-                        {formatCurrency((totalBeforeTax || 0) + (overallTaxAmt || 0))}
-                      </span>
-                    </div>
-                  </div>
 
-                  <div className="rounded-xl border border-border bg-muted/20 p-3 mt-1.5">
-                    <div className="flex items-center gap-4">
+                    {/* Overall discount % */}
+                    <div className="flex justify-between items-center gap-2">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] text-muted-foreground font-medium">Discount %</span>
+                        <span className="text-sm text-muted-foreground">Discount</span>
                         <input
                           type="number"
                           min="0"
@@ -1008,11 +998,20 @@ export default function CustomerInvoiceFormModal({
                           step="0.01"
                           value={overallDiscountPct}
                           onChange={(e) => setValue("overall_discount_percent", parseFloat(e.target.value) || 0)}
-                          className="w-14 h-7 text-xs text-right bg-background border border-border rounded-md px-1.5 focus:outline-none focus:ring-1 focus:ring-ring"
+                          className="w-14 h-6 text-xs text-right bg-background border border-border rounded px-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                          placeholder="0"
                         />
+                        <span className="text-[10px] text-muted-foreground">%</span>
                       </div>
+                      <span className="font-mono text-sm text-destructive">
+                        −{formatCurrency(overallDiscountAmt)}
+                      </span>
+                    </div>
+
+                    {/* Overall tax % */}
+                    <div className="flex justify-between items-center gap-2">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] text-muted-foreground font-medium">Tax %</span>
+                        <span className="text-sm text-muted-foreground">Tax</span>
                         <input
                           type="number"
                           min="0"
@@ -1020,9 +1019,21 @@ export default function CustomerInvoiceFormModal({
                           step="0.01"
                           value={overallTaxPct}
                           onChange={(e) => setValue("overall_tax_percent", parseFloat(e.target.value) || 0)}
-                          className="w-14 h-7 text-xs text-right bg-background border border-border rounded-md px-1.5 focus:outline-none focus:ring-1 focus:ring-ring"
+                          className="w-14 h-6 text-xs text-right bg-background border border-border rounded px-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                          placeholder="0"
                         />
+                        <span className="text-[10px] text-muted-foreground">%</span>
                       </div>
+                      <span className="font-mono text-sm">
+                        +{formatCurrency(overallTaxAmt)}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-2.5 border-t border-border">
+                      <span className="text-sm font-semibold">Total</span>
+                      <span className="text-lg font-bold font-mono">
+                        {formatCurrency((totalBeforeTax || 0) + (overallTaxAmt || 0))}
+                      </span>
                     </div>
                   </div>
                 </div>
