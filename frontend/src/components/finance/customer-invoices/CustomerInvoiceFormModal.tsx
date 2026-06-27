@@ -59,10 +59,7 @@ interface Props {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ManualEntryFields — isolated so typing never loses focus.
-// Keeps its own local state and only flushes to the parent on blur,
-// which means the parent's useFieldArray update() never re-mounts these inputs.
 // ─────────────────────────────────────────────────────────────────────────────
-
 interface ManualEntryFieldsProps {
   name: string;
   sku: string;
@@ -94,7 +91,6 @@ const ManualEntryFields = memo(function ManualEntryFields({
     costPrice !== undefined ? String(costPrice) : ""
   );
 
-  // Sync if parent resets (modal re-open / edit load)
   useEffect(() => { setLocalName(name); }, [name]);
   useEffect(() => { setLocalSku(sku); }, [sku]);
   useEffect(() => {
@@ -103,7 +99,6 @@ const ManualEntryFields = memo(function ManualEntryFields({
 
   return (
     <div className="space-y-1.5">
-      {/* Item name — onChange only updates local state; parent gets value on blur */}
       <input
         type="text"
         value={localName}
@@ -112,8 +107,6 @@ const ManualEntryFields = memo(function ManualEntryFields({
         className="w-full h-8 bg-muted/40 border border-border rounded-md px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
         placeholder="Item name…"
       />
-
-      {/* SKU + Vendor */}
       <div className="flex gap-1.5">
         <input
           type="text"
@@ -133,21 +126,15 @@ const ManualEntryFields = memo(function ManualEntryFields({
           />
         </div>
       </div>
-
-      {/* Cost price */}
       <div className="flex items-center gap-1.5">
-        <label className="text-[11px] text-muted-foreground whitespace-nowrap">
-          Cost price:
-        </label>
+        <label className="text-[11px] text-muted-foreground whitespace-nowrap">Cost price:</label>
         <input
           type="number"
           step="0.01"
           min="0"
           value={localCostPrice}
           onChange={(e) => setLocalCostPrice(e.target.value)}
-          onBlur={() =>
-            onCostPriceBlur(localCostPrice !== "" ? parseFloat(localCostPrice) : undefined)
-          }
+          onBlur={() => onCostPriceBlur(localCostPrice !== "" ? parseFloat(localCostPrice) : undefined)}
           className="w-28 h-7 bg-muted/40 border border-border rounded-md px-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
           placeholder="0.00"
         />
@@ -156,6 +143,230 @@ const ManualEntryFields = memo(function ManualEntryFields({
   );
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// NumericCell — local-state input that only flushes to parent on blur.
+// Prevents react-hook-form useFieldArray.update() from firing on every
+// keystroke, which was causing the input to lose focus.
+// ─────────────────────────────────────────────────────────────────────────────
+interface NumericCellProps {
+  value: number;
+  onChange: (val: number) => void;
+  min?: number;
+  max?: number;
+  step?: string;
+  className?: string;
+  placeholder?: string;
+}
+
+const NumericCell = memo(function NumericCell({
+  value,
+  onChange,
+  min,
+  max,
+  step = "1",
+  className = "",
+  placeholder,
+}: NumericCellProps) {
+  const [local, setLocal] = useState(String(value));
+
+  useEffect(() => { setLocal(String(value)); }, [value]);
+
+  const handleBlur = () => {
+    const parsed = parseFloat(local);
+    if (!isNaN(parsed)) {
+      let clamped = parsed;
+      if (min !== undefined && clamped < min) clamped = min;
+      if (max !== undefined && clamped > max) clamped = max;
+      onChange(clamped);
+    } else {
+      // revert
+      setLocal(String(value));
+    }
+  };
+
+  return (
+    <input
+      type="number"
+      step={step}
+      min={min}
+      max={max}
+      value={local}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={handleBlur}
+      className={className}
+      placeholder={placeholder}
+    />
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LineRow — memoized so typing in one row never re-renders sibling rows.
+// Uses NumericCell for qty / unit_price / discount / tax to avoid re-renders
+// during typing, and only flushes values to the parent on blur.
+// ─────────────────────────────────────────────────────────────────────────────
+interface LineRowProps {
+  index: number;
+  fieldId: string;
+  currentLine: InvoiceLine;
+  isOverStock: boolean;
+  fetchVariants: any;
+  variantDisplayLabel: string;
+  fetchVendors: any;
+  onUpdateLine: (index: number, field: keyof InvoiceLine, value: any) => void;
+  onRemove: (index: number) => void;
+  onToggleManual: (index: number, value: boolean) => void;
+  calculateLineTotal: (line: InvoiceLine) => number;
+  formatCurrency: (value: number) => string;
+}
+
+const LineRow = memo(function LineRow({
+  index,
+  fieldId,
+  currentLine,
+  isOverStock,
+  fetchVariants,
+  variantDisplayLabel,
+  fetchVendors,
+  onUpdateLine,
+  onRemove,
+  onToggleManual,
+  calculateLineTotal,
+  formatCurrency,
+}: LineRowProps) {
+  const lineTotal = calculateLineTotal(currentLine);
+
+  return (
+    <tr key={fieldId} className="group hover:bg-muted/20 transition-colors">
+      {/* ── Item cell ── */}
+      <td className="px-4 py-3 min-w-[300px] align-top">
+        <div className="inline-flex rounded-md border border-border overflow-hidden mb-2 text-[11px]">
+          <button
+            type="button"
+            onClick={() => onToggleManual(index, false)}
+            className={`flex items-center gap-1 px-2.5 py-1 transition-colors ${
+              !currentLine.is_manual_entry
+                ? "bg-primary text-primary-foreground font-medium"
+                : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            <Package className="w-3 h-3" />
+            Inventory
+          </button>
+          <button
+            type="button"
+            onClick={() => onToggleManual(index, true)}
+            className={`flex items-center gap-1 px-2.5 py-1 border-l border-border transition-colors ${
+              currentLine.is_manual_entry
+                ? "bg-primary text-primary-foreground font-medium"
+                : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            <Type className="w-3 h-3" />
+            Manual
+          </button>
+        </div>
+
+        {!currentLine.is_manual_entry ? (
+          <SearchableSelect
+            value={currentLine.variant || ""}
+            onChange={(val) => onUpdateLine(index, "variant", val)}
+            fetchOptions={fetchVariants}
+            placeholder="Search variants…"
+            displayLabel={variantDisplayLabel}
+          />
+        ) : (
+          <ManualEntryFields
+            key={`manual-${fieldId}`}
+            name={currentLine.manual_variant_name || ""}
+            sku={currentLine.manual_variant_sku || ""}
+            costPrice={currentLine.cost_price}
+            vendorValue={currentLine.vendor || ""}
+            vendorName={currentLine.vendor_name || ""}
+            fetchVendors={fetchVendors}
+            onNameBlur={(val) => onUpdateLine(index, "manual_variant_name", val)}
+            onSkuBlur={(val) => onUpdateLine(index, "manual_variant_sku", val)}
+            onCostPriceBlur={(val) => onUpdateLine(index, "cost_price", val)}
+            onVendorChange={(val) => onUpdateLine(index, "vendor", val)}
+          />
+        )}
+      </td>
+
+      {/* ── Qty ── */}
+      <td className="px-3 py-3 align-top">
+        <div className="flex flex-col items-end gap-0.5">
+          <NumericCell
+            value={Number(currentLine.quantity) || 0}
+            onChange={(val) => onUpdateLine(index, "quantity", val)}
+            min={1}
+            max={currentLine.max_quantity || 999999}
+            className={`w-full text-right bg-transparent focus:outline-none text-sm ${
+              isOverStock ? "text-destructive font-medium" : ""
+            }`}
+          />
+          {isOverStock && (
+            <span className="flex items-center gap-0.5 text-[10px] text-destructive whitespace-nowrap">
+              <AlertCircle className="w-3 h-3" />
+              Max {currentLine.max_quantity}
+            </span>
+          )}
+        </div>
+      </td>
+
+      {/* ── Unit price ── */}
+      <td className="px-3 py-3 align-top">
+        <NumericCell
+          value={Number(currentLine.unit_price) || 0}
+          onChange={(val) => onUpdateLine(index, "unit_price", val)}
+          step="0.01"
+          className="w-full text-right bg-transparent focus:outline-none text-sm"
+        />
+      </td>
+
+      {/* ── Discount ── */}
+      <td className="px-3 py-3 align-top">
+        <NumericCell
+          value={Number(currentLine.discount_amount) || 0}
+          onChange={(val) => onUpdateLine(index, "discount_amount", val)}
+          step="0.01"
+          className="w-full text-right bg-transparent focus:outline-none text-sm text-destructive"
+          placeholder="0.00"
+        />
+      </td>
+
+      {/* ── Tax % ── */}
+      <td className="px-3 py-3 align-top">
+        <NumericCell
+          value={Number(currentLine.tax_rate) || 0}
+          onChange={(val) => onUpdateLine(index, "tax_rate", val)}
+          step="0.01"
+          className="w-full text-right bg-transparent focus:outline-none text-sm"
+          placeholder="0"
+        />
+      </td>
+
+      {/* ── Line total ── */}
+      <td className="px-3 py-3 text-right font-medium text-sm align-top">
+        {formatCurrency(lineTotal)}
+      </td>
+
+      {/* ── Delete ── */}
+      <td className="px-2 py-3 text-center align-top">
+        <button
+          type="button"
+          onClick={() => onRemove(index)}
+          className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
+          aria-label="Remove line"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </td>
+    </tr>
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main component
+// ─────────────────────────────────────────────────────────────────────────────
 export default function CustomerInvoiceFormModal({
   open,
   onClose,
@@ -222,14 +433,12 @@ export default function CustomerInvoiceFormModal({
 
   const watchedLines = watch("lines");
 
-  const calculateLineTotal = (line: InvoiceLine) => {
+  const calculateLineTotal = useCallback((line: InvoiceLine) => {
     const subtotal = line.quantity * line.unit_price;
     const discount = line.discount_amount || 0;
     const tax = (subtotal - discount) * (line.tax_rate / 100);
     return subtotal - discount + tax;
-  };
-
-
+  }, []);
 
   const overallDiscountPct = Number(useWatch({ control, name: "overall_discount_percent" })) || 0;
   const overallTaxPct = Number(useWatch({ control, name: "overall_tax_percent" })) || 0;
@@ -247,7 +456,7 @@ export default function CustomerInvoiceFormModal({
 
   useEffect(() => {
     setValue("amount", (totalBeforeTax || 0) + (overallTaxAmt || 0));
-  }, [watchedLines, setValue, watch("overall_discount_percent"), watch("overall_tax_percent")]);
+  }, [totalBeforeTax, overallTaxAmt, setValue]);
 
   useEffect(() => {
     if (initialData) {
@@ -345,7 +554,7 @@ export default function CustomerInvoiceFormModal({
     setValue("customer", customerId);
   };
 
-  const addLine = () => {
+  const addLine = useCallback(() => {
     append({
       variant: "",
       quantity: 1,
@@ -358,7 +567,7 @@ export default function CustomerInvoiceFormModal({
       vendor: "",
       cost_price: undefined,
     });
-  };
+  }, [append]);
 
   const updateLine = useCallback(
     async (index: number, field: keyof InvoiceLine, value: any) => {
@@ -395,6 +604,20 @@ export default function CustomerInvoiceFormModal({
       }
     },
     [api, update, watch]
+  );
+
+  const toggleManual = useCallback(
+    (index: number, value: boolean) => {
+      updateLine(index, "is_manual_entry", value);
+    },
+    [updateLine]
+  );
+
+  const handleRemove = useCallback(
+    (index: number) => {
+      remove(index);
+    },
+    [remove]
   );
 
   const onSubmit = async (data: CustomerInvoiceFormData) => {
@@ -498,7 +721,6 @@ export default function CustomerInvoiceFormModal({
           {/* ── Header ── */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
             <div className="flex items-center gap-3">
-              {/* Doc-type badge */}
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary/10 text-primary text-xs font-medium">
                 <FileText className="w-3.5 h-3.5" />
                 Invoice
@@ -533,7 +755,6 @@ export default function CustomerInvoiceFormModal({
                   Document details
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Invoice number */}
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium">
                       Invoice number <span className="text-destructive">*</span>
@@ -559,8 +780,6 @@ export default function CustomerInvoiceFormModal({
                       </button>
                     </div>
                   </div>
-
-                  {/* Invoice date */}
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium">Invoice date</label>
                     <input
@@ -569,8 +788,6 @@ export default function CustomerInvoiceFormModal({
                       className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                   </div>
-
-                  {/* Due date */}
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-muted-foreground">
                       Due date
@@ -585,7 +802,6 @@ export default function CustomerInvoiceFormModal({
                 </div>
               </section>
 
-              {/* ── Divider ── */}
               <hr className="border-border" />
 
               {/* ── Section 2: Customer ── */}
@@ -618,8 +834,6 @@ export default function CustomerInvoiceFormModal({
                         <Plus className="w-4 h-4" />
                       </button>
                     </div>
-
-                    {/* New customer confirmation chip */}
                     {newCustomerInfo && (
                       <div className="flex items-center gap-2 mt-1.5 px-3 py-1.5 rounded-lg bg-success/10 border border-success/20 text-xs">
                         <span className="text-success font-medium">✓ New: {newCustomerInfo.name}</span>
@@ -639,7 +853,6 @@ export default function CustomerInvoiceFormModal({
                 </div>
               </section>
 
-              {/* ── Divider ── */}
               <hr className="border-border" />
 
               {/* ── Section 3: Line items ── */}
@@ -658,7 +871,6 @@ export default function CustomerInvoiceFormModal({
                   </button>
                 </div>
 
-                {/* Empty state */}
                 {fields.length === 0 ? (
                   <button
                     type="button"
@@ -681,21 +893,11 @@ export default function CustomerInvoiceFormModal({
                           <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
                             Product / Service
                           </th>
-                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-20">
-                            Qty
-                          </th>
-                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-28">
-                            Unit price
-                          </th>
-                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-24">
-                            Discount
-                          </th>
-                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-20">
-                            Tax %
-                          </th>
-                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-28">
-                            Total
-                          </th>
+                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-20">Qty</th>
+                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-28">Unit price</th>
+                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-24">Discount</th>
+                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-20">Tax %</th>
+                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-28">Total</th>
                           <th className="w-10" />
                         </tr>
                       </thead>
@@ -708,168 +910,32 @@ export default function CustomerInvoiceFormModal({
                             tax_rate: 0,
                             is_manual_entry: false,
                           };
-                          const lineTotal = calculateLineTotal(currentLine);
                           const isOverStock =
                             !currentLine.is_manual_entry &&
                             currentLine.max_quantity !== undefined &&
                             currentLine.quantity > currentLine.max_quantity;
 
                           return (
-                            <tr key={field.id} className="group hover:bg-muted/20 transition-colors">
-                              {/* ── Item cell ── */}
-                              <td className="px-4 py-3 min-w-[300px] align-top">
-                                {/* Entry-mode toggle */}
-                                <div className="inline-flex rounded-md border border-border overflow-hidden mb-2 text-[11px]">
-                                  <button
-                                    type="button"
-                                    onClick={() => updateLine(idx, "is_manual_entry", false)}
-                                    className={`flex items-center gap-1 px-2.5 py-1 transition-colors ${
-                                      !currentLine.is_manual_entry
-                                        ? "bg-primary text-primary-foreground font-medium"
-                                        : "text-muted-foreground hover:bg-muted"
-                                    }`}
-                                  >
-                                    <Package className="w-3 h-3" />
-                                    Inventory
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => updateLine(idx, "is_manual_entry", true)}
-                                    className={`flex items-center gap-1 px-2.5 py-1 border-l border-border transition-colors ${
-                                      currentLine.is_manual_entry
-                                        ? "bg-primary text-primary-foreground font-medium"
-                                        : "text-muted-foreground hover:bg-muted"
-                                    }`}
-                                  >
-                                    <Type className="w-3 h-3" />
-                                    Manual
-                                  </button>
-                                </div>
-
-                                {!currentLine.is_manual_entry ? (
-                                  <SearchableSelect
-                                    value={currentLine.variant || ""}
-                                    onChange={(val) => updateLine(idx, "variant", val)}
-                                    fetchOptions={fetchVariants}
-                                    placeholder="Search variants…"
-                                    displayLabel={variantDisplayLabels[idx] || ""}
-                                  />
-                                ) : (
-                                  /* Isolated component — typing here never re-mounts the input */
-                                  <ManualEntryFields
-                                    key={`manual-${field.id}`}
-                                    name={currentLine.manual_variant_name || ""}
-                                    sku={currentLine.manual_variant_sku || ""}
-                                    costPrice={currentLine.cost_price}
-                                    vendorValue={currentLine.vendor || ""}
-                                    vendorName={currentLine.vendor_name || ""}
-                                    fetchVendors={fetchVendors}
-                                    onNameBlur={(val) => updateLine(idx, "manual_variant_name", val)}
-                                    onSkuBlur={(val) => updateLine(idx, "manual_variant_sku", val)}
-                                    onCostPriceBlur={(val) => updateLine(idx, "cost_price", val)}
-                                    onVendorChange={(val) => updateLine(idx, "vendor", val)}
-                                  />
-                                )}
-                              </td>
-
-                              {/* ── Qty ── */}
-                              <td className="px-3 py-3 align-top">
-                                <div className="flex flex-col items-end gap-0.5">
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    max={currentLine.max_quantity || 999999}
-                                    value={currentLine.quantity}
-                                    onChange={(e) => {
-                                      let val = parseInt(e.target.value) || 1;
-                                      if (val < 1) val = 1;
-                                      if (!currentLine.is_manual_entry) {
-                                        const max = currentLine.max_quantity;
-                                        if (max !== undefined && val > max) val = max;
-                                      }
-                                      updateLine(idx, "quantity", val);
-                                    }}
-                                    className={`w-full text-right bg-transparent focus:outline-none text-sm ${
-                                      isOverStock ? "text-destructive font-medium" : ""
-                                    }`}
-                                  />
-                                  {isOverStock && (
-                                    <span className="flex items-center gap-0.5 text-[10px] text-destructive whitespace-nowrap">
-                                      <AlertCircle className="w-3 h-3" />
-                                      Max {currentLine.max_quantity}
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-
-                              {/* ── Unit price ── */}
-                              <td className="px-3 py-3 align-top">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={currentLine.unit_price}
-                                  onChange={(e) =>
-                                    updateLine(idx, "unit_price", parseFloat(e.target.value) || 0)
-                                  }
-                                  className="w-full text-right bg-transparent focus:outline-none text-sm"
-                                />
-                              </td>
-
-                              {/* ── Discount ── */}
-                              <td className="px-3 py-3 align-top">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={currentLine.discount_amount}
-                                  onChange={(e) =>
-                                    updateLine(
-                                      idx,
-                                      "discount_amount",
-                                      parseFloat(e.target.value) || 0
-                                    )
-                                  }
-                                  className="w-full text-right bg-transparent focus:outline-none text-sm text-destructive"
-                                  placeholder="0.00"
-                                />
-                              </td>
-
-                              {/* ── Tax ── */}
-                              <td className="px-3 py-3 align-top">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={currentLine.tax_rate}
-                                  onChange={(e) =>
-                                    updateLine(idx, "tax_rate", parseFloat(e.target.value) || 0)
-                                  }
-                                  className="w-full text-right bg-transparent focus:outline-none text-sm"
-                                  placeholder="0"
-                                />
-                              </td>
-
-                              {/* ── Line total ── */}
-                              <td className="px-3 py-3 text-right font-medium text-sm align-top">
-                                {formatCurrency(lineTotal)}
-                              </td>
-
-                              {/* ── Delete ── */}
-                              <td className="px-2 py-3 text-center align-top">
-                                <button
-                                  type="button"
-                                  onClick={() => remove(idx)}
-                                  className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
-                                  aria-label="Remove line"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </td>
-                            </tr>
+                            <LineRow
+                              key={field.id}
+                              index={idx}
+                              fieldId={field.id}
+                              currentLine={currentLine}
+                              isOverStock={isOverStock}
+                              fetchVariants={fetchVariants}
+                              variantDisplayLabel={variantDisplayLabels[idx] || ""}
+                              fetchVendors={fetchVendors}
+                              onUpdateLine={updateLine}
+                              onRemove={handleRemove}
+                              onToggleManual={toggleManual}
+                              calculateLineTotal={calculateLineTotal}
+                              formatCurrency={formatCurrency}
+                            />
                           );
                         })}
                       </tbody>
                     </table>
 
-                    {/* Inline "add row" footer */}
                     <button
                       type="button"
                       onClick={addLine}
@@ -884,7 +950,6 @@ export default function CustomerInvoiceFormModal({
 
               {/* ── Section 4: Notes + Totals ── */}
               <div className="flex flex-col md:flex-row gap-6 pt-1">
-                {/* Notes */}
                 <div className="flex-1 space-y-1.5">
                   <label className="text-sm font-medium text-muted-foreground">
                     Notes
@@ -898,7 +963,6 @@ export default function CustomerInvoiceFormModal({
                   />
                 </div>
 
-                {/* Totals summary */}
                 <div className="md:w-82 shrink-0">
                   <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-2.5">
                     <div className="flex justify-between text-sm text-muted-foreground">
@@ -907,9 +971,7 @@ export default function CustomerInvoiceFormModal({
                     </div>
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>Discount (line)</span>
-                      <span className="font-mono text-destructive">
-                        −{formatCurrency(totalDiscount)}
-                      </span>
+                      <span className="font-mono text-destructive">−{formatCurrency(totalDiscount)}</span>
                     </div>
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>Tax (line)</span>
@@ -917,22 +979,14 @@ export default function CustomerInvoiceFormModal({
                     </div>
                     {overallDiscountPct > 0 && (
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">
-                          Overall discount ({overallDiscountPct}%)
-                        </span>
-                        <span className="font-mono text-destructive">
-                          −{formatCurrency(overallDiscountAmt)}
-                        </span>
+                        <span className="text-muted-foreground">Overall discount ({overallDiscountPct}%)</span>
+                        <span className="font-mono text-destructive">−{formatCurrency(overallDiscountAmt)}</span>
                       </div>
                     )}
                     {overallTaxPct > 0 && (
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">
-                          Overall tax ({overallTaxPct}%)
-                        </span>
-                        <span className="font-mono">
-                          +{formatCurrency(overallTaxAmt)}
-                        </span>
+                        <span className="text-muted-foreground">Overall tax ({overallTaxPct}%)</span>
+                        <span className="font-mono">+{formatCurrency(overallTaxAmt)}</span>
                       </div>
                     )}
                     <div className="flex justify-between items-center pt-2.5 border-t border-border">
@@ -943,7 +997,6 @@ export default function CustomerInvoiceFormModal({
                     </div>
                   </div>
 
-                  {/* Overall discount & tax inputs */}
                   <div className="rounded-xl border border-border bg-muted/20 p-3 mt-1.5">
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-1.5">
