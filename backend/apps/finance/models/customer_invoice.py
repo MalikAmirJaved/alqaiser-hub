@@ -82,7 +82,20 @@ class CustomerInvoiceLine(BaseModel):
         'inventory.ProductVariant',
         on_delete=models.PROTECT,
         related_name='invoice_lines',
+        null=True,
+        blank=True,
     )
+    is_manual_entry = models.BooleanField(default=False)
+    manual_variant_name = models.CharField(max_length=200, blank=True)
+    manual_variant_sku = models.CharField(max_length=100, blank=True)
+    vendor = models.ForeignKey(
+        'inventory.Supplier',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='invoice_lines',
+    )
+    cost_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     quantity = models.PositiveIntegerField()
     unit_price = models.DecimalField(max_digits=12, decimal_places=4)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
@@ -93,6 +106,8 @@ class CustomerInvoiceLine(BaseModel):
         indexes = [
             models.Index(fields=['customer_invoice']),
             models.Index(fields=['variant']),
+            models.Index(fields=['vendor']),
+            models.Index(fields=['is_manual_entry']),
             models.Index(fields=['company_id', 'branch_id']),
         ]
 

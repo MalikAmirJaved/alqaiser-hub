@@ -10,6 +10,12 @@ export interface CustomerInvoiceLine {
   variant: string;
   variant_sku?: string;
   variant_name?: string;
+  is_manual_entry?: boolean;
+  manual_variant_name?: string;
+  manual_variant_sku?: string;
+  vendor?: string;
+  vendor_name?: string;
+  cost_price?: number;
   quantity: number;
   unit_price: number;
   tax_rate: number;

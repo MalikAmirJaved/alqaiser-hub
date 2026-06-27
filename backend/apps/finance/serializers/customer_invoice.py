@@ -1,16 +1,25 @@
 from rest_framework import serializers
 from apps.finance.models import CustomerInvoice, CustomerInvoiceLine, BankAccount
-from apps.inventory.models import Customer, SalesOrder, ProductVariant
+from apps.inventory.models import Customer, SalesOrder, ProductVariant, Supplier
 from apps.inventory.serializers.customer import CustomerSerializer
 
 class CustomerInvoiceLineSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)
     variant = serializers.SlugRelatedField(
         slug_field='_id',
-        queryset=ProductVariant.objects.all()
+        queryset=ProductVariant.objects.all(),
+        allow_null=True,
+        required=False,
     )
-    variant_sku = serializers.CharField(source='variant.sku', read_only=True)
-    variant_name = serializers.CharField(source='variant.product.product_name', read_only=True)
+    variant_sku = serializers.SerializerMethodField()
+    variant_name = serializers.SerializerMethodField()
+    vendor = serializers.SlugRelatedField(
+        slug_field='_id',
+        queryset=Supplier.objects.all(),
+        allow_null=True,
+        required=False,
+    )
+    vendor_name = serializers.CharField(source='vendor.name', read_only=True, allow_null=True)
     subtotal = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     line_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     quantity = serializers.IntegerField(min_value=1)
@@ -19,9 +28,21 @@ class CustomerInvoiceLineSerializer(serializers.ModelSerializer):
         model = CustomerInvoiceLine
         fields = [
             'id', 'variant', 'variant_sku', 'variant_name',
+            'is_manual_entry', 'manual_variant_name', 'manual_variant_sku',
+            'vendor', 'vendor_name', 'cost_price',
             'quantity', 'unit_price', 'tax_rate', 'discount_amount',
             'subtotal', 'line_total'
         ]
+
+    def get_variant_sku(self, obj):
+        if obj.is_manual_entry:
+            return obj.manual_variant_sku or ''
+        return obj.variant.sku if obj.variant else ''
+
+    def get_variant_name(self, obj):
+        if obj.is_manual_entry:
+            return obj.manual_variant_name or ''
+        return obj.variant.product.product_name if obj.variant else ''
 
 
 class CustomerInvoiceSerializer(serializers.ModelSerializer):

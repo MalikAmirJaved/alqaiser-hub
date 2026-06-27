@@ -66,7 +66,19 @@ class QuoteLine(BaseModel):
     variant = models.ForeignKey(
         'inventory.ProductVariant',
         on_delete=models.PROTECT,
-        related_name='quote_lines'
+        related_name='quote_lines',
+        null=True,
+        blank=True,
+    )
+    is_manual_entry = models.BooleanField(default=False)
+    manual_variant_name = models.CharField(max_length=200, blank=True)
+    manual_variant_sku = models.CharField(max_length=100, blank=True)
+    vendor = models.ForeignKey(
+        'inventory.Supplier',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='quote_lines',
     )
     quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
     unit_price = models.DecimalField(max_digits=12, decimal_places=4)
@@ -78,6 +90,8 @@ class QuoteLine(BaseModel):
         indexes = [
             models.Index(fields=['quote']),
             models.Index(fields=['variant']),
+            models.Index(fields=['vendor']),
+            models.Index(fields=['is_manual_entry']),
             models.Index(fields=['company_id', 'branch_id']),
         ]
 
