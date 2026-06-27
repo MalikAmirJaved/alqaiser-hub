@@ -15,13 +15,13 @@ export interface Payment {
   supplier_bill: string | null;
   customer_invoice: string | null;
   bank_account: string | null;
+  bank_account_name?: string | null;
   journal_entry: string | null;
   notes: string;
   created_at: string;
   updated_at: string;
-  supplier_name?: string;
-  customer_name?: string;
-  bank_account_name?: string;
+  supplier_name?: string | null;
+  customer_name?: string | null;
   outstanding?: number;
   status: "DRAFT" | "CONFIRMED" | "CANCELLED";
   payable_type: string | null;
@@ -192,3 +192,4 @@ export const paymentMethodOptions = [
   { value: "CREDIT_CARD", label: "Credit Card" },
   { value: "OTHER", label: "Other" },
 ];
+
