@@ -93,6 +93,15 @@ class QuoteSerializer(serializers.ModelSerializer):
     def get_customer_phone(self, obj):
         return obj.customer.phone if obj.customer else None
 
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        # Filter out soft-deleted lines to prevent line duplication on each edit cycle
+        rep['lines'] = QuoteLineSerializer(
+            instance.lines.filter(is_deleted=False), many=True,
+            context=self.context
+        ).data
+        return rep
+
     def create(self, validated_data):
         import time, random
         lines_data = validated_data.pop('lines', [])

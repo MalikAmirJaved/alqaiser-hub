@@ -124,6 +124,15 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
     def get_customer_phone(self, obj):
         return obj.customer.phone if obj.customer else None
 
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        # Filter out soft-deleted lines to prevent line duplication on each edit cycle
+        rep['lines'] = CustomerInvoiceLineSerializer(
+            instance.lines.filter(is_deleted=False), many=True,
+            context=self.context
+        ).data
+        return rep
+
     def create(self, validated_data):
         lines_data = validated_data.pop('lines', [])
         new_customer_data = validated_data.pop('new_customer', None)
