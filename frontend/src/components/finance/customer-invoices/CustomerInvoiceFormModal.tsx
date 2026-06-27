@@ -65,14 +65,12 @@ interface ManualEntryFieldsProps {
   name: string;
   sku: string;
   description: string;
-  costPrice: number | undefined;
   vendorValue: string;
   vendorName: string;
   fetchVendors: any;
   onNameBlur: (val: string) => void;
   onSkuBlur: (val: string) => void;
   onDescriptionBlur: (val: string) => void;
-  onCostPriceBlur: (val: number | undefined) => void;
   onVendorChange: (val: string) => void;
 }
 
@@ -80,29 +78,21 @@ const ManualEntryFields = memo(function ManualEntryFields({
   name,
   sku,
   description,
-  costPrice,
   vendorValue,
   vendorName,
   fetchVendors,
   onNameBlur,
   onSkuBlur,
   onDescriptionBlur,
-  onCostPriceBlur,
   onVendorChange,
 }: ManualEntryFieldsProps) {
   const [localName, setLocalName] = useState(name);
   const [localSku, setLocalSku] = useState(sku);
   const [localDescription, setLocalDescription] = useState(description);
-  const [localCostPrice, setLocalCostPrice] = useState(
-    costPrice !== undefined ? String(costPrice) : ""
-  );
 
   useEffect(() => { setLocalName(name); }, [name]);
   useEffect(() => { setLocalSku(sku); }, [sku]);
   useEffect(() => { setLocalDescription(description); }, [description]);
-  useEffect(() => {
-    setLocalCostPrice(costPrice !== undefined ? String(costPrice) : "");
-  }, [costPrice]);
 
   return (
     <div className="space-y-1.5">
@@ -141,19 +131,6 @@ const ManualEntryFields = memo(function ManualEntryFields({
         className="w-full h-8 bg-muted/40 border border-border rounded-md px-3 text-xs text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         placeholder="Description / notes for this line…"
       />
-      <div className="flex items-center gap-1.5">
-        <label className="text-[11px] text-muted-foreground whitespace-nowrap">Cost price:</label>
-        <input
-          type="number"
-          step="0.01"
-          min="0"
-          value={localCostPrice}
-          onChange={(e) => setLocalCostPrice(e.target.value)}
-          onBlur={() => onCostPriceBlur(localCostPrice !== "" ? parseFloat(localCostPrice) : undefined)}
-          className="w-28 h-7 bg-muted/40 border border-border rounded-md px-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-          placeholder="0.00"
-        />
-      </div>
     </div>
   );
 });
@@ -295,14 +272,12 @@ const LineRow = memo(function LineRow({
             name={currentLine.manual_variant_name || ""}
             sku={currentLine.manual_variant_sku || ""}
             description={currentLine.description || ""}
-            costPrice={currentLine.cost_price}
             vendorValue={currentLine.vendor || ""}
             vendorName={currentLine.vendor_name || ""}
             fetchVendors={fetchVendors}
             onNameBlur={(val) => onUpdateLine(index, "manual_variant_name", val)}
             onSkuBlur={(val) => onUpdateLine(index, "manual_variant_sku", val)}
             onDescriptionBlur={(val) => onUpdateLine(index, "description", val)}
-            onCostPriceBlur={(val) => onUpdateLine(index, "cost_price", val)}
             onVendorChange={(val) => onUpdateLine(index, "vendor", val)}
           />
         )}
@@ -651,10 +626,6 @@ export default function CustomerInvoiceFormModal({
         }
         if (!line.vendor?.trim()) {
           toast.error(`Line ${i + 1}: Vendor is required for manual entry items.`);
-          return;
-        }
-        if (line.cost_price === undefined || line.cost_price === null || line.cost_price < 0) {
-          toast.error(`Line ${i + 1}: Cost price is required for manual entry items.`);
           return;
         }
       }

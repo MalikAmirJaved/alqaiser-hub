@@ -60,10 +60,6 @@ class CustomerInvoiceLineSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'vendor': 'Vendor is required for manual entry items.'
                 })
-            if data.get('cost_price') is None:
-                raise serializers.ValidationError({
-                    'cost_price': 'Cost price is required for manual entry items.'
-                })
             data.pop('variant', None)
         else:
             if not data.get('variant'):
