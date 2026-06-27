@@ -35,7 +35,7 @@ class CustomerInvoiceLineSerializer(serializers.ModelSerializer):
             'id', 'variant', 'variant_sku', 'variant_name',
             'is_manual_entry', 'manual_variant_name', 'manual_variant_sku',
             'vendor', 'vendor_name', 'cost_price',
-            'quantity', 'unit_price', 'tax_rate', 'discount_amount',
+            'quantity', 'unit_price', 'tax_rate', 'discount_amount', 'description',
             'subtotal', 'line_total'
         ]
 

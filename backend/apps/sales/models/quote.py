@@ -86,6 +86,7 @@ class QuoteLine(BaseModel):
     unit_price = models.DecimalField(max_digits=12, decimal_places=4)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    description = models.TextField(blank=True, default='')
 
     class Meta:
         db_table = 'sales_quote_lines'

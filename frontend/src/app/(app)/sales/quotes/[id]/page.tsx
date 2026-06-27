@@ -104,7 +104,10 @@ export default function QuoteDetailPage() {
                   <tr key={idx} className="border-b border-border/60">
                     <td className="px-4 py-2">
                       <div className="font-medium">{line.variant_name || line.variant_sku}</div>
-                      <div className="text-xs text-muted-foreground">{line.variant_sku}</div>
+                      <div className="text-xs text-muted-foreground">SKU: {line.variant_sku}</div>
+                      {(line as any).description && (
+                        <div className="text-xs text-muted-foreground/70 italic mt-0.5">{(line as any).description}</div>
+                      )}
                     </td>
                     <td className="px-4 py-2 text-right">{line.quantity}</td>
                     <td className="px-4 py-2 text-right">{formatCurrency(line.unit_price)}</td>

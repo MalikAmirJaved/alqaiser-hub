@@ -30,6 +30,7 @@ interface InvoiceLine {
   is_manual_entry?: boolean;
   manual_variant_name?: string;
   manual_variant_sku?: string;
+  description?: string;
   vendor?: string;
   vendor_name?: string;
   cost_price?: number;
@@ -63,12 +64,14 @@ interface Props {
 interface ManualEntryFieldsProps {
   name: string;
   sku: string;
+  description: string;
   costPrice: number | undefined;
   vendorValue: string;
   vendorName: string;
   fetchVendors: any;
   onNameBlur: (val: string) => void;
   onSkuBlur: (val: string) => void;
+  onDescriptionBlur: (val: string) => void;
   onCostPriceBlur: (val: number | undefined) => void;
   onVendorChange: (val: string) => void;
 }
@@ -76,23 +79,27 @@ interface ManualEntryFieldsProps {
 const ManualEntryFields = memo(function ManualEntryFields({
   name,
   sku,
+  description,
   costPrice,
   vendorValue,
   vendorName,
   fetchVendors,
   onNameBlur,
   onSkuBlur,
+  onDescriptionBlur,
   onCostPriceBlur,
   onVendorChange,
 }: ManualEntryFieldsProps) {
   const [localName, setLocalName] = useState(name);
   const [localSku, setLocalSku] = useState(sku);
+  const [localDescription, setLocalDescription] = useState(description);
   const [localCostPrice, setLocalCostPrice] = useState(
     costPrice !== undefined ? String(costPrice) : ""
   );
 
   useEffect(() => { setLocalName(name); }, [name]);
   useEffect(() => { setLocalSku(sku); }, [sku]);
+  useEffect(() => { setLocalDescription(description); }, [description]);
   useEffect(() => {
     setLocalCostPrice(costPrice !== undefined ? String(costPrice) : "");
   }, [costPrice]);
@@ -126,6 +133,14 @@ const ManualEntryFields = memo(function ManualEntryFields({
           />
         </div>
       </div>
+      <input
+        type="text"
+        value={localDescription}
+        onChange={(e) => setLocalDescription(e.target.value)}
+        onBlur={() => onDescriptionBlur(localDescription)}
+        className="w-full h-8 bg-muted/40 border border-border rounded-md px-3 text-xs text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+        placeholder="Description / notes for this line…"
+      />
       <div className="flex items-center gap-1.5">
         <label className="text-[11px] text-muted-foreground whitespace-nowrap">Cost price:</label>
         <input
@@ -279,12 +294,14 @@ const LineRow = memo(function LineRow({
             key={`manual-${fieldId}`}
             name={currentLine.manual_variant_name || ""}
             sku={currentLine.manual_variant_sku || ""}
+            description={currentLine.description || ""}
             costPrice={currentLine.cost_price}
             vendorValue={currentLine.vendor || ""}
             vendorName={currentLine.vendor_name || ""}
             fetchVendors={fetchVendors}
             onNameBlur={(val) => onUpdateLine(index, "manual_variant_name", val)}
             onSkuBlur={(val) => onUpdateLine(index, "manual_variant_sku", val)}
+            onDescriptionBlur={(val) => onUpdateLine(index, "description", val)}
             onCostPriceBlur={(val) => onUpdateLine(index, "cost_price", val)}
             onVendorChange={(val) => onUpdateLine(index, "vendor", val)}
           />
@@ -492,6 +509,7 @@ export default function CustomerInvoiceFormModal({
           is_manual_entry: line.is_manual_entry || false,
           manual_variant_name: line.manual_variant_name || "",
           manual_variant_sku: line.manual_variant_sku || "",
+          description: line.description || "",
           vendor: line.vendor || "",
           vendor_name: line.vendor_name || "",
           cost_price: line.cost_price || undefined,
@@ -564,6 +582,7 @@ export default function CustomerInvoiceFormModal({
       is_manual_entry: false,
       manual_variant_name: "",
       manual_variant_sku: "",
+      description: "",
       vendor: "",
       cost_price: undefined,
     });
@@ -579,6 +598,7 @@ export default function CustomerInvoiceFormModal({
           variant: value ? "" : currentLines[index].variant,
           manual_variant_name: value ? currentLines[index].manual_variant_name : "",
           manual_variant_sku: value ? currentLines[index].manual_variant_sku : "",
+          description: value ? currentLines[index].description : "",
         });
       } else if (field === "variant" && value) {
         update(index, { ...currentLines[index], variant: value });
@@ -681,6 +701,7 @@ export default function CustomerInvoiceFormModal({
       if (line.is_manual_entry) {
         cleaned.manual_variant_name = line.manual_variant_name || "";
         cleaned.manual_variant_sku = line.manual_variant_sku || "";
+        cleaned.description = line.description || "";
         if (line.vendor) cleaned.vendor = line.vendor;
         if (line.cost_price !== undefined && line.cost_price !== null)
           cleaned.cost_price = line.cost_price;

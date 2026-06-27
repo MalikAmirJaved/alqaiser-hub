@@ -24,6 +24,7 @@ interface QuoteLine {
   is_manual_entry?: boolean;
   manual_variant_name?: string;
   manual_variant_sku?: string;
+  description?: string;
   vendor?: string;
   vendor_name?: string;
 }
@@ -104,6 +105,7 @@ export default function QuoteFormModal({
           is_manual_entry: line.is_manual_entry || false,
           manual_variant_name: line.manual_variant_name || "",
           manual_variant_sku: line.manual_variant_sku || "",
+          description: line.description || "",
           vendor: line.vendor || "",
           vendor_name: line.vendor_name || "",
         })),
@@ -168,6 +170,7 @@ export default function QuoteFormModal({
           is_manual_entry: false,
           manual_variant_name: "",
           manual_variant_sku: "",
+          description: "",
           vendor: "",
         },
       ],
@@ -259,6 +262,7 @@ export default function QuoteFormModal({
       if (line.is_manual_entry) {
         cleaned.manual_variant_name = line.manual_variant_name || "";
         cleaned.manual_variant_sku = line.manual_variant_sku || "";
+        cleaned.description = line.description || "";
         if (line.vendor) cleaned.vendor = line.vendor;
       } else {
         cleaned.variant = line.variant;
@@ -533,6 +537,15 @@ export default function QuoteFormModal({
                                         />
                                       </div>
                                     </div>
+                                    <input
+                                      type="text"
+                                      value={line.description || ""}
+                                      onChange={(e) =>
+                                        updateLine(idx, "description", e.target.value)
+                                      }
+                                      className="w-full h-8 bg-muted/40 border border-border rounded-md px-3 text-xs text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                                      placeholder="Description / notes for this line…"
+                                    />
                                   </div>
                                 )}
                               </td>
