@@ -643,7 +643,7 @@ export default function CustomerInvoiceFormModal({
                     <span className="text-xs">Click to add a product or service</span>
                   </button>
                 ) : (
-                  <div className="rounded-xl border border-border overflow-hidden">
+                  <div className="rounded-xl border border-border overflow-visible">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-muted/50 border-b border-border">
