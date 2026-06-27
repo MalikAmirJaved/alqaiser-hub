@@ -370,6 +370,26 @@ export default function CustomerInvoiceFormModal({
   );
 
   const onSubmit = async (data: CustomerInvoiceFormData) => {
+    // ── Manual entry validation ──
+    for (let i = 0; i < data.lines.length; i++) {
+      const line = data.lines[i];
+      if (line.is_manual_entry) {
+        if (!line.manual_variant_name?.trim()) {
+          toast.error(`Line ${i + 1}: Item name is required for manual entry.`);
+          return;
+        }
+        if (!line.vendor?.trim()) {
+          toast.error(`Line ${i + 1}: Vendor is required for manual entry items.`);
+          return;
+        }
+        if (line.cost_price === undefined || line.cost_price === null || line.cost_price < 0) {
+          toast.error(`Line ${i + 1}: Cost price is required for manual entry items.`);
+          return;
+        }
+      }
+    }
+
+    // ── Stock validation (only for non-manual entries) ──
     for (const line of data.lines) {
       if (
         !line.is_manual_entry &&

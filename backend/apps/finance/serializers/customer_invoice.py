@@ -44,6 +44,33 @@ class CustomerInvoiceLineSerializer(serializers.ModelSerializer):
             return obj.manual_variant_name or ''
         return obj.variant.product.product_name if obj.variant else ''
 
+    def validate(self, data):
+        is_manual = data.get('is_manual_entry', False)
+        if is_manual:
+            if not data.get('manual_variant_name'):
+                raise serializers.ValidationError({
+                    'manual_variant_name': 'Variant name is required for manual entry items.'
+                })
+            if not data.get('vendor'):
+                raise serializers.ValidationError({
+                    'vendor': 'Vendor is required for manual entry items.'
+                })
+            if data.get('cost_price') is None:
+                raise serializers.ValidationError({
+                    'cost_price': 'Cost price is required for manual entry items.'
+                })
+            data.pop('variant', None)
+        else:
+            if not data.get('variant'):
+                raise serializers.ValidationError({
+                    'variant': 'Product variant is required for non-manual items.'
+                })
+            data.pop('vendor', None)
+            data.pop('cost_price', None)
+            data.pop('manual_variant_name', None)
+            data.pop('manual_variant_sku', None)
+        return data
+
 
 class CustomerInvoiceSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)

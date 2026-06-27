@@ -151,6 +151,11 @@ export default function QuotesPanel() {
       tax_rate: line.tax_rate || 0,
       variant_name: line.variant_name,
       variant_sku: line.variant_sku,
+      is_manual_entry: line.is_manual_entry || false,
+      manual_variant_name: line.manual_variant_name || "",
+      manual_variant_sku: line.manual_variant_sku || "",
+      vendor: line.vendor || "",
+      vendor_name: line.vendor_name || "",
     })),
   });
 
