@@ -3,8 +3,8 @@ from rest_framework.response import Response
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
-from apps.inventory.models import Supplier
-from apps.inventory.serializers import SupplierSerializer
+from apps.inventory.models import Supplier, SupplierHistory
+from apps.inventory.serializers import SupplierSerializer, SupplierHistorySerializer
 
 
 class BaseSupplierViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixin, viewsets.ModelViewSet):
@@ -100,3 +100,23 @@ class SupplierViewSet(BaseSupplierViewSet):
 class VendorViewSet(BaseSupplierViewSet):
     partner_type = 'vendor'
     permission_resource = 'vendor'
+
+
+class SupplierHistoryViewSet(
+    GenericFilterMixin,
+    CompanyBranchMixin,
+    PermissionRequiredMixin,
+    viewsets.ReadOnlyModelViewSet
+):
+    permission_module = 'INVENTORY'
+    permission_resource = 'supplier'
+    queryset = SupplierHistory.objects.select_related('supplier').all()
+    serializer_class = SupplierHistorySerializer
+    lookup_field = '_id'
+    filter_fields = {
+        'supplier': 'supplier___id',
+        'transaction_type': 'transaction_type',
+    }
+
+    def get_queryset(self):
+        return super().get_queryset().order_by('-created_at')

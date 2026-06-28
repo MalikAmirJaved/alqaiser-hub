@@ -1,11 +1,12 @@
 // components/finance/CustomerInvoiceFormModal.tsx
 import { useEffect, useState, useCallback, memo } from "react";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
-import { X, Plus, Trash2, RotateCw, Package, Type, FileText, AlertCircle, ChevronDown } from "lucide-react";
+import { X, Plus, Trash2, RotateCw, Package, Type, FileText, AlertCircle, ChevronDown, Warehouse, DollarSign, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreateCustomerInvoice,
   useUpdateCustomerInvoice,
+  useResolveReduction,
   type CustomerInvoice,
 } from "@/hooks/finance/useCustomerInvoices";
 import { useCreateSalesInvoice, useUpdateSalesInvoice } from "@/hooks/sales/useSalesInvoices";
@@ -19,6 +20,7 @@ import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { toast } from "sonner";
 
 interface InvoiceLine {
+  id?: string;
   variant: string;
   quantity: number;
   unit_price: number;
@@ -67,11 +69,14 @@ interface ManualEntryFieldsProps {
   description: string;
   vendorValue: string;
   vendorName: string;
+  costPrice?: number;
+  showCostPrice?: boolean;
   fetchVendors: any;
   onNameBlur: (val: string) => void;
   onSkuBlur: (val: string) => void;
   onDescriptionBlur: (val: string) => void;
   onVendorChange: (val: string) => void;
+  onCostPriceBlur?: (val: number) => void;
 }
 
 const ManualEntryFields = memo(function ManualEntryFields({
@@ -80,19 +85,24 @@ const ManualEntryFields = memo(function ManualEntryFields({
   description,
   vendorValue,
   vendorName,
+  costPrice,
+  showCostPrice,
   fetchVendors,
   onNameBlur,
   onSkuBlur,
   onDescriptionBlur,
   onVendorChange,
+  onCostPriceBlur,
 }: ManualEntryFieldsProps) {
   const [localName, setLocalName] = useState(name);
   const [localSku, setLocalSku] = useState(sku);
   const [localDescription, setLocalDescription] = useState(description);
+  const [localCostPrice, setLocalCostPrice] = useState(String(costPrice ?? ''));
 
   useEffect(() => { setLocalName(name); }, [name]);
   useEffect(() => { setLocalSku(sku); }, [sku]);
   useEffect(() => { setLocalDescription(description); }, [description]);
+  useEffect(() => { setLocalCostPrice(String(costPrice ?? '')); }, [costPrice]);
 
   return (
     <div className="space-y-1.5">
@@ -123,6 +133,26 @@ const ManualEntryFields = memo(function ManualEntryFields({
           />
         </div>
       </div>
+      {showCostPrice && (
+        <div className="flex gap-1.5 items-center">
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={localCostPrice}
+            onChange={(e) => setLocalCostPrice(e.target.value)}
+            onBlur={() => {
+              const parsed = parseFloat(localCostPrice);
+              if (!isNaN(parsed) && parsed >= 0) {
+                onCostPriceBlur?.(parsed);
+              }
+            }}
+            className="flex-1 h-8 bg-muted/40 border border-border rounded-md px-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring text-right"
+            placeholder="Cost price…"
+          />
+          <span className="text-xs text-muted-foreground shrink-0">Cost</span>
+        </div>
+      )}
       <input
         type="text"
         value={localDescription}
@@ -201,6 +231,7 @@ interface LineRowProps {
   fieldId: string;
   currentLine: InvoiceLine;
   isOverStock: boolean;
+  isExistingLine?: boolean;
   fetchVariants: any;
   variantDisplayLabel: string;
   fetchVendors: any;
@@ -216,6 +247,7 @@ const LineRow = memo(function LineRow({
   fieldId,
   currentLine,
   isOverStock,
+  isExistingLine = false,
   fetchVariants,
   variantDisplayLabel,
   fetchVendors,
@@ -274,11 +306,14 @@ const LineRow = memo(function LineRow({
             description={currentLine.description || ""}
             vendorValue={currentLine.vendor || ""}
             vendorName={currentLine.vendor_name || ""}
+            costPrice={currentLine.cost_price}
+            showCostPrice={!isExistingLine}
             fetchVendors={fetchVendors}
             onNameBlur={(val) => onUpdateLine(index, "manual_variant_name", val)}
             onSkuBlur={(val) => onUpdateLine(index, "manual_variant_sku", val)}
             onDescriptionBlur={(val) => onUpdateLine(index, "description", val)}
             onVendorChange={(val) => onUpdateLine(index, "vendor", val)}
+            onCostPriceBlur={(val) => onUpdateLine(index, "cost_price", val)}
           />
         )}
       </td>
@@ -371,6 +406,11 @@ export default function CustomerInvoiceFormModal({
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [newCustomerInfo, setNewCustomerInfo] = useState<any>(null);
   const [customerDisplayLabel, setCustomerDisplayLabel] = useState("");
+  const [existingLineIds, setExistingLineIds] = useState<Set<string>>(new Set());
+  const [reductionConflicts, setReductionConflicts] = useState<any[]>([]);
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [resolvingAction, setResolvingAction] = useState<"go_to_inventory" | "return_to_vendor" | null>(null);
+  const [resolvingLineId, setResolvingLineId] = useState<string | null>(null);
   const [variantDisplayLabels, setVariantDisplayLabels] = useState<Record<number, string>>({});
 
   const fetchCustomers = useServerSearch("/api/inventory/customers/", {
@@ -399,6 +439,7 @@ export default function CustomerInvoiceFormModal({
   const updateInvoice = useUpdateCustomerInvoice();
   const createSalesInvoice = useCreateSalesInvoice();
   const updateSalesInvoice = useUpdateSalesInvoice();
+  const resolveReduction = useResolveReduction();
   const queryClient = useQueryClient();
   const api = useApi();
   const { generateCode, validateCode } = useAutoCode("customer_invoice");
@@ -474,6 +515,7 @@ export default function CustomerInvoiceFormModal({
       setValue(
         "lines",
         (initialData.lines || []).map((line: any) => ({
+          id: line.id,
           variant: line.variant,
           quantity: line.quantity,
           unit_price: line.unit_price,
@@ -499,6 +541,7 @@ export default function CustomerInvoiceFormModal({
       });
       setVariantDisplayLabels(labels);
       setNewCustomerInfo(null);
+      setExistingLineIds(new Set((initialData.lines || []).map((l: any) => l.id).filter(Boolean)));
     } else if (defaultValues) {
       if (defaultValues.invoice_number !== undefined) setValue("invoice_number", defaultValues.invoice_number);
       if (defaultValues.customer !== undefined) setValue("customer", defaultValues.customer);
@@ -532,6 +575,7 @@ export default function CustomerInvoiceFormModal({
       setCustomerDisplayLabel("");
       setVariantDisplayLabels({});
       setNewCustomerInfo(null);
+      setExistingLineIds(new Set());
       generateCode()
         .then((code) => setValue("invoice_number", code))
         .catch(() => {});
@@ -562,6 +606,13 @@ export default function CustomerInvoiceFormModal({
       cost_price: undefined,
     });
   }, [append]);
+
+  const isExistingLine = useCallback((index: number): boolean => {
+    const currentLines = watch("lines");
+    const line = currentLines?.[index];
+    if (!line) return false;
+    return existingLineIds.has(line.id as string);
+  }, [existingLineIds, watch]);
 
   const updateLine = useCallback(
     async (index: number, field: keyof InvoiceLine, value: any) => {
@@ -615,6 +666,34 @@ export default function CustomerInvoiceFormModal({
     [remove]
   );
 
+  const handleResolveConflict = useCallback(
+    async (lineId: string, action: "go_to_inventory" | "return_to_vendor") => {
+      setResolvingLineId(lineId);
+      setResolvingAction(action);
+      try {
+        await resolveReduction.mutateAsync({
+          invoiceId: initialData!.id,
+          lineId,
+          action,
+        });
+        toast.success(
+          action === "go_to_inventory"
+            ? "Product created, stock added, and supplier bill updated."
+            : "Supplier bill and balance updated."
+        );
+        setShowConflictModal(false);
+        onSuccess?.(null);
+        onClose();
+      } catch (err: any) {
+        toast.error(err?.message || "Failed to resolve reduction.");
+      } finally {
+        setResolvingLineId(null);
+        setResolvingAction(null);
+      }
+    },
+    [resolveReduction, initialData, onSuccess, onClose]
+  );
+
   const onSubmit = async (data: CustomerInvoiceFormData) => {
     // ── Manual entry validation ──
     for (let i = 0; i < data.lines.length; i++) {
@@ -627,6 +706,13 @@ export default function CustomerInvoiceFormModal({
         if (!line.vendor?.trim()) {
           toast.error(`Line ${i + 1}: Vendor is required for manual entry items.`);
           return;
+        }
+        // For new manual lines (no existing id), cost_price is required
+        if (!line.id || !existingLineIds.has(line.id)) {
+          if (line.cost_price === undefined || line.cost_price === null || line.cost_price <= 0) {
+            toast.error(`Line ${i + 1}: Cost price is required for new manual entry items.`);
+            return;
+          }
         }
       }
     }
@@ -661,7 +747,7 @@ export default function CustomerInvoiceFormModal({
     payload.overall_discount_percent = Number(data.overall_discount_percent) || 0;
     payload.overall_tax_percent = Number(data.overall_tax_percent) || 0;
 
-    payload.lines = payload.lines.map((line: any) => {
+    payload.lines = payload.lines.map((line: any, idx: number) => {
       const cleaned: any = {
         quantity: line.quantity,
         unit_price: line.unit_price,
@@ -679,6 +765,10 @@ export default function CustomerInvoiceFormModal({
       } else {
         cleaned.variant = line.variant;
       }
+      // Include line id for existing lines to enable matching on backend
+      if (line.id && existingLineIds.has(line.id)) {
+        cleaned.id = line.id;
+      }
       return cleaned;
     });
 
@@ -688,9 +778,17 @@ export default function CustomerInvoiceFormModal({
         ? await updateSalesInvoice.mutateAsync({ id: initialData.id, data: payload })
         : await createSalesInvoice.mutateAsync(payload);
     } else {
-      result = initialData?.id
-        ? await updateInvoice.mutateAsync({ id: initialData.id, data: payload })
-        : await createInvoice.mutateAsync(payload);
+      if (initialData?.id) {
+        result = await updateInvoice.mutateAsync({ id: initialData.id, data: payload });
+        const conflicts = result?.data?._reduction_conflicts;
+        if (conflicts && conflicts.length > 0) {
+          setReductionConflicts(conflicts);
+          setShowConflictModal(true);
+          return;
+        }
+      } else {
+        result = await createInvoice.mutateAsync(payload);
+      }
     }
     onSuccess?.(result);
     onClose();
@@ -923,6 +1021,7 @@ export default function CustomerInvoiceFormModal({
                               fieldId={field.id}
                               currentLine={currentLine}
                               isOverStock={isOverStock}
+                              isExistingLine={isExistingLine(idx)}
                               fetchVariants={fetchVariants}
                               variantDisplayLabel={variantDisplayLabels[idx] || ""}
                               fetchVendors={fetchVendors}
@@ -1066,6 +1165,82 @@ export default function CustomerInvoiceFormModal({
         onClose={() => setShowCustomerModal(false)}
         onCustomerCreated={handleCustomerCreated}
       />
+
+      {/* ── Reduction Conflict Modal ── */}
+      {showConflictModal && reductionConflicts.length > 0 && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="relative w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl p-6">
+            <button
+              onClick={() => { setShowConflictModal(false); onClose(); }}
+              className="absolute top-3 right-3 p-1 rounded-lg hover:bg-muted text-muted-foreground"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-warning/15 flex items-center justify-center">
+                <AlertCircle className="w-5 h-5 text-warning" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold">Quantity Reduced</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  You reduced the quantity on {reductionConflicts.length} manual line(s).
+                  Choose how to handle the supplier obligation.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3 max-h-60 overflow-y-auto mb-4">
+              {reductionConflicts.map((conflict, idx) => {
+                const isResolvingThis = resolvingLineId === conflict.line_id;
+                return (
+                  <div key={idx} className="rounded-lg border border-border/60 bg-muted/20 p-3 text-sm space-y-2">
+                    <div className="font-medium">{conflict.line_name || `Line ${conflict.line_index + 1}`}</div>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Supplier: {conflict.supplier_name}</span>
+                      <span className="font-mono">
+                        {conflict.bill_paid ? "Credit" : "Bill reduction"}: {formatCurrency(Number(conflict.delta))}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Bill: {formatCurrency(Number(conflict.old_bill_amount) || 0)} → {formatCurrency(Number(conflict.new_bill_amount) || 0)}</span>
+                      <span>Qty: {conflict.old_qty} → {conflict.new_qty}</span>
+                    </div>
+                    <div className="flex flex-col gap-1.5 pt-1">
+                      <button
+                        type="button"
+                        disabled={isResolvingThis || resolvingLineId !== null}
+                        onClick={() => handleResolveConflict(conflict.line_id, "go_to_inventory")}
+                        className="w-full flex items-center justify-center gap-2 px-3 h-9 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+                      >
+                        {isResolvingThis && resolvingAction === "go_to_inventory" ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Warehouse className="w-3 h-3" />
+                        )}
+                        Create Product & Add Stock
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isResolvingThis || resolvingLineId !== null}
+                        onClick={() => handleResolveConflict(conflict.line_id, "return_to_vendor")}
+                        className="w-full flex items-center justify-center gap-2 px-3 h-9 rounded-lg border border-border text-xs font-medium hover:bg-muted disabled:opacity-50 transition-opacity"
+                      >
+                        {isResolvingThis && resolvingAction === "return_to_vendor" ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <DollarSign className="w-3 h-3" />
+                        )}
+                        Return to Supplier
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

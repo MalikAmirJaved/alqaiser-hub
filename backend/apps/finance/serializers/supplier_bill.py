@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from apps.finance.models import SupplierBill, Payment
+from apps.finance.models import SupplierBill, Payment, CustomerInvoice
 from apps.inventory.models import Supplier, PurchaseOrder
 from django.contrib.contenttypes.models import ContentType
 
@@ -37,6 +37,12 @@ class SupplierBillSerializer(serializers.ModelSerializer):
     purchase_order = serializers.SlugRelatedField(
         slug_field='_id',
         queryset=PurchaseOrder.objects.all(),
+        allow_null=True,
+        required=False
+    )
+    customer_invoice = serializers.SlugRelatedField(
+        slug_field='_id',
+        queryset=CustomerInvoice.objects.all(),
         allow_null=True,
         required=False
     )

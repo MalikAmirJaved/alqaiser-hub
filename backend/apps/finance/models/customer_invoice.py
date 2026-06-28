@@ -103,6 +103,12 @@ class CustomerInvoiceLine(BaseModel):
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     description = models.TextField(blank=True, default='')
+    supplier_bill = models.ForeignKey('SupplierBill', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='invoice_lines')
+    original_quantity = models.PositiveIntegerField(null=True, blank=True,
+        help_text='Pre-edit quantity for reduction conflict resolution')
+    resolved = models.BooleanField(default=False,
+        help_text='Whether the reduction conflict on this line has been resolved')
 
     class Meta:
         db_table = 'finance_customer_invoice_lines'

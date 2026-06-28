@@ -191,3 +191,33 @@ export function usePostCustomerInvoice() {
     },
   });
 }
+
+async function resolveReduction(
+  invoiceId: string,
+  data: { line_id: string; action: "go_to_inventory" | "return_to_vendor" }
+) {
+  return apiFetch<{ status: string; data: Record<string, unknown> }>(
+    `/api/finance/customer-invoices/${invoiceId}/resolve_reduction/`,
+    { method: "POST", body: JSON.stringify(data) }
+  );
+}
+
+export function useResolveReduction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      invoiceId,
+      lineId,
+      action,
+    }: {
+      invoiceId: string;
+      lineId: string;
+      action: "go_to_inventory" | "return_to_vendor";
+    }) => resolveReduction(invoiceId, { line_id: lineId, action }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
+    },
+  });
+}

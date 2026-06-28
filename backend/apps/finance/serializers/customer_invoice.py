@@ -1,10 +1,16 @@
-import time
 import random
+import time
 from decimal import Decimal
 
 from rest_framework import serializers
 
-from apps.finance.models import CustomerInvoice, CustomerInvoiceLine, BankAccount, SupplierBill
+from apps.finance.models import CustomerInvoice, CustomerInvoiceLine, BankAccount
+from apps.finance.services.invoice_supplier_bill import (
+    create_supplier_bill_for_line,
+    handle_removed_line,
+    line_cost,
+    sync_manual_line_bill,
+)
 from apps.inventory.models import Customer, SalesOrder, ProductVariant, Supplier
 from apps.inventory.serializers.customer import CustomerSerializer
 
@@ -28,13 +34,18 @@ class CustomerInvoiceLineSerializer(serializers.ModelSerializer):
     subtotal = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     line_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     quantity = serializers.IntegerField(min_value=1)
+    supplier_bill = serializers.SlugRelatedField(
+        slug_field='_id',
+        read_only=True,
+        allow_null=True,
+    )
 
     class Meta:
         model = CustomerInvoiceLine
         fields = [
             'id', 'variant', 'variant_sku', 'variant_name',
             'is_manual_entry', 'manual_variant_name', 'manual_variant_sku',
-            'vendor', 'vendor_name', 'cost_price',
+            'vendor', 'vendor_name', 'cost_price', 'supplier_bill',
             'quantity', 'unit_price', 'tax_rate', 'discount_amount', 'description',
             'subtotal', 'line_total'
         ]
@@ -122,12 +133,31 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)
-        # Filter out soft-deleted lines to prevent line duplication on each edit cycle
         rep['lines'] = CustomerInvoiceLineSerializer(
             instance.lines.filter(is_deleted=False), many=True,
             context=self.context
         ).data
         return rep
+
+    def _create_supplier_bills(self, invoice, lines_data, user):
+        """Create SupplierBills for manual-entry lines and link them back."""
+        line_bill_map = {}
+        for i, line_item in enumerate(lines_data):
+            if (
+                line_item.get('is_manual_entry')
+                and line_item.get('vendor')
+                and line_item.get('cost_price') is not None
+            ):
+                cost = line_cost(line_item['quantity'], line_item['cost_price'])
+                bill = create_supplier_bill_for_line(
+                    invoice,
+                    line_item['vendor'],
+                    cost,
+                    user,
+                    notes=f"Auto-created from invoice {invoice.invoice_number} line {i + 1}",
+                )
+                line_bill_map[i] = bill
+        return line_bill_map
 
     def create(self, validated_data):
         lines_data = validated_data.pop('lines', [])
@@ -142,14 +172,11 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
             customer = Customer.objects.create(**new_customer_data)
             validated_data['customer'] = customer
 
-        # Ensure tenant fields are set even if not provided in validated_data
         validated_data.setdefault('company_id', user.company_id)
         validated_data.setdefault('branch_id', user.branch_id)
         validated_data.setdefault('created_by', user)
         validated_data.setdefault('updated_by', user)
 
-        # amount is read_only so it gets stripped from validated_data.
-        # Pass a placeholder since the real amount is calculated below.
         invoice = CustomerInvoice.objects.create(**validated_data, amount=Decimal('0'))
         
         subtotal = Decimal('0')
@@ -174,37 +201,12 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
         invoice.amount = total_before_tax + overall_tax
         invoice.save(update_fields=['amount'])
 
-        # ── Auto-create unpaid SupplierBill for manual-entry lines with vendor + cost_price ──
-        vendor_bills: dict[str, dict] = {}
-        for line_item in lines_data:
-            if line_item.get('is_manual_entry') and line_item.get('vendor') and line_item.get('cost_price') is not None:
-                vendor_id = str(line_item['vendor']._id)
-                cost = Decimal(str(line_item['quantity'])) * Decimal(str(line_item['cost_price']))
-                if vendor_id in vendor_bills:
-                    vendor_bills[vendor_id]['amount'] += cost
-                else:
-                    vendor_bills[vendor_id] = {
-                        'vendor': line_item['vendor'],
-                        'amount': cost,
-                    }
-
-        for vdata in vendor_bills.values():
-            bill_number = f"BILL-INV-{int(time.time())}-{random.randint(1000, 9999)}"
-            bill_date = invoice.invoice_date
-            due_date = invoice.due_date or bill_date
-            SupplierBill.objects.create(
-                bill_number=bill_number,
-                supplier=vdata['vendor'],
-                bill_date=bill_date,
-                due_date=due_date,
-                amount=vdata['amount'],
-                status='DRAFT',
-                notes=f"Auto-created from invoice {invoice.invoice_number}",
-                company_id=invoice.company_id,
-                branch_id=invoice.branch_id,
-                created_by=user,
-                updated_by=user,
-            )
+        line_bill_map = self._create_supplier_bills(invoice, lines_data, user)
+        if line_bill_map:
+            for idx, bill in line_bill_map.items():
+                line = invoice.lines.filter(is_deleted=False).order_by('created_at')[idx]
+                line.supplier_bill = bill
+                line.save(update_fields=['supplier_bill'])
 
         return invoice
 
@@ -215,25 +217,93 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
         instance.save()
 
         if lines_data is not None:
-            instance.lines.all().update(is_deleted=True)
+            user = instance.updated_by or instance.created_by
+            existing_lines = {
+                str(l._id): l for l in instance.lines.filter(is_deleted=False)
+            }
+            incoming_ids = set()
+            
             subtotal = Decimal('0')
             per_line_discounts = Decimal('0')
-            for line_item in lines_data:
-                line = CustomerInvoiceLine.objects.create(
-                    customer_invoice=instance,
-                    company_id=instance.company_id,
-                    branch_id=instance.branch_id,
-                    created_by=instance.updated_by or instance.created_by,
-                    updated_by=instance.updated_by or instance.created_by,
-                    **line_item
-                )
+            self._reduction_conflicts = []
+            created_lines = []
+
+            raw_line_ids = self.context.get('raw_line_ids', {})
+            for i, line_item in enumerate(lines_data):
+                line_id = raw_line_ids.get(i)
+                is_manual = line_item.get('is_manual_entry', False)
+
+                if line_id and line_id in existing_lines:
+                    old_line = existing_lines[line_id]
+                    incoming_ids.add(line_id)
+
+                    if is_manual and line_item.get('vendor') and line_item.get('cost_price') is not None:
+                        conflict = sync_manual_line_bill(
+                            invoice=instance,
+                            old_line=old_line,
+                            new_vendor=line_item['vendor'],
+                            new_qty=line_item.get('quantity', old_line.quantity),
+                            new_cost_price=line_item['cost_price'],
+                            user=user,
+                            line_index=i,
+                            line_name=line_item.get('manual_variant_name', ''),
+                        )
+                        if conflict:
+                            self._reduction_conflicts.append(conflict)
+
+                    for attr, value in line_item.items():
+                        if attr != 'supplier_bill':
+                            setattr(old_line, attr, value)
+                    old_line.save()
+                    created_lines.append(old_line)
+                else:
+                    line_item.pop('supplier_bill', None)
+                    line = CustomerInvoiceLine.objects.create(
+                        customer_invoice=instance,
+                        company_id=instance.company_id,
+                        branch_id=instance.branch_id,
+                        created_by=user,
+                        updated_by=user,
+                        **line_item
+                    )
+                    created_lines.append(line)
+
+                    if (
+                        is_manual
+                        and line_item.get('vendor')
+                        and line_item.get('cost_price') is not None
+                    ):
+                        cost = line_cost(line.quantity, line_item['cost_price'])
+                        bill = create_supplier_bill_for_line(
+                            instance,
+                            line_item['vendor'],
+                            cost,
+                            user,
+                            notes=f"Auto-created from invoice {instance.invoice_number}",
+                        )
+                        line.supplier_bill = bill
+                        line.save(update_fields=['supplier_bill'])
+
+                line = created_lines[-1]
                 subtotal += line.quantity * line.unit_price
                 per_line_discounts += Decimal(str(line.discount_amount or 0))
-            overall_discount_percent = Decimal(str(validated_data.get('overall_discount_percent', instance.overall_discount_percent or 0)))
-            overall_tax_percent = Decimal(str(validated_data.get('overall_tax_percent', instance.overall_tax_percent or 0)))
+
+            for line_id, old_line in existing_lines.items():
+                if line_id not in incoming_ids:
+                    handle_removed_line(old_line, instance, user)
+                    old_line.is_deleted = True
+                    old_line.save(update_fields=['is_deleted'])
+
+            overall_discount_percent = Decimal(str(
+                validated_data.get('overall_discount_percent', instance.overall_discount_percent or 0)
+            ))
+            overall_tax_percent = Decimal(str(
+                validated_data.get('overall_tax_percent', instance.overall_tax_percent or 0)
+            ))
             overall_discount = subtotal * (overall_discount_percent / Decimal('100'))
             total_before_tax = subtotal - per_line_discounts - overall_discount
             overall_tax = total_before_tax * (overall_tax_percent / Decimal('100'))
             instance.amount = total_before_tax + overall_tax
             instance.save(update_fields=['amount'])
+
         return instance

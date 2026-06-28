@@ -2,7 +2,7 @@ from .category import CategorySerializer
 from .brand import BrandSerializer
 from .warehouse import WarehouseSerializer
 from .product import (ProductVariantSerializer, ProductSerializer)
-from .supplier import SupplierSerializer
+from .supplier import SupplierSerializer, SupplierHistorySerializer
 from .variant_attribute import VariantAttributeSerializer
 from .variant_image import VariantImageSerializer
 from .stock_management import (
@@ -24,7 +24,7 @@ from .alert import AlertSerializer
 from .barcode import BarcodeSerializer
 __all__ = [
     "CategorySerializer", "BrandSerializer", "WarehouseSerializer",
-    "SupplierSerializer", "ProductVariantSerializer", "ProductSerializer",
+    "SupplierSerializer", "SupplierHistorySerializer", "ProductVariantSerializer", "ProductSerializer",
     "VariantAttributeSerializer", "VariantImageSerializer",
     "StockAdjustmentSerializer", "StockHistoryFilterSerializer",
     "StockItemSerializer", "InventoryTransactionSerializer",

@@ -115,6 +115,11 @@ export default function SuppliersPage() {
     ];
   }, [suppliers]);
 
+  const formatCurrency = (value: number | string) => {
+    const num = Number(value) || 0;
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(num);
+  };
+
   // Define columns for TableView
   const getTableColumns = (): Column<Supplier>[] => [
     { key: "code", label: "Code", sortable: true },
@@ -122,6 +127,18 @@ export default function SuppliersPage() {
     { key: "contact_person", label: "Contact Person", sortable: true },
     { key: "email", label: "Email", sortable: true },
     { key: "phone", label: "Phone", sortable: true },
+    {
+      key: "balance",
+      label: "Balance",
+      sortable: true,
+      render: (value) => <span className="font-mono text-sm">{formatCurrency(value as string)}</span>,
+    },
+    {
+      key: "credit",
+      label: "Credit",
+      sortable: true,
+      render: (value) => <span className="font-mono text-sm text-green-600 dark:text-green-400">{formatCurrency(value as string)}</span>,
+    },
     {
       key: "status",
       label: "Status",
@@ -138,6 +155,8 @@ export default function SuppliersPage() {
     { label: "Contact Person", key: "contact_person" },
     { label: "Email", key: "email" },
     { label: "Phone", key: "phone" },
+    { label: "Balance", key: "balance", formatter: (val: string) => formatCurrency(val) },
+    { label: "Credit", key: "credit", formatter: (val: string) => formatCurrency(val) },
     { label: "Address", key: "address_line" },
     { label: "Location", key: (row: Supplier) => `${row.city}, ${row.state}, ${row.country}` },
     { label: "Postal Code", key: "postal_code" },

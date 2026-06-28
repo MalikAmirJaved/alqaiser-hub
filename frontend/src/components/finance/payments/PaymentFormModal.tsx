@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useCreatePayment, useUpdatePayment, type Payment } from "@/hooks/finance/usePayments";
+import { useCreatePayment, useUpdatePayment, useConfirmPayment, type Payment } from "@/hooks/finance/usePayments";
 import { useSupplierBills } from "@/hooks/finance/useSupplierBills";
 import { useCustomerInvoices } from "@/hooks/finance/useCustomerInvoices";
 import { useBankAccounts } from "@/hooks/finance/useBank";
@@ -11,6 +11,7 @@ import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { toast } from "sonner";
 
 interface PaymentFormModalProps {
   open: boolean;
@@ -26,18 +27,20 @@ export default function PaymentFormModal({ open, onClose, initialData, onSuccess
   const [amount, setAmount] = useState("");
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
   const [referenceNumber, setReferenceNumber] = useState("");
-  const [supplierBillId, setSupplierBillId] = useState("");
-  const [customerInvoiceId, setCustomerInvoiceId] = useState("");
+  const [payableType, setPayableType] = useState<"supplier_bill" | "customer_invoice" | "">("");
+  const [payableId, setPayableId] = useState("");
   const [bankAccountId, setBankAccountId] = useState("");
   const [notes, setNotes] = useState("");
 
   const createPayment = useCreatePayment();
   const updatePayment = useUpdatePayment();
+  const confirmPayment = useConfirmPayment();
   const { data: supplierBillsRaw } = useSupplierBills();
   const { data: customerInvoicesRaw } = useCustomerInvoices();
   const supplierBills = (supplierBillsRaw ?? []).filter((b) => b.payment_status !== "PAID");
   const customerInvoices = (customerInvoicesRaw ?? []).filter((i) => i.payment_status !== "PAID");
   const { data: bankAccounts } = useBankAccounts();
+  const isEditing = !!initialData;
 
   useEffect(() => {
     if (initialData) {
@@ -46,8 +49,8 @@ export default function PaymentFormModal({ open, onClose, initialData, onSuccess
       setAmount(String(initialData.amount));
       setPaymentDate(initialData.payment_date);
       setReferenceNumber(initialData.reference_number || "");
-      setSupplierBillId(initialData.supplier_bill || "");
-      setCustomerInvoiceId(initialData.customer_invoice || "");
+      setPayableType((initialData.payable_type as any) || "");
+      setPayableId(initialData.payable_id || "");
       setBankAccountId(initialData.bank_account || "");
       setNotes(initialData.notes || "");
     } else {
@@ -61,38 +64,85 @@ export default function PaymentFormModal({ open, onClose, initialData, onSuccess
     setAmount("");
     setPaymentDate(new Date().toISOString().split("T")[0]);
     setReferenceNumber("");
-    setSupplierBillId("");
-    setCustomerInvoiceId("");
+    setPayableType("");
+    setPayableId("");
     setBankAccountId("");
     setNotes("");
   };
 
+  // Sync payableType when paymentType changes
+  useEffect(() => {
+    if (!initialData) {
+      setPayableType(paymentType === "RECEIPT" ? "customer_invoice" : "supplier_bill");
+      setPayableId("");
+    }
+  }, [paymentType, initialData]);
+
   const handleSubmit = async () => {
+    if (!amount || parseFloat(amount) <= 0) {
+      toast.error("Amount is required");
+      return;
+    }
+    if (!payableType || !payableId) {
+      toast.error(`Please select a ${paymentType === "RECEIPT" ? "customer invoice" : "supplier bill"}`);
+      return;
+    }
+
     const payload: any = {
-      payment_type: paymentType,
-      payment_method: paymentMethod,
+      payable_type: payableType,
+      payable_id: payableId,
       amount: parseFloat(amount),
       payment_date: paymentDate,
-      reference_number: referenceNumber,
-      notes,
+      payment_method: paymentMethod,
     };
-    if (paymentType === "RECEIPT" && customerInvoiceId) payload.customer_invoice = customerInvoiceId;
-    if (paymentType === "PAYMENT" && supplierBillId) payload.supplier_bill = supplierBillId;
     if (bankAccountId) payload.bank_account = bankAccountId;
+    if (referenceNumber) payload.reference_number = referenceNumber;
+    if (notes) payload.notes = notes;
 
-    if (initialData) {
-      await updatePayment.mutateAsync({ id: initialData.id, data: payload });
-    } else {
-      await createPayment.mutateAsync(payload);
+    try {
+      if (isEditing) {
+        await updatePayment.mutateAsync({ id: initialData.id, data: payload });
+        toast.success("Payment updated");
+      } else {
+        const result = await createPayment.mutateAsync(payload as any);
+        toast.success("Payment created");
+        // Auto-confirm after creation
+        if (result?.id) {
+          try {
+            await confirmPayment.mutateAsync(result.id);
+            toast.success("Payment confirmed");
+          } catch {
+            toast.warning("Payment created but confirmation failed");
+          }
+        }
+      }
+      onSuccess?.();
+      onClose();
+    } catch {
+      // Error toast is handled by apiFetch
     }
-    onSuccess?.();
-    onClose();
+  };
+
+  const payableOptions = (): { value: string; label: string }[] => {
+    if (payableType === "supplier_bill") {
+      return (supplierBills || []).map((bill) => ({
+        value: bill.id,
+        label: `${bill.bill_number} - ${formatCurrency(bill.outstanding)}`,
+      }));
+    }
+    if (payableType === "customer_invoice") {
+      return (customerInvoices || []).map((inv) => ({
+        value: inv.id,
+        label: `${inv.invoice_number} - ${formatCurrency(Number(inv.outstanding))}`,
+      }));
+    }
+    return [];
   };
 
   return (
     <Modal open={open} onOpenChange={onClose}>
       <ModalContent>
-        <ModalHeader>{initialData ? "Edit Payment" : "New Payment"}</ModalHeader>
+        <ModalHeader>{isEditing ? "Edit Payment" : "New Payment"}</ModalHeader>
         <div className="space-y-4 py-4">
           <div>
             <Label>Type</Label>
@@ -129,28 +179,15 @@ export default function PaymentFormModal({ open, onClose, initialData, onSuccess
               placeholder="Select method"
             />
           </div>
-          {paymentType === "RECEIPT" && (
-            <div>
-              <Label>Customer Invoice</Label>
-              <SearchableSelect
-                value={customerInvoiceId}
-                onChange={setCustomerInvoiceId}
-                options={(customerInvoices || []).map((inv) => ({ value: inv.id, label: `${inv.invoice_number} - ${formatCurrency(Number(inv.outstanding))}` }))}
-                placeholder="Select invoice"
-              />
-            </div>
-          )}
-          {paymentType === "PAYMENT" && (
-            <div>
-              <Label>Supplier Bill</Label>
-              <SearchableSelect
-                value={supplierBillId}
-                onChange={setSupplierBillId}
-                options={(supplierBills || []).map((bill) => ({ value: bill.id, label: `${bill.bill_number} - ${formatCurrency(bill.outstanding)}` }))}
-                placeholder="Select bill"
-              />
-            </div>
-          )}
+          <div>
+            <Label>{paymentType === "RECEIPT" ? "Customer Invoice" : "Supplier Bill"}</Label>
+            <SearchableSelect
+              value={payableId}
+              onChange={setPayableId}
+              options={payableOptions()}
+              placeholder={`Select ${paymentType === "RECEIPT" ? "invoice" : "bill"}`}
+            />
+          </div>
           <div>
             <Label>Bank Account</Label>
             <SearchableSelect
@@ -172,7 +209,7 @@ export default function PaymentFormModal({ open, onClose, initialData, onSuccess
         <ModalFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={handleSubmit} disabled={createPayment.isPending || updatePayment.isPending}>
-            {initialData ? "Update" : "Create"}
+            {isEditing ? "Update" : "Create & Confirm"}
           </Button>
         </ModalFooter>
       </ModalContent>

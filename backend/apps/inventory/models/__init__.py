@@ -2,7 +2,7 @@ from .category import Category
 from .brand import Brand
 from .warehouse import Warehouse
 from .product import Product
-from .supplier import Supplier
+from .supplier import Supplier, SupplierHistory
 from .audit import (AuditLog, AuditFieldChange)
 from .reservation import StockReservation
 from .stock import StockItem
@@ -26,5 +26,6 @@ __all__ = [
     "VariantAttribute", "VariantImage", "StockTransfer",
     "PurchaseOrder", "PurchaseOrderLine", "GoodsReceipt", "GoodsReceiptLine",
     "Customer", "SalesOrder", "SalesOrderLine",
-    "SalesReturn", "SalesReturnLine", "Customer", "Alert"
+    "SalesReturn", "SalesReturnLine", "Customer", "Alert",
+    "SupplierHistory",
 ]
