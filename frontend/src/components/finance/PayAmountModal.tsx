@@ -28,9 +28,6 @@ export interface PayAmountModalProps {
 const PAYMENT_METHODS = [
   { value: "BANK_TRANSFER", label: "Bank Transfer" },
   { value: "CASH", label: "Cash" },
-  // { value: "CHEQUE", label: "Cheque" },
-  // { value: "CREDIT_CARD", label: "Credit Card" },
-  // { value: "OTHER", label: "Other" },
 ];
 
 export default function PayAmountModal({
