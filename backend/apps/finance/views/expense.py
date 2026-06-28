@@ -149,6 +149,7 @@ class ExpenseViewSet(
                 self._record_expense_payment(
                     expense,
                     request,
+                    amount=request.data.get('amount'),
                     payment_date=request.data.get('payment_date'),
                     payment_method=request.data.get('payment_method', 'BANK_TRANSFER'),
                     reference_number=request.data.get('reference_number', ''),
@@ -174,6 +175,7 @@ class ExpenseViewSet(
         expense,
         request,
         *,
+        amount=None,
         payment_date=None,
         payment_method='BANK_TRANSFER',
         reference_number='',
@@ -190,14 +192,22 @@ class ExpenseViewSet(
             except BankAccount.DoesNotExist:
                 raise ValueError('Bank account not found')
 
-        amount = expense.outstanding or expense.amount
-        if amount <= 0:
+        from django.utils.dateparse import parse_date
+
+        pay_amount = Decimal(str(
+            amount if amount is not None else request.data.get('amount', expense.outstanding)
+        ))
+        if pay_amount <= 0:
             raise ValueError('Payment amount must be positive')
+        if pay_amount > expense.outstanding:
+            raise ValueError(f'Amount {pay_amount} exceeds outstanding {expense.outstanding}')
+
+        parsed_date = parse_date(payment_date) if payment_date else expense.expense_date
 
         create_payment_for(
             expense,
-            amount=amount,
-            payment_date=payment_date or expense.expense_date,
+            amount=pay_amount,
+            payment_date=parsed_date,
             payment_method=payment_method,
             reference_number=reference_number,
             bank_account=bank_account,

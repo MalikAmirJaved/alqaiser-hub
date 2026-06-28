@@ -72,6 +72,10 @@ def pay_supplier_bill(bill, request, amount=None):
     bank_account = None
     bank_account_uuid = request.data.get('bank_account_id')
     payment_method = request.data.get('payment_method', 'BANK_TRANSFER')
+    reference_number = request.data.get('reference_number', '')
+
+    from django.utils.dateparse import parse_date
+    payment_date = parse_date(request.data.get('payment_date')) if request.data.get('payment_date') else bill.bill_date
 
     with transaction.atomic():
         try:
@@ -98,9 +102,10 @@ def pay_supplier_bill(bill, request, amount=None):
         create_payment_for(
             bill,
             amount=pay_amount,
-            payment_date=bill.bill_date,
+            payment_date=payment_date,
             payment_method=payment_method,
             bank_account=bank_account,
+            reference_number=reference_number,
             user=request.user,
             auto_confirm=True,
         )

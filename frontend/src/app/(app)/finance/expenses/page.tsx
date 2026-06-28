@@ -3,19 +3,25 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
-import { useExpenses, useDeleteExpense, expenseCategoryLabels, expenseCategoryOptions } from "@/hooks/finance/useExpenses";
-import { usePaySupplierBill } from "@/hooks/finance/useSupplierBills";
+import {
+  useExpenses,
+  useDeleteExpense,
+  expenseCategoryLabels,
+  expenseCategoryOptions,
+  useRecordExpensePayment,
+} from "@/hooks/finance/useExpenses";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
-import { Trash2, Send } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import ExpenseFormModal from "@/components/finance/expenses/ExpenseFormModal";
-import ExpensePaymentModal from "@/components/finance/expenses/ExpensePaymentModal";
+import PayAmountModal from "@/components/finance/PayAmountModal";
+import { StatusBadge } from "@/components/finance/ui";
 import { usePagination } from "@/hooks/usePagination";
 
 export default function ExpensesPage() {
-    const formatCurrency = useFormatCurrency();
+  const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<any>(null);
@@ -32,9 +38,10 @@ export default function ExpensesPage() {
     ...(filters.paid !== undefined ? { paid: filters.paid === "true" } : {}),
   }), [filters, pagination.page]);
 
-  const paySupplierBill = usePaySupplierBill();
+  const recordPayment = useRecordExpensePayment();
   const { data: expenses, isLoading, totalCount } = useExpenses(filtersWithPage);
   const deleteExpense = useDeleteExpense();
+
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
     { name: "category", label: "Category", type: "select", searchable: true, options: expenseCategoryOptions },
@@ -42,7 +49,7 @@ export default function ExpensesPage() {
   ];
 
   const permissions = useFeaturePermissions("FINANCE", "expense");
-  
+
   const modulePermissions: ModulePermissions = {
     create: permissions.create,
     update: permissions.update,
@@ -56,27 +63,22 @@ export default function ExpensesPage() {
   };
 
   const handleEdit = (expense: any) => {
-    // Do not allow editing if expense is linked to a supplier bill (read-only)
-    if (expense.supplier_bill_id) {
-      console.warn("Expense linked to a supplier bill cannot be edited");
-      return;
-    }
+    if (expense.supplier_bill_id) return;
     setEditingExpense(expense);
     setModalOpen(true);
   };
 
   const handleDelete = (expense: any) => {
-    // Do not allow deletion if expense is linked to a supplier bill
-    if (expense.supplier_bill_id) {
-      console.warn("Expense linked to a supplier bill cannot be deleted");
-      return;
-    }
+    if (expense.supplier_bill_id) return;
     deleteExpense.mutate(expense.id);
   };
 
-  // Payment should only happen for expenses WITHOUT a supplier bill
   const handleRecordPayment = (expense: any) => {
-    if (!expense.supplier_bill_id && !expense.paid) {
+    if (
+      !expense.supplier_bill_id &&
+      expense.payment_status !== "PAID" &&
+      Number(expense.outstanding ?? expense.amount) > 0
+    ) {
       setExpenseToPay(expense);
       setPayModalOpen(true);
     }
@@ -90,28 +92,16 @@ export default function ExpensesPage() {
     setSelectedIds([]);
   };
 
-  const handleBulkRecordPayment = () => {
-    // Only pay expenses that have a supplier_bill_id (so we can pay the bill)
-    const expensesToPay = (expenses || []).filter(
-      (e: any) => selectedIds.includes(e.id) && e.supplier_bill_id
-    );
-    expensesToPay.forEach((expense: any) => {
-      paySupplierBill.mutate({ id: expense.supplier_bill_id });
-    });
-    setSelectedIds([]);
-  };
-
   const computeKPIs = (data: any[]) => {
-    const parseAmount = (val: any): number => {
-      return typeof val === "string" ? parseFloat(val) : (val as number);
-    };
+    const parseAmount = (val: any): number =>
+      typeof val === "string" ? parseFloat(val) : (val as number);
 
     const totalUnpaid = data
-      .filter((e) => !e.paid && !e.supplier_bill_id) // only manual unpaid
-      .reduce((sum, e) => sum + parseAmount(e.amount), 0);
+      .filter((e) => !e.supplier_bill_id && e.payment_status !== "PAID")
+      .reduce((sum, e) => sum + parseAmount(e.outstanding ?? e.amount), 0);
     const totalPaid = data
-      .filter((e) => e.paid)
-      .reduce((sum, e) => sum + parseAmount(e.amount), 0);
+      .filter((e) => e.payment_status === "PAID" || e.paid)
+      .reduce((sum, e) => sum + parseAmount(e.paid_amount ?? e.amount), 0);
     const thisMonth = new Date().getMonth();
     const thisYear = new Date().getFullYear();
     const monthlyTotal = data
@@ -127,14 +117,14 @@ export default function ExpensesPage() {
       {
         label: "Unpaid (manual)",
         value: totalUnpaid,
-        sub: `${data.filter((e) => !e.paid && !e.supplier_bill_id).length} open`,
+        sub: `${data.filter((e) => !e.supplier_bill_id && e.payment_status !== "PAID").length} open`,
         tone: "destructive" as const,
         isCurrency: true,
       },
       {
-        label: "Paid (MTD)",
+        label: "Paid",
         value: totalPaid,
-        sub: `${data.filter((e) => e.paid).length} settled`,
+        sub: `${data.filter((e) => e.payment_status === "PAID" || e.paid).length} settled`,
         tone: "success" as const,
         isCurrency: true,
       },
@@ -187,15 +177,26 @@ export default function ExpensesPage() {
       render: (val: number) => formatCurrency(val),
     },
     {
-      key: "paid",
+      key: "paid_amount",
       label: "Paid",
+      render: (val: number, row: any) =>
+        row.supplier_bill_id ? "—" : formatCurrency(Number(val || 0)),
+    },
+    {
+      key: "outstanding",
+      label: "Due",
+      render: (val: number, row: any) =>
+        row.supplier_bill_id ? "—" : formatCurrency(Number(val ?? row.amount ?? 0)),
+    },
+    {
+      key: "payment_status",
+      label: "Status",
       sortable: true,
-      render: (val: boolean, row: any) => {
+      render: (val: string, row: any) => {
         if (row.supplier_bill_id) {
-          // If linked to a bill, the paid status is derived from the bill
-          return val ? "Yes (via bill)" : "No (bill unpaid)";
+          return <span className="text-xs text-muted-foreground">Via bill</span>;
         }
-        return val ? "Yes" : "No";
+        return <StatusBadge status={val || (row.paid ? "PAID" : "UNPAID")} />;
       },
     },
   ];
@@ -224,7 +225,12 @@ export default function ExpensesPage() {
           onEdit: handleEdit,
           onDelete: handleDelete,
           onPost: handleRecordPayment,
-          canPost: (expense: any) => !expense.supplier_bill_id && !expense.paid,
+          canEdit: (expense: any) => !expense.supplier_bill_id,
+          canDelete: (expense: any) => !expense.supplier_bill_id,
+          canPost: (expense: any) =>
+            !expense.supplier_bill_id &&
+            expense.payment_status !== "PAID" &&
+            Number(expense.outstanding ?? expense.amount) > 0,
           postLabel: "Pay",
         }}
         onRowClick={handleRowClick}
@@ -238,22 +244,13 @@ export default function ExpensesPage() {
           />
         }
         batchActions={
-          <>
-            <button
-              onClick={handleBulkDelete}
-              className="inline-flex items-center gap-1.5 text-sm text-destructive hover:text-destructive/80"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete Selected (manual only)
-            </button>
-            <button
-              onClick={handleBulkRecordPayment}
-              className="inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary/80"
-            >
-              <Send className="w-4 h-4" />
-              Pay Selected Bills
-            </button>
-          </>
+          <button
+            onClick={handleBulkDelete}
+            className="inline-flex items-center gap-1.5 text-sm text-destructive hover:text-destructive/80"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete Selected (manual only)
+          </button>
         }
       />
       <ExpenseFormModal
@@ -265,15 +262,34 @@ export default function ExpensesPage() {
         initialData={editingExpense}
       />
       {expenseToPay && (
-        <ExpensePaymentModal
+        <PayAmountModal
           open={payModalOpen}
           onClose={() => {
             setPayModalOpen(false);
             setExpenseToPay(null);
           }}
-          expenseId={expenseToPay.id}
-          expenseNumber={expenseToPay.expense_number}
-          amount={expenseToPay.amount}
+          title="Pay Expense"
+          documentLabel="Expense"
+          documentNumber={expenseToPay.expense_number}
+          subtitle={expenseToPay.description}
+          totalAmount={Number(expenseToPay.amount)}
+          paidAmount={Number(expenseToPay.paid_amount || 0)}
+          outstanding={Number(expenseToPay.outstanding ?? expenseToPay.amount)}
+          paymentStatus={expenseToPay.payment_status || (expenseToPay.paid ? "PAID" : "UNPAID")}
+          isPending={recordPayment.isPending}
+          onSubmit={async (data) => {
+            await recordPayment.mutateAsync({
+              id: expenseToPay.id,
+              data: {
+                amount: data.amount,
+                payment_date: data.payment_date,
+                payment_method: data.payment_method,
+                reference_number: data.reference_number,
+              },
+            });
+            setPayModalOpen(false);
+            setExpenseToPay(null);
+          }}
         />
       )}
     </>

@@ -695,6 +695,20 @@ export default function CustomerInvoiceFormModal({
   );
 
   const onSubmit = async (data: CustomerInvoiceFormData) => {
+    if (data.lines.length === 0) {
+      toast.error("Add at least one line item.");
+      return;
+    }
+
+    // ── Unit price required for every line ──
+    for (let i = 0; i < data.lines.length; i++) {
+      const line = data.lines[i];
+      if (!line.unit_price || Number(line.unit_price) <= 0) {
+        toast.error(`Line ${i + 1}: Unit price is required.`);
+        return;
+      }
+    }
+
     // ── Manual entry validation ──
     for (let i = 0; i < data.lines.length; i++) {
       const line = data.lines[i];
@@ -993,7 +1007,9 @@ export default function CustomerInvoiceFormModal({
                             Product / Service
                           </th>
                           <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-20">Qty</th>
-                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-28">Unit price</th>
+                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-28">
+                            Unit price <span className="text-destructive">*</span>
+                          </th>
                           <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-24">Discount</th>
                           <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-20">Tax %</th>
                           <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-28">Total</th>
