@@ -33,26 +33,28 @@ def update_supplier_balance(
         elif transaction_type == 'PURCHASE_REVERSAL':
             supplier.balance -= amount
         elif transaction_type == 'PAYMENT':
-            payment_remaining = amount
+            # Full payment amount clears the bill obligation from balance.
+            # Available credit is applied first; any remainder is cash paid.
+            credit_used = Decimal('0')
             if supplier.credit > 0:
-                credit_used = min(supplier.credit, payment_remaining)
+                credit_used = min(supplier.credit, amount)
                 supplier.credit -= credit_used
-                payment_remaining -= credit_used
-                SupplierHistory.objects.create(
-                    supplier=supplier,
-                    transaction_type='CREDIT_APPLIED',
-                    amount=credit_used,
-                    balance_after=supplier.balance,
-                    credit_after=supplier.credit,
-                    reference_type=reference_type,
-                    reference_id=reference_id,
-                    notes=f'Credit applied: {credit_used} from payment',
-                    company_id=supplier.company_id,
-                    branch_id=supplier.branch_id,
-                    created_by_id=supplier.updated_by_id or supplier.created_by_id,
-                    updated_by_id=supplier.updated_by_id or supplier.created_by_id,
-                )
-            supplier.balance -= payment_remaining
+                if credit_used > 0:
+                    SupplierHistory.objects.create(
+                        supplier=supplier,
+                        transaction_type='CREDIT_APPLIED',
+                        amount=credit_used,
+                        balance_after=supplier.balance,
+                        credit_after=supplier.credit,
+                        reference_type=reference_type,
+                        reference_id=reference_id,
+                        notes=f'Credit applied: {credit_used} from payment',
+                        company_id=supplier.company_id,
+                        branch_id=supplier.branch_id,
+                        created_by_id=supplier.updated_by_id or supplier.created_by_id,
+                        updated_by_id=supplier.updated_by_id or supplier.created_by_id,
+                    )
+            supplier.balance -= amount
         elif transaction_type == 'CREDIT_NOTE':
             supplier.credit += amount
         elif transaction_type == 'INVOICE_ADJUSTMENT':
@@ -77,3 +79,17 @@ def update_supplier_balance(
             created_by_id=supplier.updated_by_id or supplier.created_by_id,
             updated_by_id=supplier.updated_by_id or supplier.created_by_id,
         )
+
+
+def record_supplier_bill_created(bill, notes=''):
+    """Record a new supplier bill as a PURCHASE on the vendor balance."""
+    if not bill.supplier_id or not bill.amount:
+        return None
+    return update_supplier_balance(
+        bill.supplier,
+        bill.amount,
+        'PURCHASE',
+        reference_type='supplier_bill',
+        reference_id=bill._id,
+        notes=notes or f'Supplier bill {bill.bill_number} created',
+    )

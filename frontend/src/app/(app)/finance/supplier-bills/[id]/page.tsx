@@ -90,8 +90,8 @@ function PurchaseOrderInfoCard({ purchaseOrderId }: { purchaseOrderId: string | 
                   {line.variant_sku && <span className="text-muted-foreground ml-1">({line.variant_sku})</span>}
                 </td>
                 <td className="text-right py-2 px-2 num">{line.quantity_ordered}</td>
-                <td className="text-right py-2 px-2 num">{line.unit_cost.toFixed(2)}</td>
-                <td className="text-right py-2 pl-2 num font-medium">{(line.quantity_ordered * line.unit_cost).toFixed(2)}</td>
+                <td className="text-right py-2 px-2 num">{line.unit_cost}</td>
+                <td className="text-right py-2 pl-2 num font-medium">{(line.quantity_ordered * line.unit_cost)}</td>
               </tr>
             ))}
           </tbody>
@@ -100,7 +100,7 @@ function PurchaseOrderInfoCard({ purchaseOrderId }: { purchaseOrderId: string | 
               <td className="py-2 pr-2">Total</td>
               <td className="text-right py-2 px-2">{lines.reduce((s, l) => s + l.quantity_ordered, 0)}</td>
               <td className="text-right py-2 px-2"></td>
-              <td className="text-right py-2 pl-2">{po.total_amount?.toFixed(2)}</td>
+              <td className="text-right py-2 pl-2">{po.total_amount}</td>
             </tr>
           </tfoot>
         </table>

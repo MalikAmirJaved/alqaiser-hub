@@ -18,7 +18,7 @@ from django.contrib.contenttypes.models import ContentType
 
 from apps.finance.models import Payment, SupplierBill
 from apps.finance.services.payable import get_total_paid
-from apps.finance.services.supplier_balance import update_supplier_balance
+from apps.finance.services.supplier_balance import update_supplier_balance, record_supplier_bill_created
 
 
 def line_cost(quantity, cost_price):
@@ -142,12 +142,8 @@ def create_supplier_bill_for_line(invoice, vendor, amount, user, notes=''):
         created_by=user,
         updated_by=user,
     )
-    update_supplier_balance(
-        vendor,
-        amount,
-        'PURCHASE',
-        reference_type='supplier_bill',
-        reference_id=bill._id,
+    record_supplier_bill_created(
+        bill,
         notes=notes or f"Auto-created from invoice {invoice.invoice_number}",
     )
     return bill

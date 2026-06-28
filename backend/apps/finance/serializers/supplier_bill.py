@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from apps.finance.models import SupplierBill, Payment, CustomerInvoice
+from apps.finance.services.supplier_balance import record_supplier_bill_created
 from apps.inventory.models import Supplier, PurchaseOrder
 from django.contrib.contenttypes.models import ContentType
 
@@ -74,3 +75,8 @@ class SupplierBillSerializer(serializers.ModelSerializer):
             'id', 'created_at', 'updated_at', 'company_id', 'branch_id',
             'paid_amount', 'payment_status', 'outstanding', 'status', 'journal_entry',
         )
+
+    def create(self, validated_data):
+        bill = super().create(validated_data)
+        record_supplier_bill_created(bill)
+        return bill
