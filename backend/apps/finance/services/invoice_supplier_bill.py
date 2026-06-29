@@ -189,9 +189,12 @@ def sync_manual_line_bill(
     qty_decreased = new_qty < old_qty
 
     # Quantity decrease → defer bill update until user resolves
-    if qty_decreased and not old_line.resolved:
+    if qty_decreased:
+        if old_line.resolved:
+            # Reset resolved flag so a new reduction cycle can begin
+            old_line.resolved = False
         old_line.original_quantity = old_qty
-        old_line.save(update_fields=['original_quantity', 'updated_at'])
+        old_line.save(update_fields=['original_quantity', 'resolved', 'updated_at'])
         return {
             'line_id': str(old_line._id),
             'line_index': line_index,

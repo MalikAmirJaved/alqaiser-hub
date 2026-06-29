@@ -15,8 +15,10 @@ from apps.inventory.models import (
 def resolve_invoice_line_reduction(line, action, user):
     """Resolve a quantity reduction on a manual invoice line.
 
-    Both actions update the supplier bill and vendor balance/credit.
-    go_to_inventory additionally creates a product variant and adds stock.
+    - return_to_vendor: Reduces the supplier bill amount and vendor balance/credit
+      (company is returning stock to supplier).
+    - go_to_inventory: Keeps the supplier bill and vendor balance unchanged
+      (company keeps the stock; creates a product variant + adds stock).
     """
     if line.resolved:
         raise ValueError('This reduction has already been resolved.')
@@ -43,12 +45,13 @@ def resolve_invoice_line_reduction(line, action, user):
     }
 
     with transaction.atomic():
-        apply_line_reduction(
-            bill,
-            line,
-            user,
-            action_notes=f'Qty reduction resolved ({action_label})',
-        )
+        if action == 'return_to_vendor':
+            apply_line_reduction(
+                bill,
+                line,
+                user,
+                action_notes=f'Qty reduction resolved ({action_label})',
+            )
 
         if action == 'go_to_inventory':
             product, variant = _get_or_create_product_variant(
