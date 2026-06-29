@@ -33,21 +33,28 @@ Daphne (ASGI server, port 8000)
 
 ### Technology Stack
 
-| Layer          | Technology                                         |
-| -------------- | -------------------------------------------------- |
-| Frontend       | Next.js 16 (App Router), React 19, TypeScript 5.8  |
-| Styling        | Tailwind CSS v4, shadcn/ui (New York style)        |
-| State (client) | Redux Toolkit (auth, theme, permissions, settings) |
-| State (server) | TanStack React Query v5                            |
-| Forms          | React Hook Form v7 + Zod v3, or legacy schemas.js  |
-| Backend        | Python 3.12, Django 6.0, DRF 3.17, Channels 4.1    |
-| ASGI Server    | Daphne 4.1                                         |
-| Auth           | Cookie-based JWT (simplejwt 5.3)                   |
-| Database       | PostgreSQL (with psycopg2-binary)                  |
-| Cache/WS       | Redis 7 (django-redis, channels-redis, hiredis)    |
-| Task Queue     | Celery 5.6 + Redis (beat for daily forecast tasks) |
-| Container      | Docker + Docker Compose, multi-stage builds        |
-| Package Mgr    | Bun (frontend), pip (backend)                      |
+| Layer          | Technology                                                  |
+| -------------- | ----------------------------------------------------------- |
+| Frontend       | Next.js 16 (App Router), React 19, TypeScript 5.8           |
+| Styling        | Tailwind CSS v4, shadcn/ui (New York style)                 |
+| State (client) | Redux Toolkit (auth, theme, permissions, settings)          |
+| State (server) | TanStack React Query v5                                     |
+| Forms          | React Hook Form v7 + Zod v3, or legacy schemas.js           |
+| Rich Text      | TipTap v3 (policy content editor)                           |
+| Animations     | Framer Motion v12                                            |
+| Video          | HLS.js v1.6 (CCTV HLS stream playback)                      |
+| PDF/Export     | jsPDF, react-pdf, html2canvas, xlsx, mammoth (DOCX)         |
+| Backend        | Python 3.12, Django 6.0.4, DRF 3.17.1, Channels 4.1.0      |
+| ASGI Server    | Daphne 4.1.2                                                |
+| Auth           | Cookie-based JWT (simplejwt 5.3.1)                          |
+| Filters        | django-filter 25.1                                           |
+| Database       | PostgreSQL (psycopg2-binary 2.9.12)                         |
+| Cache/WS       | Redis 7 (django-redis 5.4.0, channels-redis 4.2.0, hiredis 2.2.3) |
+| Task Queue     | Celery 5.6.3 + Redis (beat for daily forecast tasks)        |
+| ML/Analytics   | pandas 3.0.3, numpy 2.4.6 (forecast engine)                |
+| System Deps    | ffmpeg (HLS stream processing)                              |
+| Container      | Docker + Docker Compose, multi-stage builds                 |
+| Package Mgr    | Bun (frontend), pip (backend)                               |
 
 ---
 
@@ -63,7 +70,7 @@ alqaiser/
 │
 ├── backend/                        ← Django project root
 │   ├── config/                     ← project configuration
-│   │   ├── settings.py             ← 54 apps, 10 middleware, DRF, JWT, CORS, Redis
+│   │   ├── settings.py             ← 14 internal apps, 10 middleware, DRF, JWT, CORS, Redis
 │   │   ├── urls.py                 ← root URL router → 14 app prefixes under /api/
 │   │   ├── asgi.py                 ← ProtocolTypeRouter (HTTP + WS with JWT auth)
 │   │   ├── wsgi.py                 ← fallback WSGI
@@ -87,24 +94,24 @@ alqaiser/
 │   │   │   └── test_base.py        ← BaseTestCase, UnauthenticatedTestCase
 │   │   ├── compsetting/            ← company settings, working days, holidays
 │   │   ├── finance/                ← accounts, journal, invoices, payments, budgets
-│   │   │   ├── models/             ← account, bank, budget, customer_invoice, expense, journal, payment, supplier_bill
-│   │   │   ├── serializers/
+│   │   │   ├── models/             ← 8 model files: account, bank, budget, customer_invoice, expense, journal, payment, supplier_bill
+│   │   │   ├── serializers/        ← 9 serializer files
 │   │   │   ├── services/           ← document, invoice_payment, payable
-│   │   │   ├── views/              ← per-model viewsets + dashboard, report, payroll
+│   │   │   ├── views/              ← 13 view files
 │   │   │   └── integration_signals.py
 │   │   ├── forecast/               ← sales & stock forecasting
 │   │   │   ├── analytics.py
 │   │   │   ├── services.py         ← DemandForecaster, StockForecaster
 │   │   │   └── tasks.py            ← Celery tasks (daily at 02:00 / 03:00 UTC)
 │   │   ├── hr/                     ← employees, shifts, leave, payroll, assets, recruitment, policies, exit
-│   │   │   ├── serializers/        ← asset, policy, recruitment, shift
+│   │   │   ├── serializers/        ← 6 serializer files: asset, asset_purchase_request, policy, recruitment, shift
 │   │   │   ├── services/           ← assignment_service, shift_service
-│   │   │   └── views/              ← employee, leave, payroll, shift, asset, recruitment, policy, exit
+│   │   │   └── views/              ← 15 view files
 │   │   ├── inventory/              ← products, variants, stock, warehouses, PO, SO, transfers, barcode, alerts
-│   │   │   ├── models/             ← 16 model files (product, variant, stock, warehouse, etc.)
-│   │   │   ├── serializers/        ← 15 serializer files
+│   │   │   ├── models/             ← 17 model files: alert, audit, brand, category, customer, product, purchase, reservation, sales, stock, supplier, transaction, transfer, variant, variant_attribute, variant_image, warehouse
+│   │   │   ├── serializers/        ← 19 serializer files
 │   │   │   ├── services/           ← stock_service
-│   │   │   ├── views/              ← 17 view files
+│   │   │   ├── views/              ← 19 view files
 │   │   │   ├── audit.py            ← ThreadPoolExecutor-based audit engine
 │   │   │   ├── alert_utils.py      ← WebSocket alert helper
 │   │   │   └── signals_audit.py    ← pre-save/post-save/post-delete signals
@@ -124,7 +131,7 @@ alqaiser/
 │   │   │   ├── signals.py          ← cache invalidation + WS broadcast on change
 │   │   │   └── views_extended.py   ← role assignment, overrides, bulk management
 │   │   └── sales/                  ← leads, quotes, invoices, dashboard
-│   │       ├── models/             ← lead, quote
+│   │       ├── models/             ← lead, quote (+ QuoteLine)
 │   │       ├── serializers/
 │   │       └── views/
 │   ├── consumers/
@@ -147,15 +154,15 @@ alqaiser/
     ├── .env                         ← NEXT_PUBLIC_API_URL
     └── src/
         ├── app/
-        │   ├── layout.tsx           ← root layout (Inter font, providers: ReactQuery → ThemeInit → Confirmation → Notification → Toaster)
-        │   ├── providers.tsx         ← Redux Provider + React Query (5 min staleTime, 1 retry)
+        │   ├── layout.tsx           ← root layout (Inter font, providers: ReactQuery[Redux + QueryClient] → ThemeInit → Confirmation → Notification → Toaster)
+        │   ├── providers.tsx         ← ReactQueryProvider wraps Redux Provider + QueryClient (5 min staleTime, 1 retry)
         │   ├── (app)/               ← authenticated route group
         │   │   ├── layout.tsx       ← delegates to AppLayout (sidebar + topbar shell)
         │   │   ├── page.tsx         ← redirect / → /dashboard
         │   │   ├── dashboard/       ← overall dashboard
-        │   │   ├── hr/              ← 17 route files
-        │   │   ├── inventory/       ← 26 route files
-        │   │   ├── finance/         ← 22 route files
+        │   │   ├── hr/              ← 22 route files
+        │   │   ├── inventory/       ← 23 route files
+        │   │   ├── finance/         ← 23 route files
         │   │   ├── sales/           ← 9 route files
         │   │   ├── monitoring/      ← 8 route files
         │   │   └── settings/        ← 9 route files
@@ -163,7 +170,7 @@ alqaiser/
         │   ├── unauthorized/
         │   └── demo/
         ├── components/
-        │   ├── ui/                  ← 49 shadcn/ui primitives (button, dialog, table, etc.)
+        │   ├── ui/                  ← 49 shadcn/ui primitives (button, dialog, table, card, form, select, dropdown-menu, drawer, popover, tooltip, etc.)
         │   ├── reuseable/           ← older reusable components
         │   │   └── final/           ← DynamicModulePage, DetailLayout, workflow (newer patterns)
         │   ├── sidebar/Sidebar.tsx  ← permission-filtered sidebar
@@ -171,11 +178,11 @@ alqaiser/
         │   ├── CrudPage.tsx         ← legacy generic CRUD (localStorage-based)
         │   ├── PermissionGuard.tsx  ← route-level permission guard
         │   ├── PageHeader.tsx
-        │   └── finance/, inventory/, sales/, payroll/, leave/, HRAssets/, monitoring/, recruitment/, settings/, Forms/
-        ├── hooks/                   ← 60+ hooks
-        │   ├── finance/             ← 16 hooks
-        │   ├── sales/               ← 4 hooks
-        │   └── overall/             ← 1 hook
+        │   └── finance/, inventory/, sales/, payroll/, leave/, HRAssets/, monitoring/, recruitment/, settings/, Forms/, cards/, common/
+        ├── hooks/                   ← 77 hooks
+        │   ├── finance/             ← 16 hooks (accounts, budgets, expenses, payments, supplier bills, customer invoices, journal entries, bank, trial balance, P&L, balance sheet, aging reports, expense report, audit logs, finance dashboard, forecast)
+        │   ├── sales/               ← 4 hooks (leads, quotes, sales invoices, sales dashboard)
+        │   └── overall/             ← 1 hook (overall dashboard)
         ├── config/
         │   ├── menu.js              ← sidebar menu structure
         │   ├── routePermissions.ts  ← route → permission mapping
@@ -213,24 +220,28 @@ Nexus ERP
 │
 ├── HR
 │   ├── Employee         — core employee record (30+ fields, linked to User)
-│   ├── Payroll          — PayrollRecord, deductions, compensations, loans
+│   ├── EmployeeDocument — education, experience, other documents
+│   ├── EmployeePromotion — salary promotion history
+│   ├── Payroll          — PayrollRecord + PayrollDeductionDetail, PayrollCompensation, PayrollLoanDeduction, PayrollLeaveDeduction (relational links)
 │   ├── Leave            — LeaveRequest with approval workflow
-│   ├── Shift Management — templates, overrides, date-range assignments, schedules
-│   ├── Assets           — Asset (inventory items), AssetCategory (kits), EmployeeAssetAssignment
-│   ├── Recruitment      — RecruitmentCandidate, InterviewRound, ActivityLog
+│   ├── Shift Management — ShiftTemplate, ShiftOverride, ShiftDateRangeAssignment, EmployeeDefaultShift, ShiftChangeHistory, EmployeeShiftSchedule
+│   ├── Assets           — Asset (inventory items), AssetCategory (kits), AssetPurchaseRequest, EmployeeAssetAssignment
+│   ├── Recruitment      — RecruitmentCandidate, RecruitmentActivityLog, InterviewRound
 │   ├── Exit Management  — ExitRecord + ExitChecklist
-│   ├── Policies         — Policy with versioning
-│   └── Compensation     — allowances, loans, frequency types
+│   ├── Policies         — Policy with versioning (PolicyVersion, PolicyCategory)
+│   └── Compensation     — Compensation (+ CompensationSelectedMonth, CompensationMonthRange), EmployeeLoan (+ LoanSelectedMonth, LoanMonthRange)
 │
 ├── Inventory
 │   ├── Products         — Product + ProductVariant + VariantAttribute + VariantImage
-│   ├── Stock            — StockItem (per-variant per-warehouse), InventoryTransaction
+│   ├── Stock            — StockItem (per-variant per-warehouse), InventoryTransaction, StockReservation
 │   ├── Warehouses       — physical locations
-│   ├── Purchases        — PurchaseOrder + PurchaseOrderLine + GoodsReceipt
-│   ├── Sales            — SalesOrder + SalesOrderLine + SalesReturn
+│   ├── Purchases        — PurchaseOrder + PurchaseOrderLine + GoodsReceipt + GoodsReceiptLine
+│   ├── Sales            — SalesOrder + SalesOrderLine + SalesReturn + SalesReturnLine
 │   ├── Transfers        — StockTransfer between warehouses
-│   ├── Suppliers        — Supplier (partner_type=supplier)
+│   ├── Suppliers        — Supplier + SupplierHistory (transaction ledger)
 │   ├── Customers        — Customer records
+│   ├── Categories       — Product categories (hierarchical)
+│   ├── Brands           — Product brands
 │   ├── Barcodes         — barcode generation/printing
 │   ├── Alerts           — low stock, movement alerts with severity
 │   ├── Audit            — AuditLog + AuditFieldChange (separate engine from audit app)
@@ -244,13 +255,13 @@ Nexus ERP
 │   ├── Payments         — polymorphic payments (GenericForeignKey to payable models)
 │   ├── Expenses         — categorized expenses (13 categories)
 │   ├── Budgets          — per-account period budgets (monthly/quarterly/yearly)
-│   ├── Bank Accounts    — bank accounts with book/cleared balance tracking
-│   ├── Payroll          — finance-side payroll views (preview, stats, loans, compensations)
+│   ├── Bank Accounts    — BankAccount with book/cleared balance tracking + BankTransaction
+│   ├── Payroll          — finance-side payroll views (PayrollRecord inherits PayableModelMixin)
 │   └── Reports          — trial balance, P&L, balance sheet, aging reports
 │
 ├── Sales
 │   ├── Leads            — pipeline (NEW → CONTACTED → QUALIFIED → FOLLOW_UP → CONVERTED/LOST)
-│   ├── Quotes           — DRAFT → SENT → APPROVED/REJECTED → CONVERTED
+│   ├── Quotes           — DRAFT → SENT → APPROVED/REJECTED → CONVERTED (with QuoteLine details)
 │   └── Invoices         — sales customer invoices
 │
 ├── AI Monitoring
@@ -327,9 +338,10 @@ Defined in `apps/common/basemodel.py`. Almost every business model inherits from
 - `EmployeeShiftSchedule` (hr) — standalone with manual audit fields
 - `InterviewRound` (hr) — standalone
 - `All permission models` (permissions) — Module, Resource, Action, Permission, Role, RolePermission, UserRole, UserPermission, PermissionAuditLog, ABACCondition
-- `CompanySettings`, `WorkingDay`, `PublicHoliday`, `CompanySettingHistory`, `Designation` (compsetting)
+- `CompanySettings`, `WorkingDay`, `PublicHoliday`, `CompanySettingHistory`, `Designation`, `TermsAndCondition` (compsetting)
 - `Notification` (notifications)
 - `Alert` (monitoring)
+- `AuditLogChange` (audit) — field-level change tracking for AuditLog
 
 ### 4.3 Key Relationship Patterns
 
@@ -354,15 +366,36 @@ SalesOrder 1──N SalesReturn 1──N SalesReturnLine
 Account 1──N JournalEntry 1──N JournalLine
 CustomerInvoice ──N CustomerInvoiceLine
 SupplierBill ──── (manual lines)
-Payment — (GenericForeignKey to payable)
+Payment — (GenericForeignKey to payable: CustomerInvoice, SupplierBill, PayrollRecord, Expense)
+BankAccount 1──N BankTransaction
 
+Employee 1──N EmployeeDocument
+Employee 1──N EmployeePromotion
 Employee 1──N LeaveRequest
-Employee 1──N PayrollRecord
-Employee 1──N Compensation
-Employee 1──N EmployeeLoan
+Employee 1──N PayrollRecord (PayableModelMixin → finance integration)
+Employee 1──N Compensation (+ CompensationSelectedMonth, CompensationMonthRange)
+Employee 1──N EmployeeLoan (+ LoanSelectedMonth, LoanMonthRange)
 Employee 1──N EmployeeAssetAssignment
 Employee 1──N RecruitmentCandidate
 Employee 1──N ExitRecord
+Employee 1──N ExitChecklist (via ExitRecord)
+Employee 1──N AssetPurchaseRequest
+
+ShiftTemplate 1──N ShiftOverride
+ShiftTemplate 1──N ShiftDateRangeAssignment
+ShiftTemplate 1──N EmployeeDefaultShift
+
+AssetCategory M2M Asset
+Quote 1──N QuoteLine
+Supplier 1──N SupplierHistory
+
+Policy 1──N PolicyVersion
+Policy N──1 PolicyCategory
+
+PayrollRecord 1──N PayrollDeductionDetail
+PayrollRecord 1──N PayrollCompensation
+PayrollRecord 1──N PayrollLoanDeduction
+PayrollRecord 1──N PayrollLeaveDeduction
 ```
 
 ### 4.4 Soft Delete
@@ -371,6 +404,9 @@ All BaseModel descendants use `is_deleted=True` instead of hard DELETE.
 The `CompanyBranchMixin.get_queryset()` automatically filters `is_deleted=False`.
 Cascade soft-deletes are implemented manually in view logic (e.g., Product.destroy()
 soft-deletes variants, stock items, attributes, images, reservations).
+
+**Note:** `company_id` and `branch_id` on BaseModel are `null=True, blank=True` — some
+models (e.g., audit, notifications) may not set these fields.
 
 ### 4.5 Indexes
 
@@ -507,9 +543,11 @@ Enforced by `CompanyBranchMixin.get_queryset()`:
 **Models (apps/permissions/models.py):**
 
 - `Module` → `Resource` → `Action` → `Permission(code = "MODULE:resource:action")`
-- `Role` groups permissions via `RolePermission`
+- `Role` groups permissions via `RolePermission` (has `is_system` flag for system roles)
 - `UserRole` maps users to roles
 - `UserPermission` per-user override (grant/deny with expiry)
+- `PermissionAuditLog` tracks all permission changes
+- `ABACCondition` — future ABAC extension: dynamic attribute-based rules per permission
 
 **Resolution order (PermissionService.user_has_permission):**
 
@@ -564,7 +602,6 @@ ProtocolTypeRouter
 - `apps/inventory/signals_audit.py` — inventory-specific audit tracking
 - `apps/finance/signals.py` — finance integration signals
 - `apps/finance/integration_signals.py` — additional finance integration
-- `apps/notifications/signals.py` — notification model auto-broadcast
 
 ### 5.10 Celery
 
@@ -703,14 +740,14 @@ ProtocolTypeRouter
 ```
 <html>
   <body className={inter.variable}>
-    ReactQueryProvider
-      <Provider store={store}>                   ← Redux
-        QueryClientProvider                       ← TanStack Query (5min staleTime, 1 retry)
-          ThemeInitializer                        ← sets dark/light class on <html>
-          ConfirmationProvider                    ← global confirm() dialog
-            NotificationProvider                  ← WebSocket connection + cache invalidation
+    ReactQueryProvider                     ← client wrapper: Redux + React Query
+      <Provider store={store}>             ← Redux
+        QueryClientProvider                ← TanStack Query (5min staleTime, 1 retry, refetchOnWindowFocus: false)
+          ThemeInitializer                  ← sets dark/light class on <html> (standalone component)
+          ConfirmationProvider              ← global confirm() dialog
+            NotificationProvider            ← WebSocket connection + cache invalidation
               {children}
-            <Toaster position="top-right" .../>   ← Sonner toasts
+            <Toaster position="top-right" .../>  ← Sonner toasts
 ```
 
 ### 6.3 State Management
@@ -805,6 +842,7 @@ const publicRoutes = ["/login", "/unauthorized"];
 - `PermissionGuard` — route-level access denials
 - `PageHeader` — breadcrumbs + title + action buttons
 - `DataTable` — sortable, paginated table with badge rendering
+- `TableGridView` — table/grid view toggle component
 - `StatCard` / `StatsCards` — KPI display cards
 - `FilterBar` — search/filter input
 - `FileUpload` — drag-and-drop file upload
@@ -812,6 +850,12 @@ const publicRoutes = ["/login", "/unauthorized"];
 - `LocationSelectors` — cascading country/state/city selects
 - `EmployeeMultiSelect` — employee search + multi-select
 - `DocumentViewer` — inline document preview
+- `StepBar` — multi-step progress indicator
+- `FormField` — form field wrapper
+- `FormSelectWithCreate` — select with inline creation
+- `ReasonInputModal` — modal for entering reason/notes
+- `InboxIcon` — notification bell icon component
+- `ThemeInitializer` — dark/light theme bootstrap
 
 ### 6.8 Environment Variables (frontend)
 
@@ -1069,6 +1113,7 @@ Frontend: PaymentFormModal.tsx (finance/payments)
   → POST /api/finance/payments/ { payment_type, amount, payable_id, payable_type, ... }
 Backend: PaymentViewSet.create()
   → Use GenericForeignKey to link payable (CustomerInvoice, SupplierBill, PayrollRecord, Expense)
+  → PayableModelMixin provides payable integration for models like PayrollRecord
   → Update payable payment status
   → Create/update JournalEntry with debit/credit lines
   → Return payment with journal reference
@@ -1114,9 +1159,10 @@ Backend: PaymentViewSet.create()
 3. Register API routes in `backend/config/urls.py`
 4. Add Module/Resource/Action entries in `seed_permissions.py`
 5. Models should inherit `BaseModel` from `apps.common.basemodel` (unless a good reason not to)
-6. ViewSets should inherit from `CompanyBranchMixin` + `PermissionRequiredMixin`
-7. Use `lookup_field = '_id'` for UUID-based lookups
-8. Override `create`/`update`/`destroy` to return `{ success, message, data }` format
+6. Models needing finance/payment integration should also inherit `PayableModelMixin` from `apps.finance.services.payable`
+7. ViewSets should inherit from `CompanyBranchMixin` + `PermissionRequiredMixin`
+8. Use `lookup_field = '_id'` for UUID-based lookups
+9. Override `create`/`update`/`destroy` to return `{ success, message, data }` format
 
 ### Naming Conventions
 
