@@ -17,6 +17,7 @@ export interface PayAmountModalProps {
   outstanding: number;
   paymentStatus?: "UNPAID" | "PARTIAL" | "PAID" | string;
   isPending?: boolean;
+  creditAmount?: number;
   onSubmit: (data: {
     amount: number;
     payment_date: string;
@@ -42,6 +43,7 @@ export default function PayAmountModal({
   outstanding,
   paymentStatus = "UNPAID",
   isPending = false,
+  creditAmount = 0,
   onSubmit,
 }: PayAmountModalProps) {
   const formatCurrency = useFormatCurrency();
@@ -54,16 +56,18 @@ export default function PayAmountModal({
   const outstandingNum = Number(outstanding) || 0;
   const totalNum = Number(totalAmount) || 0;
   const paidNum = Number(paidAmount) || 0;
+  const creditNum = Number(creditAmount) || 0;
+  const effectiveOutstanding = Math.max(0, outstandingNum - creditNum);
 
   useEffect(() => {
     if (open) {
-      setAmount(outstandingNum > 0 ? String(outstandingNum) : "");
+      setAmount(effectiveOutstanding > 0 ? String(effectiveOutstanding) : "");
       setPaymentDate(new Date().toISOString().split("T")[0]);
       setPaymentMethod("BANK_TRANSFER");
       setReferenceNumber("");
       setError("");
     }
-  }, [open, outstandingNum]);
+  }, [open, effectiveOutstanding]);
 
   if (!open) return null;
 
@@ -140,6 +144,13 @@ export default function PayAmountModal({
             <p className="text-sm text-muted-foreground -mt-1">{subtitle}</p>
           )}
 
+          {creditNum > 0 && (
+            <div className="rounded-xl border border-info/30 bg-info/5 px-4 py-2.5 flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Available credit</span>
+              <span className="font-semibold font-mono text-info">{formatCurrency(creditNum)}</span>
+            </div>
+          )}
+
           {/* Summary cards */}
           <div className="grid grid-cols-3 gap-2">
             <div className="rounded-xl border border-border bg-muted/30 px-3 py-2.5 text-center">
@@ -194,10 +205,10 @@ export default function PayAmountModal({
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setQuickAmount(outstandingNum)}
+                onClick={() => setQuickAmount(effectiveOutstanding)}
                 className="flex-1 h-8 text-xs rounded-lg border border-border hover:bg-muted transition-colors font-medium"
               >
-                Pay full ({formatCurrency(outstandingNum)})
+                Pay full ({formatCurrency(effectiveOutstanding)}){creditNum > 0 ? ` (${formatCurrency(creditNum)} credit)` : ""}
               </button>
               {outstandingNum > 2 && (
                 <button

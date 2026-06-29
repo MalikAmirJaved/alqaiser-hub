@@ -147,6 +147,7 @@ export default function SupplierBillsPage() {
           totalAmount={Number(billToPay.amount)}
           paidAmount={Number(billToPay.paid_amount || 0)}
           outstanding={Number(billToPay.outstanding || 0)}
+          creditAmount={Number(billToPay.supplier_credit || 0)}
           paymentStatus={billToPay.payment_status || "UNPAID"}
           isPending={payBill.isPending}
           onSubmit={async (data) => {

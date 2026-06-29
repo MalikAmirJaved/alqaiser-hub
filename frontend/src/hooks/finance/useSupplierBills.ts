@@ -21,6 +21,7 @@ export interface SupplierBill {
   supplier: string;
   supplier_name?: string;
   supplier_code?: string;
+  supplier_credit?: number;
   supplier_contact_person?: string;
   supplier_email?: string;
   supplier_phone?: string;

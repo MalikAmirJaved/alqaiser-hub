@@ -21,6 +21,7 @@ class SupplierBillSerializer(serializers.ModelSerializer):
     supplier_state = serializers.CharField(source='supplier.state', read_only=True)
     supplier_country = serializers.CharField(source='supplier.country', read_only=True)
     supplier_postal_code = serializers.CharField(source='supplier.postal_code', read_only=True)
+    supplier_credit = serializers.DecimalField(source='supplier.credit', max_digits=15, decimal_places=2, read_only=True)
 
     # Purchase order enrichment
     purchase_order_number = serializers.CharField(source='purchase_order.order_number', read_only=True, allow_null=True)

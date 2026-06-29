@@ -14,6 +14,7 @@ import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
 import { Send } from "lucide-react";
 import { usePagination } from "@/hooks/usePagination";
+import PayAmountModal from "@/components/finance/PayAmountModal";
 
 interface CustomerInvoicesPanelProps {
   moduleCode: "FINANCE" | "SALES";
@@ -25,6 +26,8 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
   const [modalOpen, setModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [payModalOpen, setPayModalOpen] = useState(false);
+  const [invoiceToPay, setInvoiceToPay] = useState<any>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const pagination = usePagination();
 
@@ -87,8 +90,9 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
   };
 
   const handlePay = (invoice: any) => {
-    if (invoice.payment_status !== "PAID" && invoice.status !== "CANCELLED") {
-      payInvoice.mutate({ id: invoice.id });
+    if (invoice.payment_status !== "PAID" && invoice.status !== "CANCELLED" && Number(invoice.outstanding) > 0) {
+      setInvoiceToPay(invoice);
+      setPayModalOpen(true);
     }
   };
 
@@ -180,7 +184,10 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
           onEdit: handleEdit,
           canEdit: (invoice) => invoice.status === "DRAFT" && invoice.payment_status !== "PAID",
           onPost: handlePay,
-          canPost: (invoice) => invoice.payment_status !== "PAID" && invoice.status !== "CANCELLED",
+          canPost: (invoice) =>
+            invoice.payment_status !== "PAID" &&
+            invoice.status !== "CANCELLED" &&
+            Number(invoice.outstanding) > 0,
           postLabel: "Pay",
         }}
         onRowClick={handleRowClick}
@@ -217,6 +224,38 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
         initialData={editingInvoice}
         moduleCode={moduleCode}
       />
+
+      {invoiceToPay && (
+        <PayAmountModal
+          open={payModalOpen}
+          onClose={() => {
+            setPayModalOpen(false);
+            setInvoiceToPay(null);
+          }}
+          title={moduleCode === "FINANCE" ? "Receive Payment" : "Receive Payment"}
+          documentLabel="Invoice"
+          documentNumber={invoiceToPay.invoice_number}
+          subtitle={invoiceToPay.customer_name ? `Customer: ${invoiceToPay.customer_name}` : undefined}
+          totalAmount={Number(invoiceToPay.amount)}
+          paidAmount={Number(invoiceToPay.paid_amount || 0)}
+          outstanding={Number(invoiceToPay.outstanding || 0)}
+          paymentStatus={invoiceToPay.payment_status || "UNPAID"}
+          isPending={payInvoice.isPending}
+          onSubmit={async (data) => {
+            await payInvoice.mutateAsync({
+              id: invoiceToPay.id,
+              body: {
+                amount: data.amount,
+                payment_method: data.payment_method,
+                payment_date: data.payment_date,
+                reference_number: data.reference_number,
+              },
+            });
+            setPayModalOpen(false);
+            setInvoiceToPay(null);
+          }}
+        />
+      )}
     </>
   );
 }
