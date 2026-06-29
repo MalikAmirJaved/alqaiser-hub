@@ -187,6 +187,8 @@ def sync_manual_line_bill(
         return None
 
     qty_decreased = new_qty < old_qty
+    delta_amount = new_amount - old_amount
+    expected_new_bill_amount = bill.amount + delta_amount
 
     # Quantity decrease → defer bill update until user resolves
     if qty_decreased:
@@ -202,14 +204,14 @@ def sync_manual_line_bill(
             'bill_id': str(bill._id),
             'supplier_id': str(new_vendor._id),
             'supplier_name': new_vendor.name,
-            'delta': abs(old_amount - new_amount),
+            'delta': abs(delta_amount),
             'old_qty': old_qty,
             'new_qty': new_qty,
             'unit_price': old_line.unit_price,
             'cost_price': new_cost_price,
             'bill_paid': bill_has_confirmed_payment(bill),
             'old_bill_amount': str(bill.amount),
-            'new_bill_amount': str(new_amount),
+            'new_bill_amount': str(expected_new_bill_amount),
         }
 
     # Increase or vendor/cost change → update bill in place immediately
@@ -218,7 +220,7 @@ def sync_manual_line_bill(
         old_vendor=old_vendor or bill.supplier,
         new_vendor=new_vendor,
         old_amount=bill.amount,
-        new_amount=new_amount,
+        new_amount=expected_new_bill_amount,
         notes=f'Invoice {invoice.invoice_number} line updated',
     )
     return None
@@ -226,8 +228,12 @@ def sync_manual_line_bill(
 
 def apply_line_reduction(bill, line, user, action_notes=''):
     """Apply bill + vendor sync after a quantity reduction is resolved."""
+    delta_qty = line.original_quantity - line.quantity
+    delta_amount = Decimal(str(delta_qty)) * Decimal(str(line.cost_price or 0))
+    
     old_amount = bill.amount
-    new_amount = line_cost(line.quantity, line.cost_price)
+    new_amount = old_amount - delta_amount
+    
     reconcile_bill_vendors(
         bill,
         old_vendor=bill.supplier,

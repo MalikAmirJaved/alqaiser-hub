@@ -133,7 +133,6 @@ const ManualEntryFields = memo(function ManualEntryFields({
           />
         </div>
       </div>
-      {showCostPrice && (
         <div className="flex gap-1.5 items-center">
           <input
             type="number"
@@ -152,7 +151,6 @@ const ManualEntryFields = memo(function ManualEntryFields({
           />
           <span className="text-xs text-muted-foreground shrink-0">Cost</span>
         </div>
-      )}
       <input
         type="text"
         value={localDescription}
