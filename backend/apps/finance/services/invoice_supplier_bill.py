@@ -168,14 +168,14 @@ def sync_manual_line_bill(
     if not new_vendor or new_cost_price is None:
         return None
 
-    new_amount = line_cost(new_qty, new_cost_price)
+    new_cost_price_val = Decimal(str(new_cost_price))
     old_qty = old_line.quantity
     old_cost_price = old_line.cost_price or Decimal('0')
-    old_amount = line_cost(old_qty, old_cost_price)
     old_vendor = old_line.vendor
     bill = old_line.supplier_bill
 
     if not bill:
+        new_amount = line_cost(new_qty, new_cost_price_val)
         bill = create_supplier_bill_for_line(
             invoice,
             new_vendor,
@@ -186,17 +186,36 @@ def sync_manual_line_bill(
         old_line.supplier_bill = bill
         return None
 
-    qty_decreased = new_qty < old_qty
-    delta_amount = new_amount - old_amount
-    expected_new_bill_amount = bill.amount + delta_amount
+    if old_cost_price > 0:
+        billed_qty = (bill.amount / old_cost_price).to_integral_value()
+    else:
+        billed_qty = Decimal(str(old_qty))
 
-    # Quantity decrease → defer bill update until user resolves
+    cost_delta_amount = billed_qty * (new_cost_price_val - old_cost_price)
+    bill_amount_after_cost = bill.amount + cost_delta_amount
+    qty_delta_amount = Decimal(str(new_qty - old_qty)) * new_cost_price_val
+
+    qty_decreased = new_qty < old_qty
+
+    # Quantity decrease → apply cost change immediately, defer reduction until user resolves
     if qty_decreased:
+        if cost_delta_amount != 0 or (old_vendor and old_vendor != new_vendor):
+            reconcile_bill_vendors(
+                bill,
+                old_vendor=old_vendor or bill.supplier,
+                new_vendor=new_vendor,
+                old_amount=bill.amount,
+                new_amount=bill_amount_after_cost,
+                notes=f'Invoice {invoice.invoice_number} line cost/vendor updated before reduction',
+            )
+
         if old_line.resolved:
             # Reset resolved flag so a new reduction cycle can begin
             old_line.resolved = False
         old_line.original_quantity = old_qty
         old_line.save(update_fields=['original_quantity', 'resolved', 'updated_at'])
+        
+        expected_new_bill_amount = bill_amount_after_cost + qty_delta_amount
         return {
             'line_id': str(old_line._id),
             'line_index': line_index,
@@ -204,23 +223,24 @@ def sync_manual_line_bill(
             'bill_id': str(bill._id),
             'supplier_id': str(new_vendor._id),
             'supplier_name': new_vendor.name,
-            'delta': abs(delta_amount),
+            'delta': abs(qty_delta_amount),
             'old_qty': old_qty,
             'new_qty': new_qty,
             'unit_price': old_line.unit_price,
-            'cost_price': new_cost_price,
+            'cost_price': new_cost_price_val,
             'bill_paid': bill_has_confirmed_payment(bill),
-            'old_bill_amount': str(bill.amount),
+            'old_bill_amount': str(bill_amount_after_cost),
             'new_bill_amount': str(expected_new_bill_amount),
         }
 
     # Increase or vendor/cost change → update bill in place immediately
+    total_new_bill_amount = bill_amount_after_cost + qty_delta_amount
     reconcile_bill_vendors(
         bill,
         old_vendor=old_vendor or bill.supplier,
         new_vendor=new_vendor,
         old_amount=bill.amount,
-        new_amount=expected_new_bill_amount,
+        new_amount=total_new_bill_amount,
         notes=f'Invoice {invoice.invoice_number} line updated',
     )
     return None
