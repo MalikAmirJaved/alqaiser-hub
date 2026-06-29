@@ -137,21 +137,26 @@ export default function SalesPage() {
   const loadCompletedOrder = useCallback((order: any) => {
     const loadedCart: CartLine[] = (order.lines || []).filter(
       (l: any) => l.status !== "CANCELLED"
-    ).map((line: any) => ({
-      variant: {
-        id: line.variant,
-        sku: line.variant_sku,
-        product_name: line.variant_name,
-        selling_price: line.unit_price,
-      } as any,
-      qty: line.quantity_ordered,
-      unitPrice: parseFloat(line.unit_price),
-      taxRate: parseFloat(line.tax_rate || 0),
-      discountPct: parseFloat(line.discount_percent || 0),
-      discountFixed: parseFloat(line.discount_amount || 0),
-      notes: "",
-      salesOrderLineId: line.id,
-    }));
+    ).map((line: any) => {
+      // Use effective quantity: ordered minus returned (don't load fully returned items)
+      const effectiveQty = Math.max(0, (line.quantity_ordered || 0) - (line.quantity_returned || 0));
+      if (effectiveQty === 0) return null;
+      return {
+        variant: {
+          id: line.variant,
+          sku: line.variant_sku,
+          product_name: line.variant_name,
+          selling_price: line.unit_price,
+        } as any,
+        qty: effectiveQty,
+        unitPrice: parseFloat(line.unit_price),
+        taxRate: parseFloat(line.tax_rate || 0),
+        discountPct: parseFloat(line.discount_percent || 0),
+        discountFixed: parseFloat(line.discount_amount || 0),
+        notes: "",
+        salesOrderLineId: line.id,
+      };
+    }).filter(Boolean) as CartLine[];
     setCart(loadedCart);
     setSelectedCustomer(order.customer ? { id: order.customer.id, name: order.customer_name } : null);
     setOrderNotes(order.notes || "");
@@ -374,7 +379,10 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
     }
   }, [cancelOrder, refetchDrafts, activeDraftId, clearCart]);
 
-  const handleCartChange = useCallback((newCart: CartLine[]) => {
+  // Called when cart items change (for future expansion)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleCartChange = useCallback((_newCart: CartLine[]) => {
+    // Reserved for cart-change side effects
   }, []);
 
   const panelLabels: Record<ActivePanel, string> = {

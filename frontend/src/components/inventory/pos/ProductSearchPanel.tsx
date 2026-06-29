@@ -48,12 +48,22 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
       .flatMap(([, data]) => data.variants),
     [pageData],
   );
+  // Deduplicate variants by ID to prevent duplicates from pagination overlap
+  const dedupedVariants = useMemo(() => {
+    const seen = new Set<string>();
+    return allVariants.filter(v => {
+      if (seen.has(v.id)) return false;
+      seen.add(v.id);
+      return true;
+    });
+  }, [allVariants]);
+
   // When a product is selected, only show its variants (filtered by product_id)
   const currentVariants = useMemo(() =>
     selectedProduct
-      ? allVariants.filter(v => v.product_id === selectedProduct.id)
-      : allVariants,
-    [allVariants, selectedProduct],
+      ? dedupedVariants.filter(v => v.product_id === selectedProduct.id)
+      : dedupedVariants,
+    [dedupedVariants, selectedProduct],
   );
 
   const resetInfiniteScroll = useCallback(() => {
@@ -94,6 +104,7 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
       setTotalVariantCount(0);
       loadingRef.current = false;
       hasContentRef.current = false;
+      return; // ← Prevent storing stale response data with mismatched page
     }
 
     if (catalogResponse?.results) {
@@ -103,13 +114,21 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
           p.variants.map(v => ({ ...v, product_name: p.product_name, product_id: p.id }))
         );
 
-        setPageData(prev => ({ ...prev, [page]: { products: newProducts, variants: newVariants } }));
+        // Deduplicate variants by ID to prevent duplicate cards
+        const seenIds = new Set<string>();
+        const uniqueVariants = newVariants.filter(v => {
+          if (seenIds.has(v.id)) return false;
+          seenIds.add(v.id);
+          return true;
+        });
+
+        setPageData(prev => ({ ...prev, [page]: { products: newProducts, variants: uniqueVariants } }));
 
         setTotalCount(catalogResponse.count);
         setTotalVariantCount(catalogResponse.variant_count ?? 0);
         const totalPages = Math.ceil(catalogResponse.count / PAGE_SIZE);
         setHasMore(page < totalPages);
-        hasContentRef.current = newVariants.length > 0;
+        hasContentRef.current = uniqueVariants.length > 0;
       }
       loadingRef.current = false;
     }
@@ -122,7 +141,6 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
 
     const handleScroll = () => {
       if (loadingRef.current) return;
-      // Don't load more pages if no content has been loaded yet (e.g. search still in progress)
       if (!hasContentRef.current) return;
       const { scrollTop, scrollHeight, clientHeight } = container;
       if (scrollHeight - scrollTop - clientHeight < 400) {
@@ -131,7 +149,9 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
       }
     };
 
-    handleScroll();
+    // Only attach scroll listener — do NOT call handleScroll() immediately
+    // because the container may have no visible content yet (empty before
+    // data arrives), which would incorrectly trigger the next page load.
     container.addEventListener("scroll", handleScroll, { passive: true });
     container.addEventListener("wheel", handleScroll, { passive: true });
     return () => {
@@ -321,9 +341,9 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
                 ) : (
                   <>
                     <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-in fade-in zoom-in-95 duration-200">
-                      {currentVariants.map((variant) => (
+                      {currentVariants.map((variant, index) => (
                         <ProductCard 
-                          key={variant.id} 
+                          key={`${variant.id}-${index}`}
                           variant={variant}
                           stockData={variant.stock}
                           onAdd={() => onAddToCart(variant)} 
