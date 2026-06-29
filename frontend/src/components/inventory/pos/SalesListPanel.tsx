@@ -11,7 +11,7 @@ import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
 import { useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api";
+import { getCustomerInvoiceById } from "@/hooks/finance/useCustomerInvoices";
 import {
   PrintPreviewModal,
   type QuoteInvoiceData,
@@ -87,6 +87,8 @@ function OrderCard({
   formatCurrency,
   onPrintInvoice,
   onGenerateInvoice,
+  onEditOrder,
+  onReturnOrder,
   pdfLoading,
   generatingId,
 }: {
@@ -94,6 +96,8 @@ function OrderCard({
   formatCurrency: (v: number | string) => string;
   onPrintInvoice: (order: OrderWithInvoice) => void;
   onGenerateInvoice: (order: OrderWithInvoice) => void;
+  onEditOrder?: (order: OrderWithInvoice) => void;
+  onReturnOrder?: (order: OrderWithInvoice) => void;
   pdfLoading: string | null;
   generatingId: string | null;
 }) {
@@ -101,7 +105,7 @@ function OrderCard({
   const cfg = statusConfig[order.status] || statusConfig.PENDING;
   const StatusIcon = cfg.icon;
   const hasInvoice = !!order.invoice_id;
-  const lineCount = order.lines?.length || 0;
+  const lineCount = order.lines?.filter((l) => l.status !== "CANCELLED").length || 0;
   const orderDate = new Date(order.order_date);
   const createdAt = new Date(order.created_at);
 
@@ -212,9 +216,10 @@ function OrderCard({
                   </tr>
                 </thead>
                 <tbody>
-                  {order.lines.map((line) => {
+                  {order.lines.filter((l) => l.status !== "CANCELLED").map((line) => {
+                    const effectiveQty = line.quantity_ordered - (line.quantity_returned || 0);
                     const lineTotal =
-                      line.quantity_ordered * Number(line.unit_price) -
+                      effectiveQty * Number(line.unit_price) -
                       Number(line.discount_amount || 0);
                     return (
                       <tr key={line.id} className="border-b border-border/20 hover:bg-muted/20">
@@ -225,9 +230,14 @@ function OrderCard({
                           <div className="text-[9px] text-muted-foreground/60 font-mono">
                             SKU: {line.variant_sku || "—"}
                           </div>
+                          {line.quantity_returned ? (
+                            <div className="text-[9px] text-warning font-medium mt-0.5">
+                              {line.quantity_returned} returned
+                            </div>
+                          ) : null}
                         </td>
                         <td className="px-2 py-2 text-center font-medium">
-                          {line.quantity_ordered}
+                          {effectiveQty}
                         </td>
                         <td className="px-2 py-2 text-right text-muted-foreground">
                           {formatCurrency(Number(line.unit_price))}
@@ -258,9 +268,35 @@ function OrderCard({
         </>
       )}
 
-      {/* ── Actions (Print / Download PDF / Thermal Print) ── */}
+      {/* ── Actions (Print / Download PDF / Thermal Print / Edit) ── */}
       {order.status === "COMPLETE" && (
         <div className="px-5 py-3 border-t border-border/40 flex items-center gap-2 bg-muted/5">
+          {onEditOrder && (
+            <button
+              onClick={() => onEditOrder(order)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-primary/10 text-primary rounded-lg text-[11px] font-bold hover:bg-primary/20 transition-all active:scale-[0.97] border border-primary/20"
+              title="Edit this sale"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                <path d="m15 5 4 4" />
+              </svg>
+              Edit
+            </button>
+          )}
+          {onReturnOrder && (
+            <button
+              onClick={() => onReturnOrder(order)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-warning/10 text-warning rounded-lg text-[11px] font-bold hover:bg-warning/20 transition-all active:scale-[0.97] border border-warning/20"
+              title="Return items from this sale"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="1 4 1 10 7 10" />
+                <path d="M3.51 15a9 9 0 1 0 .49-3.84" />
+              </svg>
+              Return
+            </button>
+          )}
           {hasInvoice ? (
             <>
               <button
@@ -302,6 +338,19 @@ function OrderCard({
           <button
             onClick={() => {
               const now = new Date(order.created_at);
+              const effectiveLines = (order.lines || [])
+                .filter((l) => l.status !== "CANCELLED")
+                .map((l) => {
+                  const effectiveQty = l.quantity_ordered - (l.quantity_returned || 0);
+                  return {
+                    variant_name: l.variant_name || "Product",
+                    variant_sku: l.variant_sku,
+                    quantity: Math.max(effectiveQty, 0),
+                    unit_price: Number(l.unit_price),
+                    total: Math.max(effectiveQty, 0) * Number(l.unit_price),
+                  };
+                });
+              const effectiveTotal = effectiveLines.reduce((s, l) => s + l.total, 0);
               const data: ThermalReceiptData = {
                 orderNumber: order.order_number,
                 date: now.toLocaleDateString("en-US", {
@@ -311,13 +360,7 @@ function OrderCard({
                 }),
                 time: now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
                 customerName: order.customer_name,
-                lines: (order.lines || []).map((l) => ({
-                  variant_name: l.variant_name || "Product",
-                  variant_sku: l.variant_sku,
-                  quantity: l.quantity_ordered,
-                  unit_price: Number(l.unit_price),
-                  total: l.quantity_ordered * Number(l.unit_price),
-                })),
+                lines: effectiveLines,
                 totalAmount: Number(order.total_amount),
               };
               printThermalReceipt(data, "Store", formatCurrency);
@@ -336,7 +379,12 @@ function OrderCard({
 
 // ── Main Component ─────────────────────────────────
 
-export function SalesListPanel() {
+interface SalesListPanelProps {
+  onEditOrder?: (order: OrderWithInvoice) => void;
+  onReturnOrder?: (order: OrderWithInvoice) => void;
+}
+
+export function SalesListPanel({ onEditOrder, onReturnOrder }: SalesListPanelProps) {
   const formatCurrency = useFormatCurrency();
   const { data: companySettings } = useCompanySettingsQuery();
   const { terms: termsData } = useTermsAndConditions();
@@ -398,11 +446,7 @@ export function SalesListPanel() {
 
     setPdfLoading(order.id);
     try {
-      const invoiceData = await queryClient.fetchQuery<any>({
-        queryKey: ["finance_customer_invoices", order.invoice_id],
-        queryFn: () => apiFetch(`/api/finance/customer-invoices/${order.invoice_id}/`),
-        staleTime: 0,
-      });
+      const invoiceData = await getCustomerInvoiceById(order.invoice_id);
 
       const docCompany: DocCompany = {
         companyName: companySettings?.companyName || "",
@@ -558,6 +602,8 @@ export function SalesListPanel() {
                 formatCurrency={formatCurrency}
                 onPrintInvoice={handlePrintInvoice}
                 onGenerateInvoice={handleGenerateInvoice}
+                onEditOrder={onEditOrder}
+                onReturnOrder={onReturnOrder}
                 pdfLoading={pdfLoading}
                 generatingId={generatingId}
               />

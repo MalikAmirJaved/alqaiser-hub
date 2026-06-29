@@ -43,6 +43,7 @@ export interface SalesReturnResponse {
   id: string;
   return_number: string;
   sales_order: string;
+  total_returned?: number;
 }
 
 export interface SalesOrderResponse {
@@ -65,6 +66,7 @@ export interface SalesOrderResponse {
     discount_pct: number;
     discount_fixed: number;
     quantity_ordered: number;
+    quantity_returned?: number;
     unit_price: number;
     tax_rate: number;
     status: string;
@@ -211,6 +213,7 @@ export function useCreateSalesReturn() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
       queryClient.invalidateQueries({ queryKey: ["currentStock"] });
+      queryClient.invalidateQueries({ queryKey: ["finance_customer_invoices"] });
     },
   });
 }
@@ -283,6 +286,29 @@ export function useDraftSalesOrders() {
   });
 }
 
+
+/**
+ * Edit a completed sales order (qty, price, variant)
+ */
+export function useEditSalesOrder() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ orderId, line_items }: { orderId: string; line_items: SalesOrderLineItem[] }) => {
+      return api<{ status: string; message: string; data: SalesOrderResponse; invoice_id?: string }>(
+        `/api/inventory/sales-orders/${orderId}/edit_sale/`,
+        { method: "POST", body: JSON.stringify({ line_items }) }
+      );
+    },
+    onSuccess: (_, { orderId }) => {
+      queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
+      queryClient.invalidateQueries({ queryKey: ["salesOrder", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["finance_customer_invoices"] });
+    },
+  });
+}
 
 export function useSalesOrders(filters?: {
   status?: string;

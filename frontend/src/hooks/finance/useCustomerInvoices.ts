@@ -27,6 +27,8 @@ export interface CustomerInvoice {
   invoice_number: string;
   customer: string;
   customer_name?: string;
+  customer_email?: string;
+  customer_phone?: string;
   sales_order: string | null;
   invoice_date: string;
   due_date: string;
@@ -78,7 +80,7 @@ async function getAllCustomerInvoices(params?: { search?: string; status?: strin
   return apiFetch<PaginatedResponse<CustomerInvoice>>(url);
 }
 
-async function getCustomerInvoiceById(id: string) {
+export async function getCustomerInvoiceById(id: string) {
   return apiFetch<CustomerInvoice>(`/api/finance/customer-invoices/${id}/`);
 }
 

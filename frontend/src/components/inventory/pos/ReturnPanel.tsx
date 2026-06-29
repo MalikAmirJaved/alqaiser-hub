@@ -4,11 +4,13 @@ import { useFetchSalesOrderByNumber, useCreateSalesReturn } from "@/hooks/useSal
 import type { Warehouse } from "@/hooks/useWarehouses";
 import { fmt } from "@/hooks/useSalesOrder";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { printThermalReceipt, type ThermalReceiptData } from "@/components/inventory/pos/ThermalReceiptModal";
 interface ReturnPanelProps {
   warehouses: Warehouse[];
+  initialOrderNumber?: string;
 }
 
-export function ReturnPanel({ warehouses }: ReturnPanelProps) {
+export function ReturnPanel({ warehouses, initialOrderNumber }: ReturnPanelProps) {
   const formatCurrency = useFormatCurrency();
   const [orderNum, setOrderNum] = useState("");
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>(warehouses[0]?.id?.toString() ?? "");
@@ -31,6 +33,13 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
 
   const { data: fetchedOrderData, isLoading, isFetching } = useFetchSalesOrderByNumber(shouldFetch ? orderNum : "");
   const { mutateAsync: createReturn, isPending: isSubmitting } = useCreateSalesReturn();
+
+  useEffect(() => {
+    if (initialOrderNumber && initialOrderNumber !== orderNum) {
+      setOrderNum(initialOrderNumber);
+      setShouldFetch(true);
+    }
+  }, [initialOrderNumber]);
 
   const handleFetchOrder = () => {
     if (!orderNum.trim()) {
@@ -102,7 +111,26 @@ export function ReturnPanel({ warehouses }: ReturnPanelProps) {
     try {
       const resp = await createReturn(payload);
       const returnNumber = resp?.return_number ?? "";
-      alert(`✓ Return ${returnNumber} processed successfully!`);
+      const totalReturned = resp?.total_returned ?? 0;
+
+      // Show thermal receipt for the return
+      const receiptData: ThermalReceiptData = {
+        orderNumber: returnNumber,
+        date: new Date().toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
+        time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+        customerName: orderData?.customer_name || "Walk-in Customer",
+        lines: selectedLines.map((l) => ({
+          variant_name: l.name,
+          variant_sku: "",
+          quantity: l.qty,
+          unit_price: l.refundAmount / l.qty,
+          total: l.refundAmount,
+        })),
+        totalAmount: totalRefund,
+        isReturn: true,
+      };
+      printThermalReceipt(receiptData, "Store", formatCurrency);
+
       setOrderNum("");
       setOrderData(null);
       setLines([]);

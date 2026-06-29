@@ -10,6 +10,7 @@ import {
   useCompleteSalesOrder,
   useCancelSalesOrder,
   useUpdateSalesOrder,
+  useEditSalesOrder,
   useDraftSalesOrders,
   useSalesOrders,
   cartToLineItems, CartLine
@@ -43,6 +44,7 @@ export default function SalesPage() {
   const { mutateAsync: completeOrder, isPending: isCompleting } = useCompleteSalesOrder();
   const { mutateAsync: cancelOrder, isPending: isCancelling } = useCancelSalesOrder();
   const { mutateAsync: updateSalesOrder } = useUpdateSalesOrder();
+  const { mutateAsync: editSalesOrder, isPending: isEditing } = useEditSalesOrder();
   const { data: companySettings } = useCompanySettingsQuery();
   const { terms: termsData } = useTermsAndConditions();
 
@@ -51,6 +53,8 @@ export default function SalesPage() {
   const [selectedWarehouse, setSelectedWarehouse] = useState<any>(null);
   const [activePanel, setActivePanel] = useState<ActivePanel>("search");
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [returnOrderNumber, setReturnOrderNumber] = useState<string>("");
   const [orderNotes, setOrderNotes] = useState("");
   const [invoiceModalProps, setInvoiceModalProps] = useState<{ open: boolean; data: QuoteInvoiceData | null }>({ open: false, data: null });
   const [thermalReceiptData, setThermalReceiptData] = useState<ThermalReceiptData | null>(null);
@@ -130,9 +134,36 @@ export default function SalesPage() {
     }
   }, [warehouses, selectedWarehouse]);
 
+  const loadCompletedOrder = useCallback((order: any) => {
+    const loadedCart: CartLine[] = (order.lines || []).filter(
+      (l: any) => l.status !== "CANCELLED"
+    ).map((line: any) => ({
+      variant: {
+        id: line.variant,
+        sku: line.variant_sku,
+        product_name: line.variant_name,
+        selling_price: line.unit_price,
+      } as any,
+      qty: line.quantity_ordered,
+      unitPrice: parseFloat(line.unit_price),
+      taxRate: parseFloat(line.tax_rate || 0),
+      discountPct: parseFloat(line.discount_percent || 0),
+      discountFixed: parseFloat(line.discount_amount || 0),
+      notes: "",
+      salesOrderLineId: line.id,
+    }));
+    setCart(loadedCart);
+    setSelectedCustomer(order.customer ? { id: order.customer.id, name: order.customer_name } : null);
+    setOrderNotes(order.notes || "");
+    setEditingOrderId(order.id);
+    setActiveDraftId(null);
+    setActivePanel("search");
+  }, []);
+
   const clearCart = useCallback(() => {
     setCart([]);
     setActiveDraftId(null);
+    setEditingOrderId(null);
     setOrderNotes("");
   }, []);
 
@@ -214,7 +245,12 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
   const notesWithPayments = notes + (payments.length ? ` | Payments: ${payments.map(p => `${p.method}:${p.amount}`).join(", ")}` : "");
   try {
     let result: any;
-    if (activeDraftId) {
+    if (editingOrderId) {
+      result = await editSalesOrder({
+        orderId: editingOrderId,
+        line_items: cartToLineItems(finalCart),
+      });
+    } else if (activeDraftId) {
       const updatedLineItems = cartToLineItems(finalCart);
       result = await completeOrder({ orderId: activeDraftId, line_items: updatedLineItems, create_invoice: createInvoice });
     } else {
@@ -297,7 +333,7 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
   } catch (err: any) {
     console.error(err);
   }
-}, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, completeOrder, clearCart, refetchDrafts, queryClient, companySettings, formatCurrency, buildThermalReceipt, showThermalReceipt]);
+}, [cart, activeDraftId, editingOrderId, selectedCustomer, selectedWarehouse, createSalesOrder, completeOrder, editSalesOrder, clearCart, refetchDrafts, queryClient, companySettings, formatCurrency, buildThermalReceipt, showThermalReceipt]);
 
   const handleSaveDraft = useCallback(async (notes: string, overrideCart?: CartLine[]) => {
     const finalCart = overrideCart || cart;
@@ -574,8 +610,8 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
               </div>
             )}
 
-            {activePanel === "return" && <ReturnPanel warehouses={warehouses} />}
-            {activePanel === "sales" && <SalesListPanel />}
+            {activePanel === "return" && <ReturnPanel warehouses={warehouses} initialOrderNumber={returnOrderNumber} />}
+            {activePanel === "sales" && <SalesListPanel onEditOrder={loadCompletedOrder} onReturnOrder={(order) => { setReturnOrderNumber(order.order_number); setActivePanel("return"); }} />}
           </div>
         </div>
       </div>
@@ -595,8 +631,9 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
           onCompleteSale={handleCompleteSale}
           onThermalPrint={handleCartThermalPrint}
           onCartChange={handleCartChange}
-          isSubmitting={isCreatingOrder || isCompleting}
+          isSubmitting={isCreatingOrder || isCompleting || isEditing}
           activeDraftId={activeDraftId}
+          isEditingOrder={!!editingOrderId}
           canCreate={permissions.create}
           canUpdate={permissions.update}
         />

@@ -22,6 +22,7 @@ interface CartPanelProps {
   onCartChange?: (newCart: CartLine[]) => void;
   isSubmitting?: boolean;
   activeDraftId?: string | null;
+  isEditingOrder?: boolean;
   canCreate?: boolean;
   canUpdate?: boolean;
 }
@@ -43,6 +44,7 @@ export function CartPanel({
   onCartChange,
   isSubmitting,
   activeDraftId,
+  isEditingOrder = false,
   canCreate = true,
   canUpdate = true,
 }: CartPanelProps) {
@@ -558,7 +560,7 @@ export function CartPanel({
                     ) : (
                       <>
                         <CheckIcon size={15} />
-                        Complete Sale · {fmt(total)}
+                        {isEditingOrder ? "Update Sale" : "Complete Sale"} · {fmt(total)}
                       </>
                     )}
                   </button>
