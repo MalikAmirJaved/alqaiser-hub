@@ -179,7 +179,7 @@ export function useDeleteExpense() {
 export function useRecordExpensePayment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { payment_date: string; payment_method: string; reference_number?: string } }) =>
+    mutationFn: ({ id, data }: { id: string; data: { amount?: number; payment_date: string; payment_method: string; reference_number?: string } }) =>
       recordExpensePayment(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: [EXPENSES_KEY] });
