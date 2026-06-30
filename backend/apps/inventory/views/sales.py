@@ -66,9 +66,10 @@ def sync_invoice_for_return(sales_return, user):
         (l.quantity * l.unit_price) - (l.discount_amount or 0)
         for l in remaining_lines
     )
+    invoice.notes = ''
     invoice.amount = max(new_amount, 0)
     invoice.updated_by = user
-    invoice.save(update_fields=['amount', 'updated_by'])
+    invoice.save(update_fields=['amount', 'updated_by', 'notes'])
 
 
 def _prorate_line_discount(line, effective_qty):
@@ -137,6 +138,7 @@ def sync_sales_order_to_invoice(order, user, create_invoice=True):
             'updated_by': user,
             'payment_method': order.payment_method,
             'bank_account': order.bank_account,
+            'notes': '',
         }
     )
 
@@ -175,10 +177,11 @@ def sync_sales_order_to_invoice(order, user, create_invoice=True):
     if not created and invoice.status == 'DRAFT':
         invoice.payment_method = order.payment_method
         invoice.bank_account = order.bank_account
+        invoice.notes = ''
         # Recalculate from freshly recreated lines with prorated discounts
         calc_total = _recreate_invoice_lines()
         invoice.amount = max(calc_total, Decimal('0'))
-        invoice.save(update_fields=['amount', 'payment_method', 'bank_account'])
+        invoice.save(update_fields=['amount', 'payment_method', 'bank_account', 'notes'])
 
     # 2. If SalesOrder is COMPLETE, post/confirm invoice and handle auto-payment
     if order.status == 'COMPLETE':
@@ -748,6 +751,11 @@ class SalesOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequir
         old_variants = {str(line.variant._id): line for line in old_lines.values()}
         existing_returns = {str(line._id): line.quantity_returned for line in old_lines.values() if line.quantity_returned}
 
+        # Snapshot original ordered qty for discount proration in total recalc
+        original_line_qty = {}
+        for _id, line in old_lines.items():
+            original_line_qty[_id] = line.quantity_ordered
+
         processed_line_ids = set()
         activity_log = []
 
@@ -770,22 +778,25 @@ class SalesOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequir
                 if existing_line:
                     processed_line_ids.add(str(existing_line._id))
                     old_qty = existing_line.quantity_ordered
+                    old_returned = existing_line.quantity_returned or 0
+                    old_effective_qty = old_qty - old_returned
                     variant = existing_line.variant
                     changes = []
 
-                    if new_qty != old_qty:
-                        changes.append(f"qty {old_qty}→{new_qty}")
-                        if new_qty > old_qty:
-                            additional = new_qty - old_qty
+                    if new_qty != old_effective_qty:
+                        changes.append(f"qty {old_effective_qty}→{new_qty}")
+                        if new_qty > old_effective_qty:
+                            additional = new_qty - old_effective_qty
                             self._deduct_stock_for_line(order, existing_line, variant, additional, user)
                         else:
-                            excess = old_qty - new_qty
+                            excess = old_effective_qty - new_qty
                             self._release_stock(order, existing_line, variant, excess, user)
 
                     if existing_line.unit_price != unit_price:
                         changes.append(f"price {existing_line.unit_price}→{unit_price}")
 
-                    existing_line.quantity_ordered = new_qty
+                    # Preserve return history: total ordered = effective + already returned
+                    existing_line.quantity_ordered = new_qty + old_returned
                     existing_line.unit_price = unit_price
                     existing_line.tax_rate = tax_rate
                     existing_line.discount_percent = discount_pct
@@ -823,7 +834,9 @@ class SalesOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequir
 
             for line in list(old_lines.values()):
                 if str(line._id) not in processed_line_ids and line.status != 'CANCELLED':
-                    self._release_stock(order, line, line.variant, line.quantity_ordered, user)
+                    effective_stock = line.quantity_ordered - (line.quantity_returned or 0)
+                    if effective_stock > 0:
+                        self._release_stock(order, line, line.variant, effective_stock, user)
                     line.status = 'CANCELLED'
                     line.updated_by = user
                     line.save(update_fields=['status', 'updated_by'])
@@ -835,15 +848,18 @@ class SalesOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequir
             for item in line_items:
                 qty = item['quantity_ordered']
                 line_id = item.get('line_id')
-                existing_returned = existing_returns.get(line_id, 0) if line_id else 0
-                effective_qty = max(qty - existing_returned, 0)
                 price = item['unit_price']
                 d_pct = item.get('discount_pct', 0)
                 d_fixed = item.get('discount_fixed', 0)
+                effective_qty = qty  # frontend sends effective qty
                 subtotal = effective_qty * price
                 if d_fixed > 0:
-                    # Prorate fixed discount proportionally to effective qty
-                    discount = d_fixed * effective_qty / qty if qty > 0 else 0
+                    # Prorate fixed discount by original ordered qty (before this edit)
+                    orig_qty = original_line_qty.get(line_id) if line_id else None
+                    if orig_qty and orig_qty > 0:
+                        discount = d_fixed * effective_qty / orig_qty
+                    else:
+                        discount = d_fixed
                 else:
                     discount = subtotal * (d_pct / 100)
                 total_amount += (subtotal - discount)

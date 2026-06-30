@@ -53,25 +53,27 @@ export function ReturnPanel({ warehouses, initialOrderNumber }: ReturnPanelProps
     if (fetchedOrderData && fetchedOrderData.lines) {
       setOrderData(fetchedOrderData);
       setLines(
-        (fetchedOrderData.lines || []).map((l: any) => {
-          const quantityOrdered = l.quantity_ordered;
-          const lineTotal = Number(l.line_total) || 0;
-          const unitValue = lineTotal / quantityOrdered; // price per item after discounts
-          const maxQty = l.max_returnable;
-          const remainingTotal = unitValue * maxQty;
-          return {
-            sol_id: l.id,
-            qty: 0,
-            maxQty: maxQty,
-            restock: true,
-            unit_cost: Number(l.unit_price) || 0,
-            refundAmount: 0,
-            reason: "",
-            name: l.variant_name || l.variant_sku || l.variant?.sku || "Product",
-            unitValue: unitValue,
-            remainingTotal: remainingTotal,
-          };
-        })
+        (fetchedOrderData.lines || [])
+          .filter((l: any) => l.status !== "CANCELLED" && (l.max_returnable ?? 0) > 0)
+          .map((l: any) => {
+            const quantityOrdered = l.quantity_ordered;
+            const lineTotal = Number(l.line_total) || 0;
+            const unitValue = lineTotal / quantityOrdered;
+            const maxQty = l.max_returnable;
+            const remainingTotal = unitValue * maxQty;
+            return {
+              sol_id: l.id,
+              qty: 0,
+              maxQty: maxQty,
+              restock: true,
+              unit_cost: Number(l.unit_price) || 0,
+              refundAmount: 0,
+              reason: "",
+              name: l.variant_name || l.variant_sku || l.variant?.sku || "Product",
+              unitValue: unitValue,
+              remainingTotal: remainingTotal,
+            };
+          })
       );
     }
   }, [fetchedOrderData]);

@@ -84,13 +84,14 @@ function DocumentContent({
   termsContent,
   formatCurrency,
 }: QuoteInvoiceDocumentProps) {
+
   const docType = data.type === "QUOTE" ? "QUOTE" : "INVOICE";
   const calcSubtotal = data.lines.reduce(
-    (sum, l) => sum + l.quantity * l.unit_price,
+    (sum, l) => sum + Number(l.quantity) * Number(l.unit_price),
     0,
   );
   const calcDiscount = data.lines.reduce(
-    (sum, l) => sum + (l.discount_amount || 0),
+    (sum, l) => sum + (Number(l.discount_amount) || 0),
     0,
   );
   const locationStr = buildLocationString(company);
@@ -245,25 +246,25 @@ function DocumentContent({
               </td>
             </tr>
           )}
-          {data.overallDiscountPercent && data.overallDiscountPercent > 0 && (
+          {Number(data.overallDiscountPercent) > 0 && (
             <tr className="border-t border-gray-200">
               <td colSpan={5} className="py-2 px-3 text-right font-semibold text-gray-900">
-                Discount ({data.overallDiscountPercent}%)
+                Discount ({Number(data.overallDiscountPercent)}%)
               </td>
               <td className="py-2 px-3 text-right text-gray-900">
-                -{formatCurrency(calcSubtotal * (data.overallDiscountPercent / 100))}
+                -{formatCurrency(calcSubtotal * (Number(data.overallDiscountPercent) / 100))}
               </td>
             </tr>
           )}
-          {data.overallTaxPercent && data.overallTaxPercent > 0 && (
+          {Number(data.overallTaxPercent) > 0 && (
             <tr className="border-t border-gray-200">
               <td colSpan={5} className="py-2 px-3 text-right font-semibold text-gray-900">
                 Tax ({data.overallTaxPercent}%)
               </td>
               <td className="py-2 px-3 text-right text-gray-900">
                 {formatCurrency(
-                  (calcSubtotal - (calcSubtotal * ((data.overallDiscountPercent || 0) / 100))) *
-                  (data.overallTaxPercent / 100)
+                  (calcSubtotal - (calcSubtotal * ((Number(data.overallDiscountPercent) || 0) / 100))) *
+                  (Number(data.overallTaxPercent) / 100)
                 )}
               </td>
             </tr>

@@ -480,7 +480,7 @@ export function SalesListPanel({ onEditOrder, onReturnOrder }: SalesListPanelPro
         totalAmount: Number(invoiceData?.amount || order.total_amount),
         status: invoiceData?.status || "COMPLETE",
         paymentStatus: invoiceData?.payment_status || "",
-        notes: invoiceData?.notes || order.notes || "",
+        notes: invoiceData?.notes || "",
       };
 
       setInvoiceModalProps({ open: true, data: docData });

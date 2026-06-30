@@ -110,6 +110,8 @@ class SalesOrderLine(BaseModel):
 
     @property
     def max_returnable(self):
+        if self.status == 'CANCELLED':
+            return 0
         return self.quantity_ordered - self.quantity_returned
 
 

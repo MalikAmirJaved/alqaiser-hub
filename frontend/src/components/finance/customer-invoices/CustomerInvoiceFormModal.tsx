@@ -1,5 +1,5 @@
 // components/finance/CustomerInvoiceFormModal.tsx
-import { useEffect, useState, useCallback, memo } from "react";
+import { useEffect, useState, useCallback, useRef, memo } from "react";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { X, Plus, Trash2, RotateCw, Package, Type, FileText, AlertCircle, ChevronDown, Warehouse, DollarSign, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -10,10 +10,12 @@ import {
   type CustomerInvoice,
 } from "@/hooks/finance/useCustomerInvoices";
 import { useCreateSalesInvoice, useUpdateSalesInvoice } from "@/hooks/sales/useSalesInvoices";
+import { useCreateSupplier } from "@/hooks/useSuppliers";
 import { useServerSearch } from "@/hooks/useServerSearch";
 import { useApi } from "@/hooks/useApi";
 import type { VariantDetail } from "@/hooks/useAllVariants";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
+import { FormModal } from "@/components/inventory/supplier/FormModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useAutoCode } from "@/hooks/useAutoCode";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
@@ -76,6 +78,7 @@ interface ManualEntryFieldsProps {
   onSkuBlur: (val: string) => void;
   onDescriptionBlur: (val: string) => void;
   onVendorChange: (val: string) => void;
+  onVendorAddNew?: () => void;
   onCostPriceBlur?: (val: number) => void;
 }
 
@@ -92,6 +95,7 @@ const ManualEntryFields = memo(function ManualEntryFields({
   onSkuBlur,
   onDescriptionBlur,
   onVendorChange,
+  onVendorAddNew,
   onCostPriceBlur,
 }: ManualEntryFieldsProps) {
   const [localName, setLocalName] = useState(name);
@@ -130,6 +134,8 @@ const ManualEntryFields = memo(function ManualEntryFields({
             fetchOptions={fetchVendors}
             placeholder="Vendor…"
             displayLabel={vendorName}
+            onAddNew={onVendorAddNew}
+            addNewLabel="+ New Vendor"
           />
         </div>
       </div>
@@ -188,19 +194,45 @@ const NumericCell = memo(function NumericCell({
   placeholder,
 }: NumericCellProps) {
   const [local, setLocal] = useState(String(value));
+  const lastEmittedRef = useRef(value);
+  const isTypingRef = useRef(false);
 
-  useEffect(() => { setLocal(String(value)); }, [value]);
+  useEffect(() => {
+    if (!isTypingRef.current) {
+      setLocal(String(value));
+      lastEmittedRef.current = value;
+    }
+    isTypingRef.current = false;
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setLocal(val);
+    isTypingRef.current = true;
+
+    const parsed = parseFloat(val);
+    if (!isNaN(parsed) && parsed !== lastEmittedRef.current) {
+      let clamped = parsed;
+      if (min !== undefined && clamped < min) clamped = min;
+      if (max !== undefined && clamped > max) clamped = max;
+      onChange(clamped);
+      lastEmittedRef.current = clamped;
+    }
+  };
 
   const handleBlur = () => {
+    isTypingRef.current = false;
     const parsed = parseFloat(local);
     if (!isNaN(parsed)) {
       let clamped = parsed;
       if (min !== undefined && clamped < min) clamped = min;
       if (max !== undefined && clamped > max) clamped = max;
       onChange(clamped);
+      lastEmittedRef.current = clamped;
+      setLocal(String(clamped));
     } else {
-      // revert
       setLocal(String(value));
+      lastEmittedRef.current = value;
     }
   };
 
@@ -211,7 +243,7 @@ const NumericCell = memo(function NumericCell({
       min={min}
       max={max}
       value={local}
-      onChange={(e) => setLocal(e.target.value)}
+      onChange={handleChange}
       onBlur={handleBlur}
       className={className}
       placeholder={placeholder}
@@ -236,6 +268,7 @@ interface LineRowProps {
   onUpdateLine: (index: number, field: keyof InvoiceLine, value: any) => void;
   onRemove: (index: number) => void;
   onToggleManual: (index: number, value: boolean) => void;
+  onVendorAddNew?: () => void;
   calculateLineTotal: (line: InvoiceLine) => number;
   formatCurrency: (value: number) => string;
 }
@@ -252,6 +285,7 @@ const LineRow = memo(function LineRow({
   onUpdateLine,
   onRemove,
   onToggleManual,
+  onVendorAddNew,
   calculateLineTotal,
   formatCurrency,
 }: LineRowProps) {
@@ -311,6 +345,7 @@ const LineRow = memo(function LineRow({
             onSkuBlur={(val) => onUpdateLine(index, "manual_variant_sku", val)}
             onDescriptionBlur={(val) => onUpdateLine(index, "description", val)}
             onVendorChange={(val) => onUpdateLine(index, "vendor", val)}
+            onVendorAddNew={onVendorAddNew}
             onCostPriceBlur={(val) => onUpdateLine(index, "cost_price", val)}
           />
         )}
@@ -410,6 +445,8 @@ export default function CustomerInvoiceFormModal({
   const [resolvingAction, setResolvingAction] = useState<"go_to_inventory" | "return_to_vendor" | null>(null);
   const [resolvingLineId, setResolvingLineId] = useState<string | null>(null);
   const [variantDisplayLabels, setVariantDisplayLabels] = useState<Record<number, string>>({});
+  const [showSupplierForm, setShowSupplierForm] = useState(false);
+  const [createdSupplierName, setCreatedSupplierName] = useState("");
 
   const fetchCustomers = useServerSearch("/api/inventory/customers/", {
     transformOption: (c: any) => ({
@@ -438,9 +475,43 @@ export default function CustomerInvoiceFormModal({
   const createSalesInvoice = useCreateSalesInvoice();
   const updateSalesInvoice = useUpdateSalesInvoice();
   const resolveReduction = useResolveReduction();
+  const createSupplier = useCreateSupplier();
   const queryClient = useQueryClient();
   const api = useApi();
   const { generateCode, validateCode } = useAutoCode("customer_invoice");
+  const { generateCode: genSupplierCode } = useAutoCode("supplier");
+
+  const supplierFormFields = [
+    { name: "code", label: "Code", type: "code" as const, required: true, placeholder: "e.g., SUP-001" },
+    { name: "name", label: "Name", type: "text" as const, required: true, placeholder: "Company name" },
+    { name: "contact_person", label: "Contact Person", type: "text" as const, placeholder: "Full name" },
+    { name: "email", label: "Email", type: "email" as const, placeholder: "contact@company.com" },
+    { name: "phone", label: "Phone", type: "tel" as const, placeholder: "+1 234 567 8900" },
+    { name: "address_line", label: "Address", type: "textarea" as const, placeholder: "Street address" },
+    { name: "location", label: "Location", type: "location-group" as const, fields: { country: "country", state: "state", city: "city" } },
+    { name: "postal_code", label: "Postal Code", type: "text" as const, placeholder: "Postal code" },
+    {
+      name: "status", label: "Status", type: "select" as const,
+      options: [
+        { value: "active", label: "Active" },
+        { value: "inactive", label: "Inactive" },
+        { value: "suspended", label: "Suspended" },
+      ],
+    },
+  ];
+
+  const handleCreateSupplier = async (data: any) => {
+    try {
+      const result: any = await createSupplier.mutateAsync(data);
+      const supplierId = result?.id || result?.data?.id || result?._id;
+      setCreatedSupplierName(data.name || "");
+      setShowSupplierForm(false);
+      toast.success(`Supplier "${data.name}" created`);
+      await queryClient.invalidateQueries({ queryKey: ["inventory_supplier"] });
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to create supplier");
+    }
+  };
 
   const { register, control, handleSubmit, reset, setValue, watch } =
     useForm<CustomerInvoiceFormData>({
@@ -644,10 +715,10 @@ export default function CustomerInvoiceFormModal({
           }
         } catch {}
       } else {
-        update(index, { ...currentLines[index], [field]: value });
+        setValue(`lines.${index}.${field}` as any, value, { shouldDirty: true });
       }
     },
-    [api, update, watch]
+    [api, update, watch, setValue]
   );
 
   const toggleManual = useCallback(
@@ -997,7 +1068,7 @@ export default function CustomerInvoiceFormModal({
                     <span className="text-xs">Click to add a product or service</span>
                   </button>
                 ) : (
-                  <div className="rounded-xl border border-border overflow-visible">
+                  <div className="rounded-xl border border-border overflow-visible relative z-10">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-muted/40 border-b-2 border-border/60">
@@ -1042,6 +1113,7 @@ export default function CustomerInvoiceFormModal({
                               onUpdateLine={updateLine}
                               onRemove={handleRemove}
                               onToggleManual={toggleManual}
+                              onVendorAddNew={() => setShowSupplierForm(true)}
                               calculateLineTotal={calculateLineTotal}
                               formatCurrency={formatCurrency}
                             />
@@ -1178,6 +1250,17 @@ export default function CustomerInvoiceFormModal({
         open={showCustomerModal}
         onClose={() => setShowCustomerModal(false)}
         onCustomerCreated={handleCustomerCreated}
+      />
+
+      <FormModal
+        open={showSupplierForm}
+        onClose={() => setShowSupplierForm(false)}
+        title="Add New Vendor"
+        fields={supplierFormFields}
+        initialData={{}}
+        onSubmit={handleCreateSupplier}
+        isSubmitting={createSupplier.isPending}
+        onGenerateCode={genSupplierCode}
       />
 
       {/* ── Reduction Conflict Modal ── */}
