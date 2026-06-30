@@ -98,12 +98,24 @@ def reconcile_bill_vendors(
 
     if same_vendor:
         delta = new_outstanding - old_outstanding
+
         if delta > 0:
+            # First apply the full outstanding increase
             update_supplier_balance(
                 new_vendor, delta, 'PURCHASE',
                 reference_type=ref_type, reference_id=ref_id,
                 notes=f'{note}: outstanding +{delta}',
             )
+            # Then apply any available credit against the new outstanding
+            if new_vendor.credit > 0:
+                credit_available = new_vendor.credit
+                credit_to_use = min(credit_available, delta, new_outstanding)
+                if credit_to_use > 0:
+                    update_supplier_balance(
+                        new_vendor, credit_to_use, 'CREDIT_APPLIED',
+                        reference_type=ref_type, reference_id=ref_id,
+                        notes=f'{note}: credit {credit_to_use} applied against increased bill',
+                    )
         elif delta < 0:
             update_supplier_balance(
                 new_vendor, abs(delta), 'PURCHASE_REVERSAL',
