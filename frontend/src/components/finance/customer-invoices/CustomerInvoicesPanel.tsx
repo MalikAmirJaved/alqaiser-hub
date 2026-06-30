@@ -151,7 +151,6 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
       sortable: true,
       render: (val: number) => (val ? formatCurrency(val) : "—"),
     },
-    { key: "currency", label: "Curr", render: () => "USD" },
     {
       key: "payment_status",
       label: "Payment",
@@ -203,14 +202,19 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
         batchActions={
           <>
             <button
-              onClick={() => {
-                selectedIds.forEach((id) => payInvoice.mutate({ id }));
+              onClick={async () => {
+                try {
+                  await Promise.all(selectedIds.map((id) => payInvoice.mutateAsync({ id })));
+                } catch {
+                  // errors shown via mutation error state
+                }
                 setSelectedIds([]);
               }}
+              disabled={payInvoice.isPending}
               className="inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary/80"
             >
               <Send className="w-4 h-4" />
-              Pay Selected
+              {payInvoice.isPending ? "Paying..." : "Pay Selected"}
             </button>
           </>
         }

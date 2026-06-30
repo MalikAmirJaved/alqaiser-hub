@@ -97,23 +97,15 @@ export default function SuppliersPage() {
 
   const handleView = (supplier: Supplier) => router.push(`suppliers/${supplier.id}`);
 
-  // Calculate stats from current data
+  // Calculate stats - use totalCount for total, page data for active count
   const stats = useMemo(() => {
-    if (!suppliers || suppliers.length === 0) {
-      return [
-        { id: "total", label: "Total", value: 0 },
-        { id: "active", label: "Active", value: 0 },
-      ];
-    }
-
-    const total = suppliers.length;
-    const active = suppliers.filter((item) => item.status === "active").length;
+    const active = (suppliers || []).filter((item) => item.status === "active").length;
 
     return [
-      { id: "total", label: "Total", value: total, valueClassName: "text-2xl font-bold" },
+      { id: "total", label: "Total", value: totalCount, valueClassName: "text-2xl font-bold" },
       { id: "active", label: "Active", value: active, valueClassName: "text-green-600 dark:text-green-400" },
     ];
-  }, [suppliers]);
+  }, [suppliers, totalCount]);
 
   const formatCurrency = (value: number | string) => {
     const num = Number(value) || 0;

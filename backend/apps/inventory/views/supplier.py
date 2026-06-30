@@ -26,7 +26,7 @@ class BaseSupplierViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequ
     def get_queryset(self):
         qs = super().get_queryset()
 
-        qs = qs.filter(partner_type=self.partner_type)
+        qs = qs.filter(is_deleted=False, partner_type=self.partner_type)
 
         sort_by = self.request.query_params.get('sort_by')
         sort_order = self.request.query_params.get('sort_order', 'asc')
@@ -45,7 +45,7 @@ class BaseSupplierViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequ
         serializer.save(
             company_id=user.company_id,
             branch_id=user.branch_id,
-            # partner_type=self.partner_type,
+            partner_type=self.partner_type,
             created_by=user,
             updated_by=user,
         )
@@ -95,11 +95,6 @@ class BaseSupplierViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequ
 class SupplierViewSet(BaseSupplierViewSet):
     partner_type = 'supplier'
     permission_resource = 'supplier'
-
-
-class VendorViewSet(BaseSupplierViewSet):
-    partner_type = 'vendor'
-    permission_resource = 'vendor'
 
 
 class SupplierHistoryViewSet(

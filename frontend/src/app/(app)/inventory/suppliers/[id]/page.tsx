@@ -23,6 +23,7 @@ const transactionTypeLabels: Record<string, string> = {
   CREDIT_NOTE: "Credit Note",
   INVOICE_ADJUSTMENT: "Invoice Adjustment",
   CREDIT_APPLIED: "Credit Applied",
+  PURCHASE_REVERSAL: "Purchase Reversal",
 };
 
 const transactionTypeColors: Record<string, string> = {
@@ -31,6 +32,7 @@ const transactionTypeColors: Record<string, string> = {
   CREDIT_NOTE: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
   INVOICE_ADJUSTMENT: "bg-purple-500/15 text-purple-600 dark:text-purple-400",
   CREDIT_APPLIED: "bg-rose-500/15 text-rose-600 dark:text-rose-400",
+  PURCHASE_REVERSAL: "bg-orange-500/15 text-orange-600 dark:text-orange-400",
 };
 
 export default function SupplierDetailPage() {

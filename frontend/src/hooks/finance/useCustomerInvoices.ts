@@ -22,6 +22,15 @@ export interface CustomerInvoiceLine {
   discount_amount: number;
 }
 
+export interface InvoicePayment {
+  id: string;
+  amount: string;
+  payment_date: string;
+  payment_method: string;
+  reference_number: string;
+  status: string;
+}
+
 export interface CustomerInvoice {
   id: string;
   invoice_number: string;
@@ -44,6 +53,7 @@ export interface CustomerInvoice {
   source?: string;
   payment_method?: string;
   lines?: CustomerInvoiceLine[];
+  payments?: InvoicePayment[];
   created_at: string;
   updated_at: string;
   created_by?: number | string | null;

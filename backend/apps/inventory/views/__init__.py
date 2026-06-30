@@ -3,7 +3,7 @@ from .category import CategoryViewSet
 from .brand import BrandViewSet
 from .warehouse import WarehouseViewSet
 from .product import ProductViewSet
-from .supplier import BaseSupplierViewSet, SupplierViewSet, VendorViewSet, SupplierHistoryViewSet
+from .supplier import BaseSupplierViewSet, SupplierViewSet, SupplierHistoryViewSet
 from .stock_management import StockManagementViewSet
 from .transfer import StockTransferViewSet
 from .purchase import PurchaseOrderViewSet, GoodsReceiptViewSet
@@ -18,7 +18,7 @@ from .barcode import BarcodeViewSet
 
 __all__ = [
     "AttributeViewSet", "CategoryViewSet", "BrandViewSet", "WarehouseViewSet",
-    "BaseSupplierViewSet", "SupplierViewSet","VendorViewSet","SupplierHistoryViewSet","ProductViewSet","StockManagementViewSet",
+    "BaseSupplierViewSet", "SupplierViewSet","SupplierHistoryViewSet","ProductViewSet","StockManagementViewSet",
     "StockTransferViewSet","PurchaseOrderViewSet", "GoodsReceiptViewSet",
      "CustomerViewSet", "SalesOrderViewSet",
     "SalesReturnViewSet","VariantViewSet","BatchStockMixin", "ReportViewSet", "AuditLogViewSet","AlertViewSet", "BarcodeViewSet"

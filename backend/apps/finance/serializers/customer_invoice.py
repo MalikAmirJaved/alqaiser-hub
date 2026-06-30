@@ -93,6 +93,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
     customer_email = serializers.SerializerMethodField()
     customer_phone = serializers.SerializerMethodField()
     lines = CustomerInvoiceLineSerializer(many=True, required=False)
+    payments = serializers.SerializerMethodField()
     
     customer = serializers.SlugRelatedField(
         slug_field='_id',
@@ -130,6 +131,21 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
 
     def get_customer_phone(self, obj):
         return obj.customer.phone if obj.customer else None
+
+    def get_payments(self, obj):
+        from apps.finance.services.payable import get_payments_queryset
+        payments = get_payments_queryset(obj)
+        return [
+            {
+                'id': str(p._id),
+                'amount': str(p.amount),
+                'payment_date': str(p.payment_date),
+                'payment_method': p.payment_method,
+                'reference_number': p.reference_number or '',
+                'status': p.status,
+            }
+            for p in payments
+        ]
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)

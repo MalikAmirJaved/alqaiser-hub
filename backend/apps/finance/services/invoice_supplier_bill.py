@@ -26,6 +26,14 @@ def line_cost(quantity, cost_price):
 
 
 def generate_bill_number():
+    from django.db import IntegrityError
+    for _ in range(10):
+        try:
+            num = f"BILL-INV-{int(time.time())}-{random.randint(1000, 9999)}"
+            if not SupplierBill.objects.filter(bill_number=num).exists():
+                return num
+        except IntegrityError:
+            continue
     return f"BILL-INV-{int(time.time())}-{random.randint(1000, 9999)}"
 
 
@@ -100,21 +108,31 @@ def reconcile_bill_vendors(
         delta = new_outstanding - old_outstanding
 
         if delta > 0:
-            # First apply the full outstanding increase
             update_supplier_balance(
                 new_vendor, delta, 'PURCHASE',
                 reference_type=ref_type, reference_id=ref_id,
                 notes=f'{note}: outstanding +{delta}',
             )
-            # Then apply any available credit against the new outstanding
             if new_vendor.credit > 0:
-                credit_available = new_vendor.credit
-                credit_to_use = min(credit_available, delta, new_outstanding)
+                credit_to_use = min(new_vendor.credit, delta, new_outstanding)
                 if credit_to_use > 0:
-                    update_supplier_balance(
-                        new_vendor, credit_to_use, 'CREDIT_APPLIED',
-                        reference_type=ref_type, reference_id=ref_id,
-                        notes=f'{note}: credit {credit_to_use} applied against increased bill',
+                    from apps.inventory.models import SupplierHistory
+                    new_vendor.refresh_from_db()
+                    new_vendor.credit -= credit_to_use
+                    new_vendor.save(update_fields=['credit', 'updated_at'])
+                    SupplierHistory.objects.create(
+                        supplier=new_vendor,
+                        transaction_type='CREDIT_APPLIED',
+                        amount=credit_to_use,
+                        balance_after=new_vendor.balance,
+                        credit_after=new_vendor.credit,
+                        reference_type=ref_type,
+                        reference_id=ref_id,
+                        notes=f'{note}: credit {credit_to_use} consumed against increased bill',
+                        company_id=new_vendor.company_id,
+                        branch_id=new_vendor.branch_id,
+                        created_by_id=new_vendor.updated_by_id or new_vendor.created_by_id,
+                        updated_by_id=new_vendor.updated_by_id or new_vendor.created_by_id,
                     )
         elif delta < 0:
             update_supplier_balance(

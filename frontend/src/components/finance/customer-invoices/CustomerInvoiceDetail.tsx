@@ -11,6 +11,7 @@ import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
 import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
 import { StatusBadge } from "@/components/finance/ui";
 import CustomerInvoiceFormModal from "./CustomerInvoiceFormModal";
+import PayAmountModal from "@/components/finance/PayAmountModal";
 import { FileText, Send, Printer, Download, Share2, Receipt } from "lucide-react";
 
 interface CustomerInvoiceDetailProps {
@@ -38,6 +39,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const [editingInvoice, setEditingInvoice] = useState<any>(null);
   const [posting, setPosting] = useState(false);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [payModalOpen, setPayModalOpen] = useState(false);
 
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!invoice) return <div className="p-8 text-center">Invoice not found</div>;
@@ -62,13 +64,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   };
 
   const handlePay = async () => {
-    setPosting(true);
-    try {
-      await payInvoice.mutateAsync({ id: invoice.id });
-      refetch();
-    } finally {
-      setPosting(false);
-    }
+    setPayModalOpen(true);
   };
 
   const handlePrint = () => {
@@ -252,18 +248,53 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   tabs.push({
     id: "payment",
     label: "Payment History",
-    count: 0,
+    count: invoice.payments?.length || 0,
     render: () => (
-      <div className="text-center py-8 text-muted-foreground">
-        <Receipt className="w-12 h-12 mx-auto mb-3 opacity-30" />
-        <p className="text-sm">Payment history will appear here</p>
+      <div>
+        {(!invoice.payments || invoice.payments.length === 0) ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <Receipt className="w-12 h-12 mx-auto mb-3 opacity-30" />
+            <p className="text-sm">No payments recorded yet</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-xs text-muted-foreground border-b border-border bg-surface/40">
+                <tr>
+                  <th className="px-4 py-2 text-left">Date</th>
+                  <th className="px-4 py-2 text-left">Method</th>
+                  <th className="px-4 py-2 text-left">Reference</th>
+                  <th className="px-4 py-2 text-right">Amount</th>
+                  <th className="px-4 py-2 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoice.payments.map((p: any) => (
+                  <tr key={p.id} className="border-b border-border/60">
+                    <td className="px-4 py-2">{p.payment_date}</td>
+                    <td className="px-4 py-2">{p.payment_method}</td>
+                    <td className="px-4 py-2 text-muted-foreground">{p.reference_number || "—"}</td>
+                    <td className="px-4 py-2 text-right font-medium">{formatCurrency(Number(p.amount))}</td>
+                    <td className="px-4 py-2 text-center">
+                      <span className={`inline-flex px-2 py-0.5 text-xs rounded-full font-medium ${
+                        p.status === "CONFIRMED" ? "bg-success/15 text-success" : "bg-muted/40 text-muted-foreground"
+                      }`}>{p.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         {canRecordPayment && (
-          <button
-            onClick={() => router.push(`/finance/payments/new?invoice=${invoice.id}`)}
-            className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm"
-          >
-            Record Payment
-          </button>
+          <div className="mt-4 text-center">
+            <button
+              onClick={() => setPayModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm"
+            >
+              Record Payment
+            </button>
+          </div>
         )}
       </div>
     ),
@@ -291,12 +322,11 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
         entityId={invoice.invoice_number}
         title={`${invoice.customer_name || "Customer"} — ${invoice.invoice_number}`}
         status={invoice.payment_status || "UNPAID"}
-        subtitle={`Issued ${invoice.invoice_date} · Due ${invoice.due_date} · USD`}
+        subtitle={`Issued ${invoice.invoice_date} · Due ${invoice.due_date}`}
         data={invoice}
         meta={[
           { label: "Customer", value: invoice.customer_name || "-" },
           { label: "Due Date", value: invoice.due_date },
-          { label: "Currency", value: "USD" },
         ]}
         summary={[
           { label: "Invoice Total", value: formatCurrency(amount), tone: "info", isCurrency: true },
@@ -338,6 +368,35 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
         initialData={editingInvoice}
         onSuccess={handleUpdateSuccess}
       />
+
+      {invoice && (
+        <PayAmountModal
+          open={payModalOpen}
+          onClose={() => setPayModalOpen(false)}
+          title="Receive Payment"
+          documentLabel="Invoice"
+          documentNumber={invoice.invoice_number}
+          subtitle={invoice.customer_name ? `Customer: ${invoice.customer_name}` : undefined}
+          totalAmount={toNumber(invoice.amount)}
+          paidAmount={toNumber(invoice.paid_amount || 0)}
+          outstanding={toNumber(invoice.outstanding || 0)}
+          paymentStatus={invoice.payment_status || "UNPAID"}
+          isPending={payInvoice.isPending}
+          onSubmit={async (data) => {
+            await payInvoice.mutateAsync({
+              id: invoice.id,
+              body: {
+                amount: data.amount,
+                payment_method: data.payment_method,
+                payment_date: data.payment_date,
+                reference_number: data.reference_number,
+              },
+            });
+            setPayModalOpen(false);
+            refetch();
+          }}
+        />
+      )}
       {invoice && companySettings && (
         <PrintPreviewModal
           open={showPrintPreview}

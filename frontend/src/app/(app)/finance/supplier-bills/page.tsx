@@ -151,17 +151,21 @@ export default function SupplierBillsPage() {
           paymentStatus={billToPay.payment_status || "UNPAID"}
           isPending={payBill.isPending}
           onSubmit={async (data) => {
-            await payBill.mutateAsync({
-              id: billToPay.id,
-              body: {
-                amount: data.amount,
-                payment_method: data.payment_method,
-                payment_date: data.payment_date,
-                reference_number: data.reference_number,
-              },
-            });
-            setPayModalOpen(false);
-            setBillToPay(null);
+            try {
+              await payBill.mutateAsync({
+                id: billToPay.id,
+                body: {
+                  amount: data.amount,
+                  payment_method: data.payment_method,
+                  payment_date: data.payment_date,
+                  reference_number: data.reference_number,
+                },
+              });
+              setPayModalOpen(false);
+              setBillToPay(null);
+            } catch {
+              // error handled by mutation error state
+            }
           }}
         />
       )}

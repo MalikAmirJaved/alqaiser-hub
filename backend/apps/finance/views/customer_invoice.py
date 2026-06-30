@@ -76,14 +76,21 @@ class CustomerInvoiceViewSet(
 
     def perform_create(self, serializer):
         import time, random
-        serializer.save(
-            invoice_number=f"INV-{int(time.time())}-{random.randint(1000, 9999)}",
-            source='FINANCE',
-            company_id=self.request.user.company_id,
-            branch_id=self.request.user.branch_id,
-            created_by=self.request.user,
-            updated_by=self.request.user,
-        )
+        from django.db import IntegrityError
+        for _ in range(10):
+            try:
+                serializer.save(
+                    invoice_number=f"INV-{int(time.time())}-{random.randint(1000, 9999)}",
+                    source='FINANCE',
+                    company_id=self.request.user.company_id,
+                    branch_id=self.request.user.branch_id,
+                    created_by=self.request.user,
+                    updated_by=self.request.user,
+                )
+                return
+            except IntegrityError:
+                continue
+        raise ValueError("Failed to generate unique invoice number")
 
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
