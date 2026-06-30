@@ -676,7 +676,7 @@ export default function CustomerInvoiceFormModal({
         });
         toast.success(
           action === "go_to_inventory"
-            ? "Product created, stock added, and supplier bill updated."
+            ? "Product created and stock added. Supplier bill unchanged."
             : "Supplier bill and balance updated."
         );
         setShowConflictModal(false);

@@ -66,9 +66,26 @@ def reconcile_bill_vendors(
 
     Removes the old outstanding from old_vendor, applies new outstanding to
     new_vendor, and issues credit when total_paid exceeds the new amount.
+
+    No-op when vendor and amount are unchanged to prevent duplicate credit
+    entries on subsequent non-bill-related invoice updates.
     """
     old_amount = Decimal(str(old_amount))
     new_amount = Decimal(str(new_amount))
+
+    same_vendor = (
+        old_vendor
+        and new_vendor
+        and old_vendor.pk == new_vendor.pk
+    )
+
+    # No-op: nothing to reconcile when both vendor and amount are unchanged.
+    # Without this guard, subsequent invoice updates (e.g. changing due date)
+    # would re-trigger the overpayment → CREDIT_NOTE logic, doubling the
+    # supplier credit on every save.
+    if same_vendor and old_amount == new_amount:
+        return
+
     paid = get_total_paid(bill)
 
     old_outstanding = max(Decimal('0'), old_amount - paid)
@@ -78,12 +95,6 @@ def reconcile_bill_vendors(
     ref_type = 'supplier_bill'
     ref_id = bill._id
     note = notes or f'Bill {bill.bill_number} updated'
-
-    same_vendor = (
-        old_vendor
-        and new_vendor
-        and old_vendor.pk == new_vendor.pk
-    )
 
     if same_vendor:
         delta = new_outstanding - old_outstanding
@@ -197,7 +208,14 @@ def sync_manual_line_bill(
 
     qty_decreased = new_qty < old_qty
 
-    # Quantity decrease → apply cost change immediately, defer reduction until user resolves
+    # Quantity decrease → apply cost/vendor changes immediately so the
+    # supplier bill always reflects the current per-unit cost for ALL
+    # items (including those that will go to inventory).
+    #
+    # The qty reduction itself is deferred to the resolution step where
+    # the user picks "return_to_vendor" (deduct qty from bill) or
+    # "go_to_inventory" (bill stays cost-adjusted, stock added to
+    # inventory).
     if qty_decreased:
         if cost_delta_amount != 0 or (old_vendor and old_vendor != new_vendor):
             reconcile_bill_vendors(
@@ -214,8 +232,8 @@ def sync_manual_line_bill(
             old_line.resolved = False
         old_line.original_quantity = old_qty
         old_line.save(update_fields=['original_quantity', 'resolved', 'updated_at'])
-        
-        expected_new_bill_amount = bill_amount_after_cost + qty_delta_amount
+
+        expected_new_bill_amount = line_cost(new_qty, new_cost_price_val)
         return {
             'line_id': str(old_line._id),
             'line_index': line_index,
@@ -229,39 +247,83 @@ def sync_manual_line_bill(
             'unit_price': old_line.unit_price,
             'cost_price': new_cost_price_val,
             'bill_paid': bill_has_confirmed_payment(bill),
-            'old_bill_amount': str(bill_amount_after_cost),
+            'old_bill_amount': str(bill.amount),
             'new_bill_amount': str(expected_new_bill_amount),
         }
 
     # Increase or vendor/cost change → update bill in place immediately
     total_new_bill_amount = bill_amount_after_cost + qty_delta_amount
-    reconcile_bill_vendors(
-        bill,
-        old_vendor=old_vendor or bill.supplier,
-        new_vendor=new_vendor,
-        old_amount=bill.amount,
-        new_amount=total_new_bill_amount,
-        notes=f'Invoice {invoice.invoice_number} line updated',
-    )
+
+    # Skip if nothing changed — prevents duplicate credit/balance updates on
+    # unrelated invoice edits (e.g. due date change) after a reduction was
+    # already resolved. The early-return in reconcile_bill_vendors() also
+    # guards against this, but checking here avoids the function call entirely.
+    if total_new_bill_amount != bill.amount or (
+        old_vendor and new_vendor and old_vendor.pk != new_vendor.pk
+    ):
+        reconcile_bill_vendors(
+            bill,
+            old_vendor=old_vendor or bill.supplier,
+            new_vendor=new_vendor,
+            old_amount=bill.amount,
+            new_amount=total_new_bill_amount,
+            notes=f'Invoice {invoice.invoice_number} line updated',
+        )
     return None
 
 
 def apply_line_reduction(bill, line, user, action_notes=''):
-    """Apply bill + vendor sync after a quantity reduction is resolved."""
+    """Apply qty-reduction effects on a supplier bill after resolution.
+
+    Cost/vendor adjustments were already applied during sync via
+    ``reconcile_bill_vendors``. This function only applies the QTY
+    reduction: reduces the bill amount by ``delta_qty × cost_price``
+    and adjusts supplier balance/credit for the returned items only.
+
+    Using ``reconcile_bill_vendors`` here with the full new amount would
+    double-count the overpayment because credit was already given for
+    the cost-only portion during sync.  By calculating only the qty
+    delta, we avoid the double-credit bug.
+    """
+
     delta_qty = line.original_quantity - line.quantity
-    delta_amount = Decimal(str(delta_qty)) * Decimal(str(line.cost_price or 0))
-    
+    new_cost = Decimal(str(line.cost_price or 0))
+    paid = get_total_paid(bill)
+
+    reduction_amount = line_cost(delta_qty, new_cost)
+
     old_amount = bill.amount
-    new_amount = old_amount - delta_amount
-    
-    reconcile_bill_vendors(
-        bill,
-        old_vendor=bill.supplier,
-        new_vendor=line.vendor,
-        old_amount=old_amount,
-        new_amount=new_amount,
-        notes=action_notes or f'Qty reduction on invoice {line.customer_invoice.invoice_number}',
-    )
+    new_amount = old_amount - reduction_amount
+
+    old_overpayment = max(Decimal('0'), paid - old_amount)
+    new_overpayment = max(Decimal('0'), paid - new_amount)
+    additional_overpayment = new_overpayment - old_overpayment
+
+    old_outstanding = max(Decimal('0'), old_amount - paid)
+    new_outstanding = max(Decimal('0'), new_amount - paid)
+    outstanding_delta = new_outstanding - old_outstanding
+
+    ref_type = 'supplier_bill'
+    ref_id = bill._id
+    note = action_notes or f'Qty reduction on invoice {line.customer_invoice.invoice_number}'
+    vendor = line.vendor
+
+    if outstanding_delta < 0:
+        update_supplier_balance(
+            vendor, abs(outstanding_delta), 'PURCHASE_REVERSAL',
+            reference_type=ref_type, reference_id=ref_id,
+            notes=f'{note}: outstanding -{abs(outstanding_delta)}',
+        )
+
+    if additional_overpayment > 0:
+        update_supplier_balance(
+            vendor, additional_overpayment, 'CREDIT_NOTE',
+            reference_type=ref_type, reference_id=ref_id,
+            notes=f'{note}: additional overpayment from qty reduction',
+        )
+
+    bill.amount = new_amount
+    bill.save(update_fields=['amount', 'updated_at'])
 
 
 def handle_removed_line(old_line, invoice, user):

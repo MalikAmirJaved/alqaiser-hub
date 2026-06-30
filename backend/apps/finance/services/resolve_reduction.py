@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.db import transaction
 
+from apps.finance.models import InvoiceLineProductLink
 from apps.finance.services.invoice_supplier_bill import apply_line_reduction
 from apps.inventory.models import (
     InventoryTransaction,
@@ -54,15 +55,35 @@ def resolve_invoice_line_reduction(line, action, user):
             )
 
         if action == 'go_to_inventory':
-            product, variant = _get_or_create_product_variant(
-                name=line.manual_variant_name,
-                sku=line.manual_variant_sku,
-                selling_price=line.unit_price,
-                buying_price=line.cost_price,
-                company_id=line.company_id,
-                branch_id=line.branch_id,
-                user=user,
-            )
+            # Check if a product link already exists for this line
+            existing_link = InvoiceLineProductLink.objects.filter(
+                invoice_line=line,
+                is_deleted=False,
+            ).first()
+
+            if existing_link:
+                product = existing_link.product
+                variant = existing_link.variant
+            else:
+                product, variant = _get_or_create_product_variant(
+                    name=line.manual_variant_name,
+                    sku=line.manual_variant_sku,
+                    selling_price=line.unit_price,
+                    buying_price=line.cost_price,
+                    company_id=line.company_id,
+                    branch_id=line.branch_id,
+                    user=user,
+                )
+                InvoiceLineProductLink.objects.create(
+                    invoice_line=line,
+                    product=product,
+                    variant=variant,
+                    company_id=line.company_id,
+                    branch_id=line.branch_id,
+                    created_by=user,
+                    updated_by=user,
+                )
+
             _add_stock(
                 variant=variant,
                 quantity=delta_qty,

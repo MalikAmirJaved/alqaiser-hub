@@ -127,3 +127,36 @@ class CustomerInvoiceLine(BaseModel):
     @property
     def line_total(self):
         return self.subtotal - self.discount_amount
+
+
+class InvoiceLineProductLink(BaseModel):
+    """
+    Links a manual invoice line to the ProductVariant created when the user
+    chooses "go_to_inventory" during reduction resolution.
+
+    This ensures subsequent reductions on the same line reuse the existing
+    product/variant instead of creating duplicates.
+    """
+    invoice_line = models.ForeignKey(
+        'CustomerInvoiceLine',
+        on_delete=models.CASCADE,
+        related_name='product_links',
+    )
+    product = models.ForeignKey(
+        'inventory.Product',
+        on_delete=models.PROTECT,
+        related_name='invoice_line_links',
+    )
+    variant = models.ForeignKey(
+        'inventory.ProductVariant',
+        on_delete=models.PROTECT,
+        related_name='invoice_line_links',
+    )
+
+    class Meta:
+        db_table = 'finance_invoice_line_product_links'
+        unique_together = [['invoice_line', 'variant']]
+        indexes = [
+            models.Index(fields=['invoice_line']),
+            models.Index(fields=['variant']),
+        ]
