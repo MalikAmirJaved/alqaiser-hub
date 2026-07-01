@@ -471,7 +471,7 @@ export default function QuoteFormModal({
                           return (
                             <tr key={idx} className="group hover:bg-muted/20 transition-colors">
                               {/* ── Item cell ── */}
-                              <td className="px-4 py-3 min-w-[280px] align-top">
+                              <td className="px-4 py-3 min-w-[280px] align-bottom">
                                 {/* Entry-mode toggle */}
                                 <div className="inline-flex rounded-md border border-border overflow-hidden mb-2 text-[11px]">
                                   <button
@@ -551,7 +551,7 @@ export default function QuoteFormModal({
                               </td>
 
                               {/* ── Qty ── */}
-                              <td className="px-3 py-3 align-top">
+                              <td className="px-3 py-3 align-bottom">
                                 <input
                                   type="number"
                                   min="1"
@@ -565,7 +565,7 @@ export default function QuoteFormModal({
                               </td>
 
                               {/* ── Unit price ── */}
-                              <td className="px-3 py-3 align-top">
+                              <td className="px-3 py-3 align-bottom">
                                 <input
                                   type="number"
                                   step="0.01"
@@ -580,7 +580,7 @@ export default function QuoteFormModal({
                               </td>
 
                               {/* ── Discount ── */}
-                              <td className="px-3 py-3 align-top">
+                              <td className="px-3 py-3 align-bottom">
                                 <input
                                   type="number"
                                   step="0.01"
@@ -599,7 +599,7 @@ export default function QuoteFormModal({
                               </td>
 
                               {/* ── Tax ── */}
-                              <td className="px-3 py-3 align-top">
+                              <td className="px-3 py-3 align-bottom">
                                 <input
                                   type="number"
                                   step="0.01"
@@ -614,12 +614,12 @@ export default function QuoteFormModal({
                               </td>
 
                               {/* ── Line total ── */}
-                              <td className="px-3 py-3 text-right font-medium text-sm align-top">
+                              <td className="px-3 py-3 text-right font-medium text-sm align-bottom">
                                 {formatCurrency(lineTotal)}
                               </td>
 
                               {/* ── Delete ── */}
-                              <td className="px-2 py-3 text-center align-top">
+                              <td className="px-2 py-3 text-center align-bottom">
                                 <button
                                   type="button"
                                   onClick={() => removeLine(idx)}

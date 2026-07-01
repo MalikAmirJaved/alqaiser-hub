@@ -294,7 +294,7 @@ const LineRow = memo(function LineRow({
   return (
     <tr key={fieldId} className="group hover:bg-muted/20 transition-colors">
       {/* ── Item cell ── */}
-      <td className="px-4 py-3 min-w-[300px] align-top">
+      <td className="px-4 py-3 min-w-[300px] align-bottom">
         <div className="inline-flex rounded-md border border-border overflow-hidden mb-2 text-[11px]">
           <button
             type="button"
@@ -352,7 +352,7 @@ const LineRow = memo(function LineRow({
       </td>
 
       {/* ── Qty ── */}
-      <td className="px-3 py-3 align-top">
+      <td className="px-3 py-3 align-bottom">
         <div className="flex flex-col items-end gap-0.5">
           <NumericCell
             value={Number(currentLine.quantity) || 0}
@@ -373,7 +373,7 @@ const LineRow = memo(function LineRow({
       </td>
 
       {/* ── Unit price ── */}
-      <td className="px-3 py-3 align-top">
+      <td className="px-3 py-3 align-bottom">
         <NumericCell
           value={Number(currentLine.unit_price) || 0}
           onChange={(val) => onUpdateLine(index, "unit_price", val)}
@@ -385,7 +385,7 @@ const LineRow = memo(function LineRow({
       </td>
 
       {/* ── Discount ── */}
-      <td className="px-3 py-3 align-top">
+      <td className="px-3 py-3 align-bottom">
         <NumericCell
           value={Number(currentLine.discount_amount) || 0}
           onChange={(val) => onUpdateLine(index, "discount_amount", val)}
@@ -397,7 +397,7 @@ const LineRow = memo(function LineRow({
       </td>
 
       {/* ── Tax % ── */}
-      <td className="px-3 py-3 align-top">
+      <td className="px-3 py-3 align-bottom">
         <NumericCell
           value={Number(currentLine.tax_rate) || 0}
           onChange={(val) => onUpdateLine(index, "tax_rate", val)}
@@ -410,12 +410,12 @@ const LineRow = memo(function LineRow({
       </td>
 
       {/* ── Line total ── */}
-      <td className="px-3 py-3 text-right font-medium text-sm align-top">
+      <td className="px-3 py-3 text-right font-medium text-sm align-bottom">
         {formatCurrency(lineTotal)}
       </td>
 
       {/* ── Delete ── */}
-      <td className="px-2 py-3 text-center align-top">
+      <td className="px-2 py-3 text-center align-bottom">
         <button
           type="button"
           onClick={() => onRemove(index)}
