@@ -6,6 +6,7 @@ import autoTable from "jspdf-autotable";
 import { Dialog, DialogContent, DialogTitle, DialogClose } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Printer, Download, X, Loader2 } from "lucide-react";
+import { Country, State } from "country-state-city";
 
 // ── Types ──────────────────────────────────────────
 
@@ -60,8 +61,22 @@ interface QuoteInvoiceDocumentProps {
 // ── Helpers ────────────────────────────────────────
 
 function buildLocationString(company: DocCompany): string {
-  const parts = [company.city, company.state, company.country].filter(Boolean);
+  const parts = [company.city, resolveStateName(company.country, company.state), resolveCountryName(company.country)].filter(Boolean);
   return parts.length > 0 ? parts.join(", ") : "";
+}
+
+/** Resolve ISO country code to display name */
+function resolveCountryName(code?: string): string {
+  if (!code) return "";
+  const country = Country.getCountryByCode(code);
+  return country?.name || code;
+}
+
+/** Resolve ISO state code to display name */
+function resolveStateName(countryCode?: string, stateCode?: string): string {
+  if (!countryCode || !stateCode) return stateCode || "";
+  const state = State.getStateByCodeAndCountry(stateCode, countryCode);
+  return state?.name || stateCode;
 }
 
 /** Load a remote image URL into a base64 data URI */
@@ -664,7 +679,11 @@ export function PrintPreviewModal({
     const printStyles = `
       <style>
         body { margin: 0; font-family: Arial, Helvetica, sans-serif; }
-        @page { margin: 10mm; }
+        @page { size: auto; margin: 5mm; }
+        @media print {
+          @page { margin: 0; }
+          body { margin: 10mm; }
+        }
         * { box-sizing: border-box; }
         img { max-width: 64px; max-height: 64px; }
       </style>
@@ -673,6 +692,7 @@ export function PrintPreviewModal({
     const html = `
       <html>
         <head>
+          <title></title>
           ${styleLinks}
           ${inlineStyles}
           ${printStyles}
