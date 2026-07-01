@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { DetailLayout, StandardSidebar, RelatedRecords, type DetailTab } from "@/components/reuseable/final/DetailLayout";
-import { useQuote, useUpdateQuote, useSendQuote, useMarkViewedQuote, useApproveQuote, useRejectQuote, useMarkConvertedQuote } from "@/hooks/sales/useQuotes";
+import { useQuote, useUpdateQuote, useSendQuote, useMarkViewedQuote, useApproveQuote, useRejectQuote, useMarkConvertedQuote, useQuoteStatusHistory } from "@/hooks/sales/useQuotes";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
+import StatusHistoryTimeline from "@/components/sales/StatusHistoryTimeline";
 import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
 import QuoteFormModal from "@/components/sales/QuoteFormModal";
 import { Printer, Download, FileText, HelpCircle, Settings, Info } from "lucide-react";
@@ -25,6 +26,8 @@ export default function QuoteDetailPage() {
   const permissions = useFeaturePermissions("SALES", "quote");
   const { data: companySettings } = useCompanySettingsQuery();
   const { terms: termsData } = useTermsAndConditions();
+
+  const { data: statusHistory, isLoading: historyLoading } = useQuoteStatusHistory(id as string);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<any>(null);
@@ -220,6 +223,14 @@ export default function QuoteDetailPage() {
             </div>
           ))}
         </div>
+      ),
+    },
+    {
+      id: "history",
+      label: "Status History",
+      count: statusHistory?.length || 0,
+      render: () => (
+        <StatusHistoryTimeline history={statusHistory || []} isLoading={historyLoading} />
       ),
     },
   ];

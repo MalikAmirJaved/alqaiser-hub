@@ -6,7 +6,9 @@ from apps.common.baseauthentication import CompanyBranchMixin
 from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.sales.models.quote import Quote
+from apps.sales.models.status_history import SalesStatusHistory
 from apps.sales.serializers.quote import QuoteSerializer
+from apps.sales.serializers.status_history import SalesStatusHistorySerializer
 from apps.finance.models import CustomerInvoice
 
 
@@ -63,6 +65,22 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
             'message': 'Quote deleted successfully'
         })
 
+    # ── Helpers ──
+
+    def _log_status_change(self, quote, from_status, to_status, notes=''):
+        SalesStatusHistory.objects.create(
+            entity_type='QUOTE',
+            entity_id=quote._id,
+            from_status=from_status,
+            to_status=to_status,
+            notes=notes,
+            changed_by=self.request.user,
+            company_id=quote.company_id,
+            branch_id=quote.branch_id,
+            created_by=self.request.user,
+            updated_by=self.request.user,
+        )
+
     # ── Workflow Actions ──
 
     @action(detail=True, methods=['post'])
@@ -74,8 +92,10 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
                 {'error': f"Cannot send quote with status '{quote.status}'"},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        from_status = quote.status
         quote.status = 'SENT'
         quote.save(update_fields=['status'])
+        self._log_status_change(quote, from_status, 'SENT')
         return Response({'status': 'success', 'message': 'Quote sent to customer'})
 
     @action(detail=True, methods=['post'])
@@ -87,8 +107,10 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
                 {'error': f"Cannot mark quote as viewed with status '{quote.status}'"},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        from_status = quote.status
         quote.status = 'VIEWED'
         quote.save(update_fields=['status'])
+        self._log_status_change(quote, from_status, 'VIEWED')
         return Response({'status': 'success', 'message': 'Quote marked as viewed'})
 
     @action(detail=True, methods=['post'])
@@ -100,8 +122,10 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
                 {'error': f"Cannot approve quote with status '{quote.status}'"},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        from_status = quote.status
         quote.status = 'APPROVED'
         quote.save(update_fields=['status'])
+        self._log_status_change(quote, from_status, 'APPROVED')
         return Response({'status': 'success', 'message': 'Quote approved'})
 
     @action(detail=True, methods=['post'])
@@ -113,8 +137,10 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
                 {'error': f"Cannot reject quote with status '{quote.status}'"},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        from_status = quote.status
         quote.status = 'REJECTED'
         quote.save(update_fields=['status'])
+        self._log_status_change(quote, from_status, 'REJECTED')
         return Response({'status': 'success', 'message': 'Quote rejected'})
 
     @action(detail=True, methods=['post'])
@@ -130,8 +156,10 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
         prev = prev_map.get(quote.status)
         if not prev:
             return Response({'error': f"Cannot revert quote with status '{quote.status}'"}, status=status.HTTP_400_BAD_REQUEST)
+        from_status = quote.status
         quote.status = prev
         quote.save(update_fields=['status'])
+        self._log_status_change(quote, from_status, prev)
         return Response({'status': 'success', 'message': f'Quote reverted to {prev}'})
 
     @action(detail=True, methods=['post'])
@@ -150,7 +178,21 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
             invoice = CustomerInvoice.objects.get(_id=invoice_id, company_id=quote.company_id)
         except CustomerInvoice.DoesNotExist:
             return Response({'error': 'Invoice not found'}, status=status.HTTP_404_NOT_FOUND)
+        from_status = quote.status
         quote.converted_invoice = invoice
         quote.status = 'CONVERTED'
         quote.save(update_fields=['converted_invoice', 'status'])
+        self._log_status_change(quote, from_status, 'CONVERTED', f"Converted to invoice {invoice.invoice_number}")
         return Response({'status': 'success', 'message': 'Quote converted to invoice'})
+
+    @action(detail=True, methods=['get'])
+    def status_history(self, request, _id=None):
+        """Return status change history for this quote."""
+        quote = self.get_object()
+        history = SalesStatusHistory.objects.filter(
+            entity_type='QUOTE',
+            entity_id=quote._id,
+            company_id=quote.company_id,
+        ).order_by('-created_at')
+        serializer = SalesStatusHistorySerializer(history, many=True)
+        return Response(serializer.data)

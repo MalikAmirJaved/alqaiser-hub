@@ -214,6 +214,31 @@ async function resolveReduction(
   );
 }
 
+export interface AuditLogEntry {
+  id: number;
+  user: number | null;
+  user_name: string;
+  user_email: string;
+  action: string;
+  action_display: string;
+  model_name: string;
+  record_id: string;
+  module: string;
+  field_changes: { id: number; field_name: string; old_value: string | null; new_value: string | null; created_at: string }[];
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export function useCustomerInvoiceAuditLog(invoiceId: string | null) {
+  return useQuery({
+    queryKey: [CUSTOMER_INVOICES_KEY, "audit_log", invoiceId],
+    queryFn: () => apiFetch<AuditLogEntry[]>(`/api/finance/customer-invoices/${invoiceId}/audit_log/`),
+    enabled: !!invoiceId,
+  });
+}
+
 export function useResolveReduction() {
   const queryClient = useQueryClient();
   return useMutation({

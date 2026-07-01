@@ -210,3 +210,24 @@ export function useRevertQuoteStatus() {
     },
   });
 }
+
+export interface StatusHistoryEntry {
+  id: string;
+  entity_type: "LEAD" | "QUOTE";
+  entity_id: string;
+  from_status: string;
+  to_status: string;
+  notes: string;
+  changed_by: number | null;
+  changed_by_name: string | null;
+  created_at: string;
+}
+
+export function useQuoteStatusHistory(id: string | null) {
+  const api = useApi();
+  return useQuery({
+    queryKey: ["sales_quote_status_history", id],
+    queryFn: () => api<StatusHistoryEntry[]>(`/api/sales/quotes/${id}/status_history/`),
+    enabled: !!id,
+  });
+}

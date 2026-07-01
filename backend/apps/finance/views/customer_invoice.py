@@ -17,6 +17,8 @@ from apps.inventory.services.stock_service import (
     direct_deduct_stock,
     direct_release_stock,
 )
+from apps.audit.models import AuditLog
+from apps.audit.serializers import AuditLogSerializer
 
 
 class CustomerInvoiceViewSet(
@@ -215,3 +217,15 @@ class CustomerInvoiceViewSet(
             'message': f'Reduction resolved: {action_type}',
             'data': result,
         })
+
+    @action(detail=True, methods=['get'])
+    def audit_log(self, request, _id=None):
+        """Return audit trail (field-level changes) for this invoice."""
+        invoice = self.get_object()
+        logs = AuditLog.objects.filter(
+            model_name='CustomerInvoice',
+            record_id=invoice._id,
+            company_id=invoice.company_id,
+        ).order_by('-created_at').prefetch_related('field_changes')
+        serializer = AuditLogSerializer(logs, many=True)
+        return Response(serializer.data)

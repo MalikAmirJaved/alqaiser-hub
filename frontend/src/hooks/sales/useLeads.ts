@@ -188,3 +188,24 @@ export function useRevertLeadStatus() {
     },
   });
 }
+
+export interface StatusHistoryEntry {
+  id: string;
+  entity_type: "LEAD" | "QUOTE";
+  entity_id: string;
+  from_status: string;
+  to_status: string;
+  notes: string;
+  changed_by: number | null;
+  changed_by_name: string | null;
+  created_at: string;
+}
+
+export function useLeadStatusHistory(id: string | null) {
+  const api = useApi();
+  return useQuery({
+    queryKey: ["sales_lead_status_history", id],
+    queryFn: () => api<StatusHistoryEntry[]>(`/api/sales/leads/${id}/status_history/`),
+    enabled: !!id,
+  });
+}

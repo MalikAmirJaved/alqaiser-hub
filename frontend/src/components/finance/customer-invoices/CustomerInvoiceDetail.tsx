@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DetailLayout, StandardSidebar, RelatedRecords, type DetailTab } from "@/components/reuseable/final/DetailLayout";
-import { useCustomerInvoice, useUpdateCustomerInvoice, usePayCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
+import { useCustomerInvoice, useUpdateCustomerInvoice, usePayCustomerInvoice, useCustomerInvoiceAuditLog } from "@/hooks/finance/useCustomerInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
@@ -12,7 +12,7 @@ import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
 import { StatusBadge } from "@/components/finance/ui";
 import CustomerInvoiceFormModal from "./CustomerInvoiceFormModal";
 import PayAmountModal from "@/components/finance/PayAmountModal";
-import { FileText, Send, Printer, Download, Share2, Receipt } from "lucide-react";
+import { FileText, Send, Printer, Download, Share2, Receipt, Edit, User, Clock } from "lucide-react";
 
 interface CustomerInvoiceDetailProps {
   id: string;
@@ -34,6 +34,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const permissions = useFeaturePermissions(moduleCode, "customer_invoice");
   const { data: companySettings } = useCompanySettingsQuery();
   const { terms: termsData } = useTermsAndConditions();
+  const { data: auditLogs, isLoading: auditLogsLoading } = useCustomerInvoiceAuditLog(id);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any>(null);
@@ -244,6 +245,75 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
       render: () => <RelatedRecords items={relatedItems} />,
     });
   }
+
+  const editLogs = auditLogs?.filter((l) => l.action === "UPDATE") || [];
+
+  tabs.push({
+    id: "edit_history",
+    label: "Edit History",
+    count: editLogs.length,
+    render: () => {
+      if (auditLogsLoading) {
+        return <div className="p-8 text-center text-muted-foreground">Loading edit history...</div>;
+      }
+      if (editLogs.length === 0) {
+        return (
+          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+            <Edit className="w-10 h-10 mb-3 opacity-30" />
+            <p className="text-sm">No edit history recorded yet.</p>
+          </div>
+        );
+      }
+      return (
+        <div className="space-y-4">
+          {editLogs.map((log) => (
+            <div key={log.id} className="rounded-lg border border-border/60 p-4">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium text-xs ${
+                  log.action === "CREATE" ? "bg-success/15 text-success" :
+                  log.action === "UPDATE" ? "bg-primary/15 text-primary" :
+                  "bg-destructive/15 text-destructive"
+                }`}>{log.action_display}</span>
+                <span className="inline-flex items-center gap-1">
+                  <User className="w-3 h-3" />
+                  {log.user_name || "System"}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {new Date(log.created_at).toLocaleString()}
+                </span>
+              </div>
+              {log.field_changes && log.field_changes.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-muted-foreground border-b border-border/40">
+                        <th className="px-3 py-1.5 text-left font-medium">Field</th>
+                        <th className="px-3 py-1.5 text-left font-medium">Old Value</th>
+                        <th className="px-3 py-1.5 text-left font-medium">New Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {log.field_changes.map((change) => (
+                        <tr key={change.id} className="border-b border-border/20">
+                          <td className="px-3 py-1.5 font-medium text-foreground">{change.field_name}</td>
+                          <td className="px-3 py-1.5 text-muted-foreground max-w-[200px] truncate">{change.old_value || "—"}</td>
+                          <td className="px-3 py-1.5 text-foreground max-w-[200px] truncate">{change.new_value || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {(!log.field_changes || log.field_changes.length === 0) && (
+                <p className="text-xs text-muted-foreground">No field-level changes tracked for this action.</p>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    },
+  });
 
   tabs.push({
     id: "payment",

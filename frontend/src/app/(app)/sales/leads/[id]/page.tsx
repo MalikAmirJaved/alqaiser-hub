@@ -11,13 +11,15 @@ import {
   useLead, useUpdateLead,
   useContactLead, useQualifyLead,
   useConvertLeadToCustomer, useMarkLost, useScheduleFollowUp,
+  useLeadStatusHistory,
 } from "@/hooks/sales/useLeads";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import LeadFormModal from "@/components/sales/LeadFormModal";
 import QuoteFormModal from "@/components/sales/QuoteFormModal";
+import StatusHistoryTimeline from "@/components/sales/StatusHistoryTimeline";
 import { toast } from "sonner";
-import { CheckCircle, Phone, ThumbsUp, UserPlus, XCircle, Calendar, FileText, Loader2, X } from "lucide-react";
+import { CheckCircle, Phone, ThumbsUp, UserPlus, XCircle, Calendar, FileText, Loader2, X, Clock } from "lucide-react";
 
 export default function LeadDetailPage() {
   const formatCurrency = useFormatCurrency();
@@ -30,6 +32,8 @@ export default function LeadDetailPage() {
   const markLost = useMarkLost();
   const scheduleFollowUp = useScheduleFollowUp();
   const permissions = useFeaturePermissions("SALES", "lead");
+
+  const { data: statusHistory, isLoading: historyLoading } = useLeadStatusHistory(id as string);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<any>(null);
@@ -150,6 +154,14 @@ export default function LeadDetailPage() {
             </div>
           ))}
         </div>
+      ),
+    },
+    {
+      id: "history",
+      label: "Status History",
+      count: statusHistory?.length || 0,
+      render: () => (
+        <StatusHistoryTimeline history={statusHistory || []} isLoading={historyLoading} />
       ),
     },
   ];
