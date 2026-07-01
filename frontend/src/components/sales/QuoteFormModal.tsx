@@ -160,7 +160,6 @@ export default function QuoteFormModal({
     setFormData((prev) => ({
       ...prev,
       lines: [
-        ...prev.lines,
         {
           variant: "",
           quantity: 1,
@@ -173,6 +172,7 @@ export default function QuoteFormModal({
           description: "",
           vendor: "",
         },
+        ...prev.lines,
       ],
     }));
   };
@@ -447,16 +447,16 @@ export default function QuoteFormModal({
                           <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
                             Product / Service
                           </th>
-                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-20">
+                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-24">
                             Qty
                           </th>
-                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-28">
+                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-32">
                             Unit price
                           </th>
-                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-24">
+                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-28">
                             Discount
                           </th>
-                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-20">
+                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-24">
                             Tax %
                           </th>
                           <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-28">

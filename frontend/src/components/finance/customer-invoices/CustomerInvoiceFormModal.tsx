@@ -533,7 +533,7 @@ export default function CustomerInvoiceFormModal({
       },
     });
 
-  const { fields, append, remove, update } = useFieldArray({
+  const { fields, prepend, remove, update } = useFieldArray({
     control,
     name: "lines",
   });
@@ -666,7 +666,7 @@ export default function CustomerInvoiceFormModal({
   };
 
   const addLine = useCallback(() => {
-    append({
+    prepend({
       variant: "",
       quantity: 1,
       unit_price: 0,
@@ -679,7 +679,7 @@ export default function CustomerInvoiceFormModal({
       vendor: "",
       cost_price: undefined,
     });
-  }, [append]);
+  }, [prepend]);
 
   const isExistingLine = useCallback((index: number): boolean => {
     const currentLines = watch("lines");
@@ -1080,12 +1080,12 @@ export default function CustomerInvoiceFormModal({
                           <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
                             Product / Service
                           </th>
-                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-20">Qty</th>
-                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-28">
+                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-24">Qty</th>
+                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-32">
                             Unit price <span className="text-destructive">*</span>
                           </th>
-                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-24">Discount</th>
-                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-20">Tax %</th>
+                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-28">Discount</th>
+                          <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-24">Tax %</th>
                           <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground w-28">Total</th>
                           <th className="w-10" />
                         </tr>

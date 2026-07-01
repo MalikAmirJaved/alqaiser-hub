@@ -267,8 +267,8 @@ export default function ProfilePicUploader({
       <div className="mt-3 flex items-start gap-2 px-3 py-2 rounded-lg bg-info/5 border border-info/20">
         <AlertCircle className="w-3.5 h-3.5 text-info shrink-0 mt-0.5" />
         <div className="text-[11px] text-muted-foreground leading-relaxed">
-          <p className="font-medium text-info">Face &amp; Image Quality Validation</p>
-          <p>Each photo is validated server-side for: exactly one human face, minimum 400×400px resolution, sharpness, and proper lighting. Invalid photos are rejected with an error message. Files are only saved when you submit the form.</p>
+          <p className="font-medium text-info">Face &amp; Resolution Validation</p>
+          <p>Each photo is validated server-side for: exactly one human face, minimum 300×300px resolution. Invalid photos are rejected with an error message.</p>
         </div>
       </div>
     </div>

@@ -1,12 +1,11 @@
 """
-API views for employee profile picture validation and management.
+API views for employee profile picture validation.
 """
 import os
 import uuid
 import logging
 
 from django.conf import settings
-from django.utils.text import get_valid_filename
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -22,18 +21,15 @@ logger = logging.getLogger(__name__)
 
 class EmployeeProfilePicUploadView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
     """
-    Upload a profile picture, generate thumbnails, and run face detection validation.
+    Validate a profile picture WITHOUT permanently saving it.
     
-    POST: Upload a file, validate it (face detection + resolution), return result.
-    Expects multipart form with:
-        - file: the image file (jpg, jpeg, png, gif, webp)
+    POST: Save file to temp → run face detection → delete temp → return result.
     
-    Returns:
-        - valid (bool): whether all validation checks passed
+    Returns ONLY status data (no file URLs):
+        - valid (bool): whether the image passed validation
         - faces_detected (int): number of faces found
-        - width/height (int): image dimensions
-        - error (str, optional): error message if validation fails
-        - url/url_thumb/url_detail: file URLs
+        - width/height (int): image dimensions (0 if detection fails)
+        - message (str): human-readable result message
     """
     permission_module = 'HR'
     permission_resource = 'employee'
@@ -46,7 +42,7 @@ class EmployeeProfilePicUploadView(CompanyBranchMixin, PermissionRequiredMixin, 
         uploaded_file = request.FILES.get('file')
         if not uploaded_file:
             return Response(
-                {'error': 'No file provided'},
+                {'valid': False, 'message': 'No file provided'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -54,65 +50,54 @@ class EmployeeProfilePicUploadView(CompanyBranchMixin, PermissionRequiredMixin, 
         if ext not in self.ALLOWED_EXTS:
             return Response({
                 'valid': False,
-                'error': f'File type .{ext} not allowed. Allowed: {", ".join(self.ALLOWED_EXTS)}'
+                'message': f'File type .{ext} is not allowed. Allowed: {", ".join(self.ALLOWED_EXTS)}',
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Save file to upload directory
-        upload_dir = os.path.join(settings.BASE_DIR, 'upload', 'employee', 'profile')
-        os.makedirs(upload_dir, exist_ok=True)
+        # Save to TEMP directory
+        temp_dir = os.path.join(settings.BASE_DIR, 'upload', 'temp', 'profile')
+        os.makedirs(temp_dir, exist_ok=True)
 
         file_id = uuid.uuid4().hex
         filename = f'{file_id}.{ext}'
-        filepath = os.path.join(upload_dir, filename)
+        filepath = os.path.join(temp_dir, filename)
 
         with open(filepath, 'wb+') as dest:
             for chunk in uploaded_file.chunks():
                 dest.write(chunk)
 
-        relative_url = f'/upload/employee/profile/{filename}'
-
-        # Generate thumbnails
-        thumb_url = ''
-        detail_url = ''
         try:
-            from PIL import Image as PILImage
-            img = PILImage.open(filepath)
+            # Run face detection
+            validation = validate_profile_picture(filepath)
 
-            # Convert RGBA to RGB for JPEG compatibility
-            if img.mode in ('RGBA', 'P') and ext in ('jpg', 'jpeg'):
-                img = img.convert('RGB')
+            # Build response
+            valid = validation.get('valid', False)
+            faces = validation.get('faces_detected', 0)
+            width = validation.get('width', 0)
+            height = validation.get('height', 0)
+            error = validation.get('error')
 
-            # Thumbnail (150x150)
-            thumb_img = img.copy()
-            thumb_img.thumbnail((150, 150), PILImage.LANCZOS)
-            thumb_filename = f'{file_id}_thumb.{ext}'
-            thumb_path = os.path.join(upload_dir, thumb_filename)
-            thumb_img.save(thumb_path, quality=80, optimize=True)
-            thumb_url = f'/upload/employee/profile/{thumb_filename}'
+            if valid:
+                message = f'Photo accepted — 1 human face detected (confidence: {validation.get("confidence", 0):.2f})'
+            else:
+                message = error or 'Face validation failed. Please upload a clear photo of a person\'s face.'
 
-            # Detail (600x600)
-            detail_img = img.copy()
-            detail_img.thumbnail((600, 600), PILImage.LANCZOS)
-            detail_filename = f'{file_id}_detail.{ext}'
-            detail_path = os.path.join(upload_dir, detail_filename)
-            detail_img.save(detail_path, quality=85, optimize=True)
-            detail_url = f'/upload/employee/profile/{detail_filename}'
-        except Exception as e:
-            logger.warning(f"Thumbnail generation failed: {e}")
+            return Response({
+                'valid': valid,
+                'faces_detected': faces,
+                'width': width,
+                'height': height,
+                'message': message,
+            })
 
-        # Run face detection validation
-        validation = validate_profile_picture(filepath)
-
-        return Response({
-            'valid': validation.get('valid', False),
-            'faces_detected': validation.get('faces_detected', 0),
-            'width': validation.get('width', 0),
-            'height': validation.get('height', 0),
-            'error': validation.get('error'),
-            'url': relative_url,
-            'url_thumb': thumb_url,
-            'url_detail': detail_url,
-            'filename': uploaded_file.name,
-            'size': uploaded_file.size,
-            'mime_type': uploaded_file.content_type or 'image/jpeg',
-        })
+        finally:
+            # ALWAYS delete the temp file — no orphaned files
+            try:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+                # Also remove any thumbnails that might have been generated
+                for suffix in ['_thumb', '_detail']:
+                    thumb_path = os.path.join(temp_dir, f'{file_id}{suffix}.{ext}')
+                    if os.path.exists(thumb_path):
+                        os.remove(thumb_path)
+            except Exception as e:
+                logger.warning(f"Failed to clean up temp file {filepath}: {e}")
