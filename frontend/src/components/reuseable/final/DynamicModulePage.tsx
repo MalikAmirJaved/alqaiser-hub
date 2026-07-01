@@ -268,7 +268,7 @@ export function DynamicModulePage<T>({
           </div>
         )}
         <Card>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-visible">
             <table className="w-full text-sm">
               <thead className="text-xs text-muted-foreground border-b border-border bg-surface/40">
                 <tr>

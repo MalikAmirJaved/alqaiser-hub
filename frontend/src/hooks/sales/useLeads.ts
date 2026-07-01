@@ -176,3 +176,15 @@ export function useMarkLost() {
     },
   });
 }
+
+export function useRevertLeadStatus() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<{ status: string; message: string }>(`/api/sales/leads/${id}/revert_status/`, { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales_leads"] });
+    },
+  });
+}

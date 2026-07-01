@@ -198,3 +198,15 @@ export function useMarkConvertedQuote() {
     },
   });
 }
+
+export function useRevertQuoteStatus() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<{ status: string; message: string }>(`/api/sales/quotes/${id}/revert_status/`, { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });
+    },
+  });
+}

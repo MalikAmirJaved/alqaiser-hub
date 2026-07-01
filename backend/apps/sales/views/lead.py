@@ -104,6 +104,27 @@ class LeadViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixi
         })
 
     @action(detail=True, methods=['post'])
+    def revert_status(self, request, _id=None):
+        """Revert lead one step back in the pipeline."""
+        lead = self.get_object()
+        prev_map = {
+            'CONTACTED': 'NEW',
+            'FOLLOW_UP': 'CONTACTED',
+            'QUALIFIED': 'CONTACTED',
+            'LOST': 'NEW',
+        }
+        prev = prev_map.get(lead.status)
+        if not prev:
+            return Response({'error': f"Cannot revert lead with status '{lead.status}'"}, status=status.HTTP_400_BAD_REQUEST)
+        lead.status = prev
+        if prev == 'NEW':
+            lead.lost_reason = ''
+            lead.follow_up_date = None
+            lead.follow_up_notes = ''
+        lead.save(update_fields=['status', 'lost_reason', 'follow_up_date', 'follow_up_notes'])
+        return Response({'status': 'success', 'message': f'Lead reverted to {prev}'})
+
+    @action(detail=True, methods=['post'])
     def mark_lost(self, request, _id=None):
         """Move lead to LOST with a reason."""
         lead = self.get_object()

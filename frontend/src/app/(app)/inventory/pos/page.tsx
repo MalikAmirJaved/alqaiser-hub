@@ -311,8 +311,8 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
           phone: company?.phone || "",
           email: company?.email || "",
           taxId: company?.taxId || "",
-          logo: "",
-          logoUrl: "",
+          logo: company?.logo || "",
+          logoUrl: company?.logo ? `${process.env.NEXT_PUBLIC_API_URL}${company.logo}` : "",
         };
         
         const docData: QuoteInvoiceData = {
@@ -670,8 +670,8 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
               phone: companySettings?.phone || "",
               email: companySettings?.email || "",
               taxId: companySettings?.taxId || "",
-              logo: "",
-              logoUrl: "",
+              logo: companySettings?.logo || "",
+              logoUrl: companySettings?.logo ? `${process.env.NEXT_PUBLIC_API_URL}${companySettings.logo}` : "",
             },
             termsContent: termsData?.invoice || "",
             formatCurrency,

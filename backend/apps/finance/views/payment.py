@@ -394,7 +394,7 @@ class PaymentViewSet(
             ct = ContentType.objects.get_for_model(SupplierBill)
             qs = qs.filter(content_type=ct, object_id__in=bill_ids)
 
-        return qs
+        return qs.order_by('-created_at')
 
     def get_serializer_class(self):
         if self.action in ('create', 'update', 'partial_update'):

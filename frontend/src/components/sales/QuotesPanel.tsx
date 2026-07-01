@@ -2,14 +2,22 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useQuotes, useSendQuote, useMarkViewedQuote, useApproveQuote, useRejectQuote, useMarkConvertedQuote, Quote } from "@/hooks/sales/useQuotes";
+import { useQuotes, useSendQuote, useMarkViewedQuote, useApproveQuote, useRejectQuote, useMarkConvertedQuote, useRevertQuoteStatus, Quote } from "@/hooks/sales/useQuotes";
 import { DynamicModulePage, type ModulePermissions, type Kpi } from "@/components/reuseable/final/DynamicModulePage";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { StatusBadge } from "@/components/finance/ui";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
-import { CheckCircle, XCircle, FileText, ExternalLink } from "lucide-react";
+import { CheckCircle, XCircle, FileText, ExternalLink, MoreVertical, Pencil, Trash2, Send, Eye, Undo2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import QuoteFormModal from "./QuoteFormModal";
 import CustomerInvoiceFormModal from "@/components/finance/customer-invoices/CustomerInvoiceFormModal";
 import { usePagination } from "@/hooks/usePagination";
@@ -53,7 +61,9 @@ export default function QuotesPanel() {
   const approveQuote = useApproveQuote();
   const rejectQuote = useRejectQuote();
   const markConverted = useMarkConvertedQuote();
+  const revertQuoteStatus = useRevertQuoteStatus();
   const permissions = useFeaturePermissions("SALES", "quote");
+  const { confirm: confirmDelete, Modal: ConfirmModal } = useConfirmationModal();
 
   const modulePermissions: ModulePermissions = {
     create: permissions.create,
@@ -171,65 +181,66 @@ export default function QuotesPanel() {
       key: "actions",
       label: "",
       align: "right" as const,
-      render: (_: any, quote: Quote) => (
-        <div className="flex items-center gap-1">
-          {quote.status === "DRAFT" && (
-            <button
-              onClick={(e) => { e.stopPropagation(); handleSend(quote); }}
-              className="p-1.5 rounded-md hover:bg-info/10 text-info transition"
-              title="Send to Customer"
-            >
-              <FileText className="w-4 h-4" />
-            </button>
-          )}
-          {quote.status === "SENT" && (
-            <button
-              onClick={(e) => { e.stopPropagation(); handleMarkViewed(quote); }}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-info/10 text-info hover:bg-info/20 text-xs font-medium transition"
-              title="Mark as Viewed"
-            >
-              Viewed
-            </button>
-          )}
-          {quote.status === "VIEWED" && (
-            <>
-              <button
-                onClick={(e) => { e.stopPropagation(); handleApprove(quote); }}
-                className="p-1.5 rounded-md hover:bg-success/10 text-success transition"
-                title="Approve Quote"
-              >
-                <CheckCircle className="w-4 h-4" />
+      render: (_: any, quote: Quote) => {
+        if (quote.status === "CONVERTED") return null;
+
+        const canRevert = ["SENT", "VIEWED", "APPROVED", "REJECTED"].includes(quote.status);
+        const hasWorkflowActions = ["DRAFT", "SENT", "VIEWED", "APPROVED"].includes(quote.status);
+        const showEdit = quote.status === "DRAFT" && permissions.update;
+        const showSeparator = (hasWorkflowActions || canRevert) && showEdit;
+
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button onClick={(e) => e.stopPropagation()} className="p-1 rounded-md hover:bg-muted transition">
+                <MoreVertical className="w-4 h-4" />
               </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); handleReject(quote); }}
-                className="p-1.5 rounded-md hover:bg-destructive/10 text-destructive transition"
-                title="Reject Quote"
-              >
-                <XCircle className="w-4 h-4" />
-              </button>
-            </>
-          )}
-          {quote.status === "APPROVED" && quote.converted_invoice ? (
-            <button
-              onClick={(e) => { e.stopPropagation(); router.push(`/sales/customer-invoices/${quote.converted_invoice}`); }}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-success/10 text-success hover:bg-success/20 text-xs font-medium transition"
-              title="View converted invoice"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              {quote.converted_invoice_number || "Invoiced"}
-            </button>
-          ) : quote.status === "APPROVED" ? (
-            <button
-              onClick={(e) => { e.stopPropagation(); handleConvertToInvoice(quote); }}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 text-xs font-medium transition"
-              title="Convert to Invoice"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              Invoice
-            </button>
-          ) : null}
-        </div>
-      ),
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()} side="bottom">
+              {quote.status === "DRAFT" && (
+                <DropdownMenuItem onClick={() => handleSend(quote)}>
+                  <Send className="w-4 h-4 mr-2" /> Send to Customer
+                </DropdownMenuItem>
+              )}
+              {quote.status === "SENT" && (
+                <DropdownMenuItem onClick={() => handleMarkViewed(quote)}>
+                  <Eye className="w-4 h-4 mr-2" /> Mark as Viewed
+                </DropdownMenuItem>
+              )}
+              {quote.status === "VIEWED" && (
+                <>
+                  <DropdownMenuItem onClick={() => handleApprove(quote)}>
+                    <CheckCircle className="w-4 h-4 mr-2" /> Approve
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleReject(quote)}>
+                    <XCircle className="w-4 h-4 mr-2" /> Reject
+                  </DropdownMenuItem>
+                </>
+              )}
+              {quote.status === "APPROVED" && quote.converted_invoice ? (
+                <DropdownMenuItem onClick={() => router.push(`/sales/customer-invoices/${quote.converted_invoice}`)}>
+                  <ExternalLink className="w-4 h-4 mr-2" /> View Invoice
+                </DropdownMenuItem>
+              ) : quote.status === "APPROVED" ? (
+                <DropdownMenuItem onClick={() => handleConvertToInvoice(quote)}>
+                  <FileText className="w-4 h-4 mr-2" /> Convert to Invoice
+                </DropdownMenuItem>
+              ) : null}
+              {canRevert && (
+                <DropdownMenuItem onClick={() => revertQuoteStatus.mutate(quote.id, { onSuccess: () => refetch() })}>
+                  <Undo2 className="w-4 h-4 mr-2" /> Revert Status
+                </DropdownMenuItem>
+              )}
+              {showSeparator && <DropdownMenuSeparator />}
+              {showEdit && (
+                <DropdownMenuItem onClick={() => handleEdit(quote)}>
+                  <Pencil className="w-4 h-4 mr-2" /> Edit
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
     },
   ];
 
@@ -247,10 +258,6 @@ export default function QuotesPanel() {
         permissions={modulePermissions}
         primaryActionLabel="New Quote"
         onCreate={handleCreate}
-        actions={{
-          onEdit: handleEdit,
-          canEdit: (quote) => quote.status === "DRAFT"
-        }}
         onRowClick={(quote) => router.push(`/sales/quotes/${quote.id}`)}
         exportEnabled={permissions.export}
         totalCount={totalCount}
@@ -280,6 +287,7 @@ export default function QuotesPanel() {
         onSuccess={handleInvoiceSuccess}
         moduleCode="SALES"
       />
+      <ConfirmModal />
     </>
   );
 }

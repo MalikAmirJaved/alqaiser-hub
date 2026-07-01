@@ -118,6 +118,23 @@ class QuoteViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
         return Response({'status': 'success', 'message': 'Quote rejected'})
 
     @action(detail=True, methods=['post'])
+    def revert_status(self, request, _id=None):
+        """Revert quote one step back in the pipeline."""
+        quote = self.get_object()
+        prev_map = {
+            'SENT': 'DRAFT',
+            'VIEWED': 'SENT',
+            'APPROVED': 'VIEWED',
+            'REJECTED': 'VIEWED',
+        }
+        prev = prev_map.get(quote.status)
+        if not prev:
+            return Response({'error': f"Cannot revert quote with status '{quote.status}'"}, status=status.HTTP_400_BAD_REQUEST)
+        quote.status = prev
+        quote.save(update_fields=['status'])
+        return Response({'status': 'success', 'message': f'Quote reverted to {prev}'})
+
+    @action(detail=True, methods=['post'])
     def mark_converted(self, request, _id=None):
         """Link this quote to an invoice and set status to CONVERTED."""
         quote = self.get_object()

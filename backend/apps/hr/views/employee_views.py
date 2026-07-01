@@ -12,7 +12,7 @@ import json
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.common.filters import FilterPaginationMixin
 from apps.permissions.mixins import PermissionRequiredMixin
-from apps.hr.models import Employee, EmployeeDefaultShift, EmployeeAssetAssignment, AssetCategory, RecruitmentCandidate, EmployeeDocument
+from apps.hr.models import Employee, EmployeeDefaultShift, EmployeeAssetAssignment, AssetCategory, RecruitmentCandidate, EmployeeDocument, EmployeeProfilePic
 from apps.hr.filters import EmployeeFilter
 from apps.organization.models import Department
 from apps.compsetting.models import Designation
@@ -78,6 +78,18 @@ def serialize_employee(employee):
         "salary": str(employee.salary),
         "profile_picture": employee.profile_picture or "",
         "profile_picture_thumb": employee.profile_picture_thumb or "",
+        "profile_pictures": [
+            {
+                "id": str(pic._id),
+                "file_url": pic.file_url,
+                "file_url_thumb": pic.file_url_thumb or "",
+                "file_url_detail": pic.file_url_detail or "",
+                "original_filename": pic.original_filename or "",
+                "is_primary": pic.is_primary,
+                "sort_order": pic.sort_order,
+            }
+            for pic in employee.profile_pictures.filter(is_deleted=False).order_by('-is_primary', 'sort_order')
+        ],
         "education_documents": [
             {
                 "id": str(doc._id),
@@ -281,6 +293,26 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, FilterPagination
                 updated_by=request.user,
             )
 
+        # Create EmployeeProfilePic records from validated profile pictures
+        profile_pics = request.data.get('profile_pictures', [])
+        for idx, pic_data in enumerate(profile_pics):
+            EmployeeProfilePic.objects.create(
+                company_id=company_id,
+                branch_id=branch_id,
+                employee=employee,
+                file_url=pic_data.get('file_url', ''),
+                file_url_thumb=pic_data.get('file_url_thumb', ''),
+                file_url_detail=pic_data.get('file_url_detail', ''),
+                original_filename=pic_data.get('original_filename', ''),
+                file_size=pic_data.get('file_size', 0),
+                mime_type=pic_data.get('mime_type', ''),
+                is_primary=(idx == 0),
+                sort_order=idx,
+                is_face_validated=True,
+                created_by=request.user,
+                updated_by=request.user,
+            )
+
         if default_shift and joining_date:
             EmployeeDefaultShift.objects.create(
                 company_id=company_id,
@@ -419,6 +451,29 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, FilterPagination
             for field in updatable_fields:
                 if field in request.data:
                     setattr(employee, field, request.data[field])
+
+            # ---------- Handle profile pictures (relational) ----------
+            if 'profile_pictures' in request.data:
+                # Soft-delete existing profile pics
+                employee.profile_pictures.filter(is_deleted=False).update(is_deleted=True)
+                # Create new ones
+                for idx, pic_data in enumerate(request.data['profile_pictures']):
+                    EmployeeProfilePic.objects.create(
+                        company_id=company_id,
+                        branch_id=employee.branch_id,
+                        employee=employee,
+                        file_url=pic_data.get('file_url', ''),
+                        file_url_thumb=pic_data.get('file_url_thumb', ''),
+                        file_url_detail=pic_data.get('file_url_detail', ''),
+                        original_filename=pic_data.get('original_filename', ''),
+                        file_size=pic_data.get('file_size', 0),
+                        mime_type=pic_data.get('mime_type', ''),
+                        is_primary=(idx == 0),
+                        sort_order=idx,
+                        is_face_validated=True,
+                        created_by=request.user,
+                        updated_by=request.user,
+                    )
 
             # ---------- Handle education/experience documents (relational) ----------
             if 'education_documents' in request.data:

@@ -85,6 +85,7 @@ const statusConfig: Record<string, { label: string; color: string; bg: string; i
 function OrderCard({
   order,
   formatCurrency,
+  companyName,
   onPrintInvoice,
   onGenerateInvoice,
   onEditOrder,
@@ -94,6 +95,7 @@ function OrderCard({
 }: {
   order: OrderWithInvoice;
   formatCurrency: (v: number | string) => string;
+  companyName: string;
   onPrintInvoice: (order: OrderWithInvoice) => void;
   onGenerateInvoice: (order: OrderWithInvoice) => void;
   onEditOrder?: (order: OrderWithInvoice) => void;
@@ -363,7 +365,7 @@ function OrderCard({
                 lines: effectiveLines,
                 totalAmount: Number(order.total_amount),
               };
-              printThermalReceipt(data, "Store", formatCurrency);
+              printThermalReceipt(data, companyName || "Store", formatCurrency);
             }}
             className="flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-50 text-amber-700 rounded-lg text-[11px] font-bold hover:bg-amber-100 transition-all active:scale-[0.97] border border-amber-200"
             title="Print thermal receipt"
@@ -457,8 +459,8 @@ export function SalesListPanel({ onEditOrder, onReturnOrder }: SalesListPanelPro
         phone: companySettings?.phone || "",
         email: companySettings?.email || "",
         taxId: companySettings?.taxId || "",
-        logo: "",
-        logoUrl: "",
+        logo: companySettings?.logo || "",
+        logoUrl: companySettings?.logo ? `${process.env.NEXT_PUBLIC_API_URL}${companySettings.logo}` : "",
       };
 
       const docData: QuoteInvoiceData = {
@@ -600,6 +602,7 @@ export function SalesListPanel({ onEditOrder, onReturnOrder }: SalesListPanelPro
                 key={order.id}
                 order={order}
                 formatCurrency={formatCurrency}
+                companyName={companySettings?.companyName || "Store"}
                 onPrintInvoice={handlePrintInvoice}
                 onGenerateInvoice={handleGenerateInvoice}
                 onEditOrder={onEditOrder}

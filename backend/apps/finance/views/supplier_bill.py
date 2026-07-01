@@ -34,6 +34,10 @@ class SupplierBillViewSet(
         'status': 'status',
         'supplier': 'supplier___id',
     }
+
+    def get_queryset(self):
+        return super().get_queryset().order_by('-created_at')
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)

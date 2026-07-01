@@ -158,10 +158,22 @@ class SalesOrderSerializer(serializers.ModelSerializer):
 class SalesReturnLineSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)
     refund_amount = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True)
+    variant_name = serializers.SerializerMethodField()
+    variant_sku = serializers.SerializerMethodField()
 
     class Meta:
         model = SalesReturnLine
-        fields = ['id', 'sales_order_line', 'quantity_returned', 'refund_amount', 'restock', 'unit_cost', 'reason']
+        fields = ['id', 'sales_order_line', 'quantity_returned', 'refund_amount', 'restock', 'unit_cost', 'reason', 'variant_name', 'variant_sku']
+
+    def get_variant_name(self, obj):
+        if obj.sales_order_line and obj.sales_order_line.variant:
+            return obj.sales_order_line.variant.product.product_name
+        return None
+
+    def get_variant_sku(self, obj):
+        if obj.sales_order_line and obj.sales_order_line.variant:
+            return obj.sales_order_line.variant.sku
+        return None
 
 
 class SalesReturnSerializer(serializers.ModelSerializer):
@@ -176,13 +188,14 @@ class SalesReturnSerializer(serializers.ModelSerializer):
     )
     created_by_info = serializers.SerializerMethodField()
     updated_by_info = serializers.SerializerMethodField()
+    total_returned = serializers.SerializerMethodField()
 
     class Meta:
         model = SalesReturn
         fields = [
             'id', 'return_number', 'sales_order', 'sales_order_number',
             'warehouse', 'warehouse_name', 'return_date', 'status', 'reason',
-            'lines', 'return_lines',
+            'lines', 'return_lines', 'total_returned',
             'created_at', 'updated_at', 'created_by_info', 'updated_by_info',
         ]
         read_only_fields = ['return_number', 'created_at', 'updated_at']
@@ -196,6 +209,14 @@ class SalesReturnSerializer(serializers.ModelSerializer):
         if obj.updated_by:
             return {'id': obj.updated_by._id, 'username': obj.updated_by.username}
         return None
+
+    def get_total_returned(self, obj):
+        # Calculate total from lines
+        total = 0
+        for line in obj.lines.all():
+            if line.refund_amount:
+                total += float(line.refund_amount)
+        return total
 
     def create(self, validated_data):
         return_lines_data = validated_data.pop('return_lines')

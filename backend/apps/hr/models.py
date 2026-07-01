@@ -189,6 +189,40 @@ class AssetCategory(BaseModel):
 
 
 # =========================================================
+# EMPLOYEE PROFILE PICTURE (relational table for multiple profile pics)
+# =========================================================
+class EmployeeProfilePic(BaseModel):
+    """Employee profile pictures - supports multiple images with face validation"""
+    
+    employee = models.ForeignKey(
+        'Employee',
+        on_delete=models.CASCADE,
+        related_name='profile_pictures'
+    )
+    file_url = models.CharField(max_length=500)
+    file_url_thumb = models.CharField(max_length=500, blank=True, null=True)
+    file_url_detail = models.CharField(max_length=500, blank=True, null=True)
+    original_filename = models.CharField(max_length=255, blank=True, null=True)
+    file_size = models.PositiveIntegerField(default=0)
+    mime_type = models.CharField(max_length=100, blank=True, null=True)
+    is_primary = models.BooleanField(default=False, help_text="Primary/display picture")
+    is_face_validated = models.BooleanField(default=True, help_text="Passed face detection validation")
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    
+    class Meta:
+        verbose_name = "Employee Profile Picture"
+        verbose_name_plural = "Employee Profile Pictures"
+        ordering = ['-is_primary', 'sort_order', 'created_at']
+        indexes = [
+            models.Index(fields=['employee', 'is_primary']),
+            models.Index(fields=['employee', 'is_deleted']),
+        ]
+    
+    def __str__(self):
+        return f"Profile pic for {self.employee.employee_id} - {self.original_filename}"
+
+
+# =========================================================
 # EMPLOYEE
 # =========================================================
 class Employee(BaseModel):

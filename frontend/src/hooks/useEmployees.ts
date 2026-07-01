@@ -13,6 +13,16 @@ export interface EmployeeDocument {
   mime_type?: string;
 }
 
+export interface EmployeeProfilePic {
+  id: string;
+  file_url: string;
+  file_url_thumb: string;
+  file_url_detail?: string;
+  original_filename: string;
+  is_primary: boolean;
+  sort_order: number;
+}
+
 export interface Employee {
   id: string;
   employee_id: string;
@@ -55,6 +65,7 @@ export interface Employee {
   salary: string;
   profile_picture?: string;
   profile_picture_thumb?: string;
+  profile_pictures?: EmployeeProfilePic[];
   education_documents?: EmployeeDocument[];
   experience_documents?: EmployeeDocument[];
   isfrom_user_id?: string;

@@ -334,3 +334,48 @@ export function useSalesOrders(filters?: {
     staleTime: 30_000,
   });
 }
+
+// ── Sales Returns ────────────────────────────────────
+
+export interface SalesReturnListItem {
+  id: string;
+  return_number: string;
+  sales_order: string;
+  sales_order_number?: string;
+  warehouse?: { id: string; warehouse_name: string };
+  return_date: string;
+  reason?: string;
+  total_returned: number;
+  status: string;
+  created_at: string;
+  lines?: Array<{
+    id: string;
+    variant_name: string;
+    variant_sku: string;
+    quantity_returned: number;
+    refund_amount: number;
+    restock: boolean;
+    reason: string;
+  }>;
+}
+
+export function useSalesReturns(filters?: {
+  search?: string;
+  page?: number;
+  page_size?: number;
+}) {
+  const api = useApi();
+  const params = new URLSearchParams();
+  if (filters?.search) params.append("search", filters.search);
+  if (filters?.page) params.append("page", String(filters.page));
+  if (filters?.page_size) params.append("page_size", String(filters.page_size));
+  const url = `/api/inventory/sales-returns/${params.toString() ? `?${params}` : ""}`;
+  return useQuery<{ data: SalesReturnListItem[]; totalCount: number }>({
+    queryKey: ["inventory_sales_returns", filters],
+    queryFn: async () => {
+      const response = await api<{ count: number; results: SalesReturnListItem[] }>(url);
+      return { data: response.results, totalCount: response.count };
+    },
+    staleTime: 30_000,
+  });
+}
