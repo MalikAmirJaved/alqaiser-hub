@@ -14,6 +14,7 @@ import DepartmentFormModal from "@/components/settings/departments/DepartmentFor
 import DesignationFormModal from "@/components/settings/designations/DesignationFormModal";
 import { useAutoCode } from "@/hooks/useAutoCode";
 import FileUpload, { uploadFiles, deleteUploadedFiles } from "../reuseable/FileUpload";
+import { BASE_URL } from "@/lib/api";
 import ProfilePicUploader from "./ProfilePicUploader";
 
 export default function EmployeeForm({ initialData = null, onSubmit, onCancel }) {
@@ -155,7 +156,45 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
     const experienceDocs = [];
 
     try {
-        // Step 1: Upload all pending files
+        // Step 1: Upload pending profile pictures to permanent storage
+        const uploadedProfilePics = [];
+        for (const pic of profilePictures) {
+            if (pic.file) {
+                // New upload — File object from ProfilePicUploader
+                const formData = new FormData();
+                formData.append("file", pic.file);
+                formData.append("module", "employee");
+                formData.append("submodule", "profile");
+                formData.append("type", "image");
+
+                const res = await fetch(`${BASE_URL}/api/common/upload/`, {
+                    method: "POST",
+                    credentials: "include",
+                    body: formData,
+                });
+
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.error || "Failed to upload profile picture");
+                }
+
+                const data = await res.json();
+                uploadedUrls.push(data.url);
+                uploadedProfilePics.push({
+                    file_url: data.url,
+                    file_url_thumb: data.url_thumb || data.url,
+                    file_url_detail: data.url_detail || data.url,
+                    original_filename: pic.original_filename || pic.file.name,
+                    file_size: pic.file_size || pic.file.size,
+                    mime_type: pic.mime_type || pic.file.type,
+                });
+            } else {
+                // Existing URL (from initialData editing) — use as-is
+                uploadedProfilePics.push(pic);
+            }
+        }
+
+        // Step 2: Upload all pending documents
         if (pendingFiles.length > 0) {
             const results = await uploadFiles(pendingFiles);
             for (const result of results) {
@@ -178,13 +217,13 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
             }
         }
 
-        // Step 2: Prepare clean payload
+        // Step 3: Prepare clean payload
         // Set the primary profile picture from the first validated image
         let primaryPicUrl = formData.profile_picture || "";
         let primaryPicThumb = formData.profile_picture_thumb || "";
-        if (profilePictures.length > 0) {
-            primaryPicUrl = profilePictures[0].file_url;
-            primaryPicThumb = profilePictures[0].file_url_thumb;
+        if (uploadedProfilePics.length > 0) {
+            primaryPicUrl = uploadedProfilePics[0].file_url;
+            primaryPicThumb = uploadedProfilePics[0].file_url_thumb;
         }
         
         const payload = {
@@ -224,7 +263,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
             default_shift_id: formData.default_shift_id || null,
             profile_picture: primaryPicUrl,
             profile_picture_thumb: primaryPicThumb,
-            profile_pictures: profilePictures.map((pic) => ({
+            profile_pictures: uploadedProfilePics.map((pic) => ({
                 file_url: pic.file_url,
                 file_url_thumb: pic.file_url_thumb,
                 file_url_detail: pic.file_url_detail,
@@ -239,13 +278,14 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
             payload.isfrom_user_id = formData.isfrom_user_id;
         }
 
-        // Step 3: Create/Update employee
+        // Step 4: Create/Update employee
         await onSubmit(payload);
         
-        // Step 4: Clear pending files on success
+        // Step 5: Clear pending files on success
         setPendingFiles([]);
+        setProfilePictures([]);
     } catch (error) {
-        // Step 5: Rollback - delete uploaded files if employee creation fails
+        // Step 6: Rollback - delete uploaded files if employee creation fails
         if (uploadedUrls.length > 0) {
             await deleteUploadedFiles(uploadedUrls);
         }
@@ -280,7 +320,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
               Profile Photos
             </h3>
             <p className="text-xs text-muted-foreground mb-3">
-              Upload multiple profile photos. Each photo is validated server-side for face detection (must contain exactly one human face) and minimum resolution (300×300px).
+              upload multiple profile photos. Each photo is validated server-side for face detection (must contain exactly one human face, high resolution 400×400px+), sharpness, and proper lighting.
               The first photo is the primary/display picture.
             </p>
             <ProfilePicUploader

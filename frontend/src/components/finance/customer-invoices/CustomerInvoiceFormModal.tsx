@@ -359,7 +359,7 @@ const LineRow = memo(function LineRow({
             onChange={(val) => onUpdateLine(index, "quantity", val)}
             min={1}
             max={currentLine.max_quantity || 999999}
-            className={`w-full h-8 px-2 bg-transparent hover:bg-muted/30 focus:bg-background border border-transparent focus:border-primary/50 rounded-md text-right text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 ${
+            className={`w-full h-8 px-2 bg-background border border-input hover:border-primary/60 focus:border-primary rounded-md text-right text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 ${
               isOverStock ? "text-destructive font-medium" : ""
             }`}
           />
@@ -378,7 +378,9 @@ const LineRow = memo(function LineRow({
           value={Number(currentLine.unit_price) || 0}
           onChange={(val) => onUpdateLine(index, "unit_price", val)}
           step="0.01"
-          className="w-full h-8 px-2 bg-transparent hover:bg-muted/30 focus:bg-background border border-transparent focus:border-primary/50 rounded-md text-right text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20"
+          min={0}
+          className="w-full h-8 px-2 bg-background border border-input hover:border-primary/60 focus:border-primary rounded-md text-right text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20"
+          placeholder="0.00"
         />
       </td>
 
@@ -388,7 +390,8 @@ const LineRow = memo(function LineRow({
           value={Number(currentLine.discount_amount) || 0}
           onChange={(val) => onUpdateLine(index, "discount_amount", val)}
           step="0.01"
-          className="w-full h-8 px-2 bg-transparent hover:bg-muted/30 focus:bg-background border border-transparent focus:border-primary/50 rounded-md text-right text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 text-destructive placeholder:text-destructive/50"
+          min={0}
+          className="w-full h-8 px-2 bg-background border border-input hover:border-primary/60 focus:border-primary rounded-md text-right text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 text-destructive placeholder:text-destructive/50"
           placeholder="0.00"
         />
       </td>
@@ -399,7 +402,9 @@ const LineRow = memo(function LineRow({
           value={Number(currentLine.tax_rate) || 0}
           onChange={(val) => onUpdateLine(index, "tax_rate", val)}
           step="0.01"
-          className="w-full h-8 px-2 bg-transparent hover:bg-muted/30 focus:bg-background border border-transparent focus:border-primary/50 rounded-md text-right text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20"
+          min={0}
+          max={100}
+          className="w-full h-8 px-2 bg-background border border-input hover:border-primary/60 focus:border-primary rounded-md text-right text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20"
           placeholder="0"
         />
       </td>

@@ -1,9 +1,19 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { X, CheckCircle2, AlertCircle, Loader2, ImageIcon } from "lucide-react";
 import { BASE_URL } from "@/lib/api";
 import { toast } from "sonner";
+
+/**
+ * ProfilePicUploader
+ * 
+ * - Sends file to server for VALIDATION only (face detection + resolution check)
+ * - Server saves to temp → detects → deletes temp → returns {valid, message}
+ * - If valid: file is kept in-component state (as a pending file with blob preview)
+ * - The actual file upload to permanent storage happens in EmployeeForm.handleSubmit
+ * - If user closes form without saving → no orphaned files on server
+ */
 
 export default function ProfilePicUploader({
   value = [],
@@ -14,6 +24,17 @@ export default function ProfilePicUploader({
   const [validating, setValidating] = useState({});
   const inputRef = useRef(null);
 
+  // Cleanup blob URLs when component unmounts or value changes
+  useEffect(() => {
+    return () => {
+      value.forEach((pic) => {
+        if (pic.preview && pic.preview.startsWith("blob:")) {
+          URL.revokeObjectURL(pic.preview);
+        }
+      });
+    };
+  }, []);
+
   const handleFiles = async (files) => {
     const fileArray = Array.from(files);
     
@@ -23,25 +44,24 @@ export default function ProfilePicUploader({
     }
 
     for (const file of fileArray) {
-      // Validate file type
+      // Client-side validation
       if (!file.type.startsWith("image/")) {
         toast.error(`${file.name} is not an image file`);
         continue;
       }
-
-      // Validate file size (max 10MB)
       if (file.size > 10 * 1024 * 1024) {
         toast.error(`${file.name} exceeds 10MB limit`);
         continue;
       }
 
-      const uploadId = `upload-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const validationId = `val-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       
-      // Show loading state for this file
-      setValidating((prev) => ({ ...prev, [uploadId]: true }));
+      // Show loading state
+      setValidating((prev) => ({ ...prev, [validationId]: true }));
 
       try {
-        // Upload the file to the face validation endpoint
+        // Send file to server-side validation endpoint
+        // The server saves to temp, runs face detection, then DELETES the temp file
         const formData = new FormData();
         formData.append("file", file);
 
@@ -59,32 +79,32 @@ export default function ProfilePicUploader({
           continue;
         }
 
-        if (!data || data.error || !data.valid) {
-          // Validation failed - show error toast
-          const errorMsg = (data && data.error) || "Failed to validate image";
-          toast.error(`${file.name}: ${errorMsg}`);
+        if (!data || !data.valid) {
+          // Validation failed — show error toast with server message
+          const msg = (data && data.message) || "Failed to validate image";
+          toast.error(`${file.name}: ${msg}`);
           continue;
         }
 
-        // Validation passed - add to the list
-        const newPic = {
-          id: uploadId,
-          file_url: data.url,
-          file_url_thumb: data.url_thumb || data.url,
-          file_url_detail: data.url_detail || data.url,
-          original_filename: data.filename || file.name,
-          file_size: data.size || file.size,
+        // Validation passed — keep the file in memory (blob preview)
+        const previewUrl = URL.createObjectURL(file);
+        const pendingPic = {
+          id: validationId,
+          file: file,                    // actual File object for later upload
+          preview: previewUrl,           // blob URL for preview
+          original_filename: file.name,
+          file_size: file.size,
           mime_type: file.type,
         };
 
-        onChange([...value, newPic]);
-        toast.success(`Profile photo "${file.name}" accepted ✓`);
+        onChange([...value, pendingPic]);
+        toast.success(`"${file.name}" accepted ✓`);
       } catch (error) {
-        toast.error(`${file.name}: Upload failed - ${error.message}`);
+        toast.error(`${file.name}: Validation failed - ${error.message}`);
       } finally {
         setValidating((prev) => {
           const next = { ...prev };
-          delete next[uploadId];
+          delete next[validationId];
           return next;
         });
       }
@@ -94,6 +114,10 @@ export default function ProfilePicUploader({
   };
 
   const handleRemove = (id) => {
+    const toRemove = value.find((pic) => pic.id === id);
+    if (toRemove && toRemove.preview?.startsWith("blob:")) {
+      URL.revokeObjectURL(toRemove.preview);
+    }
     onChange(value.filter((pic) => pic.id !== id));
   };
 
@@ -133,7 +157,7 @@ export default function ProfilePicUploader({
 
   return (
     <div>
-      {/* Uploaded images grid */}
+      {/* Uploaded images grid (blob previews, no server URLs) */}
       {value.length > 0 && (
         <div className="flex flex-wrap gap-3 mb-4">
           {value.map((pic, idx) => (
@@ -146,7 +170,7 @@ export default function ProfilePicUploader({
               }`}
             >
               <img
-                src={`${BASE_URL}${pic.file_url_thumb || pic.file_url}`}
+                src={pic.preview}
                 alt={pic.original_filename || `Profile ${idx + 1}`}
                 className="w-full h-full object-cover"
               />
@@ -232,7 +256,7 @@ export default function ProfilePicUploader({
                 JPG, PNG, WebP up to 10MB each
               </p>
               <p className="text-xs text-muted-foreground">
-                {value.length}/{maxFiles} uploaded
+                {value.length}/{maxFiles} validated
               </p>
             </div>
           </div>
@@ -243,8 +267,8 @@ export default function ProfilePicUploader({
       <div className="mt-3 flex items-start gap-2 px-3 py-2 rounded-lg bg-info/5 border border-info/20">
         <AlertCircle className="w-3.5 h-3.5 text-info shrink-0 mt-0.5" />
         <div className="text-[11px] text-muted-foreground leading-relaxed">
-          <p className="font-medium text-info">Face &amp; Resolution Validation</p>
-          <p>Each photo is validated server-side for: exactly one human face, minimum 300×300px resolution. Invalid photos are rejected with an error message.</p>
+          <p className="font-medium text-info">Face &amp; Image Quality Validation</p>
+          <p>Each photo is validated server-side for: exactly one human face, minimum 400×400px resolution, sharpness, and proper lighting. Invalid photos are rejected with an error message. Files are only saved when you submit the form.</p>
         </div>
       </div>
     </div>

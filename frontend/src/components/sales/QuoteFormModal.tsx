@@ -560,7 +560,7 @@ export default function QuoteFormModal({
                                     const val = parseInt(e.target.value) || 1;
                                     updateLine(idx, "quantity", val > 0 ? val : 1);
                                   }}
-                                  className="w-full h-8 px-2 bg-transparent hover:bg-muted/30 focus:bg-background border border-transparent focus:border-amber-500/50 rounded-md text-right text-sm transition-all focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                                  className="w-full h-8 px-2 bg-background border border-input hover:border-amber-400/60 focus:border-amber-500 rounded-md text-right text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500/20"
                                 />
                               </td>
 
@@ -569,12 +569,13 @@ export default function QuoteFormModal({
                                 <input
                                   type="number"
                                   step="0.01"
-                                  min="0.01"
+                                  min="0"
                                   value={line.unit_price}
                                   onChange={(e) =>
                                     updateLine(idx, "unit_price", parseFloat(e.target.value) || 0)
                                   }
-                                  className="w-full h-8 px-2 bg-transparent hover:bg-muted/30 focus:bg-background border border-transparent focus:border-amber-500/50 rounded-md text-right text-sm transition-all focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                                  className="w-full h-8 px-2 bg-background border border-input hover:border-amber-400/60 focus:border-amber-500 rounded-md text-right text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                                  placeholder="0.00"
                                 />
                               </td>
 
@@ -583,6 +584,7 @@ export default function QuoteFormModal({
                                 <input
                                   type="number"
                                   step="0.01"
+                                  min="0"
                                   value={line.discount_amount}
                                   onChange={(e) =>
                                     updateLine(
@@ -591,7 +593,7 @@ export default function QuoteFormModal({
                                       parseFloat(e.target.value) || 0
                                     )
                                   }
-                                  className="w-full h-8 px-2 bg-transparent hover:bg-muted/30 focus:bg-background border border-transparent focus:border-amber-500/50 rounded-md text-right text-sm transition-all focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-destructive placeholder:text-destructive/50"
+                                  className="w-full h-8 px-2 bg-background border border-input hover:border-amber-400/60 focus:border-amber-500 rounded-md text-right text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-destructive placeholder:text-destructive/50"
                                   placeholder="0.00"
                                 />
                               </td>
@@ -601,11 +603,12 @@ export default function QuoteFormModal({
                                 <input
                                   type="number"
                                   step="0.01"
+                                  min="0"
                                   value={line.tax_rate}
                                   onChange={(e) =>
                                     updateLine(idx, "tax_rate", parseFloat(e.target.value) || 0)
                                   }
-                                  className="w-full h-8 px-2 bg-transparent hover:bg-muted/30 focus:bg-background border border-transparent focus:border-amber-500/50 rounded-md text-right text-sm transition-all focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                                  className="w-full h-8 px-2 bg-background border border-input hover:border-amber-400/60 focus:border-amber-500 rounded-md text-right text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500/20"
                                   placeholder="0"
                                 />
                               </td>
