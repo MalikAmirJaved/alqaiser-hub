@@ -41,20 +41,23 @@ Daphne (ASGI server, port 8000)
 | State (server) | TanStack React Query v5                                     |
 | Forms          | React Hook Form v7 + Zod v3, or legacy schemas.js           |
 | Rich Text      | TipTap v3 (policy content editor)                           |
-| Animations     | Framer Motion v12                                            |
+| Animations     | Framer Motion v12                                           |
 | Video          | HLS.js v1.6 (CCTV HLS stream playback)                      |
 | PDF/Export     | jsPDF, react-pdf, html2canvas, xlsx, mammoth (DOCX)         |
 | Backend        | Python 3.12, Django 6.0.4, DRF 3.17.1, Channels 4.1.0      |
 | ASGI Server    | Daphne 4.1.2                                                |
+| WSGI Server    | Gunicorn 21.2.0 (fallback)                                  |
 | Auth           | Cookie-based JWT (simplejwt 5.3.1)                          |
-| Filters        | django-filter 25.1                                           |
+| Filters        | django-filter 25.1                                          |
 | Database       | PostgreSQL (psycopg2-binary 2.9.12)                         |
 | Cache/WS       | Redis 7 (django-redis 5.4.0, channels-redis 4.2.0, hiredis 2.2.3) |
 | Task Queue     | Celery 5.6.3 + Redis (beat for daily forecast tasks)        |
-| ML/Analytics   | pandas 3.0.3, numpy 2.4.6 (forecast engine)                |
-| System Deps    | ffmpeg (HLS stream processing)                              |
+| ML/Analytics   | pandas 3.0.3, numpy 2.4.6, opencv-python-headless           |
+| System Deps    | ffmpeg (HLS/stream processing)                              |
 | Container      | Docker + Docker Compose, multi-stage builds                 |
-| Package Mgr    | Bun (frontend), pip (backend)                               |
+| Package Mgr    | npm (frontend), pip (backend)                               |
+| Env Mgr        | django-environ 0.13.0                                       |
+| Seed Data      | faker (development seeding)                                 |
 
 ---
 
@@ -94,7 +97,7 @@ alqaiser/
 │   │   │   └── test_base.py        ← BaseTestCase, UnauthenticatedTestCase
 │   │   ├── compsetting/            ← company settings, working days, holidays
 │   │   ├── finance/                ← accounts, journal, invoices, payments, budgets
-│   │   │   ├── models/             ← 8 model files: account, bank, budget, customer_invoice, expense, journal, payment, supplier_bill
+│   │   │   ├── models/             ← package (8 files): account.py, bank.py, budget.py, customer_invoice.py, expense.py, journal.py, payment.py, supplier_bill.py
 │   │   │   ├── serializers/        ← 9 serializer files
 │   │   │   ├── services/           ← document, invoice_payment, payable
 │   │   │   ├── views/              ← 13 view files
@@ -123,7 +126,7 @@ alqaiser/
 │   │   │   ├── routing.py          ← WS URL patterns
 │   │   │   └── utils.py            ← broadcast_data_update helper
 │   │   ├── organization/           ← Company, Branch, Custom User (+ Department)
-│   │   ├── overall_dashboard/      ← cross-module KPI endpoint
+│   │   ├── overall_dashboard/      ← cross-module KPI endpoint (summary, trends, recent_activity, alerts actions)
 │   │   ├── permissions/            ← RBAC engine (Module, Resource, Action, Permission, Role, UserRole, UserPermission)
 │   │   │   ├── checks.py           ← check_permission, require_permission
 │   │   │   ├── mixins.py           ← PermissionRequiredMixin (DRF)
@@ -131,7 +134,11 @@ alqaiser/
 │   │   │   ├── signals.py          ← cache invalidation + WS broadcast on change
 │   │   │   └── views_extended.py   ← role assignment, overrides, bulk management
 │   │   └── sales/                  ← leads, quotes, invoices, dashboard
-│   │       ├── models/             ← lead, quote (+ QuoteLine)
+│   │       ├── models/             ← package: lead.py, quote.py, status_history.py
+│   │       │   ├── __init__.py     ← exports Lead, Quote, QuoteLine, SalesStatusHistory
+│   │       │   ├── lead.py         ← Lead (pipeline: NEW→CONTACTED→QUALIFIED→FOLLOW_UP→CONVERTED/LOST)
+│   │       │   ├── quote.py        ← Quote + QuoteLine
+│   │       │   └── status_history.py ← SalesStatusHistory (entity_type, from_status, to_status)
 │   │       ├── serializers/
 │   │       └── views/
 │   ├── consumers/
@@ -179,7 +186,7 @@ alqaiser/
         │   ├── PermissionGuard.tsx  ← route-level permission guard
         │   ├── PageHeader.tsx
         │   └── finance/, inventory/, sales/, payroll/, leave/, HRAssets/, monitoring/, recruitment/, settings/, Forms/, cards/, common/
-        ├── hooks/                   ← 77 hooks
+        ├── hooks/                   ← 78 hooks (57 root + 16 finance + 4 sales + 1 overall)
         │   ├── finance/             ← 16 hooks (accounts, budgets, expenses, payments, supplier bills, customer invoices, journal entries, bank, trial balance, P&L, balance sheet, aging reports, expense report, audit logs, finance dashboard, forecast)
         │   ├── sales/               ← 4 hooks (leads, quotes, sales invoices, sales dashboard)
         │   └── overall/             ← 1 hook (overall dashboard)
@@ -266,13 +273,14 @@ Nexus ERP
 │
 ├── AI Monitoring
 │   ├── Live Dashboard   — CCTV feeds, workforce/inventory monitoring
-│   ├── Sites            — monitored locations
-│   ├── NVRs             — network video recorders
-│   └── Cameras          — camera configuration
-│
+│   ├── Sites            — monitored locations (monitoring_sites table: name, location)
+│   ├── NVRs             — network video recorders (FK → Site, monitoring_nvrs table: nvr_name, ip, port)
+│   └── Cameras          — camera configuration (FK → Nvr, monitoring_cameras table: channel, zone, purpose)
+
 ├── Forecasting
-│   ├── Sales Forecast   — daily Celery task (02:00 UTC)
-│   └── Stock Forecast   — daily Celery task (03:00 UTC)
+│   ├── Configuration    — ForecastConfiguration (scope: GLOBAL/VARIANT/CATEGORY, method: MOVING_AVERAGE/EXPONENTIAL_SMOOTHING/LINEAR_REGRESSION)
+│   ├── Sales Forecast   — SalesForecast (per-variant, predicted_quantity + confidence bounds), daily Celery task (02:00 UTC)
+│   └── Stock Forecast   — StockForecast (per-variant per-warehouse, projected_closing_stock + required_purchase_qty), daily Celery task (03:00 UTC)
 │
 ├── Permissions (RBAC)
 │   ├── Modules          — 7 modules (HR, INVENTORY, FINANCE, SALES, AI_MONITORING, SETTINGS, NOTIFICATIONS)
@@ -627,6 +635,7 @@ ProtocolTypeRouter
 | `ORG_COMPANY_NAME/SHORT/BRANCH_NAME/CODE`     | —                              | Seed data                      |
 | `ORG_ADMIN_USERNAME/EMAIL/PASSWORD`           | —                              | Seed admin credentials         |
 | `ORG_WAREHOUSE_CODE/NAME`                     | —                              | Seed warehouse                 |
+| `APP_HOST` (docker-compose)                   | —                              | Bind address for services (e.g. `192.168.88.51`) |
 
 ---
 
@@ -834,20 +843,20 @@ const publicRoutes = ["/login", "/unauthorized"];
    - Permission-aware action buttons
    - Used in: finance, inventory, sales main pages
 
-**Reusable Components:**
+**Reusable Components (src/components/reuseable/):**
 
 - `FormModal` — generic modal wrapper with Escape key, backdrop, loading state
 - `SearchableSelect` — searchable dropdown with inline "Add New" support
 - `ConfirmationModal` — via context (`useConfirmation()`)
 - `PermissionGuard` — route-level access denials
 - `PageHeader` — breadcrumbs + title + action buttons
-- `DataTable` — sortable, paginated table with badge rendering
+- `DataTable` (.jsx) — sortable, paginated table with badge rendering
 - `TableGridView` — table/grid view toggle component
 - `StatCard` / `StatsCards` — KPI display cards
 - `FilterBar` — search/filter input
 - `FileUpload` — drag-and-drop file upload
 - `DatePicker` / `DateRangePickerRac` — date selection
-- `LocationSelectors` — cascading country/state/city selects
+- `LocationSelectors` (.jsx) — cascading country/state/city selects
 - `EmployeeMultiSelect` — employee search + multi-select
 - `DocumentViewer` — inline document preview
 - `StepBar` — multi-step progress indicator
@@ -855,7 +864,12 @@ const publicRoutes = ["/login", "/unauthorized"];
 - `FormSelectWithCreate` — select with inline creation
 - `ReasonInputModal` — modal for entering reason/notes
 - `InboxIcon` — notification bell icon component
+- `Checkbox` — reusable checkbox wrapper
+- `CurrencySelect` (.jsx) — currency selector
 - `ThemeInitializer` — dark/light theme bootstrap
+- `DynamicModulePage` (final/) — generic React Query-backed CRUD with KPI cards, tabs, batch actions
+- `DetailLayout` (final/) — tabbed detail view with sidebar
+- `workflow` (final/) — workflow step component
 
 ### 6.8 Environment Variables (frontend)
 
@@ -1221,11 +1235,12 @@ Backend: PaymentViewSet.create()
 | `test_runner.py` unused      | `backend/config/test_runner.py`                                                     | Exists but not referenced in`settings.py`.                                                                                    |
 | `test_settings.py` unused    | `backend/config/test_settings.py`                                                   | Exists but not used.                                                                                                            |
 | Duplicate route                | `frontend/src/app/(app)/finance/forecast/page.tsx` and `.../forecasting/page.tsx` | Two separate forecast routes — likely one is dead.                                                                             |
-| Chart of Accounts seed missing | `backend/`                                                                          | Referenced in old agent.md as`seed_chart_of_accounts` but command does not exist in the codebase.                             |
+| Chart of Accounts merged into seed_org | `backend/apps/organization/management/commands/seed_org.py`                        | Chart of accounts (11 standard accounts) is now seeded inside `seed_org` at lines 166-203, not as a separate command. Update any references from `seed_chart_of_accounts`. |
 | Missing TypeScript strictness  | `frontend/tsconfig.json`                                                            | `noImplicitAny: false`, `noUnusedLocals: false` — loose for rapid development.                                             |
 | Weak ESLint rules              | `frontend/eslint.config.js`                                                         | `no-unused-vars: off`, `no-explicit-any: off` — should tighten for production.                                             |
 | `finance-design` missing     | `frontend/src/components/finance/ui.tsx`                                            | Imported by`DynamicModulePage`/`DetailLayout` but file exports are not fully verified.                                      |
 | Inventory audit dual system    | `backend/apps/inventory/audit.py` + `backend/apps/audit/`                         | Two parallel audit engines — inventory uses ThreadPoolExecutor, audit app uses signals.                                        |
+| DASHBOARD module missing       | `backend/apps/overall_dashboard/views.py`                                          | `OverallDashboardViewSet` uses `permission_module = 'DASHBOARD'` but `seed_permissions.py` does not define a DASHBOARD module. Works via `action_permission_any_of` fallbacks (FINANCE, INVENTORY, SALES), but should be registered. |
 
 ---
 
@@ -1233,12 +1248,14 @@ Backend: PaymentViewSet.create()
 
 ### Docker Compose Services
 
-| Service      | Image             | Ports     | Depends On |
-| ------------ | ----------------- | --------- | ---------- |
-| `db`       | postgres:15       | 5433:5432 | —         |
-| `redis`    | redis:7           | 6379:6379 | —         |
-| `backend`  | alqaiser-backend  | 8000:8000 | db, redis  |
-| `frontend` | alqaiser-frontend | 3000:3000 | backend    |
+| Service      | Image             | Ports                  | Depends On |
+| ------------ | ----------------- | ---------------------- | ---------- |
+| `db`       | postgres:15       | ${APP_HOST}:5433:5432  | —         |
+| `redis`    | redis:7           | 6379:6379              | —         |
+| `backend`  | alqaiser-backend  | ${APP_HOST}:8000:8000  | db, redis  |
+| `frontend` | alqaiser-frontend | ${APP_HOST}:3000:3000  | backend    |
+
+**Note:** Ports are bound to `APP_HOST` (e.g. `192.168.88.51`) from `.env`. Frontend's `NEXT_PUBLIC_API_URL` is set to `http://${APP_HOST}:8000`.
 
 ### Startup Order (Entrypoint.sh)
 
@@ -1246,12 +1263,12 @@ Backend: PaymentViewSet.create()
 2. `python manage.py collectstatic --noinput`
 3. `daphne -b 0.0.0.0 -p 8000 config.asgi:application`
 
-### Seed Commands (run after first deploy)
+### Seed Commands (run in order after first deploy)
 
 ```bash
-python manage.py seed_org                  # Company + admin user
-python manage.py seed_permissions          # RBAC matrix
-# seed_chart_of_accounts — does NOT exist in this codebase
+python manage.py seed_org                  # Company + admin user + default warehouse + company settings + working days + chart of accounts (11 standard accounts)
+python manage.py seed_permissions          # RBAC matrix (7 modules, 3 roles)
+python manage.py seed_data --count N       # (optional) Bulk test data via faker
 ```
 
 ### Other Management Commands
