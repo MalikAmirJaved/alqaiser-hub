@@ -82,6 +82,7 @@ function resolveStateName(countryCode?: string, stateCode?: string): string {
 /** Load a remote image URL into a base64 data URI */
 async function imageUrlToBase64(url: string): Promise<string> {
   const response = await fetch(url);
+  if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`);
   const blob = await response.blob();
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -328,59 +329,88 @@ async function generatePdf(
   const doc = new jsPDF("p", "mm", "a4");
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
+  const rightMargin = 10; // extra safety for right-aligned text
+  const maxTextWidth = pageWidth - margin - rightMargin - (company.logo || company.logoUrl ? 20 : 0); // reserve space for logo
   let y = margin;
   const locationStr = buildLocationString(company);
 
   // ── Header ──
-  // Company logo (if provided) - load async and add as image, max 14mm height
   const logoSourceUrl = company.logoUrl || company.logo;
+  let textX = margin;
+
   if (logoSourceUrl) {
     try {
       const logoDataUrl = await imageUrlToBase64(logoSourceUrl);
       const logoHeight = 14;
       const logoWidth = 14;
-      // Detect format from data URI
       const format = logoDataUrl.startsWith("data:image/png") ? "PNG" :
                      logoDataUrl.startsWith("data:image/jpeg") ? "JPEG" :
                      logoDataUrl.startsWith("data:image/gif") ? "GIF" :
                      logoDataUrl.startsWith("data:image/webp") ? "WEBP" : "JPEG";
       doc.addImage(logoDataUrl, format, margin, y - 2, logoWidth, logoHeight);
-      // Shift text to the right of the logo
-      const textX = margin + logoWidth + 6;
-      doc.setFontSize(16);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(0);
-      doc.text(company.companyName, textX, y + 2);
-      y += 8;
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(0);
-      if (company.address) {
-        doc.text(company.address, textX, y);
-        y += 3.5;
-      }
-      if (locationStr) {
-        doc.text(locationStr, textX, y);
-        y += 3.5;
-      }
-      const contactParts: string[] = [];
-      if (company.phone) contactParts.push(company.phone);
-      if (company.email) contactParts.push(company.email);
-      if (contactParts.length > 0) {
-        doc.text(contactParts.join("  |  "), textX, y);
-        y += 3.5;
-      }
-      if (company.taxId) {
-        doc.text(`TRN: ${company.taxId}`, textX, y);
-        y += 3.5;
-      }
-      y += 2;
+      textX = margin + logoWidth + 6;
     } catch {
-      // Fallback if logo fails to load - just text
-      y = _renderCompanyText(doc, company, locationStr, margin, y);
+      // Logo failed, fall back to no logo
+      textX = margin;
     }
+  }
+
+  // Render company info with proper wrapping
+  const renderCompanyText = (x: number, startY: number) => {
+    let currentY = startY;
+    const fontSize = 16;
+    doc.setFontSize(fontSize);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0);
+    doc.text(company.companyName, x, currentY);
+    currentY += 6;
+
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0);
+
+    // Address
+    if (company.address) {
+      const lines = doc.splitTextToSize(company.address, maxTextWidth);
+      lines.forEach((line: string) => {
+        doc.text(line, x, currentY);
+        currentY += 3.5;
+      });
+    }
+    // Location
+    if (locationStr) {
+      const lines = doc.splitTextToSize(locationStr, maxTextWidth);
+      lines.forEach((line: string) => {
+        doc.text(line, x, currentY);
+        currentY += 3.5;
+      });
+    }
+    // Contact
+    const contactParts: string[] = [];
+    if (company.phone) contactParts.push(company.phone);
+    if (company.email) contactParts.push(company.email);
+    if (contactParts.length > 0) {
+      const contactLine = contactParts.join("  |  ");
+      const lines = doc.splitTextToSize(contactLine, maxTextWidth);
+      lines.forEach((line: string) => {
+        doc.text(line, x, currentY);
+        currentY += 3.5;
+      });
+    }
+    // Tax ID
+    if (company.taxId) {
+      doc.text(`TRN: ${company.taxId}`, x, currentY);
+      currentY += 3.5;
+    }
+    currentY += 2;
+    return currentY;
+  };
+
+  // If logo is present and we set textX, use that, else use margin
+  if (logoSourceUrl && textX !== margin) {
+    y = renderCompanyText(textX, y);
   } else {
-    y = _renderCompanyText(doc, company, locationStr, margin, y);
+    y = renderCompanyText(margin, y);
   }
 
   // Document type & number (right-aligned)
@@ -555,8 +585,9 @@ async function generatePdf(
     doc.setTextColor(0);
     doc.text("Notes:", margin, nextY);
     nextY += 4;
-    doc.text(docData.notes, margin, nextY, { maxWidth: pageWidth - 2 * margin });
-    nextY += 6;
+    const noteLines = doc.splitTextToSize(docData.notes, pageWidth - 2 * margin);
+    doc.text(noteLines, margin, nextY);
+    nextY += noteLines.length * 4 + 2;
   }
 
   // ── Terms & Conditions ──
@@ -574,25 +605,18 @@ async function generatePdf(
     doc.setFont("helvetica", "normal");
     doc.setTextColor(0);
 
-    // Convert common HTML to readable plain text with structure preserved
+    // Convert HTML to plain text with structure
     let text = termsContent
-      // Replace block-level closing tags with newlines
       .replace(/<\/(?:p|div|li|h[1-6]|blockquote|tr|table)>/gi, "\n")
-      // Replace <br> and <br/> with newlines
       .replace(/<br\s*\/?>/gi, "\n")
-      // Replace <li> with bullet prefix
       .replace(/<li[^>]*>/gi, "  • ")
-      // Replace <td> or <th> with tab-like spacing
       .replace(/<\/(?:td|th)>/gi, "  ")
-      // Strip remaining HTML tags
       .replace(/<[^>]*>/g, "")
-      // Decode common entities
       .replace(/&nbsp;/g, " ")
       .replace(/&amp;/g, "&")
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")
       .replace(/&quot;/g, '"')
-      // Collapse multiple consecutive newlines into max 2
       .replace(/\n{3,}/g, "\n\n")
       .trim();
 
@@ -601,46 +625,6 @@ async function generatePdf(
   }
 
   return doc.output("blob");
-}
-
-// ── Helper: render company text block (no logo) ────
-function _renderCompanyText(
-  doc: jsPDF,
-  company: DocCompany,
-  locationStr: string,
-  margin: number,
-  startY: number,
-): number {
-  let y = startY;
-  doc.setFontSize(16);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(0);
-  doc.text(company.companyName, margin, y);
-  y += 6;
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(0);
-  if (company.address) {
-    doc.text(company.address, margin, y);
-    y += 3.5;
-  }
-  if (locationStr) {
-    doc.text(locationStr, margin, y);
-    y += 3.5;
-  }
-  const contactParts: string[] = [];
-  if (company.phone) contactParts.push(company.phone);
-  if (company.email) contactParts.push(company.email);
-  if (contactParts.length > 0) {
-    doc.text(contactParts.join("  |  "), margin, y);
-    y += 3.5;
-  }
-  if (company.taxId) {
-    doc.text(`TRN: ${company.taxId}`, margin, y);
-    y += 3.5;
-  }
-  y += 2;
-  return y;
 }
 
 // ── Print Preview Modal ────────────────────────────
@@ -666,12 +650,10 @@ export function PrintPreviewModal({
     const contentEl = contentRef.current;
     if (!contentEl) return;
 
-    // Copy all stylesheet link tags from the current page so Tailwind CSS is available
     const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
       .map((link) => link.outerHTML)
       .join('\n');
 
-    // Also copy any inline style tags that contain critical CSS (CSS variables, etc.)
     const inlineStyles = Array.from(document.querySelectorAll('style'))
       .map((s) => s.outerHTML)
       .join('\n');
@@ -704,7 +686,6 @@ export function PrintPreviewModal({
     printWindow.document.close();
     printWindow.focus();
 
-    // Wait for stylesheets to fully load before triggering print
     printWindow.addEventListener('load', () => {
       printWindow.print();
     });
@@ -721,6 +702,9 @@ export function PrintPreviewModal({
       a.download = `${prefix}_${documentProps.data.documentNumber}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+      // Optionally show a toast/error message here
     } finally {
       setPdfLoading(false);
     }
