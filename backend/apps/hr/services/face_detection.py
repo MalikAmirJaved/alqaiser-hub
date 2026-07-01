@@ -28,7 +28,7 @@ PROTOTXT = os.path.join(MODEL_DIR, 'deploy.prototxt')
 CAFFEMODEL = os.path.join(MODEL_DIR, 'res10_300x300_ssd_iter_140000.caffemodel')
 
 # Confidence threshold — only keep detections above this score
-CONFIDENCE_THRESHOLD = 0.5
+CONFIDENCE_THRESHOLD = 0.4
 
 _face_net = None
 
