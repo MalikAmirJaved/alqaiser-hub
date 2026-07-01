@@ -49,14 +49,19 @@ interface PosCatalogResponse {
 }
 
 // ---------- Hook ----------
-export function usePosCatalog(filters: {
-  warehouse_id: string;
-  search?: string;
-  category_id?: string;
-  brand_id?: string;
-  page?: number;
-  page_size?: number;
-}) {
+export function usePosCatalog(
+  filters: {
+    warehouse_id: string;
+    search?: string;
+    category_id?: string;
+    brand_id?: string;
+    page?: number;
+    page_size?: number;
+  },
+  options?: {
+    enabled?: boolean;
+  }
+) {
   const api = useApi();
 
   const params = new URLSearchParams();
@@ -74,6 +79,7 @@ export function usePosCatalog(filters: {
     queryFn: () => api<PosCatalogResponse>(url),
     staleTime: 30_000,
     retry: 1,
+    enabled: options?.enabled ?? true,
   });
 }
 

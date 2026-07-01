@@ -84,7 +84,14 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
     page_size: PAGE_SIZE,
   }), [warehouseId, debouncedSearch, categoryId, brandId, page]);
 
-  const { data: catalogResponse, isLoading, isFetching } = usePosCatalog(catalogFilters);
+  // Only fetch when warehouse is selected to avoid unnecessary API calls with empty warehouse_id
+  const { data: catalogResponse, isLoading, isFetching } = usePosCatalog({
+    ...catalogFilters,
+    // Ensure we have a valid warehouse before fetching
+    warehouse_id: warehouseId || "",
+  }, {
+    enabled: !!warehouseId, // Only fetch when warehouseId is available
+  });
 
   // Accumulate data by page; refetches replace the page entry instead of appending
   useEffect(() => {
@@ -104,10 +111,19 @@ export function ProductSearchPanel({ onAddToCart, warehouseId }: ProductSearchPa
       setTotalVariantCount(0);
       loadingRef.current = false;
       hasContentRef.current = false;
-      return; // ← Prevent storing stale response data with mismatched page
+      // Don't return early - allow the effect to process the new response
     }
 
     if (catalogResponse?.results) {
+      // Only process if response matches current filters (not stale)
+      const isStale =
+        prevFiltersRef.current.warehouseId !== warehouseId ||
+        prevFiltersRef.current.debouncedSearch !== debouncedSearch ||
+        prevFiltersRef.current.categoryId !== categoryId ||
+        prevFiltersRef.current.brandId !== brandId;
+
+      if (isStale) return; // Skip stale response
+
       if (catalogResponse.page === page) {
         const newProducts = catalogResponse.results;
         const newVariants = newProducts.flatMap(p =>

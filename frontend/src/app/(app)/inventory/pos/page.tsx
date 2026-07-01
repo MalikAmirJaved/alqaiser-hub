@@ -118,16 +118,23 @@ export default function SalesPage() {
     }
   }, [cart, activeDraftId]);
 
-  // Prefetch product list on mount for faster initial load
+  // Prefetch POS catalog on mount for faster initial load (only after warehouse is set)
   useEffect(() => {
-    queryClient.prefetchQuery({
-      queryKey: ["inventory_variant", { active_only: true }],
-      queryFn: () => useAllVariantsSimple({ active_only: true }),
-      staleTime: 5 * 60 * 1000,
-    });
-  }, [queryClient]);
+    if (!selectedWarehouse?.id) return;
 
-  // Default to first warehouse
+    const params = new URLSearchParams();
+    params.append("warehouse_id", selectedWarehouse.id);
+    params.append("page", "1");
+    params.append("page_size", "20");
+
+    queryClient.prefetchQuery({
+      queryKey: ["pos_catalog", { warehouse_id: selectedWarehouse.id, search: undefined, category_id: undefined, brand_id: undefined, page: 1, page_size: 20 }],
+      queryFn: () => apiFetch(`/api/inventory/stock/pos-catalog/?${params.toString()}`),
+      staleTime: 30_000,
+    });
+  }, [queryClient, selectedWarehouse]);
+
+  // Default to first warehouse (ensure this runs first)
   useEffect(() => {
     if (warehouses.length > 0 && (!selectedWarehouse || selectedWarehouse === undefined)) {
       setSelectedWarehouse(warehouses[0]);
