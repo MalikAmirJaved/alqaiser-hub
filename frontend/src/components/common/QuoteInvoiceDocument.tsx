@@ -92,6 +92,34 @@ async function imageUrlToBase64(url: string): Promise<string> {
   });
 }
 
+/** Clip a base64 image into a circle (for a rounded logo) and return a PNG data URI */
+async function makeImageCircular(dataUrl: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const size = Math.max(img.width, img.height);
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Canvas not supported"));
+        return;
+      }
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(img, (size - img.width) / 2, (size - img.height) / 2);
+      ctx.restore();
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => reject(new Error("Failed to load logo for rounding"));
+    img.src = dataUrl;
+  });
+}
+
 // ── Document Component ─────────────────────────────
 
 function DocumentContent({
@@ -112,19 +140,35 @@ function DocumentContent({
   );
   const locationStr = buildLocationString(company);
 
+  const logoSrc = company.logo
+    ? `${process.env.NEXT_PUBLIC_API_URL}${company.logo}`
+    : undefined;
+
   return (
-    <div className="bg-white text-gray-900 p-8 max-w-4xl mx-auto font-sans">
+    <div className="relative bg-white text-gray-900 p-8 max-w-4xl mx-auto font-sans overflow-hidden">
+      {/* ── Watermark (full page, behind everything) ──────── */}
+      {logoSrc && (
+        <div
+          className="watermark-logo pointer-events-none select-none absolute inset-0 z-0 flex items-center justify-center"
+          style={{ WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}
+          aria-hidden="true"
+        >
+          <img
+            src={logoSrc}
+            alt=""
+            className="w-2/3 max-w-sm object-contain"
+            style={{ opacity: 0.06 }}
+          />
+        </div>
+      )}
+
+      {/* ── Foreground content ───────────────── */}
+      <div className="relative z-10">
+
       {/* ── Header ───────────────────────────── */}
-      <div className="flex justify-between items-start border-b-2 border-gray-300 pb-6 mb-6">
-        <div className="flex items-start gap-4">
-          {company.logo && (
-            <img
-              src={`${process.env.NEXT_PUBLIC_API_URL}${company.logo}`}
-              alt={`${company.companyName} logo`}
-              className="w-16 h-16 object-contain rounded"
-            />
-          )}
-          <div>
+      <div className="border-b-2 border-gray-300 pb-6 mb-6">
+        <div className="flex justify-between items-center gap-4">
+          <div className="flex-1">
             <h1 className="text-3xl font-bold text-gray-900">{company.companyName}</h1>
             <div className="mt-2 text-sm text-gray-900 space-y-0.5">
               {company.address && <p>{company.address}</p>}
@@ -133,10 +177,19 @@ function DocumentContent({
               {company.taxId && <p>TRN: {company.taxId}</p>}
             </div>
           </div>
-        </div>
-        <div className="text-right shrink-0">
-          <h2 className="text-2xl font-bold text-gray-900">{docType}</h2>
-          <p className="text-sm text-gray-900 mt-1">#{data.documentNumber}</p>
+          {logoSrc && (
+            <div className="flex-shrink-0">
+              <img
+                src={logoSrc}
+                alt={`${company.companyName} logo`}
+                className="header-logo w-20 h-20 object-contain rounded-full border border-gray-200"
+              />
+            </div>
+          )}
+          <div className="flex-1 text-right shrink-0">
+            <h2 className="text-2xl font-bold text-gray-900">{docType}</h2>
+            <p className="text-sm text-gray-900 mt-1">#{data.documentNumber}</p>
+          </div>
         </div>
       </div>
 
@@ -316,6 +369,8 @@ function DocumentContent({
           />
         </div>
       )}
+      </div>
+      {/* end foreground content */}
     </div>
   );
 }
@@ -328,102 +383,117 @@ async function generatePdf(
   const { data: docData, company, termsContent, formatCurrency } = props;
   const doc = new jsPDF("p", "mm", "a4");
   const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 20;
   const rightMargin = 10; // extra safety for right-aligned text
-  const maxTextWidth = pageWidth - margin - rightMargin - (company.logo || company.logoUrl ? 20 : 0); // reserve space for logo
+  const maxTextWidth = pageWidth - margin - rightMargin;
   let y = margin;
   const locationStr = buildLocationString(company);
 
-  // ── Header ──
+  // ── Load logo (original used for watermark; rounded copy used in header) ──
   const logoSourceUrl = company.logoUrl || company.logo;
-  let textX = margin;
+  let logoDataUrl: string | null = null;
+  let headerLogoDataUrl: string | null = null;
+  let logoFormat: "PNG" | "JPEG" | "GIF" | "WEBP" = "PNG";
 
   if (logoSourceUrl) {
     try {
-      const logoDataUrl = await imageUrlToBase64(logoSourceUrl);
-      const logoHeight = 14;
-      const logoWidth = 14;
-      const format = logoDataUrl.startsWith("data:image/png") ? "PNG" :
-                     logoDataUrl.startsWith("data:image/jpeg") ? "JPEG" :
-                     logoDataUrl.startsWith("data:image/gif") ? "GIF" :
-                     logoDataUrl.startsWith("data:image/webp") ? "WEBP" : "JPEG";
-      doc.addImage(logoDataUrl, format, margin, y - 2, logoWidth, logoHeight);
-      textX = margin + logoWidth + 6;
+      logoDataUrl = await imageUrlToBase64(logoSourceUrl);
+      logoFormat = logoDataUrl.startsWith("data:image/png") ? "PNG" :
+                   logoDataUrl.startsWith("data:image/jpeg") ? "JPEG" :
+                   logoDataUrl.startsWith("data:image/gif") ? "GIF" :
+                   logoDataUrl.startsWith("data:image/webp") ? "WEBP" : "JPEG";
+      try {
+        headerLogoDataUrl = await makeImageCircular(logoDataUrl);
+      } catch {
+        headerLogoDataUrl = logoDataUrl; // fall back to the un-rounded logo
+      }
     } catch {
-      // Logo failed, fall back to no logo
-      textX = margin;
+      logoDataUrl = null;
     }
   }
 
-  // Render company info with proper wrapping
-  const renderCompanyText = (x: number, startY: number) => {
-    let currentY = startY;
-    const fontSize = 16;
-    doc.setFontSize(fontSize);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(0);
-    doc.text(company.companyName, x, currentY);
-    currentY += 6;
-
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(0);
-
-    // Address
-    if (company.address) {
-      const lines = doc.splitTextToSize(company.address, maxTextWidth);
-      lines.forEach((line: string) => {
-        doc.text(line, x, currentY);
-        currentY += 3.5;
-      });
+  // ── Watermark: large, faint, centered on the page, drawn behind everything ──
+  const drawWatermark = () => {
+    if (!logoDataUrl) return;
+    try {
+      const wmSize = 120;
+      const wmX = (pageWidth - wmSize) / 2;
+      const wmY = (pageHeight - wmSize) / 2;
+      const anyDoc = doc as any;
+      if (anyDoc.GState && anyDoc.setGState) {
+        anyDoc.saveGraphicsState();
+        anyDoc.setGState(new anyDoc.GState({ opacity: 0.06 }));
+        doc.addImage(logoDataUrl!, logoFormat, wmX, wmY, wmSize, wmSize);
+        anyDoc.restoreGraphicsState();
+      }
+      // If GState isn't available in this jsPDF build, we simply skip the
+      // watermark rather than drawing a solid (too dark) logo on the page.
+    } catch {
+      // Watermark is decorative — never let it break PDF generation.
     }
-    // Location
-    if (locationStr) {
-      const lines = doc.splitTextToSize(locationStr, maxTextWidth);
-      lines.forEach((line: string) => {
-        doc.text(line, x, currentY);
-        currentY += 3.5;
-      });
-    }
-    // Contact
-    const contactParts: string[] = [];
-    if (company.phone) contactParts.push(company.phone);
-    if (company.email) contactParts.push(company.email);
-    if (contactParts.length > 0) {
-      const contactLine = contactParts.join("  |  ");
-      const lines = doc.splitTextToSize(contactLine, maxTextWidth);
-      lines.forEach((line: string) => {
-        doc.text(line, x, currentY);
-        currentY += 3.5;
-      });
-    }
-    // Tax ID
-    if (company.taxId) {
-      doc.text(`TRN: ${company.taxId}`, x, currentY);
-      currentY += 3.5;
-    }
-    currentY += 2;
-    return currentY;
   };
+  drawWatermark();
 
-  // If logo is present and we set textX, use that, else use margin
-  if (logoSourceUrl && textX !== margin) {
-    y = renderCompanyText(textX, y);
-  } else {
-    y = renderCompanyText(margin, y);
+  // ── Header: company info (left), logo (center), doc type & number (right) ──
+  const headerTopY = y;
+  const logoSize = 20;
+  const hasLogo = !!headerLogoDataUrl;
+
+  if (headerLogoDataUrl) {
+    const logoX = (pageWidth - logoSize) / 2;
+    doc.addImage(headerLogoDataUrl, "PNG", logoX, headerTopY, logoSize, logoSize);
   }
 
-  // Document type & number (right-aligned)
-  const docType = docData.type === "QUOTE" ? "QUOTE" : "INVOICE";
+  // Company name & details, left-aligned, capped so it doesn't run into the centered logo
+  const leftMaxWidth = hasLogo
+    ? (pageWidth / 2 - logoSize / 2) - margin - 5
+    : pageWidth - margin - rightMargin - 45;
+  let leftY = headerTopY;
+
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0);
-  doc.text(docType, pageWidth - margin, margin + 2, { align: "right" });
+  doc.text(company.companyName, margin, leftY);
+  leftY += 6;
+
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(0);
+
+  if (company.address) {
+    const lines = doc.splitTextToSize(company.address, leftMaxWidth);
+    lines.forEach((line: string) => { doc.text(line, margin, leftY); leftY += 3.5; });
+  }
+  if (locationStr) {
+    const lines = doc.splitTextToSize(locationStr, leftMaxWidth);
+    lines.forEach((line: string) => { doc.text(line, margin, leftY); leftY += 3.5; });
+  }
+  const contactParts: string[] = [];
+  if (company.phone) contactParts.push(company.phone);
+  if (company.email) contactParts.push(company.email);
+  if (contactParts.length > 0) {
+    const lines = doc.splitTextToSize(contactParts.join("  |  "), leftMaxWidth);
+    lines.forEach((line: string) => { doc.text(line, margin, leftY); leftY += 3.5; });
+  }
+  if (company.taxId) {
+    doc.text(`TRN: ${company.taxId}`, margin, leftY);
+    leftY += 3.5;
+  }
+
+  // Document type & number, right-aligned, top-aligned with the company block
+  const docType = docData.type === "QUOTE" ? "QUOTE" : "INVOICE";
+  doc.setFontSize(15);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0);
+  doc.text(docType, pageWidth - margin, headerTopY + 2, { align: "right" });
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(0);
-  doc.text(`#${docData.documentNumber}`, pageWidth - margin, margin + 8, { align: "right" });
+  doc.text(`#${docData.documentNumber}`, pageWidth - margin, headerTopY + 8, { align: "right" });
 
+  // Divider sits below the tallest of the three header columns
+  y = Math.max(leftY, headerTopY + (hasLogo ? logoSize + 4 : 0), headerTopY + 12) + 4;
   doc.setDrawColor(200);
   doc.line(margin, y, pageWidth - margin, y);
   y += 8;
@@ -667,7 +737,12 @@ export function PrintPreviewModal({
           body { margin: 10mm; }
         }
         * { box-sizing: border-box; }
-        img { max-width: 64px; max-height: 64px; }
+        img.header-logo { max-width: 80px; max-height: 80px; }
+        .watermark-logo, .watermark-logo img {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+          color-adjust: exact;
+        }
       </style>
     `;
 

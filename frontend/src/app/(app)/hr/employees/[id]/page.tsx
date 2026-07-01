@@ -55,6 +55,7 @@ import {
   Tag,
   Percent,
   Eye,
+  Image as ImageIcon,
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { BASE_URL } from "@/lib/api";
@@ -141,6 +142,7 @@ const TABS = [
   { id: "loans", label: "Loans", icon: CreditCard },
   { id: "leaves", label: "Leaves", icon: Calendar },
   { id: "assets", label: "Assets", icon: Package },
+  { id: "images", label: "Images", icon: ImageIcon },
   { id: "documents", label: "Documents", icon: FileText },
   { id: "exit", label: "Exit", icon: LogOut },
 ];
@@ -548,12 +550,52 @@ export default function EmployeeDetailPage() {
       </div>
     ),
 
+    // ── IMAGES ──
+    images: (
+      <div>
+        {(!employee.profile_pictures || employee.profile_pictures.length === 0) ? (
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <ImageIcon className="w-12 h-12 mb-3 opacity-30" />
+            <p className="text-sm">No images uploaded for this employee.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {employee.profile_pictures.map((pic, idx) => (
+              <div
+                key={pic.id || idx}
+                className="group relative aspect-square rounded-xl overflow-hidden border border-border bg-muted/20 cursor-pointer"
+                onClick={() => setDocViewer({ open: true, url: pic.file_url, filename: pic.original_filename || `Image ${idx + 1}`, mimeType: "image/jpeg", title: `${fullName} - Photo ${idx + 1}` })}
+              >
+                <img
+                  src={`${BASE_URL}${pic.file_url_thumb || pic.file_url}`}
+                  alt={pic.original_filename || `Image ${idx + 1}`}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all" />
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Eye className="w-6 h-6 text-white drop-shadow-lg" />
+                </div>
+                {pic.is_primary && (
+                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-primary text-[10px] font-bold text-primary-foreground shadow-md">
+                    PRIMARY
+                  </div>
+                )}
+                <div className="absolute bottom-0 inset-x-0 p-2 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                  <p className="text-[10px] text-white truncate">{pic.original_filename || `Photo ${idx + 1}`}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    ),
+
     // ── DOCUMENTS ──
     documents: (
       <div className="space-y-5">
         {/* Profile Pictures Gallery */}
         {employee.profile_pictures && employee.profile_pictures.length > 0 && (
-          <SectionCard title={`Profile Photos (${employee.profile_pictures.length})`} icon={User}>
+          <SectionCard title={`Profile Photos (${employee.profile_pictures.length})`} icon={ImageIcon}>
             <div className="flex flex-wrap gap-3">
               {employee.profile_pictures.map((pic, idx) => (
                 <div
@@ -632,6 +674,7 @@ export default function EmployeeDetailPage() {
             </div>
           )}
         </SectionCard>
+      </div>
       </div>
     ),
 
