@@ -1,7 +1,7 @@
 "use client";
 
 // components/sales/QuoteFormModal.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { X, Plus, Trash2, Package, Type, FileText, AlertCircle } from "lucide-react";
 import { useServerSearch } from "@/hooks/useServerSearch";
 import { useApi } from "@/hooks/useApi";
@@ -13,6 +13,7 @@ import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { toast } from "sonner";
 
 interface QuoteLine {
+  _key: string;
   variant: string;
   quantity: number;
   unit_price: number;
@@ -28,6 +29,9 @@ interface QuoteLine {
   vendor?: string;
   vendor_name?: string;
 }
+
+let lineKeyCounter = 0;
+const nextLineKey = () => `ql_${++lineKeyCounter}`;
 
 interface QuoteFormModalProps {
   open: boolean;
@@ -95,6 +99,7 @@ export default function QuoteFormModal({
         overall_tax_percent: Number(initialData.overall_tax_percent || 0),
         notes: initialData.notes || "",
         lines: (initialData.lines || []).map((line) => ({
+          _key: nextLineKey(),
           variant: line.variant,
           quantity: line.quantity,
           unit_price: line.unit_price,
@@ -157,10 +162,12 @@ export default function QuoteFormModal({
   };
 
   const addLine = () => {
+    const key = nextLineKey();
     setFormData((prev) => ({
       ...prev,
       lines: [
         {
+          _key: key,
           variant: "",
           quantity: 1,
           unit_price: 0,
@@ -185,34 +192,52 @@ export default function QuoteFormModal({
   };
 
   const updateLine = async (index: number, field: keyof QuoteLine, value: any) => {
-    const newLines = [...formData.lines];
     if (field === "is_manual_entry") {
-      newLines[index] = {
-        ...newLines[index],
-        is_manual_entry: value,
-        variant: value ? "" : newLines[index].variant,
-        manual_variant_name: value ? newLines[index].manual_variant_name : "",
-        manual_variant_sku: value ? newLines[index].manual_variant_sku : "",
-      };
+      setFormData((prev) => {
+        const lines = [...prev.lines];
+        lines[index] = {
+          ...lines[index],
+          is_manual_entry: value,
+          variant: value ? "" : lines[index].variant,
+          manual_variant_name: value ? lines[index].manual_variant_name : "",
+          manual_variant_sku: value ? lines[index].manual_variant_sku : "",
+        };
+        return { ...prev, lines };
+      });
     } else if (field === "variant" && value) {
-      newLines[index] = { ...newLines[index], variant: value };
+      const lineKey = formData.lines[index]?._key;
+      setFormData((prev) => {
+        const lines = [...prev.lines];
+        lines[index] = { ...lines[index], variant: value };
+        return { ...prev, lines };
+      });
       try {
         const variant = await api<VariantDetail>(`/api/inventory/variants/${value}/`);
-        if (variant) {
-          newLines[index] = {
-            ...newLines[index],
-            variant: value,
-            variant_name: variant.product_name,
-            variant_sku: variant.sku,
-            unit_price: variant.selling_price,
-            max_quantity: variant.total_stock,
-          };
+        if (variant && lineKey) {
+          setFormData((prev) => {
+            const lines = [...prev.lines];
+            const idx = lines.findIndex((l) => l._key === lineKey);
+            if (idx === -1) return prev;
+            const line = lines[idx] || {};
+            lines[idx] = {
+              ...line,
+              variant: value,
+              variant_name: variant.product_name,
+              variant_sku: variant.sku,
+              unit_price: line.unit_price || variant.selling_price,
+              max_quantity: variant.total_stock,
+            };
+            return { ...prev, lines };
+          });
         }
       } catch {}
     } else {
-      newLines[index] = { ...newLines[index], [field]: value };
+      setFormData((prev) => {
+        const lines = [...prev.lines];
+        lines[index] = { ...lines[index], [field]: value };
+        return { ...prev, lines };
+      });
     }
-    setFormData((prev) => ({ ...prev, lines: newLines }));
   };
 
   const calculateLineTotal = (line: QuoteLine) => {
@@ -250,6 +275,19 @@ export default function QuoteFormModal({
 
     payload.overall_discount_percent = Number(formData.overall_discount_percent) || 0;
     payload.overall_tax_percent = Number(formData.overall_tax_percent) || 0;
+
+    for (let i = 0; i < payload.lines.length; i++) {
+      const line = payload.lines[i];
+      if (line.is_manual_entry) {
+        if (!line.manual_variant_name?.trim()) {
+          toast.error(`Line ${i + 1}: Item name is required for manual entry.`);
+          return;
+        }
+      } else if (!line.variant) {
+        toast.error(`Line ${i + 1}: Please select a variant.`);
+        return;
+      }
+    }
 
     payload.lines = payload.lines.map((line: any) => {
       const cleaned: any = {
@@ -469,7 +507,7 @@ export default function QuoteFormModal({
                         {formData.lines.map((line, idx) => {
                           const lineTotal = calculateLineTotal(line);
                           return (
-                            <tr key={idx} className="group hover:bg-muted/20 transition-colors">
+                            <tr key={line._key} className="group hover:bg-muted/20 transition-colors">
                               {/* ── Item cell ── */}
                               <td className="px-4 py-3 min-w-[280px] align-bottom">
                                 {/* Entry-mode toggle */}

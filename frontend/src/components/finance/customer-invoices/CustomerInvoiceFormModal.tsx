@@ -449,7 +449,7 @@ export default function CustomerInvoiceFormModal({
   const [showConflictModal, setShowConflictModal] = useState(false);
   const [resolvingAction, setResolvingAction] = useState<"go_to_inventory" | "return_to_vendor" | null>(null);
   const [resolvingLineId, setResolvingLineId] = useState<string | null>(null);
-  const [variantDisplayLabels, setVariantDisplayLabels] = useState<Record<number, string>>({});
+  const [variantDisplayLabels, setVariantDisplayLabels] = useState<Record<string, string>>({});
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [createdSupplierName, setCreatedSupplierName] = useState("");
 
@@ -518,7 +518,7 @@ export default function CustomerInvoiceFormModal({
     }
   };
 
-  const { register, control, handleSubmit, reset, setValue, watch } =
+  const { register, control, handleSubmit, reset, setValue, watch, getValues } =
     useForm<CustomerInvoiceFormData>({
       defaultValues: {
         invoice_number: "",
@@ -534,11 +534,19 @@ export default function CustomerInvoiceFormModal({
     });
 
   const { fields, prepend, remove, update } = useFieldArray({
+
     control,
     name: "lines",
   });
 
   const watchedLines = watch("lines");
+  const subtotal = (watchedLines || []).reduce((s, l) => s + Number(l.quantity) * Number(l.unit_price), 0);
+  const totalDiscount = (watchedLines || []).reduce((s, l) => s + (Number(l.discount_amount) || 0), 0);
+  const totalTax = (watchedLines || []).reduce((s, l) => {
+    const sub = Number(l.quantity) * Number(l.unit_price);
+    const disc = Number(l.discount_amount) || 0;
+    return s + (sub - disc) * ((Number(l.tax_rate) || 0) / 100);
+  }, 0);
 
   const calculateLineTotal = useCallback((line: InvoiceLine) => {
     const subtotal = line.quantity * line.unit_price;
@@ -550,13 +558,6 @@ export default function CustomerInvoiceFormModal({
   const overallDiscountPct = Number(useWatch({ control, name: "overall_discount_percent" })) || 0;
   const overallTaxPct = Number(useWatch({ control, name: "overall_tax_percent" })) || 0;
 
-  const subtotal = (watchedLines || []).reduce((s, l) => s + Number(l.quantity) * Number(l.unit_price), 0);
-  const totalDiscount = (watchedLines || []).reduce((s, l) => s + (Number(l.discount_amount) || 0), 0);
-  const totalTax = (watchedLines || []).reduce((s, l) => {
-    const sub = Number(l.quantity) * Number(l.unit_price);
-    const disc = Number(l.discount_amount) || 0;
-    return s + (sub - disc) * ((Number(l.tax_rate) || 0) / 100);
-  }, 0);
   const overallDiscountAmt = (subtotal || 0) * (overallDiscountPct / 100);
   const totalBeforeTax = (subtotal || 0) - (totalDiscount || 0) - (overallDiscountAmt || 0);
   const overallTaxAmt = (totalBeforeTax || 0) * (overallTaxPct / 100);
@@ -607,13 +608,6 @@ export default function CustomerInvoiceFormModal({
         }))
       );
       setCustomerDisplayLabel((initialData as any).customer_name || "");
-      const labels: Record<number, string> = {};
-      (initialData.lines || []).forEach((line: any, idx: number) => {
-        if (line.variant_name || line.variant_sku) {
-          labels[idx] = line.variant_name || line.variant_sku || "";
-        }
-      });
-      setVariantDisplayLabels(labels);
       setNewCustomerInfo(null);
       setExistingLineIds(new Set((initialData.lines || []).map((l: any) => l.id).filter(Boolean)));
     } else if (defaultValues) {
@@ -627,13 +621,6 @@ export default function CustomerInvoiceFormModal({
       if (defaultValues.notes !== undefined) setValue("notes", defaultValues.notes);
       if (defaultValues.lines !== undefined) setValue("lines", defaultValues.lines as any);
       setCustomerDisplayLabel((defaultValues as any).customer_name || "");
-      const labels: Record<number, string> = {};
-      ((defaultValues as any).lines || []).forEach((line: any, idx: number) => {
-        if (line.variant_name || line.variant_sku) {
-          labels[idx] = line.variant_name || line.variant_sku || "";
-        }
-      });
-      setVariantDisplayLabels(labels);
     } else {
       reset({
         invoice_number: "",
@@ -655,6 +642,17 @@ export default function CustomerInvoiceFormModal({
         .catch(() => {});
     }
   }, [initialData, defaultValues, setValue, reset, open]);
+
+  useEffect(() => {
+    const labels: Record<string, string> = {};
+    fields.forEach((field) => {
+      const line = watchedLines?.[fields.indexOf(field)];
+      if (line?.variant_name || line?.variant_sku) {
+        labels[field.id] = line.variant_name || line.variant_sku || "";
+      }
+    });
+    setVariantDisplayLabels(labels);
+  }, [fields, watchedLines]);
 
   const handleCustomerCreated = async (
     customerId: string,
@@ -701,21 +699,26 @@ export default function CustomerInvoiceFormModal({
           description: value ? currentLines[index].description : "",
         });
       } else if (field === "variant" && value) {
+        const fieldId = fields[index]?.id;
         update(index, { ...currentLines[index], variant: value });
         try {
           const variant = await api<VariantDetail>(`/api/inventory/variants/${value}/`);
-          if (variant) {
-            update(index, {
-              ...currentLines[index],
+          if (variant && fieldId) {
+            const correctIdx = fields.findIndex((f) => f.id === fieldId);
+            if (correctIdx === -1) return;
+            const freshLines = getValues("lines");
+            const freshLine = freshLines?.[correctIdx];
+            update(correctIdx, {
+              ...freshLine,
               variant: value,
               variant_name: variant.product_name,
               variant_sku: variant.sku,
-              unit_price: variant.selling_price,
+              unit_price: freshLine?.unit_price || variant.selling_price,
               max_quantity: variant.total_stock,
             });
             setVariantDisplayLabels((prev) => ({
               ...prev,
-              [index]: `${variant.product_name} (${variant.sku})`,
+              [fieldId]: `${variant.product_name} (${variant.sku})`,
             }));
           }
         } catch {}
@@ -723,7 +726,7 @@ export default function CustomerInvoiceFormModal({
         setValue(`lines.${index}.${field}` as any, value, { shouldDirty: true });
       }
     },
-    [api, update, watch, setValue]
+    [api, update, watch, setValue, getValues, fields]
   );
 
   const toggleManual = useCallback(
@@ -772,6 +775,20 @@ export default function CustomerInvoiceFormModal({
     if (data.lines.length === 0) {
       toast.error("Add at least one line item.");
       return;
+    }
+
+    // ── Variant / manual item name required for every line ──
+    for (let i = 0; i < data.lines.length; i++) {
+      const line = data.lines[i];
+      if (line.is_manual_entry) {
+        if (!line.manual_variant_name?.trim()) {
+          toast.error(`Line ${i + 1}: Item name is required for manual entry.`);
+          return;
+        }
+      } else if (!line.variant) {
+        toast.error(`Line ${i + 1}: Please select a variant.`);
+        return;
+      }
     }
 
     // ── Unit price required for every line ──
@@ -1092,13 +1109,7 @@ export default function CustomerInvoiceFormModal({
                       </thead>
                       <tbody className="divide-y divide-border">
                         {fields.map((field, idx) => {
-                          const currentLine = watchedLines?.[idx] || {
-                            quantity: 1,
-                            unit_price: 0,
-                            discount_amount: 0,
-                            tax_rate: 0,
-                            is_manual_entry: false,
-                          };
+                          const currentLine = (field as any) as InvoiceLine;
                           const isOverStock =
                             !currentLine.is_manual_entry &&
                             currentLine.max_quantity !== undefined &&
@@ -1113,7 +1124,7 @@ export default function CustomerInvoiceFormModal({
                               isOverStock={isOverStock}
                               isExistingLine={isExistingLine(idx)}
                               fetchVariants={fetchVariants}
-                              variantDisplayLabel={variantDisplayLabels[idx] || ""}
+                              variantDisplayLabel={variantDisplayLabels[field.id] || ""}
                               fetchVendors={fetchVendors}
                               onUpdateLine={updateLine}
                               onRemove={handleRemove}
