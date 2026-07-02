@@ -161,11 +161,17 @@ export default function LeadsPanel() {
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
     { name: "status", label: "Status", type: "status", options: leadStatusOptions },
+    { name: "priority", label: "Priority", type: "status", options: [
+      { value: "HOT", label: "Hot" },
+      { value: "WARM", label: "Warm" },
+      { value: "COLD", label: "Cold" },
+    ]},
   ];
 
   const leadFilters = useMemo(() => {
-    const f: { status?: string; search?: string; page?: string } = {};
+    const f: { status?: string; priority?: string; search?: string; page?: string } = {};
     if (filters.status) f.status = filters.status;
+    if (filters.priority) f.priority = filters.priority;
     if (filters.search) f.search = filters.search;
     f.page = String(pagination.page);
     return f;
@@ -326,6 +332,23 @@ export default function LeadsPanel() {
     },
     { key: "source", label: "Source",
       render: (val: string) => <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-muted">{val}</span>,
+    },
+    {
+      key: "priority", label: "Priority", sortable: true,
+      render: (val: string) => {
+        if (!val) return <span className="text-xs text-muted-foreground">—</span>;
+        const colors: Record<string, string> = {
+          HOT: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+          WARM: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+          COLD: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+        };
+        const icons: Record<string, string> = { HOT: "🔥", WARM: "🟡", COLD: "🔵" };
+        return (
+          <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${colors[val] || ""}`}>
+            {icons[val]} {val}
+          </span>
+        );
+      },
     },
     {
       key: "status", label: "Status", sortable: true,

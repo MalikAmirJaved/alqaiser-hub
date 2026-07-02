@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from apps.common.basemodel import BaseModel
 
@@ -27,6 +28,11 @@ class Lead(BaseModel):
         ('REFERRAL', 'Referral'),
         ('OTHER', 'Other'),
     ]
+    PRIORITY_CHOICES = [
+        ('HOT', 'Hot'),
+        ('WARM', 'Warm'),
+        ('COLD', 'Cold'),
+    ]
     LOST_REASON_CHOICES = [
         ('TOO_EXPENSIVE', 'Too Expensive'),
         ('COMPETITOR_SELECTED', 'Competitor Selected'),
@@ -46,6 +52,7 @@ class Lead(BaseModel):
     country = models.CharField(max_length=100, blank=True)
     state = models.CharField(max_length=100, blank=True)
     city = models.CharField(max_length=100, blank=True)
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, blank=True, default='')
     score = models.IntegerField(null=True, blank=True)
     follow_up_date = models.DateField(null=True, blank=True)
     follow_up_notes = models.TextField(blank=True)
@@ -57,7 +64,16 @@ class Lead(BaseModel):
         indexes = [
             models.Index(fields=['company_id', 'branch_id']),
             models.Index(fields=['status']),
+            models.Index(fields=['priority']),
         ]
+
+    def clean(self):
+        if self.score is not None and (self.score < 1 or self.score > 100):
+            raise ValidationError({'score': 'Score must be between 1 and 100.'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         full_name = f"{self.first_name} {self.last_name}".strip()

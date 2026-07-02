@@ -12,6 +12,7 @@ export interface Lead {
   phone: string;
   status: "NEW" | "CONTACTED" | "QUALIFIED" | "FOLLOW_UP" | "CONVERTED" | "LOST";
   source: string;
+  priority: "HOT" | "WARM" | "COLD" | "";
   notes: string;
   address_line: string;
   country: string;
@@ -35,10 +36,11 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-export function useLeads(filters?: { status?: string; search?: string; page?: string }) {
+export function useLeads(filters?: { status?: string; priority?: string; search?: string; page?: string }) {
   const api = useApi();
   const searchParams = new URLSearchParams();
   if (filters?.status) searchParams.append("status", filters.status);
+  if (filters?.priority) searchParams.append("priority", filters.priority);
   if (filters?.search) searchParams.append("search", filters.search);
   if (filters?.page) searchParams.append("page", filters.page);
   const url = `/api/sales/leads/${searchParams.toString() ? `?${searchParams}` : ""}`;

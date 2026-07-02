@@ -21,6 +21,7 @@ const defaultForm = {
   email: "",
   phone: "",
   source: "MANUAL",
+  priority: "" as string,
   notes: "",
   address_line: "",
   country: "",
@@ -44,6 +45,7 @@ export default function LeadFormModal({ open, onClose, initialData, onSuccess }:
         email: initialData.email || "",
         phone: initialData.phone || "",
         source: initialData.source || "MANUAL",
+        priority: initialData.priority || "",
         notes: initialData.notes || "",
         address_line: initialData.address_line || "",
         country: initialData.country || "",
@@ -120,6 +122,15 @@ export default function LeadFormModal({ open, onClose, initialData, onSuccess }:
                 ]} placeholder="Select source" />
             </div>
             <div>
+              <label className="block text-sm font-medium mb-1">Priority</label>
+              <SearchableSelect value={formData.priority} onChange={val => setFormData({ ...formData, priority: val })}
+                options={[
+                  { value: "HOT", label: "🔥 Hot" },
+                  { value: "WARM", label: "🟡 Warm" },
+                  { value: "COLD", label: "🔵 Cold" },
+                ]} placeholder="Select priority" />
+            </div>
+            <div>
               <label className="block text-sm font-medium mb-1">Email</label>
               <input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
@@ -130,9 +141,13 @@ export default function LeadFormModal({ open, onClose, initialData, onSuccess }:
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Score</label>
-              <input type="number" min="0" value={formData.score ?? ""}
-                onChange={e => setFormData({ ...formData, score: e.target.value ? parseInt(e.target.value) : null })}
+              <label className="block text-sm font-medium mb-1">Score (1-100)</label>
+              <input type="number" min="1" max="100" value={formData.score ?? ""}
+                onChange={e => {
+                  const val = e.target.value ? parseInt(e.target.value) : null;
+                  if (val !== null && (val < 1 || val > 100)) return;
+                  setFormData({ ...formData, score: val });
+                }}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
             </div>
           </div>

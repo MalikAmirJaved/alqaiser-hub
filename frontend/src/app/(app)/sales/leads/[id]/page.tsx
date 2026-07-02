@@ -134,7 +134,16 @@ export default function LeadDetailPage() {
             ["Company", lead.company_name || "—"],
             ["Email", lead.email || "—"],
             ["Phone", lead.phone || "—"],
-            ["Score", lead.score !== null && lead.score !== undefined ? String(lead.score) : "—"],
+            ["Priority", lead.priority ? (
+              <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
+                lead.priority === "HOT" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+                lead.priority === "WARM" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
+                "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+              }`}>
+                {lead.priority === "HOT" ? "🔥" : lead.priority === "WARM" ? "🟡" : "🔵"} {lead.priority}
+              </span>
+            ) : "—"],
+            ["Score", lead.score !== null && lead.score !== undefined ? `${lead.score}/100` : "—"],
             ["Source", lead.source],
             ["Status", lead.status],
             ["Address", lead.address_line || "—"],
@@ -199,12 +208,15 @@ export default function LeadDetailPage() {
         data={lead}
         meta={[
           { label: "Source", value: lead.source },
+          { label: "Priority", value: lead.priority || "—" },
           { label: "Email", value: lead.email || "—" },
           { label: "Phone", value: lead.phone || "—" },
         ]}
         summary={[
           { label: "Created", value: new Date(String(lead.created_at)).toLocaleDateString(), isCurrency: false },
           { label: "Status", value: lead.status, tone: statusTone[lead.status] as any || "warning", isCurrency: false },
+          { label: "Priority", value: lead.priority || "—", tone: lead.priority === "HOT" ? "destructive" : lead.priority === "WARM" ? "warning" : lead.priority === "COLD" ? "info" : undefined, isCurrency: false },
+          { label: "Score", value: lead.score != null ? `${lead.score}/100` : "—", isCurrency: false },
           { label: "Converted", value: lead.status === "CONVERTED" ? "Yes" : "No", isCurrency: false },
         ]}
         primaryActionLabel={primaryAction?.label || ""}
@@ -222,32 +234,6 @@ export default function LeadDetailPage() {
                 ["Modified by", lead.updated_by_name || "—"],
               ]}
             />
-            <div className="rounded-xl border border-border bg-card p-4 space-y-2">
-              {(lead.status === "QUALIFIED" || lead.status === "CONVERTED") && (
-                <button onClick={handleCreateQuote}
-                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition">
-                  <FileText className="w-4 h-4" /> Create Quote
-                </button>
-              )}
-              {lead.status === "QUALIFIED" && (
-                <button onClick={() => handleAction("convert")}
-                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border border-border text-sm hover:bg-muted transition">
-                  <UserPlus className="w-4 h-4" /> Convert to Customer
-                </button>
-              )}
-              {(lead.status === "CONTACTED" || lead.status === "QUALIFIED") && (
-                <button onClick={() => { setFollowUpNotes(""); setFollowUpDate(""); setShowFollowUp(true); }}
-                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border border-border text-sm hover:bg-muted transition">
-                  <Calendar className="w-4 h-4" /> Schedule Follow Up
-                </button>
-              )}
-              {lead.status !== "LOST" && lead.status !== "CONVERTED" && (
-                <button onClick={() => { setLostReason(""); setShowLost(true); }}
-                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border border-border text-sm text-destructive hover:bg-destructive/5 transition">
-                  <XCircle className="w-4 h-4" /> Mark Lost
-                </button>
-              )}
-            </div>
           </div>
         }
         currencyFormatter={formatCurrency}

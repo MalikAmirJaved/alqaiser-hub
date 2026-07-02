@@ -22,6 +22,7 @@ class LeadViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMixi
     filter_fields = {
         'status': 'status',
         'source': 'source',
+        'priority': 'priority',
         'search': ['company_name', 'first_name', 'last_name', 'email', 'phone'],
     }
 

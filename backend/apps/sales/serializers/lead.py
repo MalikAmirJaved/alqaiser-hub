@@ -10,13 +10,18 @@ class LeadSerializer(serializers.ModelSerializer):
         model = Lead
         fields = [
             'id', 'title', 'first_name', 'last_name', 'company_name',
-            'email', 'phone', 'source', 'status', 'notes',
+            'email', 'phone', 'source', 'status', 'priority', 'notes',
             'address_line', 'country', 'state', 'city', 'score',
             'follow_up_date', 'follow_up_notes', 'lost_reason',
             'converted_customer_id',
             'created_at', 'updated_at',
         ]
         read_only_fields = ('id', 'created_at', 'updated_at', 'company_id', 'branch_id', 'converted_customer_id')
+
+    def validate_score(self, value):
+        if value is not None and (value < 1 or value > 100):
+            raise serializers.ValidationError("Score must be between 1 and 100.")
+        return value
 
     def create(self, validated_data):
         user = self.context['request'].user
