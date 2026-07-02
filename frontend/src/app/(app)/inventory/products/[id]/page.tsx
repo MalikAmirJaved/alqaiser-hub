@@ -13,7 +13,7 @@ import { useProductRelatedData } from "@/hooks/useProductRelatedData";
 import { format } from "date-fns";
 import { BASE_URL } from "@/lib/api";
 import DocumentViewer from "@/components/reuseable/DocumentViewer";
-import { ArrowUpRight, User, Building2 } from "lucide-react";
+import { ArrowUpRight, User, Building2, Hash, Tag, Barcode, DollarSign, Package, Warehouse, Eye } from "lucide-react";
 
 export default function ProductDetailPage() {
   const router = useRouter();
@@ -157,39 +157,165 @@ export default function ProductDetailPage() {
               product.variants.length === 0 ? (
                 <div className="py-8 text-center text-sm text-muted-foreground">No variants</div>
               ) : (
-                <div className="space-y-3">
-                  {product.variants.map((v) => (
-                    <div key={v.id} className="border border-border rounded-xl overflow-hidden">
-                      <div className="flex items-start justify-between px-4 py-3 bg-muted/10">
-                        <div>
-                          <p className="text-sm font-semibold">
-                            {v.variant_attributes.length > 0
-                              ? v.variant_attributes.map(a => `${a.attribute_key}: ${a.attribute_value}`).join(" · ")
-                              : v.sku}
-                          </p>
-                          <p className="text-xs text-muted-foreground font-mono mt-0.5">SKU: {v.sku}</p>
-                          {v.barcode && <p className="text-xs text-muted-foreground">Barcode: {v.barcode}</p>}
+                <div className="space-y-4">
+                  {product.variants.map((v) => {
+                    const attributes = v.variant_attributes ?? [];
+                    const images = v.variant_images ?? [];
+                    const stockWarehouses = v.stock_by_warehouse ?? [];
+                    const primaryImage = images.find(img => img.is_primary) || images[0];
+
+                    return (
+                      <div key={v.id} className="border border-border rounded-xl overflow-hidden">
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-5 py-4 bg-muted/10 border-b border-border/40">
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            {/* Thumbnail */}
+                            {primaryImage ? (
+                              <img
+                                src={`${BASE_URL}${primaryImage.image_url_thumb || primaryImage.image_url}`}
+                                alt={v.sku}
+                                className="w-12 h-12 rounded-lg object-cover border border-border shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                                onClick={() => setDocViewer({ open: true, url: primaryImage.image_url, filename: `${v.sku} Image`, mimeType: "image/jpeg", title: `${v.sku}` })}
+                              />
+                            ) : (
+                              <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                                <Package className="w-5 h-5 text-muted-foreground" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold truncate">
+                                {v.variant_title || (attributes.length > 0
+                                  ? attributes.map(a => `${a.attribute_key}: ${a.attribute_value}`).join(" · ")
+                                  : v.sku)}
+                              </p>
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                <span className="inline-flex items-center gap-1 text-[10px] font-mono text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
+                                  <Hash className="w-2.5 h-2.5" />
+                                  {v.sku}
+                                </span>
+                                {v.barcode && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-mono text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
+                                    <Barcode className="w-2.5 h-2.5" />
+                                    {v.barcode}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0 ml-4">
+                            <p className="text-base font-bold text-success">{formatCurrency(v.selling_price)}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {v.total_stock} {v.total_stock === 1 ? 'unit' : 'units'} in stock
+                            </p>
+                          </div>
                         </div>
-                        <div className="text-right shrink-0 ml-4">
-                          <p className="text-sm font-bold text-success">{formatCurrency(v.selling_price)}</p>
-                          <p className="text-xs text-muted-foreground mt-1">{v.total_stock} in stock</p>
+
+                        {/* Body */}
+                        <div className="p-5 space-y-4">
+                          {/* Attributes */}
+                          {attributes.length > 0 && (
+                            <div>
+                              <h5 className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2 flex items-center gap-1.5">
+                                <Tag className="w-3 h-3" />
+                                Attributes
+                              </h5>
+                              <div className="flex flex-wrap gap-1.5">
+                                {attributes.map((a) => (
+                                  <span
+                                    key={a.id}
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-muted/50 border border-border text-xs"
+                                  >
+                                    <span className="text-muted-foreground font-medium">{a.attribute_key}:</span>
+                                    <span className="font-semibold">{a.attribute_value}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Pricing & Stock Levels */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {[
+                              { label: 'Selling Price', value: formatCurrency(v.selling_price), icon: DollarSign, color: 'text-success' },
+                              { label: 'Buying Price', value: v.buying_price ? formatCurrency(v.buying_price) : '—', icon: DollarSign, color: 'text-muted-foreground' },
+                              { label: 'Min Stock', value: v.min_stock_level ?? '—', icon: Package, color: v.total_stock <= (v.min_stock_level || 0) ? 'text-destructive' : 'text-muted-foreground' },
+                              { label: 'Max Stock', value: v.max_stock_level ?? '—', icon: Package, color: 'text-muted-foreground' },
+                            ].map(({ label, value, icon: Icon, color }) => (
+                              <div key={label} className="bg-muted/30 rounded-lg p-3">
+                                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mb-1">
+                                  <Icon className="w-3 h-3" />
+                                  {label}
+                                </div>
+                                <p className={`text-sm font-semibold ${color}`}>{value}</p>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Stock by Warehouse */}
+                          {stockWarehouses.length > 0 && (
+                            <div>
+                              <h5 className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2 flex items-center gap-1.5">
+                                <Warehouse className="w-3 h-3" />
+                                Stock by Warehouse
+                              </h5>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {stockWarehouses.map((sw, idx) => (
+                                  <div key={`${sw.warehouse_id}-${idx}`} className="bg-muted/30 rounded-lg p-3 border border-border/40">
+                                    <p className="text-xs font-medium truncate" title={sw.warehouse_name}>{sw.warehouse_name}</p>
+                                    <div className="flex items-center justify-between mt-1.5 text-xs">
+                                      <span className="text-muted-foreground">On hand:</span>
+                                      <span className="font-semibold font-mono">{sw.quantity_on_hand}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs">
+                                      <span className="text-muted-foreground">Reserved:</span>
+                                      <span className="font-semibold font-mono text-warning">{sw.quantity_reserved}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Images Gallery */}
+                          {images.length > 0 && (
+                            <div>
+                              <h5 className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2 flex items-center gap-1.5">
+                                <Eye className="w-3 h-3" />
+                                Images ({images.length})
+                              </h5>
+                              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+                                {images.map((img) => (
+                                  <div
+                                    key={img.id}
+                                    className="group relative aspect-square rounded-lg overflow-hidden border border-border bg-muted/20 cursor-pointer"
+                                    onClick={() => setDocViewer({ open: true, url: img.image_url, filename: `${v.sku} Image`, mimeType: "image/jpeg", title: `${v.sku} — ${img.is_primary ? 'Primary' : `Image ${img.sort_order + 1}`}` })}
+                                  >
+                                    <img
+                                      src={`${BASE_URL}${img.image_url_thumb || img.image_url}`}
+                                      alt={`${v.sku} image ${img.sort_order + 1}`}
+                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                    />
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all" />
+                                    {img.is_primary && (
+                                      <div className="absolute top-1 left-1 px-1 py-0.5 rounded bg-primary/90 text-[8px] font-bold text-primary-foreground shadow">
+                                        PRIMARY
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Timestamps */}
+                          <div className="pt-2 border-t border-border/40 flex items-center gap-4 text-[10px] text-muted-foreground">
+                            <span>Created: {format(new Date(v.created_at), "dd MMM yyyy, HH:mm")}</span>
+                            <span>Updated: {format(new Date(v.updated_at), "dd MMM yyyy, HH:mm")}</span>
+                          </div>
                         </div>
                       </div>
-                      {v.variant_images.length > 0 && (
-                        <div className="px-4 py-3 flex gap-2 border-t border-border/40 overflow-x-auto">
-                          {v.variant_images.map((img) => (
-                            <img
-                              key={img.id}
-                              src={`${BASE_URL}${img.image_url_thumb || img.image_url}`}
-                              alt=""
-                              className="w-12 h-12 object-cover rounded-lg border border-border shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
-                              onClick={() => setDocViewer({ open: true, url: img.image_url, filename: `Variant Image`, mimeType: "image/jpeg", title: `${v.sku} Image` })}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ),
           },
