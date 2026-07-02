@@ -180,6 +180,8 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
             <thead className="text-xs text-muted-foreground border-b border-border bg-surface/40">
               <tr>
                 <th className="px-4 py-2 text-left">Product</th>
+                <th className="px-4 py-2 text-left">Supplier</th>
+                <th className="px-4 py-2 text-right">Cost Price</th>
                 <th className="px-4 py-2 text-right">Quantity</th>
                 <th className="px-4 py-2 text-right">Unit Price</th>
                 <th className="px-4 py-2 text-right">Discount</th>
@@ -204,6 +206,20 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
                         <div className="text-xs text-muted-foreground/70 italic mt-0.5">{(line as any).description}</div>
                       )}
                     </td>
+                    <td className="px-4 py-2 text-sm">
+                      {line.vendor_name ? (
+                        <span className="text-muted-foreground">{line.vendor_name}</span>
+                      ) : (
+                        <span className="text-muted-foreground/40">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right text-sm">
+                      {line.cost_price != null && line.cost_price > 0 ? (
+                        <span className="text-muted-foreground">{formatCurrency(line.cost_price)}</span>
+                      ) : (
+                        <span className="text-muted-foreground/40">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-right">{line.quantity}</td>
                     <td className="px-4 py-2 text-right">{formatCurrency(line.unit_price)}</td>
                     <td className="px-4 py-2 text-right text-destructive">{discount > 0 ? formatCurrency(discount) : "—"}</td>
@@ -221,7 +237,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
               })}
               {(!invoice.lines || invoice.lines.length === 0) && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
                     No items in this invoice
                   </td>
                 </tr>
@@ -231,7 +247,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
               {invoice.lines && invoice.lines.length > 0 && (
                 <>
                   <tr>
-                    <td colSpan={5} className="px-4 py-2 text-right text-sm text-muted-foreground">Subtotal</td>
+                    <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">Subtotal</td>
                     <td className="px-4 py-2 text-right text-sm">
                       {formatCurrency(
                         invoice.lines.reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0)
@@ -240,7 +256,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
                   </tr>
                   {(invoice as any).overall_discount_percent > 0 && (
                     <tr>
-                      <td colSpan={5} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                      <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
                         Discount ({(invoice as any).overall_discount_percent}%)
                       </td>
                       <td className="px-4 py-2 text-right text-sm text-destructive">
@@ -253,7 +269,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
                   )}
                   {(invoice as any).overall_tax_percent > 0 && (
                     <tr>
-                      <td colSpan={5} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                      <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
                         Tax ({(invoice as any).overall_tax_percent}%)
                       </td>
                       <td className="px-4 py-2 text-right text-sm">
@@ -269,7 +285,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
                 </>
               )}
               <tr className="border-t-2 border-border">
-                <td colSpan={5} className="px-4 py-3 text-right font-bold">Total</td>
+                <td colSpan={8} className="px-4 py-3 text-right font-bold">Total</td>
                 <td className="px-4 py-3 text-right font-bold text-primary">{formatCurrency(amount)}</td>
               </tr>
             </tfoot>
