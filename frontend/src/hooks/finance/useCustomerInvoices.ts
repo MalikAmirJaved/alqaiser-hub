@@ -46,7 +46,7 @@ export interface CustomerInvoice {
   outstanding: number | string;
   overall_discount_percent?: number | string;
   overall_tax_percent?: number | string;
-  status: "DRAFT" | "CANCELLED";
+  status: "PENDING" | "SENT" | "DRAFT" | "CANCELLED";
   payment_status?: "UNPAID" | "PARTIAL" | "PAID";
   journal_entry: number | string | null;
   notes: string;
@@ -119,6 +119,12 @@ async function payCustomerInvoice(id: string, body?: Record<string, unknown>) {
   });
 }
 
+async function sendCustomerInvoice(id: string) {
+  return apiFetch<CustomerInvoice>(`/api/finance/customer-invoices/${id}/send_invoice/`, {
+    method: "POST",
+  });
+}
+
 /** @deprecated Use payCustomerInvoice — kept for backward compatibility */
 async function postCustomerInvoice(id: string) {
   return apiFetch<CustomerInvoice>(`/api/finance/customer-invoices/${id}/post_invoice/`, { method: "POST" });
@@ -186,6 +192,17 @@ export function usePayCustomerInvoice() {
     mutationFn: ({ id, body }: { id: string; body?: Record<string, unknown> }) =>
       payCustomerInvoice(id, body),
     onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY, id] });
+    },
+  });
+}
+
+export function useSendInvoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => sendCustomerInvoice(id),
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY, id] });
     },

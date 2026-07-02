@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DetailLayout, StandardSidebar, RelatedRecords, type DetailTab } from "@/components/reuseable/final/DetailLayout";
-import { useCustomerInvoice, useUpdateCustomerInvoice, usePayCustomerInvoice, useCustomerInvoiceAuditLog } from "@/hooks/finance/useCustomerInvoices";
+import { useCustomerInvoice, useUpdateCustomerInvoice, usePayCustomerInvoice, useSendInvoice, useCustomerInvoiceAuditLog } from "@/hooks/finance/useCustomerInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
@@ -12,7 +12,8 @@ import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
 import { StatusBadge } from "@/components/finance/ui";
 import CustomerInvoiceFormModal from "./CustomerInvoiceFormModal";
 import PayAmountModal from "@/components/finance/PayAmountModal";
-import { FileText, Send, Printer, Download, Share2, Receipt, Edit, User, Clock } from "lucide-react";
+import { FileText, Send, Printer, Download, Share2, Receipt, Edit, User, Clock, Mail, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface CustomerInvoiceDetailProps {
   id: string;
@@ -31,7 +32,9 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const { data: invoice, isLoading, refetch } = useCustomerInvoice(id);
   const updateInvoice = useUpdateCustomerInvoice();
   const payInvoice = usePayCustomerInvoice();
-  const permissions = useFeaturePermissions(moduleCode, "customer_invoice");
+  const sendInvoice = useSendInvoice();
+  const resourceName = moduleCode === "SALES" ? "sales_customers_invoice" : "customer_invoice";
+  const permissions = useFeaturePermissions(moduleCode, resourceName);
   const { data: companySettings } = useCompanySettingsQuery();
   const { terms: termsData } = useTermsAndConditions();
   const { data: auditLogs, isLoading: auditLogsLoading } = useCustomerInvoiceAuditLog(id);
@@ -48,10 +51,11 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const amount = toNumber(invoice.amount);
   const paidAmount = toNumber(invoice.paid_amount);
   const outstanding = toNumber(invoice.outstanding);
-  const canPay = invoice.payment_status !== "PAID" && invoice.status !== "CANCELLED";
-  const canEdit = invoice.status === "DRAFT" && permissions.update && invoice.payment_status !== "PAID"
-  const canDelete = invoice.status === "DRAFT" && permissions.delete;
+  const canPay = invoice.status === "SENT" && invoice.payment_status !== "PAID";
+  const canEdit = (invoice.status === "DRAFT" || invoice.status === "PENDING") && permissions.update && invoice.payment_status !== "PAID"
+  const canDelete = (invoice.status === "DRAFT" || invoice.status === "PENDING") && permissions.delete;
   const canRecordPayment = canPay;
+  const canSend = invoice.status === "PENDING" && permissions.send;
 
   const handleEdit = () => {
     setEditingInvoice(invoice);
@@ -66,6 +70,16 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
 
   const handlePay = async () => {
     setPayModalOpen(true);
+  };
+
+  const handleSend = async () => {
+    try {
+      await sendInvoice.mutateAsync(invoice.id);
+      toast.success("Invoice sent successfully");
+      refetch();
+    } catch {
+      /* toast from apiFetch */
+    }
   };
 
   const handlePrint = () => {
@@ -398,7 +412,9 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
       case "PAID": return "success";
       case "UNPAID": return "warning";
       case "PARTIAL": return "warning";
-      case "DRAFT": return "warning";
+      case "DRAFT": return "info";
+      case "PENDING": return "warning";
+      case "SENT": return "info";
       case "CANCELLED": return "destructive";
       default: return "info";
     }
@@ -427,33 +443,55 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
           { label: "Outstanding", value: formatCurrency(outstanding), tone: outstanding > 0 ? "warning" : "success", isCurrency: true },
           { label: "Due Date", value: invoice.due_date, isCurrency: false },
         ]}
-        primaryActionLabel={canPay ? "Pay Invoice" : undefined}
-        onPrimaryAction={canPay ? handlePay : undefined}
+        primaryActionLabel={canSend ? "Send Invoice" : canPay ? "Pay Invoice" : undefined}
+        onPrimaryAction={canSend ? handleSend : canPay ? handlePay : undefined}
         onEdit={canEdit ? handleEdit : undefined}
         onPrint={handlePrint}
         onExport={handleExportPdf}
-        permissions={{ edit: canEdit, submit: canPay }}
+        permissions={{ edit: canEdit, submit: canSend || canPay }}
         tabs={tabs}
         sidebar={
-          <StandardSidebar
-            riskIndicators={[
-              { label: "High value", value: amount > 50000 ? "> $50k" : "Within limit", tone: amount > 50000 ? "warning" : "success" },
-              { label: "Outstanding", value: outstanding > 0 ? `${formatCurrency(outstanding)} due` : "Fully paid", tone: outstanding > 0 ? "warning" : "success" },
-              { label: "Overdue", value: new Date(invoice.due_date) < new Date() && outstanding > 0 ? "Yes" : "No", tone: new Date(invoice.due_date) < new Date() && outstanding > 0 ? "destructive" : "success" },
-              { label: "Source", value: (invoice as any).source_label || "New", tone: "info" },
-            ]}
-            metadata={[
-              ["Invoice #", invoice.invoice_number],
-              ["Created", new Date(invoice.created_at).toLocaleString()],
-              ["Created By", (invoice as any).created_by_label || invoice.created_by_name || "—"],
-              ["Modified", new Date(invoice.updated_at).toLocaleString()],
-              ["Modified By", invoice.updated_by_name || "—"],
-              ["Source", (invoice as any).source_label || "New"],
-              ["Customer", invoice.customer_name || "—"],
-              ["Payment Status", invoice.payment_status || "—"],
-              ["Due Date", invoice.due_date],
-            ]}
-          />
+          <div className="space-y-4">
+            <StandardSidebar
+              riskIndicators={[
+                { label: "High value", value: amount > 50000 ? "> $50k" : "Within limit", tone: amount > 50000 ? "warning" : "success" },
+                { label: "Outstanding", value: outstanding > 0 ? `${formatCurrency(outstanding)} due` : "Fully paid", tone: outstanding > 0 ? "warning" : "success" },
+                { label: "Overdue", value: new Date(invoice.due_date) < new Date() && outstanding > 0 ? "Yes" : "No", tone: new Date(invoice.due_date) < new Date() && outstanding > 0 ? "destructive" : "success" },
+                { label: "Source", value: (invoice as any).source_label || "New", tone: "info" },
+              ]}
+              metadata={[
+                ["Invoice #", invoice.invoice_number],
+                ["Created", new Date(invoice.created_at).toLocaleString()],
+                ["Created By", (invoice as any).created_by_label || invoice.created_by_name || "—"],
+                ["Modified", new Date(invoice.updated_at).toLocaleString()],
+                ["Modified By", invoice.updated_by_name || "—"],
+                ["Source", (invoice as any).source_label || "New"],
+                ["Customer", invoice.customer_name || "—"],
+                ["Payment Status", invoice.payment_status || "—"],
+                ["Due Date", invoice.due_date],
+              ]}
+            />
+            <div className="rounded-xl border border-border bg-card p-4 space-y-2">
+              {canSend && (
+                <button
+                  onClick={handleSend}
+                  disabled={sendInvoice.isPending}
+                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition disabled:opacity-50"
+                >
+                  {sendInvoice.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                  Send Invoice
+                </button>
+              )}
+              {canPay && (
+                <button
+                  onClick={handlePay}
+                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 transition"
+                >
+                  <Receipt className="w-4 h-4" /> Record Payment
+                </button>
+              )}
+            </div>
+          </div>
         }
         currencyFormatter={formatCurrency}
       />

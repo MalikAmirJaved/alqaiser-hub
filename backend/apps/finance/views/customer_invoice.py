@@ -97,8 +97,8 @@ class CustomerInvoiceViewSet(
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
-        if instance.status != 'DRAFT':
-            return Response({'error': 'Only DRAFT invoices can be updated.'}, status=status.HTTP_400_BAD_REQUEST)
+        if instance.status not in ('DRAFT', 'PENDING'):
+            return Response({'error': 'Only DRAFT or PENDING invoices can be updated.'}, status=status.HTTP_400_BAD_REQUEST)
         if instance.payment_status == 'PAID':
             return Response({'error': 'Cannot edit a paid invoice.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
@@ -139,9 +139,9 @@ class CustomerInvoiceViewSet(
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        if instance.status != 'DRAFT':
+        if instance.status not in ('DRAFT', 'PENDING'):
             return Response(
-                {'error': 'Only DRAFT invoices can be deleted'},
+                {'error': 'Only DRAFT or PENDING invoices can be deleted'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if instance.payment_status == 'PAID':
@@ -179,6 +179,20 @@ class CustomerInvoiceViewSet(
         """Record a payment against an invoice (books JE on first payment)."""
         invoice = self.get_object()
         return self._pay_invoice(invoice, request)
+
+    @action(detail=True, methods=['post'])
+    def send_invoice(self, request, _id=None):
+        """Mark invoice as SENT (PENDING → SENT)."""
+        invoice = self.get_object()
+        if invoice.status != 'PENDING':
+            return Response({'error': f"Cannot send invoice with status '{invoice.status}'"}, status=status.HTTP_400_BAD_REQUEST)
+        invoice.status = 'SENT'
+        invoice.save(update_fields=['status', 'updated_at'])
+        return Response({
+            'status': 'success',
+            'message': 'Invoice marked as Sent',
+            'data': self.get_serializer(invoice).data,
+        })
 
     @action(detail=True, methods=['post'])
     def resolve_reduction(self, request, _id=None):

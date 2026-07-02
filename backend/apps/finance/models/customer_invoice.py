@@ -23,10 +23,12 @@ class CustomerInvoice(PayableModelMixin, BaseModel):
     status = models.CharField(
         max_length=20,
         choices=[
+            ('PENDING', 'Pending'),
+            ('SENT', 'Sent'),
             ('DRAFT', 'Draft'),
             ('CANCELLED', 'Cancelled'),
         ],
-        default='DRAFT',
+        default='PENDING',
     )
     payment_method = models.CharField(
         max_length=20,

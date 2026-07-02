@@ -38,12 +38,15 @@ interface Actions<T> {
   onEdit?: (item: T) => void;
   onDelete?: (item: T) => void;
   onPost?: (item: T) => void;
+  onSend?: (item: T) => void;
   onPrint?: (item: T) => void;
   canEdit?: (item: T) => boolean;
   canDelete?: (item: T) => boolean;
   canPost?: (item: T) => boolean;
+  canSend?: (item: T) => boolean;
   canPrint?: (item: T) => boolean;
   postLabel?: string;
+  sendLabel?: string;
 }
 
 
@@ -194,7 +197,7 @@ export function DynamicModulePage<T>({
     });
   };
 
-  const showActionsColumn = (actions?.onEdit || actions?.onDelete || actions?.onPost || actions?.onPrint) && (permissions.update || permissions.delete);
+  const showActionsColumn = (actions?.onEdit || actions?.onDelete || actions?.onPost || actions?.onSend || actions?.onPrint) && (permissions.update || permissions.delete);
   const showCheckboxColumn = permissions.delete || onRowSelect;
 
   return (
@@ -369,6 +372,20 @@ export function DynamicModulePage<T>({
                                     title="Print"
                                   >
                                     <Printer className="w-4 h-4" />
+                                  </button>
+                                )}
+                              {actions?.onSend &&
+                                permissions.update &&
+                                (actions.canSend?.(item) ?? true) && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      actions.onSend!(item);
+                                    }}
+                                    className="p-1 rounded-md hover:bg-muted text-primary"
+                                    title={actions.sendLabel ?? "Send"}
+                                  >
+                                    <Send className="w-4 h-4" />
                                   </button>
                                 )}
                               {actions?.onPost &&
