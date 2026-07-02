@@ -42,7 +42,8 @@ export const routePermissions: Record<string, string> = {
   "/inventory/reports":     "INVENTORY:report:view",
   "/inventory/alerts":      "INVENTORY:alert:view",
   "/inventory/customers":   "INVENTORY:customer:view",
-  "/inventory/pos":         "INVENTORY:sales_order:view",
+  "/inventory/pos":                "INVENTORY:sales_order:view",
+  "/inventory/pos/sales-orders":   "INVENTORY:sales_order:view",
   "/inventory/audit":       "INVENTORY:audit_log:view",
 
   // Sales

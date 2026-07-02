@@ -148,6 +148,7 @@ export default function LeadsPanel() {
   const [lostLead, setLostLead] = useState<Lead | null>(null);
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
   const [quoteCustomerId, setQuoteCustomerId] = useState<string | null>(null);
+  const [quoteLeadId, setQuoteLeadId] = useState<string | null>(null);
 
   const leadStatusOptions = [
     { value: "NEW", label: "New" },
@@ -211,6 +212,7 @@ export default function LeadsPanel() {
   };
 
   const handleCreateQuote = async (lead: Lead) => {
+    setQuoteLeadId(lead.id);
     if (lead.status === "CONVERTED") {
       setQuoteCustomerId(lead.converted_customer_id || null);
       setQuoteModalOpen(true);
@@ -226,6 +228,7 @@ export default function LeadsPanel() {
   const handleQuoteModalSuccess = () => {
     setQuoteModalOpen(false);
     setQuoteCustomerId(null);
+    setQuoteLeadId(null);
     refetch();
   };
 
@@ -410,8 +413,9 @@ export default function LeadsPanel() {
 
       <QuoteFormModal
         open={quoteModalOpen}
-        onClose={() => { setQuoteModalOpen(false); setQuoteCustomerId(null); }}
+        onClose={() => { setQuoteModalOpen(false); setQuoteCustomerId(null); setQuoteLeadId(null); }}
         initialCustomerId={quoteCustomerId}
+        initialLeadId={quoteLeadId}
         onSuccess={handleQuoteModalSuccess}
       />
 

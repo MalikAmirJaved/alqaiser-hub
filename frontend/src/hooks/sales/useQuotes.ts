@@ -34,6 +34,7 @@ export interface Quote {
   overall_discount_percent?: number | string;
   overall_tax_percent?: number | string;
   status: "DRAFT" | "SENT" | "VIEWED" | "APPROVED" | "REJECTED" | "CONVERTED";
+  source?: string;
   notes: string;
   lines: QuoteLine[];
   created_at?: string;

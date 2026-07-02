@@ -38,6 +38,7 @@ interface QuoteFormModalProps {
   onClose: () => void;
   initialData?: Quote | null;
   initialCustomerId?: string | null;
+  initialLeadId?: string | null;
   onSuccess?: (quote?: Quote) => void;
 }
 
@@ -46,6 +47,7 @@ export default function QuoteFormModal({
   onClose,
   initialData,
   initialCustomerId,
+  initialLeadId,
   onSuccess,
 }: QuoteFormModalProps) {
   const formatCurrency = useFormatCurrency();
@@ -86,6 +88,7 @@ export default function QuoteFormModal({
     overall_discount_percent: 0,
     overall_tax_percent: 0,
     notes: "",
+    lead: "",
     lines: [] as QuoteLine[],
   });
 
@@ -98,6 +101,7 @@ export default function QuoteFormModal({
         overall_discount_percent: Number(initialData.overall_discount_percent || 0),
         overall_tax_percent: Number(initialData.overall_tax_percent || 0),
         notes: initialData.notes || "",
+        lead: initialData.lead || "",
         lines: (initialData.lines || []).map((line) => ({
           _key: nextLineKey(),
           variant: line.variant,
@@ -125,12 +129,17 @@ export default function QuoteFormModal({
     if (initialCustomerId && !initialData && open) {
       setFormData((prev) => ({ ...prev, customer: initialCustomerId }));
       setNewCustomerInfo(null);
-      // Fetch customer name for the displayLabel
       api(`/api/inventory/customers/${initialCustomerId}/`)
         .then((c: any) => setCustomerDisplayLabel(c.name || ""))
         .catch(() => {});
     }
   }, [initialCustomerId, initialData, open]);
+
+  useEffect(() => {
+    if (initialLeadId && !initialData && open) {
+      setFormData((prev) => ({ ...prev, lead: initialLeadId }));
+    }
+  }, [initialLeadId, initialData, open]);
 
   const resetForm = () => {
     setFormData({
@@ -140,6 +149,7 @@ export default function QuoteFormModal({
       overall_discount_percent: 0,
       overall_tax_percent: 0,
       notes: "",
+      lead: "",
       lines: [],
     });
     setNewCustomerInfo(null);

@@ -250,6 +250,7 @@ export default function LeadDetailPage() {
         open={quoteModalOpen}
         onClose={() => { setQuoteModalOpen(false); setQuoteCustomerId(null); }}
         initialCustomerId={quoteCustomerId}
+        initialLeadId={lead.id}
         onSuccess={handleQuoteModalSuccess}
       />
 

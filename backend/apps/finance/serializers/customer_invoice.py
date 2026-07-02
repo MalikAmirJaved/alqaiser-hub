@@ -92,6 +92,10 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
     customer_name = serializers.SerializerMethodField()
     customer_email = serializers.SerializerMethodField()
     customer_phone = serializers.SerializerMethodField()
+    created_by_name = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
+    source_label = serializers.SerializerMethodField()
+    created_by_label = serializers.SerializerMethodField()
     lines = CustomerInvoiceLineSerializer(many=True, required=False)
     payments = serializers.SerializerMethodField()
     
@@ -131,6 +135,22 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
 
     def get_customer_phone(self, obj):
         return obj.customer.phone if obj.customer else None
+
+    def get_created_by_name(self, obj):
+        return obj.created_by.username if obj.created_by else None
+
+    def get_updated_by_name(self, obj):
+        return obj.updated_by.username if obj.updated_by else None
+
+    def get_source_label(self, obj):
+        if obj.source_quotes.exists():
+            return "From Quote"
+        return "New"
+
+    def get_created_by_label(self, obj):
+        name = obj.created_by.username if obj.created_by else None
+        src = obj.source or 'new'
+        return f"{name} ({src})" if name else None
 
     def get_payments(self, obj):
         from apps.finance.services.payable import get_payments_queryset

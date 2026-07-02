@@ -70,6 +70,10 @@ class QuoteSerializer(serializers.ModelSerializer):
     customer_name = serializers.SerializerMethodField()
     customer_email = serializers.SerializerMethodField()
     customer_phone = serializers.SerializerMethodField()
+    created_by_name = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
+    source_label = serializers.SerializerMethodField()
+    created_by_label = serializers.SerializerMethodField()
     new_customer = CustomerSerializer(required=False, write_only=True)
     converted_invoice = serializers.UUIDField(source='converted_invoice._id', read_only=True, allow_null=True)
     converted_invoice_number = serializers.CharField(source='converted_invoice.invoice_number', read_only=True, allow_null=True)
@@ -80,6 +84,7 @@ class QuoteSerializer(serializers.ModelSerializer):
             'id', 'quote_number', 'lead', 'customer', 'customer_name', 'customer_email', 'customer_phone', 'new_customer',
             'date', 'expiration_date', 'total_amount', 'overall_discount_percent', 'overall_tax_percent', 'status', 'source',
             'notes', 'lines', 'created_at', 'updated_at',
+            'created_by_name', 'updated_by_name', 'source_label', 'created_by_label',
             'converted_invoice', 'converted_invoice_number',
         ]
         read_only_fields = ('id', 'quote_number', 'created_at', 'updated_at', 'company_id', 'branch_id', 'total_amount', 'status')
@@ -92,6 +97,20 @@ class QuoteSerializer(serializers.ModelSerializer):
 
     def get_customer_phone(self, obj):
         return obj.customer.phone if obj.customer else None
+
+    def get_created_by_name(self, obj):
+        return obj.created_by.username if obj.created_by else None
+
+    def get_updated_by_name(self, obj):
+        return obj.updated_by.username if obj.updated_by else None
+
+    def get_source_label(self, obj):
+        return "From Lead" if obj.lead else "New"
+
+    def get_created_by_label(self, obj):
+        name = obj.created_by.username if obj.created_by else None
+        src = obj.source or 'new'
+        return f"{name} ({src})" if name else None
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)

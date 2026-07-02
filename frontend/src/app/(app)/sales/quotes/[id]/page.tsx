@@ -204,24 +204,44 @@ export default function QuoteDetailPage() {
       id: "overview",
       label: "Details",
       render: () => (
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          {[
-            ["Quote Number", quote.quote_number],
-            ["Customer", quote.customer_name || "—"],
-            ["Date", quote.date],
-            ["Expiration Date", quote.expiration_date || "—"],
-            ["Discount %", (quote as any).overall_discount_percent ? `${(quote as any).overall_discount_percent}%` : "—"],
-            ["Tax %", (quote as any).overall_tax_percent ? `${(quote as any).overall_tax_percent}%` : "—"],
-            ["Status", quote.status],
-            ["Notes", quote.notes || "—"],
-            ["Created", new Date(String(quote.created_at)).toLocaleDateString()],
-            ["Last Updated", new Date(String(quote.updated_at)).toLocaleDateString()],
-          ].map(([label, value]) => (
-            <div key={label as string} className="flex justify-between border-b border-border/60 pb-2">
-              <span className="text-muted-foreground">{label}</span>
-              <span className="font-medium">{value}</span>
+        <div className="space-y-6">
+          <div>
+            <h4 className="text-sm font-medium text-muted-foreground mb-3">Quote Information</h4>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              {[
+                ["Quote Number", quote.quote_number],
+                ["Customer", quote.customer_name || "—"],
+                ["Date", quote.date],
+                ["Expiration Date", quote.expiration_date || "—"],
+                ["Discount %", (quote as any).overall_discount_percent ? `${(quote as any).overall_discount_percent}%` : "—"],
+                ["Tax %", (quote as any).overall_tax_percent ? `${(quote as any).overall_tax_percent}%` : "—"],
+                ["Status", quote.status],
+                ["Notes", quote.notes || "—"],
+              ].map(([label, value]) => (
+                <div key={label as string} className="flex justify-between border-b border-border/60 pb-2">
+                  <span className="text-muted-foreground">{label}</span>
+                  <span className="font-medium">{value}</span>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
+          <div>
+            <h4 className="text-sm font-medium text-muted-foreground mb-3">Source & Origin</h4>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              {[
+                ["Source", (quote as any).source_label || (quote.lead ? "From Lead" : "New")],
+                ["Created By", (quote as any).created_by_label || quote.created_by_name || "—"],
+                ["Created At", quote.created_at ? new Date(String(quote.created_at)).toLocaleString() : "—"],
+                ["Modified By", quote.updated_by_name || "—"],
+                ["Modified At", quote.updated_at ? new Date(String(quote.updated_at)).toLocaleString() : "—"],
+              ].map(([label, value]) => (
+                <div key={label as string} className="flex justify-between border-b border-border/60 pb-2">
+                  <span className="text-muted-foreground">{label}</span>
+                  <span className="font-medium">{value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       ),
     },
@@ -296,11 +316,21 @@ export default function QuoteDetailPage() {
         tabs={tabs}
         sidebar={
           <StandardSidebar
+            riskIndicators={[
+              { label: "Source", value: (quote as any).source_label || "New", tone: "info" },
+              { label: "Status", value: quote.status, tone: quote.status === "APPROVED" || quote.status === "CONVERTED" ? "success" : quote.status === "REJECTED" ? "destructive" : "warning" },
+              { label: "Amount", value: formatCurrency(quote.total_amount), tone: "info" },
+            ]}
             metadata={[
+              ["Quote #", quote.quote_number],
               ["Created", new Date(String(quote.created_at)).toLocaleString()],
-              ["Created by", quote.created_by_name || "—"],
+              ["Created By", (quote as any).created_by_label || quote.created_by_name || "—"],
               ["Modified", new Date(String(quote.updated_at)).toLocaleString()],
-              ["Modified by", quote.updated_by_name || "—"],
+              ["Modified By", quote.updated_by_name || "—"],
+              ["Source", (quote as any).source_label || "New"],
+              ["Customer", quote.customer_name || "—"],
+              ["Lead Linked", quote.lead ? "Yes" : "No"],
+              ["Status", quote.status],
             ]}
           />
         }

@@ -285,7 +285,7 @@ export default function CustomerDetail({ id, moduleCode, onBack }: CustomerDetai
     </Link>
   );
   const orderActions = (row: Record<string, unknown>) => (
-    <Link href={`/inventory/sales-orders/${row.id as string}`}>
+    <Link href={`/inventory/pos/sales-orders/${row.id as string}`}>
       <button className="text-xs text-primary hover:underline">View</button>
     </Link>
   );

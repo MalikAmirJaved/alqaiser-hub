@@ -212,28 +212,51 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
     {
       id: "overview",
       label: "Details",
-      render: () => (
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          {[
-            ["Invoice Number", invoice.invoice_number],
-            ["Customer", invoice.customer_name || "—"],
-            ["Invoice Date", invoice.invoice_date],
-            ["Due Date", invoice.due_date],
-            ["Discount %", (invoice as any).overall_discount_percent ? `${(invoice as any).overall_discount_percent}%` : "—"],
-            ["Tax %", (invoice as any).overall_tax_percent ? `${(invoice as any).overall_tax_percent}%` : "—"],
-            ["Status", invoice.status],
-            ["Source", invoice.source || "Manual"],
-            ["Payment Method", invoice.payment_method || "—"],
-            ["Created", new Date(invoice.created_at).toLocaleDateString()],
-            ["Last Updated", new Date(invoice.updated_at).toLocaleDateString()],
-          ].map(([label, value]) => (
-            <div key={label as string} className="flex justify-between border-b border-border/60 pb-2">
-              <span className="text-muted-foreground">{label}</span>
-              <span className="font-medium">{value}</span>
+      render: () => {
+        const sourceLabel = (invoice as any).source_label || "New";
+        return (
+          <div className="space-y-6">
+            <div>
+              <h4 className="text-sm font-medium text-muted-foreground mb-3">Invoice Information</h4>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                {[
+                  ["Invoice Number", invoice.invoice_number],
+                  ["Customer", invoice.customer_name || "—"],
+                  ["Invoice Date", invoice.invoice_date],
+                  ["Due Date", invoice.due_date],
+                  ["Discount %", (invoice as any).overall_discount_percent ? `${(invoice as any).overall_discount_percent}%` : "—"],
+                  ["Tax %", (invoice as any).overall_tax_percent ? `${(invoice as any).overall_tax_percent}%` : "—"],
+                  ["Status", invoice.status],
+                  ["Payment Method", invoice.payment_method || "—"],
+                  ["Notes", invoice.notes || "—"],
+                ].map(([label, value]) => (
+                  <div key={label as string} className="flex justify-between border-b border-border/60 pb-2">
+                    <span className="text-muted-foreground">{label}</span>
+                    <span className="font-medium">{value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
-        </div>
-      ),
+            <div>
+              <h4 className="text-sm font-medium text-muted-foreground mb-3">Source & Origin</h4>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                {[
+                  ["Source", sourceLabel],
+                  ["Created By", (invoice as any).created_by_label || invoice.created_by_name || "—"],
+                  ["Created At", new Date(invoice.created_at).toLocaleString()],
+                  ["Modified By", invoice.updated_by_name || "—"],
+                  ["Modified At", new Date(invoice.updated_at).toLocaleString()],
+                ].map(([label, value]) => (
+                  <div key={label as string} className="flex justify-between border-b border-border/60 pb-2">
+                    <span className="text-muted-foreground">{label}</span>
+                    <span className="font-medium">{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      },
     },
   ];
 
@@ -417,13 +440,18 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
               { label: "High value", value: amount > 50000 ? "> $50k" : "Within limit", tone: amount > 50000 ? "warning" : "success" },
               { label: "Outstanding", value: outstanding > 0 ? `${formatCurrency(outstanding)} due` : "Fully paid", tone: outstanding > 0 ? "warning" : "success" },
               { label: "Overdue", value: new Date(invoice.due_date) < new Date() && outstanding > 0 ? "Yes" : "No", tone: new Date(invoice.due_date) < new Date() && outstanding > 0 ? "destructive" : "success" },
+              { label: "Source", value: (invoice as any).source_label || "New", tone: "info" },
             ]}
             metadata={[
+              ["Invoice #", invoice.invoice_number],
               ["Created", new Date(invoice.created_at).toLocaleString()],
-              ["Created by", invoice.created_by_name || "System"],
+              ["Created By", (invoice as any).created_by_label || invoice.created_by_name || "—"],
               ["Modified", new Date(invoice.updated_at).toLocaleString()],
-              ["Modified by", invoice.updated_by_name || "System"],
-              ["Source", invoice.source || "Manual"],
+              ["Modified By", invoice.updated_by_name || "—"],
+              ["Source", (invoice as any).source_label || "New"],
+              ["Customer", invoice.customer_name || "—"],
+              ["Payment Status", invoice.payment_status || "—"],
+              ["Due Date", invoice.due_date],
             ]}
           />
         }
