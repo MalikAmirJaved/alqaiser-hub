@@ -17,8 +17,8 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-MIN_WIDTH = 300
-MIN_HEIGHT = 300
+MIN_WIDTH = 640
+MIN_HEIGHT = 640
 MAX_WIDTH = 5000
 MAX_HEIGHT = 7000
 
