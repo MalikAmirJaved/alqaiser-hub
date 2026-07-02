@@ -101,6 +101,8 @@ CUSTOM_ACTION_TO_PERMISSION: dict[str, str] = {
     # ── Finance ────────────────────────────────────────────────────
     "pay":              "pay",
     "send_invoice":     "send",
+    "cancel_invoice":   "cancel",
+    "refund_payments":  "refund",
     "recompute_sales":  "recompute_sales",
     "recompute_stock":  "recompute_stock",
 

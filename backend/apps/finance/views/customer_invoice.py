@@ -195,6 +195,44 @@ class CustomerInvoiceViewSet(
         })
 
     @action(detail=True, methods=['post'])
+    def cancel_invoice(self, request, _id=None):
+        """Cancel invoice and reverse all side-effects (stock, supplier bills, journal entries)."""
+        invoice = self.get_object()
+        reason = request.data.get('reason', '')
+        if not reason or not reason.strip():
+            return Response({'error': 'Cancellation reason is required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from apps.finance.services.cancel_invoice import cancel_customer_invoice
+            success, message = cancel_customer_invoice(invoice, request.user, reason=reason)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        if not success:
+            return Response({'error': message}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'status': 'success',
+            'message': message,
+            'data': self.get_serializer(invoice).data,
+        })
+
+    @action(detail=True, methods=['post'])
+    def refund_payments(self, request, _id=None):
+        """Cancel all confirmed payments for this invoice and reverse their effects."""
+        invoice = self.get_object()
+        try:
+            from apps.finance.services.cancel_invoice import refund_invoice_payments
+            success, message = refund_invoice_payments(invoice, request.user)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        if not success:
+            return Response({'error': message}, status=status.HTTP_400_BAD_REQUEST)
+        invoice.refresh_from_db()
+        return Response({
+            'status': 'success',
+            'message': message,
+            'data': self.get_serializer(invoice).data,
+        })
+
+    @action(detail=True, methods=['post'])
     def resolve_reduction(self, request, _id=None):
         """Resolve a reduction conflict on a manual invoice line."""
         invoice = self.get_object()

@@ -175,7 +175,10 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
       key: "payment_status",
       label: "Payment",
       sortable: true,
-      render: (val: string) => <StatusBadge status={val || "UNPAID"} />,
+      render: (val: string, row: any) => {
+        const hasRefund = row.payments?.some((p: any) => p.payment_type === "PAYMENT" && p.status === "CONFIRMED");
+        return <StatusBadge status={hasRefund ? "REFUNDED" : val || "UNPAID"} />;
+      },
     },
   ];
 

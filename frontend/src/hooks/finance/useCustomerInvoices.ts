@@ -125,6 +125,19 @@ async function sendCustomerInvoice(id: string) {
   });
 }
 
+async function cancelCustomerInvoice(id: string, reason?: string) {
+  return apiFetch<CustomerInvoice>(`/api/finance/customer-invoices/${id}/cancel_invoice/`, {
+    method: "POST",
+    body: JSON.stringify({ reason: reason || "" }),
+  });
+}
+
+async function refundInvoicePayments(id: string) {
+  return apiFetch<CustomerInvoice>(`/api/finance/customer-invoices/${id}/refund_payments/`, {
+    method: "POST",
+  });
+}
+
 /** @deprecated Use payCustomerInvoice — kept for backward compatibility */
 async function postCustomerInvoice(id: string) {
   return apiFetch<CustomerInvoice>(`/api/finance/customer-invoices/${id}/post_invoice/`, { method: "POST" });
@@ -202,6 +215,28 @@ export function useSendInvoice() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => sendCustomerInvoice(id),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY, id] });
+    },
+  });
+}
+
+export function useCancelInvoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason?: string }) => cancelCustomerInvoice(id, reason),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY, id] });
+    },
+  });
+}
+
+export function useRefundInvoicePayments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => refundInvoicePayments(id),
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY, id] });

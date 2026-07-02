@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DetailLayout, StandardSidebar, RelatedRecords, type DetailTab } from "@/components/reuseable/final/DetailLayout";
-import { useCustomerInvoice, useUpdateCustomerInvoice, usePayCustomerInvoice, useSendInvoice, useCustomerInvoiceAuditLog } from "@/hooks/finance/useCustomerInvoices";
+import { useCustomerInvoice, useUpdateCustomerInvoice, usePayCustomerInvoice, useSendInvoice, useCancelInvoice, useRefundInvoicePayments, useCustomerInvoiceAuditLog } from "@/hooks/finance/useCustomerInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
@@ -12,7 +12,7 @@ import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
 import { StatusBadge } from "@/components/finance/ui";
 import CustomerInvoiceFormModal from "./CustomerInvoiceFormModal";
 import PayAmountModal from "@/components/finance/PayAmountModal";
-import { FileText, Send, Printer, Download, Share2, Receipt, Edit, User, Clock, Mail, Loader2 } from "lucide-react";
+import { FileText, Send, Printer, Download, Share2, Receipt, Edit, User, Clock, Mail, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 
 interface CustomerInvoiceDetailProps {
@@ -30,9 +30,12 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const { data: invoice, isLoading, refetch } = useCustomerInvoice(id);
+  console.log("invoice:: ", invoice)
   const updateInvoice = useUpdateCustomerInvoice();
   const payInvoice = usePayCustomerInvoice();
   const sendInvoice = useSendInvoice();
+  const cancelInvoice = useCancelInvoice();
+  const refundPayments = useRefundInvoicePayments();
   const resourceName = moduleCode === "SALES" ? "sales_customers_invoice" : "customer_invoice";
   const permissions = useFeaturePermissions(moduleCode, resourceName);
   const { data: companySettings } = useCompanySettingsQuery();
@@ -44,6 +47,8 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const [posting, setPosting] = useState(false);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [payModalOpen, setPayModalOpen] = useState(false);
+  const [refundModalOpen, setRefundModalOpen] = useState(false);
+  const [refundReason, setRefundReason] = useState("");
 
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!invoice) return <div className="p-8 text-center">Invoice not found</div>;
@@ -56,6 +61,8 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const canDelete = (invoice.status === "DRAFT" || invoice.status === "PENDING") && permissions.delete;
   const canRecordPayment = canPay;
   const canSend = invoice.status === "PENDING" && permissions.send;
+  const canCancel = invoice.status !== "CANCELLED" && permissions.cancel;
+  const isRefunded = invoice.payments?.some((p: any) => p.payment_type === "PAYMENT" && p.status === "CONFIRMED");
 
   const handleEdit = () => {
     setEditingInvoice(invoice);
@@ -76,6 +83,44 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
     try {
       await sendInvoice.mutateAsync(invoice.id);
       toast.success("Invoice sent successfully");
+      refetch();
+    } catch {
+      /* toast from apiFetch */
+    }
+  };
+
+  const handleCancel = async () => {
+    const reason = window.prompt("Reason for cancellation (required):");
+    if (!reason || !reason.trim()) {
+      toast.error("Cancellation reason is required");
+      return;
+    }
+
+    // Only open refund modal if invoice is fully paid
+    if (invoice.payment_status === "PAID") {
+      setRefundReason(reason.trim());
+      setRefundModalOpen(true);
+      return;
+    }
+
+    // Otherwise, cancel directly
+    try {
+      await cancelInvoice.mutateAsync({ id: invoice.id, reason: reason.trim() });
+      toast.success("Invoice cancelled");
+      refetch();
+    } catch {
+      /* toast from apiFetch */
+    }
+  };
+
+  const handleRefundAndCancel = async () => {
+    if (!refundReason) return;
+    try {
+      await refundPayments.mutateAsync(invoice.id);
+      await cancelInvoice.mutateAsync({ id: invoice.id, reason: refundReason });
+      toast.success("Payments refunded and invoice cancelled");
+      setRefundModalOpen(false);
+      setRefundReason("");
       refetch();
     } catch {
       /* toast from apiFetch */
@@ -373,6 +418,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
                   <th className="px-4 py-2 text-left">Reference</th>
                   <th className="px-4 py-2 text-right">Amount</th>
                   <th className="px-4 py-2 text-center">Status</th>
+                  <th className="px-4 py-2 text-center">Type</th>
                 </tr>
               </thead>
               <tbody>
@@ -386,6 +432,11 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
                       <span className={`inline-flex px-2 py-0.5 text-xs rounded-full font-medium ${
                         p.status === "CONFIRMED" ? "bg-success/15 text-success" : "bg-muted/40 text-muted-foreground"
                       }`}>{p.status}</span>
+                    </td>
+                    <td className="px-4 py-2 text-center">
+                      <span className={`inline-flex px-2 py-0.5 text-xs rounded-full font-medium ${
+                        p.payment_type === "PAYMENT" ? "bg-destructive/15 text-destructive" : "bg-info/15 text-info"
+                      }`}>{p.payment_type === "PAYMENT" ? "Refund" : "Payment"}</span>
                     </td>
                   </tr>
                 ))}
@@ -408,6 +459,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   });
 
   const getStatusColor = (status: string): "success" | "warning" | "destructive" | "info" => {
+    if (isRefunded) return "destructive";
     switch (status) {
       case "PAID": return "success";
       case "UNPAID": return "warning";
@@ -430,7 +482,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
         }
         entityId={invoice.invoice_number}
         title={`${invoice.customer_name || "Customer"} — ${invoice.invoice_number}`}
-        status={invoice.payment_status || "UNPAID"}
+        status={isRefunded ? "REFUNDED" : invoice.payment_status || "UNPAID"}
         subtitle={`Issued ${invoice.invoice_date} · Due ${invoice.due_date}`}
         data={invoice}
         meta={[
@@ -446,6 +498,8 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
         primaryActionLabel={canSend ? "Send Invoice" : canPay ? "Pay Invoice" : undefined}
         onPrimaryAction={canSend ? handleSend : canPay ? handlePay : undefined}
         onEdit={canEdit ? handleEdit : undefined}
+        onDelete={canCancel ? handleCancel : undefined}
+        deleteLabel="Cancel Invoice"
         onPrint={handlePrint}
         onExport={handleExportPdf}
         permissions={{ edit: canEdit, submit: canSend || canPay }}
@@ -579,6 +633,45 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
             formatCurrency,
           }}
         />
+      )}
+
+      {/* Refund & Cancel Confirmation Modal */}
+      {refundModalOpen && invoice && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setRefundModalOpen(false)}>
+          <div className="relative w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Refund & Cancel Invoice</h3>
+              <button onClick={() => setRefundModalOpen(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="space-y-3 text-sm">
+              <p className="text-muted-foreground">
+                This invoice has <strong className="text-foreground">{formatCurrency(paidAmount)}</strong> in confirmed payments that must be refunded before cancellation.
+              </p>
+              <div className="rounded-xl border border-warning/30 bg-warning/5 px-4 py-3 space-y-1.5">
+                <p className="font-medium text-warning">This will:</p>
+                <ul className="list-disc list-inside text-muted-foreground space-y-0.5">
+                  <li>Reverse all confirmed payments</li>
+                  <li>Reverse journal entries</li>
+                  <li>Reverse bank transactions</li>
+                  <li>Reverse inventory stock</li>
+                  <li>Cancel supplier bills</li>
+                  <li>Set invoice status to Cancelled</li>
+                </ul>
+              </div>
+              <p className="text-muted-foreground">
+                <strong className="text-foreground">Reason:</strong> {refundReason}
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setRefundModalOpen(false)} className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted">Go Back</button>
+              <button onClick={handleRefundAndCancel} disabled={refundPayments.isPending || cancelInvoice.isPending}
+                className="inline-flex items-center gap-1.5 px-4 h-9 rounded-md bg-destructive text-destructive-foreground text-sm hover:opacity-90 disabled:opacity-50">
+                {(refundPayments.isPending || cancelInvoice.isPending) ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Refund & Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

@@ -85,7 +85,7 @@ RESOURCES_ACTIONS: dict[str, dict[str, list[str]]] = {
     "FINANCE": {
         "dashboard":        ["view", "export"],
         "account":          ["view", "create", "update", "delete", "export"],
-        "customer_invoice": ["view", "create", "pay", "update", "delete", "send", "export"],
+        "customer_invoice": ["view", "create", "pay", "update", "delete", "send", "cancel", "refund", "export"],
         "expense":          ["view", "create", "pay", "update", "delete", "export"],
         "journal_entrie":   ["view", "export"],
         "finance_reports":  ["view", "export"],
@@ -105,7 +105,7 @@ RESOURCES_ACTIONS: dict[str, dict[str, list[str]]] = {
         "lead":                   ["view", "create", "update", "delete", "accept", "convert_to_quote", "export"],
         "quote":                  ["view", "create", "approve", "reject", "update", "delete", "export"],
         "sales_customer":         ["view", "create", "update", "delete", "export"],
-        "sales_customers_invoice":["view", "create", "pay", "update", "delete", "send", "export"],
+        "sales_customers_invoice":["view", "create", "pay", "update", "delete", "send", "cancel", "refund", "export"],
     },
 
     # ── AI Monitoring ────────────────────────────────────────────────────────
@@ -188,6 +188,8 @@ ACTION_DISPLAY_NAMES: dict[str, str] = {
     # Finance-specific
     "pay":                    "Pay",
     "send":                   "Send",
+    "cancel":                 "Cancel",
+    "refund":                 "Refund",
     "recompute_sales":        "Recompute Sales",
     "recompute_stock":        "Recompute Stock",
     # Sales-specific

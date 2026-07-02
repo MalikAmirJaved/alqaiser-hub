@@ -163,6 +163,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
                 'payment_method': p.payment_method,
                 'reference_number': p.reference_number or '',
                 'status': p.status,
+                'payment_type': p.payment_type,
             }
             for p in payments
         ]
