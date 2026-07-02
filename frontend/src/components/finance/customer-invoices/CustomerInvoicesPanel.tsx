@@ -172,6 +172,12 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
       render: (val: number) => (val ? formatCurrency(val) : "—"),
     },
     {
+      key: "status",
+      label: "Status",
+      sortable: true,
+      render: (val: string) => <StatusBadge status={val || "DRAFT"} />,
+    },
+    {
       key: "payment_status",
       label: "Payment",
       sortable: true,
