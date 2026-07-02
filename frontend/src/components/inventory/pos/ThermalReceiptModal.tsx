@@ -25,6 +25,7 @@ export interface ThermalReceiptData {
   paymentMethod?: string;
   paidAmount?: number;
   changeAmount?: number;
+  isReturn?: boolean;
 }
 
 interface ThermalReceiptModalProps {
@@ -54,7 +55,7 @@ export function ThermalReceiptContent({
           {companyName || "Store"}
         </h2>
         <div className="border-t border-dashed border-gray-400 my-2" />
-        <p className="text-[10px]">SALE RECEIPT</p>
+        <p className="text-[10px]">{data.isReturn ? "RETURN RECEIPT" : "SALE RECEIPT"}</p>
         <p className="text-[10px]">#{data.orderNumber}</p>
         <p className="text-[10px]">
           {data.date} {data.time}
@@ -115,8 +116,14 @@ export function ThermalReceiptContent({
 
       {/* Footer */}
       <div className="text-center text-[9px] text-gray-600 space-y-0.5">
-        <p>Thank you for your purchase!</p>
-        <p>Goods sold are not returnable</p>
+        {data.isReturn ? (
+          <p>Return processed successfully</p>
+        ) : (
+          <>
+            <p>Thank you for your purchase!</p>
+            <p>Goods sold are not returnable</p>
+          </>
+        )}
         <p className="font-mono text-[7px] mt-1 tracking-widest">
           {data.orderNumber.replace(/[^A-Za-z0-9]/g, "*")}
         </p>
@@ -182,7 +189,7 @@ function buildReceiptHtml(
       <div class="text-center mb-3">
         <h2 class="text-sm font-bold uppercase tracking-wider">${escapeHtml(companyName || "Store")}</h2>
         <div style="border-top: 1px dashed #999; margin: 4px 0;"></div>
-        <p class="text-xs">SALE RECEIPT</p>
+        <p class="text-xs">${data.isReturn ? "RETURN RECEIPT" : "SALE RECEIPT"}</p>
         <p class="text-xs">#${escapeHtml(data.orderNumber)}</p>
         <p class="text-xs">${escapeHtml(data.date)} ${escapeHtml(data.time)}</p>
         ${data.customerName ? `<p class="text-xs mt-1">Customer: ${escapeHtml(data.customerName)}</p>` : ""}
@@ -229,8 +236,7 @@ function buildReceiptHtml(
       <div style="border-top: 1px dashed #999; margin: 6px 0;"></div>
 
       <div class="text-center text-gray-600" style="font-size: 9px;">
-        <p>Thank you for your purchase!</p>
-        <p>Goods sold are not returnable</p>
+        ${data.isReturn ? '<p>Return processed successfully</p>' : '<p>Thank you for your purchase!</p><p>Goods sold are not returnable</p>'}
         <p style="font-family: 'Courier New', Courier, monospace; font-size: 7px; margin-top: 2px; letter-spacing: 0.1em;">
           ${data.orderNumber.replace(/[^A-Za-z0-9]/g, "*")}
         </p>

@@ -1,19 +1,23 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
 import { useCustomerInvoices, usePayCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
 import { useSalesInvoices } from "@/hooks/sales/useSalesInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
+import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
 import { useServerSearch } from "@/hooks/useServerSearch";
 import CustomerInvoiceFormModal from "@/components/finance/customer-invoices/CustomerInvoiceFormModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
 import { StatusBadge } from "@/components/finance/ui";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
 import { Send } from "lucide-react";
 import { usePagination } from "@/hooks/usePagination";
+import PayAmountModal from "@/components/finance/PayAmountModal";
 
 interface CustomerInvoicesPanelProps {
   moduleCode: "FINANCE" | "SALES";
@@ -25,7 +29,11 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
   const [modalOpen, setModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [payModalOpen, setPayModalOpen] = useState(false);
+  const [invoiceToPay, setInvoiceToPay] = useState<any>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [printInvoice, setPrintInvoice] = useState<any>(null);
   const pagination = usePagination();
 
   const fetchCustomers = useServerSearch("/api/finance/customers/", {
@@ -66,6 +74,8 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
 
   const resourceName = moduleCode === "SALES" ? "sales_customers_invoice" : "customer_invoice";
   const permissions = useFeaturePermissions(moduleCode, resourceName);
+  const { data: companySettings } = useCompanySettingsQuery();
+  const { terms: termsData } = useTermsAndConditions();
 
   const modulePermissions: ModulePermissions = {
     create: permissions.create,
@@ -87,8 +97,9 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
   };
 
   const handlePay = (invoice: any) => {
-    if (invoice.payment_status !== "PAID" && invoice.status !== "CANCELLED") {
-      payInvoice.mutate({ id: invoice.id });
+    if (invoice.payment_status !== "PAID" && invoice.status !== "CANCELLED" && Number(invoice.outstanding) > 0) {
+      setInvoiceToPay(invoice);
+      setPayModalOpen(true);
     }
   };
 
@@ -147,7 +158,6 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
       sortable: true,
       render: (val: number) => (val ? formatCurrency(val) : "—"),
     },
-    { key: "currency", label: "Curr", render: () => "USD" },
     {
       key: "payment_status",
       label: "Payment",
@@ -180,8 +190,15 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
           onEdit: handleEdit,
           canEdit: (invoice) => invoice.status === "DRAFT" && invoice.payment_status !== "PAID",
           onPost: handlePay,
-          canPost: (invoice) => invoice.payment_status !== "PAID" && invoice.status !== "CANCELLED",
+          canPost: (invoice) =>
+            invoice.payment_status !== "PAID" &&
+            invoice.status !== "CANCELLED" &&
+            Number(invoice.outstanding) > 0,
           postLabel: "Pay",
+          onPrint: (invoice) => {
+            setPrintInvoice(invoice);
+            setShowPrintPreview(true);
+          },
         }}
         onRowClick={handleRowClick}
         exportEnabled={permissions.export}
@@ -196,14 +213,19 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
         batchActions={
           <>
             <button
-              onClick={() => {
-                selectedIds.forEach((id) => payInvoice.mutate({ id }));
+              onClick={async () => {
+                try {
+                  await Promise.all(selectedIds.map((id) => payInvoice.mutateAsync({ id })));
+                } catch {
+                  // errors shown via mutation error state
+                }
                 setSelectedIds([]);
               }}
+              disabled={payInvoice.isPending}
               className="inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary/80"
             >
               <Send className="w-4 h-4" />
-              Pay Selected
+              {payInvoice.isPending ? "Paying..." : "Pay Selected"}
             </button>
           </>
         }
@@ -217,6 +239,85 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
         initialData={editingInvoice}
         moduleCode={moduleCode}
       />
+
+      {invoiceToPay && (
+        <PayAmountModal
+          open={payModalOpen}
+          onClose={() => {
+            setPayModalOpen(false);
+            setInvoiceToPay(null);
+          }}
+          title={moduleCode === "FINANCE" ? "Receive Payment" : "Receive Payment"}
+          documentLabel="Invoice"
+          documentNumber={invoiceToPay.invoice_number}
+          subtitle={invoiceToPay.customer_name ? `Customer: ${invoiceToPay.customer_name}` : undefined}
+          totalAmount={Number(invoiceToPay.amount)}
+          paidAmount={Number(invoiceToPay.paid_amount || 0)}
+          outstanding={Number(invoiceToPay.outstanding || 0)}
+          paymentStatus={invoiceToPay.payment_status || "UNPAID"}
+          isPending={payInvoice.isPending}
+          onSubmit={async (data) => {
+            await payInvoice.mutateAsync({
+              id: invoiceToPay.id,
+              body: {
+                amount: data.amount,
+                payment_method: data.payment_method,
+                payment_date: data.payment_date,
+                reference_number: data.reference_number,
+              },
+            });
+            setPayModalOpen(false);
+            setInvoiceToPay(null);
+          }}
+        />
+      )}
+      {printInvoice && companySettings && (
+        <PrintPreviewModal
+          open={showPrintPreview}
+          onClose={() => { setShowPrintPreview(false); setPrintInvoice(null); }}
+          documentProps={{
+            data: {
+              type: "INVOICE",
+              documentNumber: printInvoice.invoice_number,
+              date: printInvoice.invoice_date,
+              dueDate: printInvoice.due_date,
+              customerName: printInvoice.customer_name || "—",
+              customerEmail: (printInvoice as any).customer_email || "",
+              customerPhone: (printInvoice as any).customer_phone || "",
+              lines: (printInvoice.lines || []).map((l: any) => ({
+                variant_name: l.variant_name,
+                variant_sku: l.variant_sku,
+                quantity: l.quantity,
+                unit_price: l.unit_price,
+                tax_rate: l.tax_rate,
+                discount_amount: l.discount_amount,
+              })),
+              totalAmount: Number(printInvoice.amount),
+              overallDiscountPercent: Number((printInvoice as any).overall_discount_percent || 0),
+              overallTaxPercent: Number((printInvoice as any).overall_tax_percent || 0),
+              status: printInvoice.status,
+              paymentStatus: printInvoice.payment_status,
+              notes: printInvoice.notes,
+            },
+            company: {
+              companyName: companySettings.companyName,
+              address: companySettings.address,
+              city: companySettings.city,
+              state: companySettings.state,
+              country: companySettings.country,
+              phone: companySettings.phone,
+              email: companySettings.email,
+              taxId: companySettings.taxId,
+              logo: (companySettings as any).logo || "",
+              logoUrl: (companySettings as any).logo
+                ? `${process.env.NEXT_PUBLIC_API_URL}${(companySettings as any).logo}`
+                : "",
+            },
+            termsContent: termsData?.invoice || "",
+            formatCurrency,
+          }}
+        />
+      )}
     </>
   );
 }

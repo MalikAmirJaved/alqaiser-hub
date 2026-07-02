@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   useLeads, useDeleteLead,
   useContactLead, useScheduleFollowUp, useQualifyLead,
-  useConvertLeadToCustomer, useMarkLost,
+  useConvertLeadToCustomer, useMarkLost, useRevertLeadStatus,
   Lead,
 } from "@/hooks/sales/useLeads";
 import { DynamicModulePage, type ModulePermissions, type Kpi } from "@/components/reuseable/final/DynamicModulePage";
@@ -13,7 +13,15 @@ import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { StatusBadge } from "@/components/finance/ui";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
-import { Trash2, Phone, Calendar, ThumbsUp, UserPlus, XCircle, FileText, Loader2 } from "lucide-react";
+import { Trash2, Phone, Calendar, ThumbsUp, UserPlus, XCircle, FileText, Loader2, MoreVertical, Pencil, Undo2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import LeadFormModal from "./LeadFormModal";
 import QuoteFormModal from "./QuoteFormModal";
 import { toast } from "sonner";
@@ -140,6 +148,7 @@ export default function LeadsPanel() {
   const [lostLead, setLostLead] = useState<Lead | null>(null);
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
   const [quoteCustomerId, setQuoteCustomerId] = useState<string | null>(null);
+  const [quoteLeadId, setQuoteLeadId] = useState<string | null>(null);
 
   const leadStatusOptions = [
     { value: "NEW", label: "New" },
@@ -153,11 +162,17 @@ export default function LeadsPanel() {
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
     { name: "status", label: "Status", type: "status", options: leadStatusOptions },
+    { name: "priority", label: "Priority", type: "status", options: [
+      { value: "HOT", label: "Hot" },
+      { value: "WARM", label: "Warm" },
+      { value: "COLD", label: "Cold" },
+    ]},
   ];
 
   const leadFilters = useMemo(() => {
-    const f: { status?: string; search?: string; page?: string } = {};
+    const f: { status?: string; priority?: string; search?: string; page?: string } = {};
     if (filters.status) f.status = filters.status;
+    if (filters.priority) f.priority = filters.priority;
     if (filters.search) f.search = filters.search;
     f.page = String(pagination.page);
     return f;
@@ -165,6 +180,8 @@ export default function LeadsPanel() {
 
   const { data: leads = [], isLoading, refetch, totalCount } = useLeads(leadFilters);
   const deleteLead = useDeleteLead();
+  const revertLeadStatus = useRevertLeadStatus();
+  const { confirm: confirmDelete, Modal: ConfirmModal } = useConfirmationModal();
   const contactLead = useContactLead();
   const qualifyLead = useQualifyLead();
   const convertLeadToCustomer = useConvertLeadToCustomer();
@@ -195,6 +212,7 @@ export default function LeadsPanel() {
   };
 
   const handleCreateQuote = async (lead: Lead) => {
+    setQuoteLeadId(lead.id);
     if (lead.status === "CONVERTED") {
       setQuoteCustomerId(lead.converted_customer_id || null);
       setQuoteModalOpen(true);
@@ -210,77 +228,85 @@ export default function LeadsPanel() {
   const handleQuoteModalSuccess = () => {
     setQuoteModalOpen(false);
     setQuoteCustomerId(null);
+    setQuoteLeadId(null);
     refetch();
   };
 
-  const workflowActions = (lead: Lead) => {
-    const btnClass = "inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition";
+  const renderActions = (lead: Lead) => {
+    const isEditable = !["CONVERTED", "LOST"].includes(lead.status);
 
-    switch (lead.status) {
-      case "NEW":
-        return (
-          <button onClick={(e) => { e.stopPropagation(); contactLead.mutate(lead.id, { onSuccess: () => refetch() }); }}
-            className={`${btnClass} bg-info/10 text-info hover:bg-info/20`}>
-            <Phone className="w-3.5 h-3.5" /> Contact
+    const handleDeleteClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      confirmDelete({
+        title: "Delete Lead",
+        message: "This action cannot be undone.",
+        onConfirm: () => deleteLead.mutate(lead.id),
+      });
+    };
+
+    const showMarkLost = lead.status === "CONTACTED" || lead.status === "FOLLOW_UP" || lead.status === "QUALIFIED";
+    const canRevert = ["CONTACTED", "FOLLOW_UP", "QUALIFIED", "LOST"].includes(lead.status);
+    const revertLabel = lead.status === "LOST" ? "Revert to New" : "Revert Status";
+    const showEditDelete = isEditable && (permissions.update || permissions.delete);
+    const showSeparator = (showMarkLost || canRevert) && showEditDelete;
+
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button onClick={(e) => e.stopPropagation()} className="p-1 rounded-md hover:bg-muted transition">
+            <MoreVertical className="w-4 h-4" />
           </button>
-        );
-      case "CONTACTED":
-        return (
-          <div className="flex items-center gap-1 flex-wrap">
-            <button onClick={(e) => { e.stopPropagation(); setFollowUpLead(lead); }}
-              className={`${btnClass} bg-purple-100/40 text-purple-700 hover:bg-purple-200/40`}>
-              <Calendar className="w-3.5 h-3.5" /> Follow Up
-            </button>
-            <button onClick={(e) => { e.stopPropagation(); qualifyLead.mutate(lead.id, { onSuccess: () => refetch() }); }}
-              className={`${btnClass} bg-primary/10 text-primary hover:bg-primary/20`}>
-              <ThumbsUp className="w-3.5 h-3.5" /> Qualify
-            </button>
-            <button onClick={(e) => { e.stopPropagation(); setLostLead(lead); }}
-              className={`${btnClass} bg-destructive/10 text-destructive hover:bg-destructive/20`}>
-              <XCircle className="w-3.5 h-3.5" /> Lost
-            </button>
-          </div>
-        );
-      case "FOLLOW_UP":
-        return (
-          <div className="flex items-center gap-1 flex-wrap">
-            <button onClick={(e) => { e.stopPropagation(); qualifyLead.mutate(lead.id, { onSuccess: () => refetch() }); }}
-              className={`${btnClass} bg-primary/10 text-primary hover:bg-primary/20`}>
-              <ThumbsUp className="w-3.5 h-3.5" /> Qualify
-            </button>
-            <button onClick={(e) => { e.stopPropagation(); setLostLead(lead); }}
-              className={`${btnClass} bg-destructive/10 text-destructive hover:bg-destructive/20`}>
-              <XCircle className="w-3.5 h-3.5" /> Lost
-            </button>
-          </div>
-        );
-      case "QUALIFIED":
-      case "CONVERTED":
-        return (
-          <div className="flex items-center gap-1 flex-wrap">
-            {lead.status === "CONVERTED" && (
-              <button onClick={(e) => { e.stopPropagation(); handleCreateQuote(lead); }}
-                className={`${btnClass} bg-primary/10 text-primary hover:bg-primary/20`}>
-                <FileText className="w-3.5 h-3.5" /> Quote
-              </button>
-            )}
-            {lead.status === "QUALIFIED" && (
-              <button onClick={(e) => { e.stopPropagation(); convertLeadToCustomer.mutate(lead.id, { onSuccess: () => refetch() }); }}
-                className={`${btnClass} bg-success/10 text-success hover:bg-success/20`}>
-                <UserPlus className="w-3.5 h-3.5" /> Customer
-              </button>
-            )}
-            {lead.status !== "CONVERTED" && (
-              <button onClick={(e) => { e.stopPropagation(); setLostLead(lead); }}
-                className={`${btnClass} bg-destructive/10 text-destructive hover:bg-destructive/20`}>
-                <XCircle className="w-3.5 h-3.5" /> Lost
-              </button>
-            )}
-          </div>
-        );
-      default:
-        return null;
-    }
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()} side="bottom">
+          {lead.status === "NEW" && (
+            <DropdownMenuItem onClick={() => contactLead.mutate(lead.id, { onSuccess: () => refetch() })}>
+              <Phone className="w-4 h-4 mr-2" /> Contact
+            </DropdownMenuItem>
+          )}
+          {lead.status === "CONTACTED" && (
+            <DropdownMenuItem onClick={() => setFollowUpLead(lead)}>
+              <Calendar className="w-4 h-4 mr-2" /> Follow Up
+            </DropdownMenuItem>
+          )}
+          {(lead.status === "CONTACTED" || lead.status === "FOLLOW_UP") && (
+            <DropdownMenuItem onClick={() => qualifyLead.mutate(lead.id, { onSuccess: () => refetch() })}>
+              <ThumbsUp className="w-4 h-4 mr-2" /> Qualify
+            </DropdownMenuItem>
+          )}
+          {lead.status === "QUALIFIED" && (
+            <DropdownMenuItem onClick={() => convertLeadToCustomer.mutate(lead.id, { onSuccess: () => refetch() })}>
+              <UserPlus className="w-4 h-4 mr-2" /> Convert to Customer
+            </DropdownMenuItem>
+          )}
+          {lead.status === "CONVERTED" && (
+            <DropdownMenuItem onClick={() => handleCreateQuote(lead)}>
+              <FileText className="w-4 h-4 mr-2" /> Create Quote
+            </DropdownMenuItem>
+          )}
+          {showMarkLost && (
+            <DropdownMenuItem onClick={() => setLostLead(lead)}>
+              <XCircle className="w-4 h-4 mr-2" /> Mark Lost
+            </DropdownMenuItem>
+          )}
+          {canRevert && (
+            <DropdownMenuItem onClick={() => revertLeadStatus.mutate(lead.id, { onSuccess: () => refetch() })}>
+              <Undo2 className="w-4 h-4 mr-2" /> {revertLabel}
+            </DropdownMenuItem>
+          )}
+          {showSeparator && <DropdownMenuSeparator />}
+          {isEditable && permissions.update && (
+            <DropdownMenuItem onClick={() => handleEdit(lead)}>
+              <Pencil className="w-4 h-4 mr-2" /> Edit
+            </DropdownMenuItem>
+          )}
+          {isEditable && permissions.delete && (
+            <DropdownMenuItem onClick={handleDeleteClick} className="text-destructive">
+              <Trash2 className="w-4 h-4 mr-2" /> Delete
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
   };
 
   const computeKPIs = (data: Lead[]): Kpi[] => {
@@ -311,12 +337,29 @@ export default function LeadsPanel() {
       render: (val: string) => <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-muted">{val}</span>,
     },
     {
+      key: "priority", label: "Priority", sortable: true,
+      render: (val: string) => {
+        if (!val) return <span className="text-xs text-muted-foreground">—</span>;
+        const colors: Record<string, string> = {
+          HOT: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+          WARM: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+          COLD: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+        };
+        const icons: Record<string, string> = { HOT: "🔥", WARM: "🟡", COLD: "🔵" };
+        return (
+          <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${colors[val] || ""}`}>
+            {icons[val]} {val}
+          </span>
+        );
+      },
+    },
+    {
       key: "status", label: "Status", sortable: true,
       render: (val: string) => <StatusBadge status={val} />,
     },
     {
       key: "actions", label: "", align: "right" as const,
-      render: (_: any, lead: Lead) => workflowActions(lead),
+      render: (_: any, lead: Lead) => renderActions(lead),
     },
   ];
 
@@ -334,12 +377,6 @@ export default function LeadsPanel() {
         permissions={modulePermissions}
         primaryActionLabel="New Lead"
         onCreate={handleCreate}
-        actions={{
-          onEdit: handleEdit,
-          onDelete: (lead) => deleteLead.mutate(lead.id),
-          canEdit: (lead) => !["CONVERTED", "LOST"].includes(lead.status),
-          canDelete: (lead) => !["CONVERTED", "LOST"].includes(lead.status),
-        }}
         onRowClick={(lead) => router.push(`/sales/leads/${lead.id}`)}
         exportEnabled={permissions.export}
         onRowSelect={setSelectedIds}
@@ -376,8 +413,9 @@ export default function LeadsPanel() {
 
       <QuoteFormModal
         open={quoteModalOpen}
-        onClose={() => { setQuoteModalOpen(false); setQuoteCustomerId(null); }}
+        onClose={() => { setQuoteModalOpen(false); setQuoteCustomerId(null); setQuoteLeadId(null); }}
         initialCustomerId={quoteCustomerId}
+        initialLeadId={quoteLeadId}
         onSuccess={handleQuoteModalSuccess}
       />
 
@@ -394,6 +432,7 @@ export default function LeadsPanel() {
         onClose={() => setLostLead(null)}
         onSuccess={() => refetch()}
       />
+      <ConfirmModal />
     </>
   );
 }

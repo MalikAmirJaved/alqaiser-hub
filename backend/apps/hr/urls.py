@@ -53,6 +53,8 @@ from apps.hr.views.exit_management_views import (
 
 from apps.hr.views.promotion_views import PromotionView
 
+from apps.hr.views.profile_pic_views import EmployeeProfilePicUploadView
+
 from apps.hr.views.policy_views import (
     PolicyView,
     PolicyStatsView,
@@ -74,6 +76,9 @@ urlpatterns = [
     path('asset-categories/', AssetCategoryView.as_view(), name='asset-categories'),
     path('asset-categories/stats/', AssetCategoryStatsView.as_view(), name='asset-category-stats'),
     
+    # Profile Picture Upload & Face Validation (MUST be before <str:pk> catch-all)
+    path('employees/upload-profile-pic/', EmployeeProfilePicUploadView.as_view(), name='upload-profile-pic'),
+
     # Employees
     path('employees/active/', ActiveEmployeesView.as_view(), name='active-employees'),
     path('employees/', EmployeeView.as_view(), name='employees'),

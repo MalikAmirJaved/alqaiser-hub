@@ -113,3 +113,110 @@ export function useDeleteCustomer() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["customers"] }),
   });
 }
+
+// ── Customer Detail Summary ────────────────────────────────
+
+export interface CustomerDetailRelated {
+  leads: Array<{
+    id: string;
+    first_name: string;
+    last_name: string;
+    company_name: string;
+    email: string;
+    phone: string;
+    source: string;
+    status: string;
+    created_at: string | null;
+    updated_at: string | null;
+  }>;
+  quotes: Array<{
+    id: string;
+    quote_number: string;
+    date: string | null;
+    expiration_date: string | null;
+    total_amount: string;
+    overall_discount_percent: string;
+    overall_tax_percent: string;
+    status: string;
+    source: string;
+    lead_id: string | null;
+    converted_invoice_id: string | null;
+    converted_invoice_number: string | null;
+    notes: string;
+    created_at: string | null;
+    updated_at: string | null;
+  }>;
+  sales_orders: Array<{
+    id: string;
+    order_number: string;
+    order_date: string | null;
+    total_amount: string;
+    status: string;
+    source: string;
+    payment_method: string;
+    notes: string;
+    created_at: string | null;
+    updated_at: string | null;
+  }>;
+  invoices: Array<{
+    id: string;
+    invoice_number: string;
+    invoice_date: string | null;
+    due_date: string | null;
+    amount: string;
+    paid_amount: string;
+    outstanding: string;
+    overall_discount_percent: string;
+    overall_tax_percent: string;
+    status: string;
+    payment_status: string;
+    source: string;
+    payment_method: string;
+    created_at: string | null;
+    updated_at: string | null;
+  }>;
+}
+
+export interface CustomerFinancialSummary {
+  total_invoice_amount: string;
+  total_paid: string;
+  total_outstanding: string;
+  total_discount: string;
+  total_tax: string;
+  total_orders: number;
+  total_quotes: number;
+  total_invoices: number;
+  total_leads: number;
+  total_order_payments: string;
+}
+
+export interface CustomerDetailSummary {
+  customer: Customer;
+  related: CustomerDetailRelated;
+  financial_summary: CustomerFinancialSummary;
+  source: {
+    label: string;
+    detail: string | null;
+    created_by: string | null;
+    created_at: string | null;
+    updated_by: string | null;
+    updated_at: string | null;
+  };
+  activity: Array<{
+    type: string;
+    description: string;
+    date: string | null;
+    user: string | null;
+  }>;
+}
+
+export function useCustomerDetailSummary(id: string | undefined) {
+  const api = useApi();
+  return useQuery<CustomerDetailSummary>({
+    queryKey: ["customerDetailSummary", id],
+    queryFn: () => api(`/api/inventory/customers/${id}/detail_summary/`),
+    enabled: !!id,
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
+}

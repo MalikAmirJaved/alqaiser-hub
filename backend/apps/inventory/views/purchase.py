@@ -26,6 +26,7 @@ from apps.inventory.serializers.purchase import (
     GoodsReceiptSerializer,
 )
 from apps.finance.models import SupplierBill, Expense
+from apps.finance.services.supplier_balance import record_supplier_bill_created
 from apps.hr.services.assignment_service import create_or_update_asset_from_receipt_line
 
 import logging
@@ -308,6 +309,13 @@ class GoodsReceiptViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequ
                 branch_id=po.branch_id,
                 created_by=user,
                 updated_by=user
+            )
+            record_supplier_bill_created(
+                supplier_bill,
+                notes=(
+                    f'Goods receipt {goods_receipt.receipt_number} '
+                    f'from PO {po.order_number}'
+                ),
             )
             logger.info(f"Created supplier bill {supplier_bill.bill_number} (ID: {supplier_bill._id}) for amount {total_bill_amount}")
 

@@ -31,7 +31,7 @@ export default function ProductsPage() {
     page: String(pagination.page),
   }), [filters, pagination.page]);
 
-  const { data: products = [], isLoading, refetch, totalCount } = useProducts(filtersWithPage);
+  const { data: products = [], isLoading, totalCount } = useProducts(filtersWithPage);
 
   const fetchCategories = useServerSearch("/api/inventory/categories/", {
     transformOption: (c: any) => ({ value: c.id, label: c.name }),
@@ -105,7 +105,6 @@ export default function ProductsPage() {
       message: `Delete "${p.product_name}"? This removes all variants and stock.`,
       onConfirm: async () => {
         await deleteProduct.mutateAsync(p.id);
-        refetch();
       },
     });
   };
@@ -117,11 +116,16 @@ export default function ProductsPage() {
       await createProduct.mutateAsync(data);
     }
     setShowProductModal(false);
-    refetch();
   };
 
   const handleExport = () => {
     if (!enrichedProducts.length) return;
+    const escapeCsv = (val: any) => {
+      const str = String(val ?? "");
+      return str.includes('"') || str.includes(",") || str.includes("\n")
+        ? `"${str.replace(/"/g, '""')}"`
+        : `"${str}"`;
+    };
     const rows = enrichedProducts.map(p => ({
       SKU: p.variants[0]?.sku || "",
       Name: p.product_name,
@@ -131,13 +135,13 @@ export default function ProductsPage() {
       Stock: p.total_stock,
       Status: p.status,
     }));
-    const csv = [Object.keys(rows[0]), ...rows.map(Object.values)]
-      .map(row => row.map(c => `"${c}"`).join(",")).join("\n");
+    const csv = [Object.keys(rows[0]).map(escapeCsv).join(","), ...rows.map(row => Object.values(row).map(escapeCsv).join(","))].join("\n");
     const a = Object.assign(document.createElement("a"), {
       href: URL.createObjectURL(new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" })),
       download: `products_${new Date().toISOString().split("T")[0]}.csv`,
     });
     a.click();
+    URL.revokeObjectURL(a.href);
   };
 
   // ── Table columns ──

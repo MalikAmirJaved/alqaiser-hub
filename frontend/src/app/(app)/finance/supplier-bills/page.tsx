@@ -3,25 +3,22 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
-import { useSupplierBills, useDeleteSupplierBill, usePaySupplierBill } from "@/hooks/finance/useSupplierBills";
+import { useSupplierBills, usePaySupplierBill } from "@/hooks/finance/useSupplierBills";
 import { StatusBadge } from "@/components/finance/ui";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useServerSearch } from "@/hooks/useServerSearch";
-import SupplierBillFormModal from "@/components/finance/supplier-bills/SupplierBillFormModal";
+import PayAmountModal from "@/components/finance/PayAmountModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
-import { Trash2, Send } from "lucide-react";
 import { usePagination } from "@/hooks/usePagination";
 
-
 export default function SupplierBillsPage() {
-    const formatCurrency = useFormatCurrency();
+  const formatCurrency = useFormatCurrency();
   const router = useRouter();
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingBill, setEditingBill] = useState<any>(null);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [payModalOpen, setPayModalOpen] = useState(false);
+  const [billToPay, setBillToPay] = useState<any>(null);
 
   const pagination = usePagination();
 
@@ -42,57 +39,41 @@ export default function SupplierBillsPage() {
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
     { name: "supplier", label: "Supplier", type: "select", searchable: true, fetchOptions: fetchSuppliers },
-    { name: "status", label: "Status", type: "status", options: [
-      { value: "DRAFT", label: "Draft" },
-      { value: "CANCELLED", label: "Cancelled" },
-    ]},
   ];
 
   const { data: bills, isLoading, totalCount } = useSupplierBills(filtersWithPage);
-
-  const deleteBill = useDeleteSupplierBill();
   const payBill = usePaySupplierBill();
   const permissions = useFeaturePermissions("FINANCE", "supplier_bill");
+
   const modulePermissions: ModulePermissions = {
     view: permissions.view,
     update: permissions.pay,
     export: permissions.export,
+    create: false,
+    delete: false,
   };
 
   const handleRowClick = (bill: any) => {
     router.push(`/finance/supplier-bills/${bill.id}`);
   };
 
-  const handleEdit = (bill: any) => {
-    setEditingBill(bill);
-    setModalOpen(true);
-  };
-
-  const handleDelete = (bill: any) => {
-    deleteBill.mutate(bill.id);
-  };
-
   const handlePay = (bill: any) => {
-    if (bill.payment_status !== "PAID" && bill.status !== "CANCELLED") {
-      payBill.mutate({ id: bill.id });
+    if (bill.payment_status !== "PAID" && bill.status !== "CANCELLED" && Number(bill.outstanding) > 0) {
+      setBillToPay(bill);
+      setPayModalOpen(true);
     }
-  };
-
-  const handleBulkDelete = () => {
-    selectedIds.forEach((id) => deleteBill.mutate(id));
-    setSelectedIds([]);
   };
 
   const computeKPIs = (data: any[]) => {
     const totalOutstanding = data.reduce((sum, bill) => sum + Number(bill.outstanding || 0), 0);
     const totalPaid = data.reduce((sum, bill) => sum + Number(bill.paid_amount || 0), 0);
-    const overdueCount = data.filter((bill) => bill.payment_status !== "PAID" && new Date(bill.due_date) < new Date()).length;
-    const draftCount = data.filter((bill) => bill.status === "DRAFT").length;
+    const unpaidCount = data.filter((bill) => bill.payment_status === "UNPAID").length;
+    const partialCount = data.filter((bill) => bill.payment_status === "PARTIAL").length;
     return [
-      { label: "Outstanding", value: totalOutstanding, sub: `${data.length} open bills`, tone: "info" as const, isCurrency: true },
-      { label: "Overdue", value: overdueCount, sub: `${overdueCount} bills past due`, tone: "destructive" as const, isCurrency: false },
-      { label: "Paid (MTD)", value: totalPaid, sub: "YTD", tone: "success" as const, isCurrency: true },
-      { label: "Draft", value: draftCount, sub: "Awaiting issue", isCurrency: false },
+      { label: "Outstanding", value: totalOutstanding, sub: `${unpaidCount + partialCount} open`, tone: "info" as const, isCurrency: true },
+      { label: "Paid", value: totalPaid, sub: `${data.filter((b) => b.payment_status === "PAID").length} settled`, tone: "success" as const, isCurrency: true },
+      { label: "Unpaid", value: unpaidCount, sub: "bills", tone: "destructive" as const, isCurrency: false },
+      { label: "Partial", value: partialCount, sub: "in progress", tone: "warning" as const, isCurrency: false },
     ];
   };
 
@@ -110,10 +91,9 @@ export default function SupplierBillsPage() {
       sortable: true,
       render: (val: number) => (val ? formatCurrency(val) : "—"),
     },
-    { key: "currency", label: "Curr", render: () => "USD" },
     {
       key: "payment_status",
-      label: "Payment",
+      label: "Status",
       sortable: true,
       render: (val: string) => <StatusBadge status={val || "UNPAID"} />,
     },
@@ -124,7 +104,7 @@ export default function SupplierBillsPage() {
       <DynamicModulePage
         breadcrumbs={["Payables", "Supplier Bills"]}
         title="Supplier Bills"
-        description="Manage bills from your suppliers (accounts payable)"
+        description="View and pay supplier bills (accounts payable)"
         data={bills || []}
         isLoading={isLoading}
         totalCount={totalCount}
@@ -134,21 +114,16 @@ export default function SupplierBillsPage() {
         kpis={computeKPIs}
         getRowId={(bill) => bill.id}
         permissions={modulePermissions}
-        primaryActionLabel="New Bill"
-        onCreate={() => {
-          setEditingBill(null);
-          setModalOpen(true);
-        }}
         actions={{
-          onEdit: handleEdit,
-          onDelete: handleDelete,
           onPost: handlePay,
-          canPost: (bill) => bill.payment_status !== "PAID" && bill.status !== "CANCELLED",
+          canPost: (bill) =>
+            bill.payment_status !== "PAID" &&
+            bill.status !== "CANCELLED" &&
+            Number(bill.outstanding) > 0,
           postLabel: "Pay",
         }}
         onRowClick={handleRowClick}
         exportEnabled={permissions.export}
-        onRowSelect={setSelectedIds}
         filterBar={
           <FilterBar
             fields={filterFields}
@@ -156,41 +131,44 @@ export default function SupplierBillsPage() {
             onChange={(f) => { setFilters(f); pagination.resetPage(); }}
           />
         }
-        batchActions={
-          <>
-            <button
-              onClick={handleBulkDelete}
-              className="inline-flex items-center gap-1.5 text-sm text-destructive hover:text-destructive/80"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete Selected
-            </button>
-            <button
-              onClick={() => {
-                selectedIds.forEach((id) => payBill.mutate({ id }));
-                setSelectedIds([]);
-              }}
-              className="inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary/80"
-            >
-              <Send className="w-4 h-4" />
-              Pay Selected
-            </button>
-          </>
-        }
       />
-      <SupplierBillFormModal
-        open={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setEditingBill(null);
-        }}
-        initialData={editingBill}
-        onSuccess={() => {
-          // Refetch is handled by the hook automatically
-          setModalOpen(false);
-          setEditingBill(null);
-        }}
-      />
+
+      {billToPay && (
+        <PayAmountModal
+          open={payModalOpen}
+          onClose={() => {
+            setPayModalOpen(false);
+            setBillToPay(null);
+          }}
+          title="Pay Supplier Bill"
+          documentLabel="Bill"
+          documentNumber={billToPay.bill_number}
+          subtitle={billToPay.supplier_name ? `Supplier: ${billToPay.supplier_name}` : undefined}
+          totalAmount={Number(billToPay.amount)}
+          paidAmount={Number(billToPay.paid_amount || 0)}
+          outstanding={Number(billToPay.outstanding || 0)}
+          creditAmount={Number(billToPay.supplier_credit || 0)}
+          paymentStatus={billToPay.payment_status || "UNPAID"}
+          isPending={payBill.isPending}
+          onSubmit={async (data) => {
+            try {
+              await payBill.mutateAsync({
+                id: billToPay.id,
+                body: {
+                  amount: data.amount,
+                  payment_method: data.payment_method,
+                  payment_date: data.payment_date,
+                  reference_number: data.reference_number,
+                },
+              });
+              setPayModalOpen(false);
+              setBillToPay(null);
+            } catch {
+              // error handled by mutation error state
+            }
+          }}
+        />
+      )}
     </>
   );
 }

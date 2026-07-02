@@ -8,6 +8,12 @@ export interface QuoteLine {
   variant: string;
   variant_sku?: string;
   variant_name?: string;
+  is_manual_entry?: boolean;
+  manual_variant_name?: string;
+  manual_variant_sku?: string;
+  description?: string;
+  vendor?: string;
+  vendor_name?: string;
   quantity: number;
   unit_price: number;
   tax_rate: number;
@@ -25,7 +31,10 @@ export interface Quote {
   date: string;
   expiration_date: string | null;
   total_amount: number | string;
+  overall_discount_percent?: number | string;
+  overall_tax_percent?: number | string;
   status: "DRAFT" | "SENT" | "VIEWED" | "APPROVED" | "REJECTED" | "CONVERTED";
+  source?: string;
   notes: string;
   lines: QuoteLine[];
   created_at?: string;
@@ -188,5 +197,38 @@ export function useMarkConvertedQuote() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });
     },
+  });
+}
+
+export function useRevertQuoteStatus() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<{ status: string; message: string }>(`/api/sales/quotes/${id}/revert_status/`, { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });
+    },
+  });
+}
+
+export interface StatusHistoryEntry {
+  id: string;
+  entity_type: "LEAD" | "QUOTE";
+  entity_id: string;
+  from_status: string;
+  to_status: string;
+  notes: string;
+  changed_by: number | null;
+  changed_by_name: string | null;
+  created_at: string;
+}
+
+export function useQuoteStatusHistory(id: string | null) {
+  const api = useApi();
+  return useQuery({
+    queryKey: ["sales_quote_status_history", id],
+    queryFn: () => api<StatusHistoryEntry[]>(`/api/sales/quotes/${id}/status_history/`),
+    enabled: !!id,
   });
 }

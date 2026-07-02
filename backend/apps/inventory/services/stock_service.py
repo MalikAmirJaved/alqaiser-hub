@@ -267,7 +267,7 @@ def direct_release_stock(reference_id, company_id, user, warehouse=None):
     """Reverse a direct stock deduction for a reference (e.g. unpaid invoice deleted).
 
     Adds stock back to the exact warehouses that were deducted and creates
-    ADJUSTMENT transactions.
+    ADJUSTMENT transactions based on the net deduction.
     """
     from apps.inventory.models import InventoryTransaction, StockItem
     import uuid
@@ -276,21 +276,44 @@ def direct_release_stock(reference_id, company_id, user, warehouse=None):
         source_document_id=reference_id,
         source_document_type='CUSTOMER_INVOICE',
         company_id=company_id,
-    ).select_related('variant')
+    ).select_related('variant', 'warehouse')
 
+    net_changes = {}
     for txn in transactions:
+        key = (txn.variant_id, txn.warehouse_id, txn.branch_id)
+        if key not in net_changes:
+            net_changes[key] = {
+                'variant': txn.variant,
+                'warehouse': txn.warehouse,
+                'branch_id': txn.branch_id,
+                'net_qty': 0,
+                'unit_cost': txn.unit_cost,
+            }
+        net_changes[key]['net_qty'] += txn.quantity_change
+
+    for data in net_changes.values():
+        net_qty = data['net_qty']
+        # Only reverse if there's a net deduction
+        if net_qty >= 0:
+            continue
+
+        qty_to_release = abs(net_qty)
+        variant = data['variant']
+        wh = data['warehouse']
+        branch_id = data['branch_id'] or company_id
+
         stock, _ = StockItem.objects.select_for_update().get_or_create(
-            variant=txn.variant,
-            warehouse=txn.warehouse,
+            variant=variant,
+            warehouse=wh,
             company_id=company_id,
             defaults={
                 'quantity_on_hand': 0,
                 'quantity_reserved': 0,
-                'branch_id': txn.branch_id or company_id,
+                'branch_id': branch_id,
             },
         )
         before = stock.quantity_on_hand
-        after = before + abs(txn.quantity_change)
+        after = before + qty_to_release
 
         stock.quantity_on_hand = after
         stock.version = F('version') + 1
@@ -298,14 +321,14 @@ def direct_release_stock(reference_id, company_id, user, warehouse=None):
 
         InventoryTransaction.objects.create(
             transaction_id=uuid.uuid4(),
-            variant=txn.variant,
-            warehouse=txn.warehouse,
+            variant=variant,
+            warehouse=wh,
             company_id=company_id,
-            branch_id=txn.branch_id or company_id,
-            quantity_change=abs(txn.quantity_change),
+            branch_id=branch_id,
+            quantity_change=qty_to_release,
             quantity_before=before,
             quantity_after=after,
-            unit_cost=txn.unit_cost,
+            unit_cost=data['unit_cost'],
             transaction_type='ADJUSTMENT',
             source_document_type='CUSTOMER_INVOICE_REVERSAL',
             source_document_id=reference_id,

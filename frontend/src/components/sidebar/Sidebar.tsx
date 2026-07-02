@@ -15,7 +15,6 @@ export default function Sidebar({ open, onClose }) {
   const permissions = useSelector((state: RootState) => state.permissions.permissions);
   const user = useSelector((state: RootState) => state.auth.user);
   const { data } = useSelector((state: RootState) => state.companySettings);
-
   const isCompanyAdmin = user?.role === "COMPANY_ADMIN";
   const hasPermission = (permCode: string) =>
     permissions.some(p => p.toLowerCase() === permCode.toLowerCase());
@@ -124,7 +123,15 @@ export default function Sidebar({ open, onClose }) {
       >
         <div className="px-4 py-4 border-b border-sidebar-border">
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-lg bg-sidebar-primary text-sidebar-primary-foreground grid place-items-center font-bold">C</div>
+            {data?.logo ? (
+              <img
+                src={`${process.env.NEXT_PUBLIC_API_URL}${data.logo}`}
+                alt={data?.companyName || "Company"}
+                className="w-9 h-9 rounded-lg object-contain"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-lg bg-sidebar-primary text-sidebar-primary-foreground grid place-items-center font-bold">C</div>
+            )}
             <div className="font-semibold text-sm">{data?.companyName || "Alpha"}</div>
           </div>
         </div>
@@ -257,7 +264,7 @@ export default function Sidebar({ open, onClose }) {
           <p className="text-[11px] text-sidebar-foreground/50 text-center">
             Powered by <span className="font-semibold text-sidebar-foreground/70">ClickMasters</span>
             <span className="mx-1">·</span>
-            <span className="font-mono">v1.1</span>
+            <span className="font-mono">v1.2</span>
           </p>
         </div>
       </aside>

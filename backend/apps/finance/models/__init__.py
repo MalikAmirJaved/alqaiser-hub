@@ -1,7 +1,7 @@
 from .account import Account
 from .journal import JournalEntry, JournalLine
 from .supplier_bill import SupplierBill
-from .customer_invoice import CustomerInvoice, CustomerInvoiceLine
+from .customer_invoice import CustomerInvoice, CustomerInvoiceLine, InvoiceLineProductLink
 from .payment import Payment
 from .bank import BankAccount, BankTransaction
 from .expense import Expense
@@ -15,6 +15,7 @@ __all__ = [
     'SupplierBill',
     'CustomerInvoice',
     'CustomerInvoiceLine',
+    'InvoiceLineProductLink',
     'Payment',
     'BankAccount',
     'BankTransaction',

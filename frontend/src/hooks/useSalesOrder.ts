@@ -43,6 +43,7 @@ export interface SalesReturnResponse {
   id: string;
   return_number: string;
   sales_order: string;
+  total_returned?: number;
 }
 
 export interface SalesOrderResponse {
@@ -65,6 +66,7 @@ export interface SalesOrderResponse {
     discount_pct: number;
     discount_fixed: number;
     quantity_ordered: number;
+    quantity_returned?: number;
     unit_price: number;
     tax_rate: number;
     status: string;
@@ -211,6 +213,7 @@ export function useCreateSalesReturn() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
       queryClient.invalidateQueries({ queryKey: ["currentStock"] });
+      queryClient.invalidateQueries({ queryKey: ["finance_customer_invoices"] });
     },
   });
 }
@@ -284,6 +287,29 @@ export function useDraftSalesOrders() {
 }
 
 
+/**
+ * Edit a completed sales order (qty, price, variant)
+ */
+export function useEditSalesOrder() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ orderId, line_items }: { orderId: string; line_items: SalesOrderLineItem[] }) => {
+      return api<{ status: string; message: string; data: SalesOrderResponse; invoice_id?: string }>(
+        `/api/inventory/sales-orders/${orderId}/edit_sale/`,
+        { method: "POST", body: JSON.stringify({ line_items }) }
+      );
+    },
+    onSuccess: (_, { orderId }) => {
+      queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
+      queryClient.invalidateQueries({ queryKey: ["salesOrder", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["finance_customer_invoices"] });
+    },
+  });
+}
+
 export function useSalesOrders(filters?: {
   status?: string;
   customer?: string;
@@ -303,6 +329,51 @@ export function useSalesOrders(filters?: {
     queryKey: ["inventory_sales_order", filters],
     queryFn: async () => {
       const response = await api<{ count: number; results: SalesOrderResponse[] }>(url);
+      return { data: response.results, totalCount: response.count };
+    },
+    staleTime: 30_000,
+  });
+}
+
+// ── Sales Returns ────────────────────────────────────
+
+export interface SalesReturnListItem {
+  id: string;
+  return_number: string;
+  sales_order: string;
+  sales_order_number?: string;
+  warehouse?: { id: string; warehouse_name: string };
+  return_date: string;
+  reason?: string;
+  total_returned: number;
+  status: string;
+  created_at: string;
+  lines?: Array<{
+    id: string;
+    variant_name: string;
+    variant_sku: string;
+    quantity_returned: number;
+    refund_amount: number;
+    restock: boolean;
+    reason: string;
+  }>;
+}
+
+export function useSalesReturns(filters?: {
+  search?: string;
+  page?: number;
+  page_size?: number;
+}) {
+  const api = useApi();
+  const params = new URLSearchParams();
+  if (filters?.search) params.append("search", filters.search);
+  if (filters?.page) params.append("page", String(filters.page));
+  if (filters?.page_size) params.append("page_size", String(filters.page_size));
+  const url = `/api/inventory/sales-returns/${params.toString() ? `?${params}` : ""}`;
+  return useQuery<{ data: SalesReturnListItem[]; totalCount: number }>({
+    queryKey: ["inventory_sales_returns", filters],
+    queryFn: async () => {
+      const response = await api<{ count: number; results: SalesReturnListItem[] }>(url);
       return { data: response.results, totalCount: response.count };
     },
     staleTime: 30_000,

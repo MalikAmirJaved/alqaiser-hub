@@ -4,7 +4,7 @@ from rest_framework.decorators import action
 from django.db import transaction
 from django.db.models import F, Sum
 from django.db import models
-from django.core.paginator import Paginator
+from django.core.paginator import Paginator, EmptyPage
 import uuid
 
 from apps.common.baseauthentication import CompanyBranchMixin
@@ -381,9 +381,20 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
 
         products_qs = products_qs.order_by('product_name')
 
-        # Pagination
+        # Pagination — use page() directly so out-of-range returns empty results
+        # instead of Django's get_page() default which silently returns the last page.
         paginator = Paginator(products_qs, page_size)
-        page_obj = paginator.get_page(page)
+        try:
+            page_obj = paginator.page(page)
+        except EmptyPage:
+            # Return empty results for out-of-range pages instead of last page
+            return Response({
+                'count': paginator.count,
+                'page': page,
+                'page_size': page_size,
+                'results': [],
+                'variant_count': 0,
+            })
 
         # Calculate total variant count across ALL filtered products (not just current page)
         if warehouse:

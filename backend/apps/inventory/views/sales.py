@@ -25,10 +25,72 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def sync_invoice_for_return(sales_return, user):
+    """Update the linked CustomerInvoice when a return is processed.
+
+    Prorates discount_amount proportionally when quantity is reduced,
+    so the invoice line total = (qty * unit_price) - (discount * qty/orig_qty).
+    """
+    from apps.finance.models import CustomerInvoice, CustomerInvoiceLine
+    from decimal import Decimal
+    order = sales_return.sales_order
+    invoice = CustomerInvoice.objects.filter(sales_order=order, is_deleted=False).first()
+    if not invoice:
+        return
+
+    for ret_line in sales_return.lines.all():
+        sol = ret_line.sales_order_line
+        returned_qty = ret_line.quantity_returned
+        inv_line = CustomerInvoiceLine.objects.filter(
+            customer_invoice=invoice,
+            variant=sol.variant,
+            is_deleted=False,
+        ).first()
+        if inv_line:
+            old_qty = inv_line.quantity
+            if old_qty <= returned_qty:
+                inv_line.is_deleted = True
+                inv_line.updated_by = user
+                inv_line.save(update_fields=['is_deleted', 'updated_by'])
+            else:
+                inv_line.quantity -= returned_qty
+                if inv_line.discount_amount:
+                    inv_line.discount_amount = (
+                        inv_line.discount_amount * Decimal(inv_line.quantity) / Decimal(old_qty)
+                    )
+                inv_line.updated_by = user
+                inv_line.save(update_fields=['quantity', 'discount_amount', 'updated_by'])
+
+    remaining_lines = invoice.lines.filter(is_deleted=False)
+    new_amount = sum(
+        (l.quantity * l.unit_price) - (l.discount_amount or 0)
+        for l in remaining_lines
+    )
+    invoice.notes = ''
+    invoice.amount = max(new_amount, 0)
+    invoice.updated_by = user
+    invoice.save(update_fields=['amount', 'updated_by', 'notes'])
+
+
+def _prorate_line_discount(line, effective_qty):
+    """Return the prorated discount_amount for an order line at effective_qty."""
+    from decimal import Decimal
+    if effective_qty <= 0:
+        return Decimal('0')
+    if line.discount_amount:
+        return (
+            line.discount_amount * Decimal(effective_qty) / Decimal(line.quantity_ordered)
+        ).quantize(Decimal('0.01'))
+    if line.discount_percent:
+        subtotal = Decimal(effective_qty) * line.unit_price
+        return (subtotal * line.discount_percent / 100).quantize(Decimal('0.01'))
+    return Decimal('0')
+
+
 def sync_sales_order_to_invoice(order, user, create_invoice=True):
     """
     Create a CustomerInvoice + payment for a completed SalesOrder.
-    
+
     When create_invoice=False, creates only a standalone Payment record
     linked to the SalesOrder (no CustomerInvoice).
     """
@@ -36,7 +98,7 @@ def sync_sales_order_to_invoice(order, user, create_invoice=True):
     from apps.finance.services.payable import create_payment_for, get_payments_queryset
     from django.utils import timezone
     from decimal import Decimal
-    
+
     if not create_invoice:
         # Create a standalone payment linked directly to the SalesOrder
         # (no CustomerInvoice created)
@@ -58,7 +120,7 @@ def sync_sales_order_to_invoice(order, user, create_invoice=True):
                     logger = logging.getLogger(__name__)
                     logger.warning(f'POS payment creation skipped: {e}')
         return None
-    
+
     # 1. Get or create CustomerInvoice
     invoice, created = CustomerInvoice.objects.get_or_create(
         sales_order=order,
@@ -76,46 +138,50 @@ def sync_sales_order_to_invoice(order, user, create_invoice=True):
             'updated_by': user,
             'payment_method': order.payment_method,
             'bank_account': order.bank_account,
+            'notes': '',
         }
     )
-    
-    # Sync invoice lines if created
-    if created:
-        for line in order.lines.all():
+
+    active_lines = order.lines.exclude(status='CANCELLED')
+
+    def _recreate_invoice_lines():
+        """Soft-delete old lines and recreate with prorated discounts."""
+        invoice.lines.all().update(is_deleted=True)
+        total = Decimal('0')
+        for line in active_lines:
+            effective_qty = line.quantity_ordered - (line.quantity_returned or 0)
+            if effective_qty <= 0:
+                continue
+            prorated = _prorate_line_discount(line, effective_qty)
             CustomerInvoiceLine.objects.create(
                 customer_invoice=invoice,
                 variant=line.variant,
-                quantity=line.quantity_ordered,
+                quantity=effective_qty,
                 unit_price=line.unit_price,
                 tax_rate=line.tax_rate,
-                discount_amount=line.discount_amount,
+                discount_amount=prorated,
                 company_id=order.company_id,
                 branch_id=order.branch_id,
                 created_by=user,
                 updated_by=user,
             )
-            
-    # Update amount to match order total_amount just in case it changed
+            total += (Decimal(effective_qty) * line.unit_price) - prorated
+        return total
+
+    if created:
+        # Fresh invoice — create lines and set amount from order total
+        calc_total = _recreate_invoice_lines()
+        invoice.amount = max(calc_total, Decimal('0'))
+        invoice.save(update_fields=['amount'])
+
     if not created and invoice.status == 'DRAFT':
-        invoice.amount = order.total_amount
         invoice.payment_method = order.payment_method
         invoice.bank_account = order.bank_account
-        invoice.save(update_fields=['amount', 'payment_method', 'bank_account'])
-        # soft-delete old lines and recreate to keep them in sync
-        invoice.lines.all().update(is_deleted=True)
-        for line in order.lines.all():
-            CustomerInvoiceLine.objects.create(
-                customer_invoice=invoice,
-                variant=line.variant,
-                quantity=line.quantity_ordered,
-                unit_price=line.unit_price,
-                tax_rate=line.tax_rate,
-                discount_amount=line.discount_amount,
-                company_id=order.company_id,
-                branch_id=order.branch_id,
-                created_by=user,
-                updated_by=user,
-            )
+        invoice.notes = ''
+        # Recalculate from freshly recreated lines with prorated discounts
+        calc_total = _recreate_invoice_lines()
+        invoice.amount = max(calc_total, Decimal('0'))
+        invoice.save(update_fields=['amount', 'payment_method', 'bank_account', 'notes'])
 
     # 2. If SalesOrder is COMPLETE, post/confirm invoice and handle auto-payment
     if order.status == 'COMPLETE':
@@ -126,19 +192,19 @@ def sync_sales_order_to_invoice(order, user, create_invoice=True):
                 ensure_customer_invoice_journal(invoice, user)
             except ObjectDoesNotExist:
                 raise Exception('AR or SALES account not found in Chart of Accounts. Cannot complete order.')
-            
+
         # 3. Auto-payment for immediate POS settlement
         if not get_payments_queryset(invoice).exists():
             create_payment_for(
                 invoice,
-                amount=order.total_amount,
+                amount=invoice.amount,
                 payment_date=timezone.now().date(),
                 payment_method=order.payment_method or 'CASH',
                 bank_account=order.bank_account,
                 user=user,
                 auto_confirm=True,
             )
-    
+
     return invoice
 
 
@@ -637,6 +703,188 @@ class SalesOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequir
 
         return Response({'status': 'success', 'message': 'Order cancelled'})
 
+    def _release_stock(self, order, order_line, variant, qty, user):
+        warehouse = order.warehouse
+        company_id = user.company_id
+        with transaction.atomic():
+            stock_item = StockItem.objects.select_for_update().get(
+                variant=variant, warehouse=warehouse, company_id=company_id
+            )
+            before = stock_item.quantity_on_hand
+            after = before + qty
+            stock_item.quantity_on_hand = after
+            stock_item.version += 1
+            stock_item.save(update_fields=['quantity_on_hand', 'version'])
+
+            InventoryTransaction.objects.create(
+                transaction_id=uuid.uuid4(),
+                variant=variant,
+                warehouse=warehouse,
+                company_id=company_id,
+                branch_id=user.branch_id,
+                quantity_change=qty,
+                quantity_before=before,
+                quantity_after=after,
+                unit_cost=variant.buying_price,
+                transaction_type='RETURN_IN',
+                source_document_type='SALES_ORDER',
+                source_document_id=order._id,
+                source_line_id=order_line._id,
+                reason_text=f'Order edited - stock release - {order.order_number}',
+                created_by=user,
+                updated_by=user,
+            )
+
+    @action(detail=True, methods=['post'])
+    def edit_sale(self, request, _id=None):
+        """Edit a completed sales order — adjust qty/price/variant."""
+        order = self.get_object()
+        if order.status != 'COMPLETE':
+            return Response({'error': 'Only completed orders can be edited'}, status=400)
+
+        line_items = request.data.get('line_items', [])
+        if not line_items:
+            return Response({'error': 'line_items is required'}, status=400)
+
+        user = request.user
+        old_lines = {str(line._id): line for line in order.lines.filter(status='COMPLETE')}
+        old_variants = {str(line.variant._id): line for line in old_lines.values()}
+        existing_returns = {str(line._id): line.quantity_returned for line in old_lines.values() if line.quantity_returned}
+
+        # Snapshot original ordered qty for discount proration in total recalc
+        original_line_qty = {}
+        for _id, line in old_lines.items():
+            original_line_qty[_id] = line.quantity_ordered
+
+        processed_line_ids = set()
+        activity_log = []
+
+        with transaction.atomic():
+            for item in line_items:
+                variant_uuid = item['variant']
+                new_qty = item['quantity_ordered']
+                unit_price = item['unit_price']
+                tax_rate = item.get('tax_rate', 0)
+                discount_pct = item.get('discount_pct', 0)
+                discount_fixed = item.get('discount_fixed', 0)
+                line_id = item.get('line_id')
+
+                existing_line = None
+                if line_id and line_id in old_lines:
+                    existing_line = old_lines[line_id]
+                elif variant_uuid in old_variants:
+                    existing_line = old_variants[variant_uuid]
+
+                if existing_line:
+                    processed_line_ids.add(str(existing_line._id))
+                    old_qty = existing_line.quantity_ordered
+                    old_returned = existing_line.quantity_returned or 0
+                    old_effective_qty = old_qty - old_returned
+                    variant = existing_line.variant
+                    changes = []
+
+                    if new_qty != old_effective_qty:
+                        changes.append(f"qty {old_effective_qty}→{new_qty}")
+                        if new_qty > old_effective_qty:
+                            additional = new_qty - old_effective_qty
+                            self._deduct_stock_for_line(order, existing_line, variant, additional, user)
+                        else:
+                            excess = old_effective_qty - new_qty
+                            self._release_stock(order, existing_line, variant, excess, user)
+
+                    if existing_line.unit_price != unit_price:
+                        changes.append(f"price {existing_line.unit_price}→{unit_price}")
+
+                    # Preserve return history: total ordered = effective + already returned
+                    existing_line.quantity_ordered = new_qty + old_returned
+                    existing_line.unit_price = unit_price
+                    existing_line.tax_rate = tax_rate
+                    existing_line.discount_percent = discount_pct
+                    existing_line.discount_amount = discount_fixed
+                    existing_line.updated_by = user
+                    existing_line.save(update_fields=[
+                        'quantity_ordered', 'unit_price', 'tax_rate',
+                        'discount_percent', 'discount_amount', 'updated_by',
+                    ])
+
+                    if changes:
+                        activity_log.append(
+                            f"[{timezone.now().strftime('%b %d %Y %H:%M')}] {variant.sku or variant.product.product_name}: {', '.join(changes)}"
+                        )
+                else:
+                    variant = ProductVariant.objects.get(_id=variant_uuid, company_id=user.company_id)
+                    order_line = SalesOrderLine.objects.create(
+                        sales_order=order,
+                        variant=variant,
+                        quantity_ordered=new_qty,
+                        unit_price=unit_price,
+                        tax_rate=tax_rate,
+                        discount_percent=discount_pct,
+                        discount_amount=discount_fixed,
+                        status='COMPLETE',
+                        company_id=user.company_id,
+                        branch_id=user.branch_id,
+                        created_by=user,
+                        updated_by=user,
+                    )
+                    self._deduct_stock_for_line(order, order_line, variant, new_qty, user)
+                    activity_log.append(
+                        f"[{timezone.now().strftime('%b %d %Y %H:%M')}] Added {variant.sku or variant.product.product_name} x{new_qty} @ {unit_price}"
+                    )
+
+            for line in list(old_lines.values()):
+                if str(line._id) not in processed_line_ids and line.status != 'CANCELLED':
+                    effective_stock = line.quantity_ordered - (line.quantity_returned or 0)
+                    if effective_stock > 0:
+                        self._release_stock(order, line, line.variant, effective_stock, user)
+                    line.status = 'CANCELLED'
+                    line.updated_by = user
+                    line.save(update_fields=['status', 'updated_by'])
+                    activity_log.append(
+                        f"[{timezone.now().strftime('%b %d %Y %H:%M')}] Removed {line.variant.sku or line.variant.product.product_name} x{line.quantity_ordered}"
+                    )
+
+            total_amount = 0
+            for item in line_items:
+                qty = item['quantity_ordered']
+                line_id = item.get('line_id')
+                price = item['unit_price']
+                d_pct = item.get('discount_pct', 0)
+                d_fixed = item.get('discount_fixed', 0)
+                effective_qty = qty  # frontend sends effective qty
+                subtotal = effective_qty * price
+                if d_fixed > 0:
+                    # Prorate fixed discount by original ordered qty (before this edit)
+                    orig_qty = original_line_qty.get(line_id) if line_id else None
+                    if orig_qty and orig_qty > 0:
+                        discount = d_fixed * effective_qty / orig_qty
+                    else:
+                        discount = d_fixed
+                else:
+                    discount = subtotal * (d_pct / 100)
+                total_amount += (subtotal - discount)
+            order.total_amount = total_amount
+            order.updated_by = user
+            order.save(update_fields=['total_amount', 'updated_by'])
+
+        if activity_log:
+            log_entries = '\n'.join(activity_log)
+            order.notes = (order.notes + '\n\n--- Edit Log ---\n' + log_entries) if order.notes else ('--- Edit Log ---\n' + log_entries)
+            order.save(update_fields=['notes'])
+
+        from apps.finance.models import CustomerInvoice
+        invoice = CustomerInvoice.objects.filter(sales_order=order, is_deleted=False).first()
+        if invoice:
+            sync_sales_order_to_invoice(order, user, create_invoice=True)
+
+        response_data = self.get_serializer(order, context={'request': request}).data
+        response_data['invoice_id'] = str(invoice._id) if invoice else None
+        return Response({
+            'status': 'success',
+            'message': 'Order edited successfully',
+            'data': response_data,
+        }, status=status.HTTP_200_OK)
+
     def _deduct_stock_for_line(self, order, order_line, variant, qty, user):
         warehouse = order.warehouse
         company_id = user.company_id
@@ -696,11 +944,31 @@ class SalesReturnViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequi
         serializer.is_valid(raise_exception=True)
         ret = serializer.save()
         self._process_return(ret, request.user)
+        sync_invoice_for_return(ret, request.user)
+        order = ret.sales_order
+
+        # Recalculate order total: subtract returned amounts
+        total_return_value = sum(
+            rl.refund_amount for rl in ret.lines.all()
+        )
+        order.total_amount = max(order.total_amount - total_return_value, 0)
+        order.updated_by = request.user
+
+        total_returned = sum(rl.quantity_returned for rl in ret.lines.all())
+        item_list = ', '.join(
+            f"{rl.sales_order_line.variant.sku or rl.sales_order_line.variant.product.product_name} x{rl.quantity_returned}"
+            for rl in ret.lines.all()
+        )
+        log_entry = f"[{timezone.now().strftime('%b %d %Y %H:%M')}] Return {ret.return_number}: {item_list}"
+        order.notes = (order.notes + '\n' + log_entry) if order.notes else log_entry
+        order.save(update_fields=['total_amount', 'notes', 'updated_by'])
         read_serializer = SalesReturnSerializer(ret, context={'request': request})
         return Response({
             'status': 'success',
             'message': f'Return {ret.return_number} processed.',
-            'data': read_serializer.data
+            'data': read_serializer.data,
+            'return_number': ret.return_number,
+            'total_returned': total_returned,
         }, status=status.HTTP_201_CREATED)
 
     def _process_return(self, ret, user):

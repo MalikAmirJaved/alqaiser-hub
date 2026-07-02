@@ -10,6 +10,7 @@ import {
   useCompleteSalesOrder,
   useCancelSalesOrder,
   useUpdateSalesOrder,
+  useEditSalesOrder,
   useDraftSalesOrders,
   useSalesOrders,
   cartToLineItems, CartLine
@@ -43,6 +44,7 @@ export default function SalesPage() {
   const { mutateAsync: completeOrder, isPending: isCompleting } = useCompleteSalesOrder();
   const { mutateAsync: cancelOrder, isPending: isCancelling } = useCancelSalesOrder();
   const { mutateAsync: updateSalesOrder } = useUpdateSalesOrder();
+  const { mutateAsync: editSalesOrder, isPending: isEditing } = useEditSalesOrder();
   const { data: companySettings } = useCompanySettingsQuery();
   const { terms: termsData } = useTermsAndConditions();
 
@@ -51,6 +53,8 @@ export default function SalesPage() {
   const [selectedWarehouse, setSelectedWarehouse] = useState<any>(null);
   const [activePanel, setActivePanel] = useState<ActivePanel>("search");
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [returnOrderNumber, setReturnOrderNumber] = useState<string>("");
   const [orderNotes, setOrderNotes] = useState("");
   const [invoiceModalProps, setInvoiceModalProps] = useState<{ open: boolean; data: QuoteInvoiceData | null }>({ open: false, data: null });
   const [thermalReceiptData, setThermalReceiptData] = useState<ThermalReceiptData | null>(null);
@@ -114,25 +118,64 @@ export default function SalesPage() {
     }
   }, [cart, activeDraftId]);
 
-  // Prefetch product list on mount for faster initial load
+  // Prefetch POS catalog on mount for faster initial load (only after warehouse is set)
   useEffect(() => {
-    queryClient.prefetchQuery({
-      queryKey: ["inventory_variant", { active_only: true }],
-      queryFn: () => useAllVariantsSimple({ active_only: true }),
-      staleTime: 5 * 60 * 1000,
-    });
-  }, [queryClient]);
+    if (!selectedWarehouse?.id) return;
 
-  // Default to first warehouse
+    const params = new URLSearchParams();
+    params.append("warehouse_id", selectedWarehouse.id);
+    params.append("page", "1");
+    params.append("page_size", "20");
+
+    queryClient.prefetchQuery({
+      queryKey: ["pos_catalog", { warehouse_id: selectedWarehouse.id, search: undefined, category_id: undefined, brand_id: undefined, page: 1, page_size: 20 }],
+      queryFn: () => apiFetch(`/api/inventory/stock/pos-catalog/?${params.toString()}`),
+      staleTime: 30_000,
+    });
+  }, [queryClient, selectedWarehouse]);
+
+  // Default to first warehouse (ensure this runs first)
   useEffect(() => {
     if (warehouses.length > 0 && (!selectedWarehouse || selectedWarehouse === undefined)) {
       setSelectedWarehouse(warehouses[0]);
     }
   }, [warehouses, selectedWarehouse]);
 
+  const loadCompletedOrder = useCallback((order: any) => {
+    const loadedCart: CartLine[] = (order.lines || []).filter(
+      (l: any) => l.status !== "CANCELLED"
+    ).map((line: any) => {
+      // Use effective quantity: ordered minus returned (don't load fully returned items)
+      const effectiveQty = Math.max(0, (line.quantity_ordered || 0) - (line.quantity_returned || 0));
+      if (effectiveQty === 0) return null;
+      return {
+        variant: {
+          id: line.variant,
+          sku: line.variant_sku,
+          product_name: line.variant_name,
+          selling_price: line.unit_price,
+        } as any,
+        qty: effectiveQty,
+        unitPrice: parseFloat(line.unit_price),
+        taxRate: parseFloat(line.tax_rate || 0),
+        discountPct: parseFloat(line.discount_percent || 0),
+        discountFixed: parseFloat(line.discount_amount || 0),
+        notes: "",
+        salesOrderLineId: line.id,
+      };
+    }).filter(Boolean) as CartLine[];
+    setCart(loadedCart);
+    setSelectedCustomer(order.customer ? { id: order.customer.id, name: order.customer_name } : null);
+    setOrderNotes(order.notes || "");
+    setEditingOrderId(order.id);
+    setActiveDraftId(null);
+    setActivePanel("search");
+  }, []);
+
   const clearCart = useCallback(() => {
     setCart([]);
     setActiveDraftId(null);
+    setEditingOrderId(null);
     setOrderNotes("");
   }, []);
 
@@ -214,7 +257,12 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
   const notesWithPayments = notes + (payments.length ? ` | Payments: ${payments.map(p => `${p.method}:${p.amount}`).join(", ")}` : "");
   try {
     let result: any;
-    if (activeDraftId) {
+    if (editingOrderId) {
+      result = await editSalesOrder({
+        orderId: editingOrderId,
+        line_items: cartToLineItems(finalCart),
+      });
+    } else if (activeDraftId) {
       const updatedLineItems = cartToLineItems(finalCart);
       result = await completeOrder({ orderId: activeDraftId, line_items: updatedLineItems, create_invoice: createInvoice });
     } else {
@@ -263,8 +311,8 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
           phone: company?.phone || "",
           email: company?.email || "",
           taxId: company?.taxId || "",
-          logo: "",
-          logoUrl: "",
+          logo: company?.logo || "",
+          logoUrl: company?.logo ? `${process.env.NEXT_PUBLIC_API_URL}${company.logo}` : "",
         };
         
         const docData: QuoteInvoiceData = {
@@ -297,7 +345,7 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
   } catch (err: any) {
     console.error(err);
   }
-}, [cart, activeDraftId, selectedCustomer, selectedWarehouse, createSalesOrder, completeOrder, clearCart, refetchDrafts, queryClient, companySettings, formatCurrency, buildThermalReceipt, showThermalReceipt]);
+}, [cart, activeDraftId, editingOrderId, selectedCustomer, selectedWarehouse, createSalesOrder, completeOrder, editSalesOrder, clearCart, refetchDrafts, queryClient, companySettings, formatCurrency, buildThermalReceipt, showThermalReceipt]);
 
   const handleSaveDraft = useCallback(async (notes: string, overrideCart?: CartLine[]) => {
     const finalCart = overrideCart || cart;
@@ -338,7 +386,10 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
     }
   }, [cancelOrder, refetchDrafts, activeDraftId, clearCart]);
 
-  const handleCartChange = useCallback((newCart: CartLine[]) => {
+  // Called when cart items change (for future expansion)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleCartChange = useCallback((_newCart: CartLine[]) => {
+    // Reserved for cart-change side effects
   }, []);
 
   const panelLabels: Record<ActivePanel, string> = {
@@ -574,8 +625,8 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
               </div>
             )}
 
-            {activePanel === "return" && <ReturnPanel warehouses={warehouses} />}
-            {activePanel === "sales" && <SalesListPanel />}
+            {activePanel === "return" && <ReturnPanel warehouses={warehouses} initialOrderNumber={returnOrderNumber} />}
+            {activePanel === "sales" && <SalesListPanel onEditOrder={loadCompletedOrder} onReturnOrder={(order) => { setReturnOrderNumber(order.order_number); setActivePanel("return"); }} />}
           </div>
         </div>
       </div>
@@ -595,8 +646,9 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
           onCompleteSale={handleCompleteSale}
           onThermalPrint={handleCartThermalPrint}
           onCartChange={handleCartChange}
-          isSubmitting={isCreatingOrder || isCompleting}
+          isSubmitting={isCreatingOrder || isCompleting || isEditing}
           activeDraftId={activeDraftId}
+          isEditingOrder={!!editingOrderId}
           canCreate={permissions.create}
           canUpdate={permissions.update}
         />
@@ -618,8 +670,8 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
               phone: companySettings?.phone || "",
               email: companySettings?.email || "",
               taxId: companySettings?.taxId || "",
-              logo: "",
-              logoUrl: "",
+              logo: companySettings?.logo || "",
+              logoUrl: companySettings?.logo ? `${process.env.NEXT_PUBLIC_API_URL}${companySettings.logo}` : "",
             },
             termsContent: termsData?.invoice || "",
             formatCurrency,

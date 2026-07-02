@@ -34,7 +34,8 @@ export interface CompanySettings {
   country: string;
   phone: string;
   email: string;
-  
+  logo?: string;
+
   designations: Designation[];
 
   // Financial

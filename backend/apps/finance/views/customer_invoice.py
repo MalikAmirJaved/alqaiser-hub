@@ -12,10 +12,13 @@ from apps.finance.models import CustomerInvoice, CustomerInvoiceLine
 from apps.finance.serializers import CustomerInvoiceSerializer
 from apps.finance.mixins import CompanyBranchUserMixin, SoftDeleteMixin
 from apps.finance.services.invoice_payment import pay_customer_invoice
+from apps.finance.services.resolve_reduction import resolve_invoice_line_reduction
 from apps.inventory.services.stock_service import (
     direct_deduct_stock,
     direct_release_stock,
 )
+from apps.audit.models import AuditLog
+from apps.audit.serializers import AuditLogSerializer
 
 
 class CustomerInvoiceViewSet(
@@ -75,14 +78,21 @@ class CustomerInvoiceViewSet(
 
     def perform_create(self, serializer):
         import time, random
-        serializer.save(
-            invoice_number=f"INV-{int(time.time())}-{random.randint(1000, 9999)}",
-            source='FINANCE',
-            company_id=self.request.user.company_id,
-            branch_id=self.request.user.branch_id,
-            created_by=self.request.user,
-            updated_by=self.request.user,
-        )
+        from django.db import IntegrityError
+        for _ in range(10):
+            try:
+                serializer.save(
+                    invoice_number=f"INV-{int(time.time())}-{random.randint(1000, 9999)}",
+                    source='FINANCE',
+                    company_id=self.request.user.company_id,
+                    branch_id=self.request.user.branch_id,
+                    created_by=self.request.user,
+                    updated_by=self.request.user,
+                )
+                return
+            except IntegrityError:
+                continue
+        raise ValueError("Failed to generate unique invoice number")
 
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
@@ -94,9 +104,15 @@ class CustomerInvoiceViewSet(
         try:
             with transaction.atomic():
                 direct_release_stock(instance._id, instance.company_id, request.user)
-                serializer = self.get_serializer(instance, data=request.data, partial=partial)
+                # Pass raw line IDs through context for matching during update
+                raw_lines = request.data.get('lines', [])
+                line_ids_map = {idx: str(l.get('id', '')) for idx, l in enumerate(raw_lines) if l.get('id')}
+                serializer = self.get_serializer(
+                    instance, data=request.data, partial=partial,
+                    context={**self.get_serializer_context(), 'raw_line_ids': line_ids_map}
+                )
                 serializer.is_valid(raise_exception=True)
-                self.perform_update(serializer)
+                serializer.save(updated_by=request.user)
                 direct_deduct_stock(
                     instance.lines.all(),
                     company_id=instance.company_id,
@@ -106,10 +122,16 @@ class CustomerInvoiceViewSet(
                 )
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        response_data = serializer.data
+        reduction_conflicts = getattr(serializer, '_reduction_conflicts', [])
+        if reduction_conflicts:
+            response_data['_reduction_conflicts'] = reduction_conflicts
+
         return Response({
             'status': 'success',
             'message': f'Invoice updated successfully',
-            'data': serializer.data
+            'data': response_data
         })
 
     def perform_update(self, serializer):
@@ -157,3 +179,53 @@ class CustomerInvoiceViewSet(
         """Record a payment against an invoice (books JE on first payment)."""
         invoice = self.get_object()
         return self._pay_invoice(invoice, request)
+
+    @action(detail=True, methods=['post'])
+    def resolve_reduction(self, request, _id=None):
+        """Resolve a reduction conflict on a manual invoice line."""
+        invoice = self.get_object()
+        line_id = request.data.get('line_id')
+        action_type = request.data.get('action')
+
+        if not line_id or action_type not in ('go_to_inventory', 'return_to_vendor'):
+            return Response(
+                {'error': 'line_id and a valid action (go_to_inventory or return_to_vendor) are required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            line = invoice.lines.get(_id=line_id, is_deleted=False, is_manual_entry=True)
+        except CustomerInvoiceLine.DoesNotExist:
+            return Response(
+                {'error': 'Manual entry line not found on this invoice.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if line.resolved:
+            return Response(
+                {'error': 'This reduction has already been resolved.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            result = resolve_invoice_line_reduction(line, action_type, request.user)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            'status': 'success',
+            'message': f'Reduction resolved: {action_type}',
+            'data': result,
+        })
+
+    @action(detail=True, methods=['get'])
+    def audit_log(self, request, _id=None):
+        """Return audit trail (field-level changes) for this invoice."""
+        invoice = self.get_object()
+        logs = AuditLog.objects.filter(
+            model_name='CustomerInvoice',
+            record_id=invoice._id,
+            company_id=invoice.company_id,
+        ).order_by('-created_at').prefetch_related('field_changes')
+        serializer = AuditLogSerializer(logs, many=True)
+        return Response(serializer.data)

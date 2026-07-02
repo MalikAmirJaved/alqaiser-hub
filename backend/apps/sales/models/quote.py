@@ -36,6 +36,8 @@ class Quote(BaseModel):
         ('SALES_POS', 'Sales POS'),
         ('SALES_AGENT', 'Sales Agent'),
     ], default='SALES_DESKTOP', db_index=True)
+    overall_discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    overall_tax_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
     notes = models.TextField(blank=True)
     converted_invoice = models.ForeignKey(
         'finance.CustomerInvoice',
@@ -66,18 +68,33 @@ class QuoteLine(BaseModel):
     variant = models.ForeignKey(
         'inventory.ProductVariant',
         on_delete=models.PROTECT,
-        related_name='quote_lines'
+        related_name='quote_lines',
+        null=True,
+        blank=True,
+    )
+    is_manual_entry = models.BooleanField(default=False)
+    manual_variant_name = models.CharField(max_length=200, blank=True)
+    manual_variant_sku = models.CharField(max_length=100, blank=True)
+    vendor = models.ForeignKey(
+        'inventory.Supplier',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='quote_lines',
     )
     quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
     unit_price = models.DecimalField(max_digits=12, decimal_places=4)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    description = models.TextField(blank=True, default='')
 
     class Meta:
         db_table = 'sales_quote_lines'
         indexes = [
             models.Index(fields=['quote']),
             models.Index(fields=['variant']),
+            models.Index(fields=['vendor']),
+            models.Index(fields=['is_manual_entry']),
             models.Index(fields=['company_id', 'branch_id']),
         ]
 

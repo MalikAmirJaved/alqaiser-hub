@@ -10,10 +10,25 @@ export interface CustomerInvoiceLine {
   variant: string;
   variant_sku?: string;
   variant_name?: string;
+  is_manual_entry?: boolean;
+  manual_variant_name?: string;
+  manual_variant_sku?: string;
+  vendor?: string;
+  vendor_name?: string;
+  cost_price?: number;
   quantity: number;
   unit_price: number;
   tax_rate: number;
   discount_amount: number;
+}
+
+export interface InvoicePayment {
+  id: string;
+  amount: string;
+  payment_date: string;
+  payment_method: string;
+  reference_number: string;
+  status: string;
 }
 
 export interface CustomerInvoice {
@@ -21,12 +36,16 @@ export interface CustomerInvoice {
   invoice_number: string;
   customer: string;
   customer_name?: string;
+  customer_email?: string;
+  customer_phone?: string;
   sales_order: string | null;
   invoice_date: string;
   due_date: string;
   amount: number | string;
   paid_amount: number | string;
   outstanding: number | string;
+  overall_discount_percent?: number | string;
+  overall_tax_percent?: number | string;
   status: "DRAFT" | "CANCELLED";
   payment_status?: "UNPAID" | "PARTIAL" | "PAID";
   journal_entry: number | string | null;
@@ -34,6 +53,7 @@ export interface CustomerInvoice {
   source?: string;
   payment_method?: string;
   lines?: CustomerInvoiceLine[];
+  payments?: InvoicePayment[];
   created_at: string;
   updated_at: string;
   created_by?: number | string | null;
@@ -70,7 +90,7 @@ async function getAllCustomerInvoices(params?: { search?: string; status?: strin
   return apiFetch<PaginatedResponse<CustomerInvoice>>(url);
 }
 
-async function getCustomerInvoiceById(id: string) {
+export async function getCustomerInvoiceById(id: string) {
   return apiFetch<CustomerInvoice>(`/api/finance/customer-invoices/${id}/`);
 }
 
@@ -180,6 +200,61 @@ export function usePostCustomerInvoice() {
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY, id] });
+    },
+  });
+}
+
+async function resolveReduction(
+  invoiceId: string,
+  data: { line_id: string; action: "go_to_inventory" | "return_to_vendor" }
+) {
+  return apiFetch<{ status: string; data: Record<string, unknown> }>(
+    `/api/finance/customer-invoices/${invoiceId}/resolve_reduction/`,
+    { method: "POST", body: JSON.stringify(data) }
+  );
+}
+
+export interface AuditLogEntry {
+  id: number;
+  user: number | null;
+  user_name: string;
+  user_email: string;
+  action: string;
+  action_display: string;
+  model_name: string;
+  record_id: string;
+  module: string;
+  field_changes: { id: number; field_name: string; old_value: string | null; new_value: string | null; created_at: string }[];
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export function useCustomerInvoiceAuditLog(invoiceId: string | null) {
+  return useQuery({
+    queryKey: [CUSTOMER_INVOICES_KEY, "audit_log", invoiceId],
+    queryFn: () => apiFetch<AuditLogEntry[]>(`/api/finance/customer-invoices/${invoiceId}/audit_log/`),
+    enabled: !!invoiceId,
+  });
+}
+
+export function useResolveReduction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      invoiceId,
+      lineId,
+      action,
+    }: {
+      invoiceId: string;
+      lineId: string;
+      action: "go_to_inventory" | "return_to_vendor";
+    }) => resolveReduction(invoiceId, { line_id: lineId, action }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
     },
   });
 }

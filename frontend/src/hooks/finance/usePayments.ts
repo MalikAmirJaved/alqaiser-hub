@@ -12,17 +12,14 @@ export interface Payment {
   amount: number | string;
   payment_date: string;
   reference_number: string;
-  supplier_bill: string | null;
-  customer_invoice: string | null;
   bank_account: string | null;
+  bank_account_name?: string | null;
   journal_entry: string | null;
   notes: string;
   created_at: string;
   updated_at: string;
-  supplier_name?: string;
-  customer_name?: string;
-  bank_account_name?: string;
-  outstanding?: number;
+  supplier_name?: string | null;
+  customer_name?: string | null;
   status: "DRAFT" | "CONFIRMED" | "CANCELLED";
   payable_type: string | null;
   payable_id: string | null;
@@ -37,8 +34,20 @@ interface PaginatedResponse<T> {
 }
 
 
-type CreatePaymentData = Omit<Payment, "id" | "created_at" | "updated_at" | "journal_entry">;
-type UpdatePaymentData = Partial<CreatePaymentData>;
+interface CreatePaymentPayload {
+  payable_type: "supplier_bill" | "customer_invoice";
+  payable_id: string;
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+  bank_account?: string;
+  reference_number?: string;
+  notes?: string;
+}
+
+interface UpdatePaymentPayload extends Partial<CreatePaymentPayload> {
+  status?: string;
+}
 
 // ============================================
 // API FUNCTIONS
@@ -75,14 +84,14 @@ async function getPaymentById(id: string) {
   return apiFetch<Payment>(`/api/finance/payments/${id}/`);
 }
 
-async function createPayment(data: CreatePaymentData) {
+async function createPayment(data: CreatePaymentPayload) {
   return apiFetch<Payment>("/api/finance/payments/", {
     method: "POST",
     body: JSON.stringify(data),
   });
 }
 
-async function updatePayment(id: string, data: UpdatePaymentData) {
+async function updatePayment(id: string, data: UpdatePaymentPayload) {
   return apiFetch<Payment>(`/api/finance/payments/${id}/`, {
     method: "PUT",
     body: JSON.stringify(data),
@@ -91,6 +100,13 @@ async function updatePayment(id: string, data: UpdatePaymentData) {
 
 async function deletePayment(id: string) {
   return apiFetch<void>(`/api/finance/payments/${id}/`, { method: "DELETE" });
+}
+
+async function confirmPayment(id: string) {
+  return apiFetch<{ status: string; message: string; data: Payment }>(
+    `/api/finance/payments/${id}/confirm/`,
+    { method: "POST" }
+  );
 }
 
 // ============================================
@@ -144,11 +160,25 @@ export function useCreatePayment() {
 export function useUpdatePayment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdatePaymentData }) =>
+    mutationFn: ({ id, data }: { id: string; data: UpdatePaymentPayload }) =>
       updatePayment(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: [PAYMENTS_KEY] });
       queryClient.invalidateQueries({ queryKey: [PAYMENTS_KEY, id] });
+    },
+  });
+}
+
+export function useConfirmPayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => confirmPayment(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [PAYMENTS_KEY] });
+      queryClient.invalidateQueries({ queryKey: ["finance_supplier_bills"] });
+      queryClient.invalidateQueries({ queryKey: ["finance_customer_invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["supplier"] });
+      queryClient.invalidateQueries({ queryKey: ["supplier_history"] });
     },
   });
 }
@@ -192,3 +222,4 @@ export const paymentMethodOptions = [
   { value: "CREDIT_CARD", label: "Credit Card" },
   { value: "OTHER", label: "Other" },
 ];
+

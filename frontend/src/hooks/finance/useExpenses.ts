@@ -9,6 +9,9 @@ export interface Expense {
   amount: number;
   description: string;
   paid: boolean;
+  paid_amount?: number | string;
+  outstanding?: number | string;
+  payment_status?: "UNPAID" | "PARTIAL" | "PAID";
   payment_date: string | null;
   payment_method: string;
   reference_number: string;
@@ -101,7 +104,7 @@ async function deleteExpense(id: string) {
   return apiFetch<void>(`/api/finance/expenses/${id}/`, { method: "DELETE" });
 }
 
-async function recordExpensePayment(id: string, paymentData: { payment_date: string; payment_method: string; reference_number?: string }) {
+async function recordExpensePayment(id: string, paymentData: { amount?: number; payment_date: string; payment_method: string; reference_number?: string }) {
   return apiFetch<Expense>(`/api/finance/expenses/${id}/record_payment/`, { method: "POST", body: JSON.stringify(paymentData) });
 }
 
@@ -176,7 +179,7 @@ export function useDeleteExpense() {
 export function useRecordExpensePayment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { payment_date: string; payment_method: string; reference_number?: string } }) =>
+    mutationFn: ({ id, data }: { id: string; data: { amount?: number; payment_date: string; payment_method: string; reference_number?: string } }) =>
       recordExpensePayment(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: [EXPENSES_KEY] });

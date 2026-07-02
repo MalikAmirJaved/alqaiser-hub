@@ -393,6 +393,9 @@ export function PurchaseOrderModal({
     e.preventDefault();
     const selectedLines = lineItems.filter((l) => l.selectedId);
     if (selectedLines.length === 0) return void toast.error('Add at least one line item.');
+    if (inventoryType === 'FOR_SALE' && !warehouseId) {
+      return void toast.error('Destination warehouse is required for stock for sale orders.');
+    }
     if (selectedLines.find((l) => l.unit_cost <= 0)) return void toast.error('Unit cost is required for every item.');
     const payload: PurchaseOrderPayload = {
       supplier: supplierId,
@@ -509,6 +512,7 @@ export function PurchaseOrderModal({
                           onChange={(val) => setWarehouseId(val)}
                           fetchOptions={fetchWarehouses}
                           placeholder="Select warehouse…"
+                          required
                         />
                         <button
                           type="button"

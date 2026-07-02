@@ -16,9 +16,26 @@ export interface Supplier extends Record<string, unknown> {
   city: string;
   postal_code: string;
   status: "active" | "inactive" | "suspended";
+  balance: string;
+  credit: string;
   created_at: string;
   updated_at: string;
   partner_type?: string;
+}
+
+export interface SupplierHistory {
+  id: string;
+  supplier: string;
+  supplier_name: string;
+  supplier_code: string;
+  transaction_type: "PURCHASE" | "PAYMENT" | "CREDIT_NOTE" | "INVOICE_ADJUSTMENT" | "CREDIT_APPLIED";
+  amount: string;
+  balance_after: string;
+  credit_after: string;
+  reference_type: string;
+  reference_id: string;
+  notes: string;
+  created_at: string;
 }
 export type PaginatedResponse<T> = {
   count: number;
@@ -106,5 +123,14 @@ export function useSupplier(id: string | null) {
     queryKey: ["supplier", id],
     queryFn: () => api(`/api/inventory/suppliers/${id}/`),
     enabled: !!id,
+  });
+}
+
+export function useSupplierHistory(supplierId: string | null) {
+  const api = useApi();
+  return useQuery<PaginatedResponse<SupplierHistory>>({
+    queryKey: ["supplier_history", supplierId],
+    queryFn: () => api(`/api/inventory/supplier-history/?supplier=${supplierId}`),
+    enabled: !!supplierId,
   });
 }

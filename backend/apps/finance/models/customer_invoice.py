@@ -59,6 +59,8 @@ class CustomerInvoice(PayableModelMixin, BaseModel):
         default='FINANCE',
         db_index=True,
     )
+    overall_discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    overall_tax_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
     notes = models.TextField(blank=True)
 
     class Meta:
@@ -82,17 +84,39 @@ class CustomerInvoiceLine(BaseModel):
         'inventory.ProductVariant',
         on_delete=models.PROTECT,
         related_name='invoice_lines',
+        null=True,
+        blank=True,
     )
+    is_manual_entry = models.BooleanField(default=False)
+    manual_variant_name = models.CharField(max_length=200, blank=True)
+    manual_variant_sku = models.CharField(max_length=100, blank=True)
+    vendor = models.ForeignKey(
+        'inventory.Supplier',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='invoice_lines',
+    )
+    cost_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     quantity = models.PositiveIntegerField()
     unit_price = models.DecimalField(max_digits=12, decimal_places=4)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    description = models.TextField(blank=True, default='')
+    supplier_bill = models.ForeignKey('SupplierBill', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='invoice_lines')
+    original_quantity = models.PositiveIntegerField(null=True, blank=True,
+        help_text='Pre-edit quantity for reduction conflict resolution')
+    resolved = models.BooleanField(default=False,
+        help_text='Whether the reduction conflict on this line has been resolved')
 
     class Meta:
         db_table = 'finance_customer_invoice_lines'
         indexes = [
             models.Index(fields=['customer_invoice']),
             models.Index(fields=['variant']),
+            models.Index(fields=['vendor']),
+            models.Index(fields=['is_manual_entry']),
             models.Index(fields=['company_id', 'branch_id']),
         ]
 
@@ -103,3 +127,36 @@ class CustomerInvoiceLine(BaseModel):
     @property
     def line_total(self):
         return self.subtotal - self.discount_amount
+
+
+class InvoiceLineProductLink(BaseModel):
+    """
+    Links a manual invoice line to the ProductVariant created when the user
+    chooses "go_to_inventory" during reduction resolution.
+
+    This ensures subsequent reductions on the same line reuse the existing
+    product/variant instead of creating duplicates.
+    """
+    invoice_line = models.ForeignKey(
+        'CustomerInvoiceLine',
+        on_delete=models.CASCADE,
+        related_name='product_links',
+    )
+    product = models.ForeignKey(
+        'inventory.Product',
+        on_delete=models.PROTECT,
+        related_name='invoice_line_links',
+    )
+    variant = models.ForeignKey(
+        'inventory.ProductVariant',
+        on_delete=models.PROTECT,
+        related_name='invoice_line_links',
+    )
+
+    class Meta:
+        db_table = 'finance_invoice_line_product_links'
+        unique_together = [['invoice_line', 'variant']]
+        indexes = [
+            models.Index(fields=['invoice_line']),
+            models.Index(fields=['variant']),
+        ]

@@ -25,7 +25,11 @@ def pay_customer_invoice(invoice, request, amount=None):
 
     bank_account = None
     bank_account_uuid = request.data.get('bank_account_id')
-    payment_method = request.data.get('payment_method', 'CASH')
+    payment_method = request.data.get('payment_method', 'BANK_TRANSFER')
+    reference_number = request.data.get('reference_number', '')
+
+    from django.utils.dateparse import parse_date
+    payment_date = parse_date(request.data.get('payment_date')) if request.data.get('payment_date') else timezone.now().date()
 
     with transaction.atomic():
         try:
@@ -42,13 +46,20 @@ def pay_customer_invoice(invoice, request, amount=None):
                 )
             except BankAccount.DoesNotExist:
                 return False, 'Bank account not found'
+        if not bank_account:
+            from apps.finance.models import BankAccount
+            bank_account = BankAccount.objects.filter(
+                company_id=invoice.company_id,
+                is_active=True,
+            ).first()
 
         create_payment_for(
             invoice,
             amount=pay_amount,
-            payment_date=timezone.now().date(),
+            payment_date=payment_date,
             payment_method=payment_method,
             bank_account=bank_account,
+            reference_number=reference_number,
             user=request.user,
             auto_confirm=True,
         )
@@ -72,6 +83,10 @@ def pay_supplier_bill(bill, request, amount=None):
     bank_account = None
     bank_account_uuid = request.data.get('bank_account_id')
     payment_method = request.data.get('payment_method', 'BANK_TRANSFER')
+    reference_number = request.data.get('reference_number', '')
+
+    from django.utils.dateparse import parse_date
+    payment_date = parse_date(request.data.get('payment_date')) if request.data.get('payment_date') else bill.bill_date
 
     with transaction.atomic():
         try:
@@ -98,9 +113,10 @@ def pay_supplier_bill(bill, request, amount=None):
         create_payment_for(
             bill,
             amount=pay_amount,
-            payment_date=bill.bill_date,
+            payment_date=payment_date,
             payment_method=payment_method,
             bank_account=bank_account,
+            reference_number=reference_number,
             user=request.user,
             auto_confirm=True,
         )

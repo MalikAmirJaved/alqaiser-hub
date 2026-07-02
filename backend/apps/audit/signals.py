@@ -2,9 +2,10 @@
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from django.db.models.signals import post_save, pre_delete
+from django.db.models.signals import pre_save, post_save, pre_delete
 from django.dispatch import receiver
 from .models import AuditLog, AuditLogChange
+from apps.common.middleware import get_current_request
 
 
 def _value_to_str(value):
@@ -33,25 +34,70 @@ def _has_uuid_field(instance):
     return isinstance(instance._id, uuid.UUID)
 
 
+def _should_skip(sender):
+    return (
+        sender.__name__ in ('AuditLog', 'AuditLogChange')
+        or sender._meta.app_label in ['admin', 'auth', 'contenttypes', 'sessions']
+        or sender.__name__ == 'Migration'
+    )
+
+
+@receiver(pre_save)
+def audit_pre_save(sender, instance, **kwargs):
+    """Capture old field values before update so post_save can detect changes."""
+    if not _has_uuid_field(instance):
+        return
+    if _should_skip(sender):
+        return
+    if not instance.pk:
+        return
+
+    try:
+        old = sender.objects.get(pk=instance.pk)
+        old_values = {}
+        for field in instance._meta.fields:
+            field_name = field.name
+            if field_name.startswith('_'):
+                continue
+            old_values[field_name] = getattr(old, field_name)
+        instance._old_values = old_values
+    except sender.DoesNotExist:
+        pass
+
+
 def _get_field_changes(instance, created):
     """Collect field changes as list of (field_name, old_value, new_value) tuples."""
     changes = []
     if not created:
-        try:
-            old_instance = instance.__class__.objects.get(pk=instance.pk)
+        old_values = getattr(instance, '_old_values', None)
+        if old_values is not None:
             for field in instance._meta.fields:
                 field_name = field.name
                 if field_name.startswith('_'):
                     continue
-                old_val = getattr(old_instance, field_name)
+                old_val = old_values.get(field_name)
                 new_val = getattr(instance, field_name)
                 if old_val != new_val:
                     old_str = _value_to_str(old_val)
                     new_str = _value_to_str(new_val)
                     if old_str is not None or new_str is not None:
                         changes.append((field_name, old_str, new_str))
-        except instance.__class__.DoesNotExist:
-            pass
+        else:
+            try:
+                old_instance = instance.__class__.objects.get(pk=instance.pk)
+                for field in instance._meta.fields:
+                    field_name = field.name
+                    if field_name.startswith('_'):
+                        continue
+                    old_val = getattr(old_instance, field_name)
+                    new_val = getattr(instance, field_name)
+                    if old_val != new_val:
+                        old_str = _value_to_str(old_val)
+                        new_str = _value_to_str(new_val)
+                        if old_str is not None or new_str is not None:
+                            changes.append((field_name, old_str, new_str))
+            except instance.__class__.DoesNotExist:
+                pass
     else:
         for field in instance._meta.fields:
             field_name = field.name
@@ -71,16 +117,10 @@ def audit_create_update(sender, instance, created, **kwargs):
     if not _has_uuid_field(instance):
         return
 
-    if sender.__name__ == 'AuditLog':
+    if _should_skip(sender):
         return
 
-    if sender._meta.app_label in ['admin', 'auth', 'contenttypes', 'sessions']:
-        return
-
-    if sender.__name__ == 'Migration':
-        return
-
-    request = getattr(instance, '_request', None)
+    request = get_current_request()
 
     user = getattr(request, 'user', None) if request else None
     ip = None
@@ -144,7 +184,7 @@ def audit_delete(sender, instance, **kwargs):
     if sender.__name__ == 'Migration':
         return
 
-    request = getattr(instance, '_request', None)
+    request = get_current_request()
     user = getattr(request, 'user', None) if request else None
     ip = None
     user_agent = None

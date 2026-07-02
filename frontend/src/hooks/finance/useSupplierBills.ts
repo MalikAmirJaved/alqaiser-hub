@@ -5,12 +5,35 @@ import { apiFetch } from "@/lib/api";
 // TYPES
 // ============================================
 
+export interface SupplierBillPayment {
+  id: string;
+  amount: string;
+  payment_date: string;
+  payment_method: string;
+  reference_number: string;
+  status: "DRAFT" | "CONFIRMED" | "CANCELLED";
+  notes: string;
+}
+
 export interface SupplierBill {
   id: string;
   bill_number: string;
   supplier: string;
   supplier_name?: string;
+  supplier_code?: string;
+  supplier_credit?: number;
+  supplier_contact_person?: string;
+  supplier_email?: string;
+  supplier_phone?: string;
+  supplier_address?: string;
+  supplier_city?: string;
+  supplier_state?: string;
+  supplier_country?: string;
+  supplier_postal_code?: string;
   purchase_order: string | null;
+  purchase_order_number?: string | null;
+  purchase_order_status?: string | null;
+  purchase_order_total?: number | null;
   bill_date: string;
   due_date: string;
   amount: number;
@@ -20,10 +43,11 @@ export interface SupplierBill {
   payment_status?: "UNPAID" | "PARTIAL" | "PAID";
   journal_entry: string | null;
   notes: string;
+  payments?: SupplierBillPayment[];
   created_at: string;
   updated_at: string;
-  created_by?: number | string | null;   // Add this
-  updated_by?: number | string | null;   // Add this
+  created_by?: number | string | null;
+  updated_by?: number | string | null;
 }
 
 interface PaginatedResponse<T> {
@@ -33,7 +57,7 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-type CreateSupplierBillData = Omit<SupplierBill, "id" | "created_at" | "updated_at" | "outstanding" | "paid_amount" | "status" | "journal_entry">;
+type CreateSupplierBillData = Omit<SupplierBill, "id" | "created_at" | "updated_at" | "outstanding" | "paid_amount" | "status" | "journal_entry" | "supplier_code" | "supplier_contact_person" | "supplier_email" | "supplier_phone" | "supplier_address" | "supplier_city" | "supplier_state" | "supplier_country" | "supplier_postal_code" | "purchase_order_number" | "purchase_order_status" | "purchase_order_total" | "payments">;
 type UpdateSupplierBillData = Partial<CreateSupplierBillData>;
 
 // ============================================

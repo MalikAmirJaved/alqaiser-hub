@@ -97,23 +97,20 @@ export default function SuppliersPage() {
 
   const handleView = (supplier: Supplier) => router.push(`suppliers/${supplier.id}`);
 
-  // Calculate stats from current data
+  // Calculate stats - use totalCount for total, page data for active count
   const stats = useMemo(() => {
-    if (!suppliers || suppliers.length === 0) {
-      return [
-        { id: "total", label: "Total", value: 0 },
-        { id: "active", label: "Active", value: 0 },
-      ];
-    }
-
-    const total = suppliers.length;
-    const active = suppliers.filter((item) => item.status === "active").length;
+    const active = (suppliers || []).filter((item) => item.status === "active").length;
 
     return [
-      { id: "total", label: "Total", value: total, valueClassName: "text-2xl font-bold" },
+      { id: "total", label: "Total", value: totalCount, valueClassName: "text-2xl font-bold" },
       { id: "active", label: "Active", value: active, valueClassName: "text-green-600 dark:text-green-400" },
     ];
-  }, [suppliers]);
+  }, [suppliers, totalCount]);
+
+  const formatCurrency = (value: number | string) => {
+    const num = Number(value) || 0;
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(num);
+  };
 
   // Define columns for TableView
   const getTableColumns = (): Column<Supplier>[] => [
@@ -122,6 +119,18 @@ export default function SuppliersPage() {
     { key: "contact_person", label: "Contact Person", sortable: true },
     { key: "email", label: "Email", sortable: true },
     { key: "phone", label: "Phone", sortable: true },
+    {
+      key: "balance",
+      label: "Balance",
+      sortable: true,
+      render: (value) => <span className="font-mono text-sm">{formatCurrency(value as string)}</span>,
+    },
+    {
+      key: "credit",
+      label: "Credit",
+      sortable: true,
+      render: (value) => <span className="font-mono text-sm text-green-600 dark:text-green-400">{formatCurrency(value as string)}</span>,
+    },
     {
       key: "status",
       label: "Status",
@@ -138,6 +147,8 @@ export default function SuppliersPage() {
     { label: "Contact Person", key: "contact_person" },
     { label: "Email", key: "email" },
     { label: "Phone", key: "phone" },
+    { label: "Balance", key: "balance", formatter: (val: string) => formatCurrency(val) },
+    { label: "Credit", key: "credit", formatter: (val: string) => formatCurrency(val) },
     { label: "Address", key: "address_line" },
     { label: "Location", key: (row: Supplier) => `${row.city}, ${row.state}, ${row.country}` },
     { label: "Postal Code", key: "postal_code" },

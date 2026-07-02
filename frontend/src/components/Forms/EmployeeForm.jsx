@@ -14,6 +14,8 @@ import DepartmentFormModal from "@/components/settings/departments/DepartmentFor
 import DesignationFormModal from "@/components/settings/designations/DesignationFormModal";
 import { useAutoCode } from "@/hooks/useAutoCode";
 import FileUpload, { uploadFiles, deleteUploadedFiles } from "../reuseable/FileUpload";
+import { BASE_URL } from "@/lib/api";
+import ProfilePicUploader from "./ProfilePicUploader";
 
 export default function EmployeeForm({ initialData = null, onSubmit, onCancel }) {
   const [formData, setFormData] = useState({
@@ -58,9 +60,11 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
   });
   const [loading, setLoading] = useState(false);
   const [pendingFiles, setPendingFiles] = useState([]);
+  const [profilePictures, setProfilePictures] = useState([]);
   const { generateCode, validateCode } = useAutoCode("employee");
   const [deptModalOpen, setDeptModalOpen] = useState(false);
   const [desigModalOpen, setDesigModalOpen] = useState(false);
+  const [profilePicLoading, setProfilePicLoading] = useState(false);
 
   const fetchDepartments = useServerSearch("/api/organization/departments/", {
     transformOption: (dept) => ({
@@ -109,6 +113,20 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
         asset_category_id: initialData.asset_category_id || "",
         salary: initialData.salary ? Number(initialData.salary) : (initialData.expected_salary ? Number(initialData.expected_salary) : null),
       });
+      // Load existing profile pictures for editing
+      if (initialData.profile_pictures && initialData.profile_pictures.length > 0) {
+        setProfilePictures(
+          initialData.profile_pictures.map((pic) => ({
+            id: pic.id,
+            file_url: pic.file_url,
+            file_url_thumb: pic.file_url_thumb,
+            file_url_detail: pic.file_url_detail,
+            original_filename: pic.original_filename,
+            file_size: 0,
+            mime_type: "",
+          }))
+        );
+      }
     } else {
       generateCode().then(code => setFormData(prev => ({ ...prev, employee_id: code }))).catch(() => {});
     }
@@ -138,7 +156,45 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
     const experienceDocs = [];
 
     try {
-        // Step 1: Upload all pending files
+        // Step 1: Upload pending profile pictures to permanent storage
+        const uploadedProfilePics = [];
+        for (const pic of profilePictures) {
+            if (pic.file) {
+                // New upload — File object from ProfilePicUploader
+                const formData = new FormData();
+                formData.append("file", pic.file);
+                formData.append("module", "employee");
+                formData.append("submodule", "profile");
+                formData.append("type", "image");
+
+                const res = await fetch(`${BASE_URL}/api/common/upload/`, {
+                    method: "POST",
+                    credentials: "include",
+                    body: formData,
+                });
+
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.error || "Failed to upload profile picture");
+                }
+
+                const data = await res.json();
+                uploadedUrls.push(data.url);
+                uploadedProfilePics.push({
+                    file_url: data.url,
+                    file_url_thumb: data.url_thumb || data.url,
+                    file_url_detail: data.url_detail || data.url,
+                    original_filename: pic.original_filename || pic.file.name,
+                    file_size: pic.file_size || pic.file.size,
+                    mime_type: pic.mime_type || pic.file.type,
+                });
+            } else {
+                // Existing URL (from initialData editing) — use as-is
+                uploadedProfilePics.push(pic);
+            }
+        }
+
+        // Step 2: Upload all pending documents
         if (pendingFiles.length > 0) {
             const results = await uploadFiles(pendingFiles);
             for (const result of results) {
@@ -152,11 +208,8 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                     mime_type: '',
                     sort_order: 0,
                 };
-                // Update formData with the uploaded URL
-                if (result.fieldName === "profile_picture") {
-                    formData.profile_picture = result.url;
-                    formData.profile_picture_thumb = result.url_thumb;
-                } else if (result.fieldName === "education_documents") {
+                // Categorize uploaded documents
+                if (result.fieldName === "education_documents") {
                     educationDocs.push(docData);
                 } else if (result.fieldName === "experience_documents") {
                     experienceDocs.push(docData);
@@ -164,7 +217,15 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
             }
         }
 
-        // Step 2: Prepare clean payload
+        // Step 3: Prepare clean payload
+        // Set the primary profile picture from the first validated image
+        let primaryPicUrl = formData.profile_picture || "";
+        let primaryPicThumb = formData.profile_picture_thumb || "";
+        if (uploadedProfilePics.length > 0) {
+            primaryPicUrl = uploadedProfilePics[0].file_url;
+            primaryPicThumb = uploadedProfilePics[0].file_url_thumb;
+        }
+        
         const payload = {
             id: formData.id,          
             employee_id: formData.employee_id,
@@ -200,8 +261,16 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
             bank_iban: formData.bank_iban,
             salary: Number(formData.salary),
             default_shift_id: formData.default_shift_id || null,
-            profile_picture: formData.profile_picture || "",
-            profile_picture_thumb: formData.profile_picture_thumb || "",
+            profile_picture: primaryPicUrl,
+            profile_picture_thumb: primaryPicThumb,
+            profile_pictures: uploadedProfilePics.map((pic) => ({
+                file_url: pic.file_url,
+                file_url_thumb: pic.file_url_thumb,
+                file_url_detail: pic.file_url_detail,
+                original_filename: pic.original_filename,
+                file_size: pic.file_size,
+                mime_type: pic.mime_type,
+            })),
             education_documents: [...(formData.education_documents || []), ...educationDocs],
             experience_documents: [...(formData.experience_documents || []), ...experienceDocs],
         };
@@ -209,13 +278,14 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
             payload.isfrom_user_id = formData.isfrom_user_id;
         }
 
-        // Step 3: Create/Update employee
+        // Step 4: Create/Update employee
         await onSubmit(payload);
         
-        // Step 4: Clear pending files on success
+        // Step 5: Clear pending files on success
         setPendingFiles([]);
+        setProfilePictures([]);
     } catch (error) {
-        // Step 5: Rollback - delete uploaded files if employee creation fails
+        // Step 6: Rollback - delete uploaded files if employee creation fails
         if (uploadedUrls.length > 0) {
             await deleteUploadedFiles(uploadedUrls);
         }
@@ -243,23 +313,20 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
         </div>
 
         <div className="p-5">
-          {/* Profile Picture Section */}
+          {/* Profile Pictures Section - Multi upload with face detection */}
           <div className="mb-6 p-4 rounded-xl border border-border bg-muted/20">
             <h3 className="text-sm font-semibold text-primary flex items-center gap-2 mb-3">
               <Users className="w-4 h-4" />
-              Profile Picture
+              Profile Photos
             </h3>
-            <FileUpload
-              value={formData.profile_picture}
-              onChange={(url) => handleChange("profile_picture", url)}
-              module="employee"
-              submodule="profile"
-              type="image"
-              label=""
-              description="Upload a profile photo (JPG, PNG)"
-              pendingFiles={pendingFiles}
-              onPendingFilesChange={setPendingFiles}
-              fieldName="profile_picture"
+            <p className="text-xs text-muted-foreground mb-3">
+              upload multiple profile photos. Each photo is validated server-side for face detection (must contain exactly one human face, high resolution 400×400px+), sharpness, and proper lighting.
+              The first photo is the primary/display picture.
+            </p>
+            <ProfilePicUploader
+              value={profilePictures}
+              onChange={setProfilePictures}
+              maxFiles={5}
             />
           </div>
 

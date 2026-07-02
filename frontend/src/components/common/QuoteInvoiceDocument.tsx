@@ -6,6 +6,7 @@ import autoTable from "jspdf-autotable";
 import { Dialog, DialogContent, DialogTitle, DialogClose } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Printer, Download, X, Loader2 } from "lucide-react";
+import { Country, State } from "country-state-city";
 
 // ── Types ──────────────────────────────────────────
 
@@ -43,6 +44,8 @@ export interface QuoteInvoiceData {
   customerPhone?: string;
   lines: DocLine[];
   totalAmount: number;
+  overallDiscountPercent?: number;
+  overallTaxPercent?: number;
   status?: string;
   paymentStatus?: string;
   notes?: string;
@@ -58,19 +61,62 @@ interface QuoteInvoiceDocumentProps {
 // ── Helpers ────────────────────────────────────────
 
 function buildLocationString(company: DocCompany): string {
-  const parts = [company.city, company.state, company.country].filter(Boolean);
+  const parts = [company.city, resolveStateName(company.country, company.state), resolveCountryName(company.country)].filter(Boolean);
   return parts.length > 0 ? parts.join(", ") : "";
+}
+
+/** Resolve ISO country code to display name */
+function resolveCountryName(code?: string): string {
+  if (!code) return "";
+  const country = Country.getCountryByCode(code);
+  return country?.name || code;
+}
+
+/** Resolve ISO state code to display name */
+function resolveStateName(countryCode?: string, stateCode?: string): string {
+  if (!countryCode || !stateCode) return stateCode || "";
+  const state = State.getStateByCodeAndCountry(stateCode, countryCode);
+  return state?.name || stateCode;
 }
 
 /** Load a remote image URL into a base64 data URI */
 async function imageUrlToBase64(url: string): Promise<string> {
   const response = await fetch(url);
+  if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`);
   const blob = await response.blob();
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => resolve(reader.result as string);
     reader.onerror = () => reject(new Error("Failed to read image blob"));
     reader.readAsDataURL(blob);
+  });
+}
+
+/** Clip a base64 image into a circle (for a rounded logo) and return a PNG data URI */
+async function makeImageCircular(dataUrl: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const size = Math.max(img.width, img.height);
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Canvas not supported"));
+        return;
+      }
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(img, (size - img.width) / 2, (size - img.height) / 2);
+      ctx.restore();
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => reject(new Error("Failed to load logo for rounding"));
+    img.src = dataUrl;
   });
 }
 
@@ -82,30 +128,47 @@ function DocumentContent({
   termsContent,
   formatCurrency,
 }: QuoteInvoiceDocumentProps) {
+
   const docType = data.type === "QUOTE" ? "QUOTE" : "INVOICE";
   const calcSubtotal = data.lines.reduce(
-    (sum, l) => sum + l.quantity * l.unit_price,
+    (sum, l) => sum + Number(l.quantity) * Number(l.unit_price),
     0,
   );
   const calcDiscount = data.lines.reduce(
-    (sum, l) => sum + (l.discount_amount || 0),
+    (sum, l) => sum + (Number(l.discount_amount) || 0),
     0,
   );
   const locationStr = buildLocationString(company);
 
+  const logoSrc = company.logo
+    ? `${process.env.NEXT_PUBLIC_API_URL}${company.logo}`
+    : undefined;
+
   return (
-    <div className="bg-white text-gray-900 p-8 max-w-4xl mx-auto font-sans">
+    <div className="relative bg-white text-gray-900 p-8 max-w-4xl mx-auto font-sans overflow-hidden">
+      {/* ── Watermark (full page, behind everything) ──────── */}
+      {logoSrc && (
+        <div
+          className="watermark-logo pointer-events-none select-none absolute inset-0 z-0 flex items-center justify-center"
+          style={{ WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}
+          aria-hidden="true"
+        >
+          <img
+            src={logoSrc}
+            alt=""
+            className="w-2/3 max-w-sm object-contain"
+            style={{ opacity: 0.06 }}
+          />
+        </div>
+      )}
+
+      {/* ── Foreground content ───────────────── */}
+      <div className="relative z-10">
+
       {/* ── Header ───────────────────────────── */}
-      <div className="flex justify-between items-start border-b-2 border-gray-300 pb-6 mb-6">
-        <div className="flex items-start gap-4">
-          {company.logo && (
-            <img
-              src={`${process.env.NEXT_PUBLIC_API_URL}${company.logo}`}
-              alt={`${company.companyName} logo`}
-              className="w-16 h-16 object-contain rounded"
-            />
-          )}
-          <div>
+      <div className="border-b-2 border-gray-300 pb-6 mb-6">
+        <div className="flex justify-between items-center gap-4">
+          <div className="flex-1">
             <h1 className="text-3xl font-bold text-gray-900">{company.companyName}</h1>
             <div className="mt-2 text-sm text-gray-900 space-y-0.5">
               {company.address && <p>{company.address}</p>}
@@ -114,10 +177,19 @@ function DocumentContent({
               {company.taxId && <p>TRN: {company.taxId}</p>}
             </div>
           </div>
-        </div>
-        <div className="text-right shrink-0">
-          <h2 className="text-2xl font-bold text-gray-900">{docType}</h2>
-          <p className="text-sm text-gray-900 mt-1">#{data.documentNumber}</p>
+          {logoSrc && (
+            <div className="flex-shrink-0">
+              <img
+                src={logoSrc}
+                alt={`${company.companyName} logo`}
+                className="header-logo w-20 h-20 object-contain rounded-full border border-gray-200"
+              />
+            </div>
+          )}
+          <div className="flex-1 text-right shrink-0">
+            <h2 className="text-2xl font-bold text-gray-900">{docType}</h2>
+            <p className="text-sm text-gray-900 mt-1">#{data.documentNumber}</p>
+          </div>
         </div>
       </div>
 
@@ -236,14 +308,37 @@ function DocumentContent({
                 colSpan={5}
                 className="py-2 px-3 text-right font-semibold text-gray-900"
               >
-                Discount
+                Line Discount
               </td>
               <td className="py-2 px-3 text-right text-gray-900">
                 -{formatCurrency(calcDiscount)}
               </td>
             </tr>
           )}
-          <tr className="border-t border-gray-200">
+          {Number(data.overallDiscountPercent) > 0 && (
+            <tr className="border-t border-gray-200">
+              <td colSpan={5} className="py-2 px-3 text-right font-semibold text-gray-900">
+                Discount ({Number(data.overallDiscountPercent)}%)
+              </td>
+              <td className="py-2 px-3 text-right text-gray-900">
+                -{formatCurrency(calcSubtotal * (Number(data.overallDiscountPercent) / 100))}
+              </td>
+            </tr>
+          )}
+          {Number(data.overallTaxPercent) > 0 && (
+            <tr className="border-t border-gray-200">
+              <td colSpan={5} className="py-2 px-3 text-right font-semibold text-gray-900">
+                Tax ({data.overallTaxPercent}%)
+              </td>
+              <td className="py-2 px-3 text-right text-gray-900">
+                {formatCurrency(
+                  (calcSubtotal - (calcSubtotal * ((Number(data.overallDiscountPercent) || 0) / 100))) *
+                  (Number(data.overallTaxPercent) / 100)
+                )}
+              </td>
+            </tr>
+          )}
+          <tr className="border-t-2 border-gray-300">
             <td colSpan={5} className="py-2 px-3 text-right font-bold text-lg text-gray-900">
               Total
             </td>
@@ -274,6 +369,8 @@ function DocumentContent({
           />
         </div>
       )}
+      </div>
+      {/* end foreground content */}
     </div>
   );
 }
@@ -286,73 +383,117 @@ async function generatePdf(
   const { data: docData, company, termsContent, formatCurrency } = props;
   const doc = new jsPDF("p", "mm", "a4");
   const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 20;
+  const rightMargin = 10; // extra safety for right-aligned text
+  const maxTextWidth = pageWidth - margin - rightMargin;
   let y = margin;
   const locationStr = buildLocationString(company);
 
-  // ── Header ──
-  // Company logo (if provided) - load async and add as image, max 14mm height
+  // ── Load logo (original used for watermark; rounded copy used in header) ──
   const logoSourceUrl = company.logoUrl || company.logo;
+  let logoDataUrl: string | null = null;
+  let headerLogoDataUrl: string | null = null;
+  let logoFormat: "PNG" | "JPEG" | "GIF" | "WEBP" = "PNG";
+
   if (logoSourceUrl) {
     try {
-      const logoDataUrl = await imageUrlToBase64(logoSourceUrl);
-      const logoHeight = 14;
-      const logoWidth = 14;
-      // Detect format from data URI
-      const format = logoDataUrl.startsWith("data:image/png") ? "PNG" :
-                     logoDataUrl.startsWith("data:image/jpeg") ? "JPEG" :
-                     logoDataUrl.startsWith("data:image/gif") ? "GIF" :
-                     logoDataUrl.startsWith("data:image/webp") ? "WEBP" : "JPEG";
-      doc.addImage(logoDataUrl, format, margin, y - 2, logoWidth, logoHeight);
-      // Shift text to the right of the logo
-      const textX = margin + logoWidth + 6;
-      doc.setFontSize(16);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(0);
-      doc.text(company.companyName, textX, y + 2);
-      y += 8;
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(0);
-      if (company.address) {
-        doc.text(company.address, textX, y);
-        y += 3.5;
+      logoDataUrl = await imageUrlToBase64(logoSourceUrl);
+      logoFormat = logoDataUrl.startsWith("data:image/png") ? "PNG" :
+                   logoDataUrl.startsWith("data:image/jpeg") ? "JPEG" :
+                   logoDataUrl.startsWith("data:image/gif") ? "GIF" :
+                   logoDataUrl.startsWith("data:image/webp") ? "WEBP" : "JPEG";
+      try {
+        headerLogoDataUrl = await makeImageCircular(logoDataUrl);
+      } catch {
+        headerLogoDataUrl = logoDataUrl; // fall back to the un-rounded logo
       }
-      if (locationStr) {
-        doc.text(locationStr, textX, y);
-        y += 3.5;
-      }
-      const contactParts: string[] = [];
-      if (company.phone) contactParts.push(company.phone);
-      if (company.email) contactParts.push(company.email);
-      if (contactParts.length > 0) {
-        doc.text(contactParts.join("  |  "), textX, y);
-        y += 3.5;
-      }
-      if (company.taxId) {
-        doc.text(`TRN: ${company.taxId}`, textX, y);
-        y += 3.5;
-      }
-      y += 2;
     } catch {
-      // Fallback if logo fails to load - just text
-      y = _renderCompanyText(doc, company, locationStr, margin, y);
+      logoDataUrl = null;
     }
-  } else {
-    y = _renderCompanyText(doc, company, locationStr, margin, y);
   }
 
-  // Document type & number (right-aligned)
-  const docType = docData.type === "QUOTE" ? "QUOTE" : "INVOICE";
+  // ── Watermark: large, faint, centered on the page, drawn behind everything ──
+  const drawWatermark = () => {
+    if (!logoDataUrl) return;
+    try {
+      const wmSize = 120;
+      const wmX = (pageWidth - wmSize) / 2;
+      const wmY = (pageHeight - wmSize) / 2;
+      const anyDoc = doc as any;
+      if (anyDoc.GState && anyDoc.setGState) {
+        anyDoc.saveGraphicsState();
+        anyDoc.setGState(new anyDoc.GState({ opacity: 0.06 }));
+        doc.addImage(logoDataUrl!, logoFormat, wmX, wmY, wmSize, wmSize);
+        anyDoc.restoreGraphicsState();
+      }
+      // If GState isn't available in this jsPDF build, we simply skip the
+      // watermark rather than drawing a solid (too dark) logo on the page.
+    } catch {
+      // Watermark is decorative — never let it break PDF generation.
+    }
+  };
+  drawWatermark();
+
+  // ── Header: company info (left), logo (center), doc type & number (right) ──
+  const headerTopY = y;
+  const logoSize = 20;
+  const hasLogo = !!headerLogoDataUrl;
+
+  if (headerLogoDataUrl) {
+    const logoX = (pageWidth - logoSize) / 2;
+    doc.addImage(headerLogoDataUrl, "PNG", logoX, headerTopY, logoSize, logoSize);
+  }
+
+  // Company name & details, left-aligned, capped so it doesn't run into the centered logo
+  const leftMaxWidth = hasLogo
+    ? (pageWidth / 2 - logoSize / 2) - margin - 5
+    : pageWidth - margin - rightMargin - 45;
+  let leftY = headerTopY;
+
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0);
-  doc.text(docType, pageWidth - margin, margin + 2, { align: "right" });
+  doc.text(company.companyName, margin, leftY);
+  leftY += 6;
+
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(0);
+
+  if (company.address) {
+    const lines = doc.splitTextToSize(company.address, leftMaxWidth);
+    lines.forEach((line: string) => { doc.text(line, margin, leftY); leftY += 3.5; });
+  }
+  if (locationStr) {
+    const lines = doc.splitTextToSize(locationStr, leftMaxWidth);
+    lines.forEach((line: string) => { doc.text(line, margin, leftY); leftY += 3.5; });
+  }
+  const contactParts: string[] = [];
+  if (company.phone) contactParts.push(company.phone);
+  if (company.email) contactParts.push(company.email);
+  if (contactParts.length > 0) {
+    const lines = doc.splitTextToSize(contactParts.join("  |  "), leftMaxWidth);
+    lines.forEach((line: string) => { doc.text(line, margin, leftY); leftY += 3.5; });
+  }
+  if (company.taxId) {
+    doc.text(`TRN: ${company.taxId}`, margin, leftY);
+    leftY += 3.5;
+  }
+
+  // Document type & number, right-aligned, top-aligned with the company block
+  const docType = docData.type === "QUOTE" ? "QUOTE" : "INVOICE";
+  doc.setFontSize(15);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0);
+  doc.text(docType, pageWidth - margin, headerTopY + 2, { align: "right" });
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(0);
-  doc.text(`#${docData.documentNumber}`, pageWidth - margin, margin + 8, { align: "right" });
+  doc.text(`#${docData.documentNumber}`, pageWidth - margin, headerTopY + 8, { align: "right" });
 
+  // Divider sits below the tallest of the three header columns
+  y = Math.max(leftY, headerTopY + (hasLogo ? logoSize + 4 : 0), headerTopY + 12) + 4;
   doc.setDrawColor(200);
   doc.line(margin, y, pageWidth - margin, y);
   y += 8;
@@ -452,6 +593,11 @@ async function generatePdf(
     (s, l) => s + (l.discount_amount || 0),
     0,
   );
+  const overallDiscPct = docData.overallDiscountPercent || 0;
+  const overallTaxPct = docData.overallTaxPercent || 0;
+  const overallDiscAmt = calcSubtotal * (overallDiscPct / 100);
+  const afterDisc = calcSubtotal - overallDiscAmt;
+  const overallTaxAmt = afterDisc * (overallTaxPct / 100);
 
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
@@ -464,8 +610,26 @@ async function generatePdf(
   let nextY = finalY + 5;
   if (calcDiscount > 0) {
     doc.setTextColor(0);
-    doc.text("Discount", totalX - 40, nextY);
+    doc.text("Line Discount", totalX - 40, nextY);
     doc.text(`-${formatCurrency(calcDiscount)}`, totalX, nextY, {
+      align: "right",
+    });
+    nextY += 5;
+  }
+
+  if (overallDiscPct > 0) {
+    doc.setTextColor(0);
+    doc.text(`Discount (${overallDiscPct}%)`, totalX - 40, nextY);
+    doc.text(`-${formatCurrency(overallDiscAmt)}`, totalX, nextY, {
+      align: "right",
+    });
+    nextY += 5;
+  }
+
+  if (overallTaxPct > 0) {
+    doc.setTextColor(0);
+    doc.text(`Tax (${overallTaxPct}%)`, totalX - 40, nextY);
+    doc.text(formatCurrency(overallTaxAmt), totalX, nextY, {
       align: "right",
     });
     nextY += 5;
@@ -491,8 +655,9 @@ async function generatePdf(
     doc.setTextColor(0);
     doc.text("Notes:", margin, nextY);
     nextY += 4;
-    doc.text(docData.notes, margin, nextY, { maxWidth: pageWidth - 2 * margin });
-    nextY += 6;
+    const noteLines = doc.splitTextToSize(docData.notes, pageWidth - 2 * margin);
+    doc.text(noteLines, margin, nextY);
+    nextY += noteLines.length * 4 + 2;
   }
 
   // ── Terms & Conditions ──
@@ -510,25 +675,18 @@ async function generatePdf(
     doc.setFont("helvetica", "normal");
     doc.setTextColor(0);
 
-    // Convert common HTML to readable plain text with structure preserved
+    // Convert HTML to plain text with structure
     let text = termsContent
-      // Replace block-level closing tags with newlines
       .replace(/<\/(?:p|div|li|h[1-6]|blockquote|tr|table)>/gi, "\n")
-      // Replace <br> and <br/> with newlines
       .replace(/<br\s*\/?>/gi, "\n")
-      // Replace <li> with bullet prefix
       .replace(/<li[^>]*>/gi, "  • ")
-      // Replace <td> or <th> with tab-like spacing
       .replace(/<\/(?:td|th)>/gi, "  ")
-      // Strip remaining HTML tags
       .replace(/<[^>]*>/g, "")
-      // Decode common entities
       .replace(/&nbsp;/g, " ")
       .replace(/&amp;/g, "&")
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")
       .replace(/&quot;/g, '"')
-      // Collapse multiple consecutive newlines into max 2
       .replace(/\n{3,}/g, "\n\n")
       .trim();
 
@@ -537,46 +695,6 @@ async function generatePdf(
   }
 
   return doc.output("blob");
-}
-
-// ── Helper: render company text block (no logo) ────
-function _renderCompanyText(
-  doc: jsPDF,
-  company: DocCompany,
-  locationStr: string,
-  margin: number,
-  startY: number,
-): number {
-  let y = startY;
-  doc.setFontSize(16);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(0);
-  doc.text(company.companyName, margin, y);
-  y += 6;
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(0);
-  if (company.address) {
-    doc.text(company.address, margin, y);
-    y += 3.5;
-  }
-  if (locationStr) {
-    doc.text(locationStr, margin, y);
-    y += 3.5;
-  }
-  const contactParts: string[] = [];
-  if (company.phone) contactParts.push(company.phone);
-  if (company.email) contactParts.push(company.email);
-  if (contactParts.length > 0) {
-    doc.text(contactParts.join("  |  "), margin, y);
-    y += 3.5;
-  }
-  if (company.taxId) {
-    doc.text(`TRN: ${company.taxId}`, margin, y);
-    y += 3.5;
-  }
-  y += 2;
-  return y;
 }
 
 // ── Print Preview Modal ────────────────────────────
@@ -602,12 +720,10 @@ export function PrintPreviewModal({
     const contentEl = contentRef.current;
     if (!contentEl) return;
 
-    // Copy all stylesheet link tags from the current page so Tailwind CSS is available
     const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
       .map((link) => link.outerHTML)
       .join('\n');
 
-    // Also copy any inline style tags that contain critical CSS (CSS variables, etc.)
     const inlineStyles = Array.from(document.querySelectorAll('style'))
       .map((s) => s.outerHTML)
       .join('\n');
@@ -615,15 +731,25 @@ export function PrintPreviewModal({
     const printStyles = `
       <style>
         body { margin: 0; font-family: Arial, Helvetica, sans-serif; }
-        @page { margin: 10mm; }
+        @page { size: auto; margin: 5mm; }
+        @media print {
+          @page { margin: 0; }
+          body { margin: 10mm; }
+        }
         * { box-sizing: border-box; }
-        img { max-width: 64px; max-height: 64px; }
+        img.header-logo { max-width: 80px; max-height: 80px; }
+        .watermark-logo, .watermark-logo img {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+          color-adjust: exact;
+        }
       </style>
     `;
 
     const html = `
       <html>
         <head>
+          <title></title>
           ${styleLinks}
           ${inlineStyles}
           ${printStyles}
@@ -635,7 +761,6 @@ export function PrintPreviewModal({
     printWindow.document.close();
     printWindow.focus();
 
-    // Wait for stylesheets to fully load before triggering print
     printWindow.addEventListener('load', () => {
       printWindow.print();
     });
@@ -652,6 +777,9 @@ export function PrintPreviewModal({
       a.download = `${prefix}_${documentProps.data.documentNumber}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+      // Optionally show a toast/error message here
     } finally {
       setPdfLoading(false);
     }

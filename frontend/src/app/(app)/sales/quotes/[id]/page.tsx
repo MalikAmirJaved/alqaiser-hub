@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { DetailLayout, StandardSidebar, RelatedRecords, type DetailTab } from "@/components/reuseable/final/DetailLayout";
-import { useQuote, useUpdateQuote, useSendQuote, useMarkViewedQuote, useApproveQuote, useRejectQuote, useMarkConvertedQuote } from "@/hooks/sales/useQuotes";
+import { useQuote, useUpdateQuote, useSendQuote, useMarkViewedQuote, useApproveQuote, useRejectQuote, useMarkConvertedQuote, useQuoteStatusHistory } from "@/hooks/sales/useQuotes";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
+import StatusHistoryTimeline from "@/components/sales/StatusHistoryTimeline";
 import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
 import QuoteFormModal from "@/components/sales/QuoteFormModal";
 import { Printer, Download, FileText, HelpCircle, Settings, Info } from "lucide-react";
@@ -25,6 +26,8 @@ export default function QuoteDetailPage() {
   const permissions = useFeaturePermissions("SALES", "quote");
   const { data: companySettings } = useCompanySettingsQuery();
   const { terms: termsData } = useTermsAndConditions();
+
+  const { data: statusHistory, isLoading: historyLoading } = useQuoteStatusHistory(id as string);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<any>(null);
@@ -104,7 +107,10 @@ export default function QuoteDetailPage() {
                   <tr key={idx} className="border-b border-border/60">
                     <td className="px-4 py-2">
                       <div className="font-medium">{line.variant_name || line.variant_sku}</div>
-                      <div className="text-xs text-muted-foreground">{line.variant_sku}</div>
+                      <div className="text-xs text-muted-foreground">SKU: {line.variant_sku}</div>
+                      {(line as any).description && (
+                        <div className="text-xs text-muted-foreground/70 italic mt-0.5">{(line as any).description}</div>
+                      )}
                     </td>
                     <td className="px-4 py-2 text-right">{line.quantity}</td>
                     <td className="px-4 py-2 text-right">{formatCurrency(line.unit_price)}</td>
@@ -122,7 +128,47 @@ export default function QuoteDetailPage() {
               )}
             </tbody>
             <tfoot className="border-t-2 border-border">
-              <tr>
+              {(quote as any).lines?.length > 0 && (
+                <>
+                  <tr>
+                    <td colSpan={4} className="px-4 py-2 text-right text-sm text-muted-foreground">Subtotal</td>
+                    <td className="px-4 py-2 text-right text-sm">
+                      {formatCurrency(
+                        (quote.lines || []).reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0)
+                      )}
+                    </td>
+                  </tr>
+                  {(quote as any).overall_discount_percent > 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                        Discount ({(quote as any).overall_discount_percent}%)
+                      </td>
+                      <td className="px-4 py-2 text-right text-sm text-destructive">
+                        -{formatCurrency(
+                          ((quote.lines || []).reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0)) *
+                          (Number((quote as any).overall_discount_percent) / 100)
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  {(quote as any).overall_tax_percent > 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                        Tax ({(quote as any).overall_tax_percent}%)
+                      </td>
+                      <td className="px-4 py-2 text-right text-sm">
+                        {formatCurrency(
+                          ((quote.lines || []).reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0) -
+                            ((quote.lines || []).reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0)) *
+                            (Number((quote as any).overall_discount_percent) / 100)) *
+                          (Number((quote as any).overall_tax_percent) / 100)
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </>
+              )}
+              <tr className="border-t-2 border-border">
                 <td colSpan={4} className="px-4 py-3 text-right font-semibold">Total</td>
                 <td className="px-4 py-3 text-right font-bold text-primary">{formatCurrency(quote.total_amount)}</td>
               </tr>
@@ -158,23 +204,53 @@ export default function QuoteDetailPage() {
       id: "overview",
       label: "Details",
       render: () => (
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          {[
-            ["Quote Number", quote.quote_number],
-            ["Customer", quote.customer_name || "—"],
-            ["Date", quote.date],
-            ["Expiration Date", quote.expiration_date || "—"],
-            ["Status", quote.status],
-            ["Notes", quote.notes || "—"],
-            ["Created", new Date(String(quote.created_at)).toLocaleDateString()],
-            ["Last Updated", new Date(String(quote.updated_at)).toLocaleDateString()],
-          ].map(([label, value]) => (
-            <div key={label as string} className="flex justify-between border-b border-border/60 pb-2">
-              <span className="text-muted-foreground">{label}</span>
-              <span className="font-medium">{value}</span>
+        <div className="space-y-6">
+          <div>
+            <h4 className="text-sm font-medium text-muted-foreground mb-3">Quote Information</h4>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              {[
+                ["Quote Number", quote.quote_number],
+                ["Customer", quote.customer_name || "—"],
+                ["Date", quote.date],
+                ["Expiration Date", quote.expiration_date || "—"],
+                ["Discount %", (quote as any).overall_discount_percent ? `${(quote as any).overall_discount_percent}%` : "—"],
+                ["Tax %", (quote as any).overall_tax_percent ? `${(quote as any).overall_tax_percent}%` : "—"],
+                ["Status", quote.status],
+                ["Notes", quote.notes || "—"],
+              ].map(([label, value]) => (
+                <div key={label as string} className="flex justify-between border-b border-border/60 pb-2">
+                  <span className="text-muted-foreground">{label}</span>
+                  <span className="font-medium">{value}</span>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
+          <div>
+            <h4 className="text-sm font-medium text-muted-foreground mb-3">Source & Origin</h4>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              {[
+                ["Source", (quote as any).source_label || (quote.lead ? "From Lead" : "New")],
+                ["Created By", (quote as any).created_by_label || quote.created_by_name || "—"],
+                ["Created At", quote.created_at ? new Date(String(quote.created_at)).toLocaleString() : "—"],
+                ["Modified By", quote.updated_by_name || "—"],
+                ["Modified At", quote.updated_at ? new Date(String(quote.updated_at)).toLocaleString() : "—"],
+              ].map(([label, value]) => (
+                <div key={label as string} className="flex justify-between border-b border-border/60 pb-2">
+                  <span className="text-muted-foreground">{label}</span>
+                  <span className="font-medium">{value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
+      ),
+    },
+    {
+      id: "history",
+      label: "Status History",
+      count: statusHistory?.length || 0,
+      render: () => (
+        <StatusHistoryTimeline history={statusHistory || []} isLoading={historyLoading} />
       ),
     },
   ];
@@ -240,11 +316,21 @@ export default function QuoteDetailPage() {
         tabs={tabs}
         sidebar={
           <StandardSidebar
+            riskIndicators={[
+              { label: "Source", value: (quote as any).source_label || "New", tone: "info" },
+              { label: "Status", value: quote.status, tone: quote.status === "APPROVED" || quote.status === "CONVERTED" ? "success" : quote.status === "REJECTED" ? "destructive" : "warning" },
+              { label: "Amount", value: formatCurrency(quote.total_amount), tone: "info" },
+            ]}
             metadata={[
+              ["Quote #", quote.quote_number],
               ["Created", new Date(String(quote.created_at)).toLocaleString()],
-              ["Created by", quote.created_by_name || "—"],
+              ["Created By", (quote as any).created_by_label || quote.created_by_name || "—"],
               ["Modified", new Date(String(quote.updated_at)).toLocaleString()],
-              ["Modified by", quote.updated_by_name || "—"],
+              ["Modified By", quote.updated_by_name || "—"],
+              ["Source", (quote as any).source_label || "New"],
+              ["Customer", quote.customer_name || "—"],
+              ["Lead Linked", quote.lead ? "Yes" : "No"],
+              ["Status", quote.status],
             ]}
           />
         }
@@ -317,6 +403,8 @@ export default function QuoteDetailPage() {
                 typeof quote.total_amount === "string"
                   ? parseFloat(quote.total_amount)
                   : quote.total_amount,
+              overallDiscountPercent: Number((quote as any).overall_discount_percent || 0),
+              overallTaxPercent: Number((quote as any).overall_tax_percent || 0),
               status: quote.status,
               notes: quote.notes,
             },

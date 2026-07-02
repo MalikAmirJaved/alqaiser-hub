@@ -23,6 +23,8 @@ class SupplierBill(PayableModelMixin, BaseModel):
         default='DRAFT',
     )
     journal_entry = models.OneToOneField('JournalEntry', on_delete=models.SET_NULL, null=True, blank=True)
+    customer_invoice = models.ForeignKey('CustomerInvoice', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='supplier_bills')
     notes = models.TextField(blank=True)
 
     class Meta:

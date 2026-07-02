@@ -12,6 +12,7 @@ export interface Lead {
   phone: string;
   status: "NEW" | "CONTACTED" | "QUALIFIED" | "FOLLOW_UP" | "CONVERTED" | "LOST";
   source: string;
+  priority: "HOT" | "WARM" | "COLD" | "";
   notes: string;
   address_line: string;
   country: string;
@@ -35,10 +36,11 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-export function useLeads(filters?: { status?: string; search?: string; page?: string }) {
+export function useLeads(filters?: { status?: string; priority?: string; search?: string; page?: string }) {
   const api = useApi();
   const searchParams = new URLSearchParams();
   if (filters?.status) searchParams.append("status", filters.status);
+  if (filters?.priority) searchParams.append("priority", filters.priority);
   if (filters?.search) searchParams.append("search", filters.search);
   if (filters?.page) searchParams.append("page", filters.page);
   const url = `/api/sales/leads/${searchParams.toString() ? `?${searchParams}` : ""}`;
@@ -174,5 +176,38 @@ export function useMarkLost() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales_leads"] });
     },
+  });
+}
+
+export function useRevertLeadStatus() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<{ status: string; message: string }>(`/api/sales/leads/${id}/revert_status/`, { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales_leads"] });
+    },
+  });
+}
+
+export interface StatusHistoryEntry {
+  id: string;
+  entity_type: "LEAD" | "QUOTE";
+  entity_id: string;
+  from_status: string;
+  to_status: string;
+  notes: string;
+  changed_by: number | null;
+  changed_by_name: string | null;
+  created_at: string;
+}
+
+export function useLeadStatusHistory(id: string | null) {
+  const api = useApi();
+  return useQuery({
+    queryKey: ["sales_lead_status_history", id],
+    queryFn: () => api<StatusHistoryEntry[]>(`/api/sales/leads/${id}/status_history/`),
+    enabled: !!id,
   });
 }

@@ -37,8 +37,8 @@ export default function ProductDetailPage() {
     (s, v) => s + v.stock_by_warehouse.reduce((a, w) => a + w.quantity_reserved, 0), 0
   );
   const totalAvailable = totalStock - totalReserved;
-  const minPrice = Math.min(...product.variants.map(v => v.selling_price));
-  const maxPrice = Math.max(...product.variants.map(v => v.selling_price));
+  const minPrice = product.variants.length > 0 ? Math.min(...product.variants.map(v => v.selling_price)) : 0;
+  const maxPrice = product.variants.length > 0 ? Math.max(...product.variants.map(v => v.selling_price)) : 0;
   const categoryName = categories.find(c => c.id === product.category_id)?.name || "—";
   const brandName = brands.find(b => b.id === product.brand_id)?.name || "—";
 

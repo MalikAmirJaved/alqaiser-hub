@@ -1,7 +1,7 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, permissions
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny, SAFE_METHODS
+from rest_framework.permissions import SAFE_METHODS
 from django.db import transaction
 from django.db.models import Q, F
 import uuid
@@ -35,7 +35,7 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
 
     def get_permissions(self):
         if self.request.method in SAFE_METHODS:
-            return [AllowAny()]
+            return [permissions.IsAuthenticated()]
         return super().get_permissions()
 
     @staticmethod
@@ -43,13 +43,7 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
         return img if isinstance(img, str) else img.get('url', '')
 
     def get_queryset(self):
-        user = self.request.user
-        if not user.is_authenticated:
-            qs = Product.objects.all()
-            if hasattr(qs.model, 'is_deleted'):
-                qs = qs.filter(is_deleted=False)
-        else:
-            qs = super().get_queryset()
+        qs = super().get_queryset()
 
         qs = qs.prefetch_related(
             'variants',
@@ -82,26 +76,7 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
             except Brand.DoesNotExist:
                 return Response({'error': 'Invalid brand UUID'}, status=400)
 
-        # 1. Create Product
-        product_data = {
-            'product_name': data['productName'],
-            'description': data.get('description', ''),
-            'unit': data.get('unit', 'PIECE'),
-            'storage_requirement': data.get('storageRequirement', 'AMBIENT'),
-            'tax_rate': data.get('taxRate', 0),
-            'status': data.get('status', 'active'),
-            'is_active': data.get('is_active', True),
-            'company_id': user.company_id,
-            'branch_id': user.branch_id,
-            'created_by': user,
-            'updated_by': user,
-            'category': category,
-            'brand': brand,
-        }
-        
-        product = Product.objects.create(**product_data)
-
-        # 2. Get default warehouse – raise error if none exists
+        # Get default warehouse for stock operations
         default_warehouse = self._get_default_warehouse(user)
         if not default_warehouse:
             return Response(
@@ -109,49 +84,68 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 3. Create Variants, StockItems, Attributes, Images
-        for var_data in data.get('variants', []):
-            variant = ProductVariant.objects.create(
-                product=product,
-                company_id=user.company_id,
-                branch_id=user.branch_id,
-                sku=var_data.get('sku') or self._generate_sku(product),
-                variant_title=var_data.get('variantTitle', ''),
-                barcode=var_data.get('barcode', ''),
-                selling_price=var_data.get('sellingPrice', 0),
-                min_stock_level=var_data.get('minStockLevel', 0),
-                max_stock_level=var_data.get('maxStockLevel', 0),
-                created_by=user,
-                updated_by=user,
-            )
+        with transaction.atomic():
+            # 1. Create Product
+            product_data = {
+                'product_name': data['productName'],
+                'description': data.get('description', ''),
+                'unit': data.get('unit', 'PIECE'),
+                'storage_requirement': data.get('storageRequirement', 'AMBIENT'),
+                'tax_rate': data.get('taxRate', 0),
+                'status': data.get('status', 'active'),
+                'is_active': data.get('is_active', True),
+                'company_id': user.company_id,
+                'branch_id': user.branch_id,
+                'created_by': user,
+                'updated_by': user,
+                'category': category,
+                'brand': brand,
+            }
+            
+            product = Product.objects.create(**product_data)
 
-            # Attributes
-            for attr in var_data.get('attributes', []):
-                VariantAttribute.objects.create(
-                    variant=variant,
+            # 2. Create Variants, StockItems, Attributes, Images
+            for var_data in data.get('variants', []):
+                variant = ProductVariant.objects.create(
+                    product=product,
                     company_id=user.company_id,
                     branch_id=user.branch_id,
-                    attribute_key=attr.get('key', ''),
-                    attribute_value=attr.get('value', ''),
+                    sku=var_data.get('sku') or self._generate_sku(product),
+                    variant_title=var_data.get('variantTitle', ''),
+                    barcode=var_data.get('barcode', ''),
+                    selling_price=var_data.get('sellingPrice', 0),
+                    min_stock_level=var_data.get('minStockLevel', 0),
+                    max_stock_level=var_data.get('maxStockLevel', 0),
                     created_by=user,
                     updated_by=user,
                 )
 
-            # Images
-            for idx, img in enumerate(var_data.get('images', [])):
-                VariantImage.objects.create(
-                    variant=variant,
-                    company_id=user.company_id,
-                    branch_id=user.branch_id,
-                    image_url=self._image_url(img),
-                    sort_order=idx,
-                    is_primary=(idx == 0),
-                    created_by=user,
-                    updated_by=user,
-                )
+                # Attributes
+                for attr in var_data.get('attributes', []):
+                    VariantAttribute.objects.create(
+                        variant=variant,
+                        company_id=user.company_id,
+                        branch_id=user.branch_id,
+                        attribute_key=attr.get('key', ''),
+                        attribute_value=attr.get('value', ''),
+                        created_by=user,
+                        updated_by=user,
+                    )
 
-            # Stock item (default warehouse)
-            if default_warehouse:
+                # Images
+                for idx, img in enumerate(var_data.get('images', [])):
+                    VariantImage.objects.create(
+                        variant=variant,
+                        company_id=user.company_id,
+                        branch_id=user.branch_id,
+                        image_url=self._image_url(img),
+                        sort_order=idx,
+                        is_primary=(idx == 0),
+                        created_by=user,
+                        updated_by=user,
+                    )
+
+                # Stock item (default warehouse)
                 StockItem.objects.create(
                     variant=variant,
                     warehouse=default_warehouse,
@@ -184,21 +178,27 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
         product.status = data.get('status', product.status)
         product.is_active = data.get('is_active', product.is_active)
         
-        # Update category if provided
-        if data.get('category'):
-            try:
-                category = Category.objects.get(_id=data['category'], company_id=user.company_id)
-                product.category = category
-            except Category.DoesNotExist:
-                return Response({'error': 'Invalid category UUID'}, status=400)
+        # Update category if key is present in request (allows null to clear)
+        if 'category' in data:
+            if data['category']:
+                try:
+                    category = Category.objects.get(_id=data['category'], company_id=user.company_id)
+                    product.category = category
+                except Category.DoesNotExist:
+                    return Response({'error': 'Invalid category UUID'}, status=400)
+            else:
+                product.category = None
         
-        # Update brand if provided
-        if data.get('brand'):
-            try:
-                brand = Brand.objects.get(_id=data['brand'], company_id=user.company_id)
-                product.brand = brand
-            except Brand.DoesNotExist:
-                return Response({'error': 'Invalid brand UUID'}, status=400)
+        # Update brand if key is present in request (allows null to clear)
+        if 'brand' in data:
+            if data['brand']:
+                try:
+                    brand = Brand.objects.get(_id=data['brand'], company_id=user.company_id)
+                    product.brand = brand
+                except Brand.DoesNotExist:
+                    return Response({'error': 'Invalid brand UUID'}, status=400)
+            else:
+                product.brand = None
         
         product.updated_by = user
         product.save()
@@ -206,40 +206,83 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
         # Get default warehouse for stock operations
         default_warehouse = self._get_default_warehouse(user)
 
-        # Handle variants: map received variants by UUID
-        received_variants = {v.get('id'): v for v in data.get('variants', []) if v.get('id')}
-        existing_variants = {str(v._id): v for v in product.variants.all()}
+        with transaction.atomic():
+            # Handle variants: map received variants by UUID
+            received_variants = {v.get('id'): v for v in data.get('variants', []) if v.get('id')}
+            existing_variants = {str(v._id): v for v in product.variants.all()}
 
-        # Soft delete variants not in request
-        for vid, variant in existing_variants.items():
-            if vid not in received_variants:
-                variant.is_deleted = True
-                variant.save()
+            # Soft delete variants not in request
+            for vid, variant in existing_variants.items():
+                if vid not in received_variants:
+                    variant.is_deleted = True
+                    variant.save()
 
-        # Process each variant from request
-        for var_data in data.get('variants', []):
-            if var_data.get('id') and var_data['id'] in existing_variants:
-                variant = existing_variants[var_data['id']]
-            else:
-                variant = None
+            # Process each variant from request
+            for var_data in data.get('variants', []):
+                if var_data.get('id') and var_data['id'] in existing_variants:
+                    variant = existing_variants[var_data['id']]
+                else:
+                    variant = None
 
-            # If variant exists, update its fields
-            if variant:
-                variant.sku = var_data.get('sku', variant.sku)
-                variant.variant_title = var_data.get('variantTitle', variant.variant_title)
-                variant.barcode = var_data.get('barcode', variant.barcode)
-                variant.selling_price = var_data.get('sellingPrice', variant.selling_price)
-                variant.min_stock_level = var_data.get('minStockLevel', variant.min_stock_level)
-                variant.max_stock_level = var_data.get('maxStockLevel', variant.max_stock_level)
-                variant.is_deleted = False
-                variant.save()
+                # If variant exists, update its fields
+                if variant:
+                    variant.sku = var_data.get('sku', variant.sku)
+                    variant.variant_title = var_data.get('variantTitle', variant.variant_title)
+                    variant.barcode = var_data.get('barcode', variant.barcode)
+                    variant.selling_price = var_data.get('sellingPrice', variant.selling_price)
+                    variant.min_stock_level = var_data.get('minStockLevel', variant.min_stock_level)
+                    variant.max_stock_level = var_data.get('maxStockLevel', variant.max_stock_level)
+                    variant.is_deleted = False
+                    variant.save()
 
-                # Replace attributes
-                if 'attributes' in var_data:
-                    variant.variant_attributes.all().delete()
-                    for attr in var_data['attributes']:
+                    # Replace attributes
+                    if 'attributes' in var_data:
+                        variant.variant_attributes.all().delete()
+                        for attr in var_data['attributes']:
+                            VariantAttribute.objects.create(
+                                variant=variant,
+                                company_id=user.company_id,
+                                branch_id=user.branch_id,
+                                attribute_key=attr.get('key', ''),
+                                attribute_value=attr.get('value', ''),
+                                created_by=user,
+                                updated_by=user,
+                            )
+                    # Replace images
+                    if 'images' in var_data:
+                        variant.variant_images.all().delete()
+                        for idx, img in enumerate(var_data['images']):
+                            VariantImage.objects.create(
+                                variant=variant,
+                                company_id=user.company_id,
+                                branch_id=user.branch_id,
+                                image_url=self._image_url(img),
+                                sort_order=idx,
+                                is_primary=(idx == 0),
+                                created_by=user,
+                                updated_by=user,
+                            )
+
+                else:
+                    # Create new variant
+                    new_variant = ProductVariant.objects.create(
+                        product=product,
+                        company_id=user.company_id,
+                        branch_id=user.branch_id,
+                        sku=var_data.get('sku') or self._generate_sku(product),
+                        variant_title=var_data.get('variantTitle', ''),
+                        barcode=var_data.get('barcode', ''),
+                        selling_price=var_data.get('sellingPrice', 0),
+                        min_stock_level=var_data.get('minStockLevel', 0),
+                        max_stock_level=var_data.get('maxStockLevel', 0),
+                        created_by=user,
+                        updated_by=user,
+                    )
+
+                    # Attributes
+                    for attr in var_data.get('attributes', []):
                         VariantAttribute.objects.create(
-                            variant=variant,
+                            variant=new_variant,
                             company_id=user.company_id,
                             branch_id=user.branch_id,
                             attribute_key=attr.get('key', ''),
@@ -247,12 +290,11 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
                             created_by=user,
                             updated_by=user,
                         )
-                # Replace images
-                if 'images' in var_data:
-                    variant.variant_images.all().delete()
-                    for idx, img in enumerate(var_data['images']):
+
+                    # Images
+                    for idx, img in enumerate(var_data.get('images', [])):
                         VariantImage.objects.create(
-                            variant=variant,
+                            variant=new_variant,
                             company_id=user.company_id,
                             branch_id=user.branch_id,
                             image_url=self._image_url(img),
@@ -262,58 +304,17 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
                             updated_by=user,
                         )
 
-            else:
-                # Create new variant
-                new_variant = ProductVariant.objects.create(
-                    product=product,
-                    company_id=user.company_id,
-                    branch_id=user.branch_id,
-                    sku=var_data.get('sku') or self._generate_sku(product),
-                    variant_title=var_data.get('variantTitle', ''),
-                    barcode=var_data.get('barcode', ''),
-                    selling_price=var_data.get('sellingPrice', 0),
-                    min_stock_level=var_data.get('minStockLevel', 0),
-                    max_stock_level=var_data.get('maxStockLevel', 0),
-                    created_by=user,
-                    updated_by=user,
-                )
-
-                # Attributes
-                for attr in var_data.get('attributes', []):
-                    VariantAttribute.objects.create(
-                        variant=new_variant,
-                        company_id=user.company_id,
-                        branch_id=user.branch_id,
-                        attribute_key=attr.get('key', ''),
-                        attribute_value=attr.get('value', ''),
-                        created_by=user,
-                        updated_by=user,
-                    )
-
-                # Images
-                for idx, img in enumerate(var_data.get('images', [])):
-                    VariantImage.objects.create(
-                        variant=new_variant,
-                        company_id=user.company_id,
-                        branch_id=user.branch_id,
-                        image_url=self._image_url(img),
-                        sort_order=idx,
-                        is_primary=(idx == 0),
-                        created_by=user,
-                        updated_by=user,
-                    )
-
-                # Stock item (default warehouse)
-                if default_warehouse:
-                    StockItem.objects.create(
-                        variant=new_variant,
-                        warehouse=default_warehouse,
-                        company_id=user.company_id,
-                        branch_id=user.branch_id,
-                        quantity_on_hand=0,
-                        created_by=user,
-                        updated_by=user,
-                    )
+                    # Stock item (default warehouse)
+                    if default_warehouse:
+                        StockItem.objects.create(
+                            variant=new_variant,
+                            warehouse=default_warehouse,
+                            company_id=user.company_id,
+                            branch_id=user.branch_id,
+                            quantity_on_hand=0,
+                            created_by=user,
+                            updated_by=user,
+                        )
 
         serializer = self.get_serializer(product)
         return Response({
@@ -382,55 +383,6 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
             branch_id=user.branch_id,
             is_active=True
         ).first()
-
-    def _adjust_stock(self, variant, change, change_type, reason, user, warehouse=None):
-        if warehouse is None:
-            warehouse = self._get_default_warehouse(user)
-            if not warehouse:
-                return
-
-        try:
-            stock_item = StockItem.objects.select_for_update().get(
-                variant=variant,
-                warehouse=warehouse,
-                company_id=user.company_id
-            )
-        except StockItem.DoesNotExist:
-            stock_item = StockItem.objects.create(
-                variant=variant,
-                warehouse=warehouse,
-                company_id=user.company_id,
-                branch_id=user.branch_id,
-                quantity_on_hand=0,
-                created_by=user,
-                updated_by=user,
-            )
-
-        with transaction.atomic():
-            before = stock_item.quantity_on_hand
-            new_quantity = before + change
-            if new_quantity < 0:
-                raise ValueError("Stock cannot be negative")
-                return
-
-            stock_item.quantity_on_hand = new_quantity
-            stock_item.version += 1
-            stock_item.save()
-
-            InventoryTransaction.objects.create(
-                transaction_id=uuid.uuid4(),
-                variant=variant,
-                warehouse=warehouse,
-                company_id=user.company_id,
-                quantity_change=change,
-                quantity_before=before,
-                quantity_after=new_quantity,
-                unit_cost=variant.buying_price,
-                transaction_type=change_type,
-                reason_text=reason,
-                created_by=user,
-                updated_by=user,
-            )
 
     def destroy(self, request, *args, **kwargs):
         product = self.get_object()

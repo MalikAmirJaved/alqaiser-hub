@@ -1,17 +1,58 @@
 from decimal import Decimal
+import time
+import random
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, serializers as drf_serializers
+from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.common.filters import GenericFilterMixin
 from apps.finance.mixins import CompanyBranchUserMixin, SoftDeleteMixin
-from apps.finance.models import Payment, JournalEntry, JournalLine, Account, BankTransaction
+from apps.finance.models import Payment, JournalEntry, JournalLine, Account, BankTransaction, CustomerInvoice, SupplierBill
 from apps.finance.serializers import PaymentSerializer
-from apps.finance.services.payable import get_payable_label
+from apps.finance.services.payable import get_payable_label, get_content_type_for_model
+from apps.finance.services.supplier_balance import update_supplier_balance
 from apps.permissions.mixins import PermissionRequiredMixin
+
+# Payable model mapping for creating payments
+PAYABLE_MODEL_MAP = {
+    'customer_invoice': CustomerInvoice,
+    'supplier_bill': SupplierBill,
+}
+
+
+class PaymentWriteSerializer(drf_serializers.Serializer):
+    payable_type = drf_serializers.ChoiceField(choices=list(PAYABLE_MODEL_MAP.keys()))
+    payable_id = drf_serializers.UUIDField()
+    amount = drf_serializers.DecimalField(max_digits=15, decimal_places=2, min_value=Decimal('0.01'))
+    payment_date = drf_serializers.DateField()
+    payment_method = drf_serializers.ChoiceField(
+        choices=['CASH', 'BANK_TRANSFER', 'CHEQUE', 'CREDIT_CARD', 'OTHER'],
+        default='BANK_TRANSFER',
+    )
+    bank_account = drf_serializers.SlugRelatedField(
+        slug_field='_id', queryset=[], allow_null=True, required=False,
+    )
+    reference_number = drf_serializers.CharField(required=False, allow_blank=True, default='')
+    notes = drf_serializers.CharField(required=False, allow_blank=True, default='')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.finance.models import BankAccount
+        self.fields['bank_account'].queryset = BankAccount.objects.all()
+
+    def validate(self, data):
+        model_class = PAYABLE_MODEL_MAP.get(data['payable_type'])
+        if not model_class:
+            raise drf_serializers.ValidationError(f'Invalid payable_type: {data["payable_type"]}')
+        payable = model_class.objects.filter(_id=data['payable_id']).first()
+        if not payable:
+            raise drf_serializers.ValidationError(f'{data["payable_type"]} with id {data["payable_id"]} not found')
+        data['payable'] = payable
+        return data
 
 
 def _get_cash_account(payment):
@@ -274,6 +315,18 @@ def confirm_payment_logic(payment, user):
                 bank_account.book_balance -= payment.amount
             bank_account.save(update_fields=['book_balance'])
 
+        # ── Supplier credit/balance integration for PAYMENT-type on SupplierBill ──
+        payable = payment.payable
+        if payment.payment_type == 'PAYMENT' and payable and payable._meta.model_name == 'supplierbill':
+            supplier = payable.supplier
+            if supplier:
+                update_supplier_balance(
+                    supplier, payment.amount, 'PAYMENT',
+                    reference_type='payment',
+                    reference_id=payment._id,
+                    notes=f'Payment for bill {payable.bill_number}',
+                )
+
         payment.save()
         return True, 'Payment confirmed successfully.'
 
@@ -284,13 +337,14 @@ class PaymentViewSet(
     CompanyBranchMixin,
     PermissionRequiredMixin,
     SoftDeleteMixin,
-    viewsets.ReadOnlyModelViewSet,
+    viewsets.ModelViewSet,
 ):
     queryset = Payment.objects.select_related('content_type', 'bank_account').all()
     serializer_class = PaymentSerializer
     permission_module = 'FINANCE'
     permission_resource = 'payment'
     lookup_field = '_id'
+    lookup_url_kwarg = '_id'
     filter_fields = {
         'search': ['reference_number', 'notes'],
         'payment_type': 'payment_type',
@@ -340,16 +394,88 @@ class PaymentViewSet(
             ct = ContentType.objects.get_for_model(SupplierBill)
             qs = qs.filter(content_type=ct, object_id__in=bill_ids)
 
-        return qs
+        return qs.order_by('-created_at')
+
+    def get_serializer_class(self):
+        if self.action in ('create', 'update', 'partial_update'):
+            return PaymentWriteSerializer
+        return PaymentSerializer
 
     def create(self, request, *args, **kwargs):
-        return Response({'detail': 'Method not allowed'}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        serializer = PaymentWriteSerializer(data=request.data, context=self.get_serializer_context())
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        payable = data['payable']
+        ct = get_content_type_for_model(payable.__class__)
+
+        with transaction.atomic():
+            payment = Payment.objects.create(
+                company_id=request.user.company_id,
+                branch_id=request.user.branch_id,
+                content_type=ct,
+                object_id=payable.pk,
+                payment_type=data.get('payment_type', 'PAYMENT'),
+                payment_method=data.get('payment_method', 'BANK_TRANSFER'),
+                amount=data['amount'],
+                payment_date=data['payment_date'],
+                reference_number=data.get('reference_number', ''),
+                bank_account=data.get('bank_account'),
+                status='DRAFT',
+                notes=data.get('notes', ''),
+                created_by=request.user,
+                updated_by=request.user,
+            )
+
+        return Response({
+            'status': 'success',
+            'message': 'Payment created successfully',
+            'data': PaymentSerializer(payment, context=self.get_serializer_context()).data,
+        }, status=status.HTTP_201_CREATED)
 
     def update(self, request, *args, **kwargs):
-        return Response({'detail': 'Method not allowed'}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        if instance.status != 'DRAFT':
+            return Response({'error': 'Only DRAFT payments can be updated'}, status=status.HTTP_400_BAD_REQUEST)
 
-    def partial_update(self, request, *args, **kwargs):
-        return Response({'detail': 'Method not allowed'}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        serializer = PaymentWriteSerializer(data=request.data, partial=partial, context=self.get_serializer_context())
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        for attr, value in data.items():
+            if attr in ('payable', 'payable_type', 'payable_id'):
+                continue
+            setattr(instance, attr, value)
+        instance.updated_by = request.user
+        instance.save()
+
+        return Response({
+            'status': 'success',
+            'message': 'Payment updated successfully',
+            'data': PaymentSerializer(instance, context=self.get_serializer_context()).data,
+        })
 
     def destroy(self, request, *args, **kwargs):
-        return Response({'detail': 'Method not allowed'}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        instance = self.get_object()
+        if instance.status == 'CONFIRMED':
+            return Response({'error': 'Cannot delete a confirmed payment'}, status=status.HTTP_400_BAD_REQUEST)
+        instance.is_deleted = True
+        instance.deleted_by = request.user
+        instance.save(update_fields=['is_deleted', 'deleted_by'])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['post'])
+    def confirm(self, request, _id=None):
+        payment = self.get_object()
+        try:
+            success, message = confirm_payment_logic(payment, request.user)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        if not success:
+            return Response({'error': message}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'status': 'success',
+            'message': message,
+            'data': PaymentSerializer(payment, context=self.get_serializer_context()).data,
+        })
