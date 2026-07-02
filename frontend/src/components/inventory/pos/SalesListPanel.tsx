@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { usePagination } from "@/hooks/usePagination";
 import { useSalesOrders, useGenerateInvoice, type SalesOrderResponse } from "@/hooks/useSalesOrder";
 import {
@@ -103,6 +104,7 @@ function OrderCard({
   pdfLoading: string | null;
   generatingId: string | null;
 }) {
+  const router = useRouter();
   const [expanded, setExpanded] = useState(false);
   const cfg = statusConfig[order.status] || statusConfig.PENDING;
   const StatusIcon = cfg.icon;
@@ -271,110 +273,125 @@ function OrderCard({
       )}
 
       {/* ── Actions (Print / Download PDF / Thermal Print / Edit) ── */}
-      {order.status === "COMPLETE" && (
-        <div className="px-5 py-3 border-t border-border/40 flex items-center gap-2 bg-muted/5">
-          {onEditOrder && (
-            <button
-              onClick={() => onEditOrder(order)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-primary/10 text-primary rounded-lg text-[11px] font-bold hover:bg-primary/20 transition-all active:scale-[0.97] border border-primary/20"
-              title="Edit this sale"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                <path d="m15 5 4 4" />
-              </svg>
-              Edit
-            </button>
-          )}
-          {onReturnOrder && (
-            <button
-              onClick={() => onReturnOrder(order)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-warning/10 text-warning rounded-lg text-[11px] font-bold hover:bg-warning/20 transition-all active:scale-[0.97] border border-warning/20"
-              title="Return items from this sale"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="1 4 1 10 7 10" />
-                <path d="M3.51 15a9 9 0 1 0 .49-3.84" />
-              </svg>
-              Return
-            </button>
-          )}
-          {hasInvoice ? (
-            <>
+      <div className="px-5 py-3 border-t border-border/40 flex items-center gap-2 bg-muted/5">
+        {/* Show Detail — always visible */}
+        <button
+          onClick={() => router.push(`/inventory/pos/sales-orders/${order.id}`)}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-primary/10 text-primary rounded-lg text-[11px] font-bold hover:bg-primary/20 transition-all active:scale-[0.97] border border-primary/20"
+          title="View order details"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          Show Detail
+        </button>
+        {order.status === "COMPLETE" && (
+          <>
+            {onEditOrder && (
               <button
-                onClick={() => onPrintInvoice(order)}
-                disabled={pdfLoading === order.id}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-[11px] font-bold hover:opacity-90 transition-all active:scale-[0.97] disabled:opacity-50"
+                onClick={() => onEditOrder(order)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-primary/10 text-primary rounded-lg text-[11px] font-bold hover:bg-primary/20 transition-all active:scale-[0.97] border border-primary/20"
+                title="Edit this sale"
               >
-                {pdfLoading === order.id ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                  <path d="m15 5 4 4" />
+                </svg>
+                Edit
+              </button>
+            )}
+            {onReturnOrder && (
+              <button
+                onClick={() => onReturnOrder(order)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-warning/10 text-warning rounded-lg text-[11px] font-bold hover:bg-warning/20 transition-all active:scale-[0.97] border border-warning/20"
+                title="Return items from this sale"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="1 4 1 10 7 10" />
+                  <path d="M3.51 15a9 9 0 1 0 .49-3.84" />
+                </svg>
+                Return
+              </button>
+            )}
+            <div className="w-px h-5 bg-border/60 mx-0.5" />
+            {hasInvoice ? (
+              <>
+                <button
+                  onClick={() => onPrintInvoice(order)}
+                  disabled={pdfLoading === order.id}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-[11px] font-bold hover:opacity-90 transition-all active:scale-[0.97] disabled:opacity-50"
+                >
+                  {pdfLoading === order.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Printer className="h-3.5 w-3.5" />
+                  )}
+                  Print Invoice
+                </button>
+                <button
+                  onClick={() => onPrintInvoice(order)}
+                  disabled={pdfLoading === order.id}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-muted/60 text-foreground rounded-lg text-[11px] font-bold hover:bg-muted/80 transition-all active:scale-[0.97] disabled:opacity-50 border border-border/40"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  PDF
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => onGenerateInvoice(order)}
+                disabled={generatingId === order.id}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-[11px] font-bold hover:bg-primary/20 transition-all active:scale-[0.97] disabled:opacity-50 border border-primary/20"
+              >
+                {generatingId === order.id ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <Printer className="h-3.5 w-3.5" />
+                  <Receipt className="h-3.5 w-3.5" />
                 )}
-                Print Invoice
+                Generate Invoice
               </button>
-              <button
-                onClick={() => onPrintInvoice(order)}
-                disabled={pdfLoading === order.id}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-muted/60 text-foreground rounded-lg text-[11px] font-bold hover:bg-muted/80 transition-all active:scale-[0.97] disabled:opacity-50 border border-border/40"
-              >
-                <Download className="h-3.5 w-3.5" />
-                PDF
-              </button>
-            </>
-          ) : (
+            )}
+            {/* Thermal Print Button */}
             <button
-              onClick={() => onGenerateInvoice(order)}
-              disabled={generatingId === order.id}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-[11px] font-bold hover:bg-primary/20 transition-all active:scale-[0.97] disabled:opacity-50 border border-primary/20"
+              onClick={() => {
+                const now = new Date(order.created_at);
+                const effectiveLines = (order.lines || [])
+                  .filter((l) => l.status !== "CANCELLED")
+                  .map((l) => {
+                    const effectiveQty = l.quantity_ordered - (l.quantity_returned || 0);
+                    return {
+                      variant_name: l.variant_name || "Product",
+                      variant_sku: l.variant_sku,
+                      quantity: Math.max(effectiveQty, 0),
+                      unit_price: Number(l.unit_price),
+                      total: Math.max(effectiveQty, 0) * Number(l.unit_price),
+                    };
+                  });
+                const effectiveTotal = effectiveLines.reduce((s, l) => s + l.total, 0);
+                const data: ThermalReceiptData = {
+                  orderNumber: order.order_number,
+                  date: now.toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  }),
+                  time: now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+                  customerName: order.customer_name,
+                  lines: effectiveLines,
+                  totalAmount: Number(order.total_amount),
+                };
+                printThermalReceipt(data, companyName || "Store", formatCurrency);
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-50 text-amber-700 rounded-lg text-[11px] font-bold hover:bg-amber-100 transition-all active:scale-[0.97] border border-amber-200"
+              title="Print thermal receipt"
             >
-              {generatingId === order.id ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Receipt className="h-3.5 w-3.5" />
-              )}
-              Generate Invoice
+              <ReceiptText className="h-3.5 w-3.5" />
+              Thermal
             </button>
-          )}
-          {/* Thermal Print Button */}
-          <button
-            onClick={() => {
-              const now = new Date(order.created_at);
-              const effectiveLines = (order.lines || [])
-                .filter((l) => l.status !== "CANCELLED")
-                .map((l) => {
-                  const effectiveQty = l.quantity_ordered - (l.quantity_returned || 0);
-                  return {
-                    variant_name: l.variant_name || "Product",
-                    variant_sku: l.variant_sku,
-                    quantity: Math.max(effectiveQty, 0),
-                    unit_price: Number(l.unit_price),
-                    total: Math.max(effectiveQty, 0) * Number(l.unit_price),
-                  };
-                });
-              const effectiveTotal = effectiveLines.reduce((s, l) => s + l.total, 0);
-              const data: ThermalReceiptData = {
-                orderNumber: order.order_number,
-                date: now.toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "short",
-                  day: "numeric",
-                }),
-                time: now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
-                customerName: order.customer_name,
-                lines: effectiveLines,
-                totalAmount: Number(order.total_amount),
-              };
-              printThermalReceipt(data, companyName || "Store", formatCurrency);
-            }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-50 text-amber-700 rounded-lg text-[11px] font-bold hover:bg-amber-100 transition-all active:scale-[0.97] border border-amber-200"
-            title="Print thermal receipt"
-          >
-            <ReceiptText className="h-3.5 w-3.5" />
-            Thermal
-          </button>
-        </div>
-      )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -98,22 +98,6 @@ export default function CustomerDetail({ id, moduleCode, onBack }: CustomerDetai
 
   const customerInfo = activeSummary?.customer ?? customer;
 
-  const handleDelete = () => {
-    confirm({
-      title: "Delete Customer",
-      message: `Delete "${customerInfo?.name}" permanently? This action cannot be undone.`,
-      onConfirm: async () => {
-        await deleteCustomer.mutateAsync(String(id));
-        if (onBack) {
-          onBack();
-        } else {
-          const backPath = moduleCode === "INVENTORY" ? "/inventory/customers" : "/sales/customers";
-          router.push(backPath);
-        }
-      },
-    });
-  };
-
   const handleUpdate = async (data: any) => {
     await updateCustomer.mutateAsync({ id: String(id), data });
     setIsEditing(false);
