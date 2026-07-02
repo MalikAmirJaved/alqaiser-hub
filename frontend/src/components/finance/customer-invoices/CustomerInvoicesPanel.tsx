@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
 import { useCustomerInvoices, usePayCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
 import { useSalesInvoices } from "@/hooks/sales/useSalesInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
+import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
 import { useServerSearch } from "@/hooks/useServerSearch";
 import CustomerInvoiceFormModal from "@/components/finance/customer-invoices/CustomerInvoiceFormModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
 import { StatusBadge } from "@/components/finance/ui";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
@@ -29,6 +32,8 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
   const [payModalOpen, setPayModalOpen] = useState(false);
   const [invoiceToPay, setInvoiceToPay] = useState<any>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [printInvoice, setPrintInvoice] = useState<any>(null);
   const pagination = usePagination();
 
   const fetchCustomers = useServerSearch("/api/finance/customers/", {
@@ -69,6 +74,8 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
 
   const resourceName = moduleCode === "SALES" ? "sales_customers_invoice" : "customer_invoice";
   const permissions = useFeaturePermissions(moduleCode, resourceName);
+  const { data: companySettings } = useCompanySettingsQuery();
+  const { terms: termsData } = useTermsAndConditions();
 
   const modulePermissions: ModulePermissions = {
     create: permissions.create,
@@ -188,6 +195,10 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
             invoice.status !== "CANCELLED" &&
             Number(invoice.outstanding) > 0,
           postLabel: "Pay",
+          onPrint: (invoice) => {
+            setPrintInvoice(invoice);
+            setShowPrintPreview(true);
+          },
         }}
         onRowClick={handleRowClick}
         exportEnabled={permissions.export}
@@ -257,6 +268,53 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
             });
             setPayModalOpen(false);
             setInvoiceToPay(null);
+          }}
+        />
+      )}
+      {printInvoice && companySettings && (
+        <PrintPreviewModal
+          open={showPrintPreview}
+          onClose={() => { setShowPrintPreview(false); setPrintInvoice(null); }}
+          documentProps={{
+            data: {
+              type: "INVOICE",
+              documentNumber: printInvoice.invoice_number,
+              date: printInvoice.invoice_date,
+              dueDate: printInvoice.due_date,
+              customerName: printInvoice.customer_name || "—",
+              customerEmail: (printInvoice as any).customer_email || "",
+              customerPhone: (printInvoice as any).customer_phone || "",
+              lines: (printInvoice.lines || []).map((l: any) => ({
+                variant_name: l.variant_name,
+                variant_sku: l.variant_sku,
+                quantity: l.quantity,
+                unit_price: l.unit_price,
+                tax_rate: l.tax_rate,
+                discount_amount: l.discount_amount,
+              })),
+              totalAmount: Number(printInvoice.amount),
+              overallDiscountPercent: Number((printInvoice as any).overall_discount_percent || 0),
+              overallTaxPercent: Number((printInvoice as any).overall_tax_percent || 0),
+              status: printInvoice.status,
+              paymentStatus: printInvoice.payment_status,
+              notes: printInvoice.notes,
+            },
+            company: {
+              companyName: companySettings.companyName,
+              address: companySettings.address,
+              city: companySettings.city,
+              state: companySettings.state,
+              country: companySettings.country,
+              phone: companySettings.phone,
+              email: companySettings.email,
+              taxId: companySettings.taxId,
+              logo: (companySettings as any).logo || "",
+              logoUrl: (companySettings as any).logo
+                ? `${process.env.NEXT_PUBLIC_API_URL}${(companySettings as any).logo}`
+                : "",
+            },
+            termsContent: termsData?.invoice || "",
+            formatCurrency,
           }}
         />
       )}

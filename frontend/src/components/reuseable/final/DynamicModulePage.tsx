@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { useState, useMemo, useEffect } from "react";
 import { PageHeader, Card, TableToolbar, ToolbarButton } from "@/components/finance/ui";
-import { Plus, Download, Pencil, Trash2, Send } from "lucide-react";
+import { Plus, Download, Pencil, Trash2, Send, Printer } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
@@ -38,9 +38,11 @@ interface Actions<T> {
   onEdit?: (item: T) => void;
   onDelete?: (item: T) => void;
   onPost?: (item: T) => void;
+  onPrint?: (item: T) => void;
   canEdit?: (item: T) => boolean;
   canDelete?: (item: T) => boolean;
   canPost?: (item: T) => boolean;
+  canPrint?: (item: T) => boolean;
   postLabel?: string;
 }
 
@@ -192,7 +194,7 @@ export function DynamicModulePage<T>({
     });
   };
 
-  const showActionsColumn = (actions?.onEdit || actions?.onDelete || actions?.onPost) && (permissions.update || permissions.delete);
+  const showActionsColumn = (actions?.onEdit || actions?.onDelete || actions?.onPost || actions?.onPrint) && (permissions.update || permissions.delete);
   const showCheckboxColumn = permissions.delete || onRowSelect;
 
   return (
@@ -355,6 +357,20 @@ export function DynamicModulePage<T>({
                           <td className="px-4 py-2.5 text-right">
                             <div className="flex items-center justify-end gap-1">
                             
+                              {actions?.onPrint &&
+                                permissions.view &&
+                                (actions.canPrint?.(item) ?? true) && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      actions.onPrint!(item);
+                                    }}
+                                    className="p-1 rounded-md hover:bg-muted"
+                                    title="Print"
+                                  >
+                                    <Printer className="w-4 h-4" />
+                                  </button>
+                                )}
                               {actions?.onPost &&
                                 permissions.update &&
                                 (actions.canPost?.(item) ?? true) && (

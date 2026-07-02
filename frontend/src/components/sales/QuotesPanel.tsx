@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useQuotes, useSendQuote, useMarkViewedQuote, useApproveQuote, useRejectQuote, useMarkConvertedQuote, useRevertQuoteStatus, Quote } from "@/hooks/sales/useQuotes";
 import { DynamicModulePage, type ModulePermissions, type Kpi } from "@/components/reuseable/final/DynamicModulePage";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
+import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
 import { StatusBadge } from "@/components/finance/ui";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
-import { CheckCircle, XCircle, FileText, ExternalLink, MoreVertical, Pencil, Trash2, Send, Eye, Undo2 } from "lucide-react";
+import { CheckCircle, XCircle, FileText, ExternalLink, MoreVertical, Pencil, Trash2, Send, Eye, Undo2, Printer } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -18,6 +20,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
+import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
 import QuoteFormModal from "./QuoteFormModal";
 import CustomerInvoiceFormModal from "@/components/finance/customer-invoices/CustomerInvoiceFormModal";
 import { usePagination } from "@/hooks/usePagination";
@@ -31,6 +34,8 @@ export default function QuotesPanel() {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [quoteToConvert, setQuoteToConvert] = useState<Quote | null>(null);
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [printQuote, setPrintQuote] = useState<Quote | null>(null);
   const pagination = usePagination();
 
   const quoteStatusOptions = [
@@ -63,6 +68,8 @@ export default function QuotesPanel() {
   const markConverted = useMarkConvertedQuote();
   const revertQuoteStatus = useRevertQuoteStatus();
   const permissions = useFeaturePermissions("SALES", "quote");
+  const { data: companySettings } = useCompanySettingsQuery();
+  const { terms: termsData } = useTermsAndConditions();
   const { confirm: confirmDelete, Modal: ConfirmModal } = useConfirmationModal();
 
   const modulePermissions: ModulePermissions = {
@@ -115,6 +122,11 @@ export default function QuotesPanel() {
     setEditingQuote(quote);
     setModalOpen(true);
   };
+
+  const handlePrint = useCallback((quote: Quote) => {
+    setPrintQuote(quote);
+    setShowPrintPreview(true);
+  }, []);
 
   const handleModalSuccess = () => {
     refetch();
@@ -182,8 +194,6 @@ export default function QuotesPanel() {
       label: "",
       align: "right" as const,
       render: (_: any, quote: Quote) => {
-        if (quote.status === "CONVERTED") return null;
-
         const canRevert = ["SENT", "VIEWED", "APPROVED", "REJECTED"].includes(quote.status);
         const hasWorkflowActions = ["DRAFT", "SENT", "VIEWED", "APPROVED"].includes(quote.status);
         const showEdit = quote.status === "DRAFT" && permissions.update;
@@ -231,7 +241,10 @@ export default function QuotesPanel() {
                   <Undo2 className="w-4 h-4 mr-2" /> Revert Status
                 </DropdownMenuItem>
               )}
-              {showSeparator && <DropdownMenuSeparator />}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => handlePrint(quote)}>
+                <Printer className="w-4 h-4 mr-2" /> Print
+              </DropdownMenuItem>
               {showEdit && (
                 <DropdownMenuItem onClick={() => handleEdit(quote)}>
                   <Pencil className="w-4 h-4 mr-2" /> Edit
@@ -288,6 +301,55 @@ export default function QuotesPanel() {
         moduleCode="SALES"
       />
       <ConfirmModal />
+      {printQuote && companySettings && (
+        <PrintPreviewModal
+          open={showPrintPreview}
+          onClose={() => { setShowPrintPreview(false); setPrintQuote(null); }}
+          documentProps={{
+            data: {
+              type: "QUOTE",
+              documentNumber: printQuote.quote_number,
+              date: printQuote.date,
+              expirationDate: printQuote.expiration_date || undefined,
+              customerName: printQuote.customer_name || "—",
+              customerEmail: (printQuote as any).customer_email || "",
+              customerPhone: (printQuote as any).customer_phone || "",
+              lines: (printQuote.lines || []).map((l) => ({
+                variant_name: l.variant_name,
+                variant_sku: l.variant_sku,
+                quantity: l.quantity,
+                unit_price: l.unit_price,
+                tax_rate: l.tax_rate,
+                discount_amount: l.discount_amount,
+              })),
+              totalAmount:
+                typeof printQuote.total_amount === "string"
+                  ? parseFloat(printQuote.total_amount)
+                  : printQuote.total_amount,
+              overallDiscountPercent: Number((printQuote as any).overall_discount_percent || 0),
+              overallTaxPercent: Number((printQuote as any).overall_tax_percent || 0),
+              status: printQuote.status,
+              notes: printQuote.notes,
+            },
+            company: {
+              companyName: companySettings.companyName,
+              address: companySettings.address,
+              city: companySettings.city,
+              state: companySettings.state,
+              country: companySettings.country,
+              phone: companySettings.phone,
+              email: companySettings.email,
+              taxId: companySettings.taxId,
+              logo: (companySettings as any).logo || "",
+              logoUrl: (companySettings as any).logo
+                ? `${process.env.NEXT_PUBLIC_API_URL}${(companySettings as any).logo}`
+                : "",
+            },
+            termsContent: termsData?.quote || "",
+            formatCurrency,
+          }}
+        />
+      )}
     </>
   );
 }
