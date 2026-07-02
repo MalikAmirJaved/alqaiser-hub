@@ -105,12 +105,15 @@ def cancel_customer_invoice(invoice, user, reason=''):
 
         # ── 5. Mark all invoice lines as cancelled ──────────────────────
         invoice.lines.filter(is_deleted=False).update(
-            is_deleted=True,
+            status='CANCELLED',
             updated_by=user,
         )
 
         # ── 6. Set invoice status to CANCELLED ──────────────────────────
+        from django.utils import timezone
         invoice.status = 'CANCELLED'
+        invoice.cancelled_by = user
+        invoice.cancelled_at = timezone.now()
         cancel_notes = f'Cancelled by {user.username}'
         if reason:
             cancel_notes += f': {reason}'

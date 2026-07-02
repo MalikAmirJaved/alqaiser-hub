@@ -47,7 +47,7 @@ class CustomerInvoiceLineSerializer(serializers.ModelSerializer):
             'is_manual_entry', 'manual_variant_name', 'manual_variant_sku',
             'vendor', 'vendor_name', 'cost_price', 'supplier_bill',
             'quantity', 'unit_price', 'tax_rate', 'discount_amount', 'description',
-            'subtotal', 'line_total'
+            'status', 'subtotal', 'line_total'
         ]
 
     def get_variant_sku(self, obj):
@@ -125,6 +125,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
         read_only_fields = (
             'id', 'created_at', 'updated_at', 'company_id', 'branch_id',
             'paid_amount', 'payment_status', 'outstanding', 'status', 'journal_entry', 'amount',
+            'cancelled_by', 'cancelled_at',
         )
 
     def get_customer_name(self, obj):
@@ -174,6 +175,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
             instance.lines.filter(is_deleted=False), many=True,
             context=self.context
         ).data
+        rep['cancelled_by_name'] = instance.cancelled_by.username if instance.cancelled_by else None
         return rep
 
     def _create_supplier_bills(self, invoice, lines_data, user):

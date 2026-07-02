@@ -64,6 +64,14 @@ class CustomerInvoice(PayableModelMixin, BaseModel):
     overall_discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
     overall_tax_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
     notes = models.TextField(blank=True)
+    cancelled_by = models.ForeignKey(
+        'organization.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='cancelled_invoices',
+    )
+    cancelled_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = 'finance_customer_invoices'
@@ -104,6 +112,15 @@ class CustomerInvoiceLine(BaseModel):
     unit_price = models.DecimalField(max_digits=12, decimal_places=4)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('ACTIVE', 'Active'),
+            ('CANCELLED', 'Cancelled'),
+            ('RETURNED', 'Returned'),
+        ],
+        default='ACTIVE',
+    )
     description = models.TextField(blank=True, default='')
     supplier_bill = models.ForeignKey('SupplierBill', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='invoice_lines')

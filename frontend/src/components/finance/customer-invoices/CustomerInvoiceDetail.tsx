@@ -185,6 +185,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
                 <th className="px-4 py-2 text-right">Discount</th>
                 <th className="px-4 py-2 text-right">Tax</th>
                 <th className="px-4 py-2 text-right">Total</th>
+                <th className="px-4 py-2 text-center">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -193,8 +194,9 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
                 const discount = line.discount_amount || 0;
                 const tax = (subtotal - discount) * (line.tax_rate / 100);
                 const lineTotal = subtotal - discount + tax;
+                const lineStatus = line.status || "ACTIVE";
                 return (
-                  <tr key={idx} className="border-b border-border/60">
+                  <tr key={idx} className={`border-b border-border/60 ${lineStatus === "CANCELLED" ? "bg-destructive/5" : ""}`}>
                     <td className="px-4 py-2">
                       <div className="font-medium">{line.variant_name || "Product"}</div>
                       <div className="text-xs text-muted-foreground">SKU: {line.variant_sku || "—"}</div>
@@ -207,6 +209,13 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
                     <td className="px-4 py-2 text-right text-destructive">{discount > 0 ? formatCurrency(discount) : "—"}</td>
                     <td className="px-4 py-2 text-right">{line.tax_rate}%</td>
                     <td className="px-4 py-2 text-right font-medium">{formatCurrency(lineTotal)}</td>
+                    <td className="px-4 py-2 text-center">
+                      <span className={`inline-flex px-2 py-0.5 text-xs rounded-full font-medium ${
+                        lineStatus === "CANCELLED" ? "bg-destructive/15 text-destructive" :
+                        lineStatus === "RETURNED" ? "bg-warning/15 text-warning" :
+                        "bg-success/15 text-success"
+                      }`}>{lineStatus}</span>
+                    </td>
                   </tr>
                 );
               })}
@@ -481,9 +490,17 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
             : ["Sales", "Invoices", invoice.invoice_number]
         }
         entityId={invoice.invoice_number}
-        title={`${invoice.customer_name || "Customer"} — ${invoice.invoice_number}`}
-        status={isRefunded ? "REFUNDED" : invoice.payment_status || "UNPAID"}
-        subtitle={`Issued ${invoice.invoice_date} · Due ${invoice.due_date}`}
+        title={
+          invoice.status === "CANCELLED"
+            ? `❌ CANCELLED — ${invoice.customer_name || "Customer"} — ${invoice.invoice_number}`
+            : `${invoice.customer_name || "Customer"} — ${invoice.invoice_number}`
+        }
+        status={invoice.status === "CANCELLED" ? "CANCELLED" : isRefunded ? "REFUNDED" : invoice.payment_status || "UNPAID"}
+        subtitle={
+          invoice.status === "CANCELLED"
+            ? `Cancelled${invoice.cancelled_at ? ` on ${new Date(invoice.cancelled_at).toLocaleDateString()}` : ""}${invoice.cancelled_by_name ? ` by ${invoice.cancelled_by_name}` : ""}${invoice.notes?.includes("Cancelled by") ? ` — ${invoice.notes.split("\n").filter((l: string) => l.includes("Cancelled by")).pop()}` : ""}`
+            : `Issued ${invoice.invoice_date} · Due ${invoice.due_date}`
+        }
         data={invoice}
         meta={[
           { label: "Customer", value: invoice.customer_name || "-" },
@@ -494,6 +511,12 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
           { label: "Paid", value: formatCurrency(paidAmount), tone: "success", sub: `${((paidAmount / amount) * 100).toFixed(1)}% paid`, isCurrency: true },
           { label: "Outstanding", value: formatCurrency(outstanding), tone: outstanding > 0 ? "warning" : "success", isCurrency: true },
           { label: "Due Date", value: invoice.due_date, isCurrency: false },
+          ...(isRefunded ? [{
+            label: "Refunded",
+            value: formatCurrency(invoice.payments?.filter((p: any) => p.payment_type === "PAYMENT" && p.status === "CONFIRMED").reduce((s: number, p: any) => s + Number(p.amount), 0) || 0),
+            tone: "destructive" as const,
+            isCurrency: true,
+          }] : []),
         ]}
         primaryActionLabel={canSend ? "Send Invoice" : canPay ? "Pay Invoice" : undefined}
         onPrimaryAction={canSend ? handleSend : canPay ? handlePay : undefined}

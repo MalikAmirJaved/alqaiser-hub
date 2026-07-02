@@ -20,6 +20,7 @@ export interface CustomerInvoiceLine {
   unit_price: number;
   tax_rate: number;
   discount_amount: number;
+  status?: "ACTIVE" | "CANCELLED" | "RETURNED";
 }
 
 export interface InvoicePayment {
@@ -29,6 +30,7 @@ export interface InvoicePayment {
   payment_method: string;
   reference_number: string;
   status: string;
+  payment_type?: string;
 }
 
 export interface CustomerInvoice {
@@ -60,6 +62,9 @@ export interface CustomerInvoice {
   created_by_name?: string;
   updated_by?: number | string | null;
   updated_by_name?: string;
+  cancelled_by?: number | string | null;
+  cancelled_by_name?: string;
+  cancelled_at?: string;
 }
 
 interface PaginatedResponse<T> {
