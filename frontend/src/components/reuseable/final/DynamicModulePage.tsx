@@ -205,6 +205,15 @@ export function DynamicModulePage<T>({
   };
 
   const showActionsColumn = (actions?.onEdit || actions?.onDelete || actions?.onPost || actions?.onSend || actions?.onPrint) && (permissions.update || permissions.delete);
+
+  const hasRowActions = (item: T) => {
+    if (actions?.onPrint && permissions.view && (actions.canPrint?.(item) ?? true)) return true;
+    if (actions?.onSend && permissions.update && (actions.canSend?.(item) ?? true)) return true;
+    if (actions?.onPost && permissions.update && (actions.canPost?.(item) ?? true)) return true;
+    if (actions?.onEdit && permissions.update && (actions.canEdit?.(item) ?? true)) return true;
+    if (actions?.onDelete && permissions.delete && (actions.canDelete?.(item) ?? true)) return true;
+    return false;
+  };
   const showCheckboxColumn = permissions.delete || onRowSelect;
 
   return (
@@ -365,6 +374,7 @@ export function DynamicModulePage<T>({
                         ))}
                         {showActionsColumn && (
                           <td className="px-4 py-2.5 text-right">
+                            {hasRowActions(item) ? (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <button
@@ -411,6 +421,7 @@ export function DynamicModulePage<T>({
                                 )}
                               </DropdownMenuContent>
                             </DropdownMenu>
+                            ) : null}
                           </td>
                         )}
                       </tr>

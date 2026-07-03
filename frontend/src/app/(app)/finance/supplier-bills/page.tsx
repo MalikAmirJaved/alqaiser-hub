@@ -95,7 +95,7 @@ export default function SupplierBillsPage() {
       key: "payment_status",
       label: "Status",
       sortable: true,
-      render: (val: string) => <StatusBadge status={val || "UNPAID"} />,
+      render: (val: string, row: any) => <StatusBadge status={row.status === "CANCELLED" ? "CANCELLED" : (val || "UNPAID")} />,
     },
   ];
 
