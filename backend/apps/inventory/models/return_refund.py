@@ -129,6 +129,27 @@ class ReturnRefundLine(BaseModel):
         default=False,
         help_text="If True, reverse the supplier bill/bill line for this item",
     )
+    disposition_action = models.CharField(
+        max_length=30,
+        blank=True,
+        choices=[
+            ('GO_TO_PRODUCT', 'Go to Product'),
+            ('RETURN_TO_SUPPLIER', 'Return to Supplier'),
+        ],
+        help_text='Manual line disposition (keeps stock vs return to vendor)',
+    )
+    product_qty = models.PositiveIntegerField(
+        default=0,
+        help_text='Quantity added back to product/inventory',
+    )
+    damage_qty = models.PositiveIntegerField(
+        default=0,
+        help_text='Quantity marked as damaged (not restocked)',
+    )
+    damage_reason = models.TextField(
+        blank=True,
+        help_text='Required when damage_qty > 0',
+    )
 
     reason = models.TextField(blank=True)
 

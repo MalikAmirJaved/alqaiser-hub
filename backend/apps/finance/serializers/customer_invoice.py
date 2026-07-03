@@ -265,6 +265,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
             subtotal = Decimal('0')
             per_line_discounts = Decimal('0')
             self._reduction_conflicts = []
+            self._variant_reduction_conflicts = []
             created_lines = []
 
             raw_line_ids = self.context.get('raw_line_ids', {})
@@ -275,13 +276,14 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
                 if line_id and line_id in existing_lines:
                     old_line = existing_lines[line_id]
                     incoming_ids.add(line_id)
+                    new_qty = line_item.get('quantity', old_line.quantity)
 
                     if is_manual and line_item.get('vendor') and line_item.get('cost_price') is not None:
                         conflict = sync_manual_line_bill(
                             invoice=instance,
                             old_line=old_line,
                             new_vendor=line_item['vendor'],
-                            new_qty=line_item.get('quantity', old_line.quantity),
+                            new_qty=new_qty,
                             new_cost_price=line_item['cost_price'],
                             user=user,
                             line_index=i,
@@ -289,6 +291,28 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
                         )
                         if conflict:
                             self._reduction_conflicts.append(conflict)
+                    elif (
+                        not is_manual
+                        and old_line.variant
+                        and new_qty < old_line.quantity
+                    ):
+                        delta_qty = old_line.quantity - new_qty
+                        if old_line.resolved:
+                            old_line.resolved = False
+                        old_line.original_quantity = old_line.quantity
+                        old_line.save(update_fields=['original_quantity', 'resolved', 'updated_at'])
+                        variant_name = ''
+                        if old_line.variant and old_line.variant.product:
+                            variant_name = old_line.variant.product.product_name
+                        self._variant_reduction_conflicts.append({
+                            'line_id': str(old_line._id),
+                            'line_index': i,
+                            'line_name': variant_name or old_line.variant.sku,
+                            'line_type': 'variant',
+                            'delta_qty': delta_qty,
+                            'old_qty': old_line.quantity,
+                            'new_qty': new_qty,
+                        })
 
                     for attr, value in line_item.items():
                         if attr != 'supplier_bill':

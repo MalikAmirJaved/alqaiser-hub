@@ -23,6 +23,10 @@ export interface ReturnRefundLine {
   tax_rate: number;
   restock: boolean;
   return_to_supplier: boolean;
+  disposition_action?: "GO_TO_PRODUCT" | "RETURN_TO_SUPPLIER";
+  product_qty?: number;
+  damage_qty?: number;
+  damage_reason?: string;
   reason: string;
 }
 
@@ -138,8 +142,16 @@ export function useCreateReturn() {
         quantity: number;
         unit_price: number;
         refund_amount: number;
+        is_manual_entry?: boolean;
+        manual_variant_name?: string;
+        manual_variant_sku?: string;
+        vendor?: string | null;
         restock: boolean;
         return_to_supplier: boolean;
+        disposition_action?: "GO_TO_PRODUCT" | "RETURN_TO_SUPPLIER";
+        product_qty?: number;
+        damage_qty?: number;
+        damage_reason?: string;
         reason?: string;
       }>;
     }) =>

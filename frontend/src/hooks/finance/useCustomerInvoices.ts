@@ -268,7 +268,13 @@ export function usePostCustomerInvoice() {
 
 async function resolveReduction(
   invoiceId: string,
-  data: { line_id: string; action: "go_to_inventory" | "return_to_vendor" }
+  data: {
+    line_id: string;
+    action?: "go_to_inventory" | "return_to_vendor";
+    product_qty?: number;
+    damage_qty?: number;
+    damage_reason?: string;
+  }
 ) {
   return apiFetch<{ status: string; data: Record<string, unknown> }>(
     `/api/finance/customer-invoices/${invoiceId}/resolve_reduction/`,
@@ -308,11 +314,24 @@ export function useResolveReduction() {
       invoiceId,
       lineId,
       action,
+      product_qty,
+      damage_qty,
+      damage_reason,
     }: {
       invoiceId: string;
       lineId: string;
-      action: "go_to_inventory" | "return_to_vendor";
-    }) => resolveReduction(invoiceId, { line_id: lineId, action }),
+      action?: "go_to_inventory" | "return_to_vendor";
+      product_qty?: number;
+      damage_qty?: number;
+      damage_reason?: string;
+    }) =>
+      resolveReduction(invoiceId, {
+        line_id: lineId,
+        ...(action ? { action } : {}),
+        product_qty,
+        damage_qty,
+        damage_reason,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
       queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });

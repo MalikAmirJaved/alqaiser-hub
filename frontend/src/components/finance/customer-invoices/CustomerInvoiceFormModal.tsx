@@ -19,6 +19,7 @@ import { FormModal } from "@/components/inventory/supplier/FormModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useAutoCode } from "@/hooks/useAutoCode";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import QtySplitModal from "./LineDispositionModals";
 import { toast } from "sonner";
 
 interface InvoiceLine {
@@ -449,9 +450,12 @@ export default function CustomerInvoiceFormModal({
   const [customerDisplayLabel, setCustomerDisplayLabel] = useState("");
   const [existingLineIds, setExistingLineIds] = useState<Set<string>>(new Set());
   const [reductionConflicts, setReductionConflicts] = useState<any[]>([]);
+  const [variantReductionConflicts, setVariantReductionConflicts] = useState<any[]>([]);
   const [showConflictModal, setShowConflictModal] = useState(false);
+  const [showVariantSplitModal, setShowVariantSplitModal] = useState(false);
   const [resolvingAction, setResolvingAction] = useState<"go_to_inventory" | "return_to_vendor" | null>(null);
   const [resolvingLineId, setResolvingLineId] = useState<string | null>(null);
+  const [splitConflict, setSplitConflict] = useState<{ line_id: string; line_name: string; delta_qty: number } | null>(null);
   const [variantDisplayLabels, setVariantDisplayLabels] = useState<Record<string, string>>({});
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [createdSupplierName, setCreatedSupplierName] = useState("");
@@ -764,7 +768,11 @@ export default function CustomerInvoiceFormModal({
   );
 
   const handleResolveConflict = useCallback(
-    async (lineId: string, action: "go_to_inventory" | "return_to_vendor") => {
+    async (
+      lineId: string,
+      action: "go_to_inventory" | "return_to_vendor",
+      split?: { product_qty: number; damage_qty: number; damage_reason: string }
+    ) => {
       setResolvingLineId(lineId);
       setResolvingAction(action);
       try {
@@ -772,23 +780,72 @@ export default function CustomerInvoiceFormModal({
           invoiceId: initialData!.id,
           lineId,
           action,
+          product_qty: split?.product_qty,
+          damage_qty: split?.damage_qty,
+          damage_reason: split?.damage_reason,
         });
         toast.success(
           action === "go_to_inventory"
             ? "Product created and stock added. Supplier bill unchanged."
             : "Supplier bill and balance updated."
         );
-        setShowConflictModal(false);
-        onSuccess?.(null);
-        onClose();
+        setReductionConflicts((prev) => prev.filter((c) => c.line_id !== lineId));
+        if (reductionConflicts.length <= 1) {
+          setShowConflictModal(false);
+          onSuccess?.(null);
+          onClose();
+        }
       } catch (err: any) {
         toast.error(err?.message || "Failed to resolve reduction.");
       } finally {
         setResolvingLineId(null);
         setResolvingAction(null);
+        setSplitConflict(null);
       }
     },
-    [resolveReduction, initialData, onSuccess, onClose]
+    [resolveReduction, initialData, onSuccess, onClose, reductionConflicts.length]
+  );
+
+  const handleVariantSplitResolve = useCallback(
+    async (split: { product_qty: number; damage_qty: number; damage_reason: string }) => {
+      const conflict = variantReductionConflicts[0];
+      if (!conflict) return;
+      setResolvingLineId(conflict.line_id);
+      try {
+        await resolveReduction.mutateAsync({
+          invoiceId: initialData!.id,
+          lineId: conflict.line_id,
+          product_qty: split.product_qty,
+          damage_qty: split.damage_qty,
+          damage_reason: split.damage_reason,
+        });
+        toast.success("Reduced quantity split between product stock and damage.");
+        const remaining = variantReductionConflicts.slice(1);
+        setVariantReductionConflicts(remaining);
+        if (remaining.length === 0) {
+          setShowVariantSplitModal(false);
+          onSuccess?.(null);
+          onClose();
+        }
+      } catch (err: any) {
+        toast.error(err?.message || "Failed to resolve quantity reduction.");
+      } finally {
+        setResolvingLineId(null);
+      }
+    },
+    [variantReductionConflicts, resolveReduction, initialData, onSuccess, onClose]
+  );
+
+  const handleGoToProductClick = useCallback(
+    (conflict: { line_id: string; line_name?: string; old_qty: number; new_qty: number }) => {
+      const deltaQty = conflict.old_qty - conflict.new_qty;
+      setSplitConflict({
+        line_id: conflict.line_id,
+        line_name: conflict.line_name || "Item",
+        delta_qty: deltaQty,
+      });
+    },
+    []
   );
 
   const onSubmit = async (data: CustomerInvoiceFormData) => {
@@ -906,9 +963,15 @@ export default function CustomerInvoiceFormModal({
       if (initialData?.id) {
         result = await updateInvoice.mutateAsync({ id: initialData.id, data: payload });
         const conflicts = result?.data?._reduction_conflicts;
+        const variantConflicts = result?.data?._variant_reduction_conflicts;
         if (conflicts && conflicts.length > 0) {
           setReductionConflicts(conflicts);
           setShowConflictModal(true);
+          return;
+        }
+        if (variantConflicts && variantConflicts.length > 0) {
+          setVariantReductionConflicts(variantConflicts);
+          setShowVariantSplitModal(true);
           return;
         }
       } else {
@@ -1322,7 +1385,7 @@ export default function CustomerInvoiceFormModal({
                 <h3 className="text-base font-semibold">Quantity Reduced</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   You reduced the quantity on {reductionConflicts.length} manual line(s).
-                  Choose how to handle the supplier obligation.
+                  Choose how to handle the removed units with the supplier.
                 </p>
               </div>
             </div>
@@ -1341,13 +1404,13 @@ export default function CustomerInvoiceFormModal({
                     </div>
                     <div className="flex justify-between text-xs text-muted-foreground">
                       <span>Bill: {formatCurrency(Number(conflict.old_bill_amount) || 0)} → {formatCurrency(Number(conflict.new_bill_amount) || 0)}</span>
-                      <span>Qty: {conflict.old_qty} → {conflict.new_qty}</span>
+                      <span>Qty: {conflict.old_qty} → {conflict.new_qty} ({conflict.old_qty - conflict.new_qty} removed)</span>
                     </div>
                     <div className="flex flex-col gap-1.5 pt-1">
                       <button
                         type="button"
                         disabled={isResolvingThis || resolvingLineId !== null}
-                        onClick={() => handleResolveConflict(conflict.line_id, "go_to_inventory")}
+                        onClick={() => handleGoToProductClick(conflict)}
                         className="w-full flex items-center justify-center gap-2 px-3 h-9 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
                       >
                         {isResolvingThis && resolvingAction === "go_to_inventory" ? (
@@ -1355,7 +1418,7 @@ export default function CustomerInvoiceFormModal({
                         ) : (
                           <Warehouse className="w-3 h-3" />
                         )}
-                        Create Product & Add Stock
+                        Go to Product (split stock / damage next)
                       </button>
                       <button
                         type="button"
@@ -1378,6 +1441,38 @@ export default function CustomerInvoiceFormModal({
           </div>
         </div>
       )}
+
+      <QtySplitModal
+        open={!!splitConflict}
+        onClose={() => setSplitConflict(null)}
+        title="Product vs Damage Split"
+        itemName={splitConflict?.line_name || "Item"}
+        totalQty={splitConflict?.delta_qty || 0}
+        confirmLabel="Go to Product"
+        isSubmitting={resolveReduction.isPending}
+        onConfirm={(result) => {
+          if (!splitConflict) return;
+          handleResolveConflict(splitConflict.line_id, "go_to_inventory", result);
+        }}
+      />
+
+      <QtySplitModal
+        open={showVariantSplitModal && variantReductionConflicts.length > 0}
+        onClose={() => {
+          setShowVariantSplitModal(false);
+          setVariantReductionConflicts([]);
+        }}
+        title="Split Reduced Quantity"
+        itemName={variantReductionConflicts[0]?.line_name || "Product"}
+        totalQty={variantReductionConflicts[0]?.delta_qty || 0}
+        confirmLabel={
+          variantReductionConflicts.length > 1
+            ? `Confirm (${variantReductionConflicts.length} lines left)`
+            : "Confirm Split"
+        }
+        isSubmitting={resolveReduction.isPending}
+        onConfirm={handleVariantSplitResolve}
+      />
     </>
   );
 }

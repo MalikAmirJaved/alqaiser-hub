@@ -12,7 +12,10 @@ from apps.finance.models import CustomerInvoice, CustomerInvoiceLine
 from apps.finance.serializers import CustomerInvoiceSerializer
 from apps.finance.mixins import CompanyBranchUserMixin, SoftDeleteMixin
 from apps.finance.services.invoice_payment import pay_customer_invoice
-from apps.finance.services.resolve_reduction import resolve_invoice_line_reduction
+from apps.finance.services.resolve_reduction import (
+    resolve_invoice_line_reduction,
+    resolve_variant_line_reduction,
+)
 from apps.inventory.services.stock_service import (
     direct_deduct_stock,
     direct_release_stock,
@@ -97,7 +100,7 @@ class CustomerInvoiceViewSet(
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
-        if instance.status not in ('DRAFT', 'PENDING'):
+        if instance.status not in ('DRAFT', 'PENDING', 'SENT'):
             return Response({'error': 'Only DRAFT or PENDING invoices can be updated.'}, status=status.HTTP_400_BAD_REQUEST)
         if instance.payment_status == 'PAID':
             return Response({'error': 'Cannot edit a paid invoice.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -127,6 +130,9 @@ class CustomerInvoiceViewSet(
         reduction_conflicts = getattr(serializer, '_reduction_conflicts', [])
         if reduction_conflicts:
             response_data['_reduction_conflicts'] = reduction_conflicts
+        variant_reduction_conflicts = getattr(serializer, '_variant_reduction_conflicts', [])
+        if variant_reduction_conflicts:
+            response_data['_variant_reduction_conflicts'] = variant_reduction_conflicts
 
         return Response({
             'status': 'success',
@@ -258,22 +264,22 @@ class CustomerInvoiceViewSet(
 
     @action(detail=True, methods=['post'])
     def resolve_reduction(self, request, _id=None):
-        """Resolve a reduction conflict on a manual invoice line."""
+        """Resolve a quantity reduction on an invoice line (manual or variant)."""
         invoice = self.get_object()
         line_id = request.data.get('line_id')
         action_type = request.data.get('action')
 
-        if not line_id or action_type not in ('go_to_inventory', 'return_to_vendor'):
+        if not line_id:
             return Response(
-                {'error': 'line_id and a valid action (go_to_inventory or return_to_vendor) are required.'},
+                {'error': 'line_id is required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
-            line = invoice.lines.get(_id=line_id, is_deleted=False, is_manual_entry=True)
+            line = invoice.lines.get(_id=line_id, is_deleted=False)
         except CustomerInvoiceLine.DoesNotExist:
             return Response(
-                {'error': 'Manual entry line not found on this invoice.'},
+                {'error': 'Invoice line not found.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -284,13 +290,34 @@ class CustomerInvoiceViewSet(
             )
 
         try:
-            result = resolve_invoice_line_reduction(line, action_type, request.user)
+            if line.is_manual_entry:
+                if action_type not in ('go_to_inventory', 'return_to_vendor'):
+                    return Response(
+                        {'error': 'action must be go_to_inventory or return_to_vendor for manual lines.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                result = resolve_invoice_line_reduction(
+                    line,
+                    action_type,
+                    request.user,
+                    product_qty=request.data.get('product_qty'),
+                    damage_qty=request.data.get('damage_qty'),
+                    damage_reason=request.data.get('damage_reason', ''),
+                )
+            else:
+                result = resolve_variant_line_reduction(
+                    line,
+                    request.user,
+                    product_qty=request.data.get('product_qty'),
+                    damage_qty=request.data.get('damage_qty'),
+                    damage_reason=request.data.get('damage_reason', ''),
+                )
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response({
             'status': 'success',
-            'message': f'Reduction resolved: {action_type}',
+            'message': f'Reduction resolved',
             'data': result,
         })
 

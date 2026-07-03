@@ -12,6 +12,7 @@ import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
 import { StatusBadge } from "@/components/finance/ui";
 import CustomerInvoiceFormModal from "./CustomerInvoiceFormModal";
 import PayAmountModal from "@/components/finance/PayAmountModal";
+import InvoiceCancelModal from "./InvoiceCancelModal";
 import { FileText, Send, Printer, Download, Share2, Receipt, Edit, User, Clock, Mail, Loader2, X, RotateCcw, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -30,7 +31,6 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const { data: invoice, isLoading, refetch } = useCustomerInvoice(id);
-  console.log("invoice:: ", invoice)
   const updateInvoice = useUpdateCustomerInvoice();
   const payInvoice = usePayCustomerInvoice();
   const sendInvoice = useSendInvoice();
@@ -47,11 +47,8 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const [posting, setPosting] = useState(false);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [payModalOpen, setPayModalOpen] = useState(false);
-  const [refundModalOpen, setRefundModalOpen] = useState(false);
-  const [refundReason, setRefundReason] = useState("");
-  const [supplierAction, setSupplierAction] = useState<"go_to_inventory" | "return_to_supplier">("return_to_supplier");
-  const [lineActions, setLineActions] = useState<Record<string, "go_to_inventory" | "return_to_supplier">>({});
-  const [stockDispositions, setStockDispositions] = useState<Record<string, "add_stock" | "damaged">>({});
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
 
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!invoice) return <div className="p-8 text-center">Invoice not found</div>;
@@ -60,7 +57,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const paidAmount = toNumber(invoice.paid_amount);
   const outstanding = toNumber(invoice.outstanding);
   const canPay = invoice.status === "SENT" && invoice.payment_status !== "PAID";
-  const canEdit = (invoice.status === "DRAFT" || invoice.status === "PENDING") && permissions.update && invoice.payment_status !== "PAID"
+  const canEdit = (invoice.status === "DRAFT" || invoice.status === "PENDING" || invoice.status === "SENT") && permissions.update && invoice.payment_status !== "PAID"
   const canDelete = (invoice.status === "DRAFT" || invoice.status === "PENDING") && permissions.delete;
   const canRecordPayment = canPay;
   const canSend = invoice.status === "PENDING" && permissions.send;
@@ -100,26 +97,13 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
       return;
     }
 
-    // Only open refund modal if invoice is fully paid
-    if (invoice.payment_status === "PAID") {
-      setRefundReason(reason.trim());
-      setSupplierAction("return_to_supplier");
-      // Initialize per-line state from invoice lines
-      const initLineActions: Record<string, "go_to_inventory" | "return_to_supplier"> = {};
-      const initStockDisp: Record<string, "add_stock" | "damaged"> = {};
-      (invoice.lines || []).forEach((l: any) => {
-        if (l.is_manual_entry) {
-          initLineActions[l.id] = "return_to_supplier";
-        }
-        initStockDisp[l.id] = "add_stock";
-      });
-      setLineActions(initLineActions);
-      setStockDispositions(initStockDisp);
-      setRefundModalOpen(true);
+    const hasLines = (invoice.lines || []).length > 0;
+    if (hasLines || invoice.payment_status === "PAID") {
+      setCancelReason(reason.trim());
+      setCancelModalOpen(true);
       return;
     }
 
-    // Otherwise, cancel directly
     try {
       await cancelInvoice.mutateAsync({ id: invoice.id, reason: reason.trim() });
       toast.success("Invoice cancelled");
@@ -129,43 +113,33 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
     }
   };
 
-  const handleRefundAndCancel = async () => {
-    if (!refundReason) return;
+  const handleConfirmCancel = async (payload: {
+    line_actions: { source_line_id: string; action: string }[];
+    stock_dispositions: {
+      source_line_id: string;
+      product_qty: number;
+      damage_qty: number;
+      damage_reason: string;
+    }[];
+  }) => {
+    if (!cancelReason) return;
     try {
-      await refundPayments.mutateAsync(invoice.id);
-      // Build per-line action payloads from invoice lines
-      const laPayload: { source_line_id: string; action: string }[] = [];
-      const sdPayload: { source_line_id: string; disposition: string }[] = [];
-      (invoice.lines || []).forEach((line: any) => {
-        const isManual = line.is_manual_entry;
-        const la = lineActions[line.id] || "return_to_supplier";
-        const sd = stockDispositions[line.id] || "add_stock";
-        if (isManual) {
-          // Manual item: always send line_action (go_to_inventory or return_to_supplier)
-          laPayload.push({ source_line_id: line.id, action: la });
-          // Only send stock_disposition if going to inventory
-          if (la === "go_to_inventory") {
-            sdPayload.push({ source_line_id: line.id, disposition: sd });
-          }
-        } else {
-          // Variant item: only send stock_disposition
-          sdPayload.push({ source_line_id: line.id, disposition: sd });
-        }
-      });
-
+      if (invoice.payment_status === "PAID") {
+        await refundPayments.mutateAsync(invoice.id);
+      }
       await cancelInvoice.mutateAsync({
         id: invoice.id,
-        reason: refundReason,
-
-        line_actions: laPayload,
-        stock_dispositions: sdPayload,
+        reason: cancelReason,
+        line_actions: payload.line_actions,
+        stock_dispositions: payload.stock_dispositions,
       });
-      toast.success("Payments refunded and invoice cancelled");
-      setRefundModalOpen(false);
-      setRefundReason("");
-      setSupplierAction("return_to_supplier");
-      setLineActions({});
-      setStockDispositions({});
+      toast.success(
+        invoice.payment_status === "PAID"
+          ? "Payments refunded and invoice cancelled"
+          : "Invoice cancelled"
+      );
+      setCancelModalOpen(false);
+      setCancelReason("");
       refetch();
     } catch {
       /* toast from apiFetch */
@@ -735,129 +709,26 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
         />
       )}
 
-      {/* Refund & Cancel Confirmation Modal */}
-      {refundModalOpen && invoice && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setRefundModalOpen(false)}>
-          <div className="relative w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl p-5" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Refund & Cancel Invoice</h3>
-              <button onClick={() => setRefundModalOpen(false)} className="p-1 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
-            </div>
-            <div className="space-y-3 text-sm">
-              <p className="text-muted-foreground">
-                This invoice has <strong className="text-foreground">{formatCurrency(paidAmount)}</strong> in confirmed payments that must be refunded before cancellation.
-              </p>
-              <div className="rounded-xl border border-warning/30 bg-warning/5 px-4 py-3 space-y-1.5">
-                <p className="font-medium text-warning">This will:</p>
-                <ul className="list-disc list-inside text-muted-foreground space-y-0.5">
-                  <li>Reverse all confirmed payments</li>
-                  <li>Reverse journal entries</li>
-                  <li>Reverse bank transactions</li>
-                  <li>Reverse inventory stock</li>
-                  <li>Cancel supplier bills</li>
-                  <li>Set invoice status to Cancelled</li>
-                </ul>
-              </div>
-
-              {/* Per-line actions & stock disposition */}
-              {(invoice.lines || []).length > 0 && (
-                <div className="rounded-xl border border-border bg-card px-3 py-3 space-y-2">
-                  <p className="font-medium text-xs text-muted-foreground uppercase tracking-wider">Line Items</p>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {(invoice.lines || []).map((line: any) => {
-                      const isManual = line.is_manual_entry;
-                      const lineAction = lineActions[line.id] || "return_to_supplier";
-                      const stockDisp = stockDispositions[line.id] || "add_stock";
-                      const isProductMode = lineAction === "go_to_inventory";
-                      return (
-                        <div key={line.id} className="p-2 rounded-lg border border-border/60 space-y-1.5">
-                          {/* Line info */}
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-medium truncate">{line.variant_name || line.manual_variant_name || "Item"}</p>
-                              <p className="text-[10px] text-muted-foreground">
-                                Qty: {line.quantity} · {formatCurrency(line.unit_price)}
-                                {isManual && <span className="ml-1.5 text-warning">(Manual)</span>}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex gap-1.5 flex-wrap">
-                            {isManual ? (
-                              <>
-                                {/* Manual item: Go to Product ↔ Return to Supplier */}
-                                <button
-                                  onClick={() => {
-                                    setLineActions(prev => ({
-                                      ...prev,
-                                      [line.id]: isProductMode ? "return_to_supplier" : "go_to_inventory",
-                                    }));
-                                  }}
-                                  className={`px-2.5 py-1 rounded text-[10px] font-medium border transition-all ${
-                                    isProductMode
-                                      ? "border-blue-300 bg-blue-50 text-blue-700 dark:bg-blue-950/20 dark:border-blue-800"
-                                      : "border-orange-300 bg-orange-50 text-orange-700 dark:bg-orange-950/20 dark:border-orange-800"
-                                  }`}
-                                >
-                                  {isProductMode ? "📦 Go to Product" : "↩ Return to Supplier"}
-                                </button>
-                                {/* Conditional stock disposition — only shown when "Go to Product" is selected */}
-                                {isProductMode && (
-                                  <button
-                                    onClick={() => setStockDispositions(prev => ({
-                                      ...prev,
-                                      [line.id]: stockDisp === "damaged" ? "add_stock" : "damaged",
-                                    }))}
-                                    className={`px-2.5 py-1 rounded text-[10px] font-medium border transition-all ${
-                                      stockDisp === "damaged"
-                                        ? "border-red-300 bg-red-50 text-red-700 dark:bg-red-950/20 dark:border-red-800"
-                                        : "border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-800"
-                                    }`}
-                                  >
-                                    {stockDisp === "damaged" ? "⚠ Damaged" : "+ Add to product qty"}
-                                  </button>
-                                )}
-                              </>
-                            ) : (
-                              <>
-                                {/* Variant item: Add to product qty vs Damaged */}
-                                <button
-                                  onClick={() => setStockDispositions(prev => ({
-                                    ...prev,
-                                    [line.id]: stockDisp === "damaged" ? "add_stock" : "damaged",
-                                  }))}
-                                  className={`px-2.5 py-1 rounded text-[10px] font-medium border transition-all ${
-                                    stockDisp === "damaged"
-                                      ? "border-red-300 bg-red-50 text-red-700 dark:bg-red-950/20 dark:border-red-800"
-                                      : "border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-800"
-                                  }`}
-                                >
-                                  {stockDisp === "damaged" ? "⚠ Damaged (no qty)" : "+ Add to product qty"}
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              <p className="text-muted-foreground">
-                <strong className="text-foreground">Reason:</strong> {refundReason}
-              </p>
-            </div>
-            <div className="flex justify-end gap-2 mt-4">
-              <button onClick={() => setRefundModalOpen(false)} className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted">Go Back</button>
-              <button onClick={handleRefundAndCancel} disabled={refundPayments.isPending || cancelInvoice.isPending}
-                className="inline-flex items-center gap-1.5 px-4 h-9 rounded-md bg-destructive text-destructive-foreground text-sm hover:opacity-90 disabled:opacity-50">
-                {(refundPayments.isPending || cancelInvoice.isPending) ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                Refund & Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <InvoiceCancelModal
+        open={cancelModalOpen}
+        onClose={() => {
+          setCancelModalOpen(false);
+          setCancelReason("");
+        }}
+        invoiceNumber={invoice.invoice_number}
+        paidAmount={paidAmount}
+        requiresRefund={invoice.payment_status === "PAID"}
+        reason={cancelReason}
+        isSubmitting={refundPayments.isPending || cancelInvoice.isPending}
+        lines={(invoice.lines || []).map((l: any) => ({
+          id: l.id,
+          name: l.variant_name || l.manual_variant_name || "Item",
+          quantity: l.quantity,
+          unit_price: l.unit_price,
+          is_manual_entry: l.is_manual_entry,
+        }))}
+        onConfirm={handleConfirmCancel}
+      />
     </>
   );
 }

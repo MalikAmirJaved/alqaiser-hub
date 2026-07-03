@@ -13,6 +13,7 @@ class ReturnRefundLineSerializer(serializers.ModelSerializer):
             'vendor',
             'quantity', 'unit_price', 'refund_amount', 'tax_rate',
             'restock', 'return_to_supplier',
+            'disposition_action', 'product_qty', 'damage_qty', 'damage_reason',
             'reason',
             'created_at', 'updated_at',
         ]

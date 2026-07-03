@@ -17,6 +17,7 @@ from apps.inventory.services.return_refund_service import (
     lookup_paid_document,
     create_return_refund,
 )
+from apps.finance.services.manual_line_disposition import DispositionValidationError
 
 
 class ReturnRefundViewSet(
@@ -72,6 +73,8 @@ class ReturnRefundViewSet(
 
         try:
             ret = create_return_refund(serializer.validated_data, request.user)
+        except DispositionValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 

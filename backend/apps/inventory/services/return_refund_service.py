@@ -21,6 +21,12 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from apps.inventory.models.return_refund import ReturnRefund, ReturnRefundLine
+from apps.finance.services.manual_line_disposition import (
+    DispositionValidationError,
+    go_to_product_for_manual_line,
+    return_qty_to_supplier_for_line,
+    validate_qty_split,
+)
 
 
 def lookup_paid_document(return_type, document_number, company_id):
@@ -184,24 +190,52 @@ def create_return_refund(return_data, user):
     # ── Create lines & validate ────────────────────────────────────
     total_refund = Decimal('0.00')
     for line_data in return_data['lines']:
-        qty = line_data['quantity']
+        qty = int(line_data['quantity'])
         refund_amt = line_data.get('refund_amount', Decimal('0.00'))
         total_refund += Decimal(str(refund_amt))
+
+        variant, vendor, inv_line = _resolve_return_line_refs(
+            return_data['return_type'], line_data, company_id,
+        )
+        is_manual = line_data.get('is_manual_entry', False) or (inv_line.is_manual_entry if inv_line else False)
+        return_to_supplier = line_data.get('return_to_supplier', False)
+        disposition_action = line_data.get('disposition_action', '')
+        if not disposition_action and is_manual:
+            disposition_action = 'RETURN_TO_SUPPLIER' if return_to_supplier else 'GO_TO_PRODUCT'
+
+        product_qty = line_data.get('product_qty')
+        damage_qty = line_data.get('damage_qty', 0)
+        damage_reason = (line_data.get('damage_reason') or '').strip()
+
+        if is_manual and disposition_action == 'GO_TO_PRODUCT':
+            validate_qty_split(qty, product_qty, damage_qty, damage_reason)
+        elif not is_manual and variant:
+            if product_qty is None and damage_qty:
+                product_qty = max(0, qty - int(damage_qty))
+            elif product_qty is None:
+                product_qty = qty if line_data.get('restock', True) else 0
+                damage_qty = qty - product_qty
+            if int(damage_qty or 0) > 0:
+                validate_qty_split(qty, product_qty, damage_qty, damage_reason)
 
         ReturnRefundLine.objects.create(
             return_refund=ret,
             source_line_id=line_data['source_line_id'],
-            variant=line_data.get('variant'),
-            is_manual_entry=line_data.get('is_manual_entry', False),
-            manual_variant_name=line_data.get('manual_variant_name', ''),
-            manual_variant_sku=line_data.get('manual_variant_sku', ''),
-            vendor=line_data.get('vendor'),
+            variant=variant,
+            is_manual_entry=is_manual,
+            manual_variant_name=line_data.get('manual_variant_name') or (inv_line.manual_variant_name if inv_line else ''),
+            manual_variant_sku=line_data.get('manual_variant_sku') or (inv_line.manual_variant_sku if inv_line else ''),
+            vendor=vendor,
             quantity=qty,
             unit_price=line_data.get('unit_price', Decimal('0')),
             refund_amount=refund_amt,
             tax_rate=line_data.get('tax_rate', Decimal('0.00')),
             restock=line_data.get('restock', True),
-            return_to_supplier=line_data.get('return_to_supplier', False),
+            return_to_supplier=return_to_supplier or disposition_action == 'RETURN_TO_SUPPLIER',
+            disposition_action=disposition_action,
+            product_qty=int(product_qty or 0),
+            damage_qty=int(damage_qty or 0),
+            damage_reason=damage_reason,
             reason=line_data.get('reason', ''),
             company_id=company_id,
             branch_id=branch_id,
@@ -216,6 +250,36 @@ def create_return_refund(return_data, user):
     _execute_return(ret, user)
 
     return ret
+
+
+def _resolve_return_line_refs(return_type, line_data, company_id):
+    """Resolve variant, vendor, and source invoice line from return line payload."""
+    from apps.finance.models import CustomerInvoiceLine
+    from apps.inventory.models import Supplier, ProductVariant
+
+    inv_line = None
+    variant = None
+    vendor = None
+
+    if return_type == 'INVOICE':
+        inv_line = CustomerInvoiceLine.objects.filter(
+            _id=line_data['source_line_id'],
+            company_id=company_id,
+            is_deleted=False,
+        ).select_related('variant', 'vendor', 'supplier_bill').first()
+        if inv_line:
+            variant = inv_line.variant
+            vendor = inv_line.vendor
+
+    vendor_id = line_data.get('vendor') or line_data.get('vendor_id')
+    if vendor_id and not vendor:
+        vendor = Supplier.objects.filter(_id=vendor_id, company_id=company_id).first()
+
+    variant_id = line_data.get('variant') or line_data.get('variant_id')
+    if variant_id and not variant:
+        variant = ProductVariant.objects.filter(_id=variant_id, company_id=company_id).first()
+
+    return variant, vendor, inv_line
 
 
 def _resolve_document(return_type, document_id, company_id):
@@ -267,27 +331,47 @@ def _execute_return(ret, user):
     Core execution: restock, reverse supplier, refund, update document.
     All within the already-active transaction.
     """
-    from apps.inventory.models import StockItem, InventoryTransaction
+    from apps.finance.models import CustomerInvoiceLine
 
-    for line in ret.lines.select_related('variant').all():
-        # ── 1. Restock inventory ───────────────────────────────
-        if line.restock and line.variant:
-            _restock_item(ret, line, user)
+    for line in ret.lines.select_related('variant', 'vendor').all():
+        inv_line = None
+        if ret.return_type == 'INVOICE':
+            inv_line = CustomerInvoiceLine.objects.filter(
+                _id=line.source_line_id,
+                company_id=ret.company_id,
+                is_deleted=False,
+            ).select_related('supplier_bill', 'vendor').first()
 
-        # ── 2. Reverse supplier bill/balance ───────────────────
-        if line.return_to_supplier:
-            _reverse_supplier_for_line(ret, line, user)
+        if line.is_manual_entry and inv_line:
+            if line.disposition_action == 'GO_TO_PRODUCT' or (
+                not line.return_to_supplier and line.disposition_action != 'RETURN_TO_SUPPLIER'
+            ):
+                go_to_product_for_manual_line(
+                    inv_line,
+                    line.quantity,
+                    user,
+                    source_document_type='RETURN_REFUND',
+                    source_document_id=ret._id,
+                    source_line_id=line._id,
+                    product_qty=line.product_qty or line.quantity,
+                    damage_qty=line.damage_qty,
+                    damage_reason=line.damage_reason,
+                    stock_reason=f'Return {ret.return_number} – go to product',
+                    damage_reason_prefix=f'Return {ret.return_number} damage',
+                )
+            elif line.return_to_supplier or line.disposition_action == 'RETURN_TO_SUPPLIER':
+                _reverse_supplier_for_line(ret, line, user, inv_line)
+        else:
+            if line.product_qty > 0 and line.variant:
+                _restock_item(ret, line, user, quantity=line.product_qty)
+            if line.damage_qty > 0 and line.variant:
+                _record_variant_damage(ret, line, user)
 
-        # ── 3. Update source document line status ──────────────
         _update_source_line_status(ret.return_type, line, user)
 
-    # ── 4. Refund payment ─────────────────────────────────────
     refund_payment_id = _refund_payment(ret, user)
-
-    # ── 5. Update source document totals ──────────────────────
     _update_source_document_totals(ret, user)
 
-    # ── 6. Mark as completed ──────────────────────────────────
     ret.status = 'COMPLETED'
     ret.completed_at = timezone.now()
     ret.completed_by = user
@@ -299,10 +383,14 @@ def _execute_return(ret, user):
     ])
 
 
-def _restock_item(ret, line, user):
+def _restock_item(ret, line, user, quantity=None):
     """Add quantity back to inventory and create RETURN_IN transaction."""
     from apps.inventory.models import StockItem, InventoryTransaction
     import uuid as _uuid
+
+    qty = quantity if quantity is not None else line.quantity
+    if qty <= 0:
+        return
 
     stock_item, _ = StockItem.objects.select_for_update().get_or_create(
         variant=line.variant,
@@ -315,7 +403,7 @@ def _restock_item(ret, line, user):
         }
     )
     before = stock_item.quantity_on_hand
-    after = before + line.quantity
+    after = before + qty
     stock_item.quantity_on_hand = after
     stock_item.version = F('version') + 1
     stock_item.save(update_fields=['quantity_on_hand', 'version'])
@@ -326,7 +414,7 @@ def _restock_item(ret, line, user):
         warehouse=ret.warehouse,
         company_id=ret.company_id,
         branch_id=ret.branch_id,
-        quantity_change=line.quantity,
+        quantity_change=qty,
         quantity_before=before,
         quantity_after=after,
         unit_cost=line.variant.buying_price or 0,
@@ -340,111 +428,154 @@ def _restock_item(ret, line, user):
     )
 
 
-def _reverse_supplier_for_line(ret, line, user):
-    """
-    Reverse the supplier bill/balance for this line.
-    Creates a SupplierHistory entry with PURCHASE_REVERSAL.
-    """
-    from apps.finance.services.supplier_balance import update_supplier_balance
+def _record_variant_damage(ret, line, user):
+    """Record damage for variant return line without restocking."""
+    from apps.inventory.models import StockItem, InventoryTransaction
+    import uuid as _uuid
+
+    stock_item, _ = StockItem.objects.select_for_update().get_or_create(
+        variant=line.variant,
+        warehouse=ret.warehouse,
+        company_id=ret.company_id,
+        defaults={
+            'quantity_on_hand': 0,
+            'quantity_reserved': 0,
+            'branch_id': ret.branch_id,
+        }
+    )
+    InventoryTransaction.objects.create(
+        transaction_id=_uuid.uuid4(),
+        variant=line.variant,
+        warehouse=ret.warehouse,
+        company_id=ret.company_id,
+        branch_id=ret.branch_id,
+        quantity_change=0,
+        quantity_before=stock_item.quantity_on_hand,
+        quantity_after=stock_item.quantity_on_hand,
+        unit_cost=line.variant.buying_price or 0,
+        transaction_type='DAMAGE',
+        source_document_type='RETURN_REFUND',
+        source_document_id=ret._id,
+        source_line_id=line._id,
+        reason_text=f'Return {ret.return_number} damage: {line.damage_reason}',
+        created_by=user,
+        updated_by=user,
+    )
+
+
+def _reverse_supplier_for_line(ret, line, user, inv_line=None):
+    """Reverse supplier bill/balance using cost price (not selling/refund price)."""
+    from apps.finance.models import CustomerInvoiceLine
 
     if not line.vendor:
         return
 
-    # Calculate the cost of the returned quantity
-    cost = line.refund_amount
+    if inv_line is None and ret.return_type == 'INVOICE':
+        inv_line = CustomerInvoiceLine.objects.filter(
+            _id=line.source_line_id,
+            company_id=ret.company_id,
+            is_deleted=False,
+        ).select_related('supplier_bill', 'vendor').first()
 
+    if inv_line:
+        return_qty_to_supplier_for_line(
+            inv_line,
+            line.quantity,
+            user,
+            notes=f'Return {ret.return_number}: reversed {line.quantity} units at cost',
+            cancel_bill_if_zero=True,
+        )
+        return
+
+    from apps.finance.services.supplier_balance import update_supplier_balance
+    cost_amount = Decimal(str(line.quantity)) * Decimal('0')
     update_supplier_balance(
         line.vendor,
-        cost,
+        cost_amount,
         'PURCHASE_REVERSAL',
         reference_type='return_refund',
         reference_id=ret._id,
-        notes=f'Return {ret.return_number}: reversed {line.quantity} units of {line.variant.sku if line.variant else line.manual_variant_sku}',
+        notes=(
+            f'Return {ret.return_number}: reversed {line.quantity} units of '
+            f'{line.variant.sku if line.variant else line.manual_variant_sku}'
+        ),
     )
-
-    # Also update the linked supplier bill if this line had one
-    if ret.return_type == 'INVOICE':
-        _update_related_supplier_bill(ret, line, user)
-
-
-def _update_related_supplier_bill(ret, line, user):
-    """Update the supplier bill linked to an invoice line when returning."""
-    from apps.finance.models import CustomerInvoiceLine, SupplierBill
-
-    inv_line = CustomerInvoiceLine.objects.filter(
-        _id=line.source_line_id,
-        company_id=ret.company_id,
-        is_deleted=False,
-    ).select_related('supplier_bill').first()
-
-    if inv_line and inv_line.supplier_bill:
-        bill = inv_line.supplier_bill
-        refund_ratio = Decimal(str(line.refund_amount)) / max(inv_line.line_total, Decimal('0.01'))
-        reduction = bill.amount * refund_ratio
-        bill.amount = max(bill.amount - reduction, Decimal('0'))
-        bill.notes = (bill.notes + '\n' if bill.notes else '') + (
-            f'Reduced by {reduction} due to return {ret.return_number}'
-        )
-        bill.save(update_fields=['amount', 'notes', 'updated_at'])
 
 
 def _refund_payment(ret, user):
     """
-    Refund the total amount by reversing payments to the original method.
-    Creates a refund Payment record for audit trail.
-    
+    Refund proportional amount based on return total vs document total.
     Returns the UUID of the refund payment, or None.
     """
     from django.contrib.contenttypes.models import ContentType
-    from apps.finance.models import Payment, BankTransaction, CustomerInvoice
+    from apps.finance.models import Payment
     from apps.finance.services.cancel_invoice import reverse_journal_entry
+    from apps.finance.services.payable import get_payments_queryset
 
     if ret.total_refund_amount <= 0:
         return None
 
-    # Find the source document
     doc, _, _ = _resolve_document(ret.return_type, ret.document_id, ret.company_id)
+    confirmed_payments = list(
+        get_payments_queryset(doc, status='CONFIRMED').select_related('bank_account', 'journal_entry')
+    )
+    if not confirmed_payments:
+        return None
 
-    # Get all confirmed payments on this document
-    from apps.finance.services.payable import get_payments_queryset
-    confirmed_payments = get_payments_queryset(doc, status='CONFIRMED')
+    doc_total = getattr(doc, 'amount', None) or getattr(doc, 'total_amount', Decimal('0'))
+    doc_total = Decimal(str(doc_total))
+    if doc_total <= 0:
+        return None
 
-    refund_payment = None
+    refund_ratio = min(Decimal('1'), Decimal(str(ret.total_refund_amount)) / doc_total)
+    remaining_refund = Decimal(str(ret.total_refund_amount))
 
-    for payment in confirmed_payments.select_related('bank_account', 'journal_entry'):
-        # Calculate proportional refund for this payment
-        if payment.amount <= 0:
+    for payment in confirmed_payments:
+        if remaining_refund <= 0:
+            break
+
+        payment_refund = min(remaining_refund, payment.amount * refund_ratio)
+        if payment_refund <= 0:
             continue
 
-        # Reverse journal entry
         if payment.journal_entry_id:
             reverse_journal_entry(
                 payment.journal_entry, user,
-                f'Refund for return {ret.return_number}',
+                f'Partial refund for return {ret.return_number}',
             )
 
-        # Reverse bank balance
         if payment.bank_account_id:
             if payment.payment_type == 'RECEIPT':
-                payment.bank_account.book_balance = F('book_balance') - payment.amount
+                payment.bank_account.book_balance = F('book_balance') - payment_refund
             else:
-                payment.bank_account.book_balance = F('book_balance') + payment.amount
+                payment.bank_account.book_balance = F('book_balance') + payment_refund
             payment.bank_account.save(update_fields=['book_balance'])
 
-        # Cancel the original payment
-        payment.status = 'CANCELLED'
-        payment.notes = (payment.notes + '\n' if payment.notes else '') + f'Cancelled by return {ret.return_number}'
-        payment.deleted_by = user
-        payment.save(update_fields=['status', 'notes', 'deleted_by', 'updated_at'])
+        if payment_refund >= payment.amount:
+            payment.status = 'CANCELLED'
+            payment.notes = (
+                (payment.notes + '\n' if payment.notes else '')
+                + f'Cancelled by return {ret.return_number}'
+            )
+            payment.deleted_by = user
+            payment.save(update_fields=['status', 'notes', 'deleted_by', 'updated_at'])
+        else:
+            payment.amount = payment.amount - payment_refund
+            payment.notes = (
+                (payment.notes + '\n' if payment.notes else '')
+                + f'Reduced by {payment_refund} due to return {ret.return_number}'
+            )
+            payment.save(update_fields=['amount', 'notes', 'updated_at'])
 
-    # Create a single refund payment record for audit trail
+        remaining_refund -= payment_refund
+
     ct = ContentType.objects.get_for_model(doc.__class__, for_concrete_model=False)
     refund_payment_obj = Payment.objects.create(
         company_id=ret.company_id,
         branch_id=ret.branch_id,
         content_type=ct,
         object_id=doc.pk,
-        payment_type='PAYMENT' if ret.return_type == 'INVOICE' else 'PAYMENT',
+        payment_type='PAYMENT',
         payment_method='BANK_TRANSFER',
         amount=ret.total_refund_amount,
         payment_date=timezone.now().date(),

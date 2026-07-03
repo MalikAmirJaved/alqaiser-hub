@@ -23,6 +23,17 @@ import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useReturns, useLookupDocument, useCreateReturn, useReturnDetail } from "@/hooks/useReturns";
 import { useWarehouses } from "@/hooks/useWarehouses";
 import { format } from "date-fns";
+import QtySplitModal, { ManualLineActionModal, type LineDispositionAction } from "@/components/finance/customer-invoices/LineDispositionModals";
+
+interface ReturnLineState {
+  quantity: number;
+  restock: boolean;
+  return_to_supplier: boolean;
+  disposition_action?: "GO_TO_PRODUCT" | "RETURN_TO_SUPPLIER";
+  product_qty?: number;
+  damage_qty?: number;
+  damage_reason?: string;
+}
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
@@ -82,8 +93,12 @@ export default function ReturnsPanel({ moduleCode }: ReturnsPanelProps) {
   const [lookedUpDoc, setLookedUpDoc] = useState<any>(null);
   const [selectedWarehouse, setSelectedWarehouse] = useState("");
   const [returnReason, setReturnReason] = useState("");
-  const [returnLines, setReturnLines] = useState<Record<string, { quantity: number; restock: boolean; return_to_supplier: boolean }>>({});
+  const [returnLines, setReturnLines] = useState<Record<string, ReturnLineState>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [dispositionQueue, setDispositionQueue] = useState<string[]>([]);
+  const [currentDispositionLineId, setCurrentDispositionLineId] = useState<string | null>(null);
+  const [showManualActionModal, setShowManualActionModal] = useState(false);
+  const [showSplitModal, setShowSplitModal] = useState(false);
 
   /* ─── Detail View ─── */
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -131,21 +146,73 @@ export default function ReturnsPanel({ moduleCode }: ReturnsPanelProps) {
   const handleCreateReturn = async () => {
     if (!lookedUpDoc || !selectedWarehouse) { toast.error("Select warehouse"); return; }
 
+    const activeLineIds = Object.entries(returnLines)
+      .filter(([_, data]) => data.quantity > 0)
+      .map(([id]) => id);
+
+    if (activeLineIds.length === 0) { toast.error("Select at least one line to return"); return; }
+
+    setDispositionQueue(activeLineIds);
+    processNextDisposition(activeLineIds, 0);
+  };
+
+  const processNextDisposition = (queue: string[], index: number) => {
+    if (index >= queue.length) {
+      submitReturn();
+      return;
+    }
+    const lineId = queue[index];
+    const lineInfo = lookedUpDoc?.lines?.find((l: any) => l.source_line_id === lineId);
+    if (!lineInfo) {
+      processNextDisposition(queue, index + 1);
+      return;
+    }
+    setCurrentDispositionLineId(lineId);
+    if (lineInfo.is_manual_entry && lineInfo.vendor_id) {
+      setShowManualActionModal(true);
+    } else if (!lineInfo.is_manual_entry) {
+      setShowSplitModal(true);
+    } else {
+      processNextDisposition(queue, index + 1);
+    }
+  };
+
+  const advanceDispositionQueue = () => {
+    if (!currentDispositionLineId || !dispositionQueue.length) return;
+    const idx = dispositionQueue.indexOf(currentDispositionLineId);
+    setShowManualActionModal(false);
+    setShowSplitModal(false);
+    setCurrentDispositionLineId(null);
+    processNextDisposition(dispositionQueue, idx + 1);
+  };
+
+  const submitReturn = async () => {
+    if (!lookedUpDoc || !selectedWarehouse) return;
+
     const lines = Object.entries(returnLines)
       .filter(([_, data]) => data.quantity > 0)
       .map(([source_line_id, data]) => {
         const lineInfo = lookedUpDoc.lines.find((l: any) => l.source_line_id === source_line_id);
+        const isManual = lineInfo?.is_manual_entry;
+        const disposition = data.disposition_action
+          || (data.return_to_supplier ? "RETURN_TO_SUPPLIER" : "GO_TO_PRODUCT");
         return {
           source_line_id,
           quantity: data.quantity,
           unit_price: lineInfo?.unit_price || 0,
           refund_amount: (lineInfo?.unit_price || 0) * data.quantity,
-          restock: data.restock,
-          return_to_supplier: data.return_to_supplier,
+          is_manual_entry: isManual,
+          manual_variant_name: lineInfo?.manual_variant_name || "",
+          manual_variant_sku: lineInfo?.variant_sku || "",
+          vendor: lineInfo?.vendor_id || null,
+          restock: !isManual && (data.product_qty ?? data.quantity) > 0,
+          return_to_supplier: disposition === "RETURN_TO_SUPPLIER",
+          disposition_action: isManual ? disposition : undefined,
+          product_qty: data.product_qty ?? (isManual ? 0 : data.quantity),
+          damage_qty: data.damage_qty ?? 0,
+          damage_reason: data.damage_reason || "",
         };
       });
-
-    if (lines.length === 0) { toast.error("Select at least one line to return"); return; }
 
     setSubmitting(true);
     try {
@@ -165,8 +232,49 @@ export default function ReturnsPanel({ moduleCode }: ReturnsPanelProps) {
       toast.error(e?.message || "Failed to process return");
     } finally {
       setSubmitting(false);
+      setDispositionQueue([]);
     }
   };
+
+  const handleManualDisposition = (action: LineDispositionAction) => {
+    if (!currentDispositionLineId) return;
+    const disposition = action === "go_to_product" ? "GO_TO_PRODUCT" : "RETURN_TO_SUPPLIER";
+    setReturnLines((prev) => ({
+      ...prev,
+      [currentDispositionLineId]: {
+        ...prev[currentDispositionLineId],
+        disposition_action: disposition,
+        return_to_supplier: disposition === "RETURN_TO_SUPPLIER",
+        restock: disposition === "GO_TO_PRODUCT",
+      },
+    }));
+    setShowManualActionModal(false);
+    if (action === "go_to_product") {
+      setShowSplitModal(true);
+    } else {
+      advanceDispositionQueue();
+    }
+  };
+
+  const handleSplitConfirm = (result: { product_qty: number; damage_qty: number; damage_reason: string }) => {
+    if (!currentDispositionLineId) return;
+    setReturnLines((prev) => ({
+      ...prev,
+      [currentDispositionLineId]: {
+        ...prev[currentDispositionLineId],
+        product_qty: result.product_qty,
+        damage_qty: result.damage_qty,
+        damage_reason: result.damage_reason,
+        restock: result.product_qty > 0,
+      },
+    }));
+    setShowSplitModal(false);
+    advanceDispositionQueue();
+  };
+
+  const currentDispositionLine = currentDispositionLineId
+    ? lookedUpDoc?.lines?.find((l: any) => l.source_line_id === currentDispositionLineId)
+    : null;
 
   const resetCreateForm = () => {
     setLookedUpDoc(null);
@@ -175,6 +283,10 @@ export default function ReturnsPanel({ moduleCode }: ReturnsPanelProps) {
     setReturnReason("");
     setSelectedWarehouse("");
     setSearchType("INVOICE");
+    setDispositionQueue([]);
+    setCurrentDispositionLineId(null);
+    setShowManualActionModal(false);
+    setShowSplitModal(false);
     lookupDoc.reset();
   };
 
@@ -349,15 +461,12 @@ export default function ReturnsPanel({ moduleCode }: ReturnsPanelProps) {
                             </div>
                             {line.is_manual_entry && line.vendor_id && (
                               <div className="flex gap-1 shrink-0">
-                                <Badge
-                                  variant={rl.return_to_supplier ? "default" : "outline"}
-                                  className="cursor-pointer text-xs"
-                                  onClick={() => setReturnLines(prev => ({
-                                    ...prev,
-                                    [line.source_line_id]: { ...prev[line.source_line_id], return_to_supplier: !prev[line.source_line_id]?.return_to_supplier },
-                                  }))}
-                                >
-                                  {rl.return_to_supplier ? "↩ Vendor" : "📦 Stock"}
+                                <Badge variant="outline" className="text-xs">
+                                  {rl.disposition_action === "GO_TO_PRODUCT"
+                                    ? "Go to Product"
+                                    : rl.disposition_action === "RETURN_TO_SUPPLIER"
+                                    ? "Return to Supplier"
+                                    : "Set on submit"}
                                 </Badge>
                               </div>
                             )}
@@ -553,6 +662,32 @@ export default function ReturnsPanel({ moduleCode }: ReturnsPanelProps) {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <ManualLineActionModal
+        open={showManualActionModal}
+        onClose={() => {
+          setShowManualActionModal(false);
+          setDispositionQueue([]);
+          setCurrentDispositionLineId(null);
+        }}
+        itemName={currentDispositionLine?.product_name || "Manual item"}
+        totalQty={returnLines[currentDispositionLineId || ""]?.quantity || 0}
+        onSelectAction={handleManualDisposition}
+      />
+
+      <QtySplitModal
+        open={showSplitModal}
+        onClose={() => {
+          setShowSplitModal(false);
+          setDispositionQueue([]);
+          setCurrentDispositionLineId(null);
+        }}
+        title="Product vs Damage Split"
+        itemName={currentDispositionLine?.product_name || "Item"}
+        totalQty={returnLines[currentDispositionLineId || ""]?.quantity || 0}
+        confirmLabel="Continue"
+        onConfirm={handleSplitConfirm}
+      />
     </div>
   );
 }
