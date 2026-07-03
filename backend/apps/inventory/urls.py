@@ -6,7 +6,8 @@ from .views import (
     StockManagementViewSet, StockTransferViewSet, PurchaseOrderViewSet,
     GoodsReceiptViewSet, CustomerViewSet, SalesOrderViewSet,
     SalesReturnViewSet, VariantViewSet, ReportViewSet,
-    AuditLogViewSet, AlertViewSet, BarcodeViewSet
+    AuditLogViewSet, AlertViewSet, BarcodeViewSet,
+    ReturnRefundViewSet,
 )
 router = DefaultRouter()
 router.register(r'attributes', AttributeViewSet, basename='inventory-attribute')
@@ -29,7 +30,7 @@ router.register(r'reports', ReportViewSet, basename='inventory-reports')
 router.register(r'audit-logs', AuditLogViewSet, basename='audit-log')
 router.register(r'alerts', AlertViewSet, basename='alerts')
 router.register(r'barcodes', BarcodeViewSet, basename='barcode')
-
+router.register(r'returns', ReturnRefundViewSet, basename='return-refund')
 
 urlpatterns = [
     path('', include(router.urls)),

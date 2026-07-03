@@ -196,14 +196,38 @@ class CustomerInvoiceViewSet(
 
     @action(detail=True, methods=['post'])
     def cancel_invoice(self, request, _id=None):
-        """Cancel invoice and reverse all side-effects (stock, supplier bills, journal entries)."""
+        """Cancel invoice and reverse all side-effects (stock, supplier bills, journal entries).
+
+        Request body:
+            reason (str): Required cancellation reason
+            supplier_action (str): 'go_to_inventory' or 'return_to_supplier' (default)
+                Default action for manual item supplier bills.
+            line_actions (list): Per-line overrides for manual items:
+                [{ "source_line_id": "uuid", "action": "go_to_inventory"|"return_to_supplier" }]
+            stock_dispositions (list): Per-line stock handling:
+                [{ "source_line_id": "uuid", "disposition": "add_stock"|"damaged" }]
+        """
         invoice = self.get_object()
         reason = request.data.get('reason', '')
         if not reason or not reason.strip():
             return Response({'error': 'Cancellation reason is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        supplier_action = request.data.get('supplier_action', 'return_to_supplier')
+        if supplier_action not in ('go_to_inventory', 'return_to_supplier'):
+            supplier_action = 'return_to_supplier'
+
+        line_actions = request.data.get('line_actions', [])
+        stock_dispositions = request.data.get('stock_dispositions', [])
+
         try:
             from apps.finance.services.cancel_invoice import cancel_customer_invoice
-            success, message = cancel_customer_invoice(invoice, request.user, reason=reason)
+            success, message = cancel_customer_invoice(
+                invoice, request.user,
+                reason=reason,
+                supplier_action=supplier_action,
+                line_actions=line_actions,
+                stock_dispositions=stock_dispositions,
+            )
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         if not success:

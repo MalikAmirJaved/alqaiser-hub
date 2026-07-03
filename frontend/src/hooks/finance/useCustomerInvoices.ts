@@ -130,10 +130,15 @@ async function sendCustomerInvoice(id: string) {
   });
 }
 
-async function cancelCustomerInvoice(id: string, reason?: string) {
+async function cancelCustomerInvoice(id: string, reason?: string, supplierAction?: string, lineActions?: any[], stockDispositions?: any[]) {
   return apiFetch<CustomerInvoice>(`/api/finance/customer-invoices/${id}/cancel_invoice/`, {
     method: "POST",
-    body: JSON.stringify({ reason: reason || "" }),
+    body: JSON.stringify({
+      reason: reason || "",
+      supplier_action: supplierAction || "return_to_supplier",
+      line_actions: lineActions || [],
+      stock_dispositions: stockDispositions || [],
+    }),
   });
 }
 
@@ -230,7 +235,7 @@ export function useSendInvoice() {
 export function useCancelInvoice() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, reason }: { id: string; reason?: string }) => cancelCustomerInvoice(id, reason),
+    mutationFn: ({ id, reason, supplier_action, line_actions, stock_dispositions }: { id: string; reason?: string; supplier_action?: string; line_actions?: any[]; stock_dispositions?: any[] }) => cancelCustomerInvoice(id, reason, supplier_action, line_actions, stock_dispositions),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY, id] });

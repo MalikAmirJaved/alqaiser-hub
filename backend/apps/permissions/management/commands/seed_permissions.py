@@ -77,6 +77,7 @@ RESOURCES_ACTIONS: dict[str, dict[str, list[str]]] = {
         "report":           ["view", "export"],
         "alert":            ["view", "export"],
         "customer":         ["view", "create", "update", "delete", "export"],
+        "return_refund":    ["view", "create", "export"],
         "sales_order":      ["view", "create", "update", "delete", "complete_sale", "hold_sale", "return", "export"],
         "audit_log":        ["view", "export"],
     },

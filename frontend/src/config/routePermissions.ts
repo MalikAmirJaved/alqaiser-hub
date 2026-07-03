@@ -45,6 +45,9 @@ export const routePermissions: Record<string, string> = {
   "/inventory/pos":                "INVENTORY:sales_order:view",
   "/inventory/pos/sales-orders":   "INVENTORY:sales_order:view",
   "/inventory/audit":       "INVENTORY:audit_log:view",
+  "/inventory/returns":    "INVENTORY:return_refund:view",
+  "/sales/return":         "INVENTORY:return_refund:view",
+  "/finance/return":       "INVENTORY:return_refund:view",
 
   // Sales
   "/sales/dashboard":         "SALES:dashboard:view",
@@ -127,6 +130,7 @@ export const menuPermissionMapping: Record<string, string | null> = {
   "Customers":            "INVENTORY:customer:view",
   "Selling / POS":        "INVENTORY:sales_order:view",
   "Inventoy Audit Logs":  "INVENTORY:audit_log:view",
+  "Return & Refund":       "INVENTORY:return_refund:view",
 
   // Sales
   "Sales Dashboard":    "SALES:dashboard:view",

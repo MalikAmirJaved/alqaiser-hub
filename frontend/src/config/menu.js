@@ -13,6 +13,7 @@ import {
   Camera,
   DoorOpen,
   Video,
+  RotateCcw,
 } from "lucide-react";
 
 export const menu = [
@@ -97,6 +98,7 @@ children: [
       { title: "Leads", to: "/sales/leads", icon: Target },
       { title: "Quotes", to: "/sales/quotes", icon: FileText },
       { title: "Invoices", to: "/sales/customer-invoices", icon: Receipt },
+      { title: "Return & Refund", to: "/sales/return", icon: RotateCcw },
       { title: "Sales Customers", to: "/sales/customers", icon: Users },
     ],
   },
@@ -109,6 +111,7 @@ children: [
       { title: "Finance Dashboard", to: "/finance/dashboard", icon: LayoutDashboard },
       { title: "Accounts", to: "/finance/accounts", icon: BookOpen },
       { title: "Customer Invoice", to: "/finance/customer-invoices", icon: Receipt },
+      { title: "Return & Refund", to: "/finance/return", icon: RotateCcw },
       { title: "Expenses", to: "/finance/expenses", icon: CreditCard },
       // { title: "Journal Entries", to: "/finance/journal-entries", icon: ArrowDownCircle },
       { title: "Finance Reports", to: "/finance/reports", icon: ArrowDownCircle },
