@@ -152,6 +152,7 @@ export default function ReturnsPanel({ moduleCode }: ReturnsPanelProps) {
 
     if (activeLineIds.length === 0) { toast.error("Select at least one line to return"); return; }
 
+    setCreateOpen(false);
     setDispositionQueue(activeLineIds);
     processNextDisposition(activeLineIds, 0);
   };
@@ -669,6 +670,7 @@ export default function ReturnsPanel({ moduleCode }: ReturnsPanelProps) {
           setShowManualActionModal(false);
           setDispositionQueue([]);
           setCurrentDispositionLineId(null);
+          setCreateOpen(true);
         }}
         itemName={currentDispositionLine?.product_name || "Manual item"}
         totalQty={returnLines[currentDispositionLineId || ""]?.quantity || 0}
@@ -681,6 +683,7 @@ export default function ReturnsPanel({ moduleCode }: ReturnsPanelProps) {
           setShowSplitModal(false);
           setDispositionQueue([]);
           setCurrentDispositionLineId(null);
+          setCreateOpen(true);
         }}
         title="Product vs Damage Split"
         itemName={currentDispositionLine?.product_name || "Item"}
