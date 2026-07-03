@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, ShieldAlert, Layers, Warehouse, TrendingUp, AlertTriangle } from "lucide-react";
+import { DollarSign, ShieldAlert, Layers, Warehouse, TrendingUp, AlertTriangle, ShoppingCart, Receipt } from "lucide-react";
 
 interface KPIStatsProps {
   totalValue?: number;
@@ -11,6 +11,8 @@ interface KPIStatsProps {
   warehouseCount?: number;
   turnoverRate?: number;
   slowMovingCount?: number;
+  totalPurchaseAmount?: number;
+  totalSalesAmount?: number;
   loading?: boolean;
   CurrencyCode?: string;
 }
@@ -22,9 +24,14 @@ export function KPIStats({
   warehouseCount = 0,
   turnoverRate = 0,
   slowMovingCount = 0,
+  totalPurchaseAmount = 0,
+  totalSalesAmount = 0,
   loading = false,
   CurrencyCode =  "$",
 }: KPIStatsProps) {
+  const netIncome = totalSalesAmount - totalPurchaseAmount;
+  const profitMargin = totalSalesAmount > 0 ? ((netIncome / totalSalesAmount) * 100).toFixed(1) : "0.0";
+
   const cards = [
     {
       title: "Total Stock Value",
@@ -34,16 +41,37 @@ export function KPIStats({
       colorClass: "text-blue-500 bg-blue-50/50 dark:bg-blue-950/20",
     },
     {
-      title: "Total Product Variants",
-      value: totalVariants.toLocaleString(),
-      description: "Unique SKUs registered",
+      title: "Total Sales (Period)",
+      value: `${CurrencyCode} ${totalSalesAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      description: "Completed orders revenue",
+      icon: ShoppingCart,
+      colorClass: "text-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20",
+    },
+    {
+      title: "Total Purchases (Period)",
+      value: `${CurrencyCode} ${totalPurchaseAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      description: "Confirmed PO amounts",
+      icon: Receipt,
+      colorClass: "text-orange-500 bg-orange-50/50 dark:bg-orange-950/20",
+    },
+    {
+      title: "Net Income (Period)",
+      value: `${CurrencyCode} ${netIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      description: `Margin: ${profitMargin}%`,
+      icon: TrendingUp,
+      colorClass: netIncome >= 0 ? "text-green-500 bg-green-50/50 dark:bg-green-950/20" : "text-red-500 bg-red-50/50 dark:bg-red-950/20",
+    },
+    {
+      title: "Stock Turnover Rate",
+      value: `${turnoverRate}x`,
+      description: "Annualized inventory cycles",
       icon: Layers,
-      colorClass: "text-purple-500 bg-purple-50/50 dark:bg-purple-950/20",
+      colorClass: "text-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20",
     },
     {
       title: "Low Stock Items",
       value: lowStockCount.toLocaleString(),
-      description: "Currently below safety margin",
+      description: "Below safety margin (available)",
       icon: ShieldAlert,
       colorClass: lowStockCount > 0 ? "text-red-500 bg-red-50/50 dark:bg-red-950/20" : "text-green-500 bg-green-50/50 dark:bg-green-950/20",
     },
@@ -55,13 +83,6 @@ export function KPIStats({
       colorClass: "text-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20",
     },
     {
-      title: "Stock Turnover Rate",
-      value: `${turnoverRate}x`,
-      description: "Yearly inventory cycles",
-      icon: TrendingUp,
-      colorClass: "text-orange-500 bg-orange-50/50 dark:bg-orange-950/20",
-    },
-    {
       title: "Slow-moving Stocks",
       value: slowMovingCount.toLocaleString(),
       description: "Over 30 days without sales",
@@ -71,7 +92,7 @@ export function KPIStats({
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       {cards.map((card, idx) => {
         const Icon = card.icon;
         return (

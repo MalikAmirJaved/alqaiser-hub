@@ -266,6 +266,7 @@ interface LineRowProps {
   variantDisplayLabel: string;
   fetchVendors: any;
   onUpdateLine: (index: number, field: keyof InvoiceLine, value: any) => void;
+  onVariantOptionSelect: (index: number, option: any) => void;
   onRemove: (index: number) => void;
   onToggleManual: (index: number, value: boolean) => void;
   onVendorAddNew?: () => void;
@@ -283,6 +284,7 @@ const LineRow = memo(function LineRow({
   variantDisplayLabel,
   fetchVendors,
   onUpdateLine,
+  onVariantOptionSelect,
   onRemove,
   onToggleManual,
   onVendorAddNew,
@@ -326,6 +328,7 @@ const LineRow = memo(function LineRow({
           <SearchableSelect
             value={currentLine.variant || ""}
             onChange={(val) => onUpdateLine(index, "variant", val)}
+            onOptionSelect={(option) => onVariantOptionSelect(index, option)}
             fetchOptions={fetchVariants}
             placeholder="Search variants…"
             displayLabel={variantDisplayLabel}
@@ -722,11 +725,28 @@ export default function CustomerInvoiceFormModal({
             }));
           }
         } catch {}
+      } else if (field === "vendor") {
+        // Must go through useFieldArray's update() — setValue() on a nested
+        // path updates RHF's internal form state but does NOT refresh the
+        // `fields` array that the table renders from, so the SearchableSelect
+        // never shows the newly picked vendor as selected even though the
+        // value would technically submit correctly.
+        update(index, { ...currentLines[index], vendor: value });
       } else {
         setValue(`lines.${index}.${field}` as any, value, { shouldDirty: true });
       }
     },
     [api, update, watch, setValue, getValues, fields]
+  );
+
+  const handleVariantOptionSelect = useCallback(
+    (index: number, option: any) => {
+      const fieldId = fields[index]?.id;
+      if (fieldId && option?.label) {
+        setVariantDisplayLabels((prev) => ({ ...prev, [fieldId]: option.label }));
+      }
+    },
+    [fields]
   );
 
   const toggleManual = useCallback(
@@ -1109,7 +1129,10 @@ export default function CustomerInvoiceFormModal({
                       </thead>
                       <tbody className="divide-y divide-border">
                         {fields.map((field, idx) => {
-                          const currentLine = (field as any) as InvoiceLine;
+                          const currentLine = {
+                            ...(field as any),
+                            ...(watchedLines?.[idx] || {}),
+                          } as InvoiceLine;
                           const isOverStock =
                             !currentLine.is_manual_entry &&
                             currentLine.max_quantity !== undefined &&
@@ -1127,6 +1150,7 @@ export default function CustomerInvoiceFormModal({
                               variantDisplayLabel={variantDisplayLabels[field.id] || ""}
                               fetchVendors={fetchVendors}
                               onUpdateLine={updateLine}
+                              onVariantOptionSelect={handleVariantOptionSelect}
                               onRemove={handleRemove}
                               onToggleManual={toggleManual}
                               onVendorAddNew={() => setShowSupplierForm(true)}
