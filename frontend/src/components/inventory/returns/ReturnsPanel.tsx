@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -94,6 +94,8 @@ export default function ReturnsPanel({ moduleCode }: ReturnsPanelProps) {
   const [selectedWarehouse, setSelectedWarehouse] = useState("");
   const [returnReason, setReturnReason] = useState("");
   const [returnLines, setReturnLines] = useState<Record<string, ReturnLineState>>({});
+  const returnLinesRef = useRef(returnLines);
+  useEffect(() => { returnLinesRef.current = returnLines; }, [returnLines]);
   const [submitting, setSubmitting] = useState(false);
   const [dispositionQueue, setDispositionQueue] = useState<string[]>([]);
   const [currentDispositionLineId, setCurrentDispositionLineId] = useState<string | null>(null);
@@ -190,7 +192,7 @@ export default function ReturnsPanel({ moduleCode }: ReturnsPanelProps) {
   const submitReturn = async () => {
     if (!lookedUpDoc || !selectedWarehouse) return;
 
-    const lines = Object.entries(returnLines)
+    const lines = Object.entries(returnLinesRef.current)
       .filter(([_, data]) => data.quantity > 0)
       .map(([source_line_id, data]) => {
         const lineInfo = lookedUpDoc.lines.find((l: any) => l.source_line_id === source_line_id);
@@ -239,16 +241,18 @@ export default function ReturnsPanel({ moduleCode }: ReturnsPanelProps) {
 
   const handleManualDisposition = (action: LineDispositionAction) => {
     if (!currentDispositionLineId) return;
-    const disposition = action === "go_to_product" ? "GO_TO_PRODUCT" : "RETURN_TO_SUPPLIER";
-    setReturnLines((prev) => ({
-      ...prev,
+    const disposition: "GO_TO_PRODUCT" | "RETURN_TO_SUPPLIER" = action === "go_to_product" ? "GO_TO_PRODUCT" : "RETURN_TO_SUPPLIER";
+    const updated: Record<string, ReturnLineState> = {
+      ...returnLinesRef.current,
       [currentDispositionLineId]: {
-        ...prev[currentDispositionLineId],
+        ...returnLinesRef.current[currentDispositionLineId],
         disposition_action: disposition,
         return_to_supplier: disposition === "RETURN_TO_SUPPLIER",
         restock: disposition === "GO_TO_PRODUCT",
       },
-    }));
+    };
+    returnLinesRef.current = updated;
+    setReturnLines(updated);
     setShowManualActionModal(false);
     if (action === "go_to_product") {
       setShowSplitModal(true);
@@ -259,16 +263,18 @@ export default function ReturnsPanel({ moduleCode }: ReturnsPanelProps) {
 
   const handleSplitConfirm = (result: { product_qty: number; damage_qty: number; damage_reason: string }) => {
     if (!currentDispositionLineId) return;
-    setReturnLines((prev) => ({
-      ...prev,
+    const updated: Record<string, ReturnLineState> = {
+      ...returnLinesRef.current,
       [currentDispositionLineId]: {
-        ...prev[currentDispositionLineId],
+        ...returnLinesRef.current[currentDispositionLineId],
         product_qty: result.product_qty,
         damage_qty: result.damage_qty,
         damage_reason: result.damage_reason,
         restock: result.product_qty > 0,
       },
-    }));
+    };
+    returnLinesRef.current = updated;
+    setReturnLines(updated);
     setShowSplitModal(false);
     advanceDispositionQueue();
   };
