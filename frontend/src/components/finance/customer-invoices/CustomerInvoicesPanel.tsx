@@ -210,7 +210,7 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
         }}
         actions={{
           onEdit: handleEdit,
-          canEdit: (invoice) => (invoice.status === "DRAFT" || invoice.status === "PENDING") && invoice.payment_status !== "PAID",
+          canEdit: (invoice) => (invoice.status === "DRAFT" || invoice.status === "PENDING" || invoice.status === "SENT") && invoice.payment_status !== "PAID",
           onSend: handleSend,
           canSend: (invoice) => invoice.status === "PENDING",
           sendLabel: "Send",
