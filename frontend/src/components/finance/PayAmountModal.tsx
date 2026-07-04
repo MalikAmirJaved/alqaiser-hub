@@ -117,7 +117,7 @@ export default function PayAmountModal({
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl overflow-hidden"
+        className="relative w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
