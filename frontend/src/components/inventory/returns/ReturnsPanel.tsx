@@ -114,9 +114,20 @@ export default function ReturnsPanel({ moduleCode }: ReturnsPanelProps) {
       setCreateOpen(true);
       setSearchType(prefillDocType);
       setDocNumber(prefillDocNumber);
-      // Auto-trigger lookup after a short delay so modal renders
       const timer = setTimeout(() => {
-        handleLookup();
+        lookupDoc.mutateAsync(
+          { return_type: prefillDocType, document_number: prefillDocNumber.trim() },
+          {
+            onSuccess: (result: any) => {
+              setLookedUpDoc(result.data);
+              const initial: Record<string, any> = {};
+              result.data.lines.forEach((l: any) => {
+                initial[l.source_line_id] = { quantity: l.max_returnable, restock: true, return_to_supplier: false };
+              });
+              setReturnLines(initial);
+            },
+          }
+        );
       }, 300);
       return () => clearTimeout(timer);
     }

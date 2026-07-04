@@ -13,7 +13,7 @@ import { StatusBadge } from "@/components/finance/ui";
 import CustomerInvoiceFormModal from "./CustomerInvoiceFormModal";
 import PayAmountModal from "@/components/finance/PayAmountModal";
 import InvoiceCancelModal from "./InvoiceCancelModal";
-import { FileText, Send, Printer, Download, Share2, Receipt, Edit, User, Clock, Mail, Loader2, X, RotateCcw, Undo2 } from "lucide-react";
+import { FileText, Send, Printer, Download, Share2, Receipt, Edit, User, Clock, Mail, Loader2, X, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 interface CustomerInvoiceDetailProps {
@@ -61,9 +61,10 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const canDelete = (invoice.status === "DRAFT" || invoice.status === "PENDING") && permissions.delete;
   const canRecordPayment = canPay;
   const canSend = invoice.status === "PENDING" && permissions.send;
-  const canCancel = invoice.status !== "CANCELLED" && permissions.cancel;
-  const canReturn = invoice.payment_status === "PAID" && invoice.status !== "CANCELLED";
   const isRefunded = invoice.payments?.some((p: any) => p.payment_type === "PAYMENT" && p.status === "CONFIRMED");
+  const hasReturnedLines = invoice.lines?.some((l: any) => l.status === "RETURNED");
+  const canCancel = invoice.status !== "CANCELLED" && permissions.cancel && !isRefunded && !hasReturnedLines;
+  const canReturn = invoice.payment_status === "PAID" && invoice.status !== "CANCELLED";
 
   const handleEdit = () => {
     setEditingInvoice(invoice);
@@ -148,6 +149,16 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
 
   const handlePrint = () => {
     setShowPrintPreview(true);
+  };
+
+  const handleReturnToRefund = () => {
+    const basePath = moduleCode === "SALES" ? "/sales/return" : "/finance/return";
+    const params = new URLSearchParams({
+      document_type: "INVOICE",
+      document_number: invoice.invoice_number,
+      document_id: invoice.id,
+    });
+    router.push(`${basePath}?${params.toString()}`);
   };
 
   const handleExportPdf = () => {
@@ -553,14 +564,14 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
             isCurrency: true,
           }] : []),
         ]}
-        primaryActionLabel={canSend ? "Send Invoice" : canPay ? "Pay Invoice" : undefined}
-        onPrimaryAction={canSend ? handleSend : canPay ? handlePay : undefined}
+        primaryActionLabel={canReturn ? "Return & Refund" : canSend ? "Send Invoice" : canPay ? "Pay Invoice" : undefined}
+        onPrimaryAction={canReturn ? handleReturnToRefund : canSend ? handleSend : canPay ? handlePay : undefined}
         onEdit={canEdit ? handleEdit : undefined}
         onDelete={canCancel ? handleCancel : undefined}
         deleteLabel="Cancel Invoice"
         onPrint={handlePrint}
         onExport={handleExportPdf}
-        permissions={{ edit: canEdit, submit: canSend || canPay }}
+        permissions={{ edit: canEdit, submit: canReturn || canSend || canPay }}
         tabs={tabs}
         sidebar={
           <div className="space-y-4">
@@ -584,22 +595,6 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
               ]}
             />
             <div className="rounded-xl border border-border bg-card p-4 space-y-2">
-              {canReturn && (
-                <button
-                  onClick={() => {
-                    const basePath = moduleCode === "SALES" ? "/sales/return" : "/finance/return";
-                    const params = new URLSearchParams({
-                      document_type: "INVOICE",
-                      document_number: invoice.invoice_number,
-                      document_id: invoice.id,
-                    });
-                    router.push(`${basePath}?${params.toString()}`);
-                  }}
-                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md bg-orange-500 text-white text-sm font-medium hover:opacity-90 transition"
-                >
-                  <Undo2 className="w-4 h-4" /> Return & Refund
-                </button>
-              )}
               {canSend && (
                 <button
                   onClick={handleSend}

@@ -298,6 +298,7 @@ def _reverse_invoice_stock_with_dispositions(invoice, user, stock_disp_map, line
 def reverse_journal_entry(journal_entry, user, reason=''):
     """Create a reversing journal entry that swaps debit/credit."""
     from apps.finance.models import JournalEntry, JournalLine
+    import time
 
     if not journal_entry or not journal_entry.is_posted:
         return
@@ -307,8 +308,16 @@ def reverse_journal_entry(journal_entry, user, reason=''):
         is_deleted=False,
     )
 
+    base_number = f'REV-{journal_entry.entry_number}'
+    entry_number = base_number
+    # Ensure unique entry_number by appending a counter if needed
+    counter = 1
+    while JournalEntry.objects.filter(entry_number=entry_number).exists():
+        entry_number = f'{base_number}-{counter}'
+        counter += 1
+
     entry = JournalEntry.objects.create(
-        entry_number=f'REV-{journal_entry.entry_number}',
+        entry_number=entry_number,
         date=journal_entry.date,
         description=f'Reversal of {journal_entry.entry_number}: {reason}',
         reference_type=journal_entry.reference_type,
