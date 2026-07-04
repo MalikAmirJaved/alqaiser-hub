@@ -598,7 +598,7 @@ def _refund_payment(ret, user):
 def _update_source_line_status(return_type, line, user):
     """Mark the source document line as RETURNED."""
     if return_type == 'INVOICE':
-        from apps.finance.models import CustomerInvoiceLine
+        from apps.finance.models import CustomerInvoiceLine, CustomerInvoice
 
         inv_line = CustomerInvoiceLine.objects.filter(
             _id=line.source_line_id,
@@ -619,6 +619,9 @@ def _update_source_line_status(return_type, line, user):
             inv_line.updated_by = user
             inv_line.save()
 
+            # Propagate quantity_returned to linked POS SalesOrderLine
+            _propagate_invoice_return_to_sales_order(inv_line, line.quantity, user)
+
     elif return_type == 'POS':
         from apps.inventory.models.sales import SalesOrderLine
 
@@ -630,6 +633,40 @@ def _update_source_line_status(return_type, line, user):
             sol.quantity_returned = F('quantity_returned') + line.quantity
             sol.updated_by = user
             sol.save(update_fields=['quantity_returned', 'updated_by'])
+
+
+def _propagate_invoice_return_to_sales_order(inv_line, returned_qty, user):
+    """
+    When an invoice is returned, check if the invoice was generated from a
+    POS SalesOrder. If so, update the corresponding SalesOrderLine's
+    quantity_returned so the POS detail page reflects the return.
+    """
+    from apps.finance.models import CustomerInvoice
+    from apps.inventory.models.sales import SalesOrderLine
+
+    # customer_invoice_id is the integer PK (BigAutoField), query by pk
+    invoice = CustomerInvoice.objects.filter(
+        pk=inv_line.customer_invoice_id,
+        is_deleted=False,
+    ).select_related('sales_order').first()
+
+    if not invoice or not invoice.sales_order_id:
+        return
+
+    if not inv_line.variant_id:
+        return
+
+    # Find the matching SalesOrderLine by variant
+    sol = SalesOrderLine.objects.filter(
+        sales_order_id=invoice.sales_order_id,
+        variant_id=inv_line.variant_id,
+        is_deleted=False,
+    ).first()
+
+    if sol:
+        sol.quantity_returned = F('quantity_returned') + returned_qty
+        sol.updated_by = user
+        sol.save(update_fields=['quantity_returned', 'updated_by'])
 
 
 def _update_source_document_totals(ret, user):

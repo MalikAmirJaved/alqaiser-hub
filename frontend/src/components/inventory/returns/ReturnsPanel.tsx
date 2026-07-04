@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -58,6 +59,7 @@ export default function ReturnsPanel({ moduleCode }: ReturnsPanelProps) {
   const fmt = useFormatCurrency();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
 
   /* ─── Module context ─── */
   // Sales module → show only INVOICE returns
@@ -231,6 +233,10 @@ export default function ReturnsPanel({ moduleCode }: ReturnsPanelProps) {
       setCreateOpen(false);
       resetCreateForm();
       refetch();
+      queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
+      queryClient.invalidateQueries({ queryKey: ["relatedReturns"] });
+      queryClient.invalidateQueries({ queryKey: ["pos_catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
     } catch (e: any) {
       toast.error(e?.message || "Failed to process return");
     } finally {

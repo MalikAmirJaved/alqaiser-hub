@@ -674,6 +674,78 @@ class SalesOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequir
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+    @action(detail=True, methods=['get'], url_path='related-returns')
+    def related_returns(self, request, _id=None):
+        """
+        Return all ReturnRefund records that affect this sales order:
+        1. Direct POS returns (return_type=POS, document_id=sales_order._id)
+        2. Invoice returns (return_type=INVOICE, where the invoice's sales_order=this order)
+        """
+        order = self.get_object()
+        from apps.inventory.models.return_refund import ReturnRefund, ReturnRefundLine
+        from apps.finance.models import CustomerInvoice
+
+        invoice_ids = list(
+            CustomerInvoice.objects.filter(
+                sales_order=order, is_deleted=False
+            ).values_list('_id', flat=True)
+        )
+
+        # Direct POS returns on this order
+        pos_returns = ReturnRefund.objects.filter(
+            return_type='POS',
+            document_id=order._id,
+            company_id=request.user.company_id,
+            is_deleted=False,
+        ).select_related('warehouse', 'completed_by').order_by('-created_at')
+
+        # Invoice returns on linked invoices
+        invoice_returns = ReturnRefund.objects.filter(
+            return_type='INVOICE',
+            document_id__in=invoice_ids,
+            company_id=request.user.company_id,
+            is_deleted=False,
+        ).select_related('warehouse', 'completed_by').order_by('-created_at')
+
+        all_returns = pos_returns.union(invoice_returns).order_by('-created_at')
+
+        results = []
+        for ret in all_returns:
+            ret_lines = []
+            for rl in ret.lines.select_related('variant').all():
+                variant_sku = rl.variant.sku if rl.variant else (rl.manual_variant_sku or '—')
+                variant_name = ''
+                if rl.variant:
+                    variant_name = rl.variant.product.product_name if rl.variant.product else ''
+                elif rl.manual_variant_name:
+                    variant_name = rl.manual_variant_name
+
+                ret_lines.append({
+                    'id': str(rl._id),
+                    'variant_sku': variant_sku,
+                    'variant_name': variant_name,
+                    'quantity': rl.quantity,
+                    'unit_price': str(rl.unit_price),
+                    'refund_amount': str(rl.refund_amount),
+                    'restock': rl.restock,
+                })
+
+            results.append({
+                'id': str(ret._id),
+                'return_number': ret.return_number,
+                'return_type': ret.return_type,
+                'document_number': ret.document_number,
+                'status': ret.status,
+                'return_date': ret.return_date.isoformat() if ret.return_date else None,
+                'total_refund_amount': str(ret.total_refund_amount),
+                'reason': ret.reason,
+                'completed_by': ret.completed_by.get_full_name() or ret.completed_by.email if ret.completed_by else None,
+                'lines': ret_lines,
+                'source_label': 'Return through invoice' if ret.return_type == 'INVOICE' else 'Direct POS return',
+            })
+
+        return Response(results)
+
     @action(detail=True, methods=['post'])
     def cancel(self, request, _id=None):
         order = self.get_object()

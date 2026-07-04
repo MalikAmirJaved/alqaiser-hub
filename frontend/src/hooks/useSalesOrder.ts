@@ -379,3 +379,40 @@ export function useSalesReturns(filters?: {
     staleTime: 30_000,
   });
 }
+
+export interface RelatedReturnLine {
+  id: string;
+  variant_sku: string;
+  variant_name: string;
+  quantity: number;
+  unit_price: string;
+  refund_amount: string;
+  restock: boolean;
+}
+
+export interface RelatedReturn {
+  id: string;
+  return_number: string;
+  return_type: string;
+  document_number: string;
+  status: string;
+  return_date: string | null;
+  total_refund_amount: string;
+  reason: string;
+  completed_by: string | null;
+  lines: RelatedReturnLine[];
+  source_label: string;
+}
+
+export function useRelatedReturns(orderId: string | null) {
+  const api = useApi();
+  return useQuery<RelatedReturn[]>({
+    queryKey: ["relatedReturns", orderId],
+    queryFn: () =>
+      api<RelatedReturn[]>(
+        `/api/inventory/sales-orders/${orderId}/related-returns/`
+      ),
+    enabled: !!orderId,
+    staleTime: 30_000,
+  });
+}
