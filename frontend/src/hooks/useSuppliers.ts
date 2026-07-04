@@ -95,8 +95,12 @@ export function useUpdateSupplier() {
         method: "PATCH",
         body: JSON.stringify(data),
       }),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["inventory_supplier"] });
+      if (variables.id) {
+        queryClient.invalidateQueries({ queryKey: ["supplier", variables.id] });
+        queryClient.invalidateQueries({ queryKey: ["supplier_detail", variables.id] });
+      }
     },
   });
 }

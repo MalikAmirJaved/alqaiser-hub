@@ -141,6 +141,10 @@ export function useCreateSalesOrder() {
       queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
       if (variables.status === "COMPLETE") {
         queryClient.invalidateQueries({ queryKey: ["inventory"] });
+        queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
+        queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
+        queryClient.invalidateQueries({ queryKey: ["pos_catalog"] });
+        queryClient.invalidateQueries({ queryKey: ["batchStock"] });
       }
     },
   });
@@ -164,6 +168,10 @@ export function useCompleteSalesOrder() {
       queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
       queryClient.invalidateQueries({ queryKey: ["salesOrder", orderId] });
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
+      queryClient.invalidateQueries({ queryKey: ["pos_catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["batchStock"] });
     },
   });
 }
@@ -306,6 +314,10 @@ export function useEditSalesOrder() {
       queryClient.invalidateQueries({ queryKey: ["salesOrder", orderId] });
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
       queryClient.invalidateQueries({ queryKey: ["finance_customer_invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
+      queryClient.invalidateQueries({ queryKey: ["pos_catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["batchStock"] });
     },
   });
 }

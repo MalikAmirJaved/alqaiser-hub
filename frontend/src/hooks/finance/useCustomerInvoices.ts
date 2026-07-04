@@ -217,6 +217,7 @@ export function usePayCustomerInvoice() {
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY, id] });
+      queryClient.invalidateQueries({ queryKey: ["sales_invoices"] });
     },
   });
 }
@@ -228,6 +229,7 @@ export function useSendInvoice() {
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY, id] });
+      queryClient.invalidateQueries({ queryKey: ["sales_invoices"] });
     },
   });
 }
@@ -239,6 +241,7 @@ export function useCancelInvoice() {
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY, id] });
+      queryClient.invalidateQueries({ queryKey: ["sales_invoices"] });
     },
   });
 }
@@ -250,6 +253,7 @@ export function useRefundInvoicePayments() {
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY, id] });
+      queryClient.invalidateQueries({ queryKey: ["sales_invoices"] });
     },
   });
 }

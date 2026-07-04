@@ -40,8 +40,13 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   compensations: ["compensations"],
   loans: ["loans", "employeeLoans"],
 
+  employeeAssets: ["employee-assignments", "available-assets"],
+
   // ---------- HR ----------
   asset_purchase_request: ["assetPurchaseRequests"],
+
+  // ---------- Company & Settings ----------
+  designation: ["designations", "companySettings"],
 
   // ---------- Inventory ----------
   inventory_category: ["inventory_category"],
@@ -51,7 +56,7 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   inventory_supplier: ["inventory_supplier"],
   inventory_variant: ["inventory_variant", "pos_catalog"],
   inventory_stock: ["inventory_stock", "pos_catalog"],
-  inventory_sales_order: ["inventory_sales_order"],
+  inventory_sales_order: ["inventory_sales_order", "pos_catalog", "inventory_variant", "inventory_stock", "batchStock"],
   pos_catalog: ["pos_catalog"],
   inventory_stock_transfer: ["inventory_stock_transfer"],
   inventory_purchase_order: ["inventory_purchase_order"],
@@ -91,7 +96,6 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   branch: ["branch"],
   user: ["users", "user"],
   company_settings: ["companySettings"],
-  designation: ["designation", "companySettings"],
 
   // ---------- Monitoring ----------
   monitoring_site: ["monitoring_sites"],
@@ -331,6 +335,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
       pollInterval = setInterval(() => {
         queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
         queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
+        queryClient.invalidateQueries({ queryKey: ["pos_catalog"] });
         queryClient.invalidateQueries({ queryKey: ["companySettings"] });
       }, 30000);
     }

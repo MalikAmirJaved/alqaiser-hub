@@ -54,6 +54,12 @@ class BranchModelTest(TestCase):
                 company=self.company, name='B', code='B1', city='C', country='C', email='dup@test.com'
             )
 
+    def test_currency_default(self):
+        b = Branch.objects.create(
+            company=self.company, name='B', code='B', city='C', country='C', email='b@t.com'
+        )
+        self.assertEqual(b.currency_code, 'USD')
+
 
 class DepartmentModelTest(TestCase):
     def test_create_department(self):
@@ -112,6 +118,11 @@ class UserModelTest(TestCase):
         u.save()
         u.refresh_from_db()
         self.assertTrue(u.is_deleted)
+
+    def test_unique_email(self):
+        User.objects.create_user(username='a', email='dup@t.com', password='pass')
+        with self.assertRaises(Exception):
+            User.objects.create_user(username='b', email='dup@t.com', password='pass')
 
 
 class UserCompanyContextTest(TestCase):

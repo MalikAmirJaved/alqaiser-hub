@@ -147,8 +147,12 @@ export function useCancelReturn() {
         body: JSON.stringify({ status: "CANCELLED" }),
         headers: { "Content-Type": "application/json" },
       }),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ["returns"] });
+      queryClient.invalidateQueries({ queryKey: ["return", id] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-invoices"] });
     },
   });
 }
