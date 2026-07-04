@@ -111,15 +111,15 @@ export default function PaymentsPage() {
       .reduce((sum, p) => sum + toNumber(p.amount), 0);
 
     const totalPayments = data
-      .filter((p) => p.payment_type === "PAYMENT")
+      .filter((p) => p.payment_type === "PAYMENT" && p.payment_method !== "CREDIT")
       .reduce((sum, p) => sum + toNumber(p.amount), 0);
 
     const totalRefunded = data
-      .filter((p) => p.payment_type === "PAYMENT" && p.reference_number?.startsWith("REFUND-"))
+      .filter((p) => p.payment_type === "PAYMENT" && p.payment_method !== "CREDIT" && p.reference_number?.startsWith("REFUND-"))
       .reduce((sum, p) => sum + toNumber(p.amount), 0);
 
     const totalPaid = data
-      .filter((p) => p.status === "CONFIRMED")
+      .filter((p) => p.status === "CONFIRMED" && p.payment_method !== "CREDIT")
       .reduce((sum, p) => sum + toNumber(p.amount), 0);
 
     const totalUnpaid = data
@@ -144,14 +144,14 @@ export default function PaymentsPage() {
         value: totalRefunded,
         tone: "destructive" as const,
         isCurrency: true,
-        sub: `${data.filter((p) => p.payment_type === "PAYMENT" && p.reference_number?.startsWith("REFUND-")).length} refunds`,
+        sub: `${data.filter((p) => p.payment_type === "PAYMENT" && p.payment_method !== "CREDIT" && p.reference_number?.startsWith("REFUND-")).length} refunds`,
       },
       {
         label: "Paid",
         value: totalPaid,
         tone: "success" as const,
         isCurrency: true,
-        sub: `${data.filter((p) => p.status === "CONFIRMED").length} transactions`,
+        sub: `${data.filter((p) => p.status === "CONFIRMED" && p.payment_method !== "CREDIT").length} transactions`,
       },
     ];
   };

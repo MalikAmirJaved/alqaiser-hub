@@ -66,7 +66,7 @@ class FinanceDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
         expenses_mtd = payments.filter(
             payment_type='PAYMENT',
             payment_date__gte=month_start,
-        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        ).exclude(payment_method='CREDIT').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
         cash_position = BankAccount.objects.filter(
             company_id=company_id,
@@ -113,6 +113,8 @@ class FinanceDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
 
         monthly = defaultdict(lambda: {'inflow': Decimal('0.00'), 'outflow': Decimal('0.00')})
         for payment in payments:
+            if payment.payment_method == 'CREDIT':
+                continue
             key = payment.payment_date.strftime('%Y-%m')
             if payment.payment_type == 'RECEIPT':
                 monthly[key]['inflow'] += payment.amount
@@ -200,6 +202,7 @@ class FinanceDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
         )
 
         # Expenses = confirmed PAYMENT payments (paid bills/expenses)
+        # Exclude CREDIT payments — those are supplier credit applications, not cash movements
         expenses = Payment.objects.filter(
             company_id=company_id,
             branch_id=branch_id,
@@ -207,7 +210,7 @@ class FinanceDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
             payment_type='PAYMENT',
             payment_date__gte=start,
             is_deleted=False,
-        )
+        ).exclude(payment_method='CREDIT')
 
         # Build monthly buckets (12 months, back from current)
         months = OrderedDict()

@@ -57,7 +57,7 @@ class OverallDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
         ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         expenses_mtd = payments.filter(
             payment_type='PAYMENT', payment_date__gte=month_start
-        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        ).exclude(payment_method='CREDIT').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         net_profit_mtd = revenue_mtd - expenses_mtd
 
         cash_position = BankAccount.objects.filter(
@@ -147,6 +147,8 @@ class OverallDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
         )
         monthly_flow = {}
         for p in payments:
+            if p.payment_method == 'CREDIT':
+                continue
             key = p.payment_date.strftime('%Y-%m')
             if key not in monthly_flow:
                 monthly_flow[key] = {'revenue': Decimal('0.00'), 'expense': Decimal('0.00')}
