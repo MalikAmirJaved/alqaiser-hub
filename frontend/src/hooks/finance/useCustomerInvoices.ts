@@ -339,3 +339,30 @@ export function useResolveReduction() {
     },
   });
 }
+
+export interface ActivityLogDetail {
+  label: string;
+  value: string;
+}
+
+export interface ActivityLogEntry {
+  type: string;
+  icon: string;
+  color: string;
+  timestamp: string;
+  user: string;
+  title: string;
+  description: string;
+  amount: string | null;
+  status?: string;
+  details: ActivityLogDetail[];
+}
+
+export function useCustomerInvoiceActivityLog(invoiceId: string | null) {
+  return useQuery<ActivityLogEntry[]>({
+    queryKey: [CUSTOMER_INVOICES_KEY, "activity_log", invoiceId],
+    queryFn: () => apiFetch<ActivityLogEntry[]>(`/api/finance/customer-invoices/${invoiceId}/activity-log/`),
+    enabled: !!invoiceId,
+    staleTime: 30_000,
+  });
+}

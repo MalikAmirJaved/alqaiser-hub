@@ -570,10 +570,10 @@ export default function ReturnsPanel({ moduleCode }: ReturnsPanelProps) {
                         <th className="px-3 py-2.5 text-left">Type</th>
                         <th className="px-3 py-2.5 text-left">Document</th>
                         <th className="px-3 py-2.5 text-left">Customer</th>
-                        <th className="px-3 py-2.5 text-right">Refund</th>
-                        <th className="px-3 py-2.5 text-center">Status</th>
-                        <th className="px-3 py-2.5 text-right">Date</th>
-                        <th className="px-3 py-2.5 text-center">Items</th>
+                        <th className="px-3 py-2.5 text-left">Refund</th>
+                        <th className="px-3 py-2.5 text-left">Status</th>
+                        <th className="px-3 py-2.5 text-left">Date</th>
+                        <th className="px-3 py-2.5 text-left">Items</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -587,12 +587,12 @@ export default function ReturnsPanel({ moduleCode }: ReturnsPanelProps) {
                           <td className="px-3 py-2.5"><StatusBadge status={r.return_type} /></td>
                           <td className="px-3 py-2.5 text-muted-foreground">{r.document_number}</td>
                           <td className="px-3 py-2.5">{r.customer_name || "—"}</td>
-                          <td className="px-3 py-2.5 text-right font-medium">{fmt(r.total_refund_amount)}</td>
-                          <td className="px-3 py-2.5 text-center"><StatusBadge status={r.status} /></td>
-                          <td className="px-3 py-2.5 text-right text-muted-foreground text-xs">
+                          <td className="px-3 py-2.5  font-medium">{fmt(r.total_refund_amount)}</td>
+                          <td className="px-3 py-2.5 "><StatusBadge status={r.status} /></td>
+                          <td className="px-3 py-2.5  text-muted-foreground text-xs">
                             {r.return_date ? format(new Date(r.return_date), "MMM d, yyyy") : "—"}
                           </td>
-                          <td className="px-3 py-2.5 text-center text-muted-foreground">{r.lines_count || 0}</td>
+                          <td className="px-3 py-2.5  text-muted-foreground">{r.lines_count || 0}</td>
                         </tr>
                       ))}
                     </tbody>

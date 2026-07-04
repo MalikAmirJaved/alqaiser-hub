@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DetailLayout, StandardSidebar, RelatedRecords, type DetailTab } from "@/components/reuseable/final/DetailLayout";
-import { useCustomerInvoice, useUpdateCustomerInvoice, usePayCustomerInvoice, useSendInvoice, useCancelInvoice, useRefundInvoicePayments, useCustomerInvoiceAuditLog } from "@/hooks/finance/useCustomerInvoices";
+import { useCustomerInvoice, useUpdateCustomerInvoice, usePayCustomerInvoice, useSendInvoice, useCancelInvoice, useRefundInvoicePayments, useCustomerInvoiceAuditLog, useCustomerInvoiceActivityLog } from "@/hooks/finance/useCustomerInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
@@ -41,6 +41,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const { data: companySettings } = useCompanySettingsQuery();
   const { terms: termsData } = useTermsAndConditions();
   const { data: auditLogs, isLoading: auditLogsLoading } = useCustomerInvoiceAuditLog(id);
+  const { data: activityLog, isLoading: activityLoading } = useCustomerInvoiceActivityLog(id);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any>(null);
@@ -386,131 +387,107 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const editLogs = auditLogs?.filter((l) => l.action === "UPDATE") || [];
 
   tabs.push({
-    id: "edit_history",
-    label: "Edit History",
-    count: editLogs.length,
+    id: "activity",
+    label: "Activity",
+    count: activityLog?.length || 0,
     render: () => {
-      if (auditLogsLoading) {
-        return <div className="p-8 text-center text-muted-foreground">Loading edit history...</div>;
+      if (activityLoading) {
+        return <div className="p-8 text-center text-muted-foreground">Loading activity...</div>;
       }
-      if (editLogs.length === 0) {
+      if (!activityLog || activityLog.length === 0) {
         return (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-            <Edit className="w-10 h-10 mb-3 opacity-30" />
-            <p className="text-sm">No edit history recorded yet.</p>
+            <Clock className="w-10 h-10 mb-3 opacity-30" />
+            <p className="text-sm">No activity recorded yet.</p>
           </div>
         );
       }
+
+      const colorMap: Record<string, string> = {
+        success: "bg-success/10 text-success border-success/20",
+        warning: "bg-warning/10 text-warning border-warning/20",
+        destructive: "bg-destructive/10 text-destructive border-destructive/20",
+        info: "bg-info/10 text-info border-info/20",
+      };
+
+      const iconMap: Record<string, React.ReactNode> = {
+        plus: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>,
+        "check-circle": <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+        edit: <Edit className="w-4 h-4" />,
+        "dollar-sign": <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+        undo: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>,
+        "rotate-ccw": <RotateCcw className="w-4 h-4" />,
+        "x-circle": <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+      };
+
       return (
-        <div className="space-y-4">
-          {editLogs.map((log) => (
-            <div key={log.id} className="rounded-lg border border-border/60 p-4">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium text-xs ${
-                  log.action === "CREATE" ? "bg-success/15 text-success" :
-                  log.action === "UPDATE" ? "bg-primary/15 text-primary" :
-                  "bg-destructive/15 text-destructive"
-                }`}>{log.action_display}</span>
-                <span className="inline-flex items-center gap-1">
-                  <User className="w-3 h-3" />
-                  {log.user_name || "System"}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {new Date(log.created_at).toLocaleString()}
-                </span>
-              </div>
-              {log.field_changes && log.field_changes.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-muted-foreground border-b border-border/40">
-                        <th className="px-3 py-1.5 text-left font-medium">Field</th>
-                        <th className="px-3 py-1.5 text-left font-medium">Old Value</th>
-                        <th className="px-3 py-1.5 text-left font-medium">New Value</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {log.field_changes.map((change) => (
-                        <tr key={change.id} className="border-b border-border/20">
-                          <td className="px-3 py-1.5 font-medium text-foreground">{change.field_name}</td>
-                          <td className="px-3 py-1.5 text-muted-foreground max-w-[200px] truncate">{change.old_value || "—"}</td>
-                          <td className="px-3 py-1.5 text-foreground max-w-[200px] truncate">{change.new_value || "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+        <div className="relative">
+          {/* Timeline line */}
+          <div className="absolute left-5 top-0 bottom-0 w-px bg-border/60" />
+
+          <div className="space-y-0">
+            {activityLog.map((event, idx) => (
+              <div key={idx} className="relative flex gap-4 pb-6 last:pb-0">
+                {/* Timeline dot */}
+                <div className={`relative z-10 flex items-center justify-center w-10 h-10 rounded-full border-2 shrink-0 ${colorMap[event.color] || colorMap.info}`}>
+                  {iconMap[event.icon] || <Clock className="w-4 h-4" />}
                 </div>
-              )}
-              {(!log.field_changes || log.field_changes.length === 0) && (
-                <p className="text-xs text-muted-foreground">No field-level changes tracked for this action.</p>
-              )}
-            </div>
-          ))}
+
+                {/* Content */}
+                <div className="flex-1 min-w-0 pt-0.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground">{event.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{event.description}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {event.amount && (
+                        <p className={`text-sm font-bold ${event.type === 'payment' ? 'text-success' : event.type === 'return' || event.type === 'payment_refund' ? 'text-destructive' : 'text-foreground'}`}>
+                          {event.type === 'payment' ? '+' : event.type === 'return' || event.type === 'payment_refund' ? '-' : ''}{formatCurrency(Number(event.amount))}
+                        </p>
+                      )}
+                      {event.status && (
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border mt-1 ${
+                          event.status === 'CONFIRMED' || event.status === 'COMPLETED' ? 'bg-success/10 text-success border-success/20' :
+                          event.status === 'DRAFT' ? 'bg-muted text-muted-foreground border-border' :
+                          'bg-warning/10 text-warning border-warning/20'
+                        }`}>
+                          {event.status}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Details */}
+                  {event.details && event.details.length > 0 && (
+                    <div className="mt-2 rounded-lg bg-muted/30 border border-border/40 px-3 py-2">
+                      {event.details.map((d, di) => (
+                        <div key={di} className="flex items-center justify-between text-xs py-0.5 border-b border-border/20 last:border-0">
+                          <span className="text-muted-foreground">{d.label}</span>
+                          <span className="font-medium text-foreground">{d.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* User & time */}
+                  <div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <User className="w-3 h-3" />
+                      {event.user}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {new Date(event.timestamp).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       );
     },
-  });
-
-  tabs.push({
-    id: "payment",
-    label: "Payment History",
-    count: invoice.payments?.length || 0,
-    render: () => (
-      <div>
-        {(!invoice.payments || invoice.payments.length === 0) ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <Receipt className="w-12 h-12 mx-auto mb-3 opacity-30" />
-            <p className="text-sm">No payments recorded yet</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-xs text-muted-foreground border-b border-border bg-surface/40">
-                <tr>
-                  <th className="px-4 py-2 text-left">Date</th>
-                  <th className="px-4 py-2 text-left">Method</th>
-                  <th className="px-4 py-2 text-left">Reference</th>
-                  <th className="px-4 py-2 text-right">Amount</th>
-                  <th className="px-4 py-2 text-center">Status</th>
-                  <th className="px-4 py-2 text-center">Type</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoice.payments.map((p: any) => (
-                  <tr key={p.id} className="border-b border-border/60">
-                    <td className="px-4 py-2">{p.payment_date}</td>
-                    <td className="px-4 py-2">{p.payment_method}</td>
-                    <td className="px-4 py-2 text-muted-foreground">{p.reference_number || "—"}</td>
-                    <td className="px-4 py-2 text-right font-medium">{formatCurrency(Number(p.amount))}</td>
-                    <td className="px-4 py-2 text-center">
-                      <span className={`inline-flex px-2 py-0.5 text-xs rounded-full font-medium ${
-                        p.status === "CONFIRMED" ? "bg-success/15 text-success" : "bg-muted/40 text-muted-foreground"
-                      }`}>{p.status}</span>
-                    </td>
-                    <td className="px-4 py-2 text-center">
-                      <span className={`inline-flex px-2 py-0.5 text-xs rounded-full font-medium ${
-                        p.payment_type === "PAYMENT" ? "bg-destructive/15 text-destructive" : "bg-info/15 text-info"
-                      }`}>{p.payment_type === "PAYMENT" ? "Refund" : "Payment"}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {canRecordPayment && (
-          <div className="mt-4 text-center">
-            <button
-              onClick={() => setPayModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm"
-            >
-              Record Payment
-            </button>
-          </div>
-        )}
-      </div>
-    ),
   });
 
   const getStatusColor = (status: string): "success" | "warning" | "destructive" | "info" => {

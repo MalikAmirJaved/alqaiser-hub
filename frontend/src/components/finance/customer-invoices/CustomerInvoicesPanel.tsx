@@ -160,14 +160,12 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
     {
       key: "amount",
       label: "Amount",
-      align: "right" as const,
       sortable: true,
       render: (val: number) => formatCurrency(val),
     },
     {
       key: "outstanding",
       label: "Balance",
-      align: "right" as const,
       sortable: true,
       render: (val: number) => (val ? formatCurrency(val) : "—"),
     },

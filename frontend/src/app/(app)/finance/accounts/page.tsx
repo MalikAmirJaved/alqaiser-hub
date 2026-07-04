@@ -177,7 +177,7 @@ function AccountRow({
             {typeLabels[node.account_type]}
           </span>
         </td>
-        <td className="px-4 py-2.5 text-right num font-medium">
+        <td className="px-4 py-2.5 num font-medium">
           {formatCurrency(node.balance)}
         </td>
         <td className="px-4 py-2.5">
@@ -317,7 +317,7 @@ export default function ChartOfAccountsPage() {
                 <tr className="text-left">
                   <th className="px-4 py-2.5 font-medium">Account</th>
                   <th className="px-4 py-2.5 font-medium">Type</th>
-                  <th className="px-4 py-2.5 font-medium text-right">
+                  <th className="px-4 py-2.5 font-medium ">
                     Balance
                   </th>
                   <th className="px-4 py-2.5 font-medium">Status</th>

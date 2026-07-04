@@ -332,3 +332,186 @@ class CustomerInvoiceViewSet(
         ).order_by('-created_at').prefetch_related('field_changes')
         serializer = AuditLogSerializer(logs, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['get'], url_path='activity-log')
+    def activity_log(self, request, _id=None):
+        """
+        Unified activity timeline for this invoice:
+        creation, status changes, edits, payments, returns, cancellations.
+        """
+        invoice = self.get_object()
+        events = []
+
+        # ── 1. Invoice created ───────────────────────────────────
+        events.append({
+            'type': 'created',
+            'icon': 'plus',
+            'color': 'success',
+            'timestamp': invoice.created_at.isoformat(),
+            'user': invoice.created_by.get_full_name() or invoice.created_by.email if invoice.created_by else 'System',
+            'title': 'Invoice created',
+            'description': f'Invoice {invoice.invoice_number} created for {invoice.customer.name if invoice.customer else "Walk-in customer"}',
+            'amount': str(invoice.amount),
+            'details': [
+                {'label': 'Invoice #', 'value': invoice.invoice_number},
+                {'label': 'Customer', 'value': invoice.customer.name if invoice.customer else 'Walk-in'},
+                {'label': 'Amount', 'value': str(invoice.amount)},
+                {'label': 'Due Date', 'value': str(invoice.due_date)},
+            ],
+        })
+
+        # ── 2. Status changes from audit logs ────────────────────
+        audit_logs = AuditLog.objects.filter(
+            model_name='CustomerInvoice',
+            record_id=invoice._id,
+            company_id=invoice.company_id,
+        ).prefetch_related('field_changes').order_by('created_at')
+
+        for log in audit_logs:
+            if log.action == 'CREATE':
+                continue  # already handled above
+
+            field_changes = log.field_changes.all()
+            if not field_changes:
+                continue
+
+            # Detect status changes
+            status_change = next((c for c in field_changes if c.field_name == 'status'), None)
+            amount_change = next((c for c in field_changes if c.field_name == 'amount'), None)
+
+            if status_change:
+                action_label = status_change.new_value or log.action.lower()
+                icon = 'check-circle' if status_change.new_value in ('SENT', 'CANCELLED') else 'edit'
+                color = 'success' if status_change.new_value == 'SENT' else 'warning' if status_change.new_value == 'CANCELLED' else 'info'
+
+                events.append({
+                    'type': 'status_change',
+                    'icon': icon,
+                    'color': color,
+                    'timestamp': log.created_at.isoformat(),
+                    'user': log.user.get_full_name() or log.user.email if log.user else 'System',
+                    'title': f'Status changed to {status_change.new_value}',
+                    'description': f'Invoice status changed from "{status_change.old_value}" to "{status_change.new_value}"',
+                    'amount': None,
+                    'details': [
+                        {'label': 'From', 'value': status_change.old_value or '—'},
+                        {'label': 'To', 'value': status_change.new_value or '—'},
+                    ],
+                })
+            elif amount_change:
+                events.append({
+                    'type': 'edited',
+                    'icon': 'edit',
+                    'color': 'info',
+                    'timestamp': log.created_at.isoformat(),
+                    'user': log.user.get_full_name() or log.user.email if log.user else 'System',
+                    'title': 'Invoice amount updated',
+                    'description': f'Amount changed from {amount_change.old_value} to {amount_change.new_value}',
+                    'amount': amount_change.new_value,
+                    'details': [
+                        {'label': 'Old Amount', 'value': amount_change.old_value or '—'},
+                        {'label': 'New Amount', 'value': amount_change.new_value or '—'},
+                    ],
+                })
+            else:
+                changed_fields = ', '.join(c.field_name for c in field_changes)
+                events.append({
+                    'type': 'edited',
+                    'icon': 'edit',
+                    'color': 'info',
+                    'timestamp': log.created_at.isoformat(),
+                    'user': log.user.get_full_name() or log.user.email if log.user else 'System',
+                    'title': 'Invoice updated',
+                    'description': f'Fields updated: {changed_fields}',
+                    'amount': None,
+                    'details': [
+                        {'label': 'Fields', 'value': changed_fields},
+                    ],
+                })
+
+        # ── 3. Payments ──────────────────────────────────────────
+        from apps.finance.services.payable import get_payments_queryset
+        payments = get_payments_queryset(invoice).order_by('payment_date')
+        for p in payments:
+            is_refund = p.payment_type == 'PAYMENT'
+            events.append({
+                'type': 'payment_refund' if is_refund else 'payment',
+                'icon': 'undo' if is_refund else 'dollar-sign',
+                'color': 'destructive' if is_refund else 'success',
+                'timestamp': p.payment_date.isoformat() + 'T12:00:00',
+                'user': p.created_by.get_full_name() or p.created_by.email if p.created_by else 'System',
+                'title': f'Refund of {p.amount}' if is_refund else f'Payment of {p.amount}',
+                'description': (
+                    f'Refunded {p.amount} via {p.payment_method}' if is_refund
+                    else f'Received {p.amount} via {p.payment_method}'
+                ) + (f' (Ref: {p.reference_number})' if p.reference_number else ''),
+                'amount': str(p.amount),
+                'status': p.status,
+                'details': [
+                    {'label': 'Amount', 'value': str(p.amount)},
+                    {'label': 'Method', 'value': p.payment_method.replace('_', ' ')},
+                    {'label': 'Date', 'value': str(p.payment_date)},
+                    {'label': 'Reference', 'value': p.reference_number or '—'},
+                    {'label': 'Status', 'value': p.status},
+                ],
+            })
+
+        # ── 4. Returns / Refunds ─────────────────────────────────
+        from apps.inventory.models.return_refund import ReturnRefund, ReturnRefundLine
+        returns = ReturnRefund.objects.filter(
+            document_id=invoice._id,
+            return_type='INVOICE',
+            company_id=invoice.company_id,
+            is_deleted=False,
+        ).select_related('warehouse', 'completed_by').order_by('-created_at')
+
+        for ret in returns:
+            ret_lines = ret.lines.select_related('variant').all()
+            line_details = []
+            total_returned = Decimal('0')
+            for rl in ret_lines:
+                sku = rl.variant.sku if rl.variant else (rl.manual_variant_sku or '—')
+                name = rl.variant.product.product_name if rl.variant and rl.variant.product else (rl.manual_variant_name or '')
+                line_details.append({'label': f'{sku} {name}', 'value': f'x{rl.quantity} = {rl.refund_amount}'})
+                total_returned += Decimal(str(rl.refund_amount))
+
+            events.append({
+                'type': 'return',
+                'icon': 'rotate-ccw',
+                'color': 'warning',
+                'timestamp': ret.return_date.isoformat() if ret.return_date else ret.created_at.isoformat(),
+                'user': ret.completed_by.get_full_name() or ret.completed_by.email if ret.completed_by else 'System',
+                'title': f'Return {ret.return_number} — {ret.status}',
+                'description': f'{len(list(ret_lines))} item(s) returned, refund: {ret.total_refund_amount}',
+                'amount': str(ret.total_refund_amount),
+                'status': ret.status,
+                'details': [
+                    {'label': 'Return #', 'value': ret.return_number},
+                    {'label': 'Refund Amount', 'value': str(ret.total_refund_amount)},
+                    {'label': 'Reason', 'value': ret.reason or '—'},
+                    {'label': 'Status', 'value': ret.status},
+                    {'label': 'Warehouse', 'value': ret.warehouse.warehouse_name if ret.warehouse else '—'},
+                    *line_details,
+                ],
+            })
+
+        # ── 5. Cancellation ──────────────────────────────────────
+        if invoice.status == 'CANCELLED' and invoice.cancelled_at:
+            events.append({
+                'type': 'cancelled',
+                'icon': 'x-circle',
+                'color': 'destructive',
+                'timestamp': invoice.cancelled_at.isoformat(),
+                'user': invoice.cancelled_by.get_full_name() or invoice.cancelled_by.email if invoice.cancelled_by else 'System',
+                'title': 'Invoice cancelled',
+                'description': f'Invoice {invoice.invoice_number} was cancelled',
+                'amount': None,
+                'details': [
+                    {'label': 'Reason', 'value': invoice.notes or '—'},
+                ],
+            })
+
+        # Sort by timestamp descending
+        events.sort(key=lambda e: e['timestamp'], reverse=True)
+
+        return Response(events)
