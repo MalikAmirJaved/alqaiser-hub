@@ -100,7 +100,7 @@ class PurchaseOrderLine(BaseModel):
     )
     quantity_ordered = models.PositiveIntegerField()
     quantity_received = models.PositiveIntegerField(default=0)
-    unit_cost = models.DecimalField(max_digits=12, decimal_places=4)
+    unit_cost = models.DecimalField(max_digits=12, decimal_places=2)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=LINE_STATUS_CHOICES, default='PENDING')
     notes = models.TextField(blank=True)
@@ -192,7 +192,7 @@ class GoodsReceiptLine(BaseModel):
         related_name='receipt_lines'
     )
     quantity_received = models.PositiveIntegerField()
-    unit_cost = models.DecimalField(max_digits=12, decimal_places=4)
+    unit_cost = models.DecimalField(max_digits=12, decimal_places=2)
     accepted = models.BooleanField(default=True)
 
     class Meta:
