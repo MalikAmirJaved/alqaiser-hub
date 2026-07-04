@@ -32,7 +32,12 @@ export function useCreateGoodsReceipt() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['goodsReceipts'] });
-      queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory_purchase_order'] });
+      queryClient.invalidateQueries({ queryKey: ['purchaseOrder'] });
+      queryClient.invalidateQueries({ queryKey: ['finance_supplier_bills'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory_variant'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory_stock'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory_product'] });
     },
   });
 }

@@ -58,8 +58,8 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   inventory_stock: ["inventory_stock", "pos_catalog", "inventory_product"],
   inventory_sales_order: ["inventory_sales_order", "pos_catalog", "inventory_variant", "inventory_stock", "batchStock", "inventory_product"],
   pos_catalog: ["pos_catalog"],
-  inventory_stock_transfer: ["inventory_stock_transfer"],
-  inventory_purchase_order: ["inventory_purchase_order", "finance_supplier_bills"],
+  inventory_stock_transfer: ["inventory_stock_transfer", "inventory_variant", "inventory_stock", "inventory_product"],
+  inventory_purchase_order: ["inventory_purchase_order", "finance_supplier_bills", "inventory_stock", "inventory_variant", "inventory_product"],
 
   // Inventory aliases
   product: ["inventory_product"],

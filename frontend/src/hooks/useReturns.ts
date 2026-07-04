@@ -152,6 +152,8 @@ export function useCancelReturn() {
       queryClient.invalidateQueries({ queryKey: ["return", id] });
       queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
       queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
       queryClient.invalidateQueries({ queryKey: ["customer-invoices"] });
     },
   });
@@ -195,6 +197,9 @@ export function useCreateReturn() {
       queryClient.invalidateQueries({ queryKey: ["returns"] });
       queryClient.invalidateQueries({ queryKey: ["customer-invoices"] });
       queryClient.invalidateQueries({ queryKey: ["inventory-analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
     },
   });
 }

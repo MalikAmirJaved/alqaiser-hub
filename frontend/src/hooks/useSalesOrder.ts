@@ -189,6 +189,11 @@ export function useCancelSalesOrder() {
     onSuccess: (_, orderId) => {
       queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
       queryClient.invalidateQueries({ queryKey: ["salesOrder", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
+      queryClient.invalidateQueries({ queryKey: ["pos_catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["batchStock"] });
     },
   });
 }
