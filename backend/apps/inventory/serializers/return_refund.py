@@ -3,14 +3,18 @@ from apps.inventory.models.return_refund import ReturnRefund, ReturnRefundLine
 
 
 class ReturnRefundLineSerializer(serializers.ModelSerializer):
+    vendor_name = serializers.CharField(source='vendor.name', read_only=True, allow_null=True)
+    variant_name = serializers.SerializerMethodField()
+    variant_sku = serializers.SerializerMethodField()
+
     class Meta:
         model = ReturnRefundLine
         fields = [
             'id', '_id', 'return_refund',
             'source_line_id',
-            'variant', 'is_manual_entry',
+            'variant', 'variant_name', 'variant_sku', 'is_manual_entry',
             'manual_variant_name', 'manual_variant_sku',
-            'vendor',
+            'vendor', 'vendor_name',
             'quantity', 'unit_price', 'refund_amount', 'tax_rate',
             'restock', 'return_to_supplier',
             'disposition_action', 'product_qty', 'damage_qty', 'damage_reason',
@@ -18,6 +22,16 @@ class ReturnRefundLineSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         ]
         read_only_fields = ['id', '_id', 'created_at', 'updated_at', 'return_refund']
+
+    def get_variant_name(self, obj):
+        if obj.is_manual_entry:
+            return obj.manual_variant_name
+        return obj.variant.product.product_name if obj.variant else None
+
+    def get_variant_sku(self, obj):
+        if obj.is_manual_entry:
+            return obj.manual_variant_sku
+        return obj.variant.sku if obj.variant else None
 
 
 class ReturnRefundListSerializer(serializers.ModelSerializer):
@@ -53,6 +67,9 @@ class ReturnRefundDetailSerializer(serializers.ModelSerializer):
     warehouse_name = serializers.CharField(source='warehouse.warehouse_name', read_only=True)
     return_type_display = serializers.CharField(source='get_return_type_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+    created_by_name = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
+    completed_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = ReturnRefund
@@ -64,9 +81,11 @@ class ReturnRefundDetailSerializer(serializers.ModelSerializer):
             'return_date', 'status', 'status_display',
             'total_refund_amount', 'reason',
             'refund_payment_id',
-            'completed_at', 'completed_by',
+            'completed_at', 'completed_by', 'completed_by_name',
             'lines',
             'created_at', 'updated_at',
+            'created_by', 'created_by_name',
+            'updated_by', 'updated_by_name',
             'company_id', 'branch_id',
         ]
         read_only_fields = [
@@ -75,6 +94,21 @@ class ReturnRefundDetailSerializer(serializers.ModelSerializer):
             'completed_at', 'completed_by',
             'company_id', 'branch_id',
         ]
+
+    def get_created_by_name(self, obj):
+        if obj.created_by:
+            return obj.created_by.get_full_name() or obj.created_by.username
+        return None
+
+    def get_updated_by_name(self, obj):
+        if obj.updated_by:
+            return obj.updated_by.get_full_name() or obj.updated_by.username
+        return None
+
+    def get_completed_by_name(self, obj):
+        if obj.completed_by:
+            return obj.completed_by.get_full_name() or obj.completed_by.username
+        return None
 
 
 class CreateReturnRefundSerializer(serializers.Serializer):

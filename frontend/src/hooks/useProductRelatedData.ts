@@ -87,21 +87,60 @@ export interface InvoiceRelated {
   created_by_name: string | null;
 }
 
-export interface ProductRelatedData {
-  stock_movements: StockMovement[];
-  purchase_orders: PurchaseOrderRelated[];
-  sales_orders: SalesOrderRelated[];
-  quotes: QuoteRelated[];
-  invoices: InvoiceRelated[];
+export interface PaginatedResult<T> {
+  count: number;
+  total_pages: number;
+  current_page: number;
+  next: boolean;
+  previous: boolean;
+  results: T[];
+}
+
+export type RelatedTab = "stock-movements" | "purchase-orders" | "sales-orders" | "quotes" | "invoices";
+
+export interface RelatedTabParams {
+  productId: string | null;
+  tab: RelatedTab;
+  page?: number;
+  pageSize?: number;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+export function useRelatedTabData({ productId, tab, page = 1, pageSize = 20, dateFrom, dateTo }: RelatedTabParams) {
+  const api = useApi();
+
+  const params = new URLSearchParams();
+  params.set("tab", tab);
+  params.set("page", String(page));
+  params.set("page_size", String(pageSize));
+  if (dateFrom) params.set("date_from", dateFrom);
+  if (dateTo) params.set("date_to", dateTo);
+
+  return useQuery<PaginatedResult<any>>({
+    queryKey: ["productRelatedTab", productId, tab, page, pageSize, dateFrom, dateTo],
+    queryFn: () =>
+      api<PaginatedResult<any>>(
+        `/api/inventory/products/${productId}/related-data/?${params.toString()}`
+      ),
+    enabled: !!productId,
+    staleTime: 30_000,
+  });
 }
 
 export function useProductRelatedData(productId: string | null) {
   const api = useApi();
 
-  return useQuery<ProductRelatedData>({
+  return useQuery<{
+    stock_movements: PaginatedResult<StockMovement>;
+    purchase_orders: PaginatedResult<PurchaseOrderRelated>;
+    sales_orders: PaginatedResult<SalesOrderRelated>;
+    quotes: PaginatedResult<QuoteRelated>;
+    invoices: PaginatedResult<InvoiceRelated>;
+  }>({
     queryKey: ["productRelatedData", productId],
     queryFn: () =>
-      api<ProductRelatedData>(
+      api(
         `/api/inventory/products/${productId}/related-data/`
       ),
     enabled: !!productId,

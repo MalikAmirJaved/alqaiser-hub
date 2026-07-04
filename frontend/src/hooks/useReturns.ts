@@ -13,10 +13,13 @@ export interface ReturnRefundLine {
   _id: string;
   source_line_id: string;
   variant?: string | null;
+  variant_name?: string | null;
+  variant_sku?: string | null;
   is_manual_entry: boolean;
   manual_variant_name: string;
   manual_variant_sku: string;
   vendor?: string | null;
+  vendor_name?: string | null;
   quantity: number;
   unit_price: number;
   refund_amount: number;
@@ -49,10 +52,17 @@ export interface ReturnRefund {
   refund_payment_id?: string | null;
   completed_at?: string | null;
   completed_by?: number | null;
+  completed_by_name?: string | null;
   lines?: ReturnRefundLine[];
   lines_count?: number;
   created_at: string;
   updated_at: string;
+  created_by?: number | null;
+  created_by_name?: string | null;
+  updated_by?: number | null;
+  updated_by_name?: string | null;
+  company_id?: number | null;
+  branch_id?: number | null;
 }
 
 export interface LookupDocumentLine {
@@ -123,6 +133,23 @@ export function useLookupDocument() {
         body: JSON.stringify(data),
         headers: { "Content-Type": "application/json" },
       }),
+  });
+}
+
+export function useCancelReturn() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<{ status: string; message: string }>(`/api/inventory/returns/${id}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "CANCELLED" }),
+        headers: { "Content-Type": "application/json" },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["returns"] });
+    },
   });
 }
 

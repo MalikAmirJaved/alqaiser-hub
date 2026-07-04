@@ -564,7 +564,7 @@ export default function ReturnsPanel({ moduleCode }: ReturnsPanelProps) {
                         <tr
                           key={r._id}
                           className="border-b last:border-0 hover:bg-muted/20 cursor-pointer transition-colors"
-                          onClick={() => setDetailId(r._id === detailId ? null : r._id)}
+                          onClick={() => router.push(`/inventory/returns/${r._id}`)}
                         >
                           <td className="px-3 py-2.5 font-medium">{r.return_number}</td>
                           <td className="px-3 py-2.5"><StatusBadge status={r.return_type} /></td>
