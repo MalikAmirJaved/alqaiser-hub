@@ -85,7 +85,7 @@ children: [
   { title: "Inventoy Audit Logs", to: "/inventory/audit", icon: FileText },
 
   // Analytics
-  { title: "Reports", to: "/inventory/reports", icon: BarChart3 },
+  // { title: "Reports", to: "/inventory/reports", icon: BarChart3 },
 ]
   },
 
