@@ -10,7 +10,7 @@ import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import { format } from "date-fns";
 
-const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
+const STATUS_CONFIG: Record<string, string> = {
   DRAFT: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
   COMPLETED: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
   CANCELLED: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
@@ -256,13 +256,13 @@ export default function ReturnDetailPage() {
             </table>
 
             {/* Damage reasons */}
-            {detail.lines.some((l) => l.damage_qty > 0 && l.damage_reason) && (
+            {detail.lines.some((l) => (l.damage_qty ?? 0) > 0 && l.damage_reason) && (
               <div className="px-4 py-3 border-t border-border space-y-1">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Damage Reasons</p>
-                {detail.lines.filter((l) => l.damage_qty > 0 && l.damage_reason).map((l) => (
+                {detail.lines.filter((l) => (l.damage_qty ?? 0) > 0 && l.damage_reason).map((l) => (
                   <p key={l._id} className="text-xs text-muted-foreground">
                     <span className="font-medium">{l.variant_name || l.manual_variant_name}</span>
-                    {": "}"{l.damage_reason}" ({l.damage_qty} unit{l.damage_qty !== 1 ? "s" : ""})
+                    {": "}"{l.damage_reason}" ({(l.damage_qty ?? 0)} unit{(l.damage_qty ?? 0) !== 1 ? "s" : ""})
                   </p>
                 ))}
               </div>

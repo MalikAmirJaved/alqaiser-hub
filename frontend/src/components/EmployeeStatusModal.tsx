@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useState } from "react";
@@ -11,16 +10,16 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useUpdateEmployee } from "@/hooks/useEmployees";
+import { useUpdateEmployee, type Employee } from "@/hooks/useEmployees";
 import { toast } from "sonner";
 import { CheckCircle2, AlertCircle } from "lucide-react";
 
 const EMPLOYMENT_STATUS_OPTIONS = [
-  { value: "ACTIVE", label: "Active", color: "bg-success/15 text-success border-success/30" },
-  { value: "ON_LEAVE", label: "On Leave", color: "bg-warning/15 text-warning border-warning/30" },
-  { value: "SUSPENDED", label: "Suspended", color: "bg-destructive/15 text-destructive border-destructive/30" },
-  { value: "TERMINATED", label: "Terminated", color: "bg-destructive/15 text-destructive border-destructive/30" },
-  { value: "RESIGNED", label: "Resigned", color: "bg-muted text-muted-foreground border-muted-foreground/30" },
+  { value: "ACTIVE" as const, label: "Active", color: "bg-success/15 text-success border-success/30" },
+  { value: "ON_LEAVE" as const, label: "On Leave", color: "bg-warning/15 text-warning border-warning/30" },
+  { value: "SUSPENDED" as const, label: "Suspended", color: "bg-destructive/15 text-destructive border-destructive/30" },
+  { value: "TERMINATED" as const, label: "Terminated", color: "bg-destructive/15 text-destructive border-destructive/30" },
+  { value: "RESIGNED" as const, label: "Resigned", color: "bg-muted text-muted-foreground border-muted-foreground/30" },
 ];
 
 interface EmployeeStatusModalProps {
@@ -36,7 +35,7 @@ export default function EmployeeStatusModal({
   employee,
   onSuccess,
 }: EmployeeStatusModalProps) {
-  const [selectedStatus, setSelectedStatus] = useState<string | null>(employee?.employment_status || null);
+  const [selectedStatus, setSelectedStatus] = useState<Employee['employment_status'] | null>(employee?.employment_status || null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const updateEmployee = useUpdateEmployee();
 
