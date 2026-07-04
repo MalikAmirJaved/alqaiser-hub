@@ -382,6 +382,7 @@ export default function ProductDetailPage() {
                               m.transaction_type === 'RETURN_IN' ? 'bg-info/10 text-info border-info/20' :
                               m.transaction_type === 'TRANSFER_IN' ? 'bg-blue-500/10 text-blue-600 border-blue-500/30' :
                               m.transaction_type === 'TRANSFER_OUT' ? 'bg-warning/10 text-warning border-warning/20' :
+                              m.transaction_type === 'DAMAGE' ? 'bg-destructive/10 text-destructive border-destructive/20' :
                               'bg-muted text-muted-foreground border-border'
                             }`}>
                               {m.transaction_type_display}

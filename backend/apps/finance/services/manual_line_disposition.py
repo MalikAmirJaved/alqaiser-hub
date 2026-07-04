@@ -14,6 +14,7 @@ import uuid
 from decimal import Decimal
 
 from django.db import transaction
+from django.db.models import F
 
 from apps.finance.models import InvoiceLineProductLink
 from apps.finance.services.invoice_supplier_bill import (
@@ -145,11 +146,11 @@ def go_to_product_for_manual_line(
     product, variant = get_or_create_product_variant_for_line(line, user)
     warehouse = _get_default_warehouse(line.company_id)
 
-    if product_qty > 0:
+    if total_qty > 0:
         _add_stock(
             variant=variant,
             warehouse=warehouse,
-            quantity=product_qty,
+            quantity=total_qty,
             cost=line.cost_price,
             source_document_type=source_document_type,
             source_document_id=source_document_id,
@@ -394,15 +395,21 @@ def _record_damage(
             'branch_id': branch_id,
         },
     )
+    before = stock.quantity_on_hand
+    after = before - int(quantity)
+    stock.quantity_on_hand = after
+    stock.version = F('version') + 1
+    stock.save(update_fields=['quantity_on_hand', 'version'])
+
     InventoryTransaction.objects.create(
         transaction_id=uuid.uuid4(),
         variant=variant,
         warehouse=warehouse,
         company_id=company_id,
         branch_id=branch_id,
-        quantity_change=0,
-        quantity_before=stock.quantity_on_hand,
-        quantity_after=stock.quantity_on_hand,
+        quantity_change=-int(quantity),
+        quantity_before=before,
+        quantity_after=after,
         unit_cost=cost or 0,
         transaction_type='DAMAGE',
         source_document_type=source_document_type,

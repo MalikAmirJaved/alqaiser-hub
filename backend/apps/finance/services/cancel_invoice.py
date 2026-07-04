@@ -214,80 +214,81 @@ def _reverse_invoice_stock_with_dispositions(invoice, user, stock_disp_map, line
             })
             net_by_key[key]['net_qty'] += txn.quantity_change
 
-        remaining_product = product_qty
-        remaining_damage = damage_qty
+    remaining_damage = damage_qty
 
-        for data in net_by_key.values():
-            net_qty = data['net_qty']
-            if net_qty >= 0:
-                continue
+    for data in net_by_key.values():
+        net_qty = data['net_qty']
+        if net_qty >= 0:
+            continue
 
-            qty_to_handle = abs(net_qty)
-            variant = data['variant']
-            wh = data['warehouse']
-            branch_id = data['branch_id'] or invoice.branch_id
+        qty_to_handle = abs(net_qty)
+        variant = data['variant']
+        wh = data['warehouse']
+        branch_id = data['branch_id'] or invoice.branch_id
 
-            stock, _ = StockItem.objects.select_for_update().get_or_create(
+        stock, _ = StockItem.objects.select_for_update().get_or_create(
+            variant=variant,
+            warehouse=wh,
+            company_id=invoice.company_id,
+            defaults={
+                'quantity_on_hand': 0,
+                'quantity_reserved': 0,
+                'branch_id': branch_id,
+            },
+        )
+
+        before = stock.quantity_on_hand
+        after = before + qty_to_handle
+        stock.quantity_on_hand = after
+        stock.version = F('version') + 1
+        stock.save(update_fields=['quantity_on_hand', 'version'])
+
+        InventoryTransaction.objects.create(
+            transaction_id=uuid.uuid4(),
+            variant=variant,
+            warehouse=wh,
+            company_id=invoice.company_id,
+            branch_id=branch_id,
+            quantity_change=qty_to_handle,
+            quantity_before=before,
+            quantity_after=after,
+            unit_cost=data['unit_cost'],
+            transaction_type='ADJUSTMENT',
+            source_document_type='CUSTOMER_INVOICE_REVERSAL',
+            source_document_id=invoice._id,
+            source_line_id=line._id,
+            reason_text='Invoice cancelled – stock fully restored',
+            created_by=user,
+            updated_by=user,
+        )
+
+        dmg_qty = min(remaining_damage, qty_to_handle)
+        if dmg_qty > 0:
+            before = stock.quantity_on_hand
+            after = before - dmg_qty
+            stock.quantity_on_hand = after
+            stock.version = F('version') + 1
+            stock.save(update_fields=['quantity_on_hand', 'version'])
+
+            InventoryTransaction.objects.create(
+                transaction_id=uuid.uuid4(),
                 variant=variant,
                 warehouse=wh,
                 company_id=invoice.company_id,
-                defaults={
-                    'quantity_on_hand': 0,
-                    'quantity_reserved': 0,
-                    'branch_id': branch_id,
-                },
+                branch_id=branch_id,
+                quantity_change=-dmg_qty,
+                quantity_before=before,
+                quantity_after=after,
+                unit_cost=data['unit_cost'],
+                transaction_type='DAMAGE',
+                source_document_type='CUSTOMER_INVOICE_CANCELLATION',
+                source_document_id=invoice._id,
+                source_line_id=line._id,
+                reason_text=f'Invoice {invoice.invoice_number} cancellation damage: {damage_reason}',
+                created_by=user,
+                updated_by=user,
             )
-
-            add_qty = min(remaining_product, qty_to_handle)
-            if add_qty > 0:
-                before = stock.quantity_on_hand
-                after = before + add_qty
-                stock.quantity_on_hand = after
-                stock.version = F('version') + 1
-                stock.save(update_fields=['quantity_on_hand', 'version'])
-
-                InventoryTransaction.objects.create(
-                    transaction_id=uuid.uuid4(),
-                    variant=variant,
-                    warehouse=wh,
-                    company_id=invoice.company_id,
-                    branch_id=branch_id,
-                    quantity_change=add_qty,
-                    quantity_before=before,
-                    quantity_after=after,
-                    unit_cost=data['unit_cost'],
-                    transaction_type='ADJUSTMENT',
-                    source_document_type='CUSTOMER_INVOICE_REVERSAL',
-                    source_document_id=invoice._id,
-                    source_line_id=line._id,
-                    reason_text='Invoice cancelled – stock restored (non-damaged)',
-                    created_by=user,
-                    updated_by=user,
-                )
-                remaining_product -= add_qty
-                qty_to_handle -= add_qty
-
-            dmg_qty = min(remaining_damage, qty_to_handle)
-            if dmg_qty > 0:
-                InventoryTransaction.objects.create(
-                    transaction_id=uuid.uuid4(),
-                    variant=variant,
-                    warehouse=wh,
-                    company_id=invoice.company_id,
-                    branch_id=branch_id,
-                    quantity_change=0,
-                    quantity_before=stock.quantity_on_hand,
-                    quantity_after=stock.quantity_on_hand,
-                    unit_cost=data['unit_cost'],
-                    transaction_type='DAMAGE',
-                    source_document_type='CUSTOMER_INVOICE_CANCELLATION',
-                    source_document_id=invoice._id,
-                    source_line_id=line._id,
-                    reason_text=f'Invoice {invoice.invoice_number} cancellation damage: {damage_reason}',
-                    created_by=user,
-                    updated_by=user,
-                )
-                remaining_damage -= dmg_qty
+            remaining_damage -= dmg_qty
 
     if not transactions_by_line:
         from apps.inventory.services.stock_service import direct_release_stock

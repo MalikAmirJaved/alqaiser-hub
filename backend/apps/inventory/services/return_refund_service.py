@@ -362,8 +362,8 @@ def _execute_return(ret, user):
             elif line.return_to_supplier or line.disposition_action == 'RETURN_TO_SUPPLIER':
                 _reverse_supplier_for_line(ret, line, user, inv_line)
         else:
-            if line.product_qty > 0 and line.variant:
-                _restock_item(ret, line, user, quantity=line.product_qty)
+            if line.quantity > 0 and line.variant:
+                _restock_item(ret, line, user, quantity=line.quantity)
             if line.damage_qty > 0 and line.variant:
                 _record_variant_damage(ret, line, user)
 
@@ -429,7 +429,7 @@ def _restock_item(ret, line, user, quantity=None):
 
 
 def _record_variant_damage(ret, line, user):
-    """Record damage for variant return line without restocking."""
+    """Record damage for variant return line — deduct damaged qty from stock."""
     from apps.inventory.models import StockItem, InventoryTransaction
     import uuid as _uuid
 
@@ -443,15 +443,21 @@ def _record_variant_damage(ret, line, user):
             'branch_id': ret.branch_id,
         }
     )
+    before = stock_item.quantity_on_hand
+    after = before - line.damage_qty
+    stock_item.quantity_on_hand = after
+    stock_item.version = F('version') + 1
+    stock_item.save(update_fields=['quantity_on_hand', 'version'])
+
     InventoryTransaction.objects.create(
         transaction_id=_uuid.uuid4(),
         variant=line.variant,
         warehouse=ret.warehouse,
         company_id=ret.company_id,
         branch_id=ret.branch_id,
-        quantity_change=0,
-        quantity_before=stock_item.quantity_on_hand,
-        quantity_after=stock_item.quantity_on_hand,
+        quantity_change=-line.damage_qty,
+        quantity_before=before,
+        quantity_after=after,
         unit_cost=line.variant.buying_price or 0,
         transaction_type='DAMAGE',
         source_document_type='RETURN_REFUND',
