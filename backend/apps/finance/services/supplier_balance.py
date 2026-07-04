@@ -63,6 +63,16 @@ def update_supplier_balance(
             supplier.credit -= amount
             supplier.balance -= amount
 
+        # Prevent negative balance/credit at the service level
+        if supplier.balance < 0:
+            raise ValueError(
+                f"Supplier '{supplier.name}' balance ({supplier.balance}) cannot be negative after {transaction_type} of {amount}"
+            )
+        if supplier.credit < 0:
+            raise ValueError(
+                f"Supplier '{supplier.name}' credit ({supplier.credit}) cannot be negative after {transaction_type} of {amount}"
+            )
+
         supplier.save(update_fields=['balance', 'credit', 'updated_at'])
 
         return SupplierHistory.objects.create(
