@@ -54,9 +54,9 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   inventory_warehouse: ["inventory_warehouse"],
   inventory_product: ["inventory_product", "pos_catalog"],
   inventory_supplier: ["inventory_supplier"],
-  inventory_variant: ["inventory_variant", "pos_catalog"],
-  inventory_stock: ["inventory_stock", "pos_catalog"],
-  inventory_sales_order: ["inventory_sales_order", "pos_catalog", "inventory_variant", "inventory_stock", "batchStock"],
+  inventory_variant: ["inventory_variant", "pos_catalog", "inventory_product"],
+  inventory_stock: ["inventory_stock", "pos_catalog", "inventory_product"],
+  inventory_sales_order: ["inventory_sales_order", "pos_catalog", "inventory_variant", "inventory_stock", "batchStock", "inventory_product"],
   pos_catalog: ["pos_catalog"],
   inventory_stock_transfer: ["inventory_stock_transfer"],
   inventory_purchase_order: ["inventory_purchase_order", "finance_supplier_bills"],
@@ -66,7 +66,7 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   inventory: ["inventory_product"],
   supplier: ["inventory_supplier"],
   vendor: ["inventory_supplier"],
-  variant: ["inventory_variant", "batchStock"],
+  variant: ["inventory_variant", "batchStock", "inventory_product"],
   stock: ["inventory_stock", "batchStock"],
   sales_order: ["inventory_sales_order"],
   sales_return: ["inventory_sales_order"],
@@ -338,6 +338,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
       queryClient.invalidateQueries({ queryKey: ["pos_catalog"] });
       queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
       queryClient.invalidateQueries({ queryKey: ["batchStock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
       // Finance
       queryClient.invalidateQueries({ queryKey: ["finance_customer_invoices"] });
       queryClient.invalidateQueries({ queryKey: ["finance_supplier_bills"] });

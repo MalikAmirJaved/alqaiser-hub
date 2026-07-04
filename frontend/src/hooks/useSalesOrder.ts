@@ -145,6 +145,7 @@ export function useCreateSalesOrder() {
         queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
         queryClient.invalidateQueries({ queryKey: ["pos_catalog"] });
         queryClient.invalidateQueries({ queryKey: ["batchStock"] });
+        queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
       }
     },
   });
@@ -172,6 +173,7 @@ export function useCompleteSalesOrder() {
       queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
       queryClient.invalidateQueries({ queryKey: ["pos_catalog"] });
       queryClient.invalidateQueries({ queryKey: ["batchStock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
     },
   });
 }
@@ -318,6 +320,7 @@ export function useEditSalesOrder() {
       queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
       queryClient.invalidateQueries({ queryKey: ["pos_catalog"] });
       queryClient.invalidateQueries({ queryKey: ["batchStock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
     },
   });
 }
