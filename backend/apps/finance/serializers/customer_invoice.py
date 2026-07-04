@@ -146,7 +146,13 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
     def get_source_label(self, obj):
         if obj.source_quotes.exists():
             return "From Quote"
-        return "New"
+        source_map = {
+            'FINANCE': 'Finance',
+            'SALES_POS': 'Sales POS',
+            'SALES_AGENT': 'Sales Agent',
+            'SALES_QUOTE': 'From Quote',
+        }
+        return source_map.get(obj.source, obj.source.replace('_', ' ').title() if obj.source else 'New')
 
     def get_created_by_label(self, obj):
         name = obj.created_by.username if obj.created_by else None
