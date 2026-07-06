@@ -58,14 +58,15 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const paidAmount = toNumber(invoice.paid_amount);
   const outstanding = toNumber(invoice.outstanding);
   const canPay = invoice.status === "SENT" && invoice.payment_status !== "PAID";
-  const canEdit = (invoice.status === "DRAFT" || invoice.status === "PENDING" || invoice.status === "SENT") && permissions.update && invoice.payment_status !== "PAID"
+  const isFromPos = (invoice as any).source === "SALES_POS";
+  const canEdit = (invoice.status === "DRAFT" || invoice.status === "PENDING" || invoice.status === "SENT") && permissions.update && invoice.payment_status !== "PAID" && !isFromPos;
   const canDelete = (invoice.status === "DRAFT" || invoice.status === "PENDING") && permissions.delete;
   const canRecordPayment = canPay;
   const canSend = invoice.status === "PENDING" && permissions.send;
   const isRefunded = invoice.payments?.some((p: any) => p.payment_type === "PAYMENT" && p.status === "CONFIRMED");
   const hasReturnedLines = invoice.lines?.some((l: any) => l.status === "RETURNED");
-  const canCancel = invoice.status !== "CANCELLED" && permissions.cancel && !isRefunded && !hasReturnedLines;
-  const canReturn = invoice.payment_status === "PAID" && invoice.status !== "CANCELLED";
+  const canCancel = invoice.status !== "CANCELLED" && permissions.cancel && !isRefunded && !hasReturnedLines && !isFromPos;
+  const canReturn = invoice.payment_status === "PAID" && invoice.status !== "CANCELLED" && !isFromPos;
 
   const handleEdit = () => {
     setEditingInvoice(invoice);
