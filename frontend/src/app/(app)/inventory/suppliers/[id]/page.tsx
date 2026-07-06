@@ -77,7 +77,7 @@ export default function SupplierDetailPage() {
         <SummaryCard label="Bills" value={String(summary.total_bills)} icon={FileText} />
         <SummaryCard label="Bill Amount" value={formatCurrency(Number(summary.total_bill_amount))} icon={Receipt} />
         <SummaryCard label="Paid" value={formatCurrency(Number(summary.total_paid))} icon={TrendingUp} className="text-success" />
-        <SummaryCard label="Outstanding" value={formatCurrency(Number(summary.total_outstanding))} icon={DollarSign} className="text-destructive" />
+        <SummaryCard label="Payable" value={formatCurrency(Number(summary.total_outstanding))} icon={DollarSign} className="text-destructive" />
       </div>
 
       {/* ── Supplier Info Card ── */}

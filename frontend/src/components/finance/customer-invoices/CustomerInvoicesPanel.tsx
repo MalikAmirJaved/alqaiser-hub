@@ -123,7 +123,7 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
     const draftCount = data.filter((inv) => inv.status === "DRAFT").length;
     return [
       {
-        label: "Outstanding",
+        label: "Payable",
         value: totalOutstanding,
         sub: `${data.length} open invoices`,
         tone: "info" as const,

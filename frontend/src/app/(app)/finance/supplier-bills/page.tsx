@@ -70,7 +70,7 @@ export default function SupplierBillsPage() {
     const unpaidCount = data.filter((bill) => bill.payment_status === "UNPAID").length;
     const partialCount = data.filter((bill) => bill.payment_status === "PARTIAL").length;
     return [
-      { label: "Outstanding", value: totalOutstanding, sub: `${unpaidCount + partialCount} open`, tone: "info" as const, isCurrency: true },
+      { label: "Payable", value: totalOutstanding, sub: `${unpaidCount + partialCount} open`, tone: "info" as const, isCurrency: true },
       { label: "Paid", value: totalPaid, sub: `${data.filter((b) => b.payment_status === "PAID").length} settled`, tone: "success" as const, isCurrency: true },
       { label: "Unpaid", value: unpaidCount, sub: "bills", tone: "destructive" as const, isCurrency: false },
       { label: "Partial", value: partialCount, sub: "in progress", tone: "warning" as const, isCurrency: false },
@@ -86,7 +86,7 @@ export default function SupplierBillsPage() {
     { key: "paid_amount", label: "Paid", render: (val: number) => formatCurrency(val) },
     {
       key: "outstanding",
-      label: "Outstanding",
+      label: "Payable",
       sortable: true,
       render: (val: number) => (val ? formatCurrency(val) : "—"),
     },

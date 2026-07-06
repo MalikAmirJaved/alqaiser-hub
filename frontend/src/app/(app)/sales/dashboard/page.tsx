@@ -166,7 +166,7 @@ export default function SalesDashboardPage() {
             accent="primary"
           />
           <Kpi
-            label="Outstanding"
+            label="Payable"
             value={formatCurrency(Number(kpis?.outstanding ?? 0))}
             accent="warning"
           />
@@ -324,7 +324,7 @@ export default function SalesDashboardPage() {
           </Card>
 
           <Card>
-            <CardHeader title="Outstanding Invoices" subtitle="Awaiting payment" />
+            <CardHeader title="Payable Invoices" subtitle="Awaiting payment" />
             <div className="p-5 flex flex-col items-center justify-center h-full">
               <div className="text-4xl font-bold text-warning">{formatCurrency(Number(kpis?.outstanding ?? 0))}</div>
               <div className="text-sm text-muted-foreground mt-2">Out of {formatCurrency(Number(kpis?.invoice_total ?? 0))} total invoiced</div>

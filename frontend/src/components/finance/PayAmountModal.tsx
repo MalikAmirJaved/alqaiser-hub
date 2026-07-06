@@ -167,9 +167,9 @@ export default function PayAmountModal({
                   Payment Breakdown
                 </div>
 
-                {/* Outstanding */}
+                {/* Payable */}
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Bill outstanding</span>
+                  <span className="text-muted-foreground">Bill payable</span>
                   <span className="font-mono font-medium">{formatCurrency(outstandingNum)}</span>
                 </div>
 
@@ -358,9 +358,9 @@ export default function PayAmountModal({
                   </span>
                 </div>
 
-                {/* Remaining outstanding */}
+                {/* Remaining payable */}
                 <div className="flex items-center justify-between text-xs font-medium">
-                  <span>Remaining outstanding</span>
+                  <span>Remaining payable</span>
                   <div className="flex items-center gap-2">
                     <span className={`font-mono font-semibold ${remainingAfter <= 0.001 ? "text-success" : "text-warning"}`}>
                       {formatCurrency(remainingAfter)}

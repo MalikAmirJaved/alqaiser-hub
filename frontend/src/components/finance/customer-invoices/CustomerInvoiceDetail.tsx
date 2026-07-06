@@ -532,7 +532,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
         summary={[
           { label: "Invoice Total", value: formatCurrency(amount), tone: "info", isCurrency: true },
           { label: "Paid", value: formatCurrency(paidAmount), tone: "success", sub: `${((paidAmount / amount) * 100).toFixed(1)}% paid`, isCurrency: true },
-          { label: "Outstanding", value: formatCurrency(outstanding), tone: outstanding > 0 ? "warning" : "success", isCurrency: true },
+          { label: "Payable", value: formatCurrency(outstanding), tone: outstanding > 0 ? "warning" : "success", isCurrency: true },
           { label: "Due Date", value: invoice.due_date, isCurrency: false },
           ...(isRefunded ? [{
             label: "Refunded",
@@ -555,7 +555,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
             <StandardSidebar
               riskIndicators={[
                 { label: "High value", value: amount > 50000 ? "> $50k" : "Within limit", tone: amount > 50000 ? "warning" : "success" },
-                { label: "Outstanding", value: outstanding > 0 ? `${formatCurrency(outstanding)} due` : "Fully paid", tone: outstanding > 0 ? "warning" : "success" },
+                { label: "Payable", value: outstanding > 0 ? `${formatCurrency(outstanding)} due` : "Fully paid", tone: outstanding > 0 ? "warning" : "success" },
                 { label: "Overdue", value: new Date(invoice.due_date) < new Date() && outstanding > 0 ? "Yes" : "No", tone: new Date(invoice.due_date) < new Date() && outstanding > 0 ? "destructive" : "success" },
                 { label: "Source", value: (invoice as any).source_label || "New", tone: "info" },
               ]}

@@ -117,7 +117,7 @@ export default function CustomerDetail({ id, moduleCode, onBack }: CustomerDetai
     { label: "Total Invoice Amount", value: parseFloat(financial?.total_invoice_amount || "0"), isCurrency: true, tone: "info" },
     { label: "Total Paid", value: parseFloat(financial?.total_paid || "0"), isCurrency: true, tone: "success" },
     {
-      label: "Total Outstanding",
+      label: "Total Payable",
       value: parseFloat(financial?.total_outstanding || "0"),
       isCurrency: true,
       tone: parseFloat(financial?.total_outstanding || "0") > 0 ? "warning" : "success",
@@ -221,7 +221,7 @@ export default function CustomerDetail({ id, moduleCode, onBack }: CustomerDetai
     { key: "amount", label: "Amount", sortable: true, render: (val) => <span className="font-mono text-right block">{formatCurrency(parseFloat(String(val)))}</span> },
     { key: "paid_amount", label: "Paid", render: (val) => <span className="font-mono text-right block text-success">{formatCurrency(parseFloat(String(val)))}</span> },
     {
-      key: "outstanding", label: "Outstanding", sortable: true,
+      key: "outstanding", label: "Payable", sortable: true,
       render: (val) => {
         const n = parseFloat(String(val));
         return <span className={`font-mono text-right block ${n > 0 ? "text-destructive" : "text-success"}`}>{formatCurrency(n)}</span>;
@@ -463,7 +463,7 @@ export default function CustomerDetail({ id, moduleCode, onBack }: CustomerDetai
           <StandardSidebar
             riskIndicators={[
               {
-                label: "Outstanding Balance",
+                label: "Payable Balance",
                 value: parseFloat(financial?.total_outstanding || "0") > 0 ? formatCurrency(parseFloat(financial?.total_outstanding || "0")) : "None",
                 tone: parseFloat(financial?.total_outstanding || "0") > 0 ? "warning" : "success",
               },
