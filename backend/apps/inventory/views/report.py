@@ -136,7 +136,7 @@ class ReportViewSet(CompanyBranchMixin, PermissionRequiredMixin, viewsets.Generi
             days_in_period = (end_date - start_date).days or 1
             avg_stock_value = total_stock_value  # using current value as proxy
             stock_turnover_rate = round(
-                (total_cogs / avg_stock_value) * (365 / days_in_period), 2
+                (total_cogs / float(avg_stock_value)) * (365 / days_in_period), 2
             )
 
         summary_data = {
