@@ -37,34 +37,11 @@ def update_supplier_balance(
         elif transaction_type == 'PURCHASE_REVERSAL':
             supplier.balance -= amount
         elif transaction_type == 'PAYMENT':
-            # Full payment amount clears the bill obligation from balance.
-            # Available credit is applied first; any remainder is cash paid.
-            # Both the credit usage AND the cash payment reduce balance.
-            credit_used = Decimal('0')
-            if supplier.credit > 0:
-                credit_used = min(supplier.credit, amount)
-                supplier.credit -= credit_used
             supplier.balance -= amount
-            # Using existing credit is equivalent to making a payment,
-            # so it also reduces the balance.
-            if credit_used > 0:
-                supplier.balance -= credit_used
-                SupplierHistory.objects.create(
-                    supplier=supplier,
-                    transaction_type='CREDIT_APPLIED',
-                    amount=credit_used,
-                    balance_after=supplier.balance,
-                    credit_after=supplier.credit,
-                    reference_type=reference_type,
-                    reference_id=reference_id,
-                    notes=f'Credit applied: {credit_used} from payment',
-                    company_id=supplier.company_id,
-                    branch_id=supplier.branch_id,
-                    created_by_id=supplier.updated_by_id or supplier.created_by_id,
-                    updated_by_id=supplier.updated_by_id or supplier.created_by_id,
-                )
         elif transaction_type == 'CREDIT_NOTE':
             supplier.credit += amount
+        elif transaction_type == 'CREDIT_REVERSAL':
+            supplier.credit -= amount
         elif transaction_type == 'INVOICE_ADJUSTMENT':
             supplier.balance += amount
         elif transaction_type == 'CREDIT_APPLIED':

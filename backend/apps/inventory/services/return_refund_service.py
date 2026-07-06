@@ -494,7 +494,10 @@ def _reverse_supplier_for_line(ret, line, user, inv_line=None):
         return
 
     from apps.finance.services.supplier_balance import update_supplier_balance
-    cost_amount = Decimal(str(line.quantity)) * Decimal('0')
+    cost = Decimal('0')
+    if line.variant and line.variant.buying_price:
+        cost = line.variant.buying_price
+    cost_amount = Decimal(str(line.quantity)) * cost
     update_supplier_balance(
         line.vendor,
         cost_amount,

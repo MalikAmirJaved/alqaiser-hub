@@ -195,50 +195,27 @@ def return_qty_to_supplier_for_line(
         return
 
     bill = line.supplier_bill
-    vendor = line.vendor
+    vendor = line.vendor or (bill.supplier if bill else None)
     if not bill or not vendor:
         raise DispositionValidationError('No supplier bill linked to this manual line.')
 
     cost = line.cost_price or Decimal('0')
     reduction_amount = line_cost(qty, cost)
-    has_payments = bill_has_confirmed_payment(bill)
+    new_amount = max(Decimal('0'), bill.amount - reduction_amount)
 
-    if has_payments:
-        update_supplier_balance(
-            vendor,
-            reduction_amount,
-            'CREDIT_NOTE',
-            reference_type='supplier_bill',
-            reference_id=bill._id,
-            notes=notes or f'Returned {qty} units to supplier (bill {bill.bill_number})',
-        )
-    else:
-        old_amount = bill.amount
-        new_amount = max(Decimal('0'), old_amount - reduction_amount)
-        outstanding_delta = new_amount - old_amount
+    from apps.finance.services.invoice_supplier_bill import reconcile_bill_vendors
+    reconcile_bill_vendors(
+        bill,
+        old_vendor=vendor,
+        new_vendor=vendor,
+        old_amount=bill.amount,
+        new_amount=new_amount,
+        notes=notes or f'Returned {qty} units to supplier',
+    )
 
-        if outstanding_delta < 0:
-            from apps.finance.services.payable import get_total_paid
-            paid = get_total_paid(bill)
-            old_outstanding = max(Decimal('0'), old_amount - paid)
-            new_outstanding = max(Decimal('0'), new_amount - paid)
-            reversal = old_outstanding - new_outstanding
-            if reversal > 0:
-                update_supplier_balance(
-                    vendor,
-                    reversal,
-                    'PURCHASE_REVERSAL',
-                    reference_type='supplier_bill',
-                    reference_id=bill._id,
-                    notes=notes or f'Returned {qty} units to supplier',
-                )
-
-        bill.amount = new_amount
-        if cancel_bill_if_zero and new_amount <= 0:
-            bill.status = 'CANCELLED'
-            bill.save(update_fields=['amount', 'status', 'updated_at'])
-        else:
-            bill.save(update_fields=['amount', 'updated_at'])
+    if cancel_bill_if_zero and new_amount <= 0:
+        bill.status = 'CANCELLED'
+        bill.save(update_fields=['status', 'updated_at'])
 
 
 @transaction.atomic
@@ -247,29 +224,15 @@ def return_full_line_to_supplier_on_cancel(line, bill, invoice, user, has_paymen
     if not bill or not bill.supplier_id or bill.amount <= 0:
         return
 
-    if has_payments:
-        update_supplier_balance(
-            bill.supplier,
-            bill.amount,
-            'CREDIT_NOTE',
-            reference_type='supplier_bill',
-            reference_id=bill._id,
-            notes=(
-                f'Invoice {invoice.invoice_number} cancelled – credit for returned goods '
-                f'(bill {bill.bill_number})'
-            ),
-        )
-    else:
-        update_supplier_balance(
-            bill.supplier,
-            bill.amount,
-            'PURCHASE_REVERSAL',
-            reference_type='supplier_bill',
-            reference_id=bill._id,
-            notes=(
-                f'Invoice {invoice.invoice_number} cancelled – bill {bill.bill_number} reversed'
-            ),
-        )
+    from apps.finance.services.invoice_supplier_bill import reconcile_bill_vendors
+    reconcile_bill_vendors(
+        bill,
+        old_vendor=bill.supplier,
+        new_vendor=bill.supplier,
+        old_amount=bill.amount,
+        new_amount=Decimal('0'),
+        notes=f'Invoice {invoice.invoice_number} cancelled – bill {bill.bill_number} reversed/returned',
+    )
 
     if bill.journal_entry_id:
         from apps.finance.services.cancel_invoice import reverse_journal_entry

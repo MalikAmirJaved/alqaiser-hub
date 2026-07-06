@@ -72,11 +72,10 @@ def reconcile_bill_vendors(
 ):
     """Sync vendor balance/credit after a bill amount or supplier change.
 
-    Removes the old outstanding from old_vendor, applies new outstanding to
-    new_vendor, and issues credit when total_paid exceeds the new amount.
+    Removes the old outstanding/overpayment from old_vendor, and applies
+    new outstanding/overpayment to new_vendor using a delta-based approach.
 
-    No-op when vendor and amount are unchanged to prevent duplicate credit
-    entries on subsequent non-bill-related invoice updates.
+    No-op when vendor and amount are unchanged to prevent duplicate history entries.
     """
     old_amount = Decimal(str(old_amount))
     new_amount = Decimal(str(new_amount))
@@ -88,9 +87,6 @@ def reconcile_bill_vendors(
     )
 
     # No-op: nothing to reconcile when both vendor and amount are unchanged.
-    # Without this guard, subsequent invoice updates (e.g. changing due date)
-    # would re-trigger the overpayment → CREDIT_NOTE logic, doubling the
-    # supplier credit on every save.
     if same_vendor and old_amount == new_amount:
         return
 
@@ -98,70 +94,92 @@ def reconcile_bill_vendors(
 
     old_outstanding = max(Decimal('0'), old_amount - paid)
     new_outstanding = max(Decimal('0'), new_amount - paid)
-    overpayment = max(Decimal('0'), paid - new_amount)
+    old_overpayment = max(Decimal('0'), paid - old_amount)
+    new_overpayment = max(Decimal('0'), paid - new_amount)
 
     ref_type = 'supplier_bill'
     ref_id = bill._id
     note = notes or f'Bill {bill.bill_number} updated'
 
     if same_vendor:
-        delta = new_outstanding - old_outstanding
-
-        if delta > 0:
+        # 1. Outstanding changes
+        outstanding_delta = new_outstanding - old_outstanding
+        if outstanding_delta > 0:
             update_supplier_balance(
-                new_vendor, delta, 'PURCHASE',
+                new_vendor, outstanding_delta, 'PURCHASE',
                 reference_type=ref_type, reference_id=ref_id,
-                notes=f'{note}: outstanding +{delta}',
+                notes=f'{note}: outstanding +{outstanding_delta}',
             )
+            # If the vendor has credit, apply it to the new outstanding amount
+            new_vendor.refresh_from_db()
             if new_vendor.credit > 0:
-                credit_to_use = min(new_vendor.credit, delta, new_outstanding)
+                credit_to_use = min(new_vendor.credit, outstanding_delta, new_outstanding)
                 if credit_to_use > 0:
-                    from apps.inventory.models import SupplierHistory
-                    new_vendor.refresh_from_db()
-                    new_vendor.credit -= credit_to_use
-                    new_vendor.save(update_fields=['credit', 'updated_at'])
-                    SupplierHistory.objects.create(
-                        supplier=new_vendor,
-                        transaction_type='CREDIT_APPLIED',
-                        amount=credit_to_use,
-                        balance_after=new_vendor.balance,
-                        credit_after=new_vendor.credit,
-                        reference_type=ref_type,
-                        reference_id=ref_id,
-                        notes=f'{note}: credit {credit_to_use} consumed against increased bill',
-                        company_id=new_vendor.company_id,
-                        branch_id=new_vendor.branch_id,
-                        created_by_id=new_vendor.updated_by_id or new_vendor.created_by_id,
-                        updated_by_id=new_vendor.updated_by_id or new_vendor.created_by_id,
+                    update_supplier_balance(
+                        new_vendor, credit_to_use, 'CREDIT_APPLIED',
+                        reference_type=ref_type, reference_id=ref_id,
+                        notes=f'{note}: credit {credit_to_use} applied to bill',
                     )
-        elif delta < 0:
+        elif outstanding_delta < 0:
             update_supplier_balance(
-                new_vendor, abs(delta), 'PURCHASE_REVERSAL',
+                new_vendor, abs(outstanding_delta), 'PURCHASE_REVERSAL',
                 reference_type=ref_type, reference_id=ref_id,
-                notes=f'{note}: outstanding -{abs(delta)}',
+                notes=f'{note}: outstanding -{abs(outstanding_delta)}',
+            )
+
+        # 2. Overpayment changes
+        overpayment_delta = new_overpayment - old_overpayment
+        if overpayment_delta > 0:
+            update_supplier_balance(
+                new_vendor, overpayment_delta, 'CREDIT_NOTE',
+                reference_type=ref_type, reference_id=ref_id,
+                notes=f'{note}: overpayment credited +{overpayment_delta}',
+            )
+        elif overpayment_delta < 0:
+            update_supplier_balance(
+                new_vendor, abs(overpayment_delta), 'CREDIT_REVERSAL',
+                reference_type=ref_type, reference_id=ref_id,
+                notes=f'{note}: credit reversed -{abs(overpayment_delta)}',
             )
     else:
-        if old_vendor and old_outstanding > 0:
-            update_supplier_balance(
-                old_vendor, old_outstanding, 'PURCHASE_REVERSAL',
-                reference_type=ref_type, reference_id=ref_id,
-                notes=f'{note}: vendor changed from {old_vendor.name}',
-            )
-        if new_vendor and new_outstanding > 0:
-            update_supplier_balance(
-                new_vendor, new_outstanding, 'PURCHASE',
-                reference_type=ref_type, reference_id=ref_id,
-                notes=f'{note}: vendor changed to {new_vendor.name}',
-            )
+        # Revert old vendor state completely
+        if old_vendor:
+            if old_outstanding > 0:
+                update_supplier_balance(
+                    old_vendor, old_outstanding, 'PURCHASE_REVERSAL',
+                    reference_type=ref_type, reference_id=ref_id,
+                    notes=f'{note}: vendor changed from {old_vendor.name}',
+                )
+            if old_overpayment > 0:
+                update_supplier_balance(
+                    old_vendor, old_overpayment, 'CREDIT_REVERSAL',
+                    reference_type=ref_type, reference_id=ref_id,
+                    notes=f'{note}: vendor changed from {old_vendor.name}',
+                )
 
-    if overpayment > 0:
-        credit_vendor = new_vendor or old_vendor
-        if credit_vendor:
-            update_supplier_balance(
-                credit_vendor, overpayment, 'CREDIT_NOTE',
-                reference_type=ref_type, reference_id=ref_id,
-                notes=f'{note}: overpayment credited',
-            )
+        # Apply new vendor state completely
+        if new_vendor:
+            if new_outstanding > 0:
+                update_supplier_balance(
+                    new_vendor, new_outstanding, 'PURCHASE',
+                    reference_type=ref_type, reference_id=ref_id,
+                    notes=f'{note}: vendor changed to {new_vendor.name}',
+                )
+                new_vendor.refresh_from_db()
+                if new_vendor.credit > 0:
+                    credit_to_use = min(new_vendor.credit, new_outstanding)
+                    if credit_to_use > 0:
+                        update_supplier_balance(
+                            new_vendor, credit_to_use, 'CREDIT_APPLIED',
+                            reference_type=ref_type, reference_id=ref_id,
+                            notes=f'{note}: credit {credit_to_use} applied to bill',
+                        )
+            if new_overpayment > 0:
+                update_supplier_balance(
+                    new_vendor, new_overpayment, 'CREDIT_NOTE',
+                    reference_type=ref_type, reference_id=ref_id,
+                    notes=f'{note}: vendor changed to {new_vendor.name}',
+                )
 
     bill.supplier = new_vendor
     bill.amount = new_amount
@@ -305,55 +323,21 @@ def sync_manual_line_bill(
 def apply_line_reduction(bill, line, user, action_notes=''):
     """Apply qty-reduction effects on a supplier bill after resolution.
 
-    Cost/vendor adjustments were already applied during sync via
-    ``reconcile_bill_vendors``. This function only applies the QTY
-    reduction: reduces the bill amount by ``delta_qty × cost_price``
-    and adjusts supplier balance/credit for the returned items only.
-
-    Using ``reconcile_bill_vendors`` here with the full new amount would
-    double-count the overpayment because credit was already given for
-    the cost-only portion during sync.  By calculating only the qty
-    delta, we avoid the double-credit bug.
+    Delegates to reconcile_bill_vendors for consistent outstanding/overpayment updates.
     """
-
     delta_qty = line.original_quantity - line.quantity
     new_cost = Decimal(str(line.cost_price or 0))
-    paid = get_total_paid(bill)
-
     reduction_amount = line_cost(delta_qty, new_cost)
+    new_amount = max(Decimal('0'), bill.amount - reduction_amount)
 
-    old_amount = bill.amount
-    new_amount = old_amount - reduction_amount
-
-    old_overpayment = max(Decimal('0'), paid - old_amount)
-    new_overpayment = max(Decimal('0'), paid - new_amount)
-    additional_overpayment = new_overpayment - old_overpayment
-
-    old_outstanding = max(Decimal('0'), old_amount - paid)
-    new_outstanding = max(Decimal('0'), new_amount - paid)
-    outstanding_delta = new_outstanding - old_outstanding
-
-    ref_type = 'supplier_bill'
-    ref_id = bill._id
-    note = action_notes or f'Qty reduction on invoice {line.customer_invoice.invoice_number}'
-    vendor = line.vendor
-
-    if outstanding_delta < 0:
-        update_supplier_balance(
-            vendor, abs(outstanding_delta), 'PURCHASE_REVERSAL',
-            reference_type=ref_type, reference_id=ref_id,
-            notes=f'{note}: outstanding -{abs(outstanding_delta)}',
-        )
-
-    if additional_overpayment > 0:
-        update_supplier_balance(
-            vendor, additional_overpayment, 'CREDIT_NOTE',
-            reference_type=ref_type, reference_id=ref_id,
-            notes=f'{note}: additional overpayment from qty reduction',
-        )
-
-    bill.amount = new_amount
-    bill.save(update_fields=['amount', 'updated_at'])
+    reconcile_bill_vendors(
+        bill,
+        old_vendor=line.vendor or bill.supplier,
+        new_vendor=line.vendor or bill.supplier,
+        old_amount=bill.amount,
+        new_amount=new_amount,
+        notes=action_notes or f'Qty reduction on invoice {line.customer_invoice.invoice_number}',
+    )
 
 
 def handle_removed_line(old_line, invoice, user):
