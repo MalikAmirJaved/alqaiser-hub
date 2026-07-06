@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import uuid
 from django.db.models import Sum, Value, DecimalField
 from django.db.models.functions import Coalesce
@@ -24,6 +24,7 @@ class PurchaseOrderLineSerializer(serializers.ModelSerializer):
     asset_name = serializers.CharField(source='asset.name', read_only=True)
     asset_serial = serializers.CharField(source='asset.serial_number', read_only=True)
     
+    unit_cost = serializers.DecimalField(max_digits=12, decimal_places=2)
     line_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     quantity_pending = serializers.SerializerMethodField()
     created_by_info = serializers.SerializerMethodField()
@@ -142,9 +143,9 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             variant_uuid = line_data.get('variant')
             asset_uuid = line_data.get('asset')
             qty = line_data['quantity_ordered']
-            unit_cost = line_data['unit_cost']
+            unit_cost = Decimal(str(line_data['unit_cost'])).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
             tax_rate = line_data.get('tax_rate', 0)
-            line_total = Decimal(qty) * Decimal(unit_cost)
+            line_total = Decimal(qty) * unit_cost
             total_amount += line_total
 
             # Resolve either variant or asset
@@ -215,6 +216,7 @@ class GoodsReceiptLineSerializer(serializers.ModelSerializer):
     variant_name = serializers.CharField(source='purchase_order_line.variant.product.product_name', read_only=True)
     asset_name = serializers.CharField(source='purchase_order_line.asset.name', read_only=True)
     id = serializers.UUIDField(source='_id', read_only=True)
+    unit_cost = serializers.DecimalField(max_digits=12, decimal_places=2)
     
     class Meta:
         model = GoodsReceiptLine
@@ -270,7 +272,7 @@ class GoodsReceiptSerializer(serializers.ModelSerializer):
                 goods_receipt=gr,
                 purchase_order_line=po_line,
                 quantity_received=line_data['quantity_received'],
-                unit_cost=line_data.get('unit_cost', 0),
+                unit_cost=Decimal(str(line_data.get('unit_cost', 0))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP),
                 accepted=line_data.get('accepted', True),
                 company_id=company_id,
                 branch_id=branch_id,

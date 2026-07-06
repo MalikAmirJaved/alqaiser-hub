@@ -8,7 +8,7 @@ import { apiFetch } from "@/lib/api";
 export interface Payment {
   id: string;
   payment_type: "RECEIPT" | "PAYMENT";
-  payment_method: "CASH" | "BANK_TRANSFER" | "CHEQUE" | "CREDIT_CARD" | "OTHER";
+  payment_method: "CASH" | "BANK_TRANSFER" | "CHEQUE" | "CREDIT_CARD" | "CREDIT" | "OTHER";
   amount: number | string;
   payment_date: string;
   reference_number: string;
@@ -207,6 +207,7 @@ export const paymentMethodLabels: Record<Payment["payment_method"], string> = {
   BANK_TRANSFER: "Bank Transfer",
   CHEQUE: "Cheque",
   CREDIT_CARD: "Credit Card",
+  CREDIT: "Credit",
   OTHER: "Other",
 };
 
@@ -220,6 +221,7 @@ export const paymentMethodOptions = [
   { value: "BANK_TRANSFER", label: "Bank Transfer" },
   { value: "CHEQUE", label: "Cheque" },
   { value: "CREDIT_CARD", label: "Credit Card" },
+  { value: "CREDIT", label: "Credit" },
   { value: "OTHER", label: "Other" },
 ];
 

@@ -24,6 +24,7 @@ class Payment(BaseModel):
         ('BANK_TRANSFER', 'Bank Transfer'),
         ('CHEQUE', 'Cheque'),
         ('CREDIT_CARD', 'Credit Card'),
+        ('CREDIT', 'Supplier Credit'),
         ('WALLET', 'Digital Wallet'),
         ('OTHER', 'Other'),
     ]

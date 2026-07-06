@@ -6,6 +6,8 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from django.contrib.contenttypes.models import ContentType
+
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.finance.models import CustomerInvoice, SupplierBill, Payment, BankAccount
@@ -39,6 +41,24 @@ class OverallDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
     def _get_company_branch(self, request):
         return request.user.company_id, request.user.branch_id
 
+    def _base_payments(self, company_id, branch_id):
+        """Confirmed payments, excluding duplicate payments from POS-generated invoices."""
+        payments = Payment.objects.filter(
+            company_id=company_id, branch_id=branch_id,
+            status='CONFIRMED', is_deleted=False,
+        )
+        customer_invoice_ct = ContentType.objects.get_for_model(CustomerInvoice)
+        pos_invoice_ids = list(
+            CustomerInvoice.objects.filter(
+                company_id=company_id, branch_id=branch_id, source='SALES_POS',
+            ).values_list('id', flat=True)
+        )
+        if pos_invoice_ids:
+            payments = payments.exclude(
+                Q(content_type=customer_invoice_ct, object_id__in=pos_invoice_ids)
+            )
+        return payments
+
     @action(detail=False, methods=['get'])
     def summary(self, request):
         """Main KPIs: Revenue, Expenses, Profit, Sales, Purchases, Stock Value, Leads, Quotes"""
@@ -48,16 +68,13 @@ class OverallDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
         today = timezone.now().date()
         month_start = today.replace(day=1)
 
-        payments = Payment.objects.filter(
-            company_id=company_id, branch_id=branch_id,
-            status='CONFIRMED', is_deleted=False
-        )
+        payments = self._base_payments(company_id, branch_id)
         revenue_mtd = payments.filter(
             payment_type='RECEIPT', payment_date__gte=month_start
         ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         expenses_mtd = payments.filter(
             payment_type='PAYMENT', payment_date__gte=month_start
-        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        ).exclude(payment_method='CREDIT').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         net_profit_mtd = revenue_mtd - expenses_mtd
 
         cash_position = BankAccount.objects.filter(
@@ -67,7 +84,9 @@ class OverallDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
         # AR / AP summary
         invoices = CustomerInvoice.objects.filter(
             company_id=company_id, branch_id=branch_id, is_deleted=False
-        ).exclude(status='CANCELLED')
+        ).exclude(
+            Q(status='CANCELLED') | Q(source='SALES_POS'),
+        )
         bills = SupplierBill.objects.filter(
             company_id=company_id, branch_id=branch_id, is_deleted=False
         ).exclude(status='CANCELLED')
@@ -141,12 +160,13 @@ class OverallDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
         start_date = today - timedelta(days=365)  # last 12 months
 
         # 1. Revenue vs Expense (from Finance payments)
-        payments = Payment.objects.filter(
-            company_id=company_id, branch_id=branch_id,
-            status='CONFIRMED', payment_date__gte=start_date, is_deleted=False
+        payments = self._base_payments(company_id, branch_id).filter(
+            payment_date__gte=start_date,
         )
         monthly_flow = {}
         for p in payments:
+            if p.payment_method == 'CREDIT':
+                continue
             key = p.payment_date.strftime('%Y-%m')
             if key not in monthly_flow:
                 monthly_flow[key] = {'revenue': Decimal('0.00'), 'expense': Decimal('0.00')}
@@ -223,9 +243,7 @@ class OverallDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
         company_id, branch_id = self._get_company_branch(request)
 
         # Payments
-        recent_payments = Payment.objects.filter(
-            company_id=company_id, branch_id=branch_id, status='CONFIRMED', is_deleted=False
-        ).order_by('-payment_date')[:5]
+        recent_payments = self._base_payments(company_id, branch_id).order_by('-payment_date')[:5]
         payments_data = [{
             'id': str(p._id),
             'type': p.payment_type,
@@ -319,7 +337,9 @@ class OverallDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
         overdue_invoices = CustomerInvoice.objects.filter(
             company_id=company_id, branch_id=branch_id,
             due_date__lt=today, is_deleted=False
-        ).exclude(status='CANCELLED').only(
+        ).exclude(
+            Q(status='CANCELLED') | Q(source='SALES_POS'),
+        ).only(
             'invoice_number', 'due_date', '_id'
         )[:5]
         for inv in overdue_invoices:

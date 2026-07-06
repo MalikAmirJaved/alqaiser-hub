@@ -134,8 +134,9 @@ export function useSendQuote() {
         `/api/sales/quotes/${id}/send/`,
         { method: "POST" }
       ),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });
+      queryClient.invalidateQueries({ queryKey: ["sales_quote", id] });
     },
   });
 }
@@ -149,8 +150,9 @@ export function useMarkViewedQuote() {
         `/api/sales/quotes/${id}/mark_viewed/`,
         { method: "POST" }
       ),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });
+      queryClient.invalidateQueries({ queryKey: ["sales_quote", id] });
     },
   });
 }
@@ -164,8 +166,9 @@ export function useApproveQuote() {
         `/api/sales/quotes/${id}/approve/`,
         { method: "POST" }
       ),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });
+      queryClient.invalidateQueries({ queryKey: ["sales_quote", id] });
     },
   });
 }
@@ -179,8 +182,9 @@ export function useRejectQuote() {
         `/api/sales/quotes/${id}/reject/`,
         { method: "POST" }
       ),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });
+      queryClient.invalidateQueries({ queryKey: ["sales_quote", id] });
     },
   });
 }
@@ -194,8 +198,9 @@ export function useMarkConvertedQuote() {
         `/api/sales/quotes/${quoteId}/mark_converted/`,
         { method: "POST", body: JSON.stringify({ invoice_id: invoiceId }) }
       ),
-    onSuccess: () => {
+    onSuccess: (_, { quoteId }) => {
       queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });
+      queryClient.invalidateQueries({ queryKey: ["sales_quote", quoteId] });
     },
   });
 }
@@ -206,8 +211,9 @@ export function useRevertQuoteStatus() {
   return useMutation({
     mutationFn: (id: string) =>
       api<{ status: string; message: string }>(`/api/sales/quotes/${id}/revert_status/`, { method: "POST" }),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });
+      queryClient.invalidateQueries({ queryKey: ["sales_quote", id] });
     },
   });
 }

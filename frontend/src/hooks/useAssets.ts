@@ -111,12 +111,13 @@ export function useUpdateAsset() {
 
   return useMutation({
     mutationFn: (asset: Record<string, any> & { id: string }) =>
-      api("/api/hr/assets/", {
+      api(`/api/hr/assets/${asset.id}/`, {
         method: "PATCH",
         body: JSON.stringify(asset),
       }),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["assets"] });
+      queryClient.invalidateQueries({ queryKey: ["asset", variables.id] });
       queryClient.invalidateQueries({ queryKey: ["assetStats"] });
     },
   });

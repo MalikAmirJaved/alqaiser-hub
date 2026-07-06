@@ -95,8 +95,12 @@ export function useUpdateSupplier() {
         method: "PATCH",
         body: JSON.stringify(data),
       }),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["inventory_supplier"] });
+      if (variables.id) {
+        queryClient.invalidateQueries({ queryKey: ["supplier", variables.id] });
+        queryClient.invalidateQueries({ queryKey: ["supplier_detail", variables.id] });
+      }
     },
   });
 }
@@ -132,5 +136,72 @@ export function useSupplierHistory(supplierId: string | null) {
     queryKey: ["supplier_history", supplierId],
     queryFn: () => api(`/api/inventory/supplier-history/?supplier=${supplierId}`),
     enabled: !!supplierId,
+  });
+}
+
+export interface SupplierDetailData {
+  supplier: Supplier;
+  summary: {
+    total_purchase_orders: number;
+    total_po_amount: string;
+    total_bills: number;
+    total_bill_amount: string;
+    total_paid: string;
+    total_outstanding: string;
+    balance: string;
+    credit: string;
+  };
+  purchase_orders: Array<Record<string, unknown>>;
+  bills: Array<Record<string, unknown>>;
+  payments: Array<Record<string, unknown>>;
+  quote_lines: Array<{
+    id: string;
+    quote_number: string;
+    quote_status: string;
+    item: string;
+    quantity: number;
+    unit_price: string;
+    line_total: string;
+    created_at: string;
+  }>;
+  invoice_lines: Array<{
+    id: string;
+    invoice_number: string;
+    invoice_status: string;
+    item: string;
+    quantity: number;
+    unit_price: string;
+    line_total: string;
+    created_at: string;
+  }>;
+  history: SupplierHistory[];
+  audit_logs: Array<{
+    id: string;
+    user_id: number;
+    user_name: string;
+    user_email: string;
+    action: string;
+    action_display: string;
+    entity_type: string;
+    entity_id: string;
+    entity_name: string;
+    field_changes: Array<{
+      id: number;
+      field_name: string;
+      old_value: string | null;
+      new_value: string | null;
+      created_at: string;
+    }>;
+    created_at: string;
+  }>;
+}
+
+export function useSupplierDetail(id: string | null) {
+  const api = useApi();
+  return useQuery<SupplierDetailData>({
+    queryKey: ["supplier_detail", id],
+    queryFn: () => api(`/api/inventory/suppliers/${id}/detail/`),
+    enabled: !!id,
+    staleTime: 0,
   });
 }

@@ -2,18 +2,99 @@ from decimal import Decimal
 
 from django.db import transaction
 
-from apps.finance.models import InvoiceLineProductLink
-from apps.finance.services.invoice_supplier_bill import apply_line_reduction
-from apps.inventory.models import (
-    InventoryTransaction,
-    Product,
-    ProductVariant,
-    StockItem,
-    Warehouse,
+from apps.finance.services.invoice_supplier_bill import bill_has_confirmed_payment
+from apps.finance.services.manual_line_disposition import (
+    apply_reduction_return_to_supplier,
+    go_to_product_for_manual_line,
+    validate_qty_split,
 )
 
 
-def resolve_invoice_line_reduction(line, action, user):
+def resolve_variant_line_reduction(line, user, product_qty=None, damage_qty=None, damage_reason=''):
+    """Resolve qty reduction on an inventory variant line (product vs damage split).
+
+    After invoice update the reduced units are already back in stock.
+    product_qty needs no action; damage_qty is deducted and recorded as DAMAGE.
+    """
+    import uuid
+
+    from apps.inventory.models import InventoryTransaction, StockItem
+
+    if line.resolved:
+        raise ValueError('This reduction has already been resolved.')
+    if not line.original_quantity:
+        raise ValueError('Original quantity not recorded for this line.')
+    if line.is_manual_entry:
+        raise ValueError('Use manual line resolution for manual entries.')
+    if not line.variant:
+        raise ValueError('No variant linked to this line.')
+
+    delta_qty = line.original_quantity - line.quantity
+    if delta_qty <= 0:
+        raise ValueError('No reduction to resolve.')
+
+    product_qty, damage_qty, damage_reason = validate_qty_split(
+        delta_qty, product_qty, damage_qty, damage_reason,
+    )
+
+    result = {
+        'action': 'variant_qty_split',
+        'delta_qty': delta_qty,
+        'product_qty': product_qty,
+        'damage_qty': damage_qty,
+    }
+
+    if damage_qty > 0:
+        remaining = damage_qty
+        stock_items = StockItem.objects.filter(
+            variant=line.variant,
+            company_id=line.company_id,
+            quantity_on_hand__gt=0,
+        ).select_related('warehouse').order_by('warehouse__warehouse_name').select_for_update()
+
+        for stock in stock_items:
+            if remaining <= 0:
+                break
+            deduct = min(stock.quantity_on_hand, remaining)
+            before = stock.quantity_on_hand
+            after = before - deduct
+            stock.quantity_on_hand = after
+            stock.save(update_fields=['quantity_on_hand'])
+
+            InventoryTransaction.objects.create(
+                transaction_id=uuid.uuid4(),
+                variant=line.variant,
+                warehouse=stock.warehouse,
+                company_id=line.company_id,
+                branch_id=line.branch_id,
+                quantity_change=-deduct,
+                quantity_before=before,
+                quantity_after=after,
+                unit_cost=line.variant.buying_price or 0,
+                transaction_type='DAMAGE',
+                source_document_type='CUSTOMER_INVOICE',
+                source_document_id=line.customer_invoice._id,
+                source_line_id=line._id,
+                reason_text=f'Invoice edit reduction damage: {damage_reason}',
+                created_by=user,
+                updated_by=user,
+            )
+            remaining -= deduct
+
+        if remaining > 0:
+            raise ValueError(
+                f'Insufficient stock to mark {damage_qty} units as damaged '
+                f'({damage_qty - remaining} available).'
+            )
+
+    line.resolved = True
+    line.original_quantity = None
+    line.save(update_fields=['resolved', 'original_quantity', 'updated_at'])
+
+    return result
+
+
+def resolve_invoice_line_reduction(line, action, user, product_qty=None, damage_qty=None, damage_reason=''):
     """Resolve a quantity reduction on a manual invoice line.
 
     - return_to_vendor: Reduces the supplier bill amount and vendor balance/credit
@@ -35,8 +116,7 @@ def resolve_invoice_line_reduction(line, action, user):
         raise ValueError('No reduction to resolve.')
 
     bill = line.supplier_bill
-    from apps.finance.services.invoice_supplier_bill import bill_has_confirmed_payment
-    action_label = 'return to supplier' if action == 'return_to_vendor' else 'go to inventory'
+    action_label = 'return to supplier' if action == 'return_to_vendor' else 'go to product'
 
     result = {
         'action': action,
@@ -47,163 +127,31 @@ def resolve_invoice_line_reduction(line, action, user):
 
     with transaction.atomic():
         if action == 'return_to_vendor':
-            apply_line_reduction(
-                bill,
+            apply_reduction_return_to_supplier(
                 line,
                 user,
                 action_notes=f'Qty reduction resolved ({action_label})',
             )
 
         if action == 'go_to_inventory':
-            # Check if a product link already exists for this line
-            existing_link = InvoiceLineProductLink.objects.filter(
-                invoice_line=line,
-                is_deleted=False,
-            ).first()
-
-            if existing_link:
-                product = existing_link.product
-                variant = existing_link.variant
-            else:
-                product, variant = _get_or_create_product_variant(
-                    name=line.manual_variant_name,
-                    sku=line.manual_variant_sku,
-                    selling_price=line.unit_price,
-                    buying_price=line.cost_price,
-                    company_id=line.company_id,
-                    branch_id=line.branch_id,
-                    user=user,
-                )
-                InvoiceLineProductLink.objects.create(
-                    invoice_line=line,
-                    product=product,
-                    variant=variant,
-                    company_id=line.company_id,
-                    branch_id=line.branch_id,
-                    created_by=user,
-                    updated_by=user,
-                )
-
-            _add_stock(
-                variant=variant,
-                quantity=delta_qty,
-                cost=line.cost_price,
-                reference_id=line.customer_invoice._id,
+            go_result = go_to_product_for_manual_line(
+                line,
+                delta_qty,
+                user,
+                source_document_type='CUSTOMER_INVOICE',
+                source_document_id=line.customer_invoice._id,
                 source_line_id=line._id,
-                company_id=line.company_id,
-                branch_id=line.branch_id,
-                user=user,
+                product_qty=product_qty,
+                damage_qty=damage_qty,
+                damage_reason=damage_reason,
+                stock_reason='Stock added from invoice line reduction (go to product)',
+                damage_reason_prefix='Invoice edit reduction damage',
             )
-            result['product_id'] = str(product._id)
-            result['variant_id'] = str(variant._id)
+            if go_result:
+                result.update(go_result)
 
         line.resolved = True
         line.original_quantity = None
         line.save(update_fields=['resolved', 'original_quantity', 'updated_at'])
 
     return result
-
-
-def line_cost(quantity, cost_price):
-    return Decimal(str(quantity)) * Decimal(str(cost_price or 0))
-
-
-def _get_or_create_product_variant(name, sku, selling_price, buying_price,
-                                   company_id, branch_id, user):
-    sku_value = (sku or '').strip()
-    if sku_value:
-        existing = ProductVariant.objects.filter(
-            sku=sku_value,
-            company_id=company_id,
-            branch_id=branch_id,
-        ).select_related('product').first()
-        if existing:
-            return existing.product, existing
-    else:
-        sku_value = _generate_sku(name, company_id, branch_id)
-
-    product = Product.objects.create(
-        product_name=name,
-        status='active',
-        company_id=company_id,
-        branch_id=branch_id,
-        created_by=user,
-        updated_by=user,
-    )
-    variant = ProductVariant.objects.create(
-        product=product,
-        sku=sku_value,
-        variant_title=name,
-        buying_price=buying_price or 0,
-        selling_price=selling_price or 0,
-        company_id=company_id,
-        branch_id=branch_id,
-        created_by=user,
-        updated_by=user,
-    )
-    return product, variant
-
-
-def _generate_sku(name, company_id, branch_id):
-    import time
-    import random
-    base = ''.join(ch for ch in name.upper() if ch.isalnum())[:8] or 'ITEM'
-    suffix = f"{int(time.time())}{random.randint(10, 99)}"
-    candidate = f"{base}-{suffix}"
-    while ProductVariant.objects.filter(
-        sku=candidate,
-        company_id=company_id,
-        branch_id=branch_id,
-    ).exists():
-        suffix = f"{int(time.time())}{random.randint(100, 999)}"
-        candidate = f"{base}-{suffix}"
-    return candidate
-
-
-def _add_stock(variant, quantity, cost, reference_id, source_line_id,
-               company_id, branch_id, user):
-    import uuid
-
-    warehouse = Warehouse.objects.filter(
-        company_id=company_id,
-        is_active=True,
-    ).order_by('created_at').first()
-
-    if not warehouse:
-        raise ValueError('No active warehouse found. Create a warehouse first.')
-
-    stock_item, _ = StockItem.objects.select_for_update().get_or_create(
-        variant=variant,
-        warehouse=warehouse,
-        company_id=company_id,
-        defaults={
-            'quantity_on_hand': 0,
-            'quantity_reserved': 0,
-            'branch_id': branch_id,
-        },
-    )
-
-    before = stock_item.quantity_on_hand
-    after = before + int(quantity)
-
-    stock_item.quantity_on_hand = after
-    stock_item.save(update_fields=['quantity_on_hand'])
-
-    InventoryTransaction.objects.create(
-        transaction_id=uuid.uuid4(),
-        variant=variant,
-        warehouse=warehouse,
-        company_id=company_id,
-        branch_id=branch_id,
-        quantity_change=int(quantity),
-        quantity_before=before,
-        quantity_after=after,
-        unit_cost=cost or 0,
-        transaction_type='PURCHASE_RECEIPT',
-        source_document_type='CUSTOMER_INVOICE',
-        source_document_id=reference_id,
-        source_line_id=source_line_id,
-        reason_text='Stock added from invoice line reduction (go to inventory)',
-        created_by=user,
-        updated_by=user,
-    )

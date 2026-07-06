@@ -118,8 +118,9 @@ export function useContactLead() {
   return useMutation({
     mutationFn: (id: string) =>
       api<{ status: string; message: string }>(`/api/sales/leads/${id}/contact/`, { method: "POST" }),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ["sales_leads"] });
+      queryClient.invalidateQueries({ queryKey: ["sales_lead", id] });
     },
   });
 }
@@ -133,8 +134,9 @@ export function useScheduleFollowUp() {
         method: "POST",
         body: JSON.stringify({ follow_up_date, follow_up_notes }),
       }),
-    onSuccess: () => {
+    onSuccess: (_, params) => {
       queryClient.invalidateQueries({ queryKey: ["sales_leads"] });
+      queryClient.invalidateQueries({ queryKey: ["sales_lead", params.id] });
     },
   });
 }
@@ -145,8 +147,9 @@ export function useQualifyLead() {
   return useMutation({
     mutationFn: (id: string) =>
       api<{ status: string; message: string }>(`/api/sales/leads/${id}/qualify/`, { method: "POST" }),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ["sales_leads"] });
+      queryClient.invalidateQueries({ queryKey: ["sales_lead", id] });
     },
   });
 }
@@ -157,8 +160,9 @@ export function useConvertLeadToCustomer() {
   return useMutation({
     mutationFn: (id: string) =>
       api<{ status: string; message: string; customer_id: string }>(`/api/sales/leads/${id}/convert_to_customer/`, { method: "POST" }),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ["sales_leads"] });
+      queryClient.invalidateQueries({ queryKey: ["sales_lead", id] });
       queryClient.invalidateQueries({ queryKey: ["customers"] });
     },
   });
@@ -173,8 +177,9 @@ export function useMarkLost() {
         method: "POST",
         body: JSON.stringify({ lost_reason }),
       }),
-    onSuccess: () => {
+    onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ["sales_leads"] });
+      queryClient.invalidateQueries({ queryKey: ["sales_lead", id] });
     },
   });
 }
@@ -185,8 +190,9 @@ export function useRevertLeadStatus() {
   return useMutation({
     mutationFn: (id: string) =>
       api<{ status: string; message: string }>(`/api/sales/leads/${id}/revert_status/`, { method: "POST" }),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ["sales_leads"] });
+      queryClient.invalidateQueries({ queryKey: ["sales_lead", id] });
     },
   });
 }

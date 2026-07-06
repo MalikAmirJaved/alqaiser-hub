@@ -40,8 +40,13 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   compensations: ["compensations"],
   loans: ["loans", "employeeLoans"],
 
+  employeeAssets: ["employee-assignments", "available-assets"],
+
   // ---------- HR ----------
   asset_purchase_request: ["assetPurchaseRequests"],
+
+  // ---------- Company & Settings ----------
+  designation: ["designations", "companySettings"],
 
   // ---------- Inventory ----------
   inventory_category: ["inventory_category"],
@@ -49,19 +54,19 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   inventory_warehouse: ["inventory_warehouse"],
   inventory_product: ["inventory_product", "pos_catalog"],
   inventory_supplier: ["inventory_supplier"],
-  inventory_variant: ["inventory_variant", "pos_catalog"],
-  inventory_stock: ["inventory_stock", "pos_catalog"],
-  inventory_sales_order: ["inventory_sales_order"],
+  inventory_variant: ["inventory_variant", "pos_catalog", "inventory_product"],
+  inventory_stock: ["inventory_stock", "pos_catalog", "inventory_product"],
+  inventory_sales_order: ["inventory_sales_order", "pos_catalog", "inventory_variant", "inventory_stock", "batchStock", "inventory_product"],
   pos_catalog: ["pos_catalog"],
-  inventory_stock_transfer: ["inventory_stock_transfer"],
-  inventory_purchase_order: ["inventory_purchase_order"],
+  inventory_stock_transfer: ["inventory_stock_transfer", "inventory_variant", "inventory_stock", "inventory_product"],
+  inventory_purchase_order: ["inventory_purchase_order", "finance_supplier_bills", "inventory_stock", "inventory_variant", "inventory_product"],
 
   // Inventory aliases
   product: ["inventory_product"],
   inventory: ["inventory_product"],
   supplier: ["inventory_supplier"],
   vendor: ["inventory_supplier"],
-  variant: ["inventory_variant", "batchStock"],
+  variant: ["inventory_variant", "batchStock", "inventory_product"],
   stock: ["inventory_stock", "batchStock"],
   sales_order: ["inventory_sales_order"],
   sales_return: ["inventory_sales_order"],
@@ -69,21 +74,21 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
 
   // ---------- Sales ----------
   sales_lead: ["sales_leads", "sales_lead"],
-  sales_quote: ["sales_quotes", "sales_quote"],
+  sales_quote: ["sales_quotes", "sales_quote", "sales_invoices"],
   lead: ["sales_leads"],
   quote: ["sales_quotes"],
 
   // ---------- Finance ----------
   finance_account: ["finance_accounts"],
   finance_journal_entry: ["finance_journal_entries", "finance_journal_entry"],
-  finance_supplier_bill: ["finance_supplier_bills"],
-  finance_customer_invoice: ["finance_customer_invoices"],
-  finance_payment: ["finance_payments"],
+  finance_supplier_bill: ["finance_supplier_bills", "inventory_purchase_order"],
+  finance_customer_invoice: ["finance_customer_invoices", "sales_invoices", "sales_dashboard"],
+  finance_payment: ["finance_payments", "finance_supplier_bills", "finance_customer_invoices", "sales_invoices"],
   finance_bank_transaction: ["finance_bank_transactions"],
   finance_budget: ["finance_budgets"],
   finance_expense: ["finance_expenses"],
-  supplier_bill: ["finance_supplier_bills"],
-  customer_invoice: ["finance_customer_invoices"],
+  supplier_bill: ["finance_supplier_bills", "inventory_purchase_order"],
+  customer_invoice: ["finance_customer_invoices", "sales_invoices", "sales_dashboard"],
   bank_transaction: ["finance_bank_transactions"],
 
   // ---------- Company & Settings ----------
@@ -91,7 +96,6 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   branch: ["branch"],
   user: ["users", "user"],
   company_settings: ["companySettings"],
-  designation: ["designation", "companySettings"],
 
   // ---------- Monitoring ----------
   monitoring_site: ["monitoring_sites"],
@@ -324,18 +328,31 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
     };
   }, [connectSocket]);
 
-  // Fallback polling when WebSocket is disconnected (optional)
+  // Background polling to catch any missed WebSocket broadcasts
+  // Runs at a slower interval to avoid excessive API calls
   useEffect(() => {
-    let pollInterval: NodeJS.Timeout;
-    if (!isConnected) {
-      pollInterval = setInterval(() => {
-        queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
-        queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
-        queryClient.invalidateQueries({ queryKey: ["companySettings"] });
-      }, 30000);
-    }
+    const pollInterval = setInterval(() => {
+      // Inventory / POS
+      queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
+      queryClient.invalidateQueries({ queryKey: ["pos_catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
+      queryClient.invalidateQueries({ queryKey: ["batchStock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
+      // Finance
+      queryClient.invalidateQueries({ queryKey: ["finance_customer_invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["finance_supplier_bills"] });
+      queryClient.invalidateQueries({ queryKey: ["finance_payments"] });
+      // Sales
+      queryClient.invalidateQueries({ queryKey: ["sales_invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["sales_dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["sales_leads"] });
+      queryClient.invalidateQueries({ queryKey: ["sales_quotes"] });
+      // Settings
+      queryClient.invalidateQueries({ queryKey: ["companySettings"] });
+    }, 60000);
     return () => clearInterval(pollInterval);
-  }, [isConnected, queryClient]);
+  }, [queryClient]);
 
   const markAsRead = useCallback(
     async (id: string) => {

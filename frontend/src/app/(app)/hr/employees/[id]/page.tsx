@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 // ============================================
@@ -169,7 +168,7 @@ export default function EmployeeDetailPage() {
 
   const shiftTemplate = shiftTemplates.find((t) => t.id === employee?.default_shift_id);
   const latestCompensation = compensations[0];
-  const exitRecord = exitData?.data?.[0];
+  const exitRecord = exitData?.[0];
 
   // ── Loading / Not found ────────────────────────────────────────
   if (empLoading) {
@@ -199,7 +198,7 @@ export default function EmployeeDetailPage() {
 
   // ── Tab panels ─────────────────────────────────────────────────
 
-  const panels: Record<string, JSX.Element> = {
+  const panels: Record<string, React.JSX.Element> = {
     // ── OVERVIEW ──
     overview: (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -501,10 +500,10 @@ export default function EmployeeDetailPage() {
         </SectionCard>
 
         {/* Assigned kits */}
-        {assignmentsData?.kits?.length > 0 && (
+        {assignmentsData && assignmentsData.kits.length > 0 && (
           <SectionCard title="Assigned Kits" icon={Layers}>
             <div className="space-y-3">
-              {assignmentsData.kits.map((kit) => (
+              {assignmentsData!.kits.map((kit) => (
                 <div key={kit.id} className="p-3 border border-border rounded-xl">
                   <p className="font-semibold text-sm mb-1">{kit.name}</p>
                   {kit.description && <p className="text-xs text-muted-foreground mb-2">{kit.description}</p>}
@@ -522,7 +521,7 @@ export default function EmployeeDetailPage() {
         )}
 
         {/* History */}
-        {assignmentsData?.history?.length > 0 && (
+        {assignmentsData && assignmentsData.history.length > 0 && (
           <SectionCard title="Assignment History" icon={Activity}>
             <div className="overflow-x-auto -mx-5 px-5">
               <table className="w-full text-sm">
@@ -534,7 +533,7 @@ export default function EmployeeDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {assignmentsData.history.map((h) => (
+                  {assignmentsData!.history.map((h) => (
                     <tr key={h.id} className="border-b border-border/40 hover:bg-muted/30">
                       <td className="py-2.5 pr-4 font-medium">{h.asset_name}</td>
                       <td className="py-2.5 pr-4 text-xs">{fmtDate(h.assigned_date)}</td>
@@ -740,9 +739,9 @@ export default function EmployeeDetailPage() {
                     src={`${BASE_URL}${employee.profile_pictures[0].file_url_thumb || employee.profile_pictures[0].file_url}`}
                     alt={fullName}
                     className="w-20 h-20 rounded-2xl border-4 border-card object-cover shadow-lg cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => setDocViewer({ open: true, url: employee.profile_pictures[0].file_url, filename: `${fullName} Profile Picture`, mimeType: "image/jpeg", title: fullName })}
+                    onClick={() => setDocViewer({ open: true, url: employee.profile_pictures![0].file_url, filename: `${fullName} Profile Picture`, mimeType: "image/jpeg", title: fullName })}
                   />
-                  {employee.profile_pictures.length > 1 && (
+                  {employee.profile_pictures!.length > 1 && (
                     <div className="absolute -bottom-1 -right-1 flex -space-x-1.5">
                       {employee.profile_pictures.slice(1, 4).map((pic, i) => (
                         <img
@@ -769,7 +768,7 @@ export default function EmployeeDetailPage() {
                   src={`${BASE_URL}${employee.profile_picture_thumb || employee.profile_picture}`}
                   alt={fullName}
                   className="w-20 h-20 rounded-2xl border-4 border-card object-cover shadow-lg shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
-                  onClick={() => setDocViewer({ open: true, url: employee.profile_picture, filename: `${fullName} Profile Picture`, mimeType: "image/jpeg", title: fullName })}
+                  onClick={() => setDocViewer({ open: true, url: employee.profile_picture!, filename: `${fullName} Profile Picture`, mimeType: "image/jpeg", title: fullName })}
                 />
               ) : (
               <div className="w-20 h-20 rounded-2xl border-4 border-card bg-gradient-to-br from-primary/40 to-primary/10 flex items-center justify-center text-2xl font-bold text-primary shadow-lg shrink-0">

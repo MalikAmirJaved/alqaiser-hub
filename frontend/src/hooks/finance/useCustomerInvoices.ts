@@ -20,6 +20,7 @@ export interface CustomerInvoiceLine {
   unit_price: number;
   tax_rate: number;
   discount_amount: number;
+  status?: "ACTIVE" | "CANCELLED" | "RETURNED";
 }
 
 export interface InvoicePayment {
@@ -29,6 +30,7 @@ export interface InvoicePayment {
   payment_method: string;
   reference_number: string;
   status: string;
+  payment_type?: string;
 }
 
 export interface CustomerInvoice {
@@ -46,7 +48,7 @@ export interface CustomerInvoice {
   outstanding: number | string;
   overall_discount_percent?: number | string;
   overall_tax_percent?: number | string;
-  status: "DRAFT" | "CANCELLED";
+  status: "PENDING" | "SENT" | "DRAFT" | "CANCELLED";
   payment_status?: "UNPAID" | "PARTIAL" | "PAID";
   journal_entry: number | string | null;
   notes: string;
@@ -60,6 +62,9 @@ export interface CustomerInvoice {
   created_by_name?: string;
   updated_by?: number | string | null;
   updated_by_name?: string;
+  cancelled_by?: number | string | null;
+  cancelled_by_name?: string;
+  cancelled_at?: string;
 }
 
 interface PaginatedResponse<T> {
@@ -116,6 +121,30 @@ async function payCustomerInvoice(id: string, body?: Record<string, unknown>) {
   return apiFetch<CustomerInvoice>(`/api/finance/customer-invoices/${id}/record_payment/`, {
     method: "POST",
     body: JSON.stringify(body ?? {}),
+  });
+}
+
+async function sendCustomerInvoice(id: string) {
+  return apiFetch<CustomerInvoice>(`/api/finance/customer-invoices/${id}/send_invoice/`, {
+    method: "POST",
+  });
+}
+
+async function cancelCustomerInvoice(id: string, reason?: string, supplierAction?: string, lineActions?: any[], stockDispositions?: any[]) {
+  return apiFetch<CustomerInvoice>(`/api/finance/customer-invoices/${id}/cancel_invoice/`, {
+    method: "POST",
+    body: JSON.stringify({
+      reason: reason || "",
+      supplier_action: supplierAction || "return_to_supplier",
+      line_actions: lineActions || [],
+      stock_dispositions: stockDispositions || [],
+    }),
+  });
+}
+
+async function refundInvoicePayments(id: string) {
+  return apiFetch<CustomerInvoice>(`/api/finance/customer-invoices/${id}/refund_payments/`, {
+    method: "POST",
   });
 }
 
@@ -188,6 +217,43 @@ export function usePayCustomerInvoice() {
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY, id] });
+      queryClient.invalidateQueries({ queryKey: ["sales_invoices"] });
+    },
+  });
+}
+
+export function useSendInvoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => sendCustomerInvoice(id),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY, id] });
+      queryClient.invalidateQueries({ queryKey: ["sales_invoices"] });
+    },
+  });
+}
+
+export function useCancelInvoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason, supplier_action, line_actions, stock_dispositions }: { id: string; reason?: string; supplier_action?: string; line_actions?: any[]; stock_dispositions?: any[] }) => cancelCustomerInvoice(id, reason, supplier_action, line_actions, stock_dispositions),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY, id] });
+      queryClient.invalidateQueries({ queryKey: ["sales_invoices"] });
+    },
+  });
+}
+
+export function useRefundInvoicePayments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => refundInvoicePayments(id),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
+      queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY, id] });
+      queryClient.invalidateQueries({ queryKey: ["sales_invoices"] });
     },
   });
 }
@@ -206,7 +272,13 @@ export function usePostCustomerInvoice() {
 
 async function resolveReduction(
   invoiceId: string,
-  data: { line_id: string; action: "go_to_inventory" | "return_to_vendor" }
+  data: {
+    line_id: string;
+    action?: "go_to_inventory" | "return_to_vendor";
+    product_qty?: number;
+    damage_qty?: number;
+    damage_reason?: string;
+  }
 ) {
   return apiFetch<{ status: string; data: Record<string, unknown> }>(
     `/api/finance/customer-invoices/${invoiceId}/resolve_reduction/`,
@@ -246,15 +318,55 @@ export function useResolveReduction() {
       invoiceId,
       lineId,
       action,
+      product_qty,
+      damage_qty,
+      damage_reason,
     }: {
       invoiceId: string;
       lineId: string;
-      action: "go_to_inventory" | "return_to_vendor";
-    }) => resolveReduction(invoiceId, { line_id: lineId, action }),
+      action?: "go_to_inventory" | "return_to_vendor";
+      product_qty?: number;
+      damage_qty?: number;
+      damage_reason?: string;
+    }) =>
+      resolveReduction(invoiceId, {
+        line_id: lineId,
+        ...(action ? { action } : {}),
+        product_qty,
+        damage_qty,
+        damage_reason,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [CUSTOMER_INVOICES_KEY] });
       queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
       queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
     },
+  });
+}
+
+export interface ActivityLogDetail {
+  label: string;
+  value: string;
+}
+
+export interface ActivityLogEntry {
+  type: string;
+  icon: string;
+  color: string;
+  timestamp: string;
+  user: string;
+  title: string;
+  description: string;
+  amount: string | null;
+  status?: string;
+  details: ActivityLogDetail[];
+}
+
+export function useCustomerInvoiceActivityLog(invoiceId: string | null) {
+  return useQuery<ActivityLogEntry[]>({
+    queryKey: [CUSTOMER_INVOICES_KEY, "activity_log", invoiceId],
+    queryFn: () => apiFetch<ActivityLogEntry[]>(`/api/finance/customer-invoices/${invoiceId}/activity-log/`),
+    enabled: !!invoiceId,
+    staleTime: 30_000,
   });
 }

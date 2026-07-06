@@ -9,6 +9,7 @@ export interface OverallSummary {
   total_purchase_amount: number;
   total_sales_amount: number;
   total_warehouses: number;
+  stock_turnover_rate: number;
 }
 
 export interface StockReportItem {
@@ -45,6 +46,8 @@ export interface StockMovementItem {
   period: string;
   transaction_type: string;
   total_quantity: number;
+  inflow: number;
+  outflow: number;
   transaction_count: number;
 }
 
@@ -82,6 +85,7 @@ export interface ReorderPlanningItem {
   recommended_reorder_qty: number;
   urgency_score: number;
   suggested_supplier_name: string;
+  available_stock: number;
 }
 
 export interface SupplierPerformanceItem {

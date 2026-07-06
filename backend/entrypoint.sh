@@ -22,6 +22,8 @@ exec daphne -b 0.0.0.0 -p 8000 config.asgi:application
 #  deactivate teh source
 # deactivate
 
+# for pytest the currently is perfectly running
+# python manage.py test  
 
 # make migerations
 # docker compose exec backend python manage.py makemigrations

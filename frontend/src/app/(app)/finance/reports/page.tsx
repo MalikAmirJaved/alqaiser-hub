@@ -750,7 +750,7 @@ function ARAgingReport() {
   return (
     <div className="space-y-6">
       {/* Summary */}
-      <StatCard label="Total Receivables" value={formatCurrency(totalAR)} icon={Users} tone="info" sub={`${data.details.length} outstanding invoices`} />
+      <StatCard label="Total Receivables" value={formatCurrency(totalAR)} icon={Users} tone="info" sub={`${data.details.length} payable invoices`} />
 
       {/* Aging Buckets */}
       <SectionCard title="Aging Buckets" subtitle="Amount overdue by time period">
@@ -853,7 +853,7 @@ function APAgingReport() {
 
   return (
     <div className="space-y-6">
-      <StatCard label="Total Payables" value={formatCurrency(totalAP)} icon={Building2} tone="warning" sub={`${data.details.length} outstanding bills`} />
+      <StatCard label="Total Payables" value={formatCurrency(totalAP)} icon={Building2} tone="warning" sub={`${data.details.length} payable bills`} />
 
       <SectionCard title="Aging Buckets" subtitle="Amount overdue by time period">
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">

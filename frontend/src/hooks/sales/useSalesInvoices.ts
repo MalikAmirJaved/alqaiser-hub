@@ -82,6 +82,7 @@ export function useCreateSalesInvoice() {
       queryClient.invalidateQueries({ queryKey: ["finance_customer_invoices"] });
       queryClient.invalidateQueries({ queryKey: ["sales_dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
     },
   });
 }
@@ -98,11 +99,13 @@ export function useUpdateSalesInvoice() {
         method: "PUT",
         body: JSON.stringify(data),
       }),
-    onSuccess: () => {
+    onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ["sales_invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["sales_invoices", id] });
       queryClient.invalidateQueries({ queryKey: ["finance_customer_invoices"] });
       queryClient.invalidateQueries({ queryKey: ["sales_dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
     },
   });
 }

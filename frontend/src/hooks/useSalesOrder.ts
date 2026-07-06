@@ -141,6 +141,11 @@ export function useCreateSalesOrder() {
       queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
       if (variables.status === "COMPLETE") {
         queryClient.invalidateQueries({ queryKey: ["inventory"] });
+        queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
+        queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
+        queryClient.invalidateQueries({ queryKey: ["pos_catalog"] });
+        queryClient.invalidateQueries({ queryKey: ["batchStock"] });
+        queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
       }
     },
   });
@@ -164,6 +169,11 @@ export function useCompleteSalesOrder() {
       queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
       queryClient.invalidateQueries({ queryKey: ["salesOrder", orderId] });
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
+      queryClient.invalidateQueries({ queryKey: ["pos_catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["batchStock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
     },
   });
 }
@@ -179,6 +189,11 @@ export function useCancelSalesOrder() {
     onSuccess: (_, orderId) => {
       queryClient.invalidateQueries({ queryKey: ["inventory_sales_order"] });
       queryClient.invalidateQueries({ queryKey: ["salesOrder", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
+      queryClient.invalidateQueries({ queryKey: ["pos_catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["batchStock"] });
     },
   });
 }
@@ -306,6 +321,11 @@ export function useEditSalesOrder() {
       queryClient.invalidateQueries({ queryKey: ["salesOrder", orderId] });
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
       queryClient.invalidateQueries({ queryKey: ["finance_customer_invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
+      queryClient.invalidateQueries({ queryKey: ["pos_catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["batchStock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
     },
   });
 }
@@ -376,6 +396,43 @@ export function useSalesReturns(filters?: {
       const response = await api<{ count: number; results: SalesReturnListItem[] }>(url);
       return { data: response.results, totalCount: response.count };
     },
+    staleTime: 30_000,
+  });
+}
+
+export interface RelatedReturnLine {
+  id: string;
+  variant_sku: string;
+  variant_name: string;
+  quantity: number;
+  unit_price: string;
+  refund_amount: string;
+  restock: boolean;
+}
+
+export interface RelatedReturn {
+  id: string;
+  return_number: string;
+  return_type: string;
+  document_number: string;
+  status: string;
+  return_date: string | null;
+  total_refund_amount: string;
+  reason: string;
+  completed_by: string | null;
+  lines: RelatedReturnLine[];
+  source_label: string;
+}
+
+export function useRelatedReturns(orderId: string | null) {
+  const api = useApi();
+  return useQuery<RelatedReturn[]>({
+    queryKey: ["relatedReturns", orderId],
+    queryFn: () =>
+      api<RelatedReturn[]>(
+        `/api/inventory/sales-orders/${orderId}/related-returns/`
+      ),
+    enabled: !!orderId,
     staleTime: 30_000,
   });
 }

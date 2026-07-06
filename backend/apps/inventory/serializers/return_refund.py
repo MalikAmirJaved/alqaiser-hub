@@ -1,0 +1,141 @@
+from rest_framework import serializers
+from apps.inventory.models.return_refund import ReturnRefund, ReturnRefundLine
+
+
+class ReturnRefundLineSerializer(serializers.ModelSerializer):
+    vendor_name = serializers.CharField(source='vendor.name', read_only=True, allow_null=True)
+    variant_name = serializers.SerializerMethodField()
+    variant_sku = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ReturnRefundLine
+        fields = [
+            'id', '_id', 'return_refund',
+            'source_line_id',
+            'variant', 'variant_name', 'variant_sku', 'is_manual_entry',
+            'manual_variant_name', 'manual_variant_sku',
+            'vendor', 'vendor_name',
+            'quantity', 'unit_price', 'refund_amount', 'tax_rate',
+            'restock', 'return_to_supplier',
+            'disposition_action', 'product_qty', 'damage_qty', 'damage_reason',
+            'reason',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', '_id', 'created_at', 'updated_at', 'return_refund']
+
+    def get_variant_name(self, obj):
+        if obj.is_manual_entry:
+            return obj.manual_variant_name
+        return obj.variant.product.product_name if obj.variant else None
+
+    def get_variant_sku(self, obj):
+        if obj.is_manual_entry:
+            return obj.manual_variant_sku
+        return obj.variant.sku if obj.variant else None
+
+
+class ReturnRefundListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for list view."""
+    customer_name = serializers.CharField(source='customer.name', read_only=True, allow_null=True)
+    warehouse_name = serializers.CharField(source='warehouse.warehouse_name', read_only=True)
+    return_type_display = serializers.CharField(source='get_return_type_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    lines_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ReturnRefund
+        fields = [
+            'id', '_id', 'return_number', 'return_type', 'return_type_display',
+            'document_id', 'document_number',
+            'customer', 'customer_name',
+            'warehouse', 'warehouse_name',
+            'return_date', 'status', 'status_display',
+            'total_refund_amount', 'reason',
+            'lines_count',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', '_id', 'created_at', 'updated_at']
+
+    def get_lines_count(self, obj):
+        return obj.lines.count()
+
+
+class ReturnRefundDetailSerializer(serializers.ModelSerializer):
+    """Full detail serializer with nested lines."""
+    lines = ReturnRefundLineSerializer(many=True, read_only=True)
+    customer_name = serializers.CharField(source='customer.name', read_only=True, allow_null=True)
+    warehouse_name = serializers.CharField(source='warehouse.warehouse_name', read_only=True)
+    return_type_display = serializers.CharField(source='get_return_type_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    created_by_name = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
+    completed_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ReturnRefund
+        fields = [
+            'id', '_id', 'return_number', 'return_type', 'return_type_display',
+            'document_id', 'document_number',
+            'customer', 'customer_name',
+            'warehouse', 'warehouse_name',
+            'return_date', 'status', 'status_display',
+            'total_refund_amount', 'reason',
+            'refund_payment_id',
+            'completed_at', 'completed_by', 'completed_by_name',
+            'lines',
+            'created_at', 'updated_at',
+            'created_by', 'created_by_name',
+            'updated_by', 'updated_by_name',
+            'company_id', 'branch_id',
+        ]
+        read_only_fields = [
+            'id', '_id', 'created_at', 'updated_at',
+            'return_number', 'refund_payment_id',
+            'completed_at', 'completed_by',
+            'company_id', 'branch_id',
+        ]
+
+    def get_created_by_name(self, obj):
+        if obj.created_by:
+            return obj.created_by.get_full_name() or obj.created_by.username
+        return None
+
+    def get_updated_by_name(self, obj):
+        if obj.updated_by:
+            return obj.updated_by.get_full_name() or obj.updated_by.username
+        return None
+
+    def get_completed_by_name(self, obj):
+        if obj.completed_by:
+            return obj.completed_by.get_full_name() or obj.completed_by.username
+        return None
+
+
+class CreateReturnRefundSerializer(serializers.Serializer):
+    """
+    Serializer for creating a return by looking up a document first,
+    then specifying lines to return.
+    """
+    return_type = serializers.ChoiceField(choices=['INVOICE', 'POS'])
+    document_id = serializers.UUIDField(
+        help_text="UUID (_id) of the CustomerInvoice or SalesOrder"
+    )
+    warehouse_id = serializers.UUIDField(
+        help_text="UUID (_id) of the warehouse to receive returned goods"
+    )
+    return_date = serializers.DateTimeField(required=False)
+    reason = serializers.CharField(required=False, allow_blank=True)
+    lines = serializers.ListField(
+        child=serializers.DictField(),
+        help_text="List of { source_line_id, quantity, unit_price, refund_amount, restock, return_to_supplier, reason }"
+    )
+
+
+class LookupDocumentSerializer(serializers.Serializer):
+    """
+    Look up a document by its invoice/order number to get line details.
+    """
+    return_type = serializers.ChoiceField(choices=['INVOICE', 'POS'])
+    document_number = serializers.CharField(
+        help_text="Invoice number (e.g. INV-...) or order number (e.g. SO-...)"
+    )

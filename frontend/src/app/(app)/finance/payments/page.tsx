@@ -60,6 +60,7 @@ export default function PaymentsPage() {
       { value: "CONFIRMED", label: "Paid" },
       { value: "DRAFT", label: "Unpaid" },
       { value: "CANCELLED", label: "Cancelled" },
+      { value: "REFUNDED", label: "Refunded" },
     ]},
     { name: "supplier", label: "Supplier/Customer", type: "select", searchable: true, fetchOptions: fetchSuppliers },
     { name: "start_date", label: "From", type: "date" },
@@ -110,11 +111,15 @@ export default function PaymentsPage() {
       .reduce((sum, p) => sum + toNumber(p.amount), 0);
 
     const totalPayments = data
-      .filter((p) => p.payment_type === "PAYMENT")
+      .filter((p) => p.payment_type === "PAYMENT" && p.payment_method !== "CREDIT")
+      .reduce((sum, p) => sum + toNumber(p.amount), 0);
+
+    const totalRefunded = data
+      .filter((p) => p.payment_type === "PAYMENT" && p.payment_method !== "CREDIT" && p.reference_number?.startsWith("REFUND-"))
       .reduce((sum, p) => sum + toNumber(p.amount), 0);
 
     const totalPaid = data
-      .filter((p) => p.status === "CONFIRMED")
+      .filter((p) => p.status === "CONFIRMED" && p.payment_method !== "CREDIT")
       .reduce((sum, p) => sum + toNumber(p.amount), 0);
 
     const totalUnpaid = data
@@ -135,18 +140,18 @@ export default function PaymentsPage() {
         isCurrency: true,
       },
       {
+        label: "Refunded",
+        value: totalRefunded,
+        tone: "destructive" as const,
+        isCurrency: true,
+        sub: `${data.filter((p) => p.payment_type === "PAYMENT" && p.payment_method !== "CREDIT" && p.reference_number?.startsWith("REFUND-")).length} refunds`,
+      },
+      {
         label: "Paid",
         value: totalPaid,
         tone: "success" as const,
         isCurrency: true,
-        sub: `${data.filter((p) => p.status === "CONFIRMED").length} transactions`,
-      },
-      {
-        label: "Unpaid",
-        value: totalUnpaid,
-        tone: "warning" as const,
-        isCurrency: true,
-        sub: `${data.filter((p) => p.status === "DRAFT").length} transactions`,
+        sub: `${data.filter((p) => p.status === "CONFIRMED" && p.payment_method !== "CREDIT").length} transactions`,
       },
     ];
   };
@@ -184,7 +189,9 @@ export default function PaymentsPage() {
     { key: "payment_method", label: "Method", render: (val: string) => (
       <span className="text-xs">{val?.replace("_", " ")}</span>
     )},
-    { key: "status", label: "Status", render: (val: string) => {
+    { key: "status", label: "Status", render: (val: string, row: Payment) => {
+      const isRefund = row.payment_type === "PAYMENT" && row.reference_number?.startsWith("REFUND-");
+      if (isRefund) return <StatusBadge status="Refunded" />;
       const statusMap: Record<string, string> = {
         CONFIRMED: "Paid",
         DRAFT: "Unpaid",

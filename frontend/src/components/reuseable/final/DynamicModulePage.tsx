@@ -3,7 +3,14 @@
 import type { ReactNode } from "react";
 import { useState, useMemo, useEffect } from "react";
 import { PageHeader, Card, TableToolbar, ToolbarButton } from "@/components/finance/ui";
-import { Plus, Download, Pencil, Trash2, Send, Printer } from "lucide-react";
+import { Plus, Download, Pencil, Trash2, Send, Printer, MoreVertical } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
@@ -38,12 +45,15 @@ interface Actions<T> {
   onEdit?: (item: T) => void;
   onDelete?: (item: T) => void;
   onPost?: (item: T) => void;
+  onSend?: (item: T) => void;
   onPrint?: (item: T) => void;
   canEdit?: (item: T) => boolean;
   canDelete?: (item: T) => boolean;
   canPost?: (item: T) => boolean;
+  canSend?: (item: T) => boolean;
   canPrint?: (item: T) => boolean;
   postLabel?: string;
+  sendLabel?: string;
 }
 
 
@@ -194,7 +204,16 @@ export function DynamicModulePage<T>({
     });
   };
 
-  const showActionsColumn = (actions?.onEdit || actions?.onDelete || actions?.onPost || actions?.onPrint) && (permissions.update || permissions.delete);
+  const showActionsColumn = (actions?.onEdit || actions?.onDelete || actions?.onPost || actions?.onSend || actions?.onPrint) && (permissions.update || permissions.delete);
+
+  const hasRowActions = (item: T) => {
+    if (actions?.onPrint && permissions.view && (actions.canPrint?.(item) ?? true)) return true;
+    if (actions?.onSend && permissions.update && (actions.canSend?.(item) ?? true)) return true;
+    if (actions?.onPost && permissions.update && (actions.canPost?.(item) ?? true)) return true;
+    if (actions?.onEdit && permissions.update && (actions.canEdit?.(item) ?? true)) return true;
+    if (actions?.onDelete && permissions.delete && (actions.canDelete?.(item) ?? true)) return true;
+    return false;
+  };
   const showCheckboxColumn = permissions.delete || onRowSelect;
 
   return (
@@ -355,61 +374,54 @@ export function DynamicModulePage<T>({
                         ))}
                         {showActionsColumn && (
                           <td className="px-4 py-2.5 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                            
-                              {actions?.onPrint &&
-                                permissions.view &&
-                                (actions.canPrint?.(item) ?? true) && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      actions.onPrint!(item);
-                                    }}
-                                    className="p-1 rounded-md hover:bg-muted"
-                                    title="Print"
-                                  >
-                                    <Printer className="w-4 h-4" />
-                                  </button>
-                                )}
-                              {actions?.onPost &&
-                                permissions.update &&
-                                (actions.canPost?.(item) ?? true) && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      actions.onPost!(item);
-                                    }}
-                                    className="p-1 rounded-md hover:bg-muted"
-                                    title={actions.postLabel ?? "Post"}
-                                  >
-                                    <Send className="w-4 h-4" />
-                                  </button>
-                                )}
-                              {actions?.onEdit && permissions.update && (actions.canEdit?.(item) ?? true) && (
+                            {hasRowActions(item) ? (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
                                 <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    actions.onEdit!(item);
-                                  }}
-                                  className="p-1 rounded-md hover:bg-muted"
-                                  title="Edit"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="p-1 rounded-md hover:bg-muted transition"
                                 >
-                                  <Pencil className="w-4 h-4" />
+                                  <MoreVertical className="w-4 h-4" />
                                 </button>
-                              )}
-                              {actions?.onDelete && permissions.delete && (actions.canDelete?.(item) ?? true) && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDelete(item);
-                                  }}
-                                  className="p-1 rounded-md hover:bg-destructive/10 text-destructive"
-                                  title="Delete"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                {actions?.onPrint &&
+                                  permissions.view &&
+                                  (actions.canPrint?.(item) ?? true) && (
+                                    <DropdownMenuItem onClick={() => actions.onPrint!(item)}>
+                                      <Printer className="w-4 h-4 mr-2" /> Print
+                                    </DropdownMenuItem>
+                                  )}
+                                {actions?.onSend &&
+                                  permissions.update &&
+                                  (actions.canSend?.(item) ?? true) && (
+                                    <DropdownMenuItem onClick={() => actions.onSend!(item)}>
+                                      <Send className="w-4 h-4 mr-2 text-primary" /> {actions.sendLabel ?? "Send"}
+                                    </DropdownMenuItem>
+                                  )}
+                                {actions?.onPost &&
+                                  permissions.update &&
+                                  (actions.canPost?.(item) ?? true) && (
+                                    <DropdownMenuItem onClick={() => actions.onPost!(item)}>
+                                      <Send className="w-4 h-4 mr-2" /> {actions.postLabel ?? "Post"}
+                                    </DropdownMenuItem>
+                                  )}
+                                {actions?.onEdit && permissions.update && (actions.canEdit?.(item) ?? true) && (
+                                  <DropdownMenuItem onClick={() => actions.onEdit!(item)}>
+                                    <Pencil className="w-4 h-4 mr-2" /> Edit
+                                  </DropdownMenuItem>
+                                )}
+                                {(actions?.onEdit || actions?.onDelete) && (actions?.onPrint || actions?.onSend || actions?.onPost) && (
+                                  <DropdownMenuSeparator />
+                                )}
+                                {actions?.onDelete && permissions.delete && (actions.canDelete?.(item) ?? true) && (
+                                  <DropdownMenuItem onClick={() => handleDelete(item)} className="text-destructive">
+                                    <Trash2 className="w-4 h-4 mr-2" /> Delete
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                            ) : null}
                           </td>
                         )}
                       </tr>

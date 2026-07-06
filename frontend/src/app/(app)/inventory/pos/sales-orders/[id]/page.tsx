@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { format } from "date-fns";
 import {
   DetailLayout,
   StandardSidebar,
@@ -12,6 +13,7 @@ import {
   useCompleteSalesOrder,
   useCancelSalesOrder,
   useGenerateInvoice,
+  useRelatedReturns,
   type SalesOrderResponse,
 } from "@/hooks/useSalesOrder";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
@@ -51,6 +53,8 @@ export default function SalesOrderDetailPage() {
     isLoading,
     refetch,
   } = useFetchSalesOrder(id as string);
+
+  const { data: relatedReturns = [] } = useRelatedReturns(id as string);
 
   const completeOrder = useCompleteSalesOrder();
   const cancelOrder = useCancelSalesOrder();
@@ -438,6 +442,110 @@ export default function SalesOrderDetailPage() {
         </div>
       ),
     },
+    {
+      id: "returns",
+      label: "Returns",
+      count: relatedReturns.length,
+      render: () => {
+        if (relatedReturns.length === 0) {
+          return (
+            <div className="py-12 text-center text-sm text-muted-foreground">
+              No returns recorded for this order
+            </div>
+          );
+        }
+        return (
+          <div className="space-y-4">
+            {relatedReturns.map((ret) => (
+              <div
+                key={ret.id}
+                className="border border-border rounded-xl overflow-hidden"
+              >
+                <div className="flex items-center justify-between px-5 py-3 bg-muted/20 border-b border-border/40">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-sm font-semibold">
+                      {ret.return_number}
+                    </span>
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium border ${
+                        ret.return_type === "INVOICE"
+                          ? "bg-info/10 text-info border-info/20"
+                          : "bg-warning/10 text-warning border-warning/20"
+                      }`}
+                    >
+                      {ret.source_label}
+                    </span>
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium border ${
+                        ret.status === "COMPLETED"
+                          ? "bg-success/10 text-success border-success/20"
+                          : "bg-muted text-muted-foreground border-border"
+                      }`}
+                    >
+                      {ret.status}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-destructive">
+                      {formatCurrency(Number(ret.total_refund_amount))}
+                    </p>
+                    {ret.return_date && (
+                      <p className="text-[10px] text-muted-foreground">
+                        {format(new Date(ret.return_date), "dd MMM yyyy, HH:mm")}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="p-4">
+                  {ret.reason && (
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Reason: {ret.reason}
+                    </p>
+                  )}
+                  <div className="space-y-1.5">
+                    {ret.lines.map((rl) => (
+                      <div
+                        key={rl.id}
+                        className="flex items-center justify-between text-xs py-1 border-b border-border/30 last:border-0"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-muted-foreground">
+                            {rl.variant_sku}
+                          </span>
+                          {rl.variant_name && (
+                            <span className="text-muted-foreground truncate max-w-[200px]">
+                              {rl.variant_name}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono">
+                            x{rl.quantity}
+                          </span>
+                          <span className="text-destructive font-semibold">
+                            {formatCurrency(Number(rl.refund_amount))}
+                          </span>
+                          {rl.restock && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-success/10 text-success border border-success/20">
+                              Restocked
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {ret.completed_by && (
+                    <p className="text-[10px] text-muted-foreground mt-2">
+                      Processed by: {ret.completed_by}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      },
+    },
   ];
 
   const getPrimaryAction = () => {
@@ -632,7 +740,7 @@ export default function SalesOrderDetailPage() {
                   >
                     <StatusBadge status={status} />
                     <span className="text-muted-foreground">
-                      {count} item{count !== 1 ? "s" : ""}
+                      {count as number} item{(count as number) !== 1 ? "s" : ""}
                     </span>
                   </div>
                 ))}

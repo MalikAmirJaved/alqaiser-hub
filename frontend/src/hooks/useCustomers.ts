@@ -74,7 +74,9 @@ export function useCreateCustomer() {
       // Return the actual customer data from the nested response
       return response.data;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["customers"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+    },
   });
 }
 
@@ -86,7 +88,11 @@ export function useUpdateCustomer() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Customer> }) =>
       api(`/api/inventory/customers/${id}/`, { method: "PUT", body: JSON.stringify(data) }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["customers"] }),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["customerDetailSummary", id] });
+      queryClient.invalidateQueries({ queryKey: ["customer", id] });
+    },
   });
 }
 

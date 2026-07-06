@@ -1,6 +1,6 @@
 from .settings import *  # noqa: F401,F403
 
-TEST_RUNNER = 'config.test_runner.AppTestRunner'
+TEST_RUNNER = 'config.test_runner.HierarchicalTestRunner'
 
 DATABASES = {
     'default': {

@@ -113,6 +113,8 @@ export interface EmployeeLoan {
   confirmed_at?: string;
   paid_at?: string;
   notes?: string;
+  start_date?: string;
+  monthly_deduction?: string;
   advance_for_month?: number;
   advance_for_year?: number;
   created_at?: string;

@@ -14,7 +14,6 @@ import { TableView, type Column } from "@/components/reuseable/TableGridView";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import CustomerForm from "./CustomerForm";
 
 interface CustomerDetailProps {
   id: string;
@@ -40,7 +39,6 @@ export default function CustomerDetail({ id, moduleCode, onBack }: CustomerDetai
   const permissions = useFeaturePermissions(moduleCode, moduleCode === "SALES" ? "sales_customer" : "customer");
   const { confirm, Modal: ConfirmModal } = useConfirmationModal();
 
-  const [isEditing, setIsEditing] = useState(false);
 
   const { data: summary, isLoading, refetch } = useCustomerDetailSummary(id);
   const { data: customer } = useCustomer(id);
@@ -98,11 +96,6 @@ export default function CustomerDetail({ id, moduleCode, onBack }: CustomerDetai
 
   const customerInfo = activeSummary?.customer ?? customer;
 
-  const handleUpdate = async (data: any) => {
-    await updateCustomer.mutateAsync({ id: String(id), data });
-    setIsEditing(false);
-    refetch();
-  };
 
   const handleBack = () => {
     if (onBack) {
@@ -116,19 +109,6 @@ export default function CustomerDetail({ id, moduleCode, onBack }: CustomerDetai
   if (isLoading) return <div className="p-8 text-center">Loading customer details...</div>;
   if (!customerInfo) return <div className="p-8 text-center">Customer not found</div>;
 
-  if (isEditing) {
-    return (
-      <div className="max-w-2xl mx-auto p-6">
-        <CustomerForm
-          initialData={customerInfo}
-          onSubmit={handleUpdate}
-          onCancel={() => setIsEditing(false)}
-          isLoading={updateCustomer.isPending}
-        />
-      </div>
-    );
-  }
-
   const breadcrumbs = moduleCode === "INVENTORY"
     ? ["Inventory", "Customers", customerInfo.name]
     : ["Sales", "Customers", customerInfo.name];
@@ -137,7 +117,7 @@ export default function CustomerDetail({ id, moduleCode, onBack }: CustomerDetai
     { label: "Total Invoice Amount", value: parseFloat(financial?.total_invoice_amount || "0"), isCurrency: true, tone: "info" },
     { label: "Total Paid", value: parseFloat(financial?.total_paid || "0"), isCurrency: true, tone: "success" },
     {
-      label: "Total Outstanding",
+      label: "Total Payable",
       value: parseFloat(financial?.total_outstanding || "0"),
       isCurrency: true,
       tone: parseFloat(financial?.total_outstanding || "0") > 0 ? "warning" : "success",
@@ -241,7 +221,7 @@ export default function CustomerDetail({ id, moduleCode, onBack }: CustomerDetai
     { key: "amount", label: "Amount", sortable: true, render: (val) => <span className="font-mono text-right block">{formatCurrency(parseFloat(String(val)))}</span> },
     { key: "paid_amount", label: "Paid", render: (val) => <span className="font-mono text-right block text-success">{formatCurrency(parseFloat(String(val)))}</span> },
     {
-      key: "outstanding", label: "Outstanding", sortable: true,
+      key: "outstanding", label: "Payable", sortable: true,
       render: (val) => {
         const n = parseFloat(String(val));
         return <span className={`font-mono text-right block ${n > 0 ? "text-destructive" : "text-success"}`}>{formatCurrency(n)}</span>;
@@ -478,13 +458,12 @@ export default function CustomerDetail({ id, moduleCode, onBack }: CustomerDetai
         ]}
         summary={summaryCards}
         tabs={tabs}
-        onEdit={permissions.update ? () => setIsEditing(true) : undefined}
         permissions={{ edit: permissions.update }}
         sidebar={
           <StandardSidebar
             riskIndicators={[
               {
-                label: "Outstanding Balance",
+                label: "Payable Balance",
                 value: parseFloat(financial?.total_outstanding || "0") > 0 ? formatCurrency(parseFloat(financial?.total_outstanding || "0")) : "None",
                 tone: parseFloat(financial?.total_outstanding || "0") > 0 ? "warning" : "success",
               },

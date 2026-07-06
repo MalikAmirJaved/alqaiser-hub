@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { Lock, Mail, ShieldCheck } from "lucide-react";
+import { Lock, Mail, ShieldCheck, Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [err, setErr] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [forgot, setForgot] = useState(false);
 
   useEffect(() => {
@@ -85,11 +86,18 @@ export default function LoginPage() {
                 <span className="text-muted-foreground text-xs">Password</span>
                 <div className="relative mt-1">
                   <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                   <input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-muted/40 border border-border rounded-md pl-9 pr-3 h-10 outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full bg-muted/40 border border-border rounded-md pl-9 pr-9 h-10 outline-none focus:ring-2 focus:ring-ring"
                   />
                 </div>
               </label>

@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { PageHeader, Card, CardHeader, StatusBadge, ToolbarButton } from "@/components/finance/ui";
-import { Printer, Download, Share2, MoreHorizontal, Pencil, Send } from "lucide-react";
+import { Printer, Download, Share2, MoreHorizontal, Pencil, Send, Trash2 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
@@ -78,6 +78,8 @@ export interface DetailLayoutProps<T = any> {
   primaryActionLabel?: string;
   onPrimaryAction?: () => void;
   onEdit?: () => void;
+  onDelete?: () => void;
+  deleteLabel?: string;
   onPrint?: () => void;
   onExport?: () => void;
   onShare?: () => void;
@@ -132,6 +134,8 @@ export function DetailLayout<T>({
   primaryActionLabel = "Submit",
   onPrimaryAction,
   onEdit,
+  onDelete,
+  deleteLabel = "Delete",
   onPrint,
   onExport,
   onShare,
@@ -285,6 +289,11 @@ export function DetailLayout<T>({
             {propPermissions?.edit && onEdit && (
               <ToolbarButton variant="ghost" icon={Pencil} onClick={onEdit}>
                 Edit
+              </ToolbarButton>
+            )}
+            {onDelete && (
+              <ToolbarButton variant="ghost" icon={Trash2} onClick={onDelete} className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                {deleteLabel}
               </ToolbarButton>
             )}
             {propPermissions?.submit && onPrimaryAction && (

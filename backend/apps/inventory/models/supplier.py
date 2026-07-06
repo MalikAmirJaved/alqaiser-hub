@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.db import models
 from apps.common.basemodel import BaseModel
 
@@ -41,6 +42,17 @@ class Supplier(BaseModel):
             models.Index(fields=['partner_type']),
             models.Index(fields=['status']),
         ]
+
+    def clean(self):
+        super().clean()
+        if self.balance < 0:
+            raise ValidationError({'balance': 'Balance cannot be negative.'})
+        if self.credit < 0:
+            raise ValidationError({'credit': 'Credit cannot be negative.'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.code} - {self.name}"

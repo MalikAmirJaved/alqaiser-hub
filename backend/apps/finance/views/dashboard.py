@@ -2,7 +2,8 @@ from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
 
-from django.db.models import Sum
+from django.contrib.contenttypes.models import ContentType
+from django.db.models import Q, Sum
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -25,6 +26,26 @@ class FinanceDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
     permission_module = 'FINANCE'
     permission_resource = 'dashboard'
 
+    def _base_payments(self, company_id, branch_id):
+        """Confirmed payments, excluding duplicate payments from POS-generated invoices."""
+        payments = Payment.objects.filter(
+            company_id=company_id,
+            branch_id=branch_id,
+            status='CONFIRMED',
+            is_deleted=False,
+        )
+        customer_invoice_ct = ContentType.objects.get_for_model(CustomerInvoice)
+        pos_invoice_ids = list(
+            CustomerInvoice.objects.filter(
+                company_id=company_id, branch_id=branch_id, source='SALES_POS',
+            ).values_list('id', flat=True)
+        )
+        if pos_invoice_ids:
+            payments = payments.exclude(
+                Q(content_type=customer_invoice_ct, object_id__in=pos_invoice_ids)
+            )
+        return payments
+
     @action(detail=False, methods=['get'])
     def summary(self, request):
         company_id = request.user.company_id
@@ -37,7 +58,9 @@ class FinanceDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
             company_id=company_id,
             branch_id=branch_id,
             is_deleted=False,
-        ).exclude(status='CANCELLED')
+        ).exclude(
+            Q(status='CANCELLED') | Q(source='SALES_POS'),
+        )
         bills = SupplierBill.objects.filter(
             company_id=company_id,
             branch_id=branch_id,
@@ -48,12 +71,7 @@ class FinanceDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
             branch_id=branch_id,
             is_deleted=False,
         )
-        payments = Payment.objects.filter(
-            company_id=company_id,
-            branch_id=branch_id,
-            status='CONFIRMED',
-            is_deleted=False,
-        )
+        payments = self._base_payments(company_id, branch_id)
 
         receivables = sum(get_outstanding(inv) for inv in invoices)
         payables = sum(get_outstanding(bill) for bill in bills)
@@ -66,7 +84,7 @@ class FinanceDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
         expenses_mtd = payments.filter(
             payment_type='PAYMENT',
             payment_date__gte=month_start,
-        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        ).exclude(payment_method='CREDIT').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
         cash_position = BankAccount.objects.filter(
             company_id=company_id,
@@ -103,16 +121,14 @@ class FinanceDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
         today = timezone.now().date()
         start = today - timedelta(days=180)
 
-        payments = Payment.objects.filter(
-            company_id=company_id,
-            branch_id=branch_id,
-            status='CONFIRMED',
+        payments = self._base_payments(company_id, branch_id).filter(
             payment_date__gte=start,
-            is_deleted=False,
         )
 
         monthly = defaultdict(lambda: {'inflow': Decimal('0.00'), 'outflow': Decimal('0.00')})
         for payment in payments:
+            if payment.payment_method == 'CREDIT':
+                continue
             key = payment.payment_date.strftime('%Y-%m')
             if payment.payment_type == 'RECEIPT':
                 monthly[key]['inflow'] += payment.amount
@@ -166,11 +182,8 @@ class FinanceDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
 
     @action(detail=False, methods=['get'])
     def recent_payments(self, request):
-        payments = Payment.objects.filter(
-            company_id=request.user.company_id,
-            branch_id=request.user.branch_id,
-            status='CONFIRMED',
-            is_deleted=False,
+        payments = self._base_payments(
+            request.user.company_id, request.user.branch_id,
         ).select_related('content_type', 'bank_account').order_by('-payment_date')[:10]
 
         from apps.finance.serializers import PaymentSerializer
@@ -190,24 +203,17 @@ class FinanceDashboardViewSet(CompanyBranchMixin, PermissionRequiredMixin, views
         from collections import OrderedDict
 
         # Revenue = confirmed RECEIPT payments (paid invoices)
-        receipts = Payment.objects.filter(
-            company_id=company_id,
-            branch_id=branch_id,
-            status='CONFIRMED',
+        receipts = self._base_payments(company_id, branch_id).filter(
             payment_type='RECEIPT',
             payment_date__gte=start,
-            is_deleted=False,
         )
 
         # Expenses = confirmed PAYMENT payments (paid bills/expenses)
-        expenses = Payment.objects.filter(
-            company_id=company_id,
-            branch_id=branch_id,
-            status='CONFIRMED',
+        # Exclude CREDIT payments — those are supplier credit applications, not cash movements
+        expenses = self._base_payments(company_id, branch_id).filter(
             payment_type='PAYMENT',
             payment_date__gte=start,
-            is_deleted=False,
-        )
+        ).exclude(payment_method='CREDIT')
 
         # Build monthly buckets (12 months, back from current)
         months = OrderedDict()

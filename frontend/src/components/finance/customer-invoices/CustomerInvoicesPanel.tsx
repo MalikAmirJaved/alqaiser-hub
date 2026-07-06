@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { DynamicModulePage, type ModulePermissions } from "@/components/reuseable/final/DynamicModulePage";
-import { useCustomerInvoices, usePayCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
+import { useCustomerInvoices, usePayCustomerInvoice, useSendInvoice } from "@/hooks/finance/useCustomerInvoices";
 import { useSalesInvoices } from "@/hooks/sales/useSalesInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
@@ -18,6 +18,7 @@ import type { FilterField } from "@/components/reuseable/FilterBar";
 import { Send } from "lucide-react";
 import { usePagination } from "@/hooks/usePagination";
 import PayAmountModal from "@/components/finance/PayAmountModal";
+import { toast } from "sonner";
 
 interface CustomerInvoicesPanelProps {
   moduleCode: "FINANCE" | "SALES";
@@ -46,6 +47,8 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
   const filterFields: FilterField[] = [
     { name: "search", label: "Search", type: "search" },
     { name: "status", label: "Status", type: "status", options: [
+      { value: "PENDING", label: "Pending" },
+      { value: "SENT", label: "Sent" },
       { value: "DRAFT", label: "Draft" },
       { value: "CANCELLED", label: "Cancelled" },
     ]},
@@ -71,6 +74,7 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
   const isLoading = isSales ? salesLoading : financeLoading;
   
   const payInvoice = usePayCustomerInvoice();
+  const sendInvoice = useSendInvoice();
 
   const resourceName = moduleCode === "SALES" ? "sales_customers_invoice" : "customer_invoice";
   const permissions = useFeaturePermissions(moduleCode, resourceName);
@@ -97,9 +101,18 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
   };
 
   const handlePay = (invoice: any) => {
-    if (invoice.payment_status !== "PAID" && invoice.status !== "CANCELLED" && Number(invoice.outstanding) > 0) {
+    if (invoice.status === "SENT" && invoice.payment_status !== "PAID" && Number(invoice.outstanding) > 0) {
       setInvoiceToPay(invoice);
       setPayModalOpen(true);
+    }
+  };
+
+  const handleSend = async (invoice: any) => {
+    try {
+      await sendInvoice.mutateAsync(invoice.id);
+      toast.success("Invoice sent successfully");
+    } catch {
+      /* toast from apiFetch */
     }
   };
 
@@ -110,7 +123,7 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
     const draftCount = data.filter((inv) => inv.status === "DRAFT").length;
     return [
       {
-        label: "Outstanding",
+        label: "Payable",
         value: totalOutstanding,
         sub: `${data.length} open invoices`,
         tone: "info" as const,
@@ -147,22 +160,29 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
     {
       key: "amount",
       label: "Amount",
-      align: "right" as const,
       sortable: true,
       render: (val: number) => formatCurrency(val),
     },
     {
       key: "outstanding",
       label: "Balance",
-      align: "right" as const,
       sortable: true,
       render: (val: number) => (val ? formatCurrency(val) : "—"),
+    },
+    {
+      key: "status",
+      label: "Status",
+      sortable: true,
+      render: (val: string) => <StatusBadge status={val || "DRAFT"} />,
     },
     {
       key: "payment_status",
       label: "Payment",
       sortable: true,
-      render: (val: string) => <StatusBadge status={val || "UNPAID"} />,
+      render: (val: string, row: any) => {
+        const hasRefund = row.payments?.some((p: any) => p.payment_type === "PAYMENT" && p.status === "CONFIRMED");
+        return <StatusBadge status={hasRefund ? "REFUNDED" : val || "UNPAID"} />;
+      },
     },
   ];
 
@@ -188,9 +208,13 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
         }}
         actions={{
           onEdit: handleEdit,
-          canEdit: (invoice) => invoice.status === "DRAFT" && invoice.payment_status !== "PAID",
+          canEdit: (invoice) => (invoice.status === "DRAFT" || invoice.status === "PENDING" || invoice.status === "SENT") && invoice.payment_status !== "PAID" && invoice.source !== "SALES_POS",
+          onSend: handleSend,
+          canSend: (invoice) => invoice.status === "PENDING",
+          sendLabel: "Send",
           onPost: handlePay,
           canPost: (invoice) =>
+            invoice.status === "SENT" &&
             invoice.payment_status !== "PAID" &&
             invoice.status !== "CANCELLED" &&
             Number(invoice.outstanding) > 0,

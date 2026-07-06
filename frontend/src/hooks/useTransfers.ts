@@ -119,6 +119,9 @@ export function useConfirmTransfer() {
       queryClient.invalidateQueries({ queryKey: ["inventory_stock_transfer"] });
       queryClient.invalidateQueries({ queryKey: ["transfer", id] });
       queryClient.invalidateQueries({ queryKey: ["transferStats"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
     },
   });
 }
@@ -133,6 +136,9 @@ export function useCancelTransfer() {
       queryClient.invalidateQueries({ queryKey: ["inventory_stock_transfer"] });
       queryClient.invalidateQueries({ queryKey: ["transfer", id] });
       queryClient.invalidateQueries({ queryKey: ["transferStats"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_variant"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_stock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory_product"] });
     },
   });
 }

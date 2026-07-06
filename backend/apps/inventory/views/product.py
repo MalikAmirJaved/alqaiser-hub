@@ -13,6 +13,8 @@ from apps.inventory.models import (
     Product, ProductVariant, StockItem, InventoryTransaction, Warehouse,
     VariantAttribute, VariantImage, Category, Brand,StockReservation
 )
+from apps.inventory.models.purchase import PurchaseOrderLine
+from apps.inventory.models.sales import SalesOrderLine
 from apps.inventory.serializers import ProductSerializer
 
 
@@ -41,6 +43,219 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
     @staticmethod
     def _image_url(img):
         return img if isinstance(img, str) else img.get('url', '')
+    @action(detail=True, methods=['get'], url_path='related-data')
+    def related_data(self, request, _id=None):
+        product = self.get_object()
+        user = request.user
+        variant_pks = list(product.variants.values_list('id', flat=True))
+
+        tab = request.query_params.get('tab', '')
+        page_num = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+
+        from django.core.paginator import Paginator, EmptyPage
+
+        def paginate(qs, serializer_fn):
+            count = qs.count()
+            paginator = Paginator(qs, page_size)
+            try:
+                page_obj = paginator.page(page_num)
+            except EmptyPage:
+                page_obj = paginator.page(paginator.num_pages) if paginator.num_pages else paginator.page(1)
+            results = [serializer_fn(obj) for obj in page_obj]
+            return {
+                'count': count,
+                'total_pages': paginator.num_pages,
+                'current_page': page_obj.number,
+                'next': page_obj.has_next(),
+                'previous': page_obj.has_previous(),
+                'results': results,
+            }
+
+        # ── Stock Movements ────────────────────────────────────
+        def _stock_movements():
+            qs = InventoryTransaction.objects.filter(
+                variant_id__in=variant_pks,
+                company_id=user.company_id,
+            ).select_related('variant', 'warehouse', 'created_by').order_by('-created_at')
+            if date_from:
+                qs = qs.filter(created_at__date__gte=date_from)
+            if date_to:
+                qs = qs.filter(created_at__date__lte=date_to)
+
+            def serialize(t):
+                return {
+                    'id': str(t._id),
+                    'transaction_id': str(t.transaction_id),
+                    'variant_id': str(t.variant._id),
+                    'variant_sku': t.variant.sku,
+                    'warehouse_name': t.warehouse.warehouse_name,
+                    'quantity_change': t.quantity_change,
+                    'quantity_before': t.quantity_before,
+                    'quantity_after': t.quantity_after,
+                    'unit_cost': str(t.unit_cost),
+                    'transaction_type': t.transaction_type,
+                    'transaction_type_display': dict(InventoryTransaction.TRANSACTION_TYPES).get(t.transaction_type, t.transaction_type),
+                    'reason_text': t.reason_text,
+                    'source_document_type': t.source_document_type,
+                    'source_document_id': str(t.source_document_id) if t.source_document_id else None,
+                    'created_at': t.created_at.isoformat(),
+                    'created_by_name': t.created_by.get_full_name() or t.created_by.email if t.created_by else None,
+                }
+            return paginate(qs, serialize)
+
+        # ── Purchase Order Lines ────────────────────────────────
+        def _purchase_orders():
+            qs = PurchaseOrderLine.objects.filter(
+                variant_id__in=variant_pks,
+                company_id=user.company_id,
+            ).select_related(
+                'purchase_order', 'purchase_order__supplier', 'variant', 'created_by'
+            ).order_by('-created_at')
+            if date_from:
+                qs = qs.filter(created_at__date__gte=date_from)
+            if date_to:
+                qs = qs.filter(created_at__date__lte=date_to)
+
+            def serialize(l):
+                po = l.purchase_order
+                return {
+                    'id': str(l._id),
+                    'order_number': po.order_number,
+                    'order_id': str(po._id),
+                    'supplier_name': po.supplier.name if po.supplier else None,
+                    'status': po.status,
+                    'line_status': l.status,
+                    'variant_sku': l.variant.sku,
+                    'quantity_ordered': l.quantity_ordered,
+                    'quantity_received': l.quantity_received,
+                    'unit_cost': str(l.unit_cost),
+                    'order_date': po.order_date.isoformat() if po.order_date else None,
+                    'created_at': l.created_at.isoformat(),
+                    'created_by_name': l.created_by.get_full_name() or l.created_by.email if l.created_by else None,
+                }
+            return paginate(qs, serialize)
+
+        # ── Sales Order Lines ──────────────────────────────────
+        def _sales_orders():
+            qs = SalesOrderLine.objects.filter(
+                variant_id__in=variant_pks,
+                company_id=user.company_id,
+            ).select_related(
+                'sales_order', 'sales_order__customer', 'variant', 'created_by'
+            ).order_by('-created_at')
+            if date_from:
+                qs = qs.filter(created_at__date__gte=date_from)
+            if date_to:
+                qs = qs.filter(created_at__date__lte=date_to)
+
+            def serialize(l):
+                so = l.sales_order
+                return {
+                    'id': str(l._id),
+                    'order_number': so.order_number,
+                    'order_id': str(so._id),
+                    'customer_name': so.customer.name if so.customer else None,
+                    'status': so.status,
+                    'line_status': l.status,
+                    'source': so.source,
+                    'variant_sku': l.variant.sku,
+                    'quantity_ordered': l.quantity_ordered,
+                    'quantity_returned': l.quantity_returned,
+                    'unit_price': str(l.unit_price),
+                    'order_date': so.order_date.isoformat() if so.order_date else None,
+                    'created_at': l.created_at.isoformat(),
+                    'created_by_name': l.created_by.get_full_name() or l.created_by.email if l.created_by else None,
+                }
+            return paginate(qs, serialize)
+
+        # ── Quote Lines ────────────────────────────────────────
+        def _quotes():
+            from apps.sales.models import QuoteLine
+            qs = QuoteLine.objects.filter(
+                variant_id__in=variant_pks,
+                company_id=user.company_id,
+            ).select_related(
+                'quote', 'quote__customer', 'quote__lead', 'variant', 'created_by'
+            ).order_by('-created_at')
+            if date_from:
+                qs = qs.filter(created_at__date__gte=date_from)
+            if date_to:
+                qs = qs.filter(created_at__date__lte=date_to)
+
+            def serialize(l):
+                q = l.quote
+                return {
+                    'id': str(l._id),
+                    'quote_number': q.quote_number,
+                    'quote_id': str(q._id),
+                    'customer_name': q.customer.name if q.customer else None,
+                    'lead_name': str(q.lead) if q.lead else None,
+                    'status': q.status,
+                    'variant_sku': l.variant.sku,
+                    'quantity': l.quantity,
+                    'unit_price': str(l.unit_price),
+                    'discount_amount': str(l.discount_amount),
+                    'date': q.date.isoformat() if q.date else None,
+                    'created_at': l.created_at.isoformat(),
+                    'created_by_name': l.created_by.get_full_name() or l.created_by.email if l.created_by else None,
+                }
+            return paginate(qs, serialize)
+
+        # ── Customer Invoice Lines ─────────────────────────────
+        def _invoices():
+            from apps.finance.models import CustomerInvoiceLine
+            qs = CustomerInvoiceLine.objects.filter(
+                variant_id__in=variant_pks,
+                company_id=user.company_id,
+            ).select_related(
+                'customer_invoice', 'customer_invoice__customer', 'variant', 'created_by'
+            ).order_by('-created_at')
+            if date_from:
+                qs = qs.filter(created_at__date__gte=date_from)
+            if date_to:
+                qs = qs.filter(created_at__date__lte=date_to)
+
+            def serialize(l):
+                inv = l.customer_invoice
+                return {
+                    'id': str(l._id),
+                    'invoice_number': inv.invoice_number,
+                    'invoice_id': str(inv._id),
+                    'customer_name': inv.customer.name if inv.customer else None,
+                    'status': inv.status,
+                    'source': inv.source,
+                    'variant_sku': l.variant.sku,
+                    'quantity': l.quantity,
+                    'unit_price': str(l.unit_price),
+                    'discount_amount': str(l.discount_amount),
+                    'cost_price': str(l.cost_price) if l.cost_price else None,
+                    'invoice_date': inv.invoice_date.isoformat() if inv.invoice_date else None,
+                    'created_at': l.created_at.isoformat(),
+                    'created_by_name': l.created_by.get_full_name() or l.created_by.email if l.created_by else None,
+                }
+            return paginate(qs, serialize)
+
+        tab_map = {
+            'stock-movements': _stock_movements,
+            'purchase-orders': _purchase_orders,
+            'sales-orders': _sales_orders,
+            'quotes': _quotes,
+            'invoices': _invoices,
+        }
+
+        if tab in tab_map:
+            return Response(tab_map[tab]())
+
+        return Response({
+            'stock_movements': _stock_movements(),
+            'purchase_orders': _purchase_orders(),
+            'sales_orders': _sales_orders(),
+            'quotes': _quotes(),
+            'invoices': _invoices(),
+        })
 
     def get_queryset(self):
         qs = super().get_queryset()

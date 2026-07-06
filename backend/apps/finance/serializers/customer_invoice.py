@@ -47,7 +47,7 @@ class CustomerInvoiceLineSerializer(serializers.ModelSerializer):
             'is_manual_entry', 'manual_variant_name', 'manual_variant_sku',
             'vendor', 'vendor_name', 'cost_price', 'supplier_bill',
             'quantity', 'unit_price', 'tax_rate', 'discount_amount', 'description',
-            'subtotal', 'line_total'
+            'status', 'subtotal', 'line_total'
         ]
 
     def get_variant_sku(self, obj):
@@ -125,6 +125,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
         read_only_fields = (
             'id', 'created_at', 'updated_at', 'company_id', 'branch_id',
             'paid_amount', 'payment_status', 'outstanding', 'status', 'journal_entry', 'amount',
+            'cancelled_by', 'cancelled_at',
         )
 
     def get_customer_name(self, obj):
@@ -145,7 +146,13 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
     def get_source_label(self, obj):
         if obj.source_quotes.exists():
             return "From Quote"
-        return "New"
+        source_map = {
+            'FINANCE': 'Finance',
+            'SALES_POS': 'Sales POS',
+            'SALES_AGENT': 'Sales Agent',
+            'SALES_QUOTE': 'From Quote',
+        }
+        return source_map.get(obj.source, obj.source.replace('_', ' ').title() if obj.source else 'New')
 
     def get_created_by_label(self, obj):
         name = obj.created_by.username if obj.created_by else None
@@ -163,6 +170,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
                 'payment_method': p.payment_method,
                 'reference_number': p.reference_number or '',
                 'status': p.status,
+                'payment_type': p.payment_type,
             }
             for p in payments
         ]
@@ -173,6 +181,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
             instance.lines.filter(is_deleted=False), many=True,
             context=self.context
         ).data
+        rep['cancelled_by_name'] = instance.cancelled_by.username if instance.cancelled_by else None
         return rep
 
     def _create_supplier_bills(self, invoice, lines_data, user):
@@ -262,6 +271,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
             subtotal = Decimal('0')
             per_line_discounts = Decimal('0')
             self._reduction_conflicts = []
+            self._variant_reduction_conflicts = []
             created_lines = []
 
             raw_line_ids = self.context.get('raw_line_ids', {})
@@ -272,13 +282,14 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
                 if line_id and line_id in existing_lines:
                     old_line = existing_lines[line_id]
                     incoming_ids.add(line_id)
+                    new_qty = line_item.get('quantity', old_line.quantity)
 
                     if is_manual and line_item.get('vendor') and line_item.get('cost_price') is not None:
                         conflict = sync_manual_line_bill(
                             invoice=instance,
                             old_line=old_line,
                             new_vendor=line_item['vendor'],
-                            new_qty=line_item.get('quantity', old_line.quantity),
+                            new_qty=new_qty,
                             new_cost_price=line_item['cost_price'],
                             user=user,
                             line_index=i,
@@ -286,6 +297,28 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
                         )
                         if conflict:
                             self._reduction_conflicts.append(conflict)
+                    elif (
+                        not is_manual
+                        and old_line.variant
+                        and new_qty < old_line.quantity
+                    ):
+                        delta_qty = old_line.quantity - new_qty
+                        if old_line.resolved:
+                            old_line.resolved = False
+                        old_line.original_quantity = old_line.quantity
+                        old_line.save(update_fields=['original_quantity', 'resolved', 'updated_at'])
+                        variant_name = ''
+                        if old_line.variant and old_line.variant.product:
+                            variant_name = old_line.variant.product.product_name
+                        self._variant_reduction_conflicts.append({
+                            'line_id': str(old_line._id),
+                            'line_index': i,
+                            'line_name': variant_name or old_line.variant.sku,
+                            'line_type': 'variant',
+                            'delta_qty': delta_qty,
+                            'old_qty': old_line.quantity,
+                            'new_qty': new_qty,
+                        })
 
                     for attr, value in line_item.items():
                         if attr != 'supplier_bill':

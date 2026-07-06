@@ -340,7 +340,7 @@ export default function SupplierBillDetailPage() {
         summary={[
           { label: "Bill Total", value: amount, tone: "info", isCurrency: true },
           { label: "Paid", value: paidAmount, tone: "success", isCurrency: true },
-          { label: "Outstanding", value: outstanding, tone: outstanding > 0 ? "warning" : "success", isCurrency: true },
+          { label: "Payable", value: outstanding, tone: outstanding > 0 ? "warning" : "success", isCurrency: true },
           { label: "Due Date", value: bill.due_date, isCurrency: false },
         ]}
         tabs={tabs}

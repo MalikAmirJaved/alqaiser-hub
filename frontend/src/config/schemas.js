@@ -641,7 +641,7 @@ export const schemas = {
       { key: "tax_amount", label: "Tax Amount", type: "number" },
       { key: "total_amount", label: "Total Amount", type: "number" },
       { key: "paid_amount", label: "Paid Amount", type: "number" },
-      { key: "outstanding_amount", label: "Outstanding", type: "number" },
+      { key: "outstanding_amount", label: "Payable", type: "number" },
       { key: "notes", label: "Notes", type: "textarea" },
       { key: "terms", label: "Payment Terms", type: "textarea" },
       { key: "status", label: "Status", type: "select", options: ["DRAFT", "SENT", "PARTIAL", "PAID", "OVERDUE", "CANCELLED"] },
