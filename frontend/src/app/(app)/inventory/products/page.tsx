@@ -367,8 +367,6 @@ export default function ProductsPage() {
       <ExportModal
         open={showExportModal}
         onClose={() => setShowExportModal(false)}
-        hasSelection={selectedRows.size > 0}
-        selectedProductIds={selectedProductIds}
       />
 
       {/* Import Upload Modal */}

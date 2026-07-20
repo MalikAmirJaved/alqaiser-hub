@@ -25,7 +25,11 @@ export function CountrySelect({ value, onChange, required = false, className = "
 
   useEffect(() => {
     const allCountries = Country.getAllCountries();
-    setCountries(allCountries.map(c => ({ value: c.isoCode, label: `${c.flag} ${c.name}` })));
+    setCountries(
+      allCountries
+        .filter(c => c.isoCode !== 'IL') // Exclude Israel
+        .map(c => ({ value: c.isoCode, label: `${c.flag} ${c.name}` }))
+    );
   }, []);
 
   useEffect(() => {

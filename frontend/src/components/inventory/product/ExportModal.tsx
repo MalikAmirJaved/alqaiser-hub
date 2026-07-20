@@ -9,8 +9,6 @@ import { useExportProducts } from "@/hooks/useProductExportImport";
 interface ExportModalProps {
   open: boolean;
   onClose: () => void;
-  hasSelection: boolean;
-  selectedProductIds?: string[];
 }
 
 // ── Main Export Modal ──
@@ -18,20 +16,14 @@ interface ExportModalProps {
 export default function ExportModal({
   open,
   onClose,
-  hasSelection,
-  selectedProductIds = [],
 }: ExportModalProps) {
-  const [scope, setScope] = useState<"all" | "selected">("all");
   const [format, setFormat] = useState<"xlsx" | "csv">("xlsx");
   const exportMutation = useExportProducts();
 
   if (!open) return null;
 
   const handleExport = async () => {
-    await exportMutation.mutateAsync({
-      format,
-      product_ids: scope === "selected" ? selectedProductIds : undefined,
-    });
+    await exportMutation.mutateAsync({ format });
     onClose();
   };
 
@@ -59,66 +51,6 @@ export default function ExportModal({
 
         {/* Body */}
         <div className="p-5 space-y-5">
-          {/* Scope Selection */}
-          <div>
-            <label className="text-sm font-medium mb-2 block">Scope</label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setScope("all")}
-                className={`relative flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
-                  scope === "all"
-                    ? "border-primary bg-primary/5 shadow-sm"
-                    : "border-border hover:border-muted-foreground/30 hover:bg-muted/20"
-                }`}
-              >
-                <div
-                  className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                    scope === "all" ? "border-primary" : "border-muted-foreground/40"
-                  }`}
-                >
-                  {scope === "all" && (
-                    <div className="w-2 h-2 rounded-full bg-primary" />
-                  )}
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-medium">All Products</p>
-                  <p className="text-xs text-muted-foreground">Export entire catalog</p>
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setScope("selected")}
-                disabled={!hasSelection}
-                className={`relative flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
-                  !hasSelection
-                    ? "border-border/40 opacity-40 cursor-not-allowed"
-                    : scope === "selected"
-                    ? "border-primary bg-primary/5 shadow-sm"
-                    : "border-border hover:border-muted-foreground/30 hover:bg-muted/20"
-                }`}
-              >
-                <div
-                  className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                    scope === "selected" ? "border-primary" : "border-muted-foreground/40"
-                  }`}
-                >
-                  {scope === "selected" && (
-                    <div className="w-2 h-2 rounded-full bg-primary" />
-                  )}
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-medium">Selected Only</p>
-                  <p className="text-xs text-muted-foreground">
-                    {hasSelection
-                      ? `${selectedProductIds.length} product(s) selected`
-                      : "Select products from table"}
-                  </p>
-                </div>
-              </button>
-            </div>
-          </div>
-
           {/* Format Selection */}
           <div>
             <label className="text-sm font-medium mb-2 block">Format</label>
