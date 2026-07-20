@@ -10,15 +10,12 @@ import {
   ChevronRight,
   AlertCircle,
   CheckCircle2,
-  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useImportConfirm } from "@/hooks/useProductExportImport";
 import type { ImportRow } from "@/hooks/useProductExportImport";
-import { useBrands, type Brand } from "@/hooks/useBrands";
-import { useCategories, type Category } from "@/hooks/useCategories";
 
 interface ImportReviewModalProps {
   open: boolean;
@@ -73,101 +70,6 @@ interface ProductGroup {
 }
 
 // ──────────────────────────────────────────────────────
-// Searchable Select (inline component)
-// ──────────────────────────────────────────────────────
-
-function SearchableSelect({
-  value,
-  options,
-  onChange,
-  placeholder,
-  isNew,
-}: {
-  value: string;
-  options: { id: string; name: string }[];
-  onChange: (id: string | null, name: string, isNew: boolean) => void;
-  placeholder: string;
-  isNew: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-
-  const filtered = useMemo(
-    () =>
-      options.filter((o) =>
-        o.name.toLowerCase().includes(search.toLowerCase())
-      ),
-    [options, search]
-  );
-
-  return (
-    <div className="relative">
-      <div
-        className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors ${
-          isNew
-            ? "border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700"
-            : "border-border hover:border-muted-foreground/40"
-        }`}
-        onClick={() => setOpen(!open)}
-      >
-        <span className="flex-1 truncate">
-          {value || <span className="text-muted-foreground">{placeholder}</span>}
-        </span>
-        {isNew && (
-          <Badge
-            variant="outline"
-            className="text-[10px] px-1 py-0 h-4 font-bold text-amber-600 border-amber-300 bg-amber-100 dark:text-amber-400 dark:border-amber-700 dark:bg-amber-950/40"
-          >
-            NEW
-          </Badge>
-        )}
-        <Search className="w-3 h-3 text-muted-foreground shrink-0" />
-      </div>
-
-      {open && (
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setOpen(false)}
-          />
-          <div className="absolute z-50 mt-1 w-full min-w-[200px] bg-card border border-border rounded-xl shadow-xl p-1.5 space-y-1">
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search..."
-              className="h-7 text-xs"
-              autoFocus
-            />
-            <div className="max-h-32 overflow-y-auto space-y-0.5">
-              {filtered.map((opt) => (
-                <button
-                  key={opt.id}
-                  onClick={() => {
-                    onChange(opt.id, opt.name, false);
-                    setOpen(false);
-                    setSearch("");
-                  }}
-                  className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-colors hover:bg-muted ${
-                    value === opt.name ? "bg-primary/10 font-medium" : ""
-                  }`}
-                >
-                  {opt.name}
-                </button>
-              ))}
-              {filtered.length === 0 && (
-                <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                  No matches
-                </p>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-// ──────────────────────────────────────────────────────
 // Main Component
 // ──────────────────────────────────────────────────────
 
@@ -190,19 +92,6 @@ export default function ImportReviewModal({
     variants: number;
   } | null>(null);
   const [serverErrors, setServerErrors] = useState<{ row_index: number; error: string }[]>([]);
-
-  // Fetch existing brands/categories for dropdowns
-  const { data: brands = [] } = useBrands({ all: "true", page_size: "1000" });
-  const { data: categories = [] } = useCategories({ all: "true", page_size: "1000" });
-
-  const brandOptions = useMemo(
-    () => brands.map((b: Brand) => ({ id: b.id, name: b.name })),
-    [brands]
-  );
-  const categoryOptions = useMemo(
-    () => categories.map((c: Category) => ({ id: c.id, name: c.name })),
-    [categories]
-  );
 
   // Validation
   const validationErrors = useMemo(() => validateRows(rows), [rows]);
@@ -235,24 +124,6 @@ export default function ImportReviewModal({
       });
     },
     []
-  );
-
-  const handleBrandChange = useCallback(
-    (rowIndex: number, id: string | null, name: string, isNew: boolean) => {
-      updateRow(rowIndex, "brand_id", id);
-      updateRow(rowIndex, "brand_name", name);
-      updateRow(rowIndex, "brand_is_new", isNew);
-    },
-    [updateRow]
-  );
-
-  const handleCategoryChange = useCallback(
-    (rowIndex: number, id: string | null, name: string, isNew: boolean) => {
-      updateRow(rowIndex, "category_id", id);
-      updateRow(rowIndex, "category_name", name);
-      updateRow(rowIndex, "category_is_new", isNew);
-    },
-    [updateRow]
   );
 
   const removeRow = useCallback((rowIndex: number) => {
@@ -361,7 +232,7 @@ export default function ImportReviewModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-5xl mx-4 animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+      <div className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-[90vw] mx-4 animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-border shrink-0">
           <div className="flex items-center gap-3">
@@ -535,31 +406,24 @@ export default function ImportReviewModal({
                                 placeholder="Variant name"
                               />
                             </td>
-                            <td className="px-2.5 py-1.5 min-w-[140px]">
-                              <SearchableSelect
+                            <td className="px-2.5 py-1.5">
+                              <Input
                                 value={row.category_name}
-                                options={categoryOptions}
-                                onChange={(id, name, isNew) =>
-                                  handleCategoryChange(
-                                    row.row_index,
-                                    id,
-                                    name,
-                                    isNew
-                                  )
+                                onChange={(e) =>
+                                  updateRow(row.row_index, "category_name", e.target.value)
                                 }
-                                placeholder="Select category"
-                                isNew={row.category_is_new}
+                                className="h-7 text-xs"
+                                placeholder="Category"
                               />
                             </td>
-                            <td className="px-2.5 py-1.5 min-w-[140px]">
-                              <SearchableSelect
+                            <td className="px-2.5 py-1.5">
+                              <Input
                                 value={row.brand_name}
-                                options={brandOptions}
-                                onChange={(id, name, isNew) =>
-                                  handleBrandChange(row.row_index, id, name, isNew)
+                                onChange={(e) =>
+                                  updateRow(row.row_index, "brand_name", e.target.value)
                                 }
-                                placeholder="Select brand"
-                                isNew={row.brand_is_new}
+                                className="h-7 text-xs"
+                                placeholder="Brand"
                               />
                             </td>
                             <td className="px-2.5 py-1.5">
