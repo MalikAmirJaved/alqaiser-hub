@@ -1,20 +1,24 @@
 // src/app/(app)/inventory/products/page.tsx
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Grid, List, Download } from "lucide-react";
+import { Plus, Grid, List, Download, Upload } from "lucide-react";
 import { TableView, GridView, Column } from "@/components/reuseable/TableGridView";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import FilterBar, { FilterField } from "@/components/reuseable/FilterBar";
 import ProductForm from "@/components/inventory/product/ProductForm";
+import ExportModal from "@/components/inventory/product/ExportModal";
+import ImportUploadModal from "@/components/inventory/product/ImportUploadModal";
+import ImportReviewModal from "@/components/inventory/product/ImportReviewModal";
 import { useProducts, useDeleteProduct, useCreateProduct, useUpdateProduct, Product, ProductPayload } from "@/hooks/useProducts";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { usePagination } from "@/hooks/usePagination";
 import { useServerSearch } from "@/hooks/useServerSearch";
+import type { ImportRow } from "@/hooks/useProductExportImport";
 
 export default function ProductsPage() {
   const router = useRouter();
@@ -24,6 +28,11 @@ export default function ProductsPage() {
   const [showProductModal, setShowProductModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | undefined>(undefined);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showImportUploadModal, setShowImportUploadModal] = useState(false);
+  const [importRows, setImportRows] = useState<ImportRow[]>([]);
+  const [importSource, setImportSource] = useState<string>("excel");
   const pagination = usePagination();
 
   const filtersWithPage = useMemo(() => ({
@@ -95,6 +104,12 @@ export default function ProductsPage() {
     ];
   }, [enrichedProducts]);
 
+  // Map selected indices to product IDs
+  const selectedProductIds = useMemo(
+    () => Array.from(selectedRows).map((idx) => enrichedProducts[idx]?.id).filter(Boolean),
+    [selectedRows, enrichedProducts]
+  );
+
   const handleCreate = () => { setSelectedProduct(undefined); setShowProductModal(true); };
   const handleEdit = (p: Product) => { setSelectedProduct(p); setShowProductModal(true); };
   const handleViewDetails = (p: Product) => { router.push(`/inventory/products/${p.id}`); };
@@ -118,31 +133,20 @@ export default function ProductsPage() {
     setShowProductModal(false);
   };
 
-  const handleExport = () => {
-    if (!enrichedProducts.length) return;
-    const escapeCsv = (val: any) => {
-      const str = String(val ?? "");
-      return str.includes('"') || str.includes(",") || str.includes("\n")
-        ? `"${str.replace(/"/g, '""')}"`
-        : `"${str}"`;
-    };
-    const rows = enrichedProducts.map(p => ({
-      SKU: p.variants[0]?.sku || "",
-      Name: p.product_name,
-      Category: p.category_name,
-      Brand: p.brand_name,
-      Price: p.display_price,
-      Stock: p.total_stock,
-      Status: p.status,
-    }));
-    const csv = [Object.keys(rows[0]).map(escapeCsv).join(","), ...rows.map(row => Object.values(row).map(escapeCsv).join(","))].join("\n");
-    const a = Object.assign(document.createElement("a"), {
-      href: URL.createObjectURL(new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" })),
-      download: `products_${new Date().toISOString().split("T")[0]}.csv`,
-    });
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
+  // Export/Import handlers
+  const handleExportOpen = () => setShowExportModal(true);
+  const handleImportOpen = () => setShowImportUploadModal(true);
+
+  const handleImportParsed = useCallback((rows: ImportRow[], source: string) => {
+    setImportRows(rows);
+    setImportSource(source);
+    setShowImportUploadModal(false);
+  }, []);
+
+  const handleImportReviewClose = useCallback(() => {
+    setImportRows([]);
+    setImportSource("excel");
+  }, []);
 
   // ── Table columns ──
   const columns: Column<any>[] = [
@@ -265,20 +269,31 @@ export default function ProductsPage() {
             </button>
             {permissions.export && (
               <button
-                onClick={handleExport}
-                className="p-2 rounded-md border border-border hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-                title="Export CSV"
+                onClick={handleExportOpen}
+                className="inline-flex items-center gap-1.5 px-3 h-9 rounded-md border border-border hover:bg-muted transition-colors text-sm font-medium"
+                title="Export products"
               >
                 <Download className="w-4 h-4" />
+                Export
               </button>
             )}
             {permissions.create && (
-              <button
-                onClick={handleCreate}
-                className="inline-flex items-center gap-2 px-4 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity text-sm font-medium"
-              >
-                <Plus className="w-4 h-4" /> Add Product
-              </button>
+              <>
+                <button
+                  onClick={handleImportOpen}
+                  className="inline-flex items-center gap-1.5 px-3 h-9 rounded-md border border-border hover:bg-muted transition-colors text-sm font-medium"
+                  title="Import products"
+                >
+                  <Upload className="w-4 h-4" />
+                  Import
+                </button>
+                <button
+                  onClick={handleCreate}
+                  className="inline-flex items-center gap-2 px-4 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity text-sm font-medium"
+                >
+                  <Plus className="w-4 h-4" /> Add Product
+                </button>
+              </>
             )}
           </div>
         }
@@ -290,12 +305,29 @@ export default function ProductsPage() {
       {/* Filters */}
       <FilterBar fields={filterFields} filters={filters} onChange={(f) => { setFilters(f); pagination.resetPage(); }} />
 
+      {/* Selection info bar */}
+      {selectedRows.size > 0 && viewMode === "table" && (
+        <div className="flex items-center justify-between px-4 py-2 rounded-xl bg-primary/5 border border-primary/10 text-sm">
+          <span className="text-muted-foreground">
+            <span className="font-medium text-foreground">{selectedRows.size}</span> product(s) selected
+          </span>
+          <button
+            onClick={() => setSelectedRows(new Set())}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
+
       {/* Table / Grid */}
       {viewMode === "table" ? (
         <TableView
           columns={columns}
           data={enrichedProducts}
           loading={isLoading}
+          selectedRows={selectedRows}
+          onRowSelect={setSelectedRows}
           onRowClick={(row) => handleViewDetails(row)}
           actions={actions}
           emptyMessage="No products found. Add your first product to get started."
@@ -330,6 +362,31 @@ export default function ProductsPage() {
           </div>
         </div>
       )}
+
+      {/* Export Modal */}
+      <ExportModal
+        open={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        hasSelection={selectedRows.size > 0}
+        selectedProductIds={selectedProductIds}
+        fetchCategories={fetchCategories}
+        fetchBrands={fetchBrands}
+      />
+
+      {/* Import Upload Modal */}
+      <ImportUploadModal
+        open={showImportUploadModal}
+        onClose={() => setShowImportUploadModal(false)}
+        onParsed={handleImportParsed}
+      />
+
+      {/* Import Review Modal */}
+      <ImportReviewModal
+        open={importRows.length > 0}
+        onClose={handleImportReviewClose}
+        rows={importRows}
+        source={importSource}
+      />
 
       <deleteConfirm.Modal />
     </div>
