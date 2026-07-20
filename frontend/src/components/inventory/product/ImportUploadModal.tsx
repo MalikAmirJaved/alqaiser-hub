@@ -45,6 +45,8 @@ export default function ImportUploadModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importParse = useImportParse();
 
+  const isParsing = importParse.isPending;
+
   const validateFile = useCallback((file: File): string | null => {
     const ext = file.name.split(".").pop()?.toLowerCase();
     if (!ext || !["xlsx", "xls", "csv"].includes(ext)) {
@@ -56,16 +58,36 @@ export default function ImportUploadModal({
     return null;
   }, []);
 
-  const handleFileSelect = useCallback((file: File) => {
+  const handleUploadAndParse = useCallback(async (file: File) => {
     setError(null);
+    const ext = file.name.split(".").pop()?.toLowerCase() || "xlsx";
+    const source = ext === "csv" ? "csv" : "excel";
+
+    try {
+      const result = await importParse.mutateAsync(file);
+      const parsedRows = result.data?.rows;
+      if (parsedRows && parsedRows.length > 0) {
+        onParsed(parsedRows, source);
+      } else {
+        setSelectedFile(null);
+        setError("The file contains no data rows to import. Check your file and try again.");
+      }
+    } catch (err: any) {
+      setSelectedFile(null);
+      setError(err.message || "Failed to parse file");
+    }
+  }, [importParse, onParsed]);
+
+  const handleFileSelect = useCallback((file: File) => {
+    if (isParsing) return;
     const validationError = validateFile(file);
     if (validationError) {
       setError(validationError);
-      setSelectedFile(null);
       return;
     }
     setSelectedFile(file);
-  }, [validateFile]);
+    handleUploadAndParse(file);
+  }, [validateFile, handleUploadAndParse, isParsing]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -84,31 +106,15 @@ export default function ImportUploadModal({
 
   const handleDragLeave = () => setDragOver(false);
 
-  const handleBrowse = () => fileInputRef.current?.click();
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handleFileSelect(file);
+  const handleBrowse = () => {
+    if (isParsing) return;
+    fileInputRef.current?.click();
   };
 
-  const handleUploadAndParse = async () => {
-    if (!selectedFile) return;
-    setError(null);
-
-    try {
-      const ext = selectedFile.name.split(".").pop()?.toLowerCase() || "xlsx";
-      const source = ext === "csv" ? "csv" : "excel";
-
-      const result = await importParse.mutateAsync(selectedFile);
-      const parsedRows = result.data?.rows;
-      if (parsedRows && parsedRows.length > 0) {
-        onParsed(parsedRows, source);
-      } else {
-        setError("The file contains no data rows to import. Check your file and try again.");
-      }
-    } catch (err: any) {
-      setError(err.message || "Failed to parse file");
-    }
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isParsing) return;
+    const file = e.target.files?.[0];
+    if (file) handleFileSelect(file);
   };
 
   const handleDownloadTemplate = async () => {
@@ -214,16 +220,18 @@ export default function ImportUploadModal({
 
           {/* Drop Zone */}
           <div
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
+            onDrop={isParsing ? undefined : handleDrop}
+            onDragOver={isParsing ? undefined : handleDragOver}
+            onDragLeave={isParsing ? undefined : handleDragLeave}
             onClick={handleBrowse}
-            className={`relative cursor-pointer rounded-xl border-2 border-dashed p-8 text-center transition-all ${
-              dragOver
-                ? "border-primary bg-primary/5 scale-[1.02]"
+            className={`relative rounded-xl border-2 border-dashed p-8 text-center transition-all ${
+              isParsing
+                ? "border-muted/40 bg-muted/10 cursor-wait"
+                : dragOver
+                ? "border-primary bg-primary/5 scale-[1.02] cursor-pointer"
                 : selectedFile
-                ? "border-success/50 bg-success/5"
-                : "border-border hover:border-muted-foreground/40 hover:bg-muted/10"
+                ? "border-success/50 bg-success/5 cursor-pointer"
+                : "border-border hover:border-muted-foreground/40 hover:bg-muted/10 cursor-pointer"
             }`}
           >
             <input
@@ -232,9 +240,18 @@ export default function ImportUploadModal({
               accept={ACCEPTED_TYPES}
               onChange={handleInputChange}
               className="hidden"
+              disabled={isParsing}
             />
 
-            {selectedFile ? (
+            {isParsing ? (
+              <div className="space-y-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+                  <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                </div>
+                <p className="text-sm font-medium text-muted-foreground">Parsing file...</p>
+                <p className="text-xs text-muted-foreground/60">{selectedFile?.name}</p>
+              </div>
+            ) : selectedFile ? (
               <div className="space-y-2">
                 <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center mx-auto">
                   <FileSpreadsheet className="w-5 h-5 text-success" />
@@ -271,25 +288,8 @@ export default function ImportUploadModal({
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 p-5 border-t border-border bg-muted/20">
-          <Button type="button" variant="outline" onClick={onClose} disabled={importParse.isPending}>
+          <Button type="button" variant="outline" onClick={onClose} disabled={isParsing}>
             Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={handleUploadAndParse}
-            disabled={!selectedFile || importParse.isPending}
-          >
-            {importParse.isPending ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                Parsing...
-              </>
-            ) : (
-              <>
-                <Upload className="w-4 h-4 mr-2" />
-                Upload &amp; Preview
-              </>
-            )}
           </Button>
         </div>
       </div>
