@@ -16,6 +16,12 @@ from .audit import AuditLogViewSet
 from .alert import AlertViewSet
 from .barcode import BarcodeViewSet
 from .return_refund import ReturnRefundViewSet
+from .product_import_export import (
+    ProductExportView,
+    ProductImportParseView,
+    ProductImportConfirmView,
+    ProductImportTemplateView,
+)
 
 __all__ = [
     "AttributeViewSet", "CategoryViewSet", "BrandViewSet", "WarehouseViewSet",
@@ -24,4 +30,6 @@ __all__ = [
      "CustomerViewSet", "SalesOrderViewSet",
     "SalesReturnViewSet","VariantViewSet","BatchStockMixin", "ReportViewSet", "AuditLogViewSet","AlertViewSet", "BarcodeViewSet",
     "ReturnRefundViewSet",
+    "ProductExportView", "ProductImportParseView",
+    "ProductImportConfirmView", "ProductImportTemplateView",
 ]
