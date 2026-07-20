@@ -14,6 +14,9 @@ class Product(BaseModel):
     STATUS_CHOICES = [
         ('draft', 'Draft'), ('active', 'Active'), ('discontinued', 'Discontinued'), ('archived', 'Archived'),
     ]
+    SOURCE_CHOICES = [
+        ('manual', 'Manual'), ('excel', 'Excel'), ('csv', 'CSV'),
+    ]
 
     product_name = models.CharField(max_length=200, null=True, blank=True)
     description = models.TextField(blank=True)
@@ -25,6 +28,7 @@ class Product(BaseModel):
     storage_requirement = models.CharField(max_length=20, choices=STORAGE_CHOICES, default='AMBIENT')
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.0, validators=[MinValueValidator(0), MaxValueValidator(100)])
 
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='manual')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     is_active = models.BooleanField(default=True)
 

@@ -43,7 +43,7 @@ Daphne (ASGI server, port 8000)
 | Rich Text      | TipTap v3 (policy content editor)                           |
 | Animations     | Framer Motion v12                                           |
 | Video          | HLS.js v1.6 (CCTV HLS stream playback)                      |
-| PDF/Export     | jsPDF, react-pdf, html2canvas, xlsx, mammoth (DOCX)         |
+| PDF/Export     | jsPDF, react-pdf, html2canvas, xlsx, mammoth (DOCX), pandas (Excel/CSV backend) |
 | Backend        | Python 3.12, Django 6.0.4, DRF 3.17.1, Channels 4.1.0      |
 | ASGI Server    | Daphne 4.1.2                                                |
 | WSGI Server    | Gunicorn 21.2.0 (fallback)                                  |
@@ -117,7 +117,8 @@ alqaiser/
 │   │   │   ├── views/              ← 19 view files
 │   │   │   ├── audit.py            ← ThreadPoolExecutor-based audit engine
 │   │   │   ├── alert_utils.py      ← WebSocket alert helper
-│   │   │   └── signals_audit.py    ← pre-save/post-save/post-delete signals
+│   │   │   ├── signals_audit.py    ← pre-save/post-save/post-delete signals
+│   │   │   └── views/product_import_export.py ← Export (xlsx/csv), Import parse/confirm, template generator
 │   │   ├── monitoring/             ← AI monitoring (sites, NVRs, cameras, HLS streams)
 │   │   ├── notifications/          ← WebSocket notification subsystem
 │   │   │   ├── consumers.py        ← NotificationConsumer (AsyncWebsocketConsumer)
@@ -186,10 +187,11 @@ alqaiser/
         │   ├── PermissionGuard.tsx  ← route-level permission guard
         │   ├── PageHeader.tsx
         │   └── finance/, inventory/, sales/, payroll/, leave/, HRAssets/, monitoring/, recruitment/, settings/, Forms/, cards/, common/
-        ├── hooks/                   ← 78 hooks (57 root + 16 finance + 4 sales + 1 overall)
-        │   ├── finance/             ← 16 hooks (accounts, budgets, expenses, payments, supplier bills, customer invoices, journal entries, bank, trial balance, P&L, balance sheet, aging reports, expense report, audit logs, finance dashboard, forecast)
-        │   ├── sales/               ← 4 hooks (leads, quotes, sales invoices, sales dashboard)
-        │   └── overall/             ← 1 hook (overall dashboard)
+├── hooks/                   ← 79 hooks (58 root + 16 finance + 4 sales + 1 overall)
+│   ├── finance/             ← 16 hooks (accounts, budgets, expenses, payments, supplier bills, customer invoices, journal entries, bank, trial balance, P&L, balance sheet, aging reports, expense report, audit logs, finance dashboard, forecast)
+│   ├── sales/               ← 4 hooks (leads, quotes, sales invoices, sales dashboard)
+│   ├── overall/             ← 1 hook (overall dashboard)
+│   └── useProductExportImport.ts ← Export, Import-parse, Import-confirm mutations
         ├── config/
         │   ├── menu.js              ← sidebar menu structure
         │   ├── routePermissions.ts  ← route → permission mapping
