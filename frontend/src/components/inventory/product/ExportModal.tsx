@@ -2,9 +2,8 @@
 "use client";
 
 import { useState } from "react";
-import { X, Download, FileSpreadsheet, FileText, Search } from "lucide-react";
+import { X, Download, FileSpreadsheet, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useExportProducts } from "@/hooks/useProductExportImport";
 
 interface ExportModalProps {
@@ -12,122 +11,6 @@ interface ExportModalProps {
   onClose: () => void;
   hasSelection: boolean;
   selectedProductIds?: string[];
-  fetchCategories?: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
-  fetchBrands?: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
-}
-
-// ── Inline searchable select (reused from the codebase pattern) ──
-
-function FilterSelect({
-  label,
-  value,
-  onChange,
-  fetchOptions,
-}: {
-  label: string;
-  value: string;
-  onChange: (val: string) => void;
-  fetchOptions?: (params: { search: string; page: number; pageSize: number }) => Promise<{ options: { value: string; label: string }[]; hasMore: boolean; totalCount: number }>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [options, setOptions] = useState<{ value: string; label: string }[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const selectedLabel = options.find((o) => o.value === value)?.label || "";
-
-  const handleOpen = async () => {
-    setOpen(true);
-    if (!options.length && fetchOptions) {
-      setLoading(true);
-      try {
-        const result = await fetchOptions({ search: "", page: 1, pageSize: 50 });
-        setOptions(result.options);
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
-  const handleSearch = async (q: string) => {
-    setSearch(q);
-    if (fetchOptions) {
-      setLoading(true);
-      try {
-        const result = await fetchOptions({ search: q, page: 1, pageSize: 50 });
-        setOptions(result.options);
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
-  return (
-    <div className="relative">
-      <label className="text-xs font-medium mb-1.5 block text-muted-foreground">{label}</label>
-      <div
-        onClick={handleOpen}
-        className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border cursor-pointer hover:border-muted-foreground/40 transition-colors text-sm"
-      >
-        <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-        <span className="flex-1 truncate">
-          {selectedLabel || <span className="text-muted-foreground">All {label.toLowerCase()}s</span>}
-        </span>
-        {value && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onChange(""); setSearch(""); }}
-            className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-          >
-            <X className="w-3 h-3" />
-          </button>
-        )}
-      </div>
-
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute z-50 mt-1 w-full bg-card border border-border rounded-xl shadow-xl p-1.5 space-y-1">
-            <Input
-              value={search}
-              onChange={(e) => handleSearch(e.target.value)}
-              placeholder="Search..."
-              className="h-7 text-xs"
-              autoFocus
-            />
-            <div className="max-h-40 overflow-y-auto space-y-0.5">
-              {loading ? (
-                <p className="px-2 py-1.5 text-xs text-muted-foreground">Loading...</p>
-              ) : options.length === 0 ? (
-                <p className="px-2 py-1.5 text-xs text-muted-foreground">No matches</p>
-              ) : (
-                <>
-                  <button
-                    onClick={() => { onChange(""); setOpen(false); setSearch(""); }}
-                    className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-colors hover:bg-muted ${
-                      !value ? "bg-primary/10 font-medium" : ""
-                    }`}
-                  >
-                    All {label.toLowerCase()}s
-                  </button>
-                  {options.map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => { onChange(opt.value); setOpen(false); setSearch(""); }}
-                      className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-colors hover:bg-muted ${
-                        value === opt.value ? "bg-primary/10 font-medium" : ""
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
 }
 
 // ── Main Export Modal ──
@@ -137,13 +20,9 @@ export default function ExportModal({
   onClose,
   hasSelection,
   selectedProductIds = [],
-  fetchCategories,
-  fetchBrands,
 }: ExportModalProps) {
   const [scope, setScope] = useState<"all" | "selected">("all");
   const [format, setFormat] = useState<"xlsx" | "csv">("xlsx");
-  const [category, setCategory] = useState("");
-  const [brand, setBrand] = useState("");
   const exportMutation = useExportProducts();
 
   if (!open) return null;
@@ -152,8 +31,6 @@ export default function ExportModal({
     await exportMutation.mutateAsync({
       format,
       product_ids: scope === "selected" ? selectedProductIds : undefined,
-      category: category || undefined,
-      brand: brand || undefined,
     });
     onClose();
   };
@@ -240,22 +117,6 @@ export default function ExportModal({
                 </div>
               </button>
             </div>
-          </div>
-
-          {/* Category / Brand Filters */}
-          <div className="grid grid-cols-2 gap-3">
-            <FilterSelect
-              label="Category"
-              value={category}
-              onChange={setCategory}
-              fetchOptions={fetchCategories}
-            />
-            <FilterSelect
-              label="Brand"
-              value={brand}
-              onChange={setBrand}
-              fetchOptions={fetchBrands}
-            />
           </div>
 
           {/* Format Selection */}

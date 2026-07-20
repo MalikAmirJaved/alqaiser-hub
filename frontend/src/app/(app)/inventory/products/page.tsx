@@ -369,8 +369,6 @@ export default function ProductsPage() {
         onClose={() => setShowExportModal(false)}
         hasSelection={selectedRows.size > 0}
         selectedProductIds={selectedProductIds}
-        fetchCategories={fetchCategories}
-        fetchBrands={fetchBrands}
       />
 
       {/* Import Upload Modal */}
