@@ -8,6 +8,10 @@ from .views import (
     SalesReturnViewSet, VariantViewSet, ReportViewSet,
     AuditLogViewSet, AlertViewSet, BarcodeViewSet,
     ReturnRefundViewSet,
+    ProductExportView,
+    ProductImportParseView,
+    ProductImportConfirmView,
+    ProductImportTemplateView,
 )
 router = DefaultRouter()
 router.register(r'attributes', AttributeViewSet, basename='inventory-attribute')
@@ -32,6 +36,11 @@ router.register(r'alerts', AlertViewSet, basename='alerts')
 router.register(r'barcodes', BarcodeViewSet, basename='barcode')
 router.register(r'returns', ReturnRefundViewSet, basename='return-refund')
 
+# ── Export / Import (standalone APIViews — follows HR module pattern) ──
 urlpatterns = [
+    path('products/export/', ProductExportView.as_view(), name='product-export'),
+    path('products/import/parse/', ProductImportParseView.as_view(), name='product-import-parse'),
+    path('products/import/confirm/', ProductImportConfirmView.as_view(), name='product-import-confirm'),
+    path('products/import/template/', ProductImportTemplateView.as_view(), name='product-import-template'),
     path('', include(router.urls)),
 ]
