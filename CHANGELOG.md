@@ -7,16 +7,16 @@ All notable changes to the **Al Qaiser Nexus ERP (Al-Qaiser BOS)** project.
 ## [1.3] — 2026-07-21
 
 ### Added
-- **Product Bulk Export/Import** — Export products to xlsx/csv with filtering (category, brand, selected IDs). Import from xlsx/csv with preview, edit, and confirm flow.
-  - `ProductExportView` / `ProductImportParseView` / `ProductImportConfirmView` / `ProductImportTemplateView`
-  - Import auto-generates SKU for missing values, creates brands/categories on-the-fly
-  - Export includes Status column; import defaults all products to `active`
-  - Frontend import modals with drag-and-drop, validation, review table, success screen
+- **Product Export to XLSX** — Export all products to Excel (.xlsx) with variant-level rows including product details, pricing, stock levels, and source tracking.
+- **Product Import from XLSX/CSV** — Import products via spreadsheet with parse → review → confirm flow. Auto-generates SKU for missing values, creates brands/categories on-the-fly, initializes stock items in default warehouse.
+- **Source tracking on Brand/Category/Product** — New `source` field to track whether records were created via manual entry or Excel/CSV import.
 
 ### Fixed
-- **Credential user bugs** — Resolved 400 error when updating user without reselecting department/designation. Username is now updatable. COMPANY_ADMIN users no longer require department/designation fields.
-- **Import parse 500 error** — Fixed `_resolve_brand_or_category` crash when pandas returns `float('nan')` instead of a string, which caused an `AttributeError` and returned an HTML error page to the frontend.
-- **Non-JSON response handling** — Frontend `apiFetch` and `useImportParse` now handle non-JSON server responses gracefully with user-friendly error messages instead of raw `"Unexpected token '<'..."`.
+- **User update 400 error** — Resolved error when updating user without reselecting department/designation. Empty values are now stripped before submission.
+- **COMPANY_ADMIN department/designation** — COMPANY_ADMIN users no longer require department/designation fields; fields are hidden from the form.
+- **Username updatable** — Username field is now editable on user update.
+- **Import parse NaN crash** — Fixed `_resolve_brand_or_category` crash when pandas returns `float('nan')` instead of a string.
+- **Non-JSON error responses** — Frontend `apiFetch` now handles non-JSON server responses gracefully with user-friendly error messages.
 
 ---
 

@@ -118,7 +118,7 @@ alqaiser/
 │   │   │   ├── audit.py            ← ThreadPoolExecutor-based audit engine
 │   │   │   ├── alert_utils.py      ← WebSocket alert helper
 │   │   │   ├── signals_audit.py    ← pre-save/post-save/post-delete signals
-│   │   │   └── views/product_import_export.py ← Export (xlsx/csv), Import parse/confirm, template generator
+│   │   │   └── views/product_import_export.py ← Export (xlsx), Import parse/confirm, template generator
 │   │   ├── monitoring/             ← AI monitoring (sites, NVRs, cameras, HLS streams)
 │   │   ├── notifications/          ← WebSocket notification subsystem
 │   │   │   ├── consumers.py        ← NotificationConsumer (AsyncWebsocketConsumer)
