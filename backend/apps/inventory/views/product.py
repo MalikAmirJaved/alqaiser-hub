@@ -266,6 +266,7 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
             combined_q = Q()
             for term in terms:
                 term_q = Q(product_name__icontains=term)
+                term_q |= Q(description__icontains=term)
                 term_q |= Q(variants__variant_title__icontains=term)
                 term_q |= Q(variants__sku__icontains=term)
                 term_q |= Q(variants__barcode__icontains=term)
