@@ -56,8 +56,10 @@ export default function UserForm({
         email: initialData.email || "",
         first_name: initialData.first_name || "",
         last_name: initialData.last_name || "",
-        department: initialData.department || "",
-        designation: initialData.designation || "",
+        // Use department_id / designation_id (UUID) for the select value, since
+        // 'department' / 'designation' are write-only in the API and not returned in GET responses
+        department: initialData.department_id || initialData.department || "",
+        designation: initialData.designation_id || initialData.designation || "",
         phone_number: initialData.phone_number || "",
         password: "",
         confirm_password: "",

@@ -109,18 +109,22 @@ class UserProfileSerializer(serializers.ModelSerializer):
         password = validated_data.pop('password', None)
         department_value = validated_data.pop('department', None)
 
-        # Handle designation UUID if present
+        # Handle designation UUID if present (ignore empty string)
         designation_uuid = validated_data.pop('designation', None)
-        if designation_uuid is not None:
+        if designation_uuid:
             try:
                 instance.designation = Designation.objects.get(_id=designation_uuid, is_deleted=False)
             except Designation.DoesNotExist:
                 instance.designation = None
+        elif designation_uuid is not None:
+            # Empty string means user intentionally cleared designation
+            instance.designation = None
 
         if department_value is not None:
             instance.department = self._get_department(department_value)
 
         # Update other fields
+        instance.username = validated_data.get('username', instance.username)
         instance.first_name = validated_data.get('first_name', instance.first_name)
         instance.last_name = validated_data.get('last_name', instance.last_name)
         instance.email = validated_data.get('email', instance.email)
