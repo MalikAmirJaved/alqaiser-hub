@@ -75,6 +75,8 @@ export default function UserForm({
     }));
   };
 
+  const isCompanyAdmin = initialData?.role === 'COMPANY_ADMIN';
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!initialData && !formData.password) {
@@ -89,8 +91,16 @@ export default function UserForm({
       alert("Password must be at least 6 characters");
       return;
     }
-    const { confirm_password, ...submitData } = formData;
-    onSubmit(submitData);
+    const { confirm_password, department, designation, ...rest } = formData;
+
+    // Strip empty department/designation so they aren't sent as "" (invalid UUID)
+    const cleanedData: any = {
+      ...rest,
+      ...(department ? { department } : {}),
+      ...(designation ? { designation } : {}),
+    };
+
+    onSubmit(cleanedData);
   };
 
   return (
@@ -152,33 +162,35 @@ export default function UserForm({
             </label>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-3">
-            <label className="text-sm flex flex-col gap-1">
-              <span className="text-muted-foreground">Department</span>
-              <SearchableSelect
-                value={formData.department}
-                onChange={(val) => handleChange("department", val)}
-                fetchOptions={fetchDepartments}
-                placeholder="Search departments..."
-                onAddNew={() => setDeptModalOpen(true)}
-                addNewLabel="+ New Department"
-                displayLabel={initialData?.department_name || ""}
-              />
-            </label>
-            <label className="text-sm flex flex-col gap-1">
-              <span className="text-muted-foreground">Designation</span>
-              <SearchableSelect
-                value={formData.designation}
-                onChange={(val) => handleChange("designation", val)}
-                fetchOptions={fetchDesignations}
-                disabled={!formData.department}
-                placeholder="Search designations..."
-                onAddNew={() => setDesigModalOpen(true)}
-                addNewLabel="+ New Designation"
-                displayLabel={initialData?.designation_name || ""}
-              />
-            </label>
-          </div>
+          {!isCompanyAdmin && (
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className="text-sm flex flex-col gap-1">
+                <span className="text-muted-foreground">Department</span>
+                <SearchableSelect
+                  value={formData.department}
+                  onChange={(val) => handleChange("department", val)}
+                  fetchOptions={fetchDepartments}
+                  placeholder="Search departments..."
+                  onAddNew={() => setDeptModalOpen(true)}
+                  addNewLabel="+ New Department"
+                  displayLabel={initialData?.department_name || ""}
+                />
+              </label>
+              <label className="text-sm flex flex-col gap-1">
+                <span className="text-muted-foreground">Designation</span>
+                <SearchableSelect
+                  value={formData.designation}
+                  onChange={(val) => handleChange("designation", val)}
+                  fetchOptions={fetchDesignations}
+                  disabled={!formData.department}
+                  placeholder="Search designations..."
+                  onAddNew={() => setDesigModalOpen(true)}
+                  addNewLabel="+ New Designation"
+                  displayLabel={initialData?.designation_name || ""}
+                />
+              </label>
+            </div>
+          )}
 
           <label className="text-sm flex flex-col gap-1">
             <span className="text-muted-foreground">Phone Number</span>
