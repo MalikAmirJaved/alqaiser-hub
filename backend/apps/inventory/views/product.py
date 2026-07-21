@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import SAFE_METHODS
 from django.db import transaction
-from django.db.models import Q, F, Subquery, Exists, OuterRef
+from django.db.models import Q, F
 import uuid
 from decimal import Decimal
 from apps.common.baseauthentication import CompanyBranchMixin
@@ -263,29 +263,14 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
         search = self.request.query_params.get('search', '').strip()
         if search:
             terms = search.split()
-            # Product name: all terms must match product_name
-            product_name_q = Q()
+            combined_q = Q()
             for term in terms:
-                product_name_q &= Q(product_name__icontains=term)
-
-            # Variant search: all terms must match the SAME variant
-            variant_match_q = Q()
-            for term in terms:
-                variant_match_q &= Q(
-                    Q(variant_title__icontains=term) |
-                    Q(sku__icontains=term) |
-                    Q(barcode__icontains=term)
-                )
-
-            matching_variant_ids = ProductVariant.objects.filter(
-                variant_match_q,
-                product=OuterRef('pk'),
-                is_deleted=False,
-            ).values('id')
-
-            qs = qs.filter(
-                product_name_q | Exists(matching_variant_ids)
-            ).distinct()
+                term_q = Q(product_name__icontains=term)
+                term_q |= Q(variants__variant_title__icontains=term)
+                term_q |= Q(variants__sku__icontains=term)
+                term_q |= Q(variants__barcode__icontains=term)
+                combined_q &= term_q
+            qs = qs.filter(combined_q).distinct()
 
         qs = qs.prefetch_related(
             'variants',
