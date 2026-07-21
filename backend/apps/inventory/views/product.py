@@ -29,11 +29,11 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
     lookup_field = '_id'
     lookup_value_regex = '[0-9a-f-]+'
     filter_fields = {
-        'search': ['product_name', 'variants__sku'],
         'category': 'category___id',
         'brand': 'brand___id',
         'status': 'status',
     }
+    ordering = ['-created_at']
 
     def get_permissions(self):
         if self.request.method in SAFE_METHODS:
@@ -259,6 +259,19 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
 
     def get_queryset(self):
         qs = super().get_queryset()
+
+        search = self.request.query_params.get('search', '').strip()
+        if search:
+            terms = search.split()
+            combined_q = Q()
+            for term in terms:
+                term_q = Q(product_name__icontains=term)
+                term_q |= Q(description__icontains=term)
+                term_q |= Q(variants__variant_title__icontains=term)
+                term_q |= Q(variants__sku__icontains=term)
+                term_q |= Q(variants__barcode__icontains=term)
+                combined_q &= term_q
+            qs = qs.filter(combined_q).distinct()
 
         qs = qs.prefetch_related(
             'variants',

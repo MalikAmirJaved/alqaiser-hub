@@ -8,6 +8,7 @@ class BrandSerializer(serializers.ModelSerializer):
         model = Brand
         fields = [
             "id", "name", "code", "description", "country_of_origin",
+            "source",
             "created_at", "updated_at"
         ]
         read_only_fields = ["id", "created_at", "updated_at"]

@@ -264,7 +264,7 @@ export default function Sidebar({ open, onClose }) {
           <p className="text-[11px] text-sidebar-foreground/50 text-center">
             Powered by <span className="font-semibold text-sidebar-foreground/70">ClickMasters</span>
             <span className="mx-1">·</span>
-            <span className="font-mono">v1.2</span>
+            <span className="font-mono">v1.3</span>
           </p>
         </div>
       </aside>
