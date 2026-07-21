@@ -18,6 +18,7 @@ class CategoryViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequired
     filter_fields = {
         'search': ['name', 'code'],
     }
+    ordering = ['-created_at']
 
     def get_queryset(self):
         qs = super().get_queryset()

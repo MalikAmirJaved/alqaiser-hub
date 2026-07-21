@@ -18,6 +18,7 @@ class BrandViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredMix
     filter_fields = {
         'search': ['name', 'code', 'country_of_origin'],
     }
+    ordering = ['-created_at']
 
     def get_queryset(self):
         qs = super().get_queryset()

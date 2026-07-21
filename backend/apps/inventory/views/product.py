@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import SAFE_METHODS
 from django.db import transaction
-from django.db.models import Q, F
+from django.db.models import Q, F, Subquery, Exists, OuterRef
 import uuid
 from decimal import Decimal
 from apps.common.baseauthentication import CompanyBranchMixin
@@ -29,11 +29,11 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
     lookup_field = '_id'
     lookup_value_regex = '[0-9a-f-]+'
     filter_fields = {
-        'search': ['product_name', 'variants__sku'],
         'category': 'category___id',
         'brand': 'brand___id',
         'status': 'status',
     }
+    ordering = ['-created_at']
 
     def get_permissions(self):
         if self.request.method in SAFE_METHODS:
@@ -259,6 +259,33 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
 
     def get_queryset(self):
         qs = super().get_queryset()
+
+        search = self.request.query_params.get('search', '').strip()
+        if search:
+            terms = search.split()
+            # Product name: all terms must match product_name
+            product_name_q = Q()
+            for term in terms:
+                product_name_q &= Q(product_name__icontains=term)
+
+            # Variant search: all terms must match the SAME variant
+            variant_match_q = Q()
+            for term in terms:
+                variant_match_q &= Q(
+                    Q(variant_title__icontains=term) |
+                    Q(sku__icontains=term) |
+                    Q(barcode__icontains=term)
+                )
+
+            matching_variant_ids = ProductVariant.objects.filter(
+                variant_match_q,
+                product=OuterRef('pk'),
+                is_deleted=False,
+            ).values('id')
+
+            qs = qs.filter(
+                product_name_q | Exists(matching_variant_ids)
+            ).distinct()
 
         qs = qs.prefetch_related(
             'variants',
