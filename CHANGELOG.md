@@ -10,6 +10,8 @@ All notable changes to the **Al Qaiser Nexus ERP (Al-Qaiser BOS)** project.
 - **Product Export to XLSX** — Export all products to Excel (.xlsx) with variant-level rows including product details, pricing, stock levels, and source tracking.
 - **Product Import from XLSX/CSV** — Import products via spreadsheet with parse → review → confirm flow. Auto-generates SKU for missing values, creates brands/categories on-the-fly, initializes stock items in default warehouse.
 - **Source tracking on Brand/Category/Product** — New `source` field to track whether records were created via manual entry or Excel/CSV import.
+- **Most recent first** — Brand, Category, and Product listing pages now show newest records at the top by default.
+- **Enhanced product search** — Product search now covers product name, description, variant title, SKU, and barcode across all variants.
 
 ### Fixed
 - **User update 400 error** — Resolved error when updating user without reselecting department/designation. Empty values are now stripped before submission.
