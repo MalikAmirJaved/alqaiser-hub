@@ -54,7 +54,7 @@ export default function ExportModal({
           {/* Format Selection */}
           <div>
             <label className="text-sm font-medium mb-2 block">Format</label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3">
               <button
                 type="button"
                 onClick={() => setFormat("xlsx")}
@@ -68,21 +68,6 @@ export default function ExportModal({
                 <div className="text-left">
                   <p className="text-sm font-medium">Excel (.xlsx)</p>
                   <p className="text-xs text-muted-foreground">Recommended</p>
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setFormat("csv")}
-                className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
-                  format === "csv"
-                    ? "border-primary bg-primary/5 shadow-sm"
-                    : "border-border hover:border-muted-foreground/30 hover:bg-muted/20"
-                }`}
-              >
-                <FileText className="w-5 h-5 text-blue-500" />
-                <div className="text-left">
-                  <p className="text-sm font-medium">CSV (.csv)</p>
-                  <p className="text-xs text-muted-foreground">Plain text</p>
                 </div>
               </button>
             </div>
