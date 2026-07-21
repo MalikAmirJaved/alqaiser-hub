@@ -138,7 +138,18 @@ export function useImportParse() {
         }
       );
 
-      const data = await response.json();
+      let data: ImportParseResponse;
+      try {
+        const text = await response.text();
+        data = JSON.parse(text);
+      } catch {
+        const msg =
+          !response.ok && response.status >= 500
+            ? "The server encountered an error. Please check your file format and try again."
+            : "Server returned an unexpected response. Please try again.";
+        throw new Error(msg);
+      }
+
       if (!response.ok) {
         throw new Error(data.message || "Failed to parse file");
       }

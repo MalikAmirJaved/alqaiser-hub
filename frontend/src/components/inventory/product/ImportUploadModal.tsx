@@ -18,7 +18,6 @@ const TEMPLATE_COLUMNS = [
   "Unit",
   "Storage Requirement",
   "Tax Rate (%)",
-  "Status",
   "Variant SKU",
   "Variant Title",
   "Variant Barcode",
@@ -27,6 +26,8 @@ const TEMPLATE_COLUMNS = [
   "Min Stock Level",
   "Max Stock Level",
 ];
+
+// Note: Status is removed from import — imported products always get status='active'.
 
 interface ImportUploadModalProps {
   open: boolean;

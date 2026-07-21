@@ -27,10 +27,12 @@ from apps.inventory.models import Product, ProductVariant, Brand, Category, Ware
 
 SAMPLE_HEADERS = [
     'Product Name', 'Product Description', 'Category', 'Brand',
-    'Unit', 'Storage Requirement', 'Tax Rate (%)', 'Status',
+    'Unit', 'Storage Requirement', 'Tax Rate (%)',
     'Variant SKU', 'Variant Title', 'Variant Barcode',
     'Buying Price', 'Selling Price', 'Min Stock Level', 'Max Stock Level',
 ]
+
+EXPORT_HEADERS = SAMPLE_HEADERS + ['Status']
 
 EXPECTED_COLUMNS = SAMPLE_HEADERS
 
@@ -82,8 +84,10 @@ def _export_rows(queryset):
             }
 
 
-def _make_xlsx(rows, filename):
-    df = pd.DataFrame(rows, columns=SAMPLE_HEADERS)
+def _make_xlsx(rows, filename, headers=None):
+    if headers is None:
+        headers = SAMPLE_HEADERS
+    df = pd.DataFrame(rows, columns=headers)
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Products')
@@ -96,9 +100,11 @@ def _make_xlsx(rows, filename):
     return response
 
 
-def _make_csv(rows, filename):
+def _make_csv(rows, filename, headers=None):
+    if headers is None:
+        headers = SAMPLE_HEADERS
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=SAMPLE_HEADERS)
+    writer = csv.DictWriter(output, fieldnames=headers)
     writer.writeheader()
     writer.writerows(rows)
     response = HttpResponse(output.getvalue(), content_type='text/csv; charset=utf-8')
@@ -107,7 +113,8 @@ def _make_csv(rows, filename):
 
 
 def _resolve_brand_or_category(name, model_class, company_id, branch_id):
-    name = (name or '').strip()
+    name = _clean_val(name, '')
+    name = str(name).strip()
     if not name:
         return None, '', False
     obj = model_class.objects.filter(
@@ -213,8 +220,8 @@ class ProductExportView(CompanyBranchMixin, PermissionRequiredMixin, APIView):
 
         filename = f'products_export_{request.user.company_id}'
         if export_format == 'csv':
-            return _make_csv(rows, filename)
-        return _make_xlsx(rows, filename)
+            return _make_csv(rows, filename, headers=EXPORT_HEADERS)
+        return _make_xlsx(rows, filename, headers=EXPORT_HEADERS)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -291,7 +298,7 @@ class ProductImportParseView(CompanyBranchMixin, PermissionRequiredMixin, APIVie
                 'unit': str(_clean_val(row.get('Unit'), 'PIECE')),
                 'storage_requirement': str(_clean_val(row.get('Storage Requirement'), 'AMBIENT')),
                 'tax_rate': float(_clean_val(row.get('Tax Rate (%)'), 0)),
-                'status': str(_clean_val(row.get('Status'), 'active')),
+                'status': 'active',
                 'variant_sku': str(_clean_val(row.get('Variant SKU'), '')).strip(),
                 'variant_title': str(_clean_val(row.get('Variant Title'), '')),
                 'variant_barcode': str(_clean_val(row.get('Variant Barcode'), '')),
@@ -362,7 +369,7 @@ class ProductImportConfirmView(CompanyBranchMixin, PermissionRequiredMixin, APIV
                         unit=first.get('unit', 'PIECE'),
                         storage_requirement=first.get('storage_requirement', 'AMBIENT'),
                         tax_rate=Decimal(str(first.get('tax_rate', 0))),
-                        status=first.get('status', 'active'),
+                        status='active',
                         is_active=True, source=source,
                         company_id=company_id, branch_id=branch_id,
                         created_by=user, updated_by=user,
