@@ -60,7 +60,7 @@ export default function PaymentModal({
     c => c.employee_id === employee?.id && c.status === "CONFIRM"
   );
   const activeLoans = allLoans.filter(l => {
-    if (l.employee_id !== employee?.id || l.approval !== "CONFIRM" || l.status !== "PAID" || l.loan_type === "SALARY_ADVANCE") return false;
+    if (l.employee_id !== employee?.id || l.approval !== "CONFIRM" || l.status !== "PAID") return false;
     // Only include loans whose selected months or month range matches the current payroll period
     const freq = l.frequency_type;
     if (freq === 'SELECTED_MONTH' || freq === 'ONE_TIME') {

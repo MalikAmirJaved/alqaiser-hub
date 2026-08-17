@@ -478,10 +478,6 @@ class PayrollView(PermissionRequiredMixin, APIView):
             ).prefetch_related('selected_months', 'month_range')
             
             for loan in active_loans:
-                # Skip salary advances (handled by auto-deduction above)
-                if loan.loan_type == 'SALARY_ADVANCE':
-                    continue
-                
                 # Don't deduct twice - skip if already deducted for this month/year
                 if PayrollLoanDeduction.objects.filter(
                     loan=loan,
@@ -920,10 +916,6 @@ class PayrollView(PermissionRequiredMixin, APIView):
                 is_deleted=False
             ).prefetch_related('selected_months', 'month_range')
             for loan in active_loans:
-                # Skip salary advances (handled by auto-deduction above)
-                if loan.loan_type == 'SALARY_ADVANCE':
-                    continue
-                
                 # Don't deduct twice - skip if already deducted for this month/year
                 if PayrollLoanDeduction.objects.filter(
                     loan=loan,
