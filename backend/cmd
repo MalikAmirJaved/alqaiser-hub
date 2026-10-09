@@ -1,5 +1,6 @@
 #  venv activate
 # source venv/bin/activate
+# ./venv/Scripts/activate
 
 #  venv deactivate
 # deactivate
