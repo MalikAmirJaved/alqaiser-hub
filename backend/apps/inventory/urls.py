@@ -10,6 +10,7 @@ from .views import (
     ReturnRefundViewSet,
     ProductExportView,
     ProductImportParseView,
+    ProductImportValidateView,
     ProductImportConfirmView,
     ProductImportTemplateView,
 )
@@ -40,6 +41,7 @@ router.register(r'returns', ReturnRefundViewSet, basename='return-refund')
 urlpatterns = [
     path('products/export/', ProductExportView.as_view(), name='product-export'),
     path('products/import/parse/', ProductImportParseView.as_view(), name='product-import-parse'),
+    path('products/import/validate/', ProductImportValidateView.as_view(), name='product-import-validate'),
     path('products/import/confirm/', ProductImportConfirmView.as_view(), name='product-import-confirm'),
     path('products/import/template/', ProductImportTemplateView.as_view(), name='product-import-template'),
     path('', include(router.urls)),

@@ -4,6 +4,19 @@ All notable changes to the **Al Qaiser Nexus ERP (Al-Qaiser BOS)** project.
 
 ---
 
+## [1.4] — 2026-10-09
+
+### Added
+- **Product Import conflict policies** — The Review & Edit modal now offers **Add New**, **Update Existing**, **Skip Duplicates**, and **Replace Existing**, submitted to and enforced by the server.
+- **SKU conflict visibility** — Uploaded SKUs are checked against existing records and the file itself; conflicting variants get a red border plus an icon and message, with the existing product/variant/category/brand/warehouse shown inline.
+- **Inline revalidation** — Edited SKUs are revalidated server-side (debounced) via a new `products/import/validate/` endpoint; `Update Existing`/`Replace Existing` update in place and preserve stock and history.
+
+### Fixed
+- **Duplicate SKU did not identify the existing product** — Import now returns the existing product/variant details for conflicting SKUs (company + branch scoped).
+- **Technical database errors shown on import** — SKU conflicts return friendly, row-scoped messages; raw SQL/constraint text is logged server-side only.
+
+---
+
 ## [1.3] — 2026-07-21
 
 ### Added

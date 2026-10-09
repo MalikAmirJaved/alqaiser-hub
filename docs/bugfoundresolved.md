@@ -27,6 +27,42 @@ Use this template:
 
 ## Resolved
 
+### BUG-20261009-02 — Product import did not identify the existing product for a duplicate SKU
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | High |
+| Module | Inventory / Import |
+| Found | 2026-10-09 (QA) |
+| Resolved | 2026-10-09 (changelog 1.4) |
+| Root cause | The parse/confirm import path never queried `ProductVariant` by SKU; the only signal was a raw `IntegrityError` with no record identity. |
+| Fix | Added batched server-side duplicate resolution (`_resolve_duplicates`, `_existing_variant_map`) scoped to company+branch; parse/validate responses now include existing product/variant/category/brand/warehouse metadata, distinguishing DB conflicts, within-file duplicates, and soft-deleted SKUs. |
+| Prevention | `apps/inventory/tests_import.py` covers DB/within-file/soft-delete/tenant/case behavior. |
+
+### BUG-20261009-03 — Product import lacked conflict-resolution options
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | High |
+| Module | Inventory / Import |
+| Found | 2026-10-09 (QA) |
+| Resolved | 2026-10-09 (changelog 1.4) |
+| Root cause | The confirm endpoint accepted only `rows`/`source` and always created new records; the modal offered only "Confirm & Create". |
+| Fix | Added `conflict_policy` (Add New / Update Existing / Skip Duplicates / Replace Existing) enforced server-side, plus a policy selector with effect summary in the Review & Edit modal. Update/Replace are non-destructive in-place updates that preserve stock, IDs, images, attributes, and historical FKs. |
+| Prevention | Policy tests in `apps/inventory/tests_import.py` assert fields, counters, and stock/ID preservation. |
+
+### BUG-20261009-04 — Technical database errors shown to users on duplicate SKU
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | Medium |
+| Module | Inventory / Import |
+| Found | 2026-10-09 (QA) |
+| Resolved | 2026-10-09 (changelog 1.4) |
+| Root cause | `ProductImportConfirmView` returned `f'DB constraint: {e}. Nothing was created.'` including raw PostgreSQL constraint text, rendered verbatim by the modal. |
+| Fix | Conflicts are detected before writes and returned as friendly row-scoped `errors`; unexpected `IntegrityError` is caught (with savepoints for Skip Duplicates) and logged server-side via `logger.exception`, never returned. |
+| Prevention | `ImportNoRawDbErrorTest` asserts no raw DB text in messages; transaction/savepoint model documented in `doc/plan.md` §6.1. |
+
 ### BUG-20260721-01 — User update returns 400 when department/designation omitted
 | Field | Value |
 | ----- | ----- |
