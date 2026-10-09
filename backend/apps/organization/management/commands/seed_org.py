@@ -36,9 +36,9 @@ class Command(BaseCommand):
             }
         )
         if created:
-            self.stdout.write(self.style.SUCCESS(f'✓ Company created: {company.name}'))
+            self.stdout.write(self.style.SUCCESS(f'[OK] Company created: {company.name}'))
         else:
-            self.stdout.write(f'— Company exists: {company.name}')
+            self.stdout.write(f'[-] Company exists: {company.name}')
 
         # -------------------------
         # BRANCH
@@ -54,9 +54,9 @@ class Command(BaseCommand):
             }
         )
         if created:
-            self.stdout.write(self.style.SUCCESS(f'✓ Branch created: {branch.name}'))
+            self.stdout.write(self.style.SUCCESS(f'[OK] Branch created: {branch.name}'))
         else:
-            self.stdout.write(f'— Branch exists: {branch.name}')
+            self.stdout.write(f'[-] Branch exists: {branch.name}')
 
         # -------------------------
         # ADMIN USER
@@ -74,9 +74,9 @@ class Command(BaseCommand):
             user.company = company
             user.branch = branch
             user.save()
-            self.stdout.write(self.style.SUCCESS(f'✓ Admin created: {admin_user}'))
+            self.stdout.write(self.style.SUCCESS(f'[OK] Admin created: {admin_user}'))
         else:
-            self.stdout.write(f'— Admin exists: {admin_user}')
+            self.stdout.write(f'[-] Admin exists: {admin_user}')
 
         # -------------------------
         # DEFAULT WAREHOUSE
@@ -104,9 +104,9 @@ class Command(BaseCommand):
                 created_by=user,
                 updated_by=user,
             )
-            self.stdout.write(self.style.SUCCESS(f'✓ Default warehouse created: {warehouse_name} ({warehouse_code})'))
+            self.stdout.write(self.style.SUCCESS(f'[OK] Default warehouse created: {warehouse_name} ({warehouse_code})'))
         else:
-            self.stdout.write(f'— Warehouse already exists: {warehouse_code}')
+            self.stdout.write(f'[-] Warehouse already exists: {warehouse_code}')
 
         # -------------------------
         # COMPANY SETTINGS & WORKING DAYS
@@ -124,9 +124,9 @@ class Command(BaseCommand):
             }
         )
         if settings_created:
-            self.stdout.write(self.style.SUCCESS(f'✓ Company settings created for {company.name}'))
+            self.stdout.write(self.style.SUCCESS(f'[OK] Company settings created for {company.name}'))
         else:
-            self.stdout.write(f'— Company settings already exist for {company.name}')
+            self.stdout.write(f'[-] Company settings already exist for {company.name}')
 
         # Create default working days (Monday=0 .. Sunday=6)
         default_days = [
@@ -158,9 +158,9 @@ class Command(BaseCommand):
                 working_days_created += 1
 
         if working_days_created:
-            self.stdout.write(self.style.SUCCESS(f'✓ Created {working_days_created} default working days'))
+            self.stdout.write(self.style.SUCCESS(f'[OK] Created {working_days_created} default working days'))
         else:
-            self.stdout.write('— Working days already exist')
+            self.stdout.write('[-] Working days already exist')
 
         # ------------------------------------------------------------
         # CHART OF ACCOUNTS  (formerly seed_chart_of_accounts.py)
@@ -196,10 +196,10 @@ class Command(BaseCommand):
         if created_count:
             self.stdout.write(
                 self.style.SUCCESS(
-                    f'✓ Seeded {created_count} accounts for company={company.id}, branch={branch.id}'
+                    f'[OK] Seeded {created_count} accounts for company={company.id}, branch={branch.id}'
                 )
             )
         else:
-            self.stdout.write('— Chart of accounts already exists')
+            self.stdout.write('[-] Chart of accounts already exists')
 
         self.stdout.write(self.style.SUCCESS('\nSeeding completed successfully.'))

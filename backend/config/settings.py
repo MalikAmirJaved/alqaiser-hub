@@ -89,18 +89,25 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = 'config.asgi.application'
 
+# Redis 5.x does not support RESP3 HELLO; redis-py 5+ defaults to protocol 3.
+# Force RESP2 so Channels/cache work with Redis 5.0.x (common on Windows).
+REDIS_HOST = env('REDIS_HOST', default='redis')
+REDIS_PORT = env.int('REDIS_PORT', default=6379)
+REDIS_CONNECTION_KWARGS = {
+    "host": REDIS_HOST,
+    "port": REDIS_PORT,
+    "protocol": 2,
+    "socket_timeout": None,
+    "socket_connect_timeout": 10,
+    "retry_on_timeout": True,
+    "socket_keepalive": True,
+}
+
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            "hosts": [{
-                "host": env('REDIS_HOST', default='redis'),
-                "port": env.int('REDIS_PORT', default=6379),
-                "socket_timeout": None,
-                "socket_connect_timeout": 10,
-                "retry_on_timeout": True,
-                "socket_keepalive": True,
-            }],
+            "hosts": [REDIS_CONNECTION_KWARGS],
         },
     },
 }
@@ -242,13 +249,18 @@ LOGGING = {
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': f"redis://{env('REDIS_HOST', default='redis')}:{env('REDIS_PORT', default=6379)}/1",
+        'LOCATION': f"redis://{REDIS_HOST}:{REDIS_PORT}/1",
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
             'CONNECTION_POOL_CLASS': 'redis.BlockingConnectionPool',
-            'CONNECTION_POOL_CLASS_KWARGS': {
+            # django-redis reads CONNECTION_POOL_KWARGS (not *_CLASS_KWARGS)
+            'CONNECTION_POOL_KWARGS': {
                 'max_connections': 50,
                 'timeout': 20,
+                'protocol': 2,  # RESP2 — required for Redis < 6
+            },
+            'REDIS_CLIENT_KWARGS': {
+                'protocol': 2,
             },
             'MAX_CONNECTIONS': 1000,
             'PICKLE_VERSION': -1,
