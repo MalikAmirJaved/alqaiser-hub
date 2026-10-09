@@ -1,8 +1,26 @@
 # AGENT.md — Al Qaiser Nexus ERP (Al-Qaiser BOS)
 
-This document is the single source of truth for the **Al Qaiser Nexus ERP** codebase.
-It is derived exclusively from the current code. Do not rely on assumptions or
-external documentation if they conflict with what is written here.
+This document is the **deep technical source of truth** for the **Al Qaiser Nexus ERP**
+codebase (repo: `nexuscrm`). It is derived from the current code. If assumptions or
+external docs conflict with this file or the code, trust the **code**, then update docs.
+
+**Last reviewed:** 2026-10-09
+
+### Companion documentation (prefer for day-to-day management)
+
+| Doc | Role |
+| --- | ---- |
+| [`prompt.md`](./prompt.md) | Condensed AI system prompt — start agents here |
+| [`docs/README.md`](./docs/README.md) | Documentation index |
+| [`docs/architecture.md`](./docs/architecture.md) | System design summary |
+| [`docs/workflow.md`](./docs/workflow.md) | Dev, auth, request, business workflows |
+| [`docs/filestructure.md`](./docs/filestructure.md) | Repository map |
+| [`docs/bugfoundresolved.md`](./docs/bugfoundresolved.md) | Bug log (found → resolved) |
+| [`docs/setup.md`](./docs/setup.md) | Local non-Docker runbook |
+| [`docs/conventions.md`](./docs/conventions.md) | Short coding/git conventions |
+| [`CHANGELOG.md`](./CHANGELOG.md) | Versioned release notes |
+| [`documentation.txt`](./documentation.txt) | End-user product guide |
+| `backend/cmd` | Local command cheat-sheet |
 
 ---
 
@@ -28,7 +46,7 @@ Daphne (ASGI server, port 8000)
   ├── PostgreSQL (primary DB)
   ├── Redis DB 0 (Channels layer for WebSocket)
   ├── Redis DB 1 (Cache: permissions, code generation, general)
-  └── Celery (forecast tasks, daily beat schedule)
+  └── Celery (forecast tasks, daily beat schedule) — separate processes
 ```
 
 ### Technology Stack
@@ -54,8 +72,8 @@ Daphne (ASGI server, port 8000)
 | Task Queue     | Celery 5.6.3 + Redis (beat for daily forecast tasks)        |
 | ML/Analytics   | pandas 3.0.3, numpy 2.4.6, opencv-python-headless           |
 | System Deps    | ffmpeg (HLS/stream processing)                              |
-| Container      | Docker + Docker Compose, multi-stage builds                 |
-| Package Mgr    | npm (frontend), pip (backend)                               |
+| Runtime        | Local processes (Docker compose removed from repo)          |
+| Package Mgr    | npm/bun (frontend), pip (backend)                           |
 | Env Mgr        | django-environ 0.13.0                                       |
 | Seed Data      | faker (development seeding)                                 |
 
@@ -64,21 +82,25 @@ Daphne (ASGI server, port 8000)
 ## 2. Repository Structure
 
 ```
-alqaiser/
-├── agent.md                        ← YOU ARE HERE
-├── docker-compose.yml              ← dev orchestration
-├── docker-compose.prod.yml         ← production orchestration
-├── .env                            ← shared env (frontend/backend vars)
+nexuscrm/
+├── agent.md                        ← YOU ARE HERE (deep reference)
+├── prompt.md                       ← AI system prompt
+├── CHANGELOG.md
+├── documentation.txt               ← end-user guide
+├── docs/                           ← professional ops docs (architecture, workflow, …)
+├── opencode.json
 ├── .gitignore
 │
 ├── backend/                        ← Django project root
+│   ├── cmd                         ← local command cheat-sheet
 │   ├── config/                     ← project configuration
 │   │   ├── settings.py             ← 14 internal apps, 10 middleware, DRF, JWT, CORS, Redis
-│   │   ├── urls.py                 ← root URL router → 14 app prefixes under /api/
+│   │   ├── urls.py                 ← root URL router → app prefixes under /api/
 │   │   ├── asgi.py                 ← ProtocolTypeRouter (HTTP + WS with JWT auth)
 │   │   ├── wsgi.py                 ← fallback WSGI
 │   │   ├── celery.py               ← Celery app + beat schedule
-│   │   └── test_runner.py          ← custom test runner (unused in settings)
+│   │   ├── test_runner.py          ← custom test runner (unused in settings)
+│   │   └── test_settings.py
 │   ├── apps/
 │   │   ├── accounts/               ← login, logout, refresh, me endpoints
 │   │   ├── audit/                  ← signal-based audit logging
@@ -145,10 +167,10 @@ alqaiser/
 │   ├── consumers/
 │   │   └── permission_consumer.py  ← PermissionConsumer (AsyncWebsocketConsumer)
 │   ├── upload/                     ← user-uploaded files (company logos, employee docs, product images)
+│   ├── face_model/                 ← monitoring-related assets (if present)
 │   ├── manage.py
 │   ├── requirements.txt
-│   ├── entrypoint.sh               ← wait-for-db, collectstatic, daphne start
-│   └── Dockerfile                  ← python:3.12-slim, multi-stage
+│   └── .env                        ← backend secrets (not committed)
 │
 └── frontend/                       ← Next.js 16 project
     ├── package.json                ← scripts: dev, build, start, lint
@@ -158,7 +180,6 @@ alqaiser/
     ├── bunfig.toml
     ├── postcss.config.mjs
     ├── eslint.config.js             ← flat config, TS + React Hooks
-    ├── Dockerfile
     ├── .env                         ← NEXT_PUBLIC_API_URL
     └── src/
         ├── app/
@@ -211,9 +232,13 @@ alqaiser/
         │   └── utils.ts             ← cn() helper
         ├── layouts/
         │   └── AppLayout.tsx        ← auth check, permission loading, route guard, sidebar+topbar shell
+        ├── services/
+        │   └── localStorageService.ts
         ├── types/                   ← policy.ts, purchase.ts, shifts.ts
         └── seed/initializeSystem.js ← system bootstrap script
 ```
+
+Compact navigation map: [`docs/filestructure.md`](./docs/filestructure.md).
 
 ---
 
@@ -637,7 +662,7 @@ ProtocolTypeRouter
 | `ORG_COMPANY_NAME/SHORT/BRANCH_NAME/CODE`     | —                              | Seed data                      |
 | `ORG_ADMIN_USERNAME/EMAIL/PASSWORD`           | —                              | Seed admin credentials         |
 | `ORG_WAREHOUSE_CODE/NAME`                     | —                              | Seed warehouse                 |
-| `APP_HOST` (docker-compose)                   | —                              | Bind address for services (e.g. `192.168.88.51`) |
+| `APP_HOST` (optional / LAN)                   | —                              | Host/IP used when binding or advertising services (e.g. `192.168.88.51`) |
 
 ---
 
@@ -1139,6 +1164,8 @@ Backend: PaymentViewSet.create()
 
 ## 13. AI Contributor Rules
 
+> Condensed prompt for agents: [`prompt.md`](./prompt.md). Process docs: [`docs/`](./docs/).
+
 ### Where to Add New Components
 
 | Component Type            | Location                                      | Convention                                                    |
@@ -1232,7 +1259,8 @@ Backend: PaymentViewSet.create()
 | Mixed file formats             | Various`.jsx` files                                                                 | `DataTable.jsx`, `LocationSelectors.jsx`, `CurrencySelect.jsx`, `EmployeeForm.jsx` — migrating to `.tsx` is ongoing. |
 | Forgot password leak           | `frontend/src/app/login/page.tsx`                                                   | Returns hardcoded`"password is admin123"` — security risk.                                                                   |
 | Plaintext passwords            | `backend/.env`                                                                      | `ORG_ADMIN_PASSWORD=123456` — development-only but risky.                                                                    |
-| Celery not in entrypoint       | `backend/entrypoint.sh`                                                             | Only starts daphne. Celery worker and beat require separate containers or manual startup.                                       |
+| Celery not auto-started        | local runtime / `backend/cmd`                                                       | Daphne alone does not start Celery. Worker and beat require separate processes (see docs/setup.md).                              |
+| Docker removed                 | repo root                                                                           | docker-compose / Dockerfiles removed — use local Postgres, Redis, Daphne, Next.js (docs/setup.md).                               |
 | Commented-out routes           | `backend/apps/finance/urls.py`                                                      | `bank-transactions`, `vendor` routes commented out.                                                                         |
 | `test_runner.py` unused      | `backend/config/test_runner.py`                                                     | Exists but not referenced in`settings.py`.                                                                                    |
 | `test_settings.py` unused    | `backend/config/test_settings.py`                                                   | Exists but not used.                                                                                                            |
@@ -1246,24 +1274,24 @@ Backend: PaymentViewSet.create()
 
 ---
 
-## 15. Docker & Deployment
+## 15. Local Runtime & Deployment
 
-### Docker Compose Services
+> **Docker compose / Dockerfiles were removed from this repository.**  
+> Run PostgreSQL, Redis, Daphne, Next.js, and Celery as local (or externally managed) processes.  
+> Full runbook: [`docs/setup.md`](./docs/setup.md). Cheat-sheet: `backend/cmd`.
 
-| Service      | Image             | Ports                  | Depends On |
-| ------------ | ----------------- | ---------------------- | ---------- |
-| `db`       | postgres:15       | ${APP_HOST}:5433:5432  | —         |
-| `redis`    | redis:7           | 6379:6379              | —         |
-| `backend`  | alqaiser-backend  | ${APP_HOST}:8000:8000  | db, redis  |
-| `frontend` | alqaiser-frontend | ${APP_HOST}:3000:3000  | backend    |
+### Recommended local processes
 
-**Note:** Ports are bound to `APP_HOST` (e.g. `192.168.88.51`) from `.env`. Frontend's `NEXT_PUBLIC_API_URL` is set to `http://${APP_HOST}:8000`.
+| Process | Command / notes | Port |
+| ------- | --------------- | ---- |
+| PostgreSQL | Local service | 5432 (typical) |
+| Redis | Local service | 6379 |
+| Backend ASGI | `daphne -b 0.0.0.0 -p 8000 config.asgi:application` | 8000 |
+| Frontend | `npm run dev` / `bun` in `frontend/` | 3000 |
+| Celery worker | `celery -A config worker --loglevel=info` | — |
+| Celery beat | `celery -A config beat --loglevel=info` | — |
 
-### Startup Order (Entrypoint.sh)
-
-1. Wait for PostgreSQL (`pg_isready`)
-2. `python manage.py collectstatic --noinput`
-3. `daphne -b 0.0.0.0 -p 8000 config.asgi:application`
+Set `frontend/.env` → `NEXT_PUBLIC_API_URL` to the backend base URL (e.g. `http://localhost:8000` or LAN IP). Align `FRONTEND_URL` / CORS on the backend.
 
 ### Seed Commands (run in order after first deploy)
 
@@ -1280,4 +1308,12 @@ python manage.py seed_data --count N       # Bulk test data (all modules)
 python manage.py seed_data --clear         # Wipe seeded data
 python manage.py seed_permissions          # Idempotent permission seeding
 python manage.py seed_org                  # Organization seeding
+python manage.py migrate
+python manage.py test
 ```
+
+### Documentation upkeep
+
+- Bug fixes → [`docs/bugfoundresolved.md`](./docs/bugfoundresolved.md) + `CHANGELOG.md`
+- Structural changes → [`docs/filestructure.md`](./docs/filestructure.md) + this tree
+- AI onboarding → keep [`prompt.md`](./prompt.md) aligned with this file
