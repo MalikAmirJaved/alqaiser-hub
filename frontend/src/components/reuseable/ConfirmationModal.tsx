@@ -17,6 +17,11 @@ export interface ConfirmationModalProps {
   confirmText?: string;
   cancelText?: string;
   isLoading?: boolean;
+  /**
+   * Disable the confirm button until the caller knows the action is safe
+   * (e.g. while a dependency pre-check is still loading).
+   */
+  confirmDisabled?: boolean;
   showCancelButton?: boolean;
   icon?: React.ReactNode;
 }
@@ -63,6 +68,7 @@ export function ConfirmationModal({
   confirmText = "Confirm",
   cancelText = "Cancel",
   isLoading = false,
+  confirmDisabled = false,
   showCancelButton = true,
   icon,
 }: ConfirmationModalProps) {
@@ -71,6 +77,7 @@ export function ConfirmationModal({
 
   const config = typeConfig[type];
   const isLoadingState = isLoading || internalLoading;
+  const isConfirmDisabled = isLoadingState || confirmDisabled;
 
   // Handle escape key press
   useEffect(() => {
@@ -78,8 +85,7 @@ export function ConfirmationModal({
       if (e.key === "Escape" && isOpen && !isLoadingState) {
         handleClose();
       }
-    };
-    document.addEventListener("keydown", handleEscape);
+    };    document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
   }, [isOpen, isLoadingState]);
 
@@ -105,14 +111,18 @@ export function ConfirmationModal({
   };
 
   const handleConfirm = async () => {
-    if (isLoadingState) return;
+    if (isConfirmDisabled) return;
     
     try {
       setInternalLoading(true);
       await onConfirm();
       handleClose();
     } catch (error) {
+      // The action failed (validation, permission, server refusal). Surface the
+      // reason and CLOSE anyway: leaving the dialog open with no feedback traps
+      // the user, who can neither retry meaningfully nor dismiss it.
       console.error("Confirmation action failed:", error);
+      handleClose();
     } finally {
       setInternalLoading(false);
     }
@@ -194,9 +204,9 @@ export function ConfirmationModal({
               )}
               <button
                 onClick={handleConfirm}
-                disabled={isLoadingState}
+                disabled={isConfirmDisabled}
                 className={cn(
-                  "inline-flex items-center justify-center gap-2 px-4 h-9 rounded-md text-sm font-medium transition-colors disabled:opacity-50",
+                  "inline-flex items-center justify-center gap-2 px-4 h-9 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
                   config.confirmButtonClass
                 )}
               >

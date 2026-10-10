@@ -27,6 +27,18 @@ Use this template:
 
 ## Resolved
 
+### BUG-20261010-10 — "Cannot delete yet" dialog could not be closed
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | High |
+| Module | Settings / Trash (frontend) |
+| Found | 2026-10-10 (reported: clicking the dialog's button did nothing) |
+| Resolved | 2026-10-10 (changelog 1.6) |
+| Root cause | When the cascade pre-check found PROTECT blockers, `TrashPurgeModal` relabelled the single action button to "Close" and hid the Cancel button (`showCancelButton={!blocked}`) — but left it wired to `onConfirm`. `ConfirmationModal` only closes when `onConfirm()` resolves, and its `catch` block merely logged the error. Clicking "Close" therefore re-dispatched the permanent delete, the server correctly refused it with 400, the promise rejected, `handleClose()` was never reached, and the dialog stayed open. The server log showed one `Trash empty/purge failed` warning per click. |
+| Fix | When blocked, the action button now calls `onClose` (it is a real Close button, not a destructive one). The confirmation is additionally disabled while the dependency pre-check is still loading (`confirmDisabled`), so a delete can no longer be dispatched before the blockers are known — previously the button read "Delete forever" and was live during that window. As a safety net, `ConfirmationModal.handleConfirm` now closes on failure too: a rejected action can never trap the dialog, and the user still gets the API's error toast explaining why. The now-unused `TrashDependencySkeleton` export was removed. |
+| Prevention | The blocked path is exercised by `TrashProtectedRelationTestCase.test_dependency_preview_reports_cannot_purge` (asserts `can_purge=False` and a non-empty `blocked_by`, which is what drives the Close-button state), and `test_purge_refuses_and_leaves_everything_intact` asserts the server rejects the request — the combination that previously left the dialog unclosable. |
+
 ### BUG-20261010-09 — Deleted products still listed on Inventory → Stock Management
 | Field | Value |
 | ----- | ----- |

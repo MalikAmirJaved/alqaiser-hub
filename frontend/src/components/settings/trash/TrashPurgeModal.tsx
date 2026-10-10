@@ -3,7 +3,6 @@
 
 import { useTrashDependencies } from "@/hooks/useTrash";
 import { ConfirmationModal } from "@/components/reuseable/ConfirmationModal";
-import { Skeleton } from "@/components/ui/skeleton";
 import { humanizeModel } from "./trashDisplay";
 
 interface TrashPurgeModalProps {
@@ -17,8 +16,16 @@ interface TrashPurgeModalProps {
 }
 
 /**
- * Permanent-delete confirmation that first loads the cascade preview so the
- * user sees exactly which related records disappear too.
+ * Permanent-delete confirmation.
+ *
+ * Loads the cascade preview first so the user sees which related records will
+ * disappear too — and so a row held by PROTECT relations is detected *before*
+ * anything is dispatched.
+ *
+ * When the row is blocked there is nothing to confirm, so the single action
+ * button becomes a real Close button. Wiring it to `onConfirm` instead would
+ * re-issue a delete that the server refuses, and because `ConfirmationModal`
+ * only closes after a successful confirm, the dialog could never be dismissed.
  */
 export default function TrashPurgeModal({
   isOpen,
@@ -51,7 +58,7 @@ export default function TrashPurgeModal({
     ? `“${displayName}” cannot be deleted: it is still referenced by ${blockerLines}. ` +
       `Those records must be removed first — nothing was deleted.`
     : depsLoading
-      ? `Permanently deleting “${displayName}”. Checking related records…`
+      ? `Checking what else would be deleted with “${displayName}”…`
       : relatedTotal > 0
         ? `“${displayName}” and ${relatedTotal} related record(s) (${dependencyLines}) will be deleted forever. This cannot be undone, and the item will not be recoverable from the trash.`
         : `“${displayName}” will be deleted forever. This cannot be undone, and the item will not be recoverable from the trash.`;
@@ -60,12 +67,15 @@ export default function TrashPurgeModal({
     <ConfirmationModal
       isOpen={isOpen}
       onClose={onClose}
-      onConfirm={onConfirm}
+      // Blocked: the button is a plain Close. Otherwise run the real delete.
+      onConfirm={blocked ? onClose : onConfirm}
       title={blocked ? "Cannot delete yet" : "Delete permanently?"}
       message={message}
       type="danger"
       confirmText={blocked ? "Close" : "Delete forever"}
       isLoading={isLoading}
+      // Nothing is known while the preview loads — do not offer a live delete.
+      confirmDisabled={!blocked && depsLoading}
       showCancelButton={!blocked}
     />
   );
@@ -113,15 +123,5 @@ export function TrashBulkPurgeModal({
       confirmText="Delete forever"
       isLoading={isLoading}
     />
-  );
-}
-
-/** Loading placeholder used while a dependency preview is being fetched. */
-export function TrashDependencySkeleton() {
-  return (
-    <div className="space-y-2">
-      <Skeleton className="h-3 w-40" />
-      <Skeleton className="h-3 w-24" />
-    </div>
   );
 }
