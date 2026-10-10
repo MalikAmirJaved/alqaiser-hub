@@ -61,25 +61,40 @@ interface RowStatus {
 
 const POLICY_META: Record<
   ConflictPolicy,
-  { label: string; hint: string }
+  { label: string; hint: string; qtyHint: string }
 > = {
   add_new: {
     label: "Add New",
     hint: "Create only new products. Any SKU conflict blocks the import.",
+    qtyHint: "Qty becomes the opening stock of the variants being created.",
   },
   update_existing: {
     label: "Update Existing",
-    hint: "Update matched SKUs in place; unmatched rows are created. Stock and history are preserved.",
+    hint: "Update matched SKUs in place and add Qty to the stock already on hand. Unmatched rows are created.",
+    qtyHint: "Qty is added to the current stock (80 + 20 = 100).",
   },
   skip_duplicates: {
     label: "Skip Duplicates",
-    hint: "Import valid rows; conflicting rows are skipped and reported.",
+    hint: "Import valid rows; conflicting rows are skipped and reported. Skipped rows stay editable so you can fix them.",
+    qtyHint: "Qty applies to the rows being created; skipped rows are left untouched.",
   },
   replace_existing: {
     label: "Replace Existing",
-    hint: "Overwrite matched records in place (keeps IDs, stock, and history).",
+    hint: "Overwrite matched records in place (keeps IDs) and set stock to Qty. Blank cells clear the stored value.",
+    qtyHint: "Qty replaces the current stock.",
   },
 };
+
+/**
+ * Existing stock the import will write to: the default warehouse when the
+ * server flagged one (`is_default`), otherwise the first listed warehouse.
+ */
+function existingStockQty(info?: RowValidation): number | null {
+  const locations = info?.existing_location || [];
+  if (locations.length === 0) return null;
+  const target = locations.find((l) => l.is_default) || locations[0];
+  return target?.quantity_on_hand ?? null;
+}
 
 function computeFileDuplicates(rows: ImportRow[]): Record<number, number> {
   const bySku: Record<string, number[]> = {};
@@ -143,6 +158,16 @@ function validateRowFields(row: ImportRow): RowError[] {
       message: "Max stock level cannot be negative",
     });
   }
+  // Only validated when the user typed a Qty — blank means "leave stock alone".
+  if (row.quantity_on_hand !== null && row.quantity_on_hand !== undefined) {
+    if (Number(row.quantity_on_hand) < 0) {
+      errors.push({
+        row_index: row.row_index,
+        field: "quantity_on_hand",
+        message: "Quantity cannot be negative",
+      });
+    }
+  }
   return errors;
 }
 
@@ -194,10 +219,10 @@ function statusMessage(
         return "SKU already exists — this row will be skipped";
       }
       if (policy === "update_existing") {
-        return "SKU already exists — this record will be updated";
+        return "SKU already exists — this record will be updated in place";
       }
       if (policy === "replace_existing") {
-        return "SKU already exists — this record will be replaced";
+        return "SKU already exists — this record will be replaced in place";
       }
       return status.otherIndex != null
         ? "SKU already exists (also duplicated within this file)"
@@ -282,7 +307,12 @@ export default function ImportReviewModal({
 
   // Seed validation from the parse response (server already resolved conflicts)
   useEffect(() => {
-    setRows(initialRows);
+    setRows(
+      initialRows.map((row) => ({
+        ...row,
+        quantity_on_hand: row.quantity_on_hand ?? null,
+      }))
+    );
     const seed: Record<number, RowValidation> = {};
     initialRows.forEach((row) => {
       seed[row.row_index] = {
@@ -475,6 +505,7 @@ export default function ImportReviewModal({
         selling_price: 0,
         min_stock_level: 0,
         max_stock_level: 0,
+        quantity_on_hand: null,
       };
       // Find the index of the first variant of this product to insert at the very top
       const firstVariantIndex = prev.findIndex((r) => r.product_name === productName);
@@ -523,6 +554,7 @@ export default function ImportReviewModal({
         selling_price: 0,
         min_stock_level: 0,
         max_stock_level: 0,
+        quantity_on_hand: null,
       };
       return [newRow, ...prev]; // Add to top
     });
@@ -907,6 +939,12 @@ export default function ImportReviewModal({
                         <th className="px-2.5 py-2 text-right font-medium text-muted-foreground">
                           Max Stock
                         </th>
+                        <th
+                          className="px-2.5 py-2 text-right font-medium text-muted-foreground"
+                          title={POLICY_META[policy].qtyHint}
+                        >
+                          Qty
+                        </th>
                         <th className="px-2.5 py-2 w-8" />
                       </tr>
                     </thead>
@@ -922,10 +960,49 @@ export default function ImportReviewModal({
                         const fieldError = (field: string) =>
                           rowFieldErrors.find((e) => e.field === field)?.message;
 
+                        // Check if this row will be skipped under skip_duplicates policy
+                        const isSkipped =
+                          policy === "skip_duplicates" &&
+                          (status.type === "db_conflict" ||
+                            status.type === "file_duplicate" ||
+                            status.type === "soft_deleted");
+
+                        // Stock the import will write to, and the resulting balance,
+                        // so "80 + 20 = 100" is visible before confirming.
+                        const stockQty = existingStockQty(info);
+                        const qtyValue =
+                          row.quantity_on_hand === null ||
+                          row.quantity_on_hand === undefined
+                            ? null
+                            : Number(row.quantity_on_hand);
+                        let stockHint: string | null = null;
+                        if (stockQty !== null && status.type === "db_conflict") {
+                          if (policy === "update_existing") {
+                            stockHint =
+                              qtyValue === null
+                                ? `${stockQty} on hand (unchanged)`
+                                : `${stockQty} + ${qtyValue} = ${stockQty + qtyValue}`;
+                          } else if (policy === "replace_existing") {
+                            stockHint =
+                              qtyValue === null
+                                ? `${stockQty} on hand (unchanged)`
+                                : `${stockQty} → ${qtyValue}`;
+                          }
+                        }
+
                         return (
                           <tr
                             key={row.row_index}
-                            className="border-b border-border/50 last:border-b-0 hover:bg-muted/20 transition-colors align-top"
+                            title={
+                              isSkipped
+                                ? "Skipped under Skip Duplicates — still editable: change the SKU to include it, or switch the conflict policy."
+                                : undefined
+                            }
+                            className={`border-b border-border/50 last:border-b-0 hover:bg-muted/20 transition-all align-top ${
+                              isSkipped
+                                ? "opacity-55 hover:opacity-100 focus-within:opacity-100"
+                                : ""
+                            }`}
                           >
                             <td className="px-2.5 py-1.5">
                               <Input
@@ -955,6 +1032,11 @@ export default function ImportReviewModal({
                                   <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
                                   <span>{message}</span>
                                 </p>
+                              )}
+                              {isSkipped && (
+                                <span className="mt-1 inline-flex items-center gap-1 rounded-md border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  Skipped
+                                </span>
                               )}
                               {info?.existing_product_name && (
                                 <p className="mt-1 text-[11px] text-muted-foreground leading-tight">
@@ -1142,6 +1224,52 @@ export default function ImportReviewModal({
                               )}
                             </td>
                             <td className="px-2.5 py-1.5">
+                              <Input
+                                type="number"
+                                value={qtyValue === null ? "" : qtyValue}
+                                onChange={(e) => {
+                                  const raw = e.target.value;
+                                  updateRow(
+                                    row.row_index,
+                                    "quantity_on_hand",
+                                    raw === ""
+                                      ? null
+                                      : Math.max(0, parseInt(raw, 10) || 0)
+                                  );
+                                }}
+                                className={`h-7 text-xs text-right ${
+                                  fieldError("quantity_on_hand")
+                                    ? "border-destructive focus-visible:ring-destructive"
+                                    : ""
+                                }`}
+                                min="0"
+                                placeholder={stockQty === null ? "0" : String(stockQty)}
+                                title={
+                                  stockQty === null
+                                    ? POLICY_META[policy].qtyHint
+                                    : `Current stock: ${stockQty}. ${
+                                        POLICY_META[policy].qtyHint
+                                      }`
+                                }
+                                aria-label={`Quantity for row ${row.row_index + 1}`}
+                                aria-invalid={!!fieldError("quantity_on_hand")}
+                              />
+                              {stockHint && (
+                                <p className="mt-1 text-right text-[11px] leading-tight text-muted-foreground">
+                                  {stockHint}
+                                </p>
+                              )}
+                              {fieldError("quantity_on_hand") && (
+                                <p
+                                  role="alert"
+                                  className="mt-1 flex items-start gap-1 text-[11px] leading-tight text-destructive"
+                                >
+                                  <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                                  <span>{fieldError("quantity_on_hand")}</span>
+                                </p>
+                              )}
+                            </td>
+                            <td className="px-2.5 py-1.5">
                               <button
                                 onClick={() => removeRow(row.row_index)}
                                 className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
@@ -1212,7 +1340,10 @@ export default function ImportReviewModal({
             </Select>
           </div>
           <p className="text-[11px] text-muted-foreground flex-1 min-w-[220px]">
-            {POLICY_META[policy].hint}
+            {POLICY_META[policy].hint}{" "}
+            <span className="text-muted-foreground/80">
+              {POLICY_META[policy].qtyHint} Leave Qty blank to keep stock as it is.
+            </span>
           </p>
           <div className="flex items-center gap-3">
             <Button

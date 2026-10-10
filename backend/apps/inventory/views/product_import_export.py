@@ -24,7 +24,10 @@ from rest_framework.parsers import MultiPartParser, FormParser
 
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.permissions.mixins import PermissionRequiredMixin
-from apps.inventory.models import Product, ProductVariant, Brand, Category, Warehouse, StockItem
+from apps.inventory.models import (
+    Product, ProductVariant, Brand, Category, Warehouse, StockItem,
+    InventoryTransaction,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -93,6 +96,24 @@ def _to_int(value, default=0):
         return int(float(value))
     except (TypeError, ValueError):
         return default
+
+
+def _provided_quantity(row):
+    """
+    The row's `quantity_on_hand`, or None when the client did not supply one.
+
+    None is meaningful: it means "leave the stored stock alone", which is what
+    keeps an untouched Qty cell from zeroing stock under Replace Existing.
+    """
+    value = row.get('quantity_on_hand')
+    if value is None or value == '':
+        return None
+    if isinstance(value, float) and math.isnan(value):
+        return None
+    try:
+        return max(int(float(value)), 0)
+    except (TypeError, ValueError):
+        return None
 
 
 def _export_rows(queryset):
@@ -270,18 +291,29 @@ def _existing_variant_map(skus, company_id, branch_id):
     return active, deleted
 
 
-def _existing_location(variant):
+def _existing_location(variant, default_warehouse_id=None):
+    """
+    Stock rows for a matched variant, default warehouse first.
+
+    The import writes stock to the default warehouse (`_get_default_warehouse`),
+    so the client needs to know which listed row that is to show the
+    "80 + 20 = 100" preview for the row the user is editing.
+    """
+    items = list(variant.stock_items.all())
+    items.sort(key=lambda s: (s.warehouse_id != default_warehouse_id, s.warehouse_id or 0))
     return [
         {
+            'warehouse_id': str(s.warehouse._id) if s.warehouse else None,
             'warehouse_name': s.warehouse.warehouse_name if s.warehouse else '',
             'quantity_on_hand': s.quantity_on_hand,
             'quantity_reserved': s.quantity_reserved,
+            'is_default': s.warehouse_id == default_warehouse_id,
         }
-        for s in variant.stock_items.all()
+        for s in items
     ]
 
 
-def _existing_metadata(variant, match):
+def _existing_metadata(variant, match, default_warehouse_id=None):
     product = variant.product
     return {
         'existing_match': match,
@@ -293,11 +325,13 @@ def _existing_metadata(variant, match):
         'existing_category_name': product.category.name if product.category else '',
         'existing_brand_name': product.brand.name if product.brand else '',
         'existing_product_status': product.status,
-        'existing_location': _existing_location(variant) if match == 'active' else [],
+        'existing_location': (
+            _existing_location(variant, default_warehouse_id) if match == 'active' else []
+        ),
     }
 
 
-def _resolve_duplicates(rows, company_id, branch_id):
+def _resolve_duplicates(rows, company_id, branch_id, default_warehouse=None):
     """
     Resolve each row's SKU against the DB (active + soft-deleted) and against
     the uploaded file itself.
@@ -312,6 +346,14 @@ def _resolve_duplicates(rows, company_id, branch_id):
             sku_index.setdefault(sku, []).append(row.get('row_index'))
 
     active, deleted = _existing_variant_map(sku_index.keys(), company_id, branch_id)
+
+    # Only matched variants carry stock context, so only look the warehouse up
+    # when there is at least one active match.
+    default_warehouse_id = None
+    if active:
+        if default_warehouse is None:
+            default_warehouse = _get_default_warehouse(company_id, branch_id)
+        default_warehouse_id = default_warehouse.id if default_warehouse else None
 
     by_index = {}
     for row in rows:
@@ -332,10 +374,10 @@ def _resolve_duplicates(rows, company_id, branch_id):
                 info['conflict_type'] = 'file_duplicate'
             if sku in active:
                 info['conflict_type'] = 'db_conflict'
-                info.update(_existing_metadata(active[sku], 'active'))
+                info.update(_existing_metadata(active[sku], 'active', default_warehouse_id))
             elif sku in deleted:
                 info['conflict_type'] = 'soft_deleted'
-                info.update(_existing_metadata(deleted[sku], 'soft_deleted'))
+                info.update(_existing_metadata(deleted[sku], 'soft_deleted', default_warehouse_id))
         by_index[ridx] = info
     return by_index, active, deleted
 
@@ -442,6 +484,9 @@ def _build_preview_rows(rows, company_id, branch_id):
             'selling_price': float(_clean_val(row.get('Selling Price'), 0)),
             'min_stock_level': int(_clean_val(row.get('Min Stock Level'), 0)),
             'max_stock_level': int(_clean_val(row.get('Max Stock Level'), 0)),
+            # Not a file column: the review modal is where the user types the
+            # quantity to add (Update Existing) or set (Replace Existing).
+            'quantity_on_hand': None,
         })
 
     by_index, _active, _deleted = _resolve_duplicates(preview, company_id, branch_id)
@@ -498,6 +543,21 @@ def _structural_errors(rows_data):
                     'row_index': ridx, 'field': field, 'code': 'invalid',
                     'message': f'{label} must be a whole number.',
                 })
+        quantity = row.get('quantity_on_hand')
+        if quantity not in (None, ''):
+            try:
+                if int(float(quantity)) < 0:
+                    errors.append({
+                        'row_index': ridx, 'field': 'quantity_on_hand',
+                        'code': 'invalid',
+                        'message': 'Quantity cannot be negative.',
+                    })
+            except (TypeError, ValueError):
+                errors.append({
+                    'row_index': ridx, 'field': 'quantity_on_hand',
+                    'code': 'invalid',
+                    'message': 'Quantity must be a whole number.',
+                })
     return errors
 
 
@@ -544,11 +604,20 @@ def _create_variant_for(product, row, sku, user, company_id, branch_id, default_
         created_by=user, updated_by=user,
     )
     if default_warehouse:
+        # The Qty cell doubles as opening stock on create; blank means 0.
+        opening_qty = _provided_quantity(row) or 0
         StockItem.objects.create(
             variant=variant, warehouse=default_warehouse,
             company_id=company_id, branch_id=branch_id,
-            quantity_on_hand=0, created_by=user, updated_by=user,
+            quantity_on_hand=opening_qty, created_by=user, updated_by=user,
         )
+        if opening_qty:
+            _record_stock_movement(
+                variant=variant, warehouse=default_warehouse, user=user,
+                quantity_change=opening_qty, quantity_before=0,
+                quantity_after=opening_qty, transaction_type='INITIAL',
+                reason='Product import — opening stock',
+            )
     return variant
 
 
@@ -584,15 +653,113 @@ def _update_product(product, row, category, brand, user, authoritative):
     product.save()
 
 
-def _update_variant(variant, row, user, authoritative):
-    if authoritative:
+def _record_stock_movement(variant, warehouse, user, quantity_change,
+                           quantity_before, quantity_after, transaction_type,
+                           reason):
+    """Ledger row for every stock write made by the import (same shape as the
+    stock-adjustment endpoints, so the inventory audit trail stays complete)."""
+    InventoryTransaction.objects.create(
+        transaction_id=uuid.uuid4(),
+        variant=variant,
+        warehouse=warehouse,
+        company_id=variant.company_id,
+        branch_id=variant.branch_id,
+        quantity_change=quantity_change,
+        quantity_before=quantity_before,
+        quantity_after=quantity_after,
+        unit_cost=variant.buying_price or Decimal('0'),
+        transaction_type=transaction_type,
+        source_document_type='PRODUCT_IMPORT',
+        reason_text=reason,
+        created_by=user, updated_by=user,
+    )
+
+
+def _locked_stock_item(variant, warehouse, user):
+    """
+    The StockItem the import writes to, locked for update.
+
+    Prefers the default warehouse (the one the create path uses); falls back to
+    the variant's first stock row so an update still works when the tenant has
+    no active warehouse configured. Lookups use the model's real unique key
+    (`variant` + `warehouse`) so a stock row with inherited/blank tenant columns
+    is still found instead of colliding with it on insert.
+    """
+    if warehouse is not None:
+        stock_item = (
+            StockItem.objects.select_for_update()
+            .filter(variant=variant, warehouse=warehouse)
+            .first()
+        )
+        if stock_item is not None:
+            return stock_item
+        return StockItem.objects.create(
+            variant=variant, warehouse=warehouse,
+            company_id=variant.company_id, branch_id=variant.branch_id,
+            quantity_on_hand=0, created_by=user, updated_by=user,
+        )
+    return (
+        StockItem.objects.select_for_update()
+        .filter(variant=variant)
+        .first()
+    )
+
+
+def _apply_stock(variant, quantity, user, warehouse, mode, policy):
+    """
+    Write the row's Qty cell to stock.
+
+    mode='add' → quantity_on_hand += quantity  (Update Existing: 80 + 20 = 100)
+    mode='set' → quantity_on_hand  = quantity  (Replace Existing: 80 → 20)
+
+    A blank Qty cell (quantity is None) leaves stock untouched under every
+    policy. Returns True when a stock row was actually written.
+    """
+    if quantity is None:
+        return False
+    stock_item = _locked_stock_item(variant, warehouse, user)
+    if stock_item is None:
+        return False
+
+    before = stock_item.quantity_on_hand
+    after = before + quantity if mode == 'add' else quantity
+    if after == before:
+        return False
+
+    stock_item.quantity_on_hand = after
+    stock_item.version += 1
+    stock_item.updated_by = user
+    stock_item.save(update_fields=['quantity_on_hand', 'version', 'updated_by', 'updated_at'])
+    _record_stock_movement(
+        variant=variant, warehouse=stock_item.warehouse, user=user,
+        quantity_change=after - before, quantity_before=before,
+        quantity_after=after,
+        transaction_type='ADD_STOCK' if mode == 'add' else 'ADJUSTMENT',
+        reason=f'Product import ({policy})',
+    )
+    return True
+
+
+def _update_variant(variant, row, user, policy, default_warehouse=None):
+    """
+    Update a matched variant according to the conflict policy:
+
+    - 'update_existing': overwrite every field the row supplies (a blank cell
+      keeps the stored value) and **add** the row's Qty to existing stock.
+    - 'replace_existing': authoritative — every field is overwritten (a blank
+      cell clears it) and the row's Qty **replaces** the stock quantity.
+    - anything else (legacy): omit-on-empty field update, stock untouched.
+    """
+    if policy == 'replace_existing':
         variant.variant_title = row.get('variant_title', '') or ''
         variant.barcode = row.get('variant_barcode', '') or ''
         variant.buying_price = _to_decimal(row.get('buying_price'))
         variant.selling_price = _to_decimal(row.get('selling_price'))
         variant.min_stock_level = _to_int(row.get('min_stock_level'))
         variant.max_stock_level = _to_int(row.get('max_stock_level'))
+        stock_mode = 'set'
     else:
+        # Omit-on-empty: the import row is not authoritative for blanks.
         title = row.get('variant_title')
         if title not in (None, ''):
             variant.variant_title = title
@@ -610,8 +777,16 @@ def _update_variant(variant, row, user, authoritative):
             value = row.get(key)
             if value not in (None, ''):
                 setattr(variant, attr, _to_int(value))
+        stock_mode = 'add' if policy == 'update_existing' else None
+
     variant.updated_by = user
     variant.save()
+
+    if stock_mode:
+        _apply_stock(
+            variant, _provided_quantity(row), user, default_warehouse,
+            stock_mode, policy,
+        )
 
 
 def _process_group(pname, vrows, policy, source, user, company_id, branch_id,
@@ -665,8 +840,7 @@ def _process_group(pname, vrows, policy, source, user, company_id, branch_id,
             sku = _normalize_sku(row.get('variant_sku'))
             matched_variant = active.get(sku) if sku else None
             if matched_variant:
-                _update_variant(matched_variant, row, user,
-                                authoritative=(policy == 'replace_existing'))
+                _update_variant(matched_variant, row, user, policy, default_warehouse)
                 local['variants_updated'] += 1
             else:
                 _create_variant_for(existing_product, row, sku, user, company_id, branch_id,
@@ -685,7 +859,9 @@ def _process_group(pname, vrows, policy, source, user, company_id, branch_id,
 
 
 def _run_import(rows_data, policy, source, user, company_id, branch_id, default_warehouse):
-    by_index, active, deleted = _resolve_duplicates(rows_data, company_id, branch_id)
+    by_index, active, deleted = _resolve_duplicates(
+        rows_data, company_id, branch_id, default_warehouse,
+    )
 
     counters = {
         'products_created': 0, 'variants_created': 0,

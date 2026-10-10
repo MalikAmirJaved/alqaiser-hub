@@ -17,6 +17,7 @@ from apps.inventory.models import (
 from apps.inventory.views.product_import_export import (
     CONFLICT_POLICIES,
     ImportValidationError,
+    _get_default_warehouse,
     _normalize_sku,
     _resolve_duplicates,
     _run_import,
@@ -132,6 +133,29 @@ class DuplicateResolutionTest(ProductImportBase):
         self.assertEqual(counts['valid'], 1)
         self.assertEqual(counts['conflicting'], 1)
 
+    def test_existing_location_flags_the_import_target_warehouse_first(self):
+        """The modal needs to know which stock row the import will write to."""
+        other = Warehouse.objects.create(
+            warehouse_name='Second', code='WH2', country='PK', city='LHR',
+            company_id=1, branch_id=1,
+        )
+        _product, variant = self._variant('LOC-1')
+        StockItem.objects.create(
+            variant=variant, warehouse=self.warehouse, quantity_on_hand=80,
+            company_id=1, branch_id=1,
+        )
+        StockItem.objects.create(
+            variant=variant, warehouse=other, quantity_on_hand=50,
+            company_id=1, branch_id=1,
+        )
+        target = _get_default_warehouse(1, 1)  # the helper the import writes with
+        by_index, _a, _d = _resolve_duplicates([row(0, 'W', 'LOC-1')], 1, 1)
+        locations = by_index[0]['existing_location']
+        self.assertEqual(len(locations), 2)
+        self.assertTrue(locations[0]['is_default'])
+        self.assertEqual(locations[0]['warehouse_id'], str(target._id))
+        self.assertFalse(locations[1]['is_default'])
+
 
 class AddNewPolicyTest(ProductImportBase):
     def test_creates_product_variant_and_stock(self):
@@ -162,6 +186,25 @@ class AddNewPolicyTest(ProductImportBase):
         with self.assertRaises(ImportValidationError):
             _run_import([row(0, 'Widget', 'DEL')], 'add_new', 'excel',
                         self.user, 1, 1, self.warehouse)
+
+    def test_quantity_becomes_opening_stock(self):
+        _run_import([row(0, 'Widget', 'NEW-QTY', quantity_on_hand=25)],
+                    'add_new', 'excel', self.user, 1, 1, self.warehouse)
+        variant = ProductVariant.objects.get(sku='NEW-QTY')
+        stock = StockItem.objects.get(variant=variant, warehouse=self.warehouse)
+        self.assertEqual(stock.quantity_on_hand, 25)
+
+    def test_negative_quantity_is_a_structural_error(self):
+        from apps.inventory.views.product_import_export import _structural_errors
+
+        errors = _structural_errors([row(0, 'Widget', 'NEG', quantity_on_hand=-1)])
+        self.assertEqual(errors[0]['field'], 'quantity_on_hand')
+        self.assertEqual(errors[0]['code'], 'invalid')
+
+    def test_blank_quantity_is_not_a_structural_error(self):
+        from apps.inventory.views.product_import_export import _structural_errors
+
+        self.assertEqual(_structural_errors([row(0, 'Widget', 'BLANK')]), [])
 
 
 class UpdateExistingPolicyTest(ProductImportBase):
@@ -202,6 +245,82 @@ class UpdateExistingPolicyTest(ProductImportBase):
         product.refresh_from_db()
         self.assertEqual(product.variants.count(), 2)
 
+    def test_quantity_is_added_to_existing_stock(self):
+        # 80 on hand + 20 imported → 100, matching the review modal preview.
+        _product, variant = self._variant('UPD-QTY')
+        StockItem.objects.create(
+            variant=variant, warehouse=self.warehouse, quantity_on_hand=80,
+            company_id=1, branch_id=1,
+        )
+        _run_import(
+            [row(0, 'Existing', 'UPD-QTY', quantity_on_hand=20)],
+            'update_existing', 'excel', self.user, 1, 1, self.warehouse,
+        )
+        stock = StockItem.objects.get(variant=variant, warehouse=self.warehouse)
+        self.assertEqual(stock.quantity_on_hand, 100)
+        self.assertEqual(stock.version, 1)
+
+    def test_blank_quantity_leaves_stock_untouched(self):
+        _product, variant = self._variant('UPD-QTY0')
+        StockItem.objects.create(
+            variant=variant, warehouse=self.warehouse, quantity_on_hand=80,
+            company_id=1, branch_id=1,
+        )
+        _run_import(
+            [row(0, 'Existing', 'UPD-QTY0', quantity_on_hand=None)],
+            'update_existing', 'excel', self.user, 1, 1, self.warehouse,
+        )
+        self.assertEqual(
+            StockItem.objects.get(variant=variant, warehouse=self.warehouse).quantity_on_hand,
+            80,
+        )
+
+    def test_quantity_is_added_to_the_default_warehouse_only(self):
+        other = Warehouse.objects.create(
+            warehouse_name='Second', code='WH2', country='PK', city='LHR',
+            company_id=1, branch_id=1,
+        )
+        _product, variant = self._variant('UPD-QTY1')
+        StockItem.objects.create(
+            variant=variant, warehouse=self.warehouse, quantity_on_hand=10,
+            company_id=1, branch_id=1,
+        )
+        StockItem.objects.create(
+            variant=variant, warehouse=other, quantity_on_hand=50,
+            company_id=1, branch_id=1,
+        )
+        _run_import(
+            [row(0, 'Existing', 'UPD-QTY1', quantity_on_hand=5)],
+            'update_existing', 'excel', self.user, 1, 1, self.warehouse,
+        )
+        self.assertEqual(
+            StockItem.objects.get(variant=variant, warehouse=self.warehouse).quantity_on_hand,
+            15,
+        )
+        self.assertEqual(
+            StockItem.objects.get(variant=variant, warehouse=other).quantity_on_hand,
+            50,
+        )
+
+    def test_quantity_write_is_recorded_in_the_ledger(self):
+        from apps.inventory.models import InventoryTransaction
+
+        _product, variant = self._variant('UPD-QTY2')
+        StockItem.objects.create(
+            variant=variant, warehouse=self.warehouse, quantity_on_hand=80,
+            company_id=1, branch_id=1,
+        )
+        _run_import(
+            [row(0, 'Existing', 'UPD-QTY2', quantity_on_hand=20)],
+            'update_existing', 'excel', self.user, 1, 1, self.warehouse,
+        )
+        entry = InventoryTransaction.objects.get(variant=variant)
+        self.assertEqual(entry.transaction_type, 'ADD_STOCK')
+        self.assertEqual(entry.quantity_change, 20)
+        self.assertEqual(entry.quantity_before, 80)
+        self.assertEqual(entry.quantity_after, 100)
+        self.assertEqual(entry.source_document_type, 'PRODUCT_IMPORT')
+
 
 class ReplaceExistingPolicyTest(ProductImportBase):
     def test_overwrites_fields_in_place_and_preserves_stock(self):
@@ -232,6 +351,47 @@ class ReplaceExistingPolicyTest(ProductImportBase):
             'replace_existing', 'excel', self.user, 1, 1, self.warehouse,
         )
         self.assertEqual(ProductVariant.objects.filter(sku='REP-2').count(), before)
+
+    def test_quantity_replaces_existing_stock(self):
+        # Replace is authoritative: 80 on hand + Qty 20 → stock becomes 20.
+        _product, variant = self._variant('REP-QTY')
+        StockItem.objects.create(
+            variant=variant, warehouse=self.warehouse, quantity_on_hand=80,
+            company_id=1, branch_id=1,
+        )
+        _run_import(
+            [row(0, 'Existing', 'REP-QTY', quantity_on_hand=20)],
+            'replace_existing', 'excel', self.user, 1, 1, self.warehouse,
+        )
+        stock = StockItem.objects.get(variant=variant, warehouse=self.warehouse)
+        self.assertEqual(stock.quantity_on_hand, 20)
+        self.assertEqual(stock.version, 1)
+
+    def test_blank_quantity_leaves_stock_untouched(self):
+        _product, variant = self._variant('REP-QTY0')
+        StockItem.objects.create(
+            variant=variant, warehouse=self.warehouse, quantity_on_hand=7,
+            company_id=1, branch_id=1,
+        )
+        _run_import(
+            [row(0, 'Existing', 'REP-QTY0', quantity_on_hand=None)],
+            'replace_existing', 'excel', self.user, 1, 1, self.warehouse,
+        )
+        self.assertEqual(
+            StockItem.objects.get(variant=variant, warehouse=self.warehouse).quantity_on_hand,
+            7,
+        )
+
+    def test_quantity_creates_the_default_warehouse_row_when_missing(self):
+        _product, variant = self._variant('REP-QTY1')
+        _run_import(
+            [row(0, 'Existing', 'REP-QTY1', quantity_on_hand=12)],
+            'replace_existing', 'excel', self.user, 1, 1, self.warehouse,
+        )
+        self.assertEqual(
+            StockItem.objects.get(variant=variant, warehouse=self.warehouse).quantity_on_hand,
+            12,
+        )
 
 
 class SkipDuplicatesPolicyTest(ProductImportBase):
@@ -513,6 +673,47 @@ class ImportApiTest(ProductImportBase):
         variant.refresh_from_db()
         self.assertEqual(variant.id, before_id)
         self.assertEqual(variant.selling_price, Decimal('99'))
+
+    def test_confirm_update_existing_adds_the_modal_quantity(self):
+        _product, variant = self._variant_in_scope('API-7Q', product_name='Old')
+        target = _get_default_warehouse(self.company_id, self.branch_id)
+        StockItem.objects.create(
+            variant=variant, warehouse=target, quantity_on_hand=80,
+            company_id=self.company_id, branch_id=self.branch_id,
+        )
+        response = self._confirm(
+            [self._import_row(0, 'Old', 'API-7Q', quantity_on_hand=20)],
+            'update_existing',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            StockItem.objects.get(variant=variant, warehouse=target).quantity_on_hand,
+            100,
+        )
+
+    def test_confirm_negative_quantity_is_rejected(self):
+        response = self._confirm(
+            [self._import_row(0, 'Widget', 'API-7N', quantity_on_hand=-1)],
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()['errors'][0]['field'], 'quantity_on_hand')
+
+    def test_confirm_replace_existing_sets_the_modal_quantity(self):
+        _product, variant = self._variant_in_scope('API-7R', product_name='Old')
+        target = _get_default_warehouse(self.company_id, self.branch_id)
+        StockItem.objects.create(
+            variant=variant, warehouse=target, quantity_on_hand=80,
+            company_id=self.company_id, branch_id=self.branch_id,
+        )
+        response = self._confirm(
+            [self._import_row(0, 'Old', 'API-7R', quantity_on_hand=20)],
+            'replace_existing',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            StockItem.objects.get(variant=variant, warehouse=target).quantity_on_hand,
+            20,
+        )
 
     def test_confirm_skip_duplicates_reports_skipped(self):
         self._variant_in_scope('API-8')

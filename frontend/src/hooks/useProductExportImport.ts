@@ -17,9 +17,12 @@ export type ConflictPolicy =
   | "replace_existing";
 
 export interface ExistingLocation {
+  warehouse_id?: string | null;
   warehouse_name: string;
   quantity_on_hand: number;
   quantity_reserved: number;
+  /** The warehouse the import writes stock to (the tenant's default warehouse). */
+  is_default?: boolean;
 }
 
 export interface ImportRow {
@@ -43,6 +46,14 @@ export interface ImportRow {
   selling_price: number;
   min_stock_level: number;
   max_stock_level: number;
+  /**
+   * Quantity typed in the review modal.
+   * - `null` / missing → stock is left untouched.
+   * - Update Existing → added to the current stock (80 + 20 = 100).
+   * - Replace Existing → replaces the current stock (80 → 20).
+   * - New rows → opening stock.
+   */
+  quantity_on_hand?: number | null;
 
   // Server-resolved conflict metadata (see backend `_resolve_duplicates`)
   conflict_type?: ConflictType;

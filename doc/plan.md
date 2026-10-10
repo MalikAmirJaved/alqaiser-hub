@@ -208,7 +208,7 @@ Rules:
 
 **Omit-on-empty:** an empty cell in an otherwise-present column preserves the existing value for Update (the imported row is not authoritative for blanks). A "missing column" cannot reach this path — the parser rejects files missing any `EXPECTED_COLUMNS` with a 400 before parsing completes (`_parse`).
 
-**Inventory impact:** none. `StockItem.quantity_on_hand`, `quantity_reserved`, `version` are untouched; no `InventoryTransaction` is written; stock is not reset.
+**Inventory impact (revised 2026-10-10):** the review modal's **Qty** column is **added** to `StockItem.quantity_on_hand` in the default warehouse — the same warehouse the create path uses (`_get_default_warehouse`): 80 on hand + Qty 20 → 100. A blank Qty cell leaves stock untouched, and `quantity_reserved` is never modified. Each write locks the stock row (`select_for_update`), bumps `version`, and appends an `InventoryTransaction` (`ADD_STOCK`, `source_document_type='PRODUCT_IMPORT'`) so the inventory audit trail stays complete.
 
 **Preserved:** product/variant `id` + `_id`, `created_at`/`created_by`, all `StockItem` rows, `VariantImage`s, `VariantAttribute`s, stock reservations, and every historical FK (see §5.5).
 
@@ -226,6 +226,7 @@ Rules:
 - Conflicting rows are **not written** — no product, variant, stock, or stock movement is created or modified for them.
 - All non-conflicting rows are imported normally (created), using the Add New creation path.
 - Per-row reporting: each skipped row returns `row_index`, `sku`, `reason`, and existing-product metadata.
+- In the modal each skipped row is dimmed and labelled **Skipped** but stays fully editable (`opacity-55 hover:opacity-100 focus-within:opacity-100`): correcting the SKU, switching policy, or fixing another field is never blocked by the skip state.
 
 **Partial import (the only policy that commits a subset):** valid rows are committed; skipped rows are excluded. Because expected conflicts are detected before writes, the partial behavior does not depend on catching an exception — the skipped rows are simply not written. A per-row savepoint is still used as a safety net for an unexpected concurrent conflict (§6.1).
 
@@ -235,7 +236,7 @@ Rules:
 
 ### 5.5 Replace Existing
 
-**Definition (non-destructive, in-place update).** "Replace" overwrites the matched variant and its product with the values supplied by the import row, **in place**, keeping the same database rows, IDs, stock, and relationships. It is explicitly **not** delete-and-recreate.
+**Definition (non-destructive, in-place update).** "Replace" overwrites the matched variant and its product with the values supplied by the import row, **in place**, keeping the same database rows, IDs, and relationships (stock changes only when a Qty is supplied — see below). It is explicitly **not** delete-and-recreate.
 
 **Evidence that delete-and-recreate is unsafe (verified).** `ProductVariant` is referenced by `on_delete=models.PROTECT` from `InventoryTransaction` (`models/transaction.py:20`), `StockTransfer` (`models/transfer.py:14`), `PurchaseOrderLine` (`models/purchase.py:87`), `SalesOrderLine` (`models/sales.py:75`), `ReturnRefundLine` (`models/return_refund.py:99`), `CustomerInvoiceLine` / `CustomerInvoiceLineLink` (`finance/models/customer_invoice.py:93,169`), and `QuoteLine` (`sales/models/quote.py:68`). Deleting a referenced variant raises `ProtectedError`. `StockItem`, `VariantImage`, `VariantAttribute`, and `StockReservation` use `CASCADE`, so a delete would silently destroy stock/images/attributes. Replace must therefore update in place.
 
@@ -244,7 +245,7 @@ Rules:
 **Fields overwritten (variant-level):** `variant_title`, `barcode`, `buying_price`, `selling_price`, `min_stock_level`, `max_stock_level`.
 **Fields overwritten (product-level):** `product_name`, `description`, `unit`, `storage_requirement`, `tax_rate`, `category`, `brand`.
 **Not import-supported / preserved:** `sku` (match key), `qr_code`, `status`, `is_active`.
-
+**Quantity (revised 2026-10-10):** Replace is authoritative for stock too — a supplied **Qty** *replaces* `StockItem.quantity_on_hand` in the default warehouse (80 on hand + Qty 20 → 20). A blank Qty cell leaves the stored quantity untouched. The write locks the row (`select_for_update`), bumps `version`, and appends an `InventoryTransaction` (`ADJUSTMENT`, `source_document_type='PRODUCT_IMPORT'`).
 **Empty cells vs missing columns.**
 - Missing column → 400 before any write (the parser requires all `EXPECTED_COLUMNS`); a malformed file cannot be partially processed.
 - Empty cell in a present column → **Replace clears/overwrites it with the field default**, because Replace is authoritative: `description→''`, `unit→'PIECE'`, `storage_requirement→'AMBIENT'`, `tax_rate→0`, `category→null`, `brand→null`, `variant_title→''`, `barcode→''`, `buying_price→0`, `selling_price→0`, `min_stock_level→0`, `max_stock_level→0`. `product_name` is required and cannot be cleared (validated).
@@ -254,7 +255,7 @@ Rules:
 
 **Multiple variants of one product:** same grouping rules as §5.3; matched variants must resolve to one product, and unmatched rows are created as new variants of that product.
 
-**Inventory impact:** none — `StockItem` balances, reservations, and stock movements are untouched.
+**Inventory impact (revised 2026-10-10):** stock changes only through the Qty cell (see above) — a blank Qty leaves balances and reservations untouched, and no stock row is ever deleted or recreated.
 
 **Preserved:** IDs, `created_at`/`created_by`, stock rows, images, attributes, reservations, and all historical FKs.
 
@@ -294,7 +295,7 @@ Rules:
 **Modal structure (maps to existing markup):**
 
 - **Header** (exists): "Review & Edit" + close. Extend the subtitle to `N row(s) · N variant(s) · X valid · Y conflicting · Z invalid`.
-- **Body** (exists: product groups + editable table). Add a per-row validation cell/indicator, the red border on the exact conflicting SKU input, an inline message, and an existing-record disclosure; distinguish DB conflicts from within-file duplicates.
+- **Body** (exists: product groups + editable table). Add a per-row validation cell/indicator, the red border on the exact conflicting SKU input, an inline message, and an existing-record disclosure; distinguish DB conflicts from within-file duplicates. Add the editable **Qty** column (per-policy effect in the header tooltip and footer summary; the cell shows the resulting balance, e.g. `80 + 20 = 100` for Update and `80 → 20` for Replace).
 - **Footer** (exists: Cancel / Confirm & Create). Add the policy selector + effect summary, a **Revalidate** button, and rename the primary action to **Confirm Import** with disabled/loading states.
 
 **Per-variant highlight rule:** the red border applies to the **SKU `Input` of a conflicting row only**. The current per-row predicate (`hasSkuError`, `ImportReviewModal.tsx` ~line 361) is the hook to extend to `conflict_type==='db_conflict' | 'soft_deleted'` keyed by `row_index`. Sibling variants and the product header are never marked.
@@ -305,6 +306,7 @@ Rules:
 | ----- | ------- | --------- | ------- | --------- |
 | Valid | no error for the row | default border | — | No |
 | DB SKU conflict | `conflict_type==='db_conflict'` | `border-destructive` + `AlertCircle` | "SKU already exists — used by <product> / <variant>" + existing details | Add New: yes; Update/Replace: it is the match target; Skip: handled |
+| Skipped row | `policy==='skip_duplicates'` and the row conflicts | row dimmed (`opacity-55`, full opacity on hover/focus) + **Skipped** badge | "SKU already exists — this row will be skipped" | No — the row stays editable so the SKU can be fixed or the policy switched |
 | Within-file duplicate | two rows share the SKU | `border-destructive` + `AlertCircle` | "Duplicate SKU in the uploaded file (also row N)" | Yes, under every policy, until fixed |
 | Soft-deleted SKU | matches a deleted variant | `border-warning` + `AlertCircle` | "SKU belongs to a deleted product; choose a different SKU" | Yes |
 | Missing SKU | empty SKU | `border-warning` + `AlertCircle` | "No SKU — one will be generated" | No (warning) |

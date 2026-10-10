@@ -27,6 +27,18 @@ Use this template:
 
 ## Resolved
 
+### BUG-20261010-01 — Conflict policies ignored quantity; skipped rows looked uneditable
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | Medium |
+| Module | Inventory / Import |
+| Found | 2026-10-10 (product review of the 1.4 import flow) |
+| Resolved | 2026-10-10 (changelog 1.4, Changed) |
+| Root cause | The conflict policies only covered descriptive fields: there was no quantity input anywhere in the Review & Edit modal or the confirm payload, `_update_variant` read a `quantity_on_hand` key that no client sent (so the "add to stock" branch was dead code), and `_create_variant_for` always wrote `StockItem(quantity_on_hand=0)`. Under **Skip Duplicates** the dimmed conflicting rows carried no explanation and looked disabled. |
+| Fix | Added an editable **Qty** column to the modal (`quantity_on_hand` on `ImportRow`; `null` = leave stock alone). **Update Existing** adds it to the stock on hand (80 + 20 = 100); **Replace Existing** sets stock to it (80 → 20); created rows use it as opening stock. Stock writes go to the default warehouse through a locked `StockItem` row, bump `version`, and append an `InventoryTransaction` (`ADD_STOCK` / `ADJUSTMENT` / `INITIAL`, `source_document_type='PRODUCT_IMPORT'`). Negative quantities are rejected as structural errors. Skipped rows are dimmed **and** labelled `Skipped` while staying editable (full opacity on hover/focus), and the modal shows the resulting balance next to the Qty cell. |
+| Prevention | `apps/inventory/tests_import.py` covers add/set/blank quantity per policy, ledger rows, `version` bumps, the default-warehouse target, and the negative-quantity 422. |
+
 ### BUG-20261009-02 — Product import did not identify the existing product for a duplicate SKU
 | Field | Value |
 | ----- | ----- |
