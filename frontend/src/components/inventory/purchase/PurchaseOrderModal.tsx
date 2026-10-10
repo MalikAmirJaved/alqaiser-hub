@@ -248,7 +248,7 @@ export function PurchaseOrderModal({
       id: nextLineId(),
       selectedId: v.id,
       quantity_ordered: 1,
-      unit_cost: v.buying_price || 0,
+      unit_cost: Number(v.buying_price) || 0,
       tax_rate: 0,
     }));
     setLineItems((prev) => {
@@ -284,7 +284,7 @@ export function PurchaseOrderModal({
       const variant = findVariant(variantId);
       if (!variant) return prev;
       const filtered = prev.filter((l) => l.selectedId !== '');
-      return [...filtered, { id: nextLineId(), selectedId: variantId, quantity_ordered: 1, unit_cost: variant.buying_price || 0, tax_rate: 0 }];
+      return [...filtered, { id: nextLineId(), selectedId: variantId, quantity_ordered: 1, unit_cost: Number(variant.buying_price) || 0, tax_rate: 0 }];
     });
   };
 
@@ -1377,7 +1377,7 @@ function ProductVariantSelector({
                               <span>
                                 Buy price:{' '}
                                 <span style={{ fontWeight: 600, color: 'var(--color-foreground)' }}>
-                                  {currencySymbol}{(variant.buying_price || 0).toFixed(2)}
+                                  {currencySymbol}{(Number(variant.buying_price) || 0).toFixed(2)}
                                 </span>
                               </span>
                             </div>
