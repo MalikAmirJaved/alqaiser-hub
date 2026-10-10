@@ -275,3 +275,8 @@ CACHE_MIDDLEWARE_SECONDS = 60
 
 # Permission cache (seconds) — role/permission lookups
 PERMISSION_CACHE_TTL = env.int('PERMISSION_CACHE_TTL', default=300)
+
+# ─── Trash / soft-delete retention ───────────────────────────────────────────
+# Days a soft-deleted row stays in Settings → Trash before the Celery beat task
+# permanently deletes it. See apps/compsetting/trash/.
+TRASH_RETENTION_DAYS = env.int('TRASH_RETENTION_DAYS', default=30)

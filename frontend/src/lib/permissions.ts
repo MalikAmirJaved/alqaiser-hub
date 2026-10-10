@@ -129,6 +129,8 @@ export const PERMISSIONS = {
     designation: ["view","create","update","delete", "export"]     as const,
     role:        ["view","create","update","delete", "export"]     as const,
     preference:  ["view","update", "export"]                       as const,
+    terms:       ["view","update", "export"]                       as const,
+    trash:       ["view","delete","restore", "export"]             as const,
     dashboard:   ["view", "export"]                                as const,
   },
 

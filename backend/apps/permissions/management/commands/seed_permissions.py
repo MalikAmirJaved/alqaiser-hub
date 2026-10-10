@@ -133,6 +133,7 @@ RESOURCES_ACTIONS: dict[str, dict[str, list[str]]] = {
         "role":         ["view", "create", "update", "delete", "export"],
         "preference":   ["view", "update", "export"],
         "terms":        ["view", "update", "export"],
+        "trash":        ["view", "delete", "restore", "export"],
         "dashboard":    ["view", "export"],
     },
 
@@ -165,6 +166,7 @@ ACTION_DISPLAY_NAMES: dict[str, str] = {
     "schedule":               "Schedule",
     "assign":                 "Assign",
     "return":                 "Return",
+    "restore":                "Restore",
     "update_round":           "Update Round",
     "update_checklist":       "Update Checklist",
     "update_status":          "Update Status",

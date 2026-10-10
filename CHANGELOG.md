@@ -4,6 +4,27 @@ All notable changes to the **Al Qaiser Nexus ERP (Al-Qaiser BOS)** project.
 
 ---
 
+## [1.5] — 2026-10-10
+
+### Added
+- **Settings → Trash module** — One place to see everything deleted anywhere in the system. Lists deleted records grouped by type (users, departments, designations, categories, brands, warehouses, suppliers, customers, products, accounts, invoices, bills, expenses, budgets, bank accounts, journal entries, leads, quotes, employees, leave requests, policies, assets, shift templates, exit records) with who deleted it, when, and a live countdown to auto-deletion. Filter by type, search across records, page through results.
+- **Permanent delete** — Delete any single trashed record forever, with a confirmation that first shows exactly which related records disappear with it (deleting a product also purges its variants and their stock rows). "Empty trash" and "Purge expired" bulk actions are included.
+- **Restore** — Put a deleted record back into its module, gated by its own `SETTINGS:trash:restore` permission. Restoring a parent does not resurrect cascade-deleted children.
+- **30-day automatic purge** — Anything in the trash longer than 30 days is permanently deleted by the daily Celery beat task (`compsetting.purge_expired_trash`, 04:00). The window is configurable via `TRASH_RETENTION_DAYS`.
+- **`deleted_at` on every soft-delete model** — New field on `BaseModel` (plus `organization.User`) recording when a row was soft-deleted, maintained automatically by `save()`. This is the clock the retention policy uses.
+- **`SETTINGS:trash` permissions** — `view`, `delete`, `restore` seeded for `COMPANY_ADMIN`, with per-module fallbacks so an Inventory or Finance admin can manage their own module's trash.
+
+### Changed
+- **Soft-delete now records a timestamp** — Roughly twenty views already assigned `instance.deleted_at = timezone.now()` before saving (HR employee/asset/policy/leave/payroll/exit, notifications); those assignments were silently discarded because the field did not exist. They now persist for real.
+- **`compsetting.TimeStampedModel`** — `deleted_at` moved up to `BaseModel` as the single source of truth. The six existing `compsetting_*` columns are preserved: a state-only migration re-attaches the field instead of dropping it.
+
+### Fixed
+- **Deletion timestamps were never stored** — `deleted_at` existed only on the six `compsetting` tables; everywhere else the attribute was set in Python and thrown away, so nothing knew when a record had been deleted.
+- **Trash API permission action was wrong** — `PermissionRequiredMixin` resolves plain `APIView`s through the HTTP-method fallback, so restore (POST) was checked as `create`. Explicit per-view `required_action` fixes it.
+- **Cascade preview looked at the wrong relations** — The dependency scan walked forward foreign keys (including the audit `created_by`/`updated_by`/`deleted_by` pointers) instead of the reverse children that actually cascade, so "related records" always reported zero.
+
+---
+
 ## [1.4] — 2026-10-09
 
 ### Added

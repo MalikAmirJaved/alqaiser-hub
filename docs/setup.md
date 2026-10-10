@@ -38,6 +38,9 @@ Create/configure `backend/.env` (do not commit). Typical keys:
 - `SECRET_KEY`, `DEBUG`, `FRONTEND_URL`, `ALLOWED_HOSTS`
 - `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`
 - `REDIS_HOST`, `REDIS_PORT`
+- `TRASH_RETENTION_DAYS` (optional, default `30`) — how long a soft-deleted
+  record stays in **Settings → Trash** before the daily Celery beat task
+  (`compsetting.purge_expired_trash`) permanently deletes it
 - JWT TTLs, seed org/admin vars (`ORG_*`)
 
 Frontend must allow the same origin CORS/`FRONTEND_URL` as your Next.js host.

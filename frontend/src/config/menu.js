@@ -14,6 +14,7 @@ import {
   DoorOpen,
   Video,
   RotateCcw,
+  Trash2,
 } from "lucide-react";
 
 export const menu = [
@@ -153,6 +154,7 @@ children: [
       { title: "Departments", to: "/settings/departments", icon: ClipboardList },
       { title: "Designations", to: "/settings/designations", icon: Briefcase },
       { title: "Preferences", to: "/settings/preferences", icon: Settings },
+      { title: "Trash", to: "/settings/trash", icon: Trash2 },
     ],
   },
 ];

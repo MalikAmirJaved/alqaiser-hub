@@ -54,6 +54,7 @@ backend/
 │   ├── audit/               # global audit signals/API
 │   ├── common/              # BaseModel, auth, pagination, filters, upload, seed_data
 │   ├── compsetting/         # company settings, holidays, designations, terms
+│   │   └── trash/           # Settings → Trash: registry, services, views, tasks
 │   ├── organization/        # Company, Branch, User (+ seed_org)
 │   ├── permissions/         # RBAC engine + seed_permissions
 │   ├── hr/                  # employees, leave, payroll, shifts, assets, ...
@@ -117,6 +118,7 @@ frontend/
     │       ├── sales/
     │       ├── monitoring/
     │       └── settings/
+    │           └── trash/       # deleted-records page (permanent delete / restore)
     ├── components/
     │   ├── ui/              # shadcn primitives
     │   ├── reuseable/       # shared widgets + final/ generics

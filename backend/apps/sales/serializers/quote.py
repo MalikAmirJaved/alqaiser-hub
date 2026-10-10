@@ -1,4 +1,5 @@
 from decimal import Decimal
+from django.utils import timezone
 from rest_framework import serializers
 from apps.sales.models.quote import Quote, QuoteLine
 from apps.sales.models.lead import Lead
@@ -182,7 +183,8 @@ class QuoteSerializer(serializers.ModelSerializer):
         instance.save()
 
         if lines_data is not None:
-            instance.lines.all().update(is_deleted=True)
+            # queryset.update() bypasses Model.save(), so stamp deleted_at too.
+            instance.lines.all().update(is_deleted=True, deleted_at=timezone.now())
             subtotal = Decimal('0')
             per_line_discounts = Decimal('0')
             for line_item in lines_data:

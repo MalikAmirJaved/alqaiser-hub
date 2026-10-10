@@ -27,6 +27,54 @@ Use this template:
 
 ## Resolved
 
+### BUG-20261010-05 — Product delete never recorded who deleted it
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | Medium |
+| Module | Inventory / Products, Settings / Trash |
+| Found | 2026-10-10 (end-to-end test: deleted a product over HTTP and checked the trash entry) |
+| Resolved | 2026-10-10 (changelog 1.5) |
+| Root cause | `ProductViewSet.destroy()` set `product.is_deleted = True` and saved with `update_fields=['is_deleted']`, never touching `deleted_by`. The cascade branch was no better: it soft-deleted variants, stock items, attributes, images, and reservations with bare `queryset.update(is_deleted=True)`, which bypasses `Model.save()`. The Trash module filters on `deleted_by IS NOT NULL` (so seeded demo rows with `is_deleted=True` never surface), so a deleted product showed up with an empty "Deleted by" column, and its child rows carried no deletion timestamp at all. |
+| Fix | `destroy()` now stamps `deleted_by` and `deleted_at` on the product and passes `is_deleted`, `deleted_at`, and `deleted_by` to every cascade `update()`. |
+| Prevention | `TrashPurgeTestCase.test_delete_through_product_api_records_deleter_and_timestamp` and `..._stamps_cascaded_children` delete through the real inventory endpoint and assert the deleter and timestamps on the product, its variant, and its stock row. |
+
+### BUG-20261010-04 — `deleted_at` was set in ~20 views but never persisted
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | High |
+| Module | Backend / Common (`BaseModel`) |
+| Found | 2026-10-10 (building the Settings → Trash module) |
+| Resolved | 2026-10-10 (changelog 1.5) |
+| Root cause | `deleted_at` was declared only on `compsetting.TimeStampedModel` (6 tables). `apps.common.basemodel.BaseModel` had `is_deleted` and `deleted_by` but no `deleted_at`, so the ~20 views that did `instance.deleted_at = timezone.now()` (HR employee/asset/policy/leave/payroll/exit, notifications, …) were setting a plain Python attribute — the value was never written and no retention rule could be based on it. |
+| Fix | `deleted_at` now lives on `BaseModel` (and on `organization.User`, which extends `AbstractUser` rather than `BaseModel`). `save()` stamps it when `is_deleted` flips to True and clears `deleted_at`/`deleted_by` on restore, including when callers pass `update_fields=['is_deleted']`. A backfill stamped legacy rows that had a real `deleted_by`; seed rows with `is_deleted=True` and no deleter were deliberately skipped so they never enter the trash. |
+| Prevention | `DeletedAtTestCase` covers stamping, `update_fields`, re-save idempotence, restore, the `User` model, and the documented `queryset.update()` limitation. |
+
+### BUG-20261010-03 — Cascade-preview walked the wrong relations and always reported zero
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | Medium |
+| Module | Settings / Trash |
+| Found | 2026-10-10 (self-test of permanent delete on a product graph) |
+| Resolved | 2026-10-10 (changelog 1.5) |
+| Root cause | The dependency scan iterated `model._meta.get_fields()` and kept concrete `many_to_one`/`one_to_one` fields, i.e. the row's *forward* foreign keys. Those are the audit pointers (`created_by`, `updated_by`, `deleted_by`) and optional links (`category`, `brand`) — all `SET_NULL` — while the rows that genuinely cascade (`Product ← ProductVariant ← StockItem`) are *reverse* relations, which the filter discarded. The confirmation dialog therefore always claimed "0 related records" before a destructive purge. |
+| Fix | Replaced the scan with a recursive walk over `model._meta.related_objects` filtered to `remote_field.on_delete is CASCADE`, aggregating counts per model and reporting how many are already soft-deleted. `on_delete=PROTECT` relations are surfaced separately as `blocked_by`, and permanent delete refuses with a clear message instead of throwing an `IntegrityError` mid-transaction. Deletion now proceeds deepest-first via `_process_relations`. |
+| Prevention | `TrashPurgeTestCase` asserts a 1-variant/1-stock graph reports 2 dependencies and that purging removes product, variant, and stock rows. |
+
+### BUG-20261010-02 — Trash API authorised the wrong action for restore and purge
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | High |
+| Module | Settings / Trash, Permissions |
+| Found | 2026-10-10 (self-test: a user granted `view` + `restore` got 403 on restore) |
+| Resolved | 2026-10-10 (changelog 1.5) |
+| Root cause | `PermissionRequiredMixin.get_permission_action()` looks for `self.action` (a ViewSet concept). These endpoints are plain `APIView`s, so it fell through `permission_action_map` (which is only consulted with `viewset_action` as the key, never the HTTP method) and `VIEWSET_ACTION_TO_PERMISSION` to the `HTTP_METHOD_TO_ACTION` fallback — resolving `POST` to `create` and typing every non-safe method to the same action. Restore demanded `SETTINGS:trash:create`, which is not seeded, so only superusers succeeded. |
+| Fix | `BaseTrashView` declares a `required_action` and overrides `get_permission_action()` to return it; `TrashListView`/`TrashEntryView` pick `view` for GET and `delete` otherwise, and restore declares `restore`. The per-action `_require_permission()` check remains as a second, independent gate, and each type also honours its own module's `delete`/`update` permission as a fallback. |
+| Prevention | `TrashPermissionTestCase` asserts a view-only user can list but not delete/restore/purge, and that granting `view` + `restore` allows restore while still forbidding permanent delete. |
+
 ### BUG-20261010-01 — Conflict policies ignored quantity; skipped rows looked uneditable
 | Field | Value |
 | ----- | ----- |

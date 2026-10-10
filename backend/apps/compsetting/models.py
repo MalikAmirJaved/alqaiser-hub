@@ -9,6 +9,10 @@ class TimeStampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_deleted = models.BooleanField(default=False)
+    # Canonical definition lives on apps.common.basemodel.BaseModel (single
+    # source of truth for the Trash module / 30-day retention purge). This
+    # re-declaration is identical and maps to the SAME db column, so it is
+    # harmless — do not add new soft-delete fields here.
     deleted_at = models.DateTimeField(null=True, blank=True)
     deleted_by = models.ForeignKey(
         django_settings.AUTH_USER_MODEL,

@@ -90,6 +90,7 @@ export const routePermissions: Record<string, string> = {
   "/settings/designations": "SETTINGS:designation:view",
   "/settings/preferences":  "SETTINGS:preference:view",
   "/settings/permissions":  "SETTINGS:permissions:view",
+  "/settings/trash":        "SETTINGS:trash:view",
 };
 
 // ─── Menu title → Permission ──────────────────────────────────────────────────
@@ -173,6 +174,7 @@ export const menuPermissionMapping: Record<string, string | null> = {
   "Designations":    "SETTINGS:designation:view",
   "Preferences":     "SETTINGS:preference:view",
   "Permissions":     "SETTINGS:permissions:view",
+  "Trash":           "SETTINGS:trash:view",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
