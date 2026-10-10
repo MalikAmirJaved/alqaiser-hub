@@ -712,7 +712,481 @@ class TrashPermissionTestCase(TrashFixtureMixin, BaseTestCase):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 7. Registry integrity
+# 7. Sorting / grouping / date filters
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TrashFilteringTestCase(TrashFixtureMixin, BaseTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.client = self.auth_client(self.admin)
+
+    def _deleted_department(self, name, when=None):
+        """A Settings-module row so group filtering has two modules to pick from."""
+        from apps.organization.models import Department
+
+        dept = Department.objects.create(
+            name=name, code=name[:8].upper().replace(' ', ''),
+            company_id=self.company.id, branch_id=self.branch.id,
+        )
+        return self.soft_delete(dept, when=when)
+
+    def test_sort_newest_and_oldest(self):
+        old = self.soft_delete(self.brand_a, when=timezone.now() - timedelta(days=10))
+        new = self.soft_delete(self.brand_b, when=timezone.now() - timedelta(days=1))
+
+        newest = self.client.get(TRASH_BASE, {'sort': 'newest'})
+        self.assertEqual(
+            [r['_id'] for r in newest.data['data']['results']],
+            [str(new._id), str(old._id)],
+        )
+
+        oldest = self.client.get(TRASH_BASE, {'sort': 'oldest'})
+        self.assertEqual(
+            [r['_id'] for r in oldest.data['data']['results']],
+            [str(old._id), str(new._id)],
+        )
+
+    def test_sort_by_name(self):
+        self.soft_delete(self.brand_b)   # "Trash Brand B"
+        self.soft_delete(self.brand_a)   # "Trash Brand A"
+
+        resp = self.client.get(TRASH_BASE, {'sort': 'name'})
+        names = [r['display_name'] for r in resp.data['data']['results']]
+        self.assertEqual(names, sorted(names, key=str.lower))
+        self.assertIn('Trash Brand A', names[0])
+
+    def test_sort_by_type_groups_same_type_together(self):
+        self.soft_delete(self.category)
+        self.soft_delete(self.brand_a)
+
+        resp = self.client.get(TRASH_BASE, {'sort': 'type'})
+        keys = [r['type_key'] for r in resp.data['data']['results']]
+        self.assertEqual(keys, sorted(keys, key=lambda k: keys.index(k)))
+        self.assertEqual(len(set(keys)), 2)
+
+    def test_sort_expiring_is_oldest_first(self):
+        soon = self.soft_delete(self.brand_a, when=timezone.now() - timedelta(days=29))
+        later = self.soft_delete(self.brand_b, when=timezone.now() - timedelta(days=1))
+
+        resp = self.client.get(TRASH_BASE, {'sort': 'expiring'})
+        self.assertEqual(
+            [r['_id'] for r in resp.data['data']['results']],
+            [str(soon._id), str(later._id)],
+        )
+
+    def test_invalid_sort_falls_back_to_newest(self):
+        self.soft_delete(self.brand_a)
+        resp = self.client.get(TRASH_BASE, {'sort': 'not-a-sort'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['data']['sort'], 'newest')
+
+    def test_group_filter_narrows_to_one_module(self):
+        self.soft_delete(self.brand_a)          # Inventory
+        self._deleted_department('GroupTest Dept')  # Settings
+
+        everything = self.client.get(TRASH_BASE)
+        self.assertEqual(everything.data['data']['count'], 2)
+
+        inventory = self.client.get(TRASH_BASE, {'group': 'Inventory'})
+        self.assertEqual(inventory.data['data']['count'], 1)
+        self.assertEqual(inventory.data['data']['results'][0]['group'], 'Inventory')
+
+        settings = self.client.get(TRASH_BASE, {'group': 'Settings'})
+        self.assertEqual(settings.data['data']['count'], 1)
+        self.assertEqual(settings.data['data']['results'][0]['group'], 'Settings')
+
+    def test_group_and_type_filters_combine(self):
+        self.soft_delete(self.brand_a)
+        self.soft_delete(self.category)
+
+        resp = self.client.get(TRASH_BASE, {'group': 'Inventory', 'type': 'brand'})
+        self.assertEqual(resp.data['data']['count'], 1)
+        self.assertEqual(resp.data['data']['results'][0]['type_key'], 'brand')
+
+        # A type outside the requested group yields nothing.
+        resp = self.client.get(TRASH_BASE, {'group': 'Settings', 'type': 'brand'})
+        self.assertEqual(resp.data['data']['count'], 0)
+
+    def test_summary_reports_group_counts(self):
+        self.soft_delete(self.brand_a)
+        self._deleted_department('GroupCount Dept')
+
+        resp = self.client.get(TRASH_BASE + 'summary/')
+        self.assertEqual(resp.status_code, 200)
+        groups = {g['group']: g for g in resp.data['data']['groups']}
+        self.assertEqual(groups['Inventory']['count'], 1)
+        self.assertEqual(groups['Settings']['count'], 1)
+        self.assertIn('brand', groups['Inventory']['types'])
+
+    def test_date_range_filters(self):
+        today = timezone.now().date()
+        self.soft_delete(self.brand_a, when=timezone.now() - timedelta(days=10))
+        self.soft_delete(self.brand_b, when=timezone.now() - timedelta(days=1))
+
+        from_only = self.client.get(TRASH_BASE, {'date_from': str(today - timedelta(days=5))})
+        self.assertEqual(from_only.data['data']['count'], 1)
+        self.assertEqual(from_only.data['data']['results'][0]['_id'], str(self.brand_b._id))
+
+        to_only = self.client.get(TRASH_BASE, {'date_to': str(today - timedelta(days=5))})
+        self.assertEqual(to_only.data['data']['count'], 1)
+        self.assertEqual(to_only.data['data']['results'][0]['_id'], str(self.brand_a._id))
+
+        both = self.client.get(TRASH_BASE, {
+            'date_from': str(today - timedelta(days=20)),
+            'date_to': str(today),
+        })
+        self.assertEqual(both.data['data']['count'], 2)
+
+    def test_invalid_date_is_ignored(self):
+        self.soft_delete(self.brand_a)
+        resp = self.client.get(TRASH_BASE, {'date_from': 'not-a-date'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['data']['count'], 1)
+
+    def test_empty_trash_scoped_to_group(self):
+        brand = self.soft_delete(self.brand_a)
+        dept = self._deleted_department('GroupEmpty Dept')
+
+        resp = self.client.delete(f'{TRASH_BASE}?group=Inventory')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['data']['purged'], 1)
+        self.assertFalse(Brand.objects.filter(pk=brand.pk).exists())
+        self.assertTrue(type(dept).objects.filter(pk=dept.pk).exists())
+
+    def test_purge_expired_scoped_to_group(self):
+        old_brand = self.soft_delete(self.brand_a, when=timezone.now() - timedelta(days=45))
+        old_dept = self._deleted_department(
+            'GroupPurge Dept', when=timezone.now() - timedelta(days=45),
+        )
+
+        resp = self.client.post(
+            TRASH_BASE + 'purge-expired/', {'group': 'Settings'}, format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['data']['purged'], 1)
+        self.assertTrue(Brand.objects.filter(pk=old_brand.pk).exists())
+        self.assertFalse(type(old_dept).objects.filter(pk=old_dept.pk).exists())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 8. Backfill of rows stored as deleted (no deleted_at)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TrashBackfillTestCase(TrashFixtureMixin, BaseTestCase):
+    """BUG-20261010-06: rows flagged deleted before deleted_at existed."""
+
+    def test_backfill_stamps_deleted_at_from_updated_at(self):
+        from apps.compsetting.trash.backfill import backfill_deleted_at
+
+        # Simulate a legacy row: is_deleted=True with no timestamp.
+        Brand.objects.filter(pk=self.brand_a.pk).update(is_deleted=True, deleted_at=None)
+        legacy = self.obj(self.brand_a)
+        self.assertIsNone(legacy.deleted_at)
+
+        result = backfill_deleted_at('inventory')
+
+        self.assertEqual(result['updated'].get('inventory.Brand'), 1)
+        legacy.refresh_from_db()
+        self.assertIsNotNone(legacy.deleted_at)
+        self.assertEqual(legacy.deleted_at, legacy.updated_at)
+
+    def test_backfill_leaves_deleted_by_null(self):
+        """No user performed these deletions — inventing one would be a lie."""
+        from apps.compsetting.trash.backfill import backfill_deleted_at
+
+        Brand.objects.filter(pk=self.brand_a.pk).update(
+            is_deleted=True, deleted_at=None, deleted_by=None,
+        )
+        backfill_deleted_at('inventory')
+
+        legacy = self.obj(self.brand_a)
+        self.assertIsNone(legacy.deleted_by_id)
+
+    def test_backfill_does_not_touch_live_rows(self):
+        from apps.compsetting.trash.backfill import backfill_deleted_at
+
+        backfill_deleted_at('inventory')
+        live = self.obj(self.brand_b)
+        self.assertFalse(live.is_deleted)
+        self.assertIsNone(live.deleted_at)
+
+    def test_backfilled_row_becomes_visible_and_purgeable(self):
+        from apps.compsetting.trash.backfill import backfill_deleted_at
+
+        Brand.objects.filter(pk=self.brand_a.pk).update(is_deleted=True, deleted_at=None)
+        self.assertEqual(self.auth_client(self.admin).get(TRASH_BASE).data['data']['count'], 0)
+
+        backfill_deleted_at('inventory')
+
+        listing = self.auth_client(self.admin).get(TRASH_BASE)
+        self.assertEqual(listing.data['data']['count'], 1)
+        entry = listing.data['data']['results'][0]
+        self.assertEqual(entry['_id'], str(self.brand_a._id))
+        self.assertIsNone(entry['deleted_by'])
+
+        purge = self.auth_client(self.admin).delete(f'{TRASH_BASE}brand/{self.brand_a._id}/')
+        self.assertEqual(purge.status_code, 200)
+        self.assertFalse(Brand.objects.filter(pk=self.brand_a.pk).exists())
+
+    def test_backfill_is_idempotent(self):
+        from apps.compsetting.trash.backfill import backfill_deleted_at
+
+        Brand.objects.filter(pk=self.brand_a.pk).update(is_deleted=True, deleted_at=None)
+        first = backfill_deleted_at('inventory')
+        second = backfill_deleted_at('inventory')
+
+        self.assertEqual(first['total'], 1)
+        self.assertEqual(second['total'], 0)
+
+    def test_backfill_dry_run_writes_nothing(self):
+        from apps.compsetting.trash.backfill import backfill_deleted_at
+
+        Brand.objects.filter(pk=self.brand_a.pk).update(is_deleted=True, deleted_at=None)
+        result = backfill_deleted_at('inventory', dry_run=True)
+
+        self.assertEqual(result['total'], 1)
+        self.assertIsNone(self.obj(self.brand_a).deleted_at)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9. PROTECT blockers anywhere in the cascade graph
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TrashProtectedRelationTestCase(TrashFixtureMixin, BaseTestCase):
+    """BUG-20261010-08: a Product has no PROTECT rows, but its Variant does.
+
+    `InventoryTransaction.variant` and `CustomerInvoiceLine.variant` are
+    ``on_delete=PROTECT``. Purging the product therefore failed deep inside the
+    cascade with an opaque ProtectedError, and "Empty trash" reported only
+    "1 item(s) could not be deleted".
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        import uuid as _uuid
+
+        from apps.inventory.models import InventoryTransaction
+
+        cls.ledger = InventoryTransaction.objects.create(
+            transaction_id=_uuid.uuid4(),
+            variant=cls.variant,
+            warehouse=cls.warehouse,
+            company_id=cls.company.id,
+            branch_id=cls.branch.id,
+            transaction_type='ADJUSTMENT',
+            quantity_change=1,
+            quantity_before=0,
+            quantity_after=1,
+        )
+
+    def setUp(self):
+        super().setUp()
+        self.client = self.auth_client(self.admin)
+
+    def _soft_delete_product(self):
+        product = self.obj(self.product)
+        product.is_deleted = True
+        product.deleted_by = self.admin
+        product.save()
+        ProductVariant.objects.filter(product=product).update(is_deleted=True)
+        product.refresh_from_db()
+        return product
+
+    def test_blockers_are_found_on_cascade_children(self):
+        product = self._soft_delete_product()
+        blockers = services.protected_relations(product)
+
+        by_model = {b['model']: b for b in blockers}
+        self.assertIn('inventory.InventoryTransaction', by_model)
+        self.assertEqual(by_model['inventory.InventoryTransaction']['count'], 1)
+        # The blocker is reported against the child that owns the FK.
+        self.assertEqual(
+            by_model['inventory.InventoryTransaction']['blocked_by_type'],
+            'inventory.ProductVariant',
+        )
+
+    def test_dependency_preview_reports_cannot_purge(self):
+        product = self._soft_delete_product()
+        resp = self.client.get(f'{TRASH_BASE}product/{product._id}/dependencies/')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.data['data']
+        self.assertFalse(data['can_purge'])
+        self.assertTrue(data['blocked_by'])
+
+    def test_purge_refuses_and_leaves_everything_intact(self):
+        product = self._soft_delete_product()
+        variants_before = ProductVariant.objects.count()
+        stock_before = StockItem.objects.count()
+
+        resp = self.client.delete(f'{TRASH_BASE}product/{product._id}/')
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(resp.data['success'])
+        self.assertIn('referenced by', resp.data['message'])
+        # Nothing was partially deleted.
+        self.assertEqual(ProductVariant.objects.count(), variants_before)
+        self.assertEqual(StockItem.objects.count(), stock_before)
+        self.assertTrue(Product.objects.filter(pk=product.pk).exists())
+        self.assertTrue(ProductVariant.objects.filter(pk=self.variant.pk).exists())
+
+    def test_empty_trash_reports_blocked_separately_from_errors(self):
+        self._soft_delete_product()
+
+        resp = self.client.delete(TRASH_BASE)
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.data['data']
+        self.assertEqual(data['purged'], 0)
+        self.assertEqual(data['blocked'], 1)
+        self.assertEqual(data['errors'], [])
+        self.assertTrue(data['blockers'])
+        self.assertIn('referenced by', data['blockers'][0])
+        # The message must explain the situation, not just report a failure.
+        self.assertIn('referenced', resp.data['message'])
+        self.assertTrue(Product.objects.filter(pk=self.product.pk).exists())
+
+    def test_summary_counts_blocked_items(self):
+        self._soft_delete_product()
+        resp = self.client.get(TRASH_BASE + 'summary/')
+        data = resp.data['data']
+        self.assertEqual(data['blocked'], 1)
+        self.assertTrue(data['blocked_samples'])
+        self.assertEqual(data['blocked_samples'][0]['type'], 'product')
+
+    def test_purge_succeeds_once_the_blocker_is_gone(self):
+        product = self._soft_delete_product()
+
+        # Remove the PROTECT references.
+        from apps.inventory.models import InventoryTransaction
+        InventoryTransaction.objects.filter(variant=self.variant).delete()
+
+        resp = self.client.delete(f'{TRASH_BASE}product/{product._id}/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(Product.objects.filter(pk=product.pk).exists())
+
+    def test_format_blockers_is_human_readable(self):
+        text = services.format_blockers([
+            {'model': 'inventory.InventoryTransaction', 'count': 2},
+            {'model': 'finance.CustomerInvoiceLine', 'count': 1},
+        ])
+        self.assertEqual(text, '2 Inventory Transaction, 1 Customer Invoice Line')
+
+    def test_format_blockers_truncates_long_lists(self):
+        blocked = [
+            {'model': f'app.Model{i}', 'count': 1} for i in range(6)
+        ]
+        text = services.format_blockers(blocked, limit=4)
+        self.assertIn('and 2 more', text)
+
+    def test_expired_blocked_item_is_kept_not_deleted(self):
+        """Retention must not silently drop an item it cannot delete."""
+        product = self._soft_delete_product()
+        Product.objects.filter(pk=product.pk).update(
+            deleted_at=timezone.now() - timedelta(days=45),
+        )
+        product.refresh_from_db()
+
+        resp = self.client.post(TRASH_BASE + 'purge-expired/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['data']['purged'], 0)
+        self.assertEqual(resp.data['data']['blocked'], 1)
+        self.assertTrue(Product.objects.filter(pk=product.pk).exists())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 10. Bulk soft-delete helper records who/when
+# ─────────────────────────────────────────────────────────────────────────────
+
+class SoftDeleteQuerysetTestCase(TrashFixtureMixin, BaseTestCase):
+
+    def test_helper_stamps_timestamp_and_user(self):
+        from apps.common.basemodel import soft_delete_qs
+
+        soft_delete_qs(Brand.objects.filter(pk=self.brand_a.pk), self.admin)
+
+        row = self.obj(self.brand_a)
+        self.assertTrue(row.is_deleted)
+        self.assertIsNotNone(row.deleted_at)
+        self.assertEqual(row.deleted_by_id, self.admin.id)
+
+    def test_helper_without_user_still_timestamps(self):
+        """System-initiated replacements have no human actor but need a clock."""
+        from apps.common.basemodel import soft_delete_qs
+
+        soft_delete_qs(Brand.objects.filter(pk=self.brand_a.pk), None)
+
+        row = self.obj(self.brand_a)
+        self.assertTrue(row.is_deleted)
+        self.assertIsNotNone(row.deleted_at)
+        self.assertIsNone(row.deleted_by_id)
+
+    def test_variant_attribute_edit_upserts_instead_of_colliding(self):
+        """BUG-20261010-07: unique (variant, attribute_key) vs soft delete.
+
+        Soft-deleting the old attribute and inserting the same key raised
+        IntegrityError, so editing an existing attribute (e.g. Color) 500'd.
+        The serializer must revive the existing row instead.
+        """
+        from apps.inventory.models import VariantAttribute
+        from apps.inventory.serializers.product import ProductVariantSerializer
+
+        variant = ProductVariant.objects.get(pk=self.variant.pk)
+        attribute = VariantAttribute.objects.create(
+            variant=variant, company_id=self.company.id, branch_id=self.branch.id,
+            attribute_key='Color', attribute_value='Red',
+        )
+
+        serializer = ProductVariantSerializer(
+            instance=variant,
+            data={'attributes': [{'key': 'Color', 'value': 'Blue'}]},
+            partial=True,
+            context={'request': type('R', (), {'user': self.admin})()},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        attribute.refresh_from_db()
+        self.assertFalse(attribute.is_deleted)
+        self.assertEqual(attribute.attribute_value, 'Blue')
+        # Same row reused — no duplicate key, no soft-deleted orphan.
+        self.assertEqual(
+            VariantAttribute.objects.filter(variant=variant, attribute_key='Color').count(),
+            1,
+        )
+
+    def test_variant_attribute_image_replace_records_deleter(self):
+        """Images have no unique key, so the replace path soft-deletes + creates."""
+        from apps.inventory.models import VariantImage
+        from apps.inventory.serializers.product import ProductVariantSerializer
+
+        variant = ProductVariant.objects.get(pk=self.variant.pk)
+        image = VariantImage.objects.create(
+            variant=variant, company_id=self.company.id, branch_id=self.branch.id,
+            image_url='/upload/product/old.png', sort_order=0, is_primary=True,
+        )
+
+        serializer = ProductVariantSerializer(
+            instance=variant,
+            data={'images': ['/upload/product/new.png']},
+            partial=True,
+            context={'request': type('R', (), {'user': self.admin})()},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        image.refresh_from_db()
+        self.assertTrue(image.is_deleted)
+        self.assertIsNotNone(image.deleted_at)
+        self.assertEqual(image.deleted_by_id, self.admin.id)
+        self.assertTrue(
+            VariantImage.objects.filter(variant=variant, is_deleted=False).exists()
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 10. Registry integrity
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TrashRegistryTestCase(TestCase):

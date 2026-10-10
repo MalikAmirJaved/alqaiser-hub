@@ -4,6 +4,23 @@ All notable changes to the **Al Qaiser Nexus ERP (Al-Qaiser BOS)** project.
 
 ---
 
+## [1.6] — 2026-10-10
+
+### Added
+- **Trash grouped by module** — Deleted records are now organised into collapsible sections per module (Settings, Inventory, Finance, Sales, Human Resources) with per-section totals and an expired count, instead of one long flat list. Module chips across the top filter to a single module and show live totals.
+- **Sort and date filters in Trash** — Sort by newest, oldest, expiring soonest, name (A–Z), or module & type. Filter by the date a record was deleted using a from/to range, alongside the existing search and "expired only" toggle.
+- **`deleted_by: null` renders as "Unknown (legacy)"** — Legacy rows restored to the trash by the backfill below are labelled instead of showing a bare dash, with a tooltip explaining that no user is recorded.
+
+### Fixed
+- **Deleted products still listed on Inventory → Stock Management** — The stock endpoints build their own querysets with `StockItem.objects`, which bypasses `CompanyBranchMixin.get_queryset()` — the only place that applies `is_deleted=False`. Deleted products therefore kept appearing on the stock page, and their quantities were counted in the "Total Units On Hand" and "Low Stock Items" cards. All stock actions (`current_stock`, `retrieve`, `variant_summary`, `pos-catalog`, `batch-stock`, `adjust`) now scope to live rows through new `alive_stock()` / `alive_variant()` helpers that check the stock row **and** its variant and product, so a half-cascaded delete cannot leak either. Stock adjustment refuses deleted variants instead of resurrecting them, and the endpoint cache keys were version-bumped so a stale cached response cannot keep serving deleted rows.
+- **Stock pagination could repeat or skip records** — `current_stock` paginated an unordered queryset, which lets the database return rows in a different order per page. It now orders by product name, SKU, and id.
+- **Rows stored as deleted were stuck outside the Trash** — 60 rows (`inventory.Product` / `ProductVariant` / `StockItem`, imported as deleted before `deleted_at` existed) had `is_deleted=True` with no timestamp. The Trash hides rows without a timestamp and the retention purge skips them, so they were permanently stuck: still reserving unique constraints but impossible to review or clean up. A data migration in each of the 10 affected apps stamps `deleted_at = updated_at` (optionally via `backfill_deleted_at(app_label, dry_run=True)`). They now appear in the trash and age out normally. `deleted_by` is intentionally left NULL — no user performed those deletions.
+- **Editing a variant attribute crashed with a duplicate-key error** — `VariantAttribute` is unique on `(variant, attribute_key)`, and the replace flow soft-deleted the old rows before inserting the same key, hitting the still-present unique index. Attribute writes now upsert: the existing row (soft-deleted or not) is revived and updated in place.
+- **Bulk soft-deletes never recorded who deleted** — `queryset.update(is_deleted=True)` bypasses `Model.save()`, so eight more call sites (variant attributes/images, invoice lines, employee photos and documents, loan/compensation months, old forecasts) left `deleted_by` and `deleted_at` empty. All now go through a new `soft_delete_qs(queryset, user)` helper in `apps/common/basemodel.py`, which records the actor and the instant in one place.
+- **"Permanently deleted 0 item(s)… 1 item(s) could not be deleted"** — The PROTECT pre-flight only checked the item itself, but a Product's *variants* are held by `InventoryTransaction`, `CustomerInvoiceLine`, and six other `PROTECT` relations. The check therefore passed, the delete started, and `ProtectedError` broke the surrounding transaction — after which every other item in the bulk action failed with the same opaque message. The blocker scan is now recursive across the whole cascade graph and runs **before** any transaction opens, so nothing is ever partially deleted. Bulk actions report `blocked` separately from real errors, and the message names the item and its references: *"…cannot be permanently deleted: it is still referenced by 2 Inventory Transaction, 1 Customer Invoice Line. Those records must be removed first."* The page shows a warning for such items, which can never age out while the references exist.
+
+---
+
 ## [1.5] — 2026-10-10
 
 ### Added

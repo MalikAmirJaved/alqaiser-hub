@@ -3,6 +3,7 @@ import numpy as np
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Sum, Q
+from apps.common.basemodel import soft_delete_qs
 from apps.inventory.models import SalesOrderLine, ProductVariant, Warehouse
 from .models import ForecastConfiguration, SalesForecast, StockForecast
 
@@ -118,13 +119,18 @@ class DemandForecaster:
             forecaster = cls(variant, company_id, branch_id)
             forecasts = forecaster.generate_forecast()
             if forecasts:
-                # Soft-delete old forecasts for this variant
-                SalesForecast.objects.filter(
-                    variant=variant,
-                    forecast_date__gte=timezone.now().date(),
-                    company_id=company_id,
-                    branch_id=branch_id
-                ).update(is_deleted=True)
+                # Soft-delete old forecasts for this variant. System-generated
+                # replacement (no human actor), but it still needs a deleted_at
+                # so the row is visible in Trash and eligible for retention.
+                soft_delete_qs(
+                    SalesForecast.objects.filter(
+                        variant=variant,
+                        forecast_date__gte=timezone.now().date(),
+                        company_id=company_id,
+                        branch_id=branch_id,
+                    ),
+                    None,
+                )
                 SalesForecast.objects.bulk_create(forecasts)
 
 class StockForecaster:

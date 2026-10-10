@@ -34,6 +34,12 @@ export interface TrashTypeCount {
   expired: number;
 }
 
+export interface TrashGroupCount {
+  group: string;
+  count: number;
+  types: string[];
+}
+
 export interface TrashSummary {
   total: number;
   expired: number;
@@ -41,7 +47,18 @@ export interface TrashSummary {
   size_bytes: number;
   retention_days: number;
   types: TrashTypeCount[];
+  groups: TrashGroupCount[];
+  /** Rows that can never be purged while immutable records reference them. */
+  blocked: number;
+  blocked_samples: {
+    type: string;
+    id: string;
+    display_name: string;
+    blocked_by: TrashBlocker[];
+  }[];
 }
+
+export type TrashSort = "newest" | "oldest" | "expiring" | "name" | "type";
 
 export interface TrashListResponse {
   count: number;
@@ -51,6 +68,7 @@ export interface TrashListResponse {
   next: number | null;
   previous: number | null;
   retention_days: number;
+  sort: TrashSort;
   results: TrashEntry[];
 }
 
@@ -61,14 +79,31 @@ export interface TrashDependency {
   fields: string[];
 }
 
+export interface TrashBlocker {
+  model: string;
+  field: string;
+  count: number;
+  blocked_by_type?: string;
+}
+
 export interface TrashDependencyReport {
   id: string;
   type: string;
   display_name: string;
   dependencies: TrashDependency[];
   total_related: number;
-  blocked_by: { model: string; field: string; count: number }[];
+  blocked_by: TrashBlocker[];
   can_purge: boolean;
+}
+
+/** Result of a bulk purge / empty-trash action. */
+export interface TrashBulkResult {
+  purged: number;
+  /** Items kept because immutable records still reference them (PROTECT). */
+  blocked: number;
+  blockers: string[];
+  by_type: Record<string, number>;
+  errors: string[];
 }
 
 /** apiFetch returns the whole envelope; unwrap `data` for convenience. */
@@ -80,10 +115,14 @@ interface Envelope<T> {
 
 export interface TrashFilters {
   type?: string;
+  group?: string;
   search?: string;
   page?: number;
   page_size?: number;
   expired?: boolean;
+  sort?: TrashSort;
+  date_from?: string;
+  date_to?: string;
 }
 
 const BASE = "/api/company/settings/trash";
@@ -91,10 +130,14 @@ const BASE = "/api/company/settings/trash";
 function buildQuery(filters: TrashFilters = {}): string {
   const params = new URLSearchParams();
   if (filters.type) params.append("type", filters.type);
+  if (filters.group) params.append("group", filters.group);
   if (filters.search) params.append("search", filters.search);
   if (filters.page) params.append("page", String(filters.page));
   if (filters.page_size) params.append("page_size", String(filters.page_size));
   if (filters.expired) params.append("expired", "true");
+  if (filters.sort && filters.sort !== "newest") params.append("sort", filters.sort);
+  if (filters.date_from) params.append("date_from", filters.date_from);
+  if (filters.date_to) params.append("date_to", filters.date_to);
   const qs = params.toString();
   return qs ? `?${qs}` : "";
 }
@@ -170,7 +213,6 @@ export function usePurgeTrashEntry() {
     onSuccess: invalidate,
   });
 }
-
 /** Restore one entry back to its module. */
 export function useRestoreTrashEntry() {
   const api = useApi();
@@ -185,33 +227,47 @@ export function useRestoreTrashEntry() {
   });
 }
 
-/** Permanently delete everything older than the retention window. */
+/**
+ * Permanently delete everything older than the retention window.
+ * Scope with a module `group`, a single `type`, or nothing (whole trash).
+ */
 export function usePurgeExpiredTrash() {
   const api = useApi();
   const invalidate = useTrashInvalidate();
   return useMutation({
-    mutationFn: (type?: string) =>
-      api<Envelope<{ purged: number; by_type: Record<string, number> }>>(
+    mutationFn: (scope?: { type?: string; group?: string }) =>
+      api<Envelope<TrashBulkResult & { retention_days: number }>>(
         `${BASE}/purge-expired/`,
         {
           method: "POST",
-          body: JSON.stringify(type ? { type } : {}),
+          body: JSON.stringify({
+            ...(scope?.type ? { type: scope.type } : {}),
+            ...(scope?.group ? { group: scope.group } : {}),
+          }),
         },
       ),
     onSuccess: invalidate,
   });
 }
 
-/** Empty the whole trash (or a subset of types) — irreversible. */
+/**
+ * Empty the trash, optionally limited to a module `group` or a set of `type`
+ * registry keys. Irreversible.
+ */
 export function useEmptyTrash() {
   const api = useApi();
   const invalidate = useTrashInvalidate();
   return useMutation({
-    mutationFn: (type?: string) =>
-      api<Envelope<{ purged: number; by_type: Record<string, number> }>>(
-        `${BASE}/${type ? `?type=${encodeURIComponent(type)}` : ""}`,
+    mutationFn: (scope?: { type?: string; group?: string }) => {
+      const params = new URLSearchParams();
+      if (scope?.type) params.append("type", scope.type);
+      if (scope?.group) params.append("group", scope.group);
+      const qs = params.toString();
+      return api<Envelope<TrashBulkResult>>(
+        `${BASE}/${qs ? `?${qs}` : ""}`,
         { method: "DELETE" },
-      ),
+      );
+    },
     onSuccess: invalidate,
   });
 }

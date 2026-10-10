@@ -3,6 +3,9 @@ from datetime import date, timedelta
 from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from rest_framework.test import APIClient
+
+from apps.common.test_base import BaseTestCase
 from apps.inventory.models import (
     Category, Brand, Warehouse, Product, ProductVariant,
     StockItem, InventoryTransaction, Supplier, SupplierHistory,
@@ -1069,3 +1072,156 @@ class InventoryAuditFieldChangeTest(TestCase):
         self.assertEqual(change.field_name, 'name')
         self.assertEqual(change.old_value, 'Old')
         self.assertEqual(change.new_value, 'New')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stock endpoints must not serve soft-deleted rows
+# BUG: deleted products kept appearing on Inventory → Stock Management because
+# the custom actions use `StockItem.objects` directly, bypassing
+# CompanyBranchMixin.get_queryset() (the only place applying is_deleted=False).
+# ─────────────────────────────────────────────────────────────────────────────
+
+class StockSoftDeleteTest(BaseTestCase):
+    """`/api/inventory/stock/…` must hide deleted stock, variants and products."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.warehouse = Warehouse.objects.create(
+            warehouse_name='Soft Delete WH', code='SDWH',
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        cls.product = Product.objects.create(
+            product_name='Live Product', company_id=cls.company.id,
+            branch_id=cls.branch.id, unit='PCS',
+        )
+        cls.variant = ProductVariant.objects.create(
+            product=cls.product, sku='LIVE-1', selling_price=10,
+            min_stock_level=1, max_stock_level=50,
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        cls.stock = StockItem.objects.create(
+            variant=cls.variant, warehouse=cls.warehouse,
+            quantity_on_hand=25, quantity_reserved=0,
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        # A second graph that has been soft-deleted.
+        cls.dead_product = Product.objects.create(
+            product_name='Deleted Product', company_id=cls.company.id,
+            branch_id=cls.branch.id, unit='PCS', is_deleted=True,
+        )
+        cls.dead_variant = ProductVariant.objects.create(
+            product=cls.dead_product, sku='DEAD-1', selling_price=99,
+            min_stock_level=1, max_stock_level=50,
+            company_id=cls.company.id, branch_id=cls.branch.id, is_deleted=True,
+        )
+        cls.dead_stock = StockItem.objects.create(
+            variant=cls.dead_variant, warehouse=cls.warehouse,
+            quantity_on_hand=199, quantity_reserved=0,
+            company_id=cls.company.id, branch_id=cls.branch.id, is_deleted=True,
+        )
+
+    def setUp(self):
+        super().setUp()
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.admin)
+
+    def _stock_skus(self, resp):
+        return [row['variant_sku'] for row in resp.data['results']]
+
+    def test_current_stock_excludes_deleted_rows(self):
+        resp = self.client.get('/api/inventory/stock/current_stock/')
+        self.assertEqual(resp.status_code, 200)
+        skus = self._stock_skus(resp)
+        self.assertIn('LIVE-1', skus)
+        self.assertNotIn('DEAD-1', skus)
+        self.assertEqual(resp.data['count'], 1)
+
+    def test_current_stock_ignores_deleted_variant_in_filter(self):
+        resp = self.client.get(
+            '/api/inventory/stock/current_stock/',
+            {'variant_ids': str(self.dead_variant._id)},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 0)
+
+    def test_current_stock_low_stock_filter_ignores_deleted(self):
+        resp = self.client.get('/api/inventory/stock/current_stock/', {'low_stock': 'true'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn('DEAD-1', self._stock_skus(resp))
+
+    def test_current_stock_search_ignores_deleted(self):
+        resp = self.client.get('/api/inventory/stock/current_stock/', {'search': 'Deleted'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 0)
+
+    def test_retrieve_deleted_stock_returns_404(self):
+        resp = self.client.get(f'/api/inventory/stock/{self.dead_stock._id}/')
+        self.assertEqual(resp.status_code, 404)
+        live = self.client.get(f'/api/inventory/stock/{self.stock._id}/')
+        self.assertEqual(live.status_code, 200)
+
+    def test_variant_summary_404_for_deleted_variant(self):
+        resp = self.client.get(
+            '/api/inventory/stock/variant_summary/',
+            {'variant_id': str(self.dead_variant._id)},
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_variant_summary_excludes_deleted_stock_of_live_variant(self):
+        """A live variant whose stock row was soft-deleted reports zero."""
+        StockItem.objects.filter(pk=self.stock.pk).update(is_deleted=True)
+        resp = self.client.get(
+            '/api/inventory/stock/variant_summary/',
+            {'variant_id': str(self.variant._id)},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['total_on_hand'], 0)
+        self.assertEqual(resp.data['warehouses'], [])
+
+    def test_pos_catalog_hides_deleted_products(self):
+        resp = self.client.get('/api/inventory/stock/pos-catalog/')
+        self.assertEqual(resp.status_code, 200)
+        names = [p['product_name'] for p in resp.data['results']]
+        self.assertIn('Live Product', names)
+        self.assertNotIn('Deleted Product', names)
+
+    def test_batch_stock_reports_zero_for_deleted_variant(self):
+        resp = self.client.post(
+            '/api/inventory/stock/batch-stock/',
+            {
+                'variant_ids': [str(self.variant._id), str(self.dead_variant._id)],
+                'warehouse_id': str(self.warehouse._id),
+            },
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        results = resp.data['results']
+        self.assertEqual(results[str(self.variant._id)]['on_hand'], 25)
+        # Deleted variant must not leak its 199 units.
+        self.assertEqual(results[str(self.dead_variant._id)]['on_hand'], 0)
+
+    def test_adjust_refuses_deleted_variant(self):
+        resp = self.client.post(
+            '/api/inventory/stock/adjust/',
+            {
+                'variant_id': str(self.dead_variant._id),
+                'warehouse_id': str(self.warehouse._id),
+                'quantity_change': 5,
+                'reason': 'test',
+                'transaction_type': 'ADJUSTMENT',
+            },
+            format='json',
+        )
+        self.assertIn(resp.status_code, (400, 422))
+        self.dead_stock.refresh_from_db()
+        self.assertEqual(self.dead_stock.quantity_on_hand, 199)
+
+    def test_alive_stock_helper_filters_all_three_levels(self):
+        from apps.inventory.views.stock_management import StockManagementViewSet as V
+
+        self.assertEqual(V.alive_stock().filter(company_id=self.company.id).count(), 1)
+        self.assertEqual(V.alive_variant().filter(company_id=self.company.id).count(), 1)
+        # Half-cascaded state: stock row itself alive, but its variant deleted.
+        StockItem.objects.filter(pk=self.dead_stock.pk).update(is_deleted=False)
+        self.assertEqual(V.alive_stock().filter(pk=self.dead_stock.pk).count(), 0)

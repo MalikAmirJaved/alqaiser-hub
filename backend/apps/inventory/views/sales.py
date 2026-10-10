@@ -9,6 +9,7 @@ from datetime import timedelta
 import uuid
 
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.basemodel import soft_delete_qs
 from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import (
@@ -146,7 +147,7 @@ def sync_sales_order_to_invoice(order, user, create_invoice=True):
 
     def _recreate_invoice_lines():
         """Soft-delete old lines and recreate with prorated discounts."""
-        invoice.lines.all().update(is_deleted=True)
+        soft_delete_qs(invoice.lines.all(), user)
         total = Decimal('0')
         for line in active_lines:
             effective_qty = line.quantity_ordered - (line.quantity_returned or 0)

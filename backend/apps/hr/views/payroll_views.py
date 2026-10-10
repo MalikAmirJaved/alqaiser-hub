@@ -11,6 +11,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from django.db.models import Q
 import logging
+from apps.common.basemodel import soft_delete_qs
 from apps.common.filters import FilterPaginationMixin
 from apps.hr.filters import PayrollFilter, EmployeeLoanFilter, CompensationFilter
 from apps.notifications.utils import broadcast_data_update
@@ -1360,7 +1361,7 @@ class EmployeeLoanView(PermissionRequiredMixin, FilterPaginationMixin, APIView):
                         {'error': f'Sum of deductions ({deductions_sum:.2f}) must equal total payable amount ({total_payable_val:.2f})'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
-            loan.selected_months.all().update(is_deleted=True)
+            soft_delete_qs(loan.selected_months.all(), request.user)
             for sm in request.data['selected_months']:
                 LoanSelectedMonth.objects.create(
                     loan=loan,
@@ -1984,7 +1985,7 @@ class CompensationView(PermissionRequiredMixin, FilterPaginationMixin, APIView):
         
         # Update selected months if provided
         if 'selected_months' in request.data:
-            compensation.selected_months.all().update(is_deleted=True)
+            soft_delete_qs(compensation.selected_months.all(), request.user)
             for sm in request.data['selected_months']:
                 CompensationSelectedMonth.objects.create(
                     compensation=compensation,

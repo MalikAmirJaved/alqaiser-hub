@@ -10,6 +10,7 @@ from rest_framework import status
 import logging
 import json
 from apps.common.baseauthentication import CompanyBranchMixin
+from apps.common.basemodel import soft_delete_qs
 from apps.common.filters import FilterPaginationMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import Employee, EmployeeDefaultShift, EmployeeAssetAssignment, AssetCategory, RecruitmentCandidate, EmployeeDocument, EmployeeProfilePic
@@ -454,8 +455,11 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, FilterPagination
 
             # ---------- Handle profile pictures (relational) ----------
             if 'profile_pictures' in request.data:
-                # Soft-delete existing profile pics
-                employee.profile_pictures.filter(is_deleted=False).update(is_deleted=True)
+                # Soft-delete existing profile pics (records who/when)
+                soft_delete_qs(
+                    employee.profile_pictures.filter(is_deleted=False),
+                    request.user,
+                )
                 # Create new ones
                 for idx, pic_data in enumerate(request.data['profile_pictures']):
                     EmployeeProfilePic.objects.create(
@@ -477,8 +481,11 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, FilterPagination
 
             # ---------- Handle education/experience documents (relational) ----------
             if 'education_documents' in request.data:
-                # Soft-delete existing education docs
-                employee.documents.filter(document_type='EDUCATION', is_deleted=False).update(is_deleted=True)
+                # Soft-delete existing education docs (records who/when)
+                soft_delete_qs(
+                    employee.documents.filter(document_type='EDUCATION', is_deleted=False),
+                    request.user,
+                )
                 # Create new ones
                 for doc_data in request.data['education_documents']:
                     EmployeeDocument.objects.create(
@@ -498,8 +505,11 @@ class EmployeeView(CompanyBranchMixin, PermissionRequiredMixin, FilterPagination
                     )
 
             if 'experience_documents' in request.data:
-                # Soft-delete existing experience docs
-                employee.documents.filter(document_type='EXPERIENCE', is_deleted=False).update(is_deleted=True)
+                # Soft-delete existing experience docs (records who/when)
+                soft_delete_qs(
+                    employee.documents.filter(document_type='EXPERIENCE', is_deleted=False),
+                    request.user,
+                )
                 # Create new ones
                 for doc_data in request.data['experience_documents']:
                     EmployeeDocument.objects.create(

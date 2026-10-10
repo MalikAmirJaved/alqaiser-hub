@@ -5,28 +5,23 @@ import { useMemo, useState } from "react";
 import {
   ArchiveRestore,
   AlertTriangle,
+  ArrowDownUp,
+  CalendarRange,
   Clock,
   Loader2,
-  MoreVertical,
   RefreshCw,
   Search,
   Trash2,
-  Undo2,
+  X,
 } from "lucide-react";
 
 import { Card, PageHeader, ToolbarButton } from "@/components/finance/ui";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { usePagination } from "@/hooks/usePagination";
 import {
   type TrashEntry,
+  type TrashSort,
   useEmptyTrash,
   usePurgeExpiredTrash,
   usePurgeTrashEntry,
@@ -36,23 +31,31 @@ import {
 } from "@/hooks/useTrash";
 
 import TrashTypeFilter from "@/components/settings/trash/TrashTypeFilter";
+import TrashGroupedTable from "@/components/settings/trash/TrashGroupedTable";
 import TrashPurgeModal, {
   TrashBulkPurgeModal,
 } from "@/components/settings/trash/TrashPurgeModal";
-import {
-  daysLeftTone,
-  formatBytes,
-  formatDateTime,
-  formatDaysLeft,
-  formatRelative,
-} from "@/components/settings/trash/trashDisplay";
+import { formatBytes } from "@/components/settings/trash/trashDisplay";
 import { cn } from "@/lib/utils";
+
+const PAGE_SIZE = 20;
+
+const SORT_OPTIONS: { value: TrashSort; label: string }[] = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "expiring", label: "Expiring soonest" },
+  { value: "name", label: "Name (A–Z)" },
+  { value: "type", label: "Module & type" },
+];
 
 export default function TrashPage() {
   const pagination = usePagination();
-  const [activeType, setActiveType] = useState("");
+  const [activeGroup, setActiveGroup] = useState("");
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<TrashSort>("newest");
   const [showExpiredOnly, setShowExpiredOnly] = useState(false);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const [purgeTarget, setPurgeTarget] = useState<TrashEntry | null>(null);
   const [bulkAction, setBulkAction] = useState<"empty" | "expired" | null>(null);
@@ -63,17 +66,19 @@ export default function TrashPage() {
 
   const filters = useMemo(
     () => ({
-      type: activeType || undefined,
+      group: activeGroup || undefined,
       search: search.trim() || undefined,
       expired: showExpiredOnly || undefined,
+      sort,
+      date_from: dateFrom || undefined,
+      date_to: dateTo || undefined,
       page: pagination.page,
-      page_size: 20,
+      page_size: PAGE_SIZE,
     }),
-    [activeType, search, showExpiredOnly, pagination.page],
+    [activeGroup, search, showExpiredOnly, sort, dateFrom, dateTo, pagination.page],
   );
 
-  const { data: entries, isLoading, totalCount, retentionDays, refetch, isFetching } =
-    useTrash(filters);
+  const { data: entries, isLoading, totalCount, refetch, isFetching } = useTrash(filters);
   const { summary, isLoading: summaryLoading, refetch: refetchSummary } = useTrashSummary();
 
   const purgeEntry = usePurgeTrashEntry();
@@ -81,10 +86,25 @@ export default function TrashPage() {
   const purgeExpired = usePurgeExpiredTrash();
   const emptyTrash = useEmptyTrash();
 
-  const types = summary?.types ?? [];
+  const groups = summary?.groups ?? [];
   const expiredCount = summary?.expired ?? 0;
+  const blockedCount = summary?.blocked ?? 0;
+  const retentionDays = summary?.retention_days ?? 30;
+
+  const hasActiveFilters =
+    !!activeGroup || !!search.trim() || showExpiredOnly || !!dateFrom || !!dateTo;
 
   const resetPage = () => pagination.resetPage();
+
+  const clearFilters = () => {
+    setActiveGroup("");
+    setSearch("");
+    setSort("newest");
+    setShowExpiredOnly(false);
+    setDateFrom("");
+    setDateTo("");
+    resetPage();
+  };
 
   const handleRefresh = async () => {
     await Promise.all([refetch(), refetchSummary()]);
@@ -103,26 +123,27 @@ export default function TrashPage() {
   };
 
   const handleConfirmBulk = async () => {
+    const scope = activeGroup ? { group: activeGroup } : undefined;
     if (bulkAction === "empty") {
-      await emptyTrash.mutateAsync(activeType || undefined);
+      await emptyTrash.mutateAsync(scope);
     } else if (bulkAction === "expired") {
-      await purgeExpired.mutateAsync(activeType || undefined);
+      await purgeExpired.mutateAsync(scope);
     }
     setBulkAction(null);
     await refetchSummary();
   };
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / 20));
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const safePage = Math.min(pagination.page, totalPages);
-  const rangeStart = totalCount === 0 ? 0 : (safePage - 1) * 20 + 1;
-  const rangeEnd = Math.min(safePage * 20, totalCount);
+  const rangeStart = totalCount === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(safePage * PAGE_SIZE, totalCount);
 
   return (
     <>
       <PageHeader
         breadcrumbs={["Settings", "Trash"]}
         title="Trash"
-        description={`Deleted records are kept for ${retentionDays} days, then permanently removed automatically.`}
+        description={`Deleted records are grouped by module and kept for ${retentionDays} days, then permanently removed automatically.`}
         actions={
           <>
             <ToolbarButton
@@ -136,7 +157,6 @@ export default function TrashPage() {
             {canDelete && expiredCount > 0 && (
               <ToolbarButton
                 icon={AlertTriangle}
-                variant="default"
                 onClick={() => setBulkAction("expired")}
               >
                 Purge expired ({expiredCount})
@@ -191,211 +211,182 @@ export default function TrashPage() {
           )}
         </div>
 
+        {/* ── Blocked warning ──────────────────────────────────────────── */}
+        {blockedCount > 0 && (
+          <div className="flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-xs text-foreground">
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-warning" />
+            <div>
+              <span className="font-medium">
+                {blockedCount} item{blockedCount === 1 ? "" : "s"} cannot be permanently
+                deleted.
+              </span>{" "}
+              {blockedCount === 1 ? "It is" : "They are"} still referenced by other records
+              (for example ledger transactions or invoice lines), so the reference has to be
+              removed first — otherwise {blockedCount === 1 ? "it" : "they"} will stay in the
+              trash forever.
+              {summary?.blocked_samples?.[0] && (
+                <span className="block mt-1 text-muted-foreground">
+                  e.g. “{summary.blocked_samples[0].display_name}” is held by{" "}
+                  {summary.blocked_samples[0].blocked_by
+                    .map((b) => `${b.count} × ${b.model.split(".").pop()}`)
+                    .join(", ")}
+                  .
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ── Filters ──────────────────────────────────────────────────── */}
         <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <input
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                resetPage();
-              }}
-              placeholder="Search deleted records…"
-              className="w-full h-9 pl-9 pr-3 rounded-md border border-border bg-surface text-sm outline-none focus:border-primary/60"
-            />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[220px] max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <input
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  resetPage();
+                }}
+                placeholder="Search deleted records…"
+                className="w-full h-9 pl-9 pr-3 rounded-md border border-border bg-surface text-sm outline-none focus:border-primary/60"
+              />
+            </div>
+
+            {/* Sort */}
+            <label className="inline-flex items-center gap-1.5 h-9 px-2 rounded-md border border-border bg-surface text-xs">
+              <ArrowDownUp className="h-3.5 w-3.5 text-muted-foreground" />
+              <select
+                value={sort}
+                onChange={(e) => {
+                  setSort(e.target.value as TrashSort);
+                  resetPage();
+                }}
+                className="bg-transparent text-xs outline-none"
+                aria-label="Sort trash"
+              >
+                {SORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {/* Deleted-date range */}
+            <label className="inline-flex items-center gap-1.5 h-9 px-2 rounded-md border border-border bg-surface text-xs">
+              <CalendarRange className="h-3.5 w-3.5 text-muted-foreground" />
+              <input
+                type="date"
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={(e) => {
+                  setDateFrom(e.target.value);
+                  resetPage();
+                }}
+                className="bg-transparent text-xs outline-none"
+                aria-label="Deleted from date"
+              />
+              <span className="text-muted-foreground">→</span>
+              <input
+                type="date"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={(e) => {
+                  setDateTo(e.target.value);
+                  resetPage();
+                }}
+                className="bg-transparent text-xs outline-none"
+                aria-label="Deleted to date"
+              />
+            </label>
+
+            {/* Expired toggle */}
+            {expiredCount > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowExpiredOnly((v) => !v);
+                  resetPage();
+                }}
+                className={cn(
+                  "inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-xs font-medium transition-colors",
+                  showExpiredOnly
+                    ? "border-destructive bg-destructive/10 text-destructive"
+                    : "border-border bg-surface text-muted-foreground hover:text-foreground",
+                )}
+                title="Show only items past the retention window"
+              >
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Expired only
+                <span className="num opacity-70">{expiredCount}</span>
+              </button>
+            )}
+
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="inline-flex items-center gap-1 h-9 px-3 rounded-md text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="h-3.5 w-3.5" /> Clear
+              </button>
+            )}
           </div>
+
           <TrashTypeFilter
-            types={types}
-            activeType={activeType}
+            groups={groups}
+            activeGroup={activeGroup}
             totalCount={summary?.total ?? 0}
-            expiredCount={expiredCount}
-            onSelect={(type) => {
-              setActiveType(type);
-              resetPage();
-            }}
-            showExpiredOnly={showExpiredOnly}
-            onToggleExpired={() => {
-              setShowExpiredOnly((v) => !v);
+            onSelect={(group) => {
+              setActiveGroup(group);
               resetPage();
             }}
           />
         </div>
 
-        {/* ── Table ────────────────────────────────────────────────────── */}
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-xs text-muted-foreground border-b border-border bg-surface/40">
-                <tr>
-                  <th className="px-4 py-2.5 text-left font-medium">Type</th>
-                  <th className="px-4 py-2.5 text-left font-medium">Record</th>
-                  <th className="px-4 py-2.5 text-left font-medium">Deleted by</th>
-                  <th className="px-4 py-2.5 text-left font-medium">Deleted at</th>
-                  <th className="px-4 py-2.5 text-left font-medium">Auto-delete</th>
-                  <th className="px-4 py-2.5 w-12" />
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading ? (
-                  Array.from({ length: 6 }).map((_, i) => (
-                    <tr key={i} className="border-b border-border/60">
-                      {Array.from({ length: 5 }).map((__, j) => (
-                        <td key={j} className="px-4 py-3">
-                          <Skeleton className="h-4 w-24" />
-                        </td>
-                      ))}
-                      <td className="px-4 py-3">
-                        <Skeleton className="h-4 w-6 ml-auto" />
-                      </td>
-                    </tr>
-                  ))
-                ) : entries.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-14 text-center">
-                      <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                        <Trash2 className="h-8 w-8 opacity-40" />
-                        <p className="text-sm font-medium">
-                          {showExpiredOnly
-                            ? "Nothing has expired yet"
-                            : search || activeType
-                              ? "No deleted records match your filters"
-                              : "The trash is empty"}
-                        </p>
-                        <p className="text-xs">
-                          Deleted records from across the system appear here.
-                        </p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  entries.map((entry) => {
-                    const rowId = `${entry.type_key}:${entry._id}`;
-                    const hasActions = canRestore || canDelete;
-                    return (
-                      <tr
-                        key={rowId}
-                        className={cn(
-                          "border-b border-border/60 hover:bg-surface-2/50",
-                          entry.is_expired && "bg-destructive/[0.04]",
-                        )}
-                      >
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium">{entry.type_label}</span>
-                            {entry.is_expired && (
-                              <span
-                                className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border border-destructive/30 text-destructive bg-destructive/10"
-                                title="Past the retention window — will be purged on the next run"
-                              >
-                                expired
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[11px] text-muted-foreground">{entry.group}</span>
-                        </td>
+        {/* ── Grouped records ──────────────────────────────────────────── */}
+        <TrashGroupedTable
+          entries={entries}
+          groups={groups}
+          isLoading={isLoading}
+          canRestore={canRestore}
+          canDelete={canDelete}
+          hasActiveFilters={hasActiveFilters}
+          filteredTotal={totalCount}
+          onRestore={handleRestore}
+          onPurge={setPurgeTarget}
+        />
 
-                        <td className="px-4 py-3">
-                          <span className="font-medium">{entry.display_name}</span>
-                          {Object.keys(entry.meta ?? {}).length > 0 && (
-                            <div className="text-[11px] text-muted-foreground mt-0.5">
-                              {Object.entries(entry.meta)
-                                .map(([key, value]) => `${key}: ${value}`)
-                                .join(" · ")}
-                            </div>
-                          )}
-                        </td>
-
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {entry.deleted_by ?? "—"}
-                        </td>
-
-                        <td className="px-4 py-3 text-muted-foreground">
-                          <div>{formatDateTime(entry.deleted_at)}</div>
-                          <div className="text-[11px]">{formatRelative(entry.deleted_at)}</div>
-                        </td>
-
-                        <td className="px-4 py-3">
-                          <span
-                            className={cn(
-                              "inline-flex items-center gap-1 h-6 px-2 rounded-full border text-[11px] font-medium",
-                              daysLeftTone(entry.days_left, entry.is_expired),
-                            )}
-                            title={entry.expires_at ? `Expires ${formatDateTime(entry.expires_at)}` : undefined}
-                          >
-                            {formatDaysLeft(entry.days_left, entry.is_expired)}
-                          </span>
-                        </td>
-
-                        <td className="px-4 py-3 text-right">
-                          {hasActions && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="p-1 rounded-md hover:bg-muted transition"
-                                  aria-label="Trash actions"
-                                >
-                                  <MoreVertical className="w-4 h-4" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                {canRestore && (
-                                  <DropdownMenuItem onClick={() => handleRestore(entry)}>
-                                    <Undo2 className="w-4 h-4 mr-2" /> Restore
-                                  </DropdownMenuItem>
-                                )}
-                                {canRestore && canDelete && <DropdownMenuSeparator />}
-                                {canDelete && (
-                                  <DropdownMenuItem
-                                    onClick={() => setPurgeTarget(entry)}
-                                    className="text-destructive"
-                                  >
-                                    <Trash2 className="w-4 h-4 mr-2" /> Delete permanently
-                                  </DropdownMenuItem>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* ── Pagination ─────────────────────────────────────────────── */}
-          {totalCount > 20 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-border text-xs text-muted-foreground">
+        {/* ── Pagination ───────────────────────────────────────────────── */}
+        {totalCount > PAGE_SIZE && (
+          <div className="flex items-center justify-between px-4 py-3 border border-border rounded-xl text-xs text-muted-foreground">
+            <span>
+              Showing {rangeStart}–{rangeEnd} of {totalCount}
+            </span>
+            <div className="flex items-center gap-2">
               <span>
-                Showing {rangeStart}–{rangeEnd} of {totalCount}
+                Page {safePage} of {totalPages}
               </span>
-              <div className="flex items-center gap-2">
-                <span>
-                  Page {safePage} of {totalPages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => pagination.setPage(safePage - 1)}
-                  disabled={safePage === 1}
-                  className="px-2.5 py-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Previous
-                </button>
-                <button
-                  type="button"
-                  onClick={() => pagination.setPage(safePage + 1)}
-                  disabled={safePage >= totalPages}
-                  className="px-2.5 py-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Next
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => pagination.setPage(safePage - 1)}
+                disabled={safePage === 1}
+                className="px-2.5 py-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() => pagination.setPage(safePage + 1)}
+                disabled={safePage >= totalPages}
+                className="px-2.5 py-1 rounded-md border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+              </button>
             </div>
-          )}
-        </Card>
+          </div>
+        )}
       </div>
 
       {/* ── Modals ─────────────────────────────────────────────────────── */}
@@ -415,7 +406,9 @@ export default function TrashPage() {
         onConfirm={handleConfirmBulk}
         title="Empty the trash?"
         count={totalCount}
-        scopeLabel={activeType ? `of type “${activeType}”` : "in the trash"}
+        scopeLabel={activeGroup ? `in ${activeGroup}` : "in the trash"}
+        blockedCount={blockedCount}
+        blockerHint="They stay listed in the trash."
         isLoading={emptyTrash.isPending}
       />
 

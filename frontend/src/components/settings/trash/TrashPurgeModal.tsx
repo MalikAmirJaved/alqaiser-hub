@@ -43,11 +43,13 @@ export default function TrashPurgeModal({
   const dependencyLines = dependencies
     .map((dep) => `${dep.count} × ${humanizeModel(dep.model)}`)
     .join(", ");
+  const blockerLines = blockedBy
+    .map((b) => `${b.count} × ${humanizeModel(b.model)}`)
+    .join(", ");
 
   const message = blocked
-    ? `“${displayName}” is still referenced by ${blockedBy
-        .map((b) => `${b.count} × ${humanizeModel(b.model)}`)
-        .join(", ")}. Remove those records first — nothing was deleted.`
+    ? `“${displayName}” cannot be deleted: it is still referenced by ${blockerLines}. ` +
+      `Those records must be removed first — nothing was deleted.`
     : depsLoading
       ? `Permanently deleting “${displayName}”. Checking related records…`
       : relatedTotal > 0
@@ -79,6 +81,8 @@ export function TrashBulkPurgeModal({
   title,
   count,
   scopeLabel,
+  blockedCount = 0,
+  blockerHint,
   isLoading = false,
 }: {
   isOpen: boolean;
@@ -87,15 +91,24 @@ export function TrashBulkPurgeModal({
   title: string;
   count: number;
   scopeLabel: string;
+  /** Items that cannot be removed because immutable records reference them. */
+  blockedCount?: number;
+  blockerHint?: string | null;
   isLoading?: boolean;
 }) {
+  const base = `${count} item(s) ${scopeLabel} will be deleted forever. This cannot be undone.`;
+  const blockedNote =
+    blockedCount > 0
+      ? ` Note: ${blockedCount} item(s) are still referenced by other records and will be kept. ${blockerHint ?? ""}`.trimEnd()
+      : "";
+
   return (
     <ConfirmationModal
       isOpen={isOpen}
       onClose={onClose}
       onConfirm={onConfirm}
       title={title}
-      message={`${count} item(s) ${scopeLabel} will be deleted forever. This cannot be undone.`}
+      message={`${base}${blockedNote}`}
       type="danger"
       confirmText="Delete forever"
       isLoading={isLoading}

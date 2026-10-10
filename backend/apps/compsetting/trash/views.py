@@ -19,6 +19,7 @@ Each has a cross-module fallback so a module admin can act on their own trash
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -78,6 +79,17 @@ class BaseTrashView(PermissionRequiredMixin, APIView):
         except (TypeError, ValueError):
             return default
 
+    @staticmethod
+    def _date_param(request, name):
+        """Parse an ISO ``YYYY-MM-DD`` query param into a date, or None."""
+        raw = (request.query_params.get(name) or '').strip()
+        if not raw:
+            return None
+        try:
+            return date.fromisoformat(raw)
+        except ValueError:
+            return None
+
     # ── permission + type helpers ──────────────────────────────────────────
     def _require_permission(self, action: str) -> Response | None:
         if check_permission(self.request.user, 'SETTINGS', 'trash', action):
@@ -125,21 +137,30 @@ class TrashListView(BaseTrashView):
         payload = services.list_trash(
             request.user,
             types=types,
+            groups=request.query_params.get('group') or request.query_params.get('groups'),
             search=request.query_params.get('search', ''),
             page=self._int_param(request, 'page', 1),
             page_size=self._int_param(request, 'page_size', 20),
             only_expired=bool(self._bool_param(request, 'expired')),
+            sort=request.query_params.get('sort', 'newest'),
+            date_from=self._date_param(request, 'date_from'),
+            date_to=self._date_param(request, 'date_to'),
         )
         return self._ok(payload)
 
     def delete(self, request):
-        """Empty the trash. Optional ``?type=a,b`` limits it to those types."""
+        """Empty the trash.
+
+        Scope with ``?type=a,b`` (registry keys) and/or ``?group=Inventory``
+        (module group).
+        """
         denied = self._require_permission('delete')
         if denied:
             return denied
 
         raw_types = request.query_params.get('type') or request.query_params.get('types')
         types = [t.strip() for t in raw_types.split(',')] if raw_types else None
+        group = request.query_params.get('group') or request.query_params.get('groups')
 
         if types and not any(get_trash_model(k) for k in types):
             return self._fail(
@@ -147,11 +168,24 @@ class TrashListView(BaseTrashView):
                 status.HTTP_404_NOT_FOUND,
             )
 
-        result = services.empty_trash(request.user, types=types)
-        if result['purged'] == 0 and not result['errors']:
+        result = services.empty_trash(request.user, types=types, groups=group)
+
+        if result['purged'] == 0 and not result['errors'] and not result['blocked']:
             return self._ok(result, 'The trash is already empty.')
 
+        if result['purged'] == 0 and result['blocked']:
+            # Nothing could be removed — explain exactly why instead of a bare
+            # "0 deleted".
+            first = result['blockers'][0] if result['blockers'] else ''
+            message = (
+                f"No items could be permanently deleted — {result['blocked']} "
+                f"item(s) are still referenced by other records. {first}"
+            ).strip()
+            return self._ok(result, message)
+
         message = f"Permanently deleted {result['purged']} item(s) from the trash."
+        if result['blocked']:
+            message += f" {result['blocked']} item(s) are still referenced and were kept."
         if result['errors']:
             message += f" {len(result['errors'])} item(s) could not be deleted."
         return self._ok(result, message)
@@ -255,6 +289,7 @@ class TrashPurgeExpiredView(BaseTrashView):
             return denied
 
         only_type = request.data.get('type') or request.query_params.get('type')
+        group = request.data.get('group') or request.query_params.get('group')
         if only_type and not get_trash_model(only_type):
             return self._fail(
                 f'Unknown trash type "{only_type}". '
@@ -262,18 +297,28 @@ class TrashPurgeExpiredView(BaseTrashView):
                 status.HTTP_404_NOT_FOUND,
             )
 
-        result = services.purge_expired(request.user, only_type=only_type)
+        result = services.purge_expired(request.user, only_type=only_type, groups=group)
 
-        if result['purged'] == 0:
+        if result['purged'] == 0 and not result['blocked']:
             return self._ok(
                 result,
                 f"Nothing to purge — no items are older than {result['retention_days']} days.",
+            )
+
+        if result['purged'] == 0 and result['blocked']:
+            first = result['blockers'][0] if result['blockers'] else ''
+            return self._ok(
+                result,
+                f"{result['blocked']} expired item(s) are still referenced by other "
+                f"records and were kept. {first}".strip(),
             )
 
         message = (
             f"Permanently deleted {result['purged']} item(s) older than "
             f"{result['retention_days']} days."
         )
+        if result['blocked']:
+            message += f" {result['blocked']} expired item(s) are still referenced and were kept."
         if result['errors']:
             message += f" {len(result['errors'])} item(s) could not be deleted."
         return self._ok(result, message)

@@ -2,92 +2,96 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Trash2 } from "lucide-react";
-import type { TrashTypeCount } from "@/hooks/useTrash";
+import {
+  Boxes,
+  Building2,
+  Landmark,
+  TrendingUp,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+import type { TrashGroupCount } from "@/hooks/useTrash";
+
+/** Icon per module group, falling back to a neutral box. */
+const GROUP_ICONS: Record<string, LucideIcon> = {
+  Settings: Building2,
+  Inventory: Boxes,
+  Finance: Landmark,
+  Sales: TrendingUp,
+  "Human Resources": Users,
+};
 
 interface TrashTypeFilterProps {
-  types: TrashTypeCount[];
-  activeType: string;
+  groups: TrashGroupCount[];
+  activeGroup: string;
   totalCount: number;
-  expiredCount: number;
-  onSelect: (type: string) => void;
-  showExpiredOnly: boolean;
-  onToggleExpired: () => void;
+  onSelect: (group: string) => void;
 }
 
 /**
- * Filter chips: "All" + one chip per trash type with a live count, plus a
- * toggle for items that have already passed the retention window.
+ * Module chips: "All" + one chip per module with its live total, so the page
+ * can be narrowed to Inventory / Finance / HR / Sales / Settings at a glance.
  */
 export default function TrashTypeFilter({
-  types,
-  activeType,
+  groups,
+  activeGroup,
   totalCount,
-  expiredCount,
   onSelect,
-  showExpiredOnly,
-  onToggleExpired,
 }: TrashTypeFilterProps) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <button
-        type="button"
+      <GroupChip
+        label="All modules"
+        count={totalCount}
+        active={activeGroup === ""}
         onClick={() => onSelect("")}
-        className={cn(
-          "inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-medium transition-colors",
-          activeType === ""
-            ? "border-primary bg-primary/10 text-primary"
-            : "border-border bg-card text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-        )}
-      >
-        All
-        <span className="num text-[11px] opacity-70">{totalCount}</span>
-      </button>
+        icon={Boxes}
+      />
 
-      {types.map((type) => {
-        const active = activeType === type.key;
+      {groups.map((group) => {
+        const active = activeGroup === group.group;
         return (
-          <button
-            key={type.key}
-            type="button"
-            onClick={() => onSelect(active ? "" : type.key)}
-            title={type.group}
-            className={cn(
-              "inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-medium transition-colors",
-              active
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-border bg-card text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-            )}
-          >
-            {type.label}
-            <span className="num text-[11px] opacity-70">{type.count}</span>
-            {type.expired > 0 && (
-              <span
-                className="w-1.5 h-1.5 rounded-full bg-destructive"
-                title={`${type.expired} expired`}
-              />
-            )}
-          </button>
+          <GroupChip
+            key={group.group}
+            label={group.group}
+            count={group.count}
+            active={active}
+            onClick={() => onSelect(active ? "" : group.group)}
+            icon={GROUP_ICONS[group.group] ?? Boxes}
+          />
         );
       })}
-
-      {expiredCount > 0 && (
-        <button
-          type="button"
-          onClick={onToggleExpired}
-          className={cn(
-            "inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-medium transition-colors ml-auto",
-            showExpiredOnly
-              ? "border-destructive bg-destructive/10 text-destructive"
-              : "border-border bg-card text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-          )}
-          title="Show only items that have passed the retention window"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-          Expired only
-          <span className="num text-[11px] opacity-70">{expiredCount}</span>
-        </button>
-      )}
     </div>
+  );
+}
+
+function GroupChip({
+  label,
+  count,
+  active,
+  onClick,
+  icon: Icon,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+  icon: LucideIcon;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-medium transition-colors",
+        active
+          ? "border-primary bg-primary/10 text-primary"
+          : "border-border bg-card text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+      )}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+      <span className="num text-[11px] opacity-70">{count}</span>
+    </button>
   );
 }

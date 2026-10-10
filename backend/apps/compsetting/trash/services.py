@@ -18,6 +18,7 @@ Everything in the trash is permanently deleted ``TRASH_RETENTION_DAYS``
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import asdict, dataclass, field as dataclass_field
 from datetime import timedelta
 from typing import Any, Iterable, Iterator, Sequence
@@ -232,6 +233,18 @@ def _extra_meta(tm: TrashModel, obj) -> dict:
 # Listing
 # ─────────────────────────────────────────────────────────────────────────────
 
+TRASH_SORTS = ('newest', 'oldest', 'expiring', 'name', 'type')
+
+#: API sort key → model field(s) applied to each per-model queryset.
+_SORT_FIELDS = {
+    'newest':   ('-deleted_at',),
+    'oldest':   ('deleted_at',),
+    'expiring': ('deleted_at',),      # earliest deletion expires first
+    'name':     ('deleted_at',),      # cross-model name sort happens in Python
+    'type':     ('deleted_at',),
+}
+
+
 def _parse_types(raw) -> list[TrashModel]:
     if not raw:
         return list(TRASH_MODELS)
@@ -246,6 +259,38 @@ def _parse_types(raw) -> list[TrashModel]:
     return [tm for tm in TRASH_MODELS if tm.key in wanted]
 
 
+def _parse_groups(raw) -> list[TrashModel]:
+    """Filter by module group (e.g. ``Inventory`` or ``Human Resources``)."""
+    if not raw:
+        return list(TRASH_MODELS)
+    if isinstance(raw, str):
+        names = [p.strip() for p in raw.split(',') if p.strip()]
+    else:
+        names = [str(p).strip() for p in raw if str(p).strip()]
+    if not names:
+        return list(TRASH_MODELS)
+
+    lowered = {n.lower() for n in names}
+    return [tm for tm in TRASH_MODELS if tm.group.lower() in lowered]
+
+
+def group_counts(user) -> list[dict]:
+    """Per-module totals for the grouped view."""
+    buckets: dict[str, dict] = {}
+    for tm in _parse_types(None):
+        if not can_view_type(user, tm):
+            continue
+        count = scope_queryset(tm, user).count()
+        if not count:
+            continue
+        bucket = buckets.setdefault(tm.group, {
+            'group': tm.group, 'count': 0, 'types': [],
+        })
+        bucket['count'] += count
+        bucket['types'].append(tm.key)
+    return sorted(buckets.values(), key=lambda b: -b['count'])
+
+
 def _search_q(tm: TrashModel, term: str) -> Q | None:
     q = Q()
     matched = False
@@ -258,18 +303,30 @@ def _search_q(tm: TrashModel, term: str) -> Q | None:
     return q if matched else None
 
 
-def iter_entries(user, types=None, search='', only_expired=False) -> Iterator[TrashEntry]:
-    """Yield serialised trash entries visible to ``user``, newest first."""
+def iter_entries(user, types=None, search='', only_expired=False,
+                 sort='newest', date_from=None, date_to=None) -> Iterator[TrashEntry]:
+    """Yield serialised trash entries visible to ``user``.
+
+    ``sort`` is one of ``TRASH_SORTS``; ``date_from`` / ``date_to`` filter on
+    ``deleted_at`` (dates, inclusive of the whole ``date_to`` day).
+    """
     cutoff = retention_cutoff()
     term = (search or '').strip()
+    if sort not in TRASH_SORTS:
+        sort = 'newest'
+    order_by = _SORT_FIELDS[sort]
 
-    for tm in _parse_types(types):
+    for tm in list(types if types is not None else TRASH_MODELS):
         if not can_view_type(user, tm):
             continue
 
         qs = scope_queryset(tm, user)
         if only_expired:
             qs = qs.filter(deleted_at__lt=cutoff)
+        if date_from:
+            qs = qs.filter(deleted_at__date__gte=date_from)
+        if date_to:
+            qs = qs.filter(deleted_at__date__lte=date_to)
 
         if term:
             q = _search_q(tm, term)
@@ -277,17 +334,22 @@ def iter_entries(user, types=None, search='', only_expired=False) -> Iterator[Tr
                 continue
             qs = qs.filter(q)
 
-        qs = qs.select_related('deleted_by')
+        qs = qs.select_related('deleted_by').order_by(*order_by)
         for obj in qs.iterator(chunk_size=200):
             yield serialize_entry(tm, obj, cutoff)
 
 
-def list_trash(user, types=None, search='', page=1, page_size=20,
-               only_expired=False, expired_only_flag=None) -> dict:
+def list_trash(user, types=None, groups=None, search='', page=1, page_size=20,
+               only_expired=False, expired_only_flag=None, sort='newest',
+               date_from=None, date_to=None) -> dict:
     """Paginated trash listing.
 
     ``only_expired`` and ``expired_only_flag`` are aliases; the latter exists so
     the view can pass ``?expired=true`` without ambiguity.
+
+    ``sort`` accepts ``newest`` (default), ``oldest``, ``expiring``, ``name`` or
+    ``type``. Cross-model ordering is finalised in Python because each model is
+    queried separately.
 
     Performance note: rows are gathered per registered model and merged in
     Python, so cost grows with the *total* trash size rather than the page size
@@ -297,7 +359,27 @@ def list_trash(user, types=None, search='', page=1, page_size=20,
     query or a shared deletion-index table.
     """
     expired = bool(only_expired or expired_only_flag)
-    entries = list(iter_entries(user, types=types, search=search, only_expired=expired))
+    if sort not in TRASH_SORTS:
+        sort = 'newest'
+
+    selected = _parse_types(types)
+    if groups:
+        allowed = {tm.key for tm in _parse_groups(groups)}
+        selected = [tm for tm in selected if tm.key in allowed]
+
+    entries = list(iter_entries(
+        user, types=selected, search=search, only_expired=expired,
+        sort=sort, date_from=date_from, date_to=date_to,
+    ))
+
+    if sort == 'name':
+        entries.sort(key=lambda e: (e.display_name or '').lower())
+    elif sort == 'type':
+        entries.sort(key=lambda e: (e.group, e.type_label, e.display_name or ''))
+    elif sort == 'newest':
+        entries.sort(key=lambda e: e.deleted_at, reverse=True)
+    elif sort in ('oldest', 'expiring'):
+        entries.sort(key=lambda e: e.deleted_at)
 
     paginator = Paginator(entries, max(1, min(int(page_size or 20), 200)))
     page_obj = paginator.get_page(page)
@@ -310,8 +392,56 @@ def list_trash(user, types=None, search='', page=1, page_size=20,
         'next': page_obj.number + 1 if page_obj.has_next() else None,
         'previous': page_obj.number - 1 if page_obj.has_previous() else None,
         'retention_days': retention_days(),
+        'sort': sort,
         'results': [e.to_dict() for e in page_obj.object_list],
     }
+
+
+def count_entries(user, types=None) -> int:
+    """Cheap row count for the visible trash (used by the blocked probe)."""
+    return sum(
+        scope_queryset(tm, user).count()
+        for tm in (types if types is not None else TRASH_MODELS)
+        if can_view_type(user, tm)
+    )
+
+
+def count_blocked(user, types=None, limit: int = 500) -> dict:
+    """How many trashed rows cannot be purged because PROTECT rows reference them.
+
+    Expensive (walks each row's cascade graph), so it is capped. A row that is
+    blocked is permanently stuck: it keeps reserving unique constraints and can
+    never age out, so the UI must be able to call it out.
+    """
+    blocked = 0
+    checked = 0
+    samples: list[dict] = []
+
+    for tm in (types if types is not None else TRASH_MODELS):
+        if not can_view_type(user, tm):
+            continue
+        qs = scope_queryset(tm, user)
+        if checked >= limit:
+            break
+        for obj in qs.only('_id').iterator(chunk_size=200):
+            checked += 1
+            if checked > limit:
+                break
+            try:
+                blockers = protected_relations(obj)
+            except Exception:
+                continue
+            if blockers:
+                blocked += 1
+                if len(samples) < 5:
+                    samples.append({
+                        'type': tm.key,
+                        'id': str(obj._id),
+                        'display_name': build_display_name(tm, obj),
+                        'blocked_by': blockers,
+                    })
+
+    return {'blocked': blocked, 'checked': checked, 'truncated': checked > limit, 'samples': samples}
 
 
 def trash_summary(user) -> dict:
@@ -342,6 +472,8 @@ def trash_summary(user) -> dict:
                 'expired': expired,
             })
 
+    blocked_info = count_blocked(user)
+
     return {
         'total': total,
         'expired': expired_total,
@@ -349,6 +481,10 @@ def trash_summary(user) -> dict:
         'size_bytes': size_total,
         'retention_days': retention_days(),
         'types': types_out,
+        'groups': group_counts(user),
+        # Rows that can never be purged while their references exist.
+        'blocked': blocked_info['blocked'],
+        'blocked_samples': blocked_info['samples'],
     }
 
 
@@ -440,10 +576,22 @@ def collect_dependencies(obj, depth: int = 0) -> list[dict]:
     ]
 
 
-def protected_relations(obj) -> list[dict]:
-    """Rows that would BLOCK a hard delete (FK with on_delete=PROTECT)."""
-    blocked = []
-    for rel in type(obj)._meta.related_objects:
+def _collect_blockers(obj, depth: int, acc: dict, visited: set) -> None:
+    """Accumulate every PROTECT relation that would block ``obj``'s deletion.
+
+    Must recurse: a Product itself may have no blockers while its Variant is
+    referenced by an immutable ledger row (InventoryTransaction) or an invoice
+    line, and the purge deletes the variant as part of the cascade.
+    """
+    if depth > MAX_DEPENDENCY_DEPTH or not hasattr(obj, '_meta'):
+        return
+
+    marker = (obj._meta.label, obj.pk)
+    if marker in visited:
+        return
+    visited.add(marker)
+
+    for rel in obj._meta.related_objects:
         remote = getattr(rel.field, 'remote_field', None)
         if remote is None or remote.on_delete is not PROTECT:
             continue
@@ -455,12 +603,36 @@ def protected_relations(obj) -> list[dict]:
         except Exception:
             continue
         if count:
-            blocked.append({
+            key = (rel.related_model._meta.label, rel.field.name)
+            entry = acc.setdefault(key, {
                 'model': rel.related_model._meta.label,
                 'field': rel.field.name,
-                'count': count,
+                'count': 0,
+                'blocked_by_type': obj._meta.label,
             })
-    return blocked
+            entry['count'] += count
+
+    # Recurse into the CASCADE children that will be deleted alongside it.
+    for rel in _reverse_cascade_relations(type(obj)):
+        qs = _child_queryset(obj, rel)
+        if qs is None:
+            continue
+        try:
+            for child in qs[:MAX_REPORTED_DEPENDENCIES]:
+                _collect_blockers(child, depth + 1, acc, visited)
+        except Exception:
+            continue
+
+
+def protected_relations(obj) -> list[dict]:
+    """Rows that would BLOCK a hard delete, anywhere in the cascade graph.
+
+    Checked before any deletion starts, because a ProtectedError raised halfway
+    through leaves a partly-purged graph and an opaque error.
+    """
+    acc: dict = {}
+    _collect_blockers(obj, 0, acc, set())
+    return sorted(acc.values(), key=lambda b: -b['count'])[:MAX_REPORTED_DEPENDENCIES]
 
 
 def _process_relations(obj, action) -> int:
@@ -513,6 +685,25 @@ def _delete_row_files(obj) -> int:
 class TrashOperationError(Exception):
     """Raised when a purge/restore cannot be performed."""
 
+    def __init__(self, message, *, blocked_by=None):
+        super().__init__(message)
+        #: PROTECT relations (if any) that caused this failure.
+        self.blocked_by = blocked_by or []
+
+
+def format_blockers(blocked: list[dict], limit: int = 4) -> str:
+    """Human-readable summary of PROTECT blockers, e.g. ``2 Inventory Transaction``."""
+    parts = []
+    for b in blocked[:limit]:
+        name = b['model'].split('.')[-1]
+        # CamelCase -> "Inventory Transaction"
+        name = re.sub(r'(?<!^)(?=[A-Z])', ' ', name)
+        parts.append(f"{b['count']} {name}")
+    text = ', '.join(parts)
+    if len(blocked) > limit:
+        text += f", and {len(blocked) - limit} more"
+    return text
+
 
 def find_entry(tm: TrashModel, user, entry_id) -> Any:
     """Fetch a single trashed row, respecting tenant scope."""
@@ -535,13 +726,15 @@ def purge_entry(tm: TrashModel, user, entry_id, *, ignore_permission: bool = Fal
     obj = find_entry(tm, user, entry_id)
     display_name = build_display_name(tm, obj)
 
-    # Surface blockers before we start so the user gets a clear message.
+    # Surface blockers before we start so the user gets a clear message and no
+    # partial delete happens.
     blocked = protected_relations(obj)
     if blocked:
-        names = ', '.join(f"{b['count']} {b['model'].split('.')[-1]}" for b in blocked)
         raise TrashOperationError(
-            f'This item is still referenced by {names} and cannot be permanently '
-            f'deleted yet. Remove those records first.'
+            f'“{display_name}” cannot be permanently deleted: it is still '
+            f'referenced by {format_blockers(blocked)}. Those records must be '
+            f'removed first.',
+            blocked_by=blocked,
         )
 
     with transaction.atomic():
@@ -559,8 +752,7 @@ def purge_entry(tm: TrashModel, user, entry_id, *, ignore_permission: bool = Fal
 
 
 def _purge_rows(rows) -> None:
-    """Best-effort deletion of a batch of related rows (per-row, so one
-    failure does not strand the rest)."""
+    """Delete a batch of related rows, files first."""
     for row in rows:
         try:
             _delete_row_files(row)
@@ -610,18 +802,29 @@ def can_restore(user, tm: TrashModel) -> bool:
     return check_permission(user, tm.module, tm.resource, 'update')
 
 
-def purge_expired(user=None, *, only_type: str | None = None) -> dict:
+def resolve_scope(types=None, groups=None) -> list[TrashModel]:
+    """Types selected by ``?type=a,b`` and/or ``?group=Inventory`` (AND-ed)."""
+    selected = _parse_types(types)
+    if groups:
+        allowed = {tm.key for tm in _parse_groups(groups)}
+        selected = [tm for tm in selected if tm.key in allowed]
+    return selected
+
+
+def purge_expired(user=None, *, only_type: str | None = None,
+                  groups: str | None = None) -> dict:
     """Permanently delete everything past the retention window.
 
     Called by the Celery beat task (no user → no permission check, global scope)
     and by the ``purge-expired`` API action (user scoped).
     """
     cutoff = retention_cutoff()
-    models = [get_trash_model(only_type)] if only_type else list(TRASH_MODELS)
-    models = [tm for tm in models if tm is not None]
+    models = resolve_scope(only_type, groups)
 
     purged = 0
+    blocked = 0
     by_type: dict[str, int] = {}
+    blockers: list[str] = []
     errors: list[str] = []
 
     for tm in models:
@@ -642,12 +845,19 @@ def purge_expired(user=None, *, only_type: str | None = None) -> dict:
                     _hard_delete_unscoped(tm, obj._id)
                 purged += 1
                 by_type[tm.key] = by_type.get(tm.key, 0) + 1
+            except TrashOperationError as exc:
+                # Still referenced by immutable records — expected, not a bug.
+                blocked += 1
+                blockers.append(str(exc))
+                logger.info('Trash retention skipped %s %s: %s', tm.key, obj._id, exc)
             except Exception as exc:
                 errors.append(f'{tm.key}:{obj._id}: {exc}')
                 logger.warning('Trash purge failed for %s %s: %s', tm.key, obj._id, exc)
 
     return {
         'purged': purged,
+        'blocked': blocked,
+        'blockers': blockers[:10],
         'by_type': by_type,
         'errors': errors[:20],
         'retention_days': retention_days(),
@@ -666,19 +876,24 @@ def _hard_delete_unscoped(tm: TrashModel, entry_id) -> None:
         obj.delete()
 
 
-def empty_trash(user, types: Sequence[str] | None = None) -> dict:
+def empty_trash(user, types: Sequence[str] | None = None,
+                groups: str | None = None) -> dict:
     """Permanently delete everything currently in the trash (manual action)."""
-    keys = None
     if types:
         keys = [k for k in types if get_trash_model(k)]
         if not keys:
             raise TrashOperationError('No valid trash types supplied.')
+        models = resolve_scope(keys, groups)
+    else:
+        models = resolve_scope(None, groups)
 
     purged = 0
+    blocked = 0
     by_type: dict[str, int] = {}
+    blockers: list[str] = []
     errors: list[str] = []
 
-    for tm in (_parse_types(keys) if keys else TRASH_MODELS):
+    for tm in models:
         if not can_purge(user, tm):
             continue
         qs = scope_queryset(tm, user)
@@ -687,11 +902,22 @@ def empty_trash(user, types: Sequence[str] | None = None) -> dict:
                 purge_entry(tm, user, obj._id, ignore_permission=True)
                 purged += 1
                 by_type[tm.key] = by_type.get(tm.key, 0) + 1
+            except TrashOperationError as exc:
+                # Still referenced by immutable records — expected, not a bug.
+                blocked += 1
+                blockers.append(str(exc))
+                logger.info('Trash empty skipped %s %s: %s', tm.key, obj._id, exc)
             except Exception as exc:
                 errors.append(f'{tm.key}:{obj._id}: {exc}')
                 logger.warning('Trash empty failed for %s %s: %s', tm.key, obj._id, exc)
 
-    return {'purged': purged, 'by_type': by_type, 'errors': errors[:20]}
+    return {
+        'purged': purged,
+        'blocked': blocked,
+        'blockers': blockers[:10],
+        'by_type': by_type,
+        'errors': errors[:20],
+    }
 
 
 def dependency_report(tm: TrashModel, user, entry_id) -> dict:

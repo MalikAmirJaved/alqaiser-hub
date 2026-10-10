@@ -22,8 +22,9 @@ class BatchStockMixin:
         user = request.user
         company_id = user.company_id
         
-        # Build cache key
-        cache_key = f"batch_stock_{company_id}_{warehouse_uuid}_{'_'.join(sorted(variant_ids))}"
+        # Build cache key (bump the version when the query semantics change,
+        # otherwise a response cached by older code keeps serving deleted rows)
+        cache_key = f"batch_stock_v2_{company_id}_{warehouse_uuid}_{'_'.join(sorted(variant_ids))}"
         cached_data = cache.get(cache_key)
         if cached_data:
             return Response({'results': cached_data})
@@ -35,13 +36,18 @@ class BatchStockMixin:
         except Warehouse.DoesNotExist:
             return Response({'error': 'Warehouse not found'}, status=404)
         
-        # Fetch stock items in one query
+        # Fetch stock items in one query. Deleted variants/stock must not be
+        # reported, otherwise a deleted product shows non-zero stock in POS.
         from apps.inventory.models import StockItem, ProductVariant
-        variants = ProductVariant.objects.filter(_id__in=variant_ids, company_id=company_id)
+        variants = ProductVariant.objects.filter(
+            _id__in=variant_ids, company_id=company_id,
+            is_deleted=False, product__is_deleted=False,
+        )
         stock_items = StockItem.objects.filter(
             variant__in=variants,
             warehouse=warehouse,
-            company_id=company_id
+            company_id=company_id,
+            is_deleted=False,
         ).select_related('variant')
         
         # Build response map

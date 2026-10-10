@@ -27,6 +27,54 @@ Use this template:
 
 ## Resolved
 
+### BUG-20261010-09 — Deleted products still listed on Inventory → Stock Management
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | High |
+| Module | Inventory / Stock |
+| Found | 2026-10-10 (reported: deleted items showing on `/inventory/stock`) |
+| Resolved | 2026-10-10 (changelog 1.6) |
+| Root cause | `StockManagementViewSet` inherits `CompanyBranchMixin`, whose `get_queryset()` is the only place that applies `is_deleted=False`. But `current_stock` (the endpoint behind the Stock Management page) builds its own queryset with `StockItem.objects.filter(company_id=…)`, bypassing the mixin entirely — and `is_deleted` was never added. The page therefore listed soft-deleted products, and their quantities were included in the "Total Units On Hand" / "Low Stock Items" KPI cards because those are summed from the returned page. Verified against live data: the endpoint returned 1 of 1 stock rows, and that row had `stock.is_deleted=True`, `variant.is_deleted=True`, `product.is_deleted=True`. |
+| Fix | Added `alive_stock()` / `alive_variant()` scoping helpers on the viewset and applied them across the module: `current_stock`, `retrieve`, `variant_summary`, `pos_catalog` (including every `Exists()` subquery), `batch_stock`, and `adjust`. The helpers filter `is_deleted=False` on the stock row **and** `variant__is_deleted=False` / `variant__product__is_deleted=False`, so a half-cascaded delete (parent soft-deleted, child rows missed) cannot leak either. `adjust` now refuses with a clear message instead of silently resurrecting a deleted variant through `get_or_create`, and the `current_stock`/`batch_stock` cache keys were version-bumped (`_v2`) so previously cached responses cannot keep serving deleted rows. |
+| Prevention | `apps/inventory/tests.py → StockSoftDeleteTest` (11 tests) seeds a live and a deleted product graph and asserts the deleted one is absent from `current_stock` (plain, low-stock, search, and variant-id filters), `retrieve` (404), `variant_summary` (404, and a live variant whose stock row was deleted reports zero), `pos-catalog`, and `batch-stock` (deleted variant reports 0 units, not 199), plus that `adjust` refuses and that `alive_stock()` catches the half-cascaded case. |
+
+### BUG-20261010-08 — "Permanently deleted 0 item(s)… 1 item(s) could not be deleted"
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | High |
+| Module | Settings / Trash |
+| Found | 2026-10-10 (reported from the running app; server log showed the ProtectedError) |
+| Resolved | 2026-10-10 (changelog 1.6) |
+| Root cause | Two compounding faults. (1) The PROTECT pre-flight `protected_relations()` only inspected the *root* object's reverse relations. A `Product` has no PROTECT rows pointing at it, but its `ProductVariant` is referenced by `InventoryTransaction.variant`, `CustomerInvoiceLine.variant`, `StockTransfer`, `PurchaseOrderLine`, `SalesOrderLine`, `ReturnRefundLine`, `InvoiceLineProductLink` and `QuoteLine` — all `on_delete=PROTECT`. So the check passed, the purge started, and `ProtectedError` was raised deep inside the cascade. (2) Because the purge runs in `transaction.atomic()`, that error marked the transaction broken; every subsequent item in the bulk loop then failed with the same opaque message, so "Empty trash" reported *"Permanently deleted 0 item(s) from the trash. 1 item(s) could not be deleted."* with no indication of what was holding the record. |
+| Fix | `protected_relations()` now walks the entire CASCADE graph (`_collect_blockers`, capped at `MAX_DEPENDENCY_DEPTH`) and reports each blocker with the child model that owns the FK, so a Product's blocker is attributed to `inventory.ProductVariant`. `purge_entry()` raises a `TrashOperationError` carrying the blocker list *before* opening a transaction, so nothing is partially deleted. Bulk actions (`empty_trash`, `purge_expired`) now count `blocked` separately from `errors` and return human-readable `blockers`; the API message names the item and the exact references ("still referenced by 2 Inventory Transaction, 1 Customer Invoice Line. Those records must be removed first."). The summary exposes `blocked` + `blocked_samples`, the page shows an amber warning explaining that such rows can never age out, and the dependency-preview modal already rendered "Cannot delete yet". |
+| Prevention | `TrashProtectedRelationTestCase` (9 tests) covers recursive blocker discovery, `can_purge=False` in the preview, purge refusing while leaving product/variant/stock rows untouched, `empty_trash` reporting `blocked=1, errors=[]` with an explanatory message, the summary count, success once the blocker is removed, and `format_blockers` wording/truncation. |
+
+### BUG-20261010-07 — Editing a variant attribute crashed with a duplicate-key error
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | High |
+| Module | Inventory / Products (variants) |
+| Found | 2026-10-10 (writing the soft-delete regression test for attribute replacement) |
+| Resolved | 2026-10-10 (changelog 1.6) |
+| Root cause | `VariantAttribute` is `unique_together = [['variant', 'attribute_key']]`. `ProductVariantSerializer.update()` soft-deleted every existing attribute and then inserted the incoming ones — but a soft-deleted row still occupies the unique index, so re-sending an existing key (for example `Color`) raised `IntegrityError: UNIQUE constraint failed`. Any user editing a variant and keeping an attribute key hit a 500. The bug was latent because the app has no attribute data yet; adding `deleted_at` bookkeeping to the replace path made it reproducible. |
+| Fix | `_create_attributes` now upserts by key: it looks up the row (including a soft-deleted one), revives it (`is_deleted=False`, clears `deleted_at`/`deleted_by`) and updates the value in place; only genuinely new keys are inserted. A key repeated in one payload updates the same row instead of colliding. The model's `Meta` now warns that soft-deleted rows hold the constraint, so callers must upsert. |
+| Prevention | `SoftDeleteQuerysetTestCase.test_variant_attribute_edit_upserts_instead_of_colliding` edits an attribute and asserts a single row survives with the new value, plus `..._image_replace_records_deleter` for the image path (which has no unique key and legitimately soft-deletes + creates). |
+
+### BUG-20261010-06 — Rows stored as deleted were invisible to Trash *and* the retention purge
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | High |
+| Module | Settings / Trash, Inventory |
+| Found | 2026-10-10 (reported: `deleted_at` was NULL on rows that already had `is_deleted=True`) |
+| Resolved | 2026-10-10 (changelog 1.6) |
+| Root cause | `deleted_at` was introduced after these rows were written, so rows flagged deleted earlier — imported as deleted, or soft-deleted through `queryset.update()` — kept `deleted_at = NULL`. The Trash module treats `NULL` as "never deleted by a user" and hides them, and the retention purge only touches rows that have a timestamp. Those rows were therefore stuck in permanent limbo: still reserving unique constraints (a soft-deleted SKU blocks re-import, `VariantAttribute`'s unique key blocks edits) but impossible to review, restore, or clean up. The live database had 60 such rows: 20 `inventory.Product`, 20 `ProductVariant`, 20 `StockItem`, all imported as deleted with no `DELETE` audit entry. |
+| Fix | Added `apps/compsetting/trash/backfill.py` plus a data migration in each of the 10 affected apps that stamps `deleted_at = updated_at` (the row's real last-modified instant) for every `is_deleted=True, deleted_at IS NULL` row. `deleted_by` is deliberately left NULL because no user performed those deletions; the API renders a missing deleter as "Unknown (legacy)". The backfill is idempotent and supports `dry_run`. It restored all 60 rows to the trash, where they now age out or can be purged on demand. |
+| Prevention | `TrashBackfillTestCase` covers stamping, `deleted_by` staying NULL, live rows being untouched, backfilled rows becoming visible *and* purgeable, idempotency, and dry-run. |
+
 ### BUG-20261010-05 — Product delete never recorded who deleted it
 | Field | Value |
 | ----- | ----- |
