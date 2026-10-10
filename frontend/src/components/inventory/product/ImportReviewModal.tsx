@@ -253,6 +253,8 @@ export default function ImportReviewModal({
   const [collapsedProducts, setCollapsedProducts] = useState<Set<string>>(
     new Set()
   );
+  const [editingProduct, setEditingProduct] = useState<string | null>(null);
+  const [editProductName, setEditProductName] = useState("");
   const [policy, setPolicy] = useState<ConflictPolicy>("add_new");
   const [validation, setValidation] = useState<Record<number, RowValidation>>(
     {}
@@ -474,8 +476,66 @@ export default function ImportReviewModal({
         min_stock_level: 0,
         max_stock_level: 0,
       };
+      // Find the index of the first variant of this product to insert at the very top
+      const firstVariantIndex = prev.findIndex((r) => r.product_name === productName);
+      if (firstVariantIndex >= 0) {
+        // Insert BEFORE the first variant (at the very top of this product's variants)
+        const newRows = [...prev];
+        newRows.splice(firstVariantIndex, 0, newRow);
+        return newRows;
+      }
+      // Fallback: add to end if product not found
       return [...prev, newRow];
     });
+  }, []);
+
+  const addNewProduct = useCallback(() => {
+    let newProductName = "";
+    setRows((prev) => {
+      const maxIndex = prev.reduce((max, r) => Math.max(max, r.row_index), -1);
+      const newRowIndex = maxIndex + 1;
+      // Generate a unique product name
+      const existingNames = new Set(prev.map((r) => r.product_name));
+      newProductName = "New Product";
+      let counter = 1;
+      while (existingNames.has(newProductName)) {
+        newProductName = `New Product ${counter}`;
+        counter++;
+      }
+      const newRow: ImportRow = {
+        row_index: newRowIndex,
+        product_name: newProductName,
+        product_description: "",
+        category_id: null,
+        category_name: "",
+        category_is_new: false,
+        brand_id: null,
+        brand_name: "",
+        brand_is_new: false,
+        unit: "PIECE",
+        storage_requirement: "AMBIENT",
+        tax_rate: 0,
+        status: "active",
+        variant_sku: "",
+        variant_title: "",
+        variant_barcode: "",
+        buying_price: 0,
+        selling_price: 0,
+        min_stock_level: 0,
+        max_stock_level: 0,
+      };
+      return [newRow, ...prev]; // Add to top
+    });
+    // Auto-expand the new product, go to page 0, and enter edit mode
+    setCollapsedProducts((prev) => {
+      const next = new Set(prev);
+      next.delete(newProductName); // Ensure it's expanded
+      return next;
+    });
+    setPage(0);
+    // Enter edit mode for the new product (auto-focus via autoFocus prop)
+    setEditingProduct(newProductName);
+    setEditProductName(newProductName);
   }, []);
 
   const toggleCollapse = useCallback((productName: string) => {
@@ -485,6 +545,30 @@ export default function ImportReviewModal({
       else next.add(productName);
       return next;
     });
+  }, []);
+
+  const startEditProductName = useCallback((productName: string) => {
+    setEditingProduct(productName);
+    setEditProductName(productName);
+  }, []);
+
+  const saveEditProductName = useCallback((productName: string) => {
+    if (editProductName.trim() && editProductName !== productName) {
+      setRows((prev) =>
+        prev.map((r) =>
+          r.product_name === productName
+            ? { ...r, product_name: editProductName.trim() }
+            : r
+        )
+      );
+    }
+    setEditingProduct(null);
+    setEditProductName("");
+  }, [editProductName]);
+
+  const cancelEditProductName = useCallback(() => {
+    setEditingProduct(null);
+    setEditProductName("");
   }, []);
 
   /** Expand, paginate to, and focus the SKU input of the first blocking row. */
@@ -633,6 +717,16 @@ export default function ImportReviewModal({
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addNewProduct}
+              className="gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Product
+            </Button>
             {validating && (
               <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -709,21 +803,57 @@ export default function ImportReviewModal({
                   )}
                 </button>
                 <Package className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className="text-sm font-semibold flex-1 truncate">
-                  {group.product_name}
-                </span>
-                {group.rows.some((r) =>
-                  (fieldErrors[r.row_index] || []).some(
-                    (e) => e.field === "product_name"
-                  )
-                ) && (
-                  <span
-                    role="alert"
-                    className="flex items-center gap-1 text-[11px] text-destructive"
-                  >
-                    <AlertCircle className="w-3 h-3" />
-                    Product name is required
-                  </span>
+                {editingProduct === group.product_name ? (
+                  <div className="flex items-center gap-1 flex-1">
+                    <Input
+                      value={editProductName}
+                      onChange={(e) => setEditProductName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveEditProductName(group.product_name);
+                        if (e.key === "Escape") cancelEditProductName();
+                      }}
+                      onBlur={() => saveEditProductName(group.product_name)}
+                      className="h-7 text-sm font-semibold bg-transparent border-primary focus-visible:ring-primary"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => saveEditProductName(group.product_name)}
+                      className="p-1 rounded hover:bg-primary/10 text-primary"
+                      title="Save"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={cancelEditProductName}
+                      className="p-1 rounded hover:bg-destructive/10 text-destructive"
+                      title="Cancel"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <span
+                      onClick={() => startEditProductName(group.product_name)}
+                      className="text-sm font-semibold flex-1 truncate  hover:underline"
+                      title="Click to edit"
+                    >
+                      {group.product_name}
+                    </span>
+                    {group.rows.some((r) =>
+                      (fieldErrors[r.row_index] || []).some(
+                        (e) => e.field === "product_name"
+                      )
+                    ) && (
+                      <span
+                        role="alert"
+                        className="flex items-center gap-1 text-[11px] text-destructive"
+                      >
+                        <AlertCircle className="w-3 h-3" />
+                        Product name is required
+                      </span>
+                    )}
+                  </>
                 )}
                 <Badge variant="secondary" className="text-xs">
                   {group.rows.length} variant{group.rows.length > 1 ? "s" : ""}
