@@ -94,6 +94,9 @@ export interface TrashDependencyReport {
   total_related: number;
   blocked_by: TrashBlocker[];
   can_purge: boolean;
+  /** CASCADE children that will also be brought back on restore. */
+  restorable: Array<{ model: string; count: number }>;
+  total_restorable: number;
 }
 
 /** Result of a bulk purge / empty-trash action. */
@@ -219,10 +222,16 @@ export function useRestoreTrashEntry() {
   const invalidate = useTrashInvalidate();
   return useMutation({
     mutationFn: ({ type, id }: { type: string; id: string }) =>
-      api<Envelope<{ id: string; display_name: string }>>(
-        `${BASE}/${type}/${id}/restore/`,
-        { method: "POST" },
-      ),
+      api<
+        Envelope<{
+          id: string;
+          type: string;
+          display_name: string;
+          restored: boolean;
+          related_restored: number;
+          related_breakdown: Array<{ model: string; count: number }>;
+        }>
+      >(`${BASE}/${type}/${id}/restore/`, { method: "POST" }),
     onSuccess: invalidate,
   });
 }

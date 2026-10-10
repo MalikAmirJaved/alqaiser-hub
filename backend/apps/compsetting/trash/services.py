@@ -635,11 +635,29 @@ def protected_relations(obj) -> list[dict]:
     return sorted(acc.values(), key=lambda b: -b['count'])[:MAX_REPORTED_DEPENDENCIES]
 
 
-def _process_relations(obj, action) -> int:
-    """Run ``action`` over every CASCADE-related row of ``obj``, deepest first.
+def _walk_cascade_relations(obj, action, *, predicate=None, depth: int = 0) -> int:
+    """Walk CASCADE-related rows of ``obj`` and run ``action`` per matching batch.
 
-    Returns the number of related rows removed (children included).
+    Parameters
+    ----------
+    obj:
+        The root object whose reverse CASCADE FK tree is walked.
+    action:
+        Callable receiving a list of rows (children of the current parent)
+        for every matching batch.
+    predicate:
+        Optional callable ``(row) -> bool`` applied per row before the batch
+        is assembled. Only rows for which ``predicate`` returns True are
+        included in the batch and recursed into. When ``None``, all rows
+        are kept (used by permanent purge, which deletes everything).
+    depth:
+        Recursion guard (see ``MAX_DEPENDENCY_DEPTH``).
+
+    Returns the number of rows on which ``action`` was invoked (children only,
+    not the root ``obj``).
     """
+    if depth >= MAX_DEPENDENCY_DEPTH:
+        return 0
     processed = 0
     for rel in _reverse_cascade_relations(type(obj)):
         qs = _child_queryset(obj, rel)
@@ -648,11 +666,26 @@ def _process_relations(obj, action) -> int:
         children = list(qs)
         if not children:
             continue
+        if predicate is not None:
+            children = [c for c in children if predicate(c)]
+            if not children:
+                continue
         for child in children:
-            processed += _process_relations(child, action)
+            processed += _walk_cascade_relations(child, action, predicate=predicate, depth=depth + 1)
         action(children)
         processed += len(children)
     return processed
+
+
+def _process_relations(obj, action) -> int:
+    """Run ``action`` over every CASCADE-related row of ``obj``, deepest first.
+
+    Returns the number of related rows removed (children included).
+
+    Thin compatibility wrapper around :func:`_walk_cascade_relations` that
+    keeps the existing call sites (purge) working unchanged.
+    """
+    return _walk_cascade_relations(obj, action)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -761,6 +794,113 @@ def _purge_rows(rows) -> None:
         row.delete()
 
 
+def _soft_restore_rows(rows, *, same_deletion_as: Any = None) -> list:
+    """Soft-restore a batch of rows (clear is_deleted / deleted_at / deleted_by).
+
+    When ``same_deletion_as`` is provided, only rows that share the same
+    ``deleted_by`` and ``deleted_at`` (i.e. the same cascade-delete operation)
+    are restored. This avoids resurrecting a child that the user deliberately
+    deleted independently *before* the parent was later soft-deleted.
+
+    Returns the list of rows that were actually modified.
+    """
+    modified: list = []
+    match_by = same_deletion_as
+    match_deleter = getattr(match_by, 'deleted_by', None) if match_by else None
+    match_deleted_at = getattr(match_by, 'deleted_at', None) if match_by else None
+
+    for row in rows:
+        # Must inherit the soft-delete fields to be restorable.
+        has_soft = (
+            hasattr(row, 'is_deleted')
+            and hasattr(row, 'deleted_at')
+        )
+        if not has_soft or not row.is_deleted:
+            continue
+        # If the row was independently deleted (different timestamp/user),
+        # leave it alone — it's not part of the same cascade operation.
+        if (
+            match_deleted_at is not None
+            and row.deleted_at is not None
+            and (
+                # Microsecond-precision mismatch is OK (Django truncates stamps).
+                abs((row.deleted_at - match_deleted_at).total_seconds()) > 5
+                or (match_deleter is not None
+                    and getattr(row, 'deleted_by', None) != match_deleter)
+            )
+        ):
+            continue
+
+        # ── Collect update_fields from what the model actually supports ──
+        update_fields: list[str] = []
+        if row.is_deleted:
+            row.is_deleted = False
+            update_fields.append('is_deleted')
+        if getattr(row, 'deleted_at', None) is not None:
+            row.deleted_at = None
+            update_fields.append('deleted_at')
+        deleter_attr = 'deleted_by'
+        if any(f.name == deleter_attr for f in row._meta.get_fields()) and getattr(row, deleter_attr, None) is not None:
+            setattr(row, deleter_attr, None)
+            update_fields.append(deleter_attr)
+
+        if update_fields:
+            try:
+                row.save(update_fields=update_fields)
+            except Exception as exc:
+                logger.warning('Trash: restore failed for %s pk=%s: %s', row._meta.label, row.pk, exc)
+                continue
+            modified.append(row)
+    return modified
+
+
+#: Predicate for :func:`_walk_cascade_relations` that keeps only soft-deleted rows.
+_is_soft_deleted = lambda row: bool(getattr(row, 'is_deleted', False))
+
+
+def collect_restorable_dependencies(obj) -> list[dict]:
+    """CASCADE children that will also be restored when ``obj`` is restored.
+
+    Mirrors :func:`collect_dependencies` but the predicate selects only
+    soft-deleted rows (with a real ``deleted_at``) so the UI can tell the user
+    exactly what else will come back.
+    """
+    if not hasattr(obj, '_meta'):
+        return []
+
+    # Require deleted_at to match (±5s) plus the same deleter — heuristic for
+    # "this child was deleted as part of the same cascade operation as the
+    # parent" and not independently beforehand.
+    match_deleter = getattr(obj, 'deleted_by', None)
+    match_deleted_at = getattr(obj, 'deleted_at', None)
+
+    def pred(row):
+        if not bool(getattr(row, 'is_deleted', False)):
+            return False
+        row_deleted_at = getattr(row, 'deleted_at', None)
+        if row_deleted_at is None:
+            return False
+        if match_deleted_at is None:
+            return True
+        return (
+            abs((row_deleted_at - match_deleted_at).total_seconds()) <= 5
+            and (match_deleter is None or getattr(row, 'deleted_by', None) == match_deleter)
+        )
+
+    counts: dict[str, dict] = {}
+    def bump(row):
+        label = row._meta.label
+        entry = counts.setdefault(label, {'model': label, 'count': 0})
+        entry['count'] += 1
+
+    def touch(children):
+        for c in children:
+            bump(c)
+
+    _walk_cascade_relations(obj, touch, predicate=pred)
+    return sorted(counts.values(), key=lambda x: (-x['count'], x['model']))
+
+
 def can_purge(user, tm: TrashModel) -> bool:
     """Permanent delete is a Settings-Trash action, with a module fallback."""
     if check_permission(user, 'SETTINGS', 'trash', 'delete'):
@@ -769,13 +909,30 @@ def can_purge(user, tm: TrashModel) -> bool:
 
 
 def restore_entry(tm: TrashModel, user, entry_id) -> dict:
-    """Un-delete a single row (clears the trash bookkeeping)."""
+    """Un-delete a trashed row AND any CASCADE children that were co-deleted.
+
+    This is the symmetric inverse of :func:`purge_entry`. Whereas
+    :func:`purge_entry` hard-deletes the root *and* its CASCADE tree, this
+    function soft-restores the root *and* every soft-deleted CASCADE child
+    that belongs to the same deletion operation (matching ``deleted_at`` ±5 s
+    and the same ``deleted_by``).
+
+    This fixes the user-facing bug "I deleted Product + Variants, but Restore
+    only brought back the Product" — the tree walker walks the same reverse
+    FK graph that ``Product.destroy()`` used when it cascaded the delete.
+    """
     if not can_restore(user, tm):
         raise TrashOperationError('You do not have permission to restore this item.')
 
     obj = find_entry(tm, user, entry_id)
     display_name = build_display_name(tm, obj)
 
+    # Capture the original deletion context BEFORE touching the root, so the
+    # cascade restore can match which children are "part of the same delete".
+    deletion_stamp = getattr(obj, 'deleted_at', None)
+    deletion_user = getattr(obj, 'deleted_by', None)
+
+    # ── 1. Restore the root itself ────────────────────────────────────────
     saved = {}
     for field_name in ('is_deleted', 'deleted_at', 'deleted_by'):
         if any(f.name == field_name for f in tm.model._meta.get_fields()):
@@ -788,11 +945,55 @@ def restore_entry(tm: TrashModel, user, entry_id) -> dict:
 
     obj.save(update_fields=[name for name in saved if name in ('is_deleted', 'deleted_at', 'deleted_by')])
 
+    # ── 2. Restore CASCADE children that share the same deletion event ────
+    #
+    # `_walk_cascade_relations` walks the tree deepest-first (same as purge).
+    # For restore order doesn't matter (the FKs still exist), but using the
+    # same walker guarantees consistency — the same tree that was purged is
+    # the one that gets restored.
+
+    restoration_context = type('_Context', (), {
+        'deleted_at': deletion_stamp, 'deleted_by': deletion_user,
+    })()
+
+    # Predicate: only soft-deleted rows with a matching deletion stamp/actor.
+    def matches_this_delete(row):
+        if not bool(getattr(row, 'is_deleted', False)):
+            return False
+        if getattr(row, 'deleted_at', None) is None:
+            return False
+        if deletion_stamp is None:
+            # No timestamp on root — best-effort: restore any soft-deleted child.
+            return True
+        return (
+            abs((row.deleted_at - deletion_stamp).total_seconds()) <= 5
+            and (deletion_user is None or getattr(row, 'deleted_by', None) == deletion_user)
+        )
+
+    # Action: soft-restore each matched batch.
+    related_breakdown: dict[str, int] = {}
+
+    def restore_batch(children):
+        restored_batch = _soft_restore_rows(children, same_deletion_as=restoration_context)
+        for r in restored_batch:
+            label = r._meta.label
+            related_breakdown[label] = related_breakdown.get(label, 0) + 1
+
+    with transaction.atomic():
+        related_restored = _walk_cascade_relations(
+            obj, restore_batch, predicate=matches_this_delete,
+        )
+
     return {
         'id': str(entry_id),
         'type': tm.key,
         'display_name': display_name,
         'restored': True,
+        'related_restored': related_restored,
+        'related_breakdown': [
+            {'model': m, 'count': c}
+            for m, c in sorted(related_breakdown.items(), key=lambda x: (-x[1], x[0]))
+        ],
     }
 
 
@@ -921,10 +1122,11 @@ def empty_trash(user, types: Sequence[str] | None = None,
 
 
 def dependency_report(tm: TrashModel, user, entry_id) -> dict:
-    """Preview of what a permanent delete would take with it."""
+    """Preview of what a permanent delete would remove (and restore would bring back)."""
     obj = find_entry(tm, user, entry_id)
     deps = collect_dependencies(obj)
     blocked = protected_relations(obj)
+    restorable = collect_restorable_dependencies(obj)
     return {
         'id': str(entry_id),
         'type': tm.key,
@@ -933,4 +1135,8 @@ def dependency_report(tm: TrashModel, user, entry_id) -> dict:
         'total_related': sum(d['count'] for d in deps),
         'blocked_by': blocked,
         'can_purge': not blocked,
+        # What restoring this row will additionally bring back (same cascade-
+        # delete operation, matched by deleted_at + deleted_by).
+        'restorable': restorable,
+        'total_restorable': sum(r['count'] for r in restorable),
     }

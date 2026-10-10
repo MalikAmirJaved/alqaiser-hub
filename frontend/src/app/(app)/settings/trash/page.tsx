@@ -34,6 +34,7 @@ import TrashTypeFilter from "@/components/settings/trash/TrashTypeFilter";
 import TrashGroupedTable from "@/components/settings/trash/TrashGroupedTable";
 import TrashPurgeModal, {
   TrashBulkPurgeModal,
+  TrashRestoreModal,
 } from "@/components/settings/trash/TrashPurgeModal";
 import { formatBytes } from "@/components/settings/trash/trashDisplay";
 import { cn } from "@/lib/utils";
@@ -58,6 +59,7 @@ export default function TrashPage() {
   const [dateTo, setDateTo] = useState("");
 
   const [purgeTarget, setPurgeTarget] = useState<TrashEntry | null>(null);
+  const [restoreTarget, setRestoreTarget] = useState<TrashEntry | null>(null);
   const [bulkAction, setBulkAction] = useState<"empty" | "expired" | null>(null);
 
   const permissions = useFeaturePermissions("SETTINGS", "trash");
@@ -111,7 +113,13 @@ export default function TrashPage() {
   };
 
   const handleRestore = async (entry: TrashEntry) => {
-    await restoreEntry.mutateAsync({ type: entry.type_key, id: entry._id });
+    setRestoreTarget(entry);
+  };
+
+  const handleConfirmRestore = async () => {
+    if (!restoreTarget) return;
+    await restoreEntry.mutateAsync({ type: restoreTarget.type_key, id: restoreTarget._id });
+    setRestoreTarget(null);
     await refetchSummary();
   };
 
@@ -398,6 +406,16 @@ export default function TrashPage() {
         entryId={purgeTarget?._id ?? null}
         displayName={purgeTarget?.display_name ?? ""}
         isLoading={purgeEntry.isPending}
+      />
+
+      <TrashRestoreModal
+        isOpen={!!restoreTarget}
+        onClose={() => setRestoreTarget(null)}
+        onConfirm={handleConfirmRestore}
+        typeKey={restoreTarget?.type_key ?? null}
+        entryId={restoreTarget?._id ?? null}
+        displayName={restoreTarget?.display_name ?? ""}
+        isLoading={restoreEntry.isPending}
       />
 
       <TrashBulkPurgeModal

@@ -125,3 +125,64 @@ export function TrashBulkPurgeModal({
     />
   );
 }
+
+// ─── Restore confirmation ─────────────────────────────────────────────────
+
+interface TrashRestoreModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void | Promise<void>;
+  typeKey: string | null;
+  entryId: string | null;
+  displayName: string;
+  isLoading?: boolean;
+}
+
+/**
+ * Restore confirmation. Loads the cascade preview so the user sees exactly
+ * which related records will be brought back alongside the trashed root —
+ * which fixes the confusion of "I restored Product but its Variants stayed
+ * in the trash" because the tree is now explicit in the confirmation.
+ */
+export function TrashRestoreModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  typeKey,
+  entryId,
+  displayName,
+  isLoading = false,
+}: TrashRestoreModalProps) {
+  const { data, isLoading: depsLoading } = useTrashDependencies(
+    isOpen ? typeKey : null,
+    isOpen ? entryId : null,
+  );
+  const report = data?.data;
+  const restorable = report?.restorable ?? [];
+  const totalRestorable = report?.total_restorable ?? 0;
+
+  const restorableLines = restorable
+    .map((r) => `${r.count} × ${humanizeModel(r.model)}`)
+    .join(", ");
+
+  const message = depsLoading
+    ? `Checking what else will be restored with “${displayName}”…`
+    : totalRestorable > 0
+      ? `“${displayName}” will be put back, along with ${totalRestorable} related record(s) that were deleted at the same time (${restorableLines}).`
+      : `“${displayName}” will be put back. No additional related records will be restored.`;
+
+  return (
+    <ConfirmationModal
+      isOpen={isOpen}
+      onClose={onClose}
+      onConfirm={onConfirm}
+      title="Restore from trash?"
+      message={message}
+      type="success"
+      confirmText="Restore"
+      isLoading={isLoading}
+      confirmDisabled={depsLoading}
+      showCancelButton={true}
+    />
+  );
+}

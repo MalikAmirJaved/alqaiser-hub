@@ -19,6 +19,7 @@ Each has a cross-module fallback so a module admin can act on their own trash
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date
 
 from rest_framework import status
@@ -275,7 +276,19 @@ class TrashRestoreView(BaseTrashView):
             logger.exception('Trash restore failed for %s %s', type_key, entry_id)
             return self._fail(f'Could not restore this item: {exc}', status.HTTP_409_CONFLICT)
 
-        return self._ok(result, f"Restored “{result['display_name']}”.")
+        related = result.get('related_restored') or 0
+        msg = f"Restored “{result['display_name']}”."
+        if related:
+            parts = []
+            for bd in result.get('related_breakdown', [])[:3]:
+                name = bd['model'].split('.')[-1]
+                name = re.sub(r'(?<!^)(?=[A-Z])', ' ', name)
+                parts.append(f"{bd['count']} {name}")
+            extra = ', '.join(parts)
+            if len(result.get('related_breakdown', [])) > 3:
+                extra += f", and {related - sum(b['count'] for b in result['related_breakdown'][:3])} more"
+            msg += f" Also restored {related} related record(s): {extra}."
+        return self._ok(result, msg)
 
 
 class TrashPurgeExpiredView(BaseTrashView):
