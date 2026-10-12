@@ -15,12 +15,24 @@ import PayAmountModal from "@/components/finance/PayAmountModal";
 import InvoiceCancelModal from "./InvoiceCancelModal";
 import { FileText, Send, Printer, Download, Share2, Receipt, Edit, User, Clock, Mail, Loader2, X, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
+import { BASE_URL } from "@/lib/api";
+import ImageLightbox from "@/components/reuseable/ImageLightbox";
 
 interface CustomerInvoiceDetailProps {
   id: string;
   moduleCode: "FINANCE" | "SALES";
   onBack?: () => void;
 }
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  CASH: "Cash",
+  BANK_TRANSFER: "Bank Transfer",
+  CHEQUE: "Cheque",
+  CREDIT_CARD: "Credit Card",
+  CREDIT: "Supplier Credit",
+  WALLET: "Digital Wallet",
+  OTHER: "Other",
+};
 
 const toNumber = (value: number | string | undefined): number => {
   if (value === undefined || value === null) return 0;
@@ -50,6 +62,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const [payModalOpen, setPayModalOpen] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [receiptPreview, setReceiptPreview] = useState("");
 
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!invoice) return <div className="p-8 text-center">Invoice not found</div>;
@@ -411,6 +424,84 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
     });
   }
 
+  const invoicePayments = invoice.payments || [];
+  if (invoicePayments.length > 0) {
+    tabs.push({
+      id: "payments",
+      label: "Payments",
+      count: invoicePayments.length,
+      render: () => (
+        <div className="space-y-3">
+          {invoicePayments.map((payment) => (
+            <div
+              key={payment.id}
+              className="flex items-start justify-between gap-4 rounded-xl border border-border bg-card p-4"
+            >
+              <div className="min-w-0 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold">
+                    {formatCurrency(toNumber(payment.amount))}
+                  </span>
+                  <span className="inline-flex px-2 py-0.5 text-[11px] rounded-full border border-border text-muted-foreground">
+                    {(payment.payment_type || "Payment").replace(/_/g, " ")}
+                  </span>
+                  <span
+                    className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
+                      payment.status === "CONFIRMED"
+                        ? "bg-success/15 text-success border-success/30"
+                        : payment.status === "CANCELLED"
+                        ? "bg-destructive/15 text-destructive border-destructive/30"
+                        : "bg-warning/15 text-warning border-warning/30"
+                    }`}
+                  >
+                    {payment.status}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {payment.payment_date
+                    ? new Date(payment.payment_date).toLocaleDateString()
+                    : "—"}
+                  {" · "}
+                  {PAYMENT_METHOD_LABELS[payment.payment_method] ||
+                    payment.payment_method ||
+                    "—"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Transaction Number:{" "}
+                  <span className="font-mono text-primary">
+                    {payment.reference_number || "—"}
+                  </span>
+                </p>
+              </div>
+              <div className="shrink-0">
+                {payment.receipt_image ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setReceiptPreview(`${BASE_URL}${payment.receipt_image}`)
+                    }
+                    title="View receipt"
+                    className="block"
+                  >
+                    <img
+                      src={`${BASE_URL}${payment.receipt_image}`}
+                      alt="Receipt"
+                      className="h-14 w-14 rounded-lg border border-border object-cover transition-opacity hover:opacity-80"
+                    />
+                  </button>
+                ) : (
+                  <span className="text-xs text-muted-foreground">
+                    No receipt
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ),
+    });
+  }
+
   const editLogs = auditLogs?.filter((l) => l.action === "UPDATE") || [];
 
   tabs.push({
@@ -729,6 +820,13 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
         }))}
         onConfirm={handleConfirmCancel}
       />
+
+      {receiptPreview && (
+        <ImageLightbox
+          src={receiptPreview}
+          onClose={() => setReceiptPreview("")}
+        />
+      )}
     </>
   );
 }

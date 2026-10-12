@@ -29,6 +29,7 @@ export interface InvoicePayment {
   payment_date: string;
   payment_method: string;
   reference_number: string;
+  receipt_image?: string;
   status: string;
   payment_type?: string;
 }
