@@ -1376,3 +1376,98 @@ class PurchaseOrderTaxPrecisionTest(BaseTestCase):
             + line.quantity_ordered * line.unit_cost * line.tax_rate / Decimal('100'),
             po.total_amount,
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# POS cart payment options: Card / Digital Wallet capture a transaction number
+# and a receipt image. They must save on the SalesOrder and flow into the
+# auto-created finance settlement Payment.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class PosPaymentDetailsTest(BaseTestCase):
+    """POST /api/inventory/sales-orders/ persists POS payment details."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.warehouse = Warehouse.objects.create(
+            warehouse_name='POS Pay WH', code='POSPWH',
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        cls.product = Product.objects.create(
+            product_name='POS Pay Product', unit='PCS',
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        cls.variant = ProductVariant.objects.create(
+            product=cls.product, sku='POSP-V1', selling_price=10,
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        StockItem.objects.create(
+            variant=cls.variant, warehouse=cls.warehouse,
+            quantity_on_hand=10, quantity_reserved=0,
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        # Cash account used by the auto-settlement payment journal
+        from apps.finance.models import Account
+        Account.objects.create(
+            code='CASH', name='Cash', account_type='ASSET',
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+
+    def _payload(self, **extra):
+        payload = {
+            'warehouse': str(self.warehouse._id),
+            'order_date': date.today().isoformat(),
+            'notes': '',
+            'line_items': [{
+                'variant': str(self.variant._id),
+                'quantity_ordered': 1,
+                'unit_price': 10,
+                'tax_rate': 0,
+                'discount_pct': 0,
+                'discount_fixed': 0,
+            }],
+            'status': 'COMPLETE',
+        }
+        payload.update(extra)
+        return payload
+
+    def test_wallet_sale_saves_payment_details_on_order(self):
+        resp = self.client.post(
+            '/api/inventory/sales-orders/',
+            self._payload(
+                payment_method='WALLET',
+                transaction_number='WLT-42',
+                receipt_image='/upload/general/pos.jpg',
+            ),
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        order = SalesOrder.objects.get(
+            order_number=resp.data['data']['order_number']
+        )
+        self.assertEqual(order.payment_method, 'WALLET')
+        self.assertEqual(order.transaction_number, 'WLT-42')
+        self.assertEqual(order.receipt_image, '/upload/general/pos.jpg')
+
+    def test_auto_created_payment_carries_txn_and_receipt(self):
+        resp = self.client.post(
+            '/api/inventory/sales-orders/',
+            self._payload(
+                payment_method='CREDIT_CARD',
+                transaction_number='CARD-77',
+                receipt_image='/upload/general/pos2.jpg',
+            ),
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        order = SalesOrder.objects.get(
+            order_number=resp.data['data']['order_number']
+        )
+        from apps.finance.services.payable import get_payments_queryset
+        payment = get_payments_queryset(order).first()
+        self.assertIsNotNone(payment, 'POS settlement payment should be created')
+        self.assertEqual(payment.payment_method, 'CREDIT_CARD')
+        self.assertEqual(payment.reference_number, 'CARD-77')
+        self.assertEqual(payment.receipt_image, '/upload/general/pos2.jpg')

@@ -158,6 +158,7 @@ export default function SupplierBillsPage() {
                   payment_method: data.payment_method,
                   payment_date: data.payment_date,
                   reference_number: data.reference_number,
+                  receipt_image: data.receipt_image,
                 },
               });
               setPayModalOpen(false);

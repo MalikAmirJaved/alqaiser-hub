@@ -24,7 +24,7 @@ class PaymentSerializer(serializers.ModelSerializer):
         model = Payment
         fields = [
             'id', '_id', 'payment_type', 'payment_method', 'amount', 'payment_date',
-            'reference_number', 'payable_type', 'payable_id', 'payable_label',
+            'reference_number', 'receipt_image', 'payable_type', 'payable_id', 'payable_label',
             'bank_account', 'bank_account_name', 'status', 'journal_entry', 'notes',
             'supplier_name', 'customer_name',
             'company_id', 'branch_id', 'created_at', 'updated_at',

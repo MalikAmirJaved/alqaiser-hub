@@ -251,7 +251,7 @@ export default function SalesPage() {
     showThermalReceipt(data);
   }, [cart, buildThermalReceipt, showThermalReceipt]);
 
-const handleCompleteSale = useCallback(async (notes: string, payments: any[], overrideCart?: CartLine[], createInvoice?: boolean) => {
+const handleCompleteSale = useCallback(async (notes: string, payments: any[], overrideCart?: CartLine[], createInvoice?: boolean, paymentInfo?: { method: string; transaction_number?: string; receipt_image?: string }) => {
   const finalCart = overrideCart || cart;
   if (finalCart.length === 0) return;
   
@@ -264,6 +264,15 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
   const warehouseId = selectedWarehouse.id;
   
   const notesWithPayments = notes + (payments.length ? ` | Payments: ${payments.map(p => `${p.method}:${p.amount}`).join(", ")}` : "");
+  // POS method → SalesOrder.payment_method choices (Card → CREDIT_CARD)
+  const methodMap: Record<string, string> = { CASH: "CASH", CARD: "CREDIT_CARD", WALLET: "WALLET" };
+  const paymentPayload = paymentInfo
+    ? {
+        payment_method: methodMap[paymentInfo.method] || "CASH",
+        ...(paymentInfo.transaction_number ? { transaction_number: paymentInfo.transaction_number } : {}),
+        ...(paymentInfo.receipt_image ? { receipt_image: paymentInfo.receipt_image } : {}),
+      }
+    : {};
   try {
     let result: any;
     if (editingOrderId) {
@@ -273,7 +282,7 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
       });
     } else if (activeDraftId) {
       const updatedLineItems = cartToLineItems(finalCart);
-      result = await completeOrder({ orderId: activeDraftId, line_items: updatedLineItems, create_invoice: createInvoice });
+      result = await completeOrder({ orderId: activeDraftId, line_items: updatedLineItems, create_invoice: createInvoice, ...paymentPayload });
     } else {
       result = await createSalesOrder({
         customer: customerId,
@@ -283,6 +292,7 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
         line_items: cartToLineItems(finalCart),
         status: "COMPLETE",
         create_invoice: createInvoice,
+        ...paymentPayload,
       });
     }
     

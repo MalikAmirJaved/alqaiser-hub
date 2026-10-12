@@ -170,6 +170,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
                 'payment_date': str(p.payment_date),
                 'payment_method': p.payment_method,
                 'reference_number': p.reference_number or '',
+                'receipt_image': p.receipt_image or '',
                 'status': p.status,
                 'payment_type': p.payment_type,
             }

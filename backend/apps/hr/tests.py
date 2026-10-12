@@ -2,6 +2,7 @@ from datetime import date, time, timedelta
 from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from apps.common.test_base import BaseTestCase
 from apps.hr.models import (
     ShiftTemplate, Asset, AssetPurchaseRequest, AssetCategory,
     Employee, EmployeeProfilePic, EmployeeDocument, EmployeePromotion,
@@ -1162,3 +1163,56 @@ class EmployeeProfilePicTest(TestCase):
             company_id=1, branch_id=1
         )
         self.assertFalse(pic.is_primary)
+
+
+# =========================================================
+# 34. PAYROLL PAYMENT RECEIPT
+# =========================================================
+class PayrollReceiptHttpTest(BaseTestCase):
+    """POST /api/hr/payroll/ must persist the transaction reference and
+    receipt image on the finance Payment for bank / digital-wallet payments."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.employee = Employee.objects.create(
+            employee_id='PAYR01', first_name='Receipt', last_name='Emp', phone='1',
+            joining_date=date(date.today().year, 1, 1),
+            salary=5000,
+            company_id=cls.company.id, branch_id=cls.branch.id,
+            created_by=cls.admin,
+        )
+
+    def test_wallet_payroll_saves_transaction_and_receipt(self):
+        resp = self.client.post(
+            '/api/hr/payroll/',
+            {
+                'employee_id': str(self.employee._id),
+                'month': date.today().month,
+                'year': date.today().year,
+                'bonus': 0,
+                'deductions': 0,
+                'transaction_type': 'SALARY',
+                'payment_method': 'WALLET',
+                'transaction_number': 'TXN-777',
+                'receipt_image': '/upload/general/payroll.jpg',
+            },
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        from apps.finance.models import Payment
+        payment = Payment.objects.get(reference_number='TXN-777')
+        self.assertEqual(payment.payment_method, 'WALLET')
+        self.assertEqual(payment.receipt_image, '/upload/general/payroll.jpg')
+        self.assertEqual(payment.status, 'CONFIRMED')
+
+        # The payroll list serialization must expose txn + receipt for the UI
+        # (PayslipModal and the payroll detail page render them).
+        resp = self.client.get(
+            '/api/hr/payroll/', {'employee': str(self.employee._id)}
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        rows = resp.data.get('results', resp.data) if isinstance(resp.data, dict) else resp.data
+        row = next(r for r in rows if r.get('transaction_number') == 'TXN-777')
+        self.assertEqual(row['receipt_image'], '/upload/general/payroll.jpg')
+        self.assertEqual(row['payment_method'], 'WALLET')

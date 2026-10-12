@@ -47,6 +47,7 @@ export interface PayrollRecord {
   transaction_type: string;
   transaction_number?: string;
   payment_method: string;
+  receipt_image?: string;
   status: string;
   payment_status?: string;
   paid_amount?: string;

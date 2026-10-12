@@ -248,6 +248,7 @@ class PayrollView(PermissionRequiredMixin, FilterPaginationMixin, APIView):
             "transaction_type": payroll.transaction_type,
             "transaction_number": latest_payment.reference_number if latest_payment else None,
             "payment_method": latest_payment.payment_method if latest_payment else None,
+            "receipt_image": latest_payment.receipt_image if latest_payment else None,
             "payment_status": payment_status,
             "status": payment_status,
             "custom_note": payroll.custom_note,
@@ -659,6 +660,7 @@ class PayrollView(PermissionRequiredMixin, FilterPaginationMixin, APIView):
             user=request.user,
             payment_method=payment_method,
             reference_number=transaction_number,
+            receipt_image=request.data.get('receipt_image', ''),
             notes=request.data.get('custom_note', ''),
             auto_confirm=False,
         )
@@ -2249,8 +2251,9 @@ class PayrollAdvanceView(PermissionRequiredMixin, APIView):
             amount=Decimal(str(net_amount)),
             payment_date=date.today(),
             user=request.user,
-            payment_method='BANK_TRANSFER',
+            payment_method=request.data.get('payment_method', 'BANK_TRANSFER'),
             reference_number=transaction_number,
+            receipt_image=request.data.get('receipt_image', ''),
             notes=f'Advance salary for {month}/{year}',
             auto_confirm=False,
         )

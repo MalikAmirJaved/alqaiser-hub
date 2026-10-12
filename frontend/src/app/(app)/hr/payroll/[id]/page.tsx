@@ -2,10 +2,13 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 import { useEmployee } from "@/hooks/useEmployees";
 import { usePayroll, useEmployeeLoans, useCompensations, computeTotalMonths } from "@/hooks/usePayroll";
 import { useLeaves } from "@/hooks/useLeaves";
 import { cn } from "@/lib/utils";
+import { BASE_URL } from "@/lib/api";
+import ImageLightbox from "@/components/reuseable/ImageLightbox";
 import {
   ArrowLeft,
   DollarSign,
@@ -136,6 +139,7 @@ function ProgressBar({ value, max, label, color = "bg-primary" }: { value: numbe
 export default function EmployeeSalaryDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const [receiptPreview, setReceiptPreview] = useState("");
 
   // ── Data Fetching ──────────────────────────────────────────────
   const { data: employee, isLoading: empLoading } = useEmployee(id);
@@ -382,7 +386,7 @@ export default function EmployeeSalaryDetailPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left">
-                  {["Period", "Type", "Base", "Comp", "Bonus", "Loan Ded.", "Leave Ded.", "Other Ded.", "Net", "Status"].map((h) => (
+                  {["Period", "Type", "Base", "Comp", "Bonus", "Loan Ded.", "Leave Ded.", "Other Ded.", "Net", "Status", "Trx #", "Receipt"].map((h) => (
                     <th key={h} className="pb-2 pr-3 text-xs text-muted-foreground font-medium whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -406,6 +410,28 @@ export default function EmployeeSalaryDetailPage() {
                       <td className="py-2.5 pr-3 text-destructive">{otherDed > 0 ? fmtCurrency(otherDed) : "—"}</td>
                       <td className="py-2.5 pr-3 font-semibold">{fmtCurrency(p.net_salary)}</td>
                       <td className="py-2.5">{badge(p.status || "PENDING", statusColors[p.status])}</td>
+                      <td className="py-2.5 pr-3 whitespace-nowrap">
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {p.transaction_number || "—"}
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        {p.receipt_image ? (
+                          <button
+                            type="button"
+                            onClick={() => setReceiptPreview(`${BASE_URL}${p.receipt_image}`)}
+                            title="View receipt"
+                          >
+                            <img
+                              src={`${BASE_URL}${p.receipt_image}`}
+                              alt="Receipt"
+                              className="h-7 w-7 rounded-md border border-border object-cover hover:opacity-80 transition-opacity"
+                            />
+                          </button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -657,6 +683,13 @@ export default function EmployeeSalaryDetailPage() {
           <InfoRow label="Account" value={employee.bank_account_number} mono />
         </div>
       </SectionCard>
+
+      {receiptPreview && (
+        <ImageLightbox
+          src={receiptPreview}
+          onClose={() => setReceiptPreview("")}
+        />
+      )}
     </div>
   );
 }

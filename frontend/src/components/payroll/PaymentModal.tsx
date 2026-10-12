@@ -5,6 +5,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useEmployeeLoans, useCompensations, usePayrollPreview, useProcessPayroll, useProcessPayrollAdvance, computeTotalMonths } from "@/hooks/usePayroll";
 import { CreditCard, Plus, Minus, X, CheckCircle, Clock, CalendarDays, Loader2, Sparkles } from "lucide-react";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
+import ReceiptUpload from "@/components/reuseable/ReceiptUpload";
 
 export default function PaymentModal({
   formatCurrency,
@@ -32,6 +33,7 @@ export default function PaymentModal({
   const [transactionType, setTransactionType] = useState("SALARY");
   const [transactionReference, setTransactionReference] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("BANK_TRANSFER");
+  const [receiptImage, setReceiptImage] = useState("");
   const [selectedLoanDeductions, setSelectedLoanDeductions] = useState<{ [key: string]: boolean }>({});
   const [overtimeHours, setOvertimeHours] = useState(0);
   const [carryoverMonth, setCarryoverMonth] = useState<number>((selectedMonth % 12) + 1);
@@ -145,6 +147,8 @@ export default function PaymentModal({
       setOvertimeHours(0);
       setBonus(0);
       setDeductions(0);
+      setTransactionReference("");
+      setReceiptImage("");
       setIsInitialized(true);
     } else {
       setIsInitialized(false);
@@ -180,6 +184,7 @@ export default function PaymentModal({
         transaction_number: transactionReference || `PAY-${selectedYear}${String(selectedMonth).padStart(2, '0')}-${employee?.employee_id || 'EMP'}`,
         payment_method: paymentMethod,
         custom_note: customNote,
+        ...(receiptImage ? { receipt_image: receiptImage } : {}),
         overtime_hours: overtimeHours,
         selected_loans: selectedLoanIds,
       };
@@ -200,6 +205,9 @@ export default function PaymentModal({
   };
 
   if (!isOpen) return null;
+
+  // Bank / digital-wallet payments carry a transaction reference and a receipt image
+  const showTxnFields = paymentMethod === "BANK_TRANSFER" || paymentMethod === "WALLET";
 
   const isLoading = previewMutation.isPending;
 
@@ -330,7 +338,7 @@ export default function PaymentModal({
           {/* Transaction Info */}
           <div className="bg-muted/40 rounded-xl p-3">
             <div className="text-xs font-medium text-primary mb-2">Transaction Information</div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className={`grid gap-2 ${showTxnFields ? "grid-cols-2" : ""}`}>
               <label className="text-sm flex flex-col gap-1">
                 <span className="text-muted-foreground text-xs">Payment Method</span>
                 <SearchableSelect
@@ -345,17 +353,28 @@ export default function PaymentModal({
                   placeholder="Select method"
                 />
               </label>
-              <label className="text-sm flex flex-col gap-1">
-                <span className="text-muted-foreground text-xs">Transaction Reference</span>
-                <input
-                  type="text"
-                  value={transactionReference}
-                  onChange={(e) => setTransactionReference(e.target.value)}
-                  placeholder={`PAY-${selectedYear}${String(selectedMonth).padStart(2, '0')}-${employee?.employee_id || 'EMP'}`}
-                  className="bg-card border border-border rounded-md h-8 px-2 text-sm font-mono"
-                />
-              </label>
+              {showTxnFields && (
+                <label className="text-sm flex flex-col gap-1">
+                  <span className="text-muted-foreground text-xs">Transaction Reference</span>
+                  <input
+                    type="text"
+                    value={transactionReference}
+                    onChange={(e) => setTransactionReference(e.target.value)}
+                    placeholder={`PAY-${selectedYear}${String(selectedMonth).padStart(2, '0')}-${employee?.employee_id || 'EMP'}`}
+                    className="bg-card border border-border rounded-md h-8 px-2 text-sm font-mono"
+                  />
+                </label>
+              )}
             </div>
+            {showTxnFields && (
+              <div className="mt-2.5">
+                <ReceiptUpload
+                  value={receiptImage}
+                  onChange={setReceiptImage}
+                  label="Receipt image"
+                />
+              </div>
+            )}
           </div>
 
           {/* Bonus Input */}

@@ -20,7 +20,8 @@ import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, BASE_URL } from "@/lib/api";
+import ImageLightbox from "@/components/reuseable/ImageLightbox";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   PrintPreviewModal,
@@ -64,6 +65,7 @@ export default function SalesOrderDetailPage() {
     open: boolean;
     data: QuoteInvoiceData | null;
   }>({ open: false, data: null });
+  const [receiptPreview, setReceiptPreview] = useState("");
 
   if (isLoading) {
     return (
@@ -417,6 +419,7 @@ export default function SalesOrderDetailPage() {
                 ? order.payment_method.replace("_", " ")
                 : "—",
             ],
+            ["Transaction Number", order.transaction_number || "—"],
             [
               "Source",
               order.source
@@ -435,6 +438,28 @@ export default function SalesOrderDetailPage() {
               </span>
             </div>
           ))}
+
+          {/* POS receipt image */}
+          <div className="flex justify-between border-b border-border/60 pb-2">
+            <span className="text-muted-foreground">Receipt</span>
+            {order.receipt_image ? (
+              <button
+                type="button"
+                onClick={() =>
+                  setReceiptPreview(`${BASE_URL}${order.receipt_image}`)
+                }
+                title="View receipt"
+              >
+                <img
+                  src={`${BASE_URL}${order.receipt_image}`}
+                  alt="Receipt"
+                  className="h-16 w-16 rounded-lg border border-border object-cover hover:opacity-80 transition-opacity"
+                />
+              </button>
+            ) : (
+              <span className="font-medium">—</span>
+            )}
+          </div>
         </div>
       ),
     },
@@ -771,6 +796,13 @@ export default function SalesOrderDetailPage() {
             termsContent: termsData?.invoice || "",
             formatCurrency,
           }}
+        />
+      )}
+
+      {receiptPreview && (
+        <ImageLightbox
+          src={receiptPreview}
+          onClose={() => setReceiptPreview("")}
         />
       )}
     </>

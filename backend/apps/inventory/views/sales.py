@@ -121,6 +121,8 @@ def sync_sales_order_to_invoice(order, user, create_invoice=True):
                         amount=order.total_amount,
                         payment_date=timezone.now().date(),
                         payment_method=order.payment_method or 'CASH',
+                        reference_number=order.transaction_number,
+                        receipt_image=order.receipt_image,
                         bank_account=order.bank_account,
                         user=user,
                         auto_confirm=True,
@@ -212,6 +214,8 @@ def sync_sales_order_to_invoice(order, user, create_invoice=True):
                 amount=invoice.amount,
                 payment_date=timezone.now().date(),
                 payment_method=order.payment_method or 'CASH',
+                reference_number=order.transaction_number,
+                receipt_image=order.receipt_image,
                 bank_account=order.bank_account,
                 user=user,
                 auto_confirm=True,
@@ -570,6 +574,20 @@ class SalesOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequir
             order.total_amount = total_amount
             order.status = 'COMPLETE'
             order.save(update_fields=['total_amount', 'status'])
+
+        # Capture POS payment details supplied at completion (method / txn ref / receipt)
+        payment_fields = []
+        if request.data.get('payment_method'):
+            order.payment_method = request.data['payment_method']
+            payment_fields.append('payment_method')
+        if request.data.get('transaction_number'):
+            order.transaction_number = request.data['transaction_number']
+            payment_fields.append('transaction_number')
+        if request.data.get('receipt_image'):
+            order.receipt_image = request.data['receipt_image']
+            payment_fields.append('receipt_image')
+        if payment_fields:
+            order.save(update_fields=payment_fields)
 
         invoice = sync_sales_order_to_invoice(order, request.user, create_invoice=create_invoice)
         invoice_id = str(invoice._id) if invoice else None

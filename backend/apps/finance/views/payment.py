@@ -30,7 +30,7 @@ class PaymentWriteSerializer(drf_serializers.Serializer):
     amount = drf_serializers.DecimalField(max_digits=15, decimal_places=2, min_value=Decimal('0.01'))
     payment_date = drf_serializers.DateField()
     payment_method = drf_serializers.ChoiceField(
-        choices=['CASH', 'BANK_TRANSFER', 'CHEQUE', 'CREDIT_CARD', 'OTHER'],
+        choices=['CASH', 'BANK_TRANSFER', 'CHEQUE', 'CREDIT_CARD', 'CREDIT', 'WALLET', 'OTHER'],
         default='BANK_TRANSFER',
     )
     bank_account = drf_serializers.SlugRelatedField(

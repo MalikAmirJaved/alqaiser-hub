@@ -153,6 +153,7 @@ class ExpenseViewSet(
                     payment_date=request.data.get('payment_date'),
                     payment_method=request.data.get('payment_method', 'BANK_TRANSFER'),
                     reference_number=request.data.get('reference_number', ''),
+                    receipt_image=request.data.get('receipt_image', ''),
                     bank_account_uuid=request.data.get('bank_account_id'),
                 )
             except ValueError as exc:
@@ -179,6 +180,7 @@ class ExpenseViewSet(
         payment_date=None,
         payment_method='BANK_TRANSFER',
         reference_number='',
+        receipt_image='',
         bank_account_uuid=None,
     ):
         """Record a direct payment for a manual expense (no linked bill)."""
@@ -210,6 +212,7 @@ class ExpenseViewSet(
             payment_date=parsed_date,
             payment_method=payment_method,
             reference_number=reference_number,
+            receipt_image=receipt_image,
             bank_account=bank_account,
             user=request.user,
             auto_confirm=True,

@@ -63,6 +63,7 @@ class SupplierBillSerializer(serializers.ModelSerializer):
                 'payment_date': p.payment_date.isoformat(),
                 'payment_method': p.payment_method,
                 'reference_number': p.reference_number,
+                'receipt_image': p.receipt_image or '',
                 'status': p.status,
                 'notes': p.notes,
             }

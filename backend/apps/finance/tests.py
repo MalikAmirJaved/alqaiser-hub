@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from apps.common.test_base import BaseTestCase
 from apps.finance.models import (
     Account, JournalEntry, JournalLine, BankAccount, BankTransaction,
     Expense, Budget, Payment, CustomerInvoice, CustomerInvoiceLine,
@@ -632,3 +633,100 @@ class InvoiceLineProductLinkTest(TestCase):
                 product=self.product, variant=self.variant,
                 company_id=1, branch_id=1
             )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Receive Payment / Pay Supplier Bill gained Card & Digital-Wallet methods and
+# a receipt-image upload. The recorded Payment row must carry all three.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class PaymentReceiptHttpTest(BaseTestCase):
+    """POST .../record_payment/ stores method + transaction ref + receipt image."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        from apps.inventory.models import Customer, Supplier
+        # Accounts required by the invoice/bill journals and payment confirmation
+        for code, name, account_type in [
+            ('CASH', 'Cash', 'ASSET'),
+            ('AR', 'Accounts Receivable', 'ASSET'),
+            ('SALES', 'Sales Revenue', 'INCOME'),
+            ('AP', 'Accounts Payable', 'LIABILITY'),
+            ('INVENTORY', 'Inventory', 'ASSET'),
+        ]:
+            Account.objects.create(
+                code=code, name=name, account_type=account_type,
+                company_id=cls.company.id, branch_id=cls.branch.id,
+            )
+        cls.customer = Customer.objects.create(
+            name='Receipt Cust', customer_code='RCPTC1',
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        cls.supplier = Supplier.objects.create(
+            name='Receipt Sup', code='RCPTS1',
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        cls.invoice = CustomerInvoice.objects.create(
+            invoice_number='INV-RCPT-1', customer=cls.customer,
+            invoice_date=date.today(), amount=Decimal('1000'),
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        cls.bill = SupplierBill.objects.create(
+            bill_number='BILL-RCPT-1', supplier=cls.supplier,
+            bill_date=date.today(), due_date=date.today(), amount=Decimal('500'),
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+
+    def _pay_invoice(self, method):
+        return self.client.post(
+            f'/api/finance/customer-invoices/{self.invoice._id}/record_payment/',
+            {
+                'amount': '100.00',
+                'payment_method': method,
+                'payment_date': date.today().isoformat(),
+                'reference_number': 'AUTH-991',
+                'receipt_image': '/upload/general/rcpt1.jpg',
+            },
+            format='json',
+        )
+
+    def test_receive_payment_card_persists_method_txn_and_receipt(self):
+        resp = self._pay_invoice('CREDIT_CARD')
+        self.assertEqual(resp.status_code, 200, resp.data)
+        payment = Payment.objects.get(
+            object_id=self.invoice.pk, payment_type='RECEIPT', is_deleted=False,
+        )
+        self.assertEqual(payment.payment_method, 'CREDIT_CARD')
+        self.assertEqual(payment.reference_number, 'AUTH-991')
+        self.assertEqual(payment.receipt_image, '/upload/general/rcpt1.jpg')
+
+    def test_receive_payment_wallet_persists_receipt(self):
+        resp = self._pay_invoice('WALLET')
+        self.assertEqual(resp.status_code, 200, resp.data)
+        payment = Payment.objects.get(
+            object_id=self.invoice.pk, payment_type='RECEIPT', is_deleted=False,
+        )
+        self.assertEqual(payment.payment_method, 'WALLET')
+        self.assertEqual(payment.receipt_image, '/upload/general/rcpt1.jpg')
+
+    def test_pay_supplier_bill_wallet_persists_method_txn_and_receipt(self):
+        resp = self.client.post(
+            f'/api/finance/supplier-bills/{self.bill._id}/record_payment/',
+            {
+                'amount': '200.00',
+                'payment_method': 'WALLET',
+                'payment_date': date.today().isoformat(),
+                'reference_number': 'WLT-555',
+                'receipt_image': '/upload/general/bill.jpg',
+            },
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        payment = Payment.objects.get(
+            object_id=self.bill.pk, payment_type='PAYMENT', is_deleted=False,
+        )
+        self.assertEqual(payment.payment_method, 'WALLET')
+        self.assertEqual(payment.reference_number, 'WLT-555')
+        self.assertEqual(payment.receipt_image, '/upload/general/bill.jpg')

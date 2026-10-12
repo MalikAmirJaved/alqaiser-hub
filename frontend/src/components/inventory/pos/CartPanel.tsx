@@ -5,6 +5,7 @@ import { useCustomers, useCreateCustomer } from "@/hooks/useCustomers";
 import { CartLine, fmt, cartTotal, cartSubtotal, cartTax } from "@/hooks/useSalesOrder";
 import { useBatchStock } from "@/hooks/useBatchStock";
 import { CartLineItem } from "./CartLineItem";
+import ReceiptUpload from "@/components/reuseable/ReceiptUpload";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 interface CartPanelProps {
@@ -17,7 +18,7 @@ interface CartPanelProps {
   onSelectWarehouse: (warehouse: any) => void;
   warehouses: any[];
   onSaveDraft: (notes: string, overrideCart?: CartLine[]) => Promise<void>;
-  onCompleteSale: (notes: string, payments: any[], overrideCart?: CartLine[], createInvoice?: boolean) => Promise<void>;
+  onCompleteSale: (notes: string, payments: any[], overrideCart?: CartLine[], createInvoice?: boolean, paymentInfo?: { method: PaymentMethod; transaction_number?: string; receipt_image?: string }) => Promise<void>;
   onThermalPrint?: () => void;
   onCartChange?: (newCart: CartLine[]) => void;
   isSubmitting?: boolean;
@@ -27,7 +28,7 @@ interface CartPanelProps {
   canUpdate?: boolean;
 }
 
-type PaymentMethod = "CASH" | "CARD" | "CREDIT";
+type PaymentMethod = "CASH" | "CARD" | "WALLET";
 
 export function CartPanel({
   cart,
@@ -59,6 +60,8 @@ export function CartPanel({
   const [payments, setPayments] = useState<{ method: PaymentMethod; amount: number }[]>([]);
   const [newPaymentAmt, setNewPaymentAmt] = useState("");
   const [newPaymentMethod, setNewPaymentMethod] = useState<PaymentMethod>("CASH");
+  const [txnNumber, setTxnNumber] = useState("");
+  const [receiptImage, setReceiptImage] = useState("");
   const [globalDiscMode, setGlobalDiscMode] = useState<"pct" | "fixed">("pct");
   const [globalDisc, setGlobalDisc] = useState(0);
   const [expandedLine, setExpandedLine] = useState<number | null>(null);
@@ -75,6 +78,14 @@ export function CartPanel({
       setCustomerSearch("");
     }
   }, [selectedCustomer]);
+
+  // Reset card/wallet payment details when the cart empties (fresh sale)
+  useEffect(() => {
+    if (cart.length === 0) {
+      setTxnNumber("");
+      setReceiptImage("");
+    }
+  }, [cart.length]);
 
   // Get unique variant IDs from cart for batch stock fetch
   const uniqueVariantIds = useMemo(
@@ -198,8 +209,19 @@ export function CartPanel({
 
   const handleComplete = useCallback(() => {
     const effectiveCartForSave = getEffectiveCartForSubmission();
-    onCompleteSale(orderNotes, payments, effectiveCartForSave, exportInvoice);
-  }, [getEffectiveCartForSubmission, orderNotes, payments, onCompleteSale, exportInvoice]);
+    const needsTxnDetails = newPaymentMethod === "CARD" || newPaymentMethod === "WALLET";
+    onCompleteSale(
+      orderNotes,
+      payments,
+      effectiveCartForSave,
+      exportInvoice,
+      {
+        method: newPaymentMethod,
+        transaction_number: needsTxnDetails ? txnNumber.trim() || undefined : undefined,
+        receipt_image: needsTxnDetails ? receiptImage || undefined : undefined,
+      }
+    );
+  }, [getEffectiveCartForSubmission, orderNotes, payments, onCompleteSale, exportInvoice, newPaymentMethod, txnNumber, receiptImage]);
 
   const handleSave = useCallback(() => {
     const effectiveCartForSave = getEffectiveCartForSubmission();
@@ -494,16 +516,36 @@ export function CartPanel({
           {showPayments && (
             <div className="space-y-2">
               <div className="flex gap-1">
-                {(["CASH", "CARD", "CREDIT"] as PaymentMethod[]).map((m) => (
+                {(["CASH", "CARD", "WALLET"] as PaymentMethod[]).map((m) => (
                   <button
                     key={m}
                     onClick={() => setNewPaymentMethod(m)}
                     className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${newPaymentMethod === m ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
                   >
-                    {m === "CASH" ? "💵 Cash" : m === "CARD" ? "💳 Card" : "📋 Credit"}
+                    {m === "CASH" ? "💵 Cash" : m === "CARD" ? "💳 Card" : "👛 Digital Wallet"}
                   </button>
                 ))}
               </div>
+
+              {(newPaymentMethod === "CARD" || newPaymentMethod === "WALLET") && (
+                <div className="space-y-2 rounded-lg border border-border/60 bg-muted/40 p-2.5">
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-medium text-muted-foreground">Transaction number</span>
+                    <input
+                      type="text"
+                      value={txnNumber}
+                      onChange={(e) => setTxnNumber(e.target.value)}
+                      placeholder="Auth / transaction #…"
+                      className="w-full bg-background rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-1 ring-primary border border-border"
+                    />
+                  </div>
+                  <ReceiptUpload
+                    value={receiptImage}
+                    onChange={setReceiptImage}
+                    label="Receipt image"
+                  />
+                </div>
+              )}
             </div>
           )}
 

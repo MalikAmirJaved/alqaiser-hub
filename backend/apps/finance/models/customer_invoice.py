@@ -38,6 +38,7 @@ class CustomerInvoice(PayableModelMixin, BaseModel):
             ('CHEQUE', 'Cheque'),
             ('CREDIT_CARD', 'Credit Card'),
             ('CREDIT', 'Credit/On Account'),
+            ('WALLET', 'Digital Wallet'),
             ('OTHER', 'Other'),
         ],
         default='CREDIT',

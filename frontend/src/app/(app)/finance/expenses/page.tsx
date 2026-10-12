@@ -285,6 +285,7 @@ export default function ExpensesPage() {
                 payment_date: data.payment_date,
                 payment_method: data.payment_method,
                 reference_number: data.reference_number,
+                receipt_image: data.receipt_image,
               },
             });
             setPayModalOpen(false);

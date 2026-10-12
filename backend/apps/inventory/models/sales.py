@@ -37,9 +37,18 @@ class SalesOrder(BaseModel):
         ('CHEQUE', 'Cheque'),
         ('CREDIT_CARD', 'Credit Card'),
         ('CREDIT', 'Credit/On Account'),
+        ('WALLET', 'Digital Wallet'),
         ('OTHER', 'Other'),
     ], default='CREDIT')
     bank_account = models.ForeignKey('finance.BankAccount', on_delete=models.SET_NULL, null=True, blank=True, related_name='sales_orders')
+    transaction_number = models.CharField(
+        max_length=100, blank=True,
+        help_text='Card/wallet transaction reference captured at POS',
+    )
+    receipt_image = models.CharField(
+        max_length=500, blank=True,
+        help_text='Uploaded receipt/proof-of-payment image URL',
+    )
     total_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     source = models.CharField(max_length=20, choices=[
         ('INVENTORY', 'Inventory'),

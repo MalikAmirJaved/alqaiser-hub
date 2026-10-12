@@ -85,6 +85,7 @@ class SalesOrderSerializer(serializers.ModelSerializer):
             'id', 'order_number', 'customer', 'customer_name',
             'warehouse', 'warehouse_name', 'status',
             'payment_method', 'bank_account',
+            'transaction_number', 'receipt_image',
             'order_date', 'total_amount', 'notes',
             'lines', 'line_items', 'invoice_id',
             'created_at', 'updated_at', 'created_by_info', 'updated_by_info',
