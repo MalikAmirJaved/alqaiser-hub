@@ -412,6 +412,48 @@ class SkipDuplicatesPolicyTest(ProductImportBase):
         self.assertEqual(ProductVariant.objects.filter(sku='SAMEFILE').count(), 1)
         self.assertEqual(result['data']['rows_skipped'], 1)
 
+    def test_new_variant_joins_product_from_skipped_existing_variant(self):
+        product, existing_variant = self._variant(
+            'HAND-WASH-250', product_name='Hand Wash',
+        )
+        original_description = product.description
+
+        result = _run_import(
+            [
+                row(0, 'Hand Wash', 'HAND-WASH-250', variant_title='250ml'),
+                row(1, 'Hand Wash', 'HAND-WASH-500', variant_title='500ml'),
+            ],
+            'skip_duplicates', 'excel', self.user, 1, 1, self.warehouse,
+        )
+
+        product.refresh_from_db()
+        new_variant = ProductVariant.objects.get(sku='HAND-WASH-500')
+        self.assertEqual(new_variant.product_id, product.id)
+        self.assertEqual(product.variants.count(), 2)
+        self.assertEqual(Product.objects.filter(product_name='Hand Wash').count(), 1)
+        self.assertEqual(result['data']['products_created'], 0)
+        self.assertEqual(result['data']['variants_created'], 1)
+        self.assertEqual(result['data']['rows_skipped'], 1)
+        self.assertEqual(product.description, original_description)
+        self.assertTrue(ProductVariant.objects.filter(pk=existing_variant.pk).exists())
+
+    def test_new_variant_is_not_attached_when_skipped_skus_match_different_products(self):
+        self._variant('HAND-WASH-A', product_name='Hand Wash')
+        self._variant('HAND-WASH-B', product_name='Hand Wash')
+
+        with self.assertRaises(ImportValidationError) as ctx:
+            _run_import(
+                [
+                    row(0, 'Hand Wash', 'HAND-WASH-A'),
+                    row(1, 'Hand Wash', 'HAND-WASH-B'),
+                    row(2, 'Hand Wash', 'HAND-WASH-NEW'),
+                ],
+                'skip_duplicates', 'excel', self.user, 1, 1, self.warehouse,
+            )
+
+        self.assertEqual(ctx.exception.errors[0]['code'], 'ambiguous_match')
+        self.assertFalse(ProductVariant.objects.filter(sku='HAND-WASH-NEW').exists())
+
 
 class ConcurrentConflictTest(ProductImportBase):
     def test_conflict_created_after_preview_is_caught_on_import(self):

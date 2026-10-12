@@ -790,7 +790,8 @@ def _update_variant(variant, row, user, policy, default_warehouse=None):
 
 
 def _process_group(pname, vrows, policy, source, user, company_id, branch_id,
-                   default_warehouse, active, existing_skus):
+                   default_warehouse, active, existing_skus,
+                   existing_product_hint=None):
     """Create/update one product group. Returns local counters (merged on success)."""
     local = {
         'products_created': 0, 'variants_created': 0,
@@ -811,7 +812,7 @@ def _process_group(pname, vrows, policy, source, user, company_id, branch_id,
         category, cn = _find_or_create_category(cat_name, company_id, branch_id, user, source)
         local['categories_created'] += int(cn)
 
-    existing_product = None
+    existing_product = existing_product_hint if policy == 'skip_duplicates' else None
     if policy in ('update_existing', 'replace_existing'):
         matched_products = {}
         for row in vrows:
@@ -833,13 +834,14 @@ def _process_group(pname, vrows, policy, source, user, company_id, branch_id,
             existing_product = next(iter(matched_products.values()))
 
     if existing_product is not None:
-        _update_product(existing_product, first, category, brand, user,
-                        authoritative=(policy == 'replace_existing'))
-        local['products_updated'] += 1
+        if policy != 'skip_duplicates':
+            _update_product(existing_product, first, category, brand, user,
+                            authoritative=(policy == 'replace_existing'))
+            local['products_updated'] += 1
         for row in vrows:
             sku = _normalize_sku(row.get('variant_sku'))
             matched_variant = active.get(sku) if sku else None
-            if matched_variant:
+            if matched_variant and policy != 'skip_duplicates':
                 _update_variant(matched_variant, row, user, policy, default_warehouse)
                 local['variants_updated'] += 1
             else:
@@ -870,6 +872,7 @@ def _run_import(rows_data, policy, source, user, company_id, branch_id, default_
         'rows_skipped': 0, 'rows_failed': 0,
     }
     skipped, failed = [], []
+    existing_products_by_name = {}
 
     # ── Partition rows according to the policy ──
     if policy == 'skip_duplicates':
@@ -880,6 +883,11 @@ def _run_import(rows_data, policy, source, user, company_id, branch_id, default_
             sku = _normalize_sku(row.get('variant_sku'))
             if info.get('conflict_type') in ('db_conflict', 'soft_deleted'):
                 counters['rows_skipped'] += 1
+                if info.get('conflict_type') == 'db_conflict' and sku in active:
+                    pname = (row.get('product_name') or '').strip()
+                    products = existing_products_by_name.setdefault(pname, {})
+                    matched_product = active[sku].product
+                    products[matched_product.pk] = matched_product
                 skipped.append(_skip_entry(
                     row, info,
                     'existing_sku' if info.get('conflict_type') == 'db_conflict' else 'soft_deleted_sku',
@@ -917,6 +925,26 @@ def _run_import(rows_data, policy, source, user, company_id, branch_id, default_
             order.append(pname)
         groups[pname].append(row)
 
+    ambiguous_groups = {
+        pname: product_ids
+        for pname, product_ids in existing_products_by_name.items()
+        if len(product_ids) > 1 and pname in groups
+    }
+    if ambiguous_groups:
+        errors = []
+        for pname, product_ids in ambiguous_groups.items():
+            group_rows = groups[pname]
+            errors.append({
+                'row_index': group_rows[0].get('row_index'),
+                'field': 'product_name',
+                'code': 'ambiguous_match',
+                'message': (
+                    f'New variants for "{pname}" match multiple existing products. '
+                    'Split the variants into separate product groups before importing.'
+                ),
+            })
+        raise ImportValidationError(errors)
+
     existing_skus = set(active.keys()) | set(deleted.keys())
     existing_skus |= {_normalize_sku(r.get('variant_sku')) for r in rows_data}
 
@@ -929,6 +957,10 @@ def _run_import(rows_data, policy, source, user, company_id, branch_id, default_
                 local = _process_group(
                     pname, vrows, policy, source, user, company_id, branch_id,
                     default_warehouse, active, existing_skus,
+                    existing_product_hint=next(
+                        iter(existing_products_by_name.get(pname, {}).values()),
+                        None,
+                    ),
                 )
         except IntegrityError:
             logger.exception(
