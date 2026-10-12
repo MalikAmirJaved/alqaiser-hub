@@ -1,11 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import { DetailLayout, StandardSidebar } from "@/components/reuseable/final/DetailLayout";
 import { usePayment } from "@/hooks/finance/usePayments";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { ExternalLink, Building2, User, Banknote, Calendar, FileText, CreditCard, CheckCircle, XCircle, Clock } from "lucide-react";
+import { BASE_URL } from "@/lib/api";
+import ImageLightbox from "@/components/reuseable/ImageLightbox";
 
 const toNumber = (value: number | string): number => {
   return typeof value === "string" ? parseFloat(value) : value;
@@ -71,6 +74,7 @@ function PayableInfoCard({ payment }: { payment: any }) {
 }
 
 function PaymentMethodCard({ payment }: { payment: any }) {
+  const [receiptPreview, setReceiptPreview] = useState("");
   const methodIcons: Record<string, string> = {
     CASH: "💵",
     BANK_TRANSFER: "🏦",
@@ -86,6 +90,7 @@ function PaymentMethodCard({ payment }: { payment: any }) {
     OTHER: "Other",
   };
   return (
+    <>
     <div className="rounded-lg border border-border/60 bg-surface-1/50 p-4 space-y-3">
       <div className="flex items-center gap-2 text-sm font-semibold">
         <CreditCard className="h-4 w-4 text-muted-foreground" />
@@ -104,12 +109,33 @@ function PaymentMethodCard({ payment }: { payment: any }) {
         )}
         {payment.reference_number && (
           <div>
-            <span className="text-muted-foreground">Reference</span>
-            <p className="font-medium">{payment.reference_number}</p>
+            <span className="text-muted-foreground">Transaction Number</span>
+            <p className="font-medium font-mono">{payment.reference_number}</p>
+          </div>
+        )}
+        {payment.receipt_image && (
+          <div>
+            <span className="text-muted-foreground">Receipt Image</span>
+            <button
+              type="button"
+              onClick={() => setReceiptPreview(`${BASE_URL}${payment.receipt_image}`)}
+              title="View receipt"
+              className="block mt-1"
+            >
+              <img
+                src={`${BASE_URL}${payment.receipt_image}`}
+                alt="Receipt"
+                className="h-20 w-20 rounded-lg border border-border object-cover transition-opacity hover:opacity-80"
+              />
+            </button>
           </div>
         )}
       </div>
     </div>
+      {receiptPreview && (
+        <ImageLightbox src={receiptPreview} onClose={() => setReceiptPreview("")} />
+      )}
+    </>
   );
 }
 
@@ -329,7 +355,7 @@ export default function PaymentDetailPage() {
             ["Created", new Date(payment.created_at).toLocaleString()],
             ["Updated", new Date(payment.updated_at).toLocaleString()],
             ["Payment Date", payment.payment_date],
-            ["Reference", payment.reference_number || "-"],
+            ["Transaction Number", payment.reference_number || "-"],
             ["Payable Type", payment.payable_type || "-"],
             ["Payable Label", payment.payable_label || "-"],
             ["Bank Account", payment.bank_account_name || "-"],

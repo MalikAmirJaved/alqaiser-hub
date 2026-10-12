@@ -9,6 +9,8 @@ import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import SupplierBillFormModal from "@/components/finance/supplier-bills/SupplierBillFormModal";
 import { ExternalLink, Building2, ShoppingCart, CreditCard, Calendar, FileText, MapPin, Phone, Mail, User as UserIcon } from "lucide-react";
+import { BASE_URL } from "@/lib/api";
+import ImageLightbox from "@/components/reuseable/ImageLightbox";
 
 const toNumber = (value: number | string): number => {
   return typeof value === "string" ? parseFloat(value) : value;
@@ -111,6 +113,7 @@ function PurchaseOrderInfoCard({ purchaseOrderId }: { purchaseOrderId: string | 
 
 function PaymentHistoryCard({ payments }: { payments: any[] }) {
   const formatCurrency = useFormatCurrency();
+  const [receiptPreview, setReceiptPreview] = useState("");
   if (!payments || payments.length === 0) {
     return (
       <div className="rounded-lg border border-border/60 bg-surface-1/50 p-4 space-y-2">
@@ -131,19 +134,40 @@ function PaymentHistoryCard({ payments }: { payments: any[] }) {
       </div>
       <div className="space-y-2">
         {payments.map((pmt, idx) => (
-          <div key={pmt.id || idx} className="flex items-center justify-between text-xs p-2 rounded-md bg-background/50 border border-border/30">
-            <div className="flex items-center gap-3">
-              <div className={`w-2 h-2 rounded-full ${pmt.status === "CONFIRMED" ? "bg-success" : pmt.status === "DRAFT" ? "bg-warning" : "bg-destructive"}`} />
-              <div>
+          <div key={pmt.id || idx} className="flex items-center justify-between gap-3 text-xs p-2 rounded-md bg-background/50 border border-border/30">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className={`w-2 h-2 shrink-0 rounded-full ${pmt.status === "CONFIRMED" ? "bg-success" : pmt.status === "DRAFT" ? "bg-warning" : "bg-destructive"}`} />
+              <div className="min-w-0">
                 <span className="font-medium">{pmt.payment_date}</span>
                 <span className="text-muted-foreground ml-2">{pmt.payment_method}</span>
+                <div className="text-muted-foreground mt-0.5">
+                  Transaction Number: <span className="font-mono text-primary">{pmt.reference_number || "—"}</span>
+                </div>
               </div>
-              {pmt.reference_number && <span className="text-muted-foreground">Ref: {pmt.reference_number}</span>}
             </div>
-            <span className="font-semibold num">{formatCurrency(Number(pmt.amount))}</span>
+            <div className="flex items-center gap-3 shrink-0">
+              {pmt.receipt_image ? (
+                <button
+                  type="button"
+                  onClick={() => setReceiptPreview(`${BASE_URL}${pmt.receipt_image}`)}
+                  title="View receipt"
+                  className="block"
+                >
+                  <img
+                    src={`${BASE_URL}${pmt.receipt_image}`}
+                    alt="Receipt"
+                    className="h-9 w-9 rounded-md border border-border object-cover transition-opacity hover:opacity-80"
+                  />
+                </button>
+              ) : null}
+              <span className="font-semibold num">{formatCurrency(Number(pmt.amount))}</span>
+            </div>
           </div>
         ))}
       </div>
+      {receiptPreview && (
+        <ImageLightbox src={receiptPreview} onClose={() => setReceiptPreview("")} />
+      )}
     </div>
   );
 }

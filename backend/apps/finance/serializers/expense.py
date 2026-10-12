@@ -6,6 +6,7 @@ from apps.inventory.models import Supplier
 
 class ExpenseSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)
+    payments = serializers.SerializerMethodField()
     paid_amount = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     payment_status = serializers.CharField(read_only=True)
     outstanding = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
@@ -29,3 +30,19 @@ class ExpenseSerializer(serializers.ModelSerializer):
             'paid_amount', 'payment_status', 'outstanding', 'paid',
             'supplier_bill_id', 'supplier_bill_number',
         )
+
+    def get_payments(self, obj):
+        """Payment history with transaction number + receipt image."""
+        return [
+            {
+                'id': str(p._id),
+                'amount': str(p.amount),
+                'payment_date': p.payment_date.isoformat(),
+                'payment_method': p.payment_method,
+                'reference_number': p.reference_number,
+                'receipt_image': p.receipt_image or '',
+                'status': p.status,
+                'notes': p.notes,
+            }
+            for p in obj.payments
+        ]

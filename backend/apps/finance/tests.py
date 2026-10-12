@@ -678,6 +678,12 @@ class PaymentReceiptHttpTest(BaseTestCase):
             bill_date=date.today(), due_date=date.today(), amount=Decimal('500'),
             company_id=cls.company.id, branch_id=cls.branch.id,
         )
+        cls.expense = Expense.objects.create(
+            expense_number='EXP-RCPT-1', category='TRAVEL',
+            expense_date=date.today(), amount=Decimal('300'),
+            description='Trip cost',
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
 
     def _pay_invoice(self, method):
         return self.client.post(
@@ -730,3 +736,26 @@ class PaymentReceiptHttpTest(BaseTestCase):
         self.assertEqual(payment.payment_method, 'WALLET')
         self.assertEqual(payment.reference_number, 'WLT-555')
         self.assertEqual(payment.receipt_image, '/upload/general/bill.jpg')
+
+    def test_expense_detail_returns_transaction_number_and_receipt(self):
+        """Expense detail serializes its payments incl. txn ref + receipt image."""
+        resp = self.client.post(
+            f'/api/finance/expenses/{self.expense._id}/record_payment/',
+            {
+                'amount': '100.00',
+                'payment_method': 'WALLET',
+                'payment_date': date.today().isoformat(),
+                'reference_number': 'WLT-777',
+                'receipt_image': '/upload/general/expense.jpg',
+            },
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        detail = self.client.get(f'/api/finance/expenses/{self.expense._id}/')
+        self.assertEqual(detail.status_code, 200, detail.data)
+        payments = detail.data['payments']
+        self.assertEqual(len(payments), 1, payments)
+        self.assertEqual(payments[0]['payment_method'], 'WALLET')
+        self.assertEqual(payments[0]['reference_number'], 'WLT-777')
+        self.assertEqual(payments[0]['receipt_image'], '/upload/general/expense.jpg')

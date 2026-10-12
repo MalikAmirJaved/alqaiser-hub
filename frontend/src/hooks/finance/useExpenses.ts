@@ -31,6 +31,19 @@ export interface Expense {
   supplier_name?: string;
 
   pay_immediately?: boolean;
+
+  payments?: ExpensePayment[];
+}
+
+export interface ExpensePayment {
+  id: string;
+  amount: string;
+  payment_date: string;
+  payment_method: string;
+  reference_number: string;
+  receipt_image?: string;
+  status: string;
+  notes?: string;
 }
 
 
@@ -53,8 +66,7 @@ export interface CreateExpenseData {
   pay_immediately?: boolean;
 }
 
-export interface UpdateExpenseData
-  extends Partial<CreateExpenseData> {}
+export type UpdateExpenseData = Partial<CreateExpenseData>;
 const EXPENSES_KEY = "finance_expenses";
 
 // ============================================
