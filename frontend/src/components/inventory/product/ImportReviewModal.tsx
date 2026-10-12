@@ -755,11 +755,11 @@ export default function ImportReviewPage({
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1680px] px-4 py-6 lg:px-8">
+    <div className=" py-6 ">
       <div className="flex min-h-[calc(100vh-9rem)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border p-5 md:p-6 shrink-0">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 ">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
               <CheckCircle2 className="w-5 h-5 text-primary" />
             </div>
