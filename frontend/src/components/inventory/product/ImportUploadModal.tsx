@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useImportParse } from "@/hooks/useProductExportImport";
 import type { ImportRow } from "@/hooks/useProductExportImport";
 
-const ACCEPTED_TYPES = ".xlsx,.xls,.csv";
+const ACCEPTED_TYPES = ".xlsx";
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 const TEMPLATE_COLUMNS = [
@@ -50,8 +50,8 @@ export default function ImportUploadModal({
 
   const validateFile = useCallback((file: File): string | null => {
     const ext = file.name.split(".").pop()?.toLowerCase();
-    if (!ext || !["xlsx", "xls", "csv"].includes(ext)) {
-      return "Invalid file format. Please upload .xlsx, .xls, or .csv files only.";
+    if (ext !== "xlsx") {
+      return "Invalid file format. Please upload an .xlsx file.";
     }
     if (file.size > MAX_FILE_SIZE) {
       return "File size exceeds 10 MB limit.";
@@ -68,6 +68,8 @@ export default function ImportUploadModal({
       const result = await importParse.mutateAsync(file);
       const parsedRows = result.data?.rows;
       if (parsedRows && parsedRows.length > 0) {
+        setSelectedFile(null);
+        setDragOver(false);
         onParsed(parsedRows, source);
       } else {
         setSelectedFile(null);
@@ -115,6 +117,7 @@ export default function ImportUploadModal({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isParsing) return;
     const file = e.target.files?.[0];
+    e.currentTarget.value = "";
     if (file) handleFileSelect(file);
   };
 
@@ -272,7 +275,7 @@ export default function ImportUploadModal({
                   <span className="text-primary hover:underline">browse</span>
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Supports .xlsx, .xls, and .csv files
+                  Supports .xlsx files only
                 </p>
               </div>
             )}

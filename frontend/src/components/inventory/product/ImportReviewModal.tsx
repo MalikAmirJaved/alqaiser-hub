@@ -3,6 +3,7 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import {
+  ArrowLeft,
   X,
   Plus,
   Trash2,
@@ -34,12 +35,14 @@ import type {
   RowValidation,
   SkippedRow,
 } from "@/hooks/useProductExportImport";
+import { PRODUCT_IMPORT_REVIEW_STORAGE_KEY } from "@/lib/productImportReview";
+import { toast } from "sonner";
 
-interface ImportReviewModalProps {
-  open: boolean;
+interface ImportReviewPageProps {
   onClose: () => void;
   rows: ImportRow[];
   source: string;
+  initialPolicy?: ConflictPolicy;
 }
 
 // ──────────────────────────────────────────────────────
@@ -268,19 +271,21 @@ interface ImportSummary {
 // Main Component
 // ──────────────────────────────────────────────────────
 
-export default function ImportReviewModal({
-  open,
+export default function ImportReviewPage({
   onClose,
   rows: initialRows,
   source,
-}: ImportReviewModalProps) {
+  initialPolicy,
+}: ImportReviewPageProps) {
   const [rows, setRows] = useState<ImportRow[]>(initialRows);
   const [collapsedProducts, setCollapsedProducts] = useState<Set<string>>(
     new Set()
   );
   const [editingProduct, setEditingProduct] = useState<string | null>(null);
   const [editProductName, setEditProductName] = useState("");
-  const [policy, setPolicy] = useState<ConflictPolicy>("add_new");
+  const [policy, setPolicy] = useState<ConflictPolicy>(
+    initialPolicy ?? "add_new"
+  );
   const [validation, setValidation] = useState<Record<number, RowValidation>>(
     {}
   );
@@ -304,6 +309,8 @@ export default function ImportReviewModal({
   rowsRef.current = rows;
   const validateRef = useRef(validate);
   validateRef.current = validate;
+  const persistenceErrorShown = useRef(false);
+  const persistenceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Seed validation from the parse response (server already resolved conflicts)
   useEffect(() => {
@@ -335,6 +342,32 @@ export default function ImportReviewModal({
     setValidation(seed);
   }, [initialRows]);
 
+  useEffect(() => {
+    persistenceTimer.current = setTimeout(() => {
+      persistenceTimer.current = null;
+      try {
+        window.sessionStorage.setItem(
+          PRODUCT_IMPORT_REVIEW_STORAGE_KEY,
+          JSON.stringify({ rows, source, policy })
+        );
+        persistenceErrorShown.current = false;
+      } catch {
+        if (!persistenceErrorShown.current) {
+          toast.error(
+            "Your latest review edits could not be saved in this browser tab."
+          );
+          persistenceErrorShown.current = true;
+        }
+      }
+    }, 250);
+    return () => {
+      if (persistenceTimer.current) {
+        clearTimeout(persistenceTimer.current);
+        persistenceTimer.current = null;
+      }
+    };
+  }, [rows, source, policy]);
+
   const fileDuplicates = useMemo(() => computeFileDuplicates(rows), [rows]);
 
   // Signature of SKU values — the debounced server revalidation trigger
@@ -347,7 +380,7 @@ export default function ImportReviewModal({
   );
 
   useEffect(() => {
-    if (!open || rowsRef.current.length === 0) return;
+    if (rowsRef.current.length === 0) return;
     const timer = setTimeout(async () => {
       const current = rowsRef.current;
       if (current.length === 0) return;
@@ -372,7 +405,7 @@ export default function ImportReviewModal({
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [skuSignature, open]);
+  }, [skuSignature]);
 
   const rerunValidation = useCallback(async () => {
     const current = rowsRef.current;
@@ -662,6 +695,10 @@ export default function ImportReviewModal({
   };
 
   const handleClose = () => {
+    if (persistenceTimer.current) {
+      clearTimeout(persistenceTimer.current);
+      persistenceTimer.current = null;
+    }
     setSuccess(null);
     setServerErrors([]);
     setValidateError(null);
@@ -669,13 +706,11 @@ export default function ImportReviewModal({
     onClose();
   };
 
-  if (!open) return null;
-
   // ── Success screen ──
   if (success) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-        <div className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-md mx-4 animate-in zoom-in-95 duration-200 p-8 text-center space-y-4">
+      <div className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-3xl items-center justify-center px-4 py-8">
+        <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm space-y-4">
           <div className="w-14 h-14 rounded-full bg-success/10 flex items-center justify-center mx-auto">
             <CheckCircle2 className="w-7 h-7 text-success" />
           </div>
@@ -720,19 +755,26 @@ export default function ImportReviewModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-[90vw] mx-4 animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+    <div className="mx-auto w-full max-w-[1680px] px-4 py-6 lg:px-8">
+      <div className="flex min-h-[calc(100vh-9rem)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-border shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border p-5 md:p-6 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
               <CheckCircle2 className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold">Review &amp; Edit</h2>
-              <p className="text-xs text-muted-foreground">
-                {productGroups.length} product(s) · {rows.length} variant(s) ·{" "}
-                <span className="text-success">{counts.valid} valid</span> ·{" "}
+              <h1 className="text-xl font-semibold tracking-tight">Review product import</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Verify product details and resolve conflicts before importing.
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                <span>{productGroups.length} products</span>
+                <span className="text-muted-foreground/50">·</span>
+                <span>{rows.length} variants</span>
+                <span className="text-muted-foreground/50">·</span>
+                <span className="text-success">{counts.valid} ready</span>
+                <span className="text-muted-foreground/50">·</span>
                 {counts.conflicting > 0 ? (
                   <button
                     type="button"
@@ -740,15 +782,26 @@ export default function ImportReviewModal({
                     className="text-destructive underline underline-offset-2 hover:opacity-80"
                     title="Show the first conflicting row"
                   >
-                    {counts.conflicting} conflicting
+                    {counts.conflicting} need attention
                   </button>
                 ) : (
-                  <span className="text-muted-foreground">0 conflicting</span>
+                  <span className="text-muted-foreground">No conflicts</span>
                 )}
-              </p>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleClose}
+              disabled={importConfirm.isPending}
+              className="gap-1.5"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to products
+            </Button>
             <Button
               type="button"
               variant="outline"
@@ -765,13 +818,6 @@ export default function ImportReviewModal({
                 Validating…
               </span>
             )}
-            <button
-              onClick={handleClose}
-              className="p-1.5 rounded-lg hover:bg-muted transition-colors"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5" />
-            </button>
           </div>
         </div>
 
@@ -815,7 +861,7 @@ export default function ImportReviewModal({
         )}
 
         {/* Table */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-3">
+        <div className="flex-1 p-4 md:p-6 space-y-3">
           {visibleGroups.map((group) => (
             <div
               key={group.product_name}
@@ -909,9 +955,9 @@ export default function ImportReviewModal({
 
               {!group.collapsed && (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full min-w-[1120px] text-xs">
                     <thead>
-                      <tr className="border-b border-border bg-muted/10">
+                      <tr className="sticky top-0 z-[1] border-b border-border bg-muted/80 backdrop-blur-sm">
                         <th className="px-2.5 py-2 text-left font-medium text-muted-foreground">
                           SKU
                         </th>
@@ -1318,7 +1364,7 @@ export default function ImportReviewModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-4 p-5 border-t border-border bg-muted/20 shrink-0 flex-wrap">
+        <div className="sticky bottom-0 z-10 flex items-center justify-between gap-4 border-t border-border bg-card/95 p-4 shadow-[0_-8px_24px_-20px_rgba(0,0,0,0.4)] backdrop-blur-sm shrink-0 flex-wrap md:p-5">
           <div className="flex items-center gap-3">
             <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
               Conflict policy

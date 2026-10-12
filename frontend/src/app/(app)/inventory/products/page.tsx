@@ -11,7 +11,6 @@ import FilterBar, { FilterField } from "@/components/reuseable/FilterBar";
 import ProductForm from "@/components/inventory/product/ProductForm";
 import ExportModal from "@/components/inventory/product/ExportModal";
 import ImportUploadModal from "@/components/inventory/product/ImportUploadModal";
-import ImportReviewModal from "@/components/inventory/product/ImportReviewModal";
 import { useProducts, useDeleteProduct, useCreateProduct, useUpdateProduct, Product, ProductPayload } from "@/hooks/useProducts";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
@@ -19,6 +18,12 @@ import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { usePagination } from "@/hooks/usePagination";
 import { useServerSearch } from "@/hooks/useServerSearch";
 import type { ImportRow } from "@/hooks/useProductExportImport";
+import {
+  PRODUCT_IMPORT_REVIEW_PATH,
+  PRODUCT_IMPORT_REVIEW_STORAGE_KEY,
+  type ProductImportReviewSession,
+} from "@/lib/productImportReview";
+import { toast } from "sonner";
 
 export default function ProductsPage() {
   const router = useRouter();
@@ -31,8 +36,6 @@ export default function ProductsPage() {
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [showExportModal, setShowExportModal] = useState(false);
   const [showImportUploadModal, setShowImportUploadModal] = useState(false);
-  const [importRows, setImportRows] = useState<ImportRow[]>([]);
-  const [importSource, setImportSource] = useState<string>("excel");
   const pagination = usePagination();
 
   const filtersWithPage = useMemo(() => ({
@@ -138,15 +141,21 @@ export default function ProductsPage() {
   const handleImportOpen = () => setShowImportUploadModal(true);
 
   const handleImportParsed = useCallback((rows: ImportRow[], source: string) => {
-    setImportRows(rows);
-    setImportSource(source);
+    const session: ProductImportReviewSession = { rows, source };
+    try {
+      window.sessionStorage.setItem(
+        PRODUCT_IMPORT_REVIEW_STORAGE_KEY,
+        JSON.stringify(session)
+      );
+    } catch {
+      toast.error(
+        "The parsed import could not be saved for review. Please try a smaller file or clear some browser storage."
+      );
+      return;
+    }
     setShowImportUploadModal(false);
-  }, []);
-
-  const handleImportReviewClose = useCallback(() => {
-    setImportRows([]);
-    setImportSource("excel");
-  }, []);
+    router.push(PRODUCT_IMPORT_REVIEW_PATH);
+  }, [router]);
 
   // ── Table columns ──
   const columns: Column<any>[] = [
@@ -374,14 +383,6 @@ export default function ProductsPage() {
         open={showImportUploadModal}
         onClose={() => setShowImportUploadModal(false)}
         onParsed={handleImportParsed}
-      />
-
-      {/* Import Review Modal */}
-      <ImportReviewModal
-        open={importRows.length > 0}
-        onClose={handleImportReviewClose}
-        rows={importRows}
-        source={importSource}
       />
 
       <deleteConfirm.Modal />
