@@ -87,6 +87,23 @@ export interface ImportParseResponse {
   };
 }
 
+export interface ImportParseFieldError {
+  row_number: number;
+  column: string;
+  value: string;
+  message: string;
+}
+
+export class ImportParseError extends Error {
+  constructor(
+    message: string,
+    public readonly details: ImportParseFieldError[] = []
+  ) {
+    super(message);
+    this.name = "ImportParseError";
+  }
+}
+
 /** Per-row validation result returned by the validate endpoint. */
 export interface RowValidation {
   row_index: number;
@@ -227,25 +244,29 @@ export function useImportParse() {
         }
       );
 
-      let data: ImportParseResponse;
+      let data: Partial<ImportParseResponse> & {
+        message?: string;
+        errors?: ImportParseFieldError[];
+      };
       try {
         const text = await response.text();
         data = JSON.parse(text);
       } catch {
-        const msg =
-          !response.ok && response.status >= 500
-            ? "The server encountered an error. Please check your file format and try again."
-            : "Server returned an unexpected response. Please try again.";
+        const msg = response.status === 413
+          ? "This file is too large to process. Please choose a smaller workbook."
+          : !response.ok && response.status >= 500
+          ? "We couldn't process this workbook because of a server error. Please try again later."
+          : "We received an unexpected response while reading the workbook. Please try again.";
         throw new Error(msg);
       }
 
       if (!response.ok) {
-        throw new Error(data.message || "Failed to parse file");
+        throw new ImportParseError(
+          data.message || "We couldn't read this workbook. Please check the file and try again.",
+          Array.isArray(data.errors) ? data.errors : []
+        );
       }
-      return data;
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || "Import parsing failed");
+      return data as ImportParseResponse;
     },
   });
 }

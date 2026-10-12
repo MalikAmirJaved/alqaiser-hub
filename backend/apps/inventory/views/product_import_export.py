@@ -12,6 +12,7 @@ import uuid
 import random
 import re
 import logging
+import zipfile
 from decimal import Decimal, InvalidOperation
 
 import pandas as pd
@@ -457,12 +458,71 @@ def _validation_counts(by_index):
     return {'total': len(by_index), 'valid': valid, 'conflicting': conflicting}
 
 
+class ImportFileValidationError(Exception):
+    def __init__(self, errors):
+        self.errors = errors
+        super().__init__('Spreadsheet values need correction.')
+
+
+class ImportMissingColumnsError(ValueError):
+    pass
+
+
+def _parse_import_number(value, column, row_number, integer=False):
+    if value in (None, ''):
+        return 0
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None, {
+            'row_number': row_number,
+            'column': column,
+            'value': str(value),
+            'message': f'Enter a valid {"whole number" if integer else "number"}.',
+        }
+    if not math.isfinite(number):
+        return None, {
+            'row_number': row_number,
+            'column': column,
+            'value': str(value),
+            'message': f'Enter a finite {"whole number" if integer else "number"}.',
+        }
+    if integer:
+        if not number.is_integer():
+            return None, {
+                'row_number': row_number,
+                'column': column,
+                'value': str(value),
+                'message': 'Enter a whole number without decimal places.',
+            }
+        return int(number)
+    return number
+
+
 def _build_preview_rows(rows, company_id, branch_id):
     """Build enriched preview rows (file-derived fields + conflict metadata)."""
     preview = []
+    numeric_errors = []
     for idx, row in enumerate(rows):
         cat_id, cat_name, cat_new = _resolve_brand_or_category(row.get('Category'), Category, company_id, branch_id)
         brand_id, brand_name, brand_new = _resolve_brand_or_category(row.get('Brand'), Brand, company_id, branch_id)
+
+        parsed_numbers = {}
+        for key, column, integer in (
+            ('tax_rate', 'Tax Rate (%)', False),
+            ('buying_price', 'Buying Price', False),
+            ('selling_price', 'Selling Price', False),
+            ('min_stock_level', 'Min Stock Level', True),
+            ('max_stock_level', 'Max Stock Level', True),
+        ):
+            raw_value = _clean_val(row.get(column), 0)
+            result = _parse_import_number(raw_value, column, idx + 2, integer)
+            if isinstance(result, tuple):
+                parsed_numbers[key] = 0
+                numeric_errors.append(result[1])
+            else:
+                parsed_numbers[key] = result
+
         preview.append({
             'row_index': idx,
             'product_name': str(_clean_val(row.get('Product Name'), '')),
@@ -475,19 +535,22 @@ def _build_preview_rows(rows, company_id, branch_id):
             'brand_is_new': brand_new,
             'unit': str(_clean_val(row.get('Unit'), 'PIECE')),
             'storage_requirement': str(_clean_val(row.get('Storage Requirement'), 'AMBIENT')),
-            'tax_rate': float(_clean_val(row.get('Tax Rate (%)'), 0)),
+            'tax_rate': parsed_numbers['tax_rate'],
             'status': 'active',
             'variant_sku': _normalize_sku(row.get('Variant SKU')),
             'variant_title': str(_clean_val(row.get('Variant Title'), '')),
             'variant_barcode': str(_clean_val(row.get('Variant Barcode'), '')),
-            'buying_price': float(_clean_val(row.get('Buying Price'), 0)),
-            'selling_price': float(_clean_val(row.get('Selling Price'), 0)),
-            'min_stock_level': int(_clean_val(row.get('Min Stock Level'), 0)),
-            'max_stock_level': int(_clean_val(row.get('Max Stock Level'), 0)),
+            'buying_price': parsed_numbers['buying_price'],
+            'selling_price': parsed_numbers['selling_price'],
+            'min_stock_level': parsed_numbers['min_stock_level'],
+            'max_stock_level': parsed_numbers['max_stock_level'],
             # Not a file column: the review modal is where the user types the
             # quantity to add (Update Existing) or set (Replace Existing).
             'quantity_on_hand': None,
         })
+
+    if numeric_errors:
+        raise ImportFileValidationError(numeric_errors)
 
     by_index, _active, _deleted = _resolve_duplicates(preview, company_id, branch_id)
     for row in preview:
@@ -1075,18 +1138,50 @@ class ProductImportParseView(CompanyBranchMixin, PermissionRequiredMixin, APIVie
 
         try:
             rows = self._parse(file, ext)
-        except ValueError as e:
+        except ImportMissingColumnsError as e:
             return Response({'status': 'error', 'message': str(e)}, status=400)
+        except ValueError as e:
+            logger.info('Product import workbook could not be read: %s', e)
+            return Response({
+                'status': 'error',
+                'message': (
+                    "We couldn't read this workbook. Make sure it is a valid .xlsx "
+                    "file and that it isn't corrupted or password-protected."
+                ),
+            }, status=400)
         except ImportError as e:
-            return Response({'status': 'error', 'message': f'Missing library: {e}. Install openpyxl.'}, status=400)
-        except Exception as e:
+            logger.exception('Product import spreadsheet support is unavailable')
+            return Response({
+                'status': 'error',
+                'message': 'Spreadsheet support is temporarily unavailable. Please contact support.',
+            }, status=500)
+        except (OSError, zipfile.BadZipFile) as e:
+            logger.info('Product import workbook could not be read: %s', e)
+            return Response({
+                'status': 'error',
+                'message': (
+                    "We couldn't read this workbook. Make sure it is a valid .xlsx "
+                    "file and that it isn't corrupted or password-protected."
+                ),
+            }, status=400)
+        except Exception:
             logger.exception('Product import parse failed')
-            return Response({'status': 'error', 'message': f'Failed to parse: {e}'}, status=400)
+            return Response({
+                'status': 'error',
+                'message': 'The workbook could not be processed due to a server error. Please try again later.',
+            }, status=500)
 
         if not rows:
             return Response({'status': 'error', 'message': 'File is empty.'}, status=400)
 
-        preview = _build_preview_rows(rows, request.user.company_id, request.user.branch_id)
+        try:
+            preview = _build_preview_rows(rows, request.user.company_id, request.user.branch_id)
+        except ImportFileValidationError as e:
+            return Response({
+                'status': 'error',
+                'message': 'Some spreadsheet values need correction before you can continue.',
+                'errors': e.errors,
+            }, status=400)
         return Response({
             'status': 'success',
             'message': f'Parsed {len(preview)} row(s).',
@@ -1104,10 +1199,10 @@ class ProductImportParseView(CompanyBranchMixin, PermissionRequiredMixin, APIVie
             df = pd.read_excel(file)
         else:
             df = pd.read_csv(file)
-        df.columns = [c.strip() for c in df.columns]
+        df.columns = [str(c).strip() for c in df.columns]
         missing = [c for c in EXPECTED_COLUMNS if c not in df.columns]
         if missing:
-            raise ValueError(f'Missing columns: {", ".join(missing)}')
+            raise ImportMissingColumnsError(f'Missing columns: {", ".join(missing)}')
         df = df.where(pd.notna(df), None)
         return df.to_dict(orient='records')
 

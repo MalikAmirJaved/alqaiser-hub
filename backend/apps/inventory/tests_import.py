@@ -3,9 +3,11 @@
 Covers Bug 2 (duplicate detection / existing-record info), Bug 3 (Add New,
 Update Existing, Skip Duplicates, Replace Existing) and Bug 4 (no raw DB errors).
 """
+import io
 import json
 from decimal import Decimal
 
+import pandas as pd
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -616,6 +618,72 @@ class ImportApiTest(ProductImportBase):
         rows = response.json()['data']['rows']
         self.assertTrue(all(r['is_duplicate_in_file'] for r in rows))
         self.assertEqual(rows[0]['duplicate_of_row_index'], 1)
+
+    def test_parse_reports_invalid_numeric_cell_with_row_and_column(self):
+        response = self.client.post(
+            '/api/inventory/products/import/parse/',
+            {'file': self._csv(
+                'Hand Wash,,Soap,Brand,PIECE,AMBIENT,l,HW-250,250ml,,10,20,0,0',
+            )},
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.json()
+        self.assertEqual(
+            payload['message'],
+            'Some spreadsheet values need correction before you can continue.',
+        )
+        self.assertEqual(payload['errors'], [{
+            'row_number': 2,
+            'column': 'Tax Rate (%)',
+            'value': 'l',
+            'message': 'Enter a valid number.',
+        }])
+
+    def test_xlsx_parse_reports_invalid_tax_rate_without_server_error(self):
+        workbook = io.BytesIO()
+        pd.DataFrame(
+            [[
+                'Hand Wash', '', 'Soap', 'Brand', 'PIECE', 'AMBIENT',
+                'l', 'HW-250', '250ml', '', 10, 20, 0, 0,
+            ]],
+            columns=self.CSV_HEADER.split(','),
+        ).to_excel(workbook, index=False, engine='openpyxl')
+        workbook.seek(0)
+        upload = SimpleUploadedFile(
+            'upload.xlsx',
+            workbook.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+
+        response = self.client.post(
+            '/api/inventory/products/import/parse/',
+            {'file': upload},
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        error = response.json()['errors'][0]
+        self.assertEqual(error['row_number'], 2)
+        self.assertEqual(error['column'], 'Tax Rate (%)')
+        self.assertEqual(error['value'], 'l')
+
+    def test_parse_reports_fractional_stock_level_as_invalid(self):
+        response = self.client.post(
+            '/api/inventory/products/import/parse/',
+            {'file': self._csv(
+                'Hand Wash,,Soap,Brand,PIECE,AMBIENT,0,HW-250,250ml,,10,20,1.5,0',
+            )},
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        error = response.json()['errors'][0]
+        self.assertEqual(error['row_number'], 2)
+        self.assertEqual(error['column'], 'Min Stock Level')
+        self.assertEqual(error['value'], '1.5')
+        self.assertEqual(error['message'], 'Enter a whole number without decimal places.')
 
     def test_parse_tenant_isolation(self):
         # Same SKU exists only in another company → not a conflict here.
