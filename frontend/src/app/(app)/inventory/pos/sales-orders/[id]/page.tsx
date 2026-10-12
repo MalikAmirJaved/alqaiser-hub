@@ -89,20 +89,16 @@ export default function SalesOrderDetailPage() {
   }
 
   const lines = order.lines || [];
-  const subtotal = lines.reduce((sum, l) => {
-    const lineSub = l.quantity_ordered * l.unit_price;
-    const disc =
-      l.discount_amount > 0
-        ? l.discount_amount
-        : lineSub * ((l.discount_pct || 0) / 100);
-    return sum + Math.max(0, lineSub - disc);
-  }, 0);
+  const subtotal = lines.reduce(
+    (sum, l) => sum + l.quantity_ordered * l.unit_price,
+    0,
+  );
   const totalTax = lines.reduce((sum, l) => {
     const lineSub = l.quantity_ordered * l.unit_price;
     const disc =
       l.discount_amount > 0
         ? l.discount_amount
-        : lineSub * ((l.discount_pct || 0) / 100);
+        : lineSub * ((l.discount_percent || 0) / 100);
     const lineNet = Math.max(0, lineSub - disc);
     return sum + lineNet * ((l.tax_rate || 0) / 100);
   }, 0);
@@ -111,7 +107,7 @@ export default function SalesOrderDetailPage() {
     const disc =
       l.discount_amount > 0
         ? l.discount_amount
-        : lineSub * ((l.discount_pct || 0) / 100);
+        : lineSub * ((l.discount_percent || 0) / 100);
     return sum + disc;
   }, 0);
 
@@ -315,7 +311,7 @@ export default function SalesOrderDetailPage() {
                   const disc =
                     line.discount_amount > 0
                       ? line.discount_amount
-                      : lineSub * ((line.discount_pct || 0) / 100);
+                      : lineSub * ((line.discount_percent || 0) / 100);
                   const lineNet = Math.max(0, lineSub - disc);
                   const lineTaxAmount =
                     lineNet * ((line.tax_rate || 0) / 100);
@@ -402,7 +398,7 @@ export default function SalesOrderDetailPage() {
               )}
               <div className="border-t border-border pt-2 flex justify-between font-bold">
                 <span>Total</span>
-                <span>{formatCurrency(order.total_amount || subtotal)}</span>
+                <span>{formatCurrency(order.total_amount || subtotal - totalDiscount + totalTax)}</span>
               </div>
             </div>
           </div>

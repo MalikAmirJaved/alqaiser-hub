@@ -12,6 +12,8 @@ export interface ThermalReceiptLine {
   variant_sku?: string;
   quantity: number;
   unit_price: number;
+  /** Line discount already deducted from `total` (fixed amount). */
+  discount_amount?: number;
   total: number;
 }
 
@@ -21,6 +23,8 @@ export interface ThermalReceiptData {
   time: string;
   customerName?: string;
   lines: ThermalReceiptLine[];
+  /** Aggregate line discount already deducted from `totalAmount`. */
+  discountAmount?: number;
   totalAmount: number;
   paymentMethod?: string;
   paidAmount?: number;
@@ -82,6 +86,11 @@ export function ThermalReceiptContent({
             <tr key={idx}>
               <td className="py-1 pr-1 truncate max-w-[120px]">
                 {line.variant_name}
+                {Number(line.discount_amount) > 0 && (
+                  <div className="text-[9px] text-gray-600">
+                    Discount -{formatCurrency(Number(line.discount_amount))}
+                  </div>
+                )}
               </td>
               <td className="py-1 text-center">{line.quantity}</td>
               <td className="py-1 text-right">{formatCurrency(line.unit_price)}</td>
@@ -92,6 +101,13 @@ export function ThermalReceiptContent({
       </table>
 
       <div className="border-t border-dashed border-gray-400 my-2" />
+
+      {Number(data.discountAmount) > 0 && (
+        <div className="flex justify-between text-[11px] mt-1">
+          <span>Discount</span>
+          <span>-{formatCurrency(Number(data.discountAmount))}</span>
+        </div>
+      )}
 
       {/* Total */}
       <div className="flex justify-between text-sm font-bold">
@@ -204,7 +220,7 @@ function buildReceiptHtml(
         <tbody>
           ${data.lines.map((line) => `
             <tr>
-              <td class="py-1 truncate">${escapeHtml(line.variant_name)}</td>
+              <td class="py-1 truncate">${escapeHtml(line.variant_name)}${Number(line.discount_amount) > 0 ? `<div class="text-gray-600" style="font-size: 9px;">Discount -${formatCurrency(Number(line.discount_amount))}</div>` : ""}</td>
               <td class="py-1 text-center">${line.quantity}</td>
               <td class="py-1 text-right">${formatCurrency(line.unit_price)}</td>
               <td class="py-1 text-right">${formatCurrency(line.total)}</td>
@@ -215,6 +231,12 @@ function buildReceiptHtml(
 
       <div style="border-top: 1px dashed #999; margin: 4px 0;"></div>
 
+      ${Number(data.discountAmount) > 0 ? `
+      <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 2px;">
+        <span>Discount</span>
+        <span>-${formatCurrency(Number(data.discountAmount))}</span>
+      </div>
+      ` : ""}
       <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 700;">
         <span>TOTAL</span>
         <span>${formatCurrency(data.totalAmount)}</span>

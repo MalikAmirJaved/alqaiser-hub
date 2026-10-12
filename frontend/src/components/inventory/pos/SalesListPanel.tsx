@@ -110,6 +110,20 @@ function OrderCard({
   const StatusIcon = cfg.icon;
   const hasInvoice = !!order.invoice_id;
   const lineCount = order.lines?.filter((l) => l.status !== "CANCELLED").length || 0;
+  // Overall (aggregate) discount across all non-cancelled lines — shown above
+  // the Total row and on the thermal receipt.
+  const orderDiscount = (order.lines || [])
+    .filter((l) => l.status !== "CANCELLED")
+    .reduce((sum, l) => {
+      const lineSub =
+        (l.quantity_ordered - (l.quantity_returned || 0)) *
+        Number(l.unit_price);
+      const disc =
+        Number(l.discount_amount || 0) > 0
+          ? Number(l.discount_amount)
+          : lineSub * (Number(l.discount_percent || 0) / 100);
+      return sum + Math.max(0, disc);
+    }, 0);
   const orderDate = new Date(order.order_date);
   const createdAt = new Date(order.created_at);
 
@@ -216,15 +230,19 @@ function OrderCard({
                     <th className="px-5 py-2 text-left font-medium">Product</th>
                     <th className="px-2 py-2 text-center font-medium">Qty</th>
                     <th className="px-2 py-2 text-right font-medium">Price</th>
+                    <th className="px-2 py-2 text-right font-medium">Discount</th>
                     <th className="px-5 py-2 text-right font-medium">Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {order.lines.filter((l) => l.status !== "CANCELLED").map((line) => {
                     const effectiveQty = line.quantity_ordered - (line.quantity_returned || 0);
-                    const lineTotal =
-                      effectiveQty * Number(line.unit_price) -
-                      Number(line.discount_amount || 0);
+                    const lineSub = effectiveQty * Number(line.unit_price);
+                    const disc =
+                      Number(line.discount_amount || 0) > 0
+                        ? Number(line.discount_amount)
+                        : lineSub * (Number(line.discount_percent || 0) / 100);
+                    const lineTotal = lineSub - disc;
                     return (
                       <tr key={line.id} className="border-b border-border/20 hover:bg-muted/20">
                         <td className="px-5 py-2">
@@ -246,6 +264,15 @@ function OrderCard({
                         <td className="px-2 py-2 text-right text-muted-foreground">
                           {formatCurrency(Number(line.unit_price))}
                         </td>
+                        <td className="px-2 py-2 text-right">
+                          {disc > 0 ? (
+                            <span className="text-destructive">
+                              -{formatCurrency(disc)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground/50">—</span>
+                          )}
+                        </td>
                         <td className="px-5 py-2 text-right font-semibold text-foreground">
                           {formatCurrency(lineTotal)}
                         </td>
@@ -254,9 +281,22 @@ function OrderCard({
                   })}
                 </tbody>
                 <tfoot>
+                  {orderDiscount > 0 && (
+                    <tr className="bg-muted/20">
+                      <td
+                        colSpan={4}
+                        className="px-5 py-2 text-right text-xs text-muted-foreground"
+                      >
+                        Discount
+                      </td>
+                      <td className="px-5 py-2 text-right text-xs font-semibold text-destructive">
+                        -{formatCurrency(orderDiscount)}
+                      </td>
+                    </tr>
+                  )}
                   <tr className="bg-muted/20">
                     <td
-                      colSpan={3}
+                      colSpan={4}
                       className="px-5 py-2 text-right text-xs font-bold text-foreground"
                     >
                       Total
@@ -359,13 +399,22 @@ function OrderCard({
                 const effectiveLines = (order.lines || [])
                   .filter((l) => l.status !== "CANCELLED")
                   .map((l) => {
-                    const effectiveQty = l.quantity_ordered - (l.quantity_returned || 0);
+                    const effectiveQty = Math.max(
+                      l.quantity_ordered - (l.quantity_returned || 0),
+                      0,
+                    );
+                    const lineSub = effectiveQty * Number(l.unit_price);
+                    const discount =
+                      Number(l.discount_amount || 0) > 0
+                        ? Number(l.discount_amount)
+                        : lineSub * (Number(l.discount_percent || 0) / 100);
                     return {
                       variant_name: l.variant_name || "Product",
                       variant_sku: l.variant_sku,
-                      quantity: Math.max(effectiveQty, 0),
+                      quantity: effectiveQty,
                       unit_price: Number(l.unit_price),
-                      total: Math.max(effectiveQty, 0) * Number(l.unit_price),
+                      discount_amount: discount,
+                      total: lineSub - discount,
                     };
                   });
                 const effectiveTotal = effectiveLines.reduce((s, l) => s + l.total, 0);
@@ -379,6 +428,7 @@ function OrderCard({
                   time: now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
                   customerName: order.customer_name,
                   lines: effectiveLines,
+                  discountAmount: orderDiscount,
                   totalAmount: Number(order.total_amount),
                 };
                 printThermalReceipt(data, companyName || "Store", formatCurrency);

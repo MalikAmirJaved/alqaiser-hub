@@ -13,7 +13,7 @@ import {
   useEditSalesOrder,
   useDraftSalesOrders,
   useSalesOrders,
-  cartToLineItems, CartLine
+  cartToLineItems, CartLine, cartTotal, lineTotal
 } from "@/hooks/useSalesOrder";
 import { useAllVariantsSimple } from "@/hooks/useAllVariants";
 import { apiFetch } from "@/lib/api";
@@ -209,18 +209,28 @@ export default function SalesPage() {
     orderNumber: string,
   ): ThermalReceiptData => {
     const now = new Date();
+    const lines = finalCart.map((line) => {
+      const base = line.qty * line.unitPrice;
+      const discount =
+        line.discountFixed > 0
+          ? line.discountFixed
+          : (base * line.discountPct) / 100;
+      return {
+        variant_name: line.variant.product_name || line.variant.sku || "Product",
+        variant_sku: line.variant.sku,
+        quantity: line.qty,
+        unit_price: line.unitPrice,
+        discount_amount: discount,
+        total: lineTotal(line),
+      };
+    });
     return {
       orderNumber,
       date: now.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
       time: now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
       customerName: selectedCustomer?.name,
-      lines: finalCart.map((line) => ({
-        variant_name: line.variant.product_name || line.variant.sku || "Product",
-        variant_sku: line.variant.sku,
-        quantity: line.qty,
-        unit_price: line.unitPrice,
-        total: line.qty * line.unitPrice,
-      })),
+      lines,
+      discountAmount: lines.reduce((s, l) => s + (l.discount_amount || 0), 0),
       totalAmount,
     };
   }, [selectedCustomer]);
@@ -236,9 +246,8 @@ export default function SalesPage() {
     if (cart.length === 0) return;
     const orderNumber = `TEMP-${Date.now()}`;
     const data = buildThermalReceipt(cart, 0, orderNumber);
-    // Calculate total using cart values
-    const total = cart.reduce((sum, l) => sum + (l.qty * l.unitPrice - (l.discountFixed > 0 ? l.discountFixed : (l.qty * l.unitPrice * l.discountPct / 100))), 0);
-    data.totalAmount = total;
+    // Same math as the cart panel: net + per-line tax
+    data.totalAmount = cartTotal(cart);
     showThermalReceipt(data);
   }, [cart, buildThermalReceipt, showThermalReceipt]);
 
@@ -278,7 +287,7 @@ const handleCompleteSale = useCallback(async (notes: string, payments: any[], ov
     }
     
     const orderNumber = result?.data?.order_number || result?.order_number || "";
-    const totalAmount = result?.data?.total_amount || finalCart.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+    const totalAmount = result?.data?.total_amount || cartTotal(finalCart);
     
     clearCart();
     refetchDrafts();
