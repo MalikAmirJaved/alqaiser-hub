@@ -570,8 +570,8 @@ export default function CustomerInvoiceFormModal({
   const overallTaxAmt = (totalBeforeTax || 0) * (overallTaxPct / 100);
 
   useEffect(() => {
-    setValue("amount", (totalBeforeTax || 0) + (overallTaxAmt || 0));
-  }, [totalBeforeTax, overallTaxAmt, setValue]);
+    setValue("amount", (totalBeforeTax || 0) + (totalTax || 0) + (overallTaxAmt || 0));
+  }, [totalBeforeTax, totalTax, overallTaxAmt, setValue]);
 
   useEffect(() => {
     if (initialData) {
@@ -1312,7 +1312,7 @@ export default function CustomerInvoiceFormModal({
                     <div className="flex justify-between items-center pt-2.5 border-t border-border">
                       <span className="text-sm font-semibold">Total</span>
                       <span className="text-lg font-bold font-mono">
-                        {formatCurrency((totalBeforeTax || 0) + (overallTaxAmt || 0))}
+                        {formatCurrency((totalBeforeTax || 0) + (totalTax || 0) + (overallTaxAmt || 0))}
                       </span>
                     </div>
                   </div>
@@ -1326,7 +1326,7 @@ export default function CustomerInvoiceFormModal({
             <p className="text-xs text-muted-foreground">
               {fields.length === 0
                 ? "No items added yet"
-                : `${fields.length} item${fields.length !== 1 ? "s" : ""} · Total ${formatCurrency((totalBeforeTax || 0) + (overallTaxAmt || 0))}`}
+                : `${fields.length} item${fields.length !== 1 ? "s" : ""} · Total ${formatCurrency((totalBeforeTax || 0) + (totalTax || 0) + (overallTaxAmt || 0))}`}
             </p>
             <div className="flex gap-2">
               <button

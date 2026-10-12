@@ -98,12 +98,15 @@ export default function QuoteDetailPage() {
                 <th className="px-4 py-2 text-right">Qty</th>
                 <th className="px-4 py-2 text-right">Unit Price</th>
                 <th className="px-4 py-2 text-right">Discount</th>
+                <th className="px-4 py-2 text-right">Tax</th>
                 <th className="px-4 py-2 text-right">Total</th>
               </tr>
             </thead>
             <tbody>
               {quote.lines?.map((line, idx) => {
-                const lineTotal = line.quantity * line.unit_price - (line.discount_amount || 0);
+                const lineNet = line.quantity * line.unit_price - (line.discount_amount || 0);
+                const lineTax = lineNet * ((line.tax_rate || 0) / 100);
+                const lineTotal = lineNet + lineTax;
                 return (
                   <tr key={idx} className="border-b border-border/60">
                     <td className="px-4 py-2">
@@ -123,61 +126,95 @@ export default function QuoteDetailPage() {
                     <td className="px-4 py-2 text-right">{line.quantity}</td>
                     <td className="px-4 py-2 text-right">{formatCurrency(line.unit_price)}</td>
                     <td className="px-4 py-2 text-right text-destructive">{formatCurrency(line.discount_amount || 0)}</td>
+                    <td className="px-4 py-2 text-right">
+                      {line.tax_rate > 0 ? (
+                        <span className="text-muted-foreground">
+                          {line.tax_rate}% ({formatCurrency(lineTax)})
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground/40">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-right font-medium">{formatCurrency(lineTotal)}</td>
                   </tr>
                 );
               })}
               {(!quote.lines || quote.lines.length === 0) && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
                     No items in this quote
                   </td>
                 </tr>
               )}
             </tbody>
-            <tfoot className="border-t-2 border-border">
-              {(quote as any).lines?.length > 0 && (
+            <tfoot className="border-t-2 border-border">                  {(quote as any).lines?.length > 0 && (
                 <>
                   <tr>
-                    <td colSpan={5} className="px-4 py-2 text-right text-sm text-muted-foreground">Subtotal</td>
+                    <td colSpan={6} className="px-4 py-2 text-right text-sm text-muted-foreground">Subtotal</td>
                     <td className="px-4 py-2 text-right text-sm">
                       {formatCurrency(
                         (quote.lines || []).reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0)
                       )}
                     </td>
                   </tr>
-                  {(quote as any).overall_discount_percent > 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-2 text-right text-sm text-muted-foreground">
-                        Discount ({(quote as any).overall_discount_percent}%)
-                      </td>
-                      <td className="px-4 py-2 text-right text-sm text-destructive">
-                        -{formatCurrency(
-                          ((quote.lines || []).reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0)) *
-                          (Number((quote as any).overall_discount_percent) / 100)
+                  {(() => {
+                    const lines = (quote.lines || []) as any[];
+                    const sub = lines.reduce((s, l) => s + l.quantity * l.unit_price, 0);
+                    const lineDiscounts = lines.reduce((s, l) => s + (l.discount_amount || 0), 0);
+                    const lineTax = lines.reduce(
+                      (s, l) =>
+                        s +
+                        (l.quantity * l.unit_price - (l.discount_amount || 0)) * ((l.tax_rate || 0) / 100),
+                      0
+                    );
+                    const overallDisc = sub * (Number((quote as any).overall_discount_percent || 0) / 100);
+                    return (
+                      <>
+                        {lineDiscounts > 0 && (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                              Discount (line)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm text-destructive">
+                              -{formatCurrency(lineDiscounts)}
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                    </tr>
-                  )}
-                  {(quote as any).overall_tax_percent > 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-2 text-right text-sm text-muted-foreground">
-                        Tax ({(quote as any).overall_tax_percent}%)
-                      </td>
-                      <td className="px-4 py-2 text-right text-sm">
-                        {formatCurrency(
-                          ((quote.lines || []).reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0) -
-                            ((quote.lines || []).reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0)) *
-                            (Number((quote as any).overall_discount_percent) / 100)) *
-                          (Number((quote as any).overall_tax_percent) / 100)
+                        {(quote as any).overall_discount_percent > 0 && (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                              Discount ({(quote as any).overall_discount_percent}%)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm text-destructive">
+                              -{formatCurrency(overallDisc)}
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                    </tr>
-                  )}
+                        {lineTax > 0 && (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                              Tax (line)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm">{formatCurrency(lineTax)}</td>
+                          </tr>
+                        )}
+                        {(quote as any).overall_tax_percent > 0 && (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                              Tax ({(quote as any).overall_tax_percent}%)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm">
+                              {formatCurrency((sub - lineDiscounts - overallDisc) * (Number((quote as any).overall_tax_percent) / 100))}
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    );
+                  })()}
                 </>
               )}
               <tr className="border-t-2 border-border">
-                <td colSpan={5} className="px-4 py-3 text-right font-semibold">Total</td>
+                <td colSpan={6} className="px-4 py-3 text-right font-semibold">Total</td>
                 <td className="px-4 py-3 text-right font-bold text-primary">{formatCurrency(quote.total_amount)}</td>
               </tr>
             </tfoot>

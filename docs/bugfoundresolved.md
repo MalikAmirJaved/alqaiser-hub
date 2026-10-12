@@ -27,6 +27,66 @@ Use this template:
 
 ## Resolved
 
+### BUG-20261012-04 — Purchase Order create 500'd on tax rates with more than 2 decimal places
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | High |
+| Module | Inventory / Purchases |
+| Found | 2026-10-12 (reported: `POST /api/inventory/purchase-orders/` → 500, server log showed `django.core.exceptions.ValidationError: {'tax_rate': ['Ensure that there are no more than 2 decimal places.']}`) |
+| Resolved | 2026-10-12 (changelog 1.8) |
+| Root cause | `PurchaseOrderSerializer` declares `line_items` as a write-only `ListField(child=DictField())`, so its per-line numbers never pass through any serializer field validation. `create()` read `tax_rate = line_data.get('tax_rate', 0)` and passed it verbatim to `PurchaseOrderLine.objects.create`. The model's `save()` deliberately calls `full_clean()`, and `tax_rate` is `DecimalField(max_digits=5, decimal_places=2)` — so any JSON number with more than 2 decimals (JS float noise such as `15.000000000000002` from cart arithmetic, or a typed `15.555`) raised `ValidationError` inside the view with no DRF handler, producing a 500 instead of a saved order. `unit_cost` was already quantized in the same loop; `tax_rate` was the only raw numeric left. |
+| Fix | `create()` now coerces and quantizes the rate to 2dp with `ROUND_HALF_UP` — the same treatment `unit_cost` receives — and uses that quantized value for both `line_tax(...)` in the order total and the `PurchaseOrderLine` insert, so the stored rate and the stored `total_amount` cannot drift. `SalesOrderLine` was checked for the same exposure: it has no `full_clean()`-on-save and its unit price allows 4dp, so POS sales were unaffected. |
+| Prevention | `apps/inventory/tests.py → PurchaseOrderTaxPrecisionTest` (3 tests) POSTs to the real endpoint with `15.555` and a float artifact `7.500000000000001`, asserting 201 with the rate stored as `15.56` / `7.50`, and that `total_amount` equals the total recomputed from the stored quantized rate. |
+
+### BUG-20261012-03 — Discount not shown on POS Recent Sales, thermal receipts, or the sales-order page
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | Medium |
+| Module | Inventory / POS (frontend) |
+| Found | 2026-10-12 (reported: discount missing on `/inventory/pos` Recent Sales tab, on thermal receipts, and on the sales-order detail page) |
+| Resolved | 2026-10-12 (changelog 1.8) |
+| Root cause | Three frontend faults around the same data. (1) `sales-orders/[id]` computed each line's discount from `l.discount_pct`, but `SalesOrderLineSerializer` returns `discount_percent` — the value was always `undefined`, so percent discounts (the kind POS writes, since the backend stores `discount_percent=discount_pct, discount_amount=discount_fixed`) rendered as “—” and `totalDiscount` stayed 0, hiding every Discount row and summary chip. The `SalesOrderResponse` hook type itself declared the *write* names (`discount_pct`/`discount_fixed`), which is why `tsc` never caught the mismatch. (2) The Recent Sales expandable table had no Discount column and subtracted only the fixed `discount_amount`, ignoring the percent. (3) Thermal receipts never displayed a discount: the Recent Sales thermal built line totals as `qty × price` with no deduction while the TOTAL used `order.total_amount` (already net of discount), so the rows could never sum to the total. |
+| Fix | `useSalesOrder.ts` response type now mirrors the API (`discount_percent`, `discount_amount`; the write payload keeps `discount_pct`/`discount_fixed` as the backend reads those). The detail page reads `discount_percent` in all three sites (both reducers and the table row). Recent Sales gained a Discount column (`-X.XX` in red, “—” otherwise) whose line totals subtract percent discounts too, with the footer `colSpan` adjusted. `ThermalReceiptLine` gained an optional `discount_amount`; both renderers — the on-screen preview and the printed iframe HTML (`buildReceiptHtml`) — show `Discount -X.XX` under each discounted line. Both thermal builders (Recent Sales button and the POS cart's `buildThermalReceipt`) now pass the computed discount and keep line totals net of it. Following up on the same report: an overall (aggregate) Discount row now sits directly above the Total — `SalesOrder` has no order-level discount field (the POS cart's global discount is distributed into lines on submission), so it is the sum of the line discounts — shown in the Recent Sales expanded-table footer and on thermal receipts through a new optional `ThermalReceiptData.discountAmount`, rendered in both the preview and the printed HTML. |
+| Prevention | The hook type now matches the serializer field list, so a future rename breaks `tsc` instead of silently rendering 0. Verified with `tsc --noEmit` (exit 0) and eslint (no new findings) on all five touched files. |
+
+### BUG-20261012-02 — Test runner reported “ALL TESTS PASSED” while 4 tests failed
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | High |
+| Module | Backend / Test infrastructure |
+| Found | 2026-10-12 (stock `manage.py test` exited 1 with 4 failures right after the custom runner printed a green 562-test summary) |
+| Resolved | 2026-10-12 (changelog 1.8) |
+| Root cause | Two independent faults. (1) `config/test_runner.py` decided its verdict and exit code from a mix of result attributes while the printer counted `_all_results` — and it never consulted the subtest failure list, so CPython’s `addSubTest` failures (which record into `result.failures` per subtest via `test.failureException`, not `self.failureException`) were invisible to both the summary and `sys.exit`. The net effect: the runner printed “✓ ALL TESTS PASSED”, exited 0, and stock Django immediately reported **562 tests, 4 failures** on the same suite. (2) The 4 masked failures were a pre-existing bad assertion: `TrashRegistryTestCase` asserted `'company_id' in {f.name for f in model._meta.get_fields()}`, but 4 of the 27 registry models (`User`, `TermsAndCondition`, …) declare tenancy as `company = ForeignKey(...)`, whose field *name* is `company` while its *column* (`attname`) is `company_id`. An `IntegerField` literally named `company_id` has both, which is why the other 23 passed. |
+| Fix | The runner now derives the verdict, counts and exit code from unittest’s own `failures` / `errors` / `skipped` / `expectedFailures` lists (which include subtest failures) instead of a parallel counter, and `_resolve_hierarchy` maps module paths so `tests_trash`, `tests_import`, `tests_totals` etc. are attributed to their app rather than “UNKNOWN”. The registry assertion now checks the **column** (`f.attname`), which is what tenant scoping actually filters on, and still asserts the other required fields on names. Verified: custom runner and stock runner agree — 562 tests, 0 failures, exit 0; the 4 subtests reproduced byte-identically at `HEAD` (commit `125a6b6`, via a clean worktree) before the fix. |
+| Prevention | The runner can no longer disagree with unittest’s own bookkeeping because it *is* unittest’s bookkeeping. `TrashRegistryTestCase` runs green on all 27 models. **Going forward: if the runner’s summary and the exit code ever disagree, trust the exit code and fix the runner.** |
+
+### BUG-20261012-01 — Sales order “Related returns” 500 (`ORDER BY` inside a compound statement)
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | High |
+| Module | Inventory / Sales (returns) |
+| Found | 2026-10-12 (endpoint test for `sales-orders/{_id}/related-returns`) |
+| Resolved | 2026-10-12 (changelog 1.8) |
+| Root cause | `SalesOrderViewSet.related_returns` built two querysets that each carried `.order_by("-created_at")`, combined them with `.union()`, and then applied a third `.order_by("-created_at")` on the compound result. In Django that compiles to a `UNION` whose operands are parenthesised subqueries containing their own `ORDER BY`, wrapped by an outer one — which PostgreSQL rejects with `ORDER BY not allowed in subqueries of compound statements`. Every sales order that opened the returns section 500’d. |
+| Fix | The `UNION` was unnecessary: `ReturnRefund.document_id` is a plain UUIDField with `return_type` (`POS` / `INVOICE`) as the discriminator, so a single queryset filtered with `Q(return_type='POS', document_id=order._id) \| Q(return_type='INVOICE', document_id__in=invoice_ids)` (plus the existing tenant/`is_deleted` scope) returns exactly the same rows, with one `ORDER BY` and the same `(return_type, document_id)` index usage. No other `.union()` exists in the backend. |
+| Prevention | `apps/inventory/tests.py → RelatedReturnsTest` creates one POS return and one invoice-linked return against a sales order and calls the endpoint over HTTP; it reproduced the SQL error before the fix and passes after. |
+
+### BUG-20261010-11 — Document totals dropped per-line tax (PO / Quote / Invoice / Sales Order)
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | Critical |
+| Module | Inventory / Sales / Finance (totals) |
+| Found | 2026-10-10 (reported: "tax was not calculated with total after created" on Purchase Order, Quote and Invoice) |
+| Resolved | 2026-10-10 (changelog 1.7) |
+| Root cause | Every document summed only the **net** line amounts (`qty × price − discount`) and never applied each line's `tax_rate`, even though the forms and detail tables displayed that tax. `PurchaseOrderSerializer.create` read `tax_rate` off the payload and threw it away; `QuoteSerializer`/`CustomerInvoiceSerializer` (both `create` and `update`) computed `base + overall_tax` and omitted line tax entirely; the four `SalesOrder` total sites in `inventory/serializers/sales.py` and `inventory/views/sales.py` did the same. So a 100.00 order at 15% saved as 100.00 while the UI showed 115.00, and the invoice-sync helpers (`sync_sales_order_to_invoice`, `sync_invoice_for_return`, `return_refund_service._update_source_document_totals`) recomputed invoice amounts tax-free, silently stripping tax from POS-sourced invoices and after every return. The UI compounds it: the Invoice form printed a "Tax (line)" row but left it out of the Total it submitted, and the Quote form's `calculateTotal()` computed `totalTax` then never added it. |
+| Fix | New single source of truth `backend/apps/common/totals.py` (`dec`, `line_net`, `line_tax`, `line_amount_with_tax`, `document_total`, `overall_discount_amount`, `overall_tax_amount`) implements the formula the UI already renders: `subtotal − line discounts − overall discount% + line tax + overall tax%`. All eleven total-writing sites now go through it: PO, Quote (create+update), CustomerInvoice (create+update), SalesOrder (serializer create, `_create_complete_order`, complete-with-modifications, edit), plus the three invoice-recompute paths. The `line_total` properties on `PurchaseOrderLine`/`QuoteLine`/`CustomerInvoiceLine`/`SalesOrderLine` now include line tax so row totals reconcile with their header total. Frontend: Quote form's `calculateTotal()` and Invoice form's `amount`/displayed Total now add `totalTax`; Quote, Invoice and print/PDF (`QuoteInvoiceDocument`) footers gained the missing *Discount (line)* and *Tax (line)* rows; Quote and PO detail tables gained a Tax column; POS thermal receipt uses the shared `cartTotal`/`lineTotal` helpers instead of its own tax-less sum. Also fixed as found: `PurchaseOrderLine.clean()` raised `models.ValidationError`, which does not exist on `django.db.models` — every PO-line validation failure would have 500'd with `AttributeError` instead of returning 400. |
+| Prevention | `backend/apps/common/tests_totals.py` — 13 tests covering the helper math and end-to-end serializer `create`/`update` for all four document types, asserting the persisted total and that `sum(line.line_total) == header total`. Existing totals tests (which use `tax_rate=0`) still pass unchanged, so the formula degrades to the old behaviour when no line has tax. **Going forward: never hand-roll a document total — import from `apps.common.totals`.** Existing rows saved before this fix are intentionally left as-is (fix-forward); recompute them only with an explicit, reviewed backfill. |
+
 ### BUG-20261010-10 — "Cannot delete yet" dialog could not be closed
 | Field | Value |
 | ----- | ----- |

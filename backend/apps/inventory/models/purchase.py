@@ -1,5 +1,6 @@
 import uuid
 from django.db import models
+from django.core.exceptions import ValidationError
 from apps.common.basemodel import BaseModel
 from django.conf import settings
 
@@ -119,13 +120,13 @@ class PurchaseOrderLine(BaseModel):
         if self.purchase_order_id:
             po = self.purchase_order
             if po.inventory_type == 'FOR_SALE' and not self.variant:
-                raise models.ValidationError("For sale orders require a product variant")
+                raise ValidationError("For sale orders require a product variant")
             if po.inventory_type == 'OFFICE_INVENTORY' and not self.asset:
-                raise models.ValidationError("Office inventory orders require an HR asset")
+                raise ValidationError("Office inventory orders require an HR asset")
             if po.inventory_type == 'FOR_SALE' and self.asset:
-                raise models.ValidationError("For sale orders cannot have an asset")
+                raise ValidationError("For sale orders cannot have an asset")
             if po.inventory_type == 'OFFICE_INVENTORY' and self.variant:
-                raise models.ValidationError("Office inventory orders cannot have a product variant")
+                raise ValidationError("Office inventory orders cannot have a product variant")
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -133,7 +134,10 @@ class PurchaseOrderLine(BaseModel):
 
     @property
     def line_total(self):
-        return self.quantity_ordered * self.unit_cost
+        """Net line amount + per-line tax (matches the order total)."""
+        from apps.common.totals import line_tax
+        net = self.quantity_ordered * self.unit_cost
+        return net + line_tax(self.quantity_ordered, self.unit_cost, self.tax_rate)
 
 class GoodsReceipt(BaseModel):
     """

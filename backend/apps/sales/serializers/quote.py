@@ -2,6 +2,7 @@ from decimal import Decimal
 from django.utils import timezone
 from rest_framework import serializers
 from apps.common.basemodel import soft_delete_qs
+from apps.common.totals import document_total, line_tax
 from apps.sales.models.quote import Quote, QuoteLine
 from apps.sales.models.lead import Lead
 from apps.inventory.models import Customer, ProductVariant, Supplier
@@ -153,6 +154,7 @@ class QuoteSerializer(serializers.ModelSerializer):
         
         subtotal = Decimal('0')
         per_line_discounts = Decimal('0')
+        per_line_taxes = Decimal('0')
         for line_item in lines_data:
             line = QuoteLine.objects.create(
                 quote=quote,
@@ -164,13 +166,14 @@ class QuoteSerializer(serializers.ModelSerializer):
             )
             subtotal += line.quantity * line.unit_price
             per_line_discounts += Decimal(str(line.discount_amount or 0))
-            
+            per_line_taxes += line_tax(line.quantity, line.unit_price, line.tax_rate, line.discount_amount)
+
         overall_discount_percent = Decimal(str(validated_data.get('overall_discount_percent', 0) or 0))
         overall_tax_percent = Decimal(str(validated_data.get('overall_tax_percent', 0) or 0))
-        overall_discount = subtotal * (overall_discount_percent / Decimal('100'))
-        total_before_tax = subtotal - per_line_discounts - overall_discount
-        overall_tax = total_before_tax * (overall_tax_percent / Decimal('100'))
-        quote.total_amount = total_before_tax + overall_tax
+        quote.total_amount = document_total(
+            subtotal, per_line_discounts, per_line_taxes,
+            overall_discount_percent, overall_tax_percent,
+        )
         quote.save(update_fields=['total_amount'])
         return quote
 
@@ -188,6 +191,7 @@ class QuoteSerializer(serializers.ModelSerializer):
             soft_delete_qs(instance.lines.all(), user)
             subtotal = Decimal('0')
             per_line_discounts = Decimal('0')
+            per_line_taxes = Decimal('0')
             for line_item in lines_data:
                 line = QuoteLine.objects.create(
                     quote=instance,
@@ -199,12 +203,13 @@ class QuoteSerializer(serializers.ModelSerializer):
                 )
                 subtotal += line.quantity * line.unit_price
                 per_line_discounts += Decimal(str(line.discount_amount or 0))
+                per_line_taxes += line_tax(line.quantity, line.unit_price, line.tax_rate, line.discount_amount)
             overall_discount_percent = Decimal(str(validated_data.get('overall_discount_percent', instance.overall_discount_percent or 0)))
             overall_tax_percent = Decimal(str(validated_data.get('overall_tax_percent', instance.overall_tax_percent or 0)))
-            overall_discount = subtotal * (overall_discount_percent / Decimal('100'))
-            total_before_tax = subtotal - per_line_discounts - overall_discount
-            overall_tax = total_before_tax * (overall_tax_percent / Decimal('100'))
-            instance.total_amount = total_before_tax + overall_tax
+            instance.total_amount = document_total(
+                subtotal, per_line_discounts, per_line_taxes,
+                overall_discount_percent, overall_tax_percent,
+            )
             instance.save(update_fields=['total_amount'])
             
         return instance

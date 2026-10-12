@@ -138,6 +138,13 @@ function DocumentContent({
     (sum, l) => sum + (Number(l.discount_amount) || 0),
     0,
   );
+  const calcLineTax = data.lines.reduce(
+    (sum, l) =>
+      sum +
+      (Number(l.quantity) * Number(l.unit_price) - (Number(l.discount_amount) || 0)) *
+        ((Number(l.tax_rate) || 0) / 100),
+    0,
+  );
   const locationStr = buildLocationString(company);
 
   const logoSrc = company.logo
@@ -315,13 +322,28 @@ function DocumentContent({
               </td>
             </tr>
           )}
+          {calcLineTax > 0 && (
+            <tr className="border-t border-gray-200">
+              <td
+                colSpan={5}
+                className="py-2 px-3 text-right font-semibold text-gray-900"
+              >
+                Line Tax
+              </td>
+              <td className="py-2 px-3 text-right text-gray-900">
+                {formatCurrency(calcLineTax)}
+              </td>
+            </tr>
+          )}
           {Number(data.overallDiscountPercent) > 0 && (
             <tr className="border-t border-gray-200">
               <td colSpan={5} className="py-2 px-3 text-right font-semibold text-gray-900">
                 Discount ({Number(data.overallDiscountPercent)}%)
               </td>
               <td className="py-2 px-3 text-right text-gray-900">
-                -{formatCurrency(calcSubtotal * (Number(data.overallDiscountPercent) / 100))}
+                -{formatCurrency(
+                  calcSubtotal * (Number(data.overallDiscountPercent) / 100)
+                )}
               </td>
             </tr>
           )}
@@ -332,7 +354,10 @@ function DocumentContent({
               </td>
               <td className="py-2 px-3 text-right text-gray-900">
                 {formatCurrency(
-                  (calcSubtotal - (calcSubtotal * ((Number(data.overallDiscountPercent) || 0) / 100))) *
+                  (calcSubtotal -
+                    calcDiscount -
+                    calcSubtotal *
+                      ((Number(data.overallDiscountPercent) || 0) / 100)) *
                   (Number(data.overallTaxPercent) / 100)
                 )}
               </td>
@@ -593,10 +618,15 @@ async function generatePdf(
     (s, l) => s + (l.discount_amount || 0),
     0,
   );
+  const calcLineTax = docData.lines.reduce(
+    (s, l) =>
+      s + (l.quantity * l.unit_price - (l.discount_amount || 0)) * ((l.tax_rate || 0) / 100),
+    0,
+  );
   const overallDiscPct = docData.overallDiscountPercent || 0;
   const overallTaxPct = docData.overallTaxPercent || 0;
   const overallDiscAmt = calcSubtotal * (overallDiscPct / 100);
-  const afterDisc = calcSubtotal - overallDiscAmt;
+  const afterDisc = calcSubtotal - calcDiscount - overallDiscAmt;
   const overallTaxAmt = afterDisc * (overallTaxPct / 100);
 
   doc.setFontSize(10);
@@ -612,6 +642,15 @@ async function generatePdf(
     doc.setTextColor(0);
     doc.text("Line Discount", totalX - 40, nextY);
     doc.text(`-${formatCurrency(calcDiscount)}`, totalX, nextY, {
+      align: "right",
+    });
+    nextY += 5;
+  }
+
+  if (calcLineTax > 0) {
+    doc.setTextColor(0);
+    doc.text("Line Tax", totalX - 40, nextY);
+    doc.text(formatCurrency(calcLineTax), totalX, nextY, {
       align: "right",
     });
     nextY += 5;

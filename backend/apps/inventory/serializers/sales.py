@@ -1,6 +1,7 @@
 # ============================================================
 # File: backend/apps/inventory/serializers/sales.py
 # ============================================================
+from decimal import Decimal
 from rest_framework import serializers
 from apps.inventory.models.sales import (
     SalesOrder, SalesOrderLine,
@@ -9,6 +10,7 @@ from apps.inventory.models.sales import (
 from apps.inventory.models import ProductVariant, Customer, Warehouse
 from apps.finance.models import BankAccount
 from apps.common.serializer_fields import UUIDForeignRelatedField
+from apps.common.totals import line_amount_with_tax
 
 
 class SalesOrderLineSerializer(serializers.ModelSerializer):
@@ -112,7 +114,7 @@ class SalesOrderSerializer(serializers.ModelSerializer):
         validated_data['updated_by'] = user
 
         order = SalesOrder.objects.create(**validated_data)
-        total_amount = 0
+        total_amount = Decimal('0')
 
         for item in line_items_data:
             variant_uuid = item.get('variant')
@@ -128,8 +130,7 @@ class SalesOrderSerializer(serializers.ModelSerializer):
                 discount = discount_fixed
             else:
                 discount = subtotal * (discount_pct / 100)
-            line_total = subtotal - discount
-            total_amount += line_total
+            total_amount += line_amount_with_tax(qty, unit_price, tax_rate, discount)
 
             SalesOrderLine.objects.create(
                 sales_order=order,

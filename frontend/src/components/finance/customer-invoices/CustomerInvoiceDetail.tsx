@@ -286,34 +286,60 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
                       )}
                     </td>
                   </tr>
-                  {(invoice as any).overall_discount_percent > 0 && (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
-                        Discount ({(invoice as any).overall_discount_percent}%)
-                      </td>
-                      <td className="px-4 py-2 text-right text-sm text-destructive">
-                        -{formatCurrency(
-                          invoice.lines.reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0) *
-                          (Number((invoice as any).overall_discount_percent) / 100)
+                  {(() => {
+                    const lines = invoice.lines as any[];
+                    const sub = lines.reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0);
+                    const lineDiscounts = lines.reduce((s: number, l: any) => s + (l.discount_amount || 0), 0);
+                    const lineTax = lines.reduce(
+                      (s: number, l: any) =>
+                        s +
+                        (l.quantity * l.unit_price - (l.discount_amount || 0)) * ((l.tax_rate || 0) / 100),
+                      0
+                    );
+                    const overallDisc = sub * (Number((invoice as any).overall_discount_percent || 0) / 100);
+                    return (
+                      <>
+                        {lineDiscounts > 0 && (
+                          <tr>
+                            <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                              Discount (line)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm text-destructive">
+                              -{formatCurrency(lineDiscounts)}
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                    </tr>
-                  )}
-                  {(invoice as any).overall_tax_percent > 0 && (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
-                        Tax ({(invoice as any).overall_tax_percent}%)
-                      </td>
-                      <td className="px-4 py-2 text-right text-sm">
-                        {formatCurrency(
-                          (invoice.lines.reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0) -
-                            invoice.lines.reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0) *
-                            (Number((invoice as any).overall_discount_percent) / 100)) *
-                          (Number((invoice as any).overall_tax_percent) / 100)
+                        {(invoice as any).overall_discount_percent > 0 && (
+                          <tr>
+                            <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                              Discount ({(invoice as any).overall_discount_percent}%)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm text-destructive">
+                              -{formatCurrency(overallDisc)}
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                    </tr>
-                  )}
+                        {lineTax > 0 && (
+                          <tr>
+                            <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                              Tax (line)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm">{formatCurrency(lineTax)}</td>
+                          </tr>
+                        )}
+                        {(invoice as any).overall_tax_percent > 0 && (
+                          <tr>
+                            <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                              Tax ({(invoice as any).overall_tax_percent}%)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm">
+                              {formatCurrency((sub - lineDiscounts - overallDisc) * (Number((invoice as any).overall_tax_percent) / 100))}
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    );
+                  })()}
                 </>
               )}
               <tr className="border-t-2 border-border">

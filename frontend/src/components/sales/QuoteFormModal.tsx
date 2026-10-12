@@ -270,7 +270,7 @@ export default function QuoteFormModal({
   const overallDiscountAmount = subtotal * (overallDiscountPercent / 100);
   const totalBeforeTax = subtotal - totalDiscount - overallDiscountAmount;
   const overallTaxAmount = totalBeforeTax * (overallTaxPercent / 100);
-  const calculateTotal = () => totalBeforeTax + overallTaxAmount;
+  const calculateTotal = () => totalBeforeTax + totalTax + overallTaxAmount;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -722,6 +722,20 @@ export default function QuoteFormModal({
                       <span>Subtotal</span>
                       <span className="font-mono">{formatCurrency(subtotal)}</span>
                     </div>
+
+                    {totalDiscount > 0 && (
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Discount (line)</span>
+                        <span className="font-mono text-destructive">−{formatCurrency(totalDiscount)}</span>
+                      </div>
+                    )}
+
+                    {totalTax > 0 && (
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Tax (line)</span>
+                        <span className="font-mono">{formatCurrency(totalTax)}</span>
+                      </div>
+                    )}
 
                     {/* Overall discount % */}
                     <div className="flex justify-between items-center gap-2">

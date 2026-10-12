@@ -4,6 +4,29 @@ All notable changes to the **Al Qaiser Nexus ERP (Al-Qaiser BOS)** project.
 
 ---
 
+## [1.8] — 2026-10-12
+
+### Fixed
+- **Creating a Purchase Order with a high-precision tax rate returned a 500** — `line_items` is a raw `ListField` of dicts, so a `tax_rate` with more than 2 decimals (JS float noise like `15.000000000000002`, or a fat-fingered `15.555`) reached `PurchaseOrderLine.save()` → `full_clean()` unvalidated and raised `ValidationError: Ensure that there are no more than 2 decimal places` straight through the view. The rate is now quantized to 2dp (`ROUND_HALF_UP`) before both the total computation and the line insert — exactly like `unit_cost` already was — so the stored rate and the stored total always agree.
+- **Discount invisible on POS Recent Sales, thermal receipts and the sales-order page** — Three related gaps. The sales-order detail page read `discount_pct` off each line, but the API returns `discount_percent`, so every percent discount displayed as “—” and the Discount rows never rendered. The Recent Sales tab had no Discount column at all (and only subtracted the fixed amount, never the percent). Thermal receipts showed no discount while their TOTAL already excluded it, so line rows could not add up. All three now compute `discount_amount > 0 ? amount : lineSubtotal × percent/100`, the Recent Sales table gained a Discount column, and thermal receipts print `Discount -X.XX` under each discounted line (preview and printed HTML). An **overall Discount row** — the aggregate of all line discounts — now sits directly above the Total: in the Recent Sales expanded-table footer and on every thermal receipt via the new optional `discountAmount`.
+- **Sales order “Related returns” crashed with a 500** — The endpoint unioned two individually-ordered querysets and then ordered the compound result (`pos_returns.union(invoice_returns).order_by("-created_at")`). PostgreSQL rejects that shape (`ORDER BY not allowed in subqueries of compound statements`), so any sales order with the returns section loaded failed. `document_id` is a plain UUID discriminated by `return_type`, so the `UNION` was unnecessary: one queryset with a `Q` filter now returns the same rows with a single `ORDER BY` and the same index usage. Regression test in `apps/inventory/tests.py` (`related_returns` over both POS- and invoice-sourced returns).
+- **Test runner reported “ALL TESTS PASSED” while failing** — The custom Django test runner (`config/test_runner.py`) printed a green summary and exited 0 while stock Django reported 4 failures, so every full-suite run was silently lying. The verdict and exit code now derive from unittest’s own `failures`/`errors`/`skipped` counters — including `addSubTest` failures, which were previously invisible — and the module hierarchy resolves app test files such as `tests_trash`, `tests_import` and `tests_totals`. The 4 failures it had been masking were a pre-existing assertion in the Trash registry test that checked the field *name* `company_id` instead of the *column*: models declaring `company = ForeignKey` expose the name `company` while the column (which tenant scoping filters on) is `company_id`. The assertion now checks the column for all 27 registry models.
+
+### Changed
+- **Purchase order detail shows the overall tax above the Order total** — The line-items table gained a **Tax** row (the aggregate of per-line tax, derived from the stored line totals) directly above **Order total**, so the footer itemizes tax instead of only showing the tax-inclusive total. Hidden when the order has no tax.
+
+---
+
+## [1.7] — 2026-10-10
+
+### Fixed
+- **Tax was left out of document totals (Purchase Order, Quote, Invoice, Sales Order)** — Every document total summed only `qty × price − discount` and silently dropped each line's `tax_rate`, while the forms and detail tables displayed that tax. Creating a 100.00 order at 15% therefore saved 100.00 against a shown 115.00, and the gap carried into every downstream number: PO confirm → `Expense.amount`, quote → invoice conversion, POS → `CustomerInvoice.amount`, payments, journal entries and every report that sums `total_amount`/`amount`. The same omission in the three invoice-recompute paths meant tax was actively *stripped* from an invoice whenever a return was processed. The Invoice form even printed a "Tax (line)" row and then left it out of the Total it submitted. All total calculation now routes through one shared helper (`apps/common/totals.py`) implementing `subtotal − line discounts − overall discount% + line tax + overall tax%`, and the line `line_total` properties include tax so rows reconcile with their header total.
+- **Quote / Invoice / print footers did not add up** — The detail-page and A4/PDF footers showed *Subtotal*, *Discount (%)*, *Tax (%)* and *Total* with no line-level rows, so the rows could never sum to the total once line discounts or line tax existed. They now show *Discount (line)* and *Tax (line)*, and the Quote and Purchase Order detail tables gained a Tax column.
+- **POS thermal receipt showed a total without tax** — The pre-sale print preview and the post-sale fallback summed `qty × price` only, disagreeing with the cart panel (and now the order) right next to it. Both reuse the shared `cartTotal` / `lineTotal` helpers.
+- **Purchase order line validation would 500 instead of returning 400** — `PurchaseOrderLine.clean()` raised `models.ValidationError`, which does not exist on `django.db.models`; the real `ValidationError` is `django.core.exceptions`. Every "For sale orders require a variant" style check was throwing `AttributeError`.
+
+---
+
 ## [1.6] — 2026-10-10
 
 ### Added

@@ -95,6 +95,30 @@ class HierarchicalTestResult(unittest.TextTestResult):
             'error_info': reason,
         })
 
+    def addSubTest(self, test, subtest, err):
+        """Record failing subtests.
+
+        unittest reports a failing ``subTest`` via addSubTest() — it never
+        calls addFailure()/addError() for the parent test. Without this
+        override the failures landed in ``self.failures`` (so run_tests()
+        exited 1) but never reached ``_all_results`` (so the printer said
+        "ALL TESTS PASSED"). Record them here so the printed verdict always
+        agrees with the exit code.
+        """
+        super().addSubTest(test, subtest, err)
+        if err is None:
+            return
+        exc_type = err[0]
+        # failureException lives on TestCase, not on the result object.
+        status = 'FAIL' if issubclass(exc_type, test.failureException) else 'ERROR'
+        duration = time.time() - self._test_start_times.get(test.id(), 0)
+        self._all_results.append({
+            'test_id': subtest.id(),
+            'status': status,
+            'duration': duration,
+            'error_info': self._get_error_info(err),
+        })
+
     def _get_error_info(self, err):
         """Extract a concise error message."""
         exc_type, exc_value, exc_tb = err
@@ -122,8 +146,9 @@ class HierarchicalTestResultPrinter:
         """Parse test ID into (app_label, class_name, method_name)."""
         parts = test_id.split('.')
         try:
-            tests_idx = parts.index('tests')
-        except ValueError:
+            # Match any test module (tests, tests_trash, tests_import, ...)
+            tests_idx = next(i for i, p in enumerate(parts) if p.startswith('tests'))
+        except StopIteration:
             return ('unknown', 'unknown', test_id)
 
         app_label = parts[tests_idx - 1] if tests_idx > 0 else 'unknown'

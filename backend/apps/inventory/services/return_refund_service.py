@@ -21,6 +21,7 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from apps.inventory.models.return_refund import ReturnRefund, ReturnRefundLine
+from apps.common.totals import document_total, line_tax
 from apps.finance.services.manual_line_disposition import (
     DispositionValidationError,
     go_to_product_for_manual_line,
@@ -684,11 +685,19 @@ def _update_source_document_totals(ret, user):
             return
 
         active_lines = invoice.lines.filter(is_deleted=False)
-        new_amount = sum(
-            (l.quantity * l.unit_price) - (l.discount_amount or 0)
+        new_subtotal = sum(l.quantity * l.unit_price for l in active_lines)
+        new_discounts = sum((l.discount_amount or 0) for l in active_lines)
+        new_line_taxes = sum(
+            line_tax(l.quantity, l.unit_price, l.tax_rate, l.discount_amount)
             for l in active_lines
         )
-        invoice.amount = max(new_amount, Decimal('0'))
+        invoice.amount = max(
+            document_total(
+                new_subtotal, new_discounts, new_line_taxes,
+                invoice.overall_discount_percent, invoice.overall_tax_percent,
+            ),
+            Decimal('0'),
+        )
         invoice.updated_by = user
         invoice.save(update_fields=['amount', 'updated_by', 'updated_at'])
 

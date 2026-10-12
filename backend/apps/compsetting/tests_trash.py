@@ -1195,12 +1195,18 @@ class TrashRegistryTestCase(TestCase):
         for tm in TRASH_MODELS:
             with self.subTest(type=tm.key):
                 model = tm.model
-                names = {f.name for f in model._meta.get_fields()}
+                fields = model._meta.get_fields()
+                names = {f.name for f in fields}
+                # FK-declared tenancy (company = ForeignKey) exposes the field
+                # as `company` while its column/attname is `company_id`; an
+                # IntegerField named `company_id` has both. Tenant scoping
+                # needs the column, so assert on attname.
+                columns = {f.attname for f in fields if hasattr(f, 'attname')}
                 self.assertIn('is_deleted', names)
                 self.assertIn('deleted_at', names)
                 self.assertIn('deleted_by', names)
                 self.assertIn('_id', names)
-                self.assertIn('company_id', names)
+                self.assertIn('company_id', columns)
                 for field_path in tm.label_fields:
                     root = field_path.split('__')[0]
                     self.assertTrue(

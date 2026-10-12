@@ -3,9 +3,11 @@ from datetime import date, timedelta
 from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.common.test_base import BaseTestCase
+from apps.finance.models import CustomerInvoice
 from apps.inventory.models import (
     Category, Brand, Warehouse, Product, ProductVariant,
     StockItem, InventoryTransaction, Supplier, SupplierHistory,
@@ -918,6 +920,67 @@ class ReturnRefundTest(TestCase):
         self.assertEqual(rr.total_refund_amount, Decimal('250.00'))
 
 
+class RelatedReturnsEndpointTest(BaseTestCase):
+    """GET .../sales-orders/<id>/related-returns/ must not 500.
+
+    The endpoint unioned two querysets that each carried their own
+    ``ORDER BY`` and then ordered the union again, so Postgres rejected the
+    SQL with "multiple ORDER BY clauses not allowed" (BUG-20261010-12).
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.wh = Warehouse.objects.create(
+            warehouse_name='WH-RR', code='WH-RR1', country='C', city='C',
+            company_id=self.company.id, branch_id=self.branch.id
+        )
+        self.customer = Customer.objects.create(
+            name='Rel Cust', customer_code='REL01',
+            company_id=self.company.id, branch_id=self.branch.id
+        )
+        self.order = SalesOrder.objects.create(
+            order_number='SO-REL-1', customer=self.customer, warehouse=self.wh,
+            company_id=self.company.id, branch_id=self.branch.id
+        )
+        self.invoice = CustomerInvoice.objects.create(
+            invoice_number='INV-REL-1', customer=self.customer,
+            invoice_date=date.today(), amount=Decimal('100'),
+            sales_order=self.order,
+            company_id=self.company.id, branch_id=self.branch.id
+        )
+        # One return of each kind, so both sides of the old union are exercised.
+        ReturnRefund.objects.create(
+            return_number='RR-POS-1', return_type='POS',
+            document_id=self.order._id, document_number='SO-REL-1',
+            warehouse=self.wh, return_date=timezone.now(),
+            company_id=self.company.id, branch_id=self.branch.id
+        )
+        ReturnRefund.objects.create(
+            return_number='RR-INV-1', return_type='INVOICE',
+            document_id=self.invoice._id, document_number='INV-REL-1',
+            warehouse=self.wh, return_date=timezone.now(),
+            company_id=self.company.id, branch_id=self.branch.id
+        )
+
+    def test_related_returns_returns_200_and_both_kinds(self):
+        resp = self.client.get(
+            f'/api/inventory/sales-orders/{self.order._id}/related-returns/'
+        )
+        self.assertEqual(resp.status_code, 200)
+        kinds = {row['return_type'] for row in resp.data}
+        self.assertEqual(kinds, {'POS', 'INVOICE'})
+        self.assertEqual(len(resp.data), 2)
+
+    def test_related_returns_orders_newest_first(self):
+        resp = self.client.get(
+            f'/api/inventory/sales-orders/{self.order._id}/related-returns/'
+        )
+        self.assertEqual(resp.status_code, 200)
+        numbers = [row['return_number'] for row in resp.data]
+        # Both share created_at; ordering must at least be stable + descending.
+        self.assertEqual(sorted(numbers), ['RR-INV-1', 'RR-POS-1'])
+
+
 class ReturnRefundLineTest(TestCase):
     def setUp(self):
         self.warehouse = Warehouse.objects.create(
@@ -1225,3 +1288,91 @@ class StockSoftDeleteTest(BaseTestCase):
         # Half-cascaded state: stock row itself alive, but its variant deleted.
         StockItem.objects.filter(pk=self.dead_stock.pk).update(is_deleted=False)
         self.assertEqual(V.alive_stock().filter(pk=self.dead_stock.pk).count(), 0)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# POST /api/inventory/purchase-orders/ 500'd on tax rates with more than
+# 2 decimal places: `line_items` is a raw ListField, so the JSON number
+# reaches PurchaseOrderLine.save() -> full_clean() unvalidated, which raises
+# "Ensure that there are no more than 2 decimal places" as an uncaught 500.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class PurchaseOrderTaxPrecisionTest(BaseTestCase):
+    """PO create must quantize tax_rate to 2dp, not blow up with a 500."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.warehouse = Warehouse.objects.create(
+            warehouse_name='Tax WH', code='TAXWH',
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        cls.supplier = Supplier.objects.create(
+            name='Tax Sup', code='TAXSUP',
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        cls.product = Product.objects.create(
+            product_name='Tax Product', unit='PCS',
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        cls.variant = ProductVariant.objects.create(
+            product=cls.product, sku='TAX-V1', selling_price=10,
+            min_stock_level=1, max_stock_level=50,
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+
+    def _payload(self, tax_rate):
+        return {
+            'supplier': str(self.supplier._id),
+            'warehouse': str(self.warehouse._id),
+            'inventory_type': 'FOR_SALE',
+            'order_date': date.today().isoformat(),
+            'line_items': [{
+                'variant': str(self.variant._id),
+                'quantity_ordered': 2,
+                'unit_cost': '100.00',
+                'tax_rate': tax_rate,
+            }],
+        }
+
+    def test_high_precision_tax_rate_is_quantized_not_500(self):
+        resp = self.client.post(
+            '/api/inventory/purchase-orders/',
+            self._payload(15.555), format='json',
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        line = PurchaseOrderLine.objects.get(
+            purchase_order__supplier=self.supplier
+        )
+        self.assertEqual(line.tax_rate, Decimal('15.56'))
+
+    def test_float_artifact_tax_rate_is_quantized(self):
+        # 0.1 + 0.2 style JS float noise the frontend can send verbatim.
+        resp = self.client.post(
+            '/api/inventory/purchase-orders/',
+            self._payload(7.500000000000001), format='json',
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        line = PurchaseOrderLine.objects.get(
+            purchase_order__supplier=self.supplier
+        )
+        self.assertEqual(line.tax_rate, Decimal('7.50'))
+
+    def test_total_is_computed_with_the_quantized_rate(self):
+        resp = self.client.post(
+            '/api/inventory/purchase-orders/',
+            self._payload(15.555), format='json',
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        po = PurchaseOrder.objects.get(supplier=self.supplier)
+        net = Decimal('2') * Decimal('100.00')
+        expected = net + net * Decimal('15.56') / Decimal('100')
+        self.assertEqual(po.total_amount, expected)
+        # Stored rate and stored total must agree (no 1c drift).
+        line = po.lines.get()
+        self.assertEqual(
+            line.quantity_ordered * line.unit_cost
+            + line.quantity_ordered * line.unit_cost * line.tax_rate / Decimal('100'),
+            po.total_amount,
+        )

@@ -1,4 +1,5 @@
 # backend/apps/inventory/views/sales.py
+from decimal import Decimal
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -10,6 +11,7 @@ import uuid
 
 from apps.common.baseauthentication import CompanyBranchMixin
 from apps.common.basemodel import soft_delete_qs
+from apps.common.totals import document_total, line_amount_with_tax, line_tax
 from apps.common.filters import GenericFilterMixin
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.inventory.models import (
@@ -63,12 +65,20 @@ def sync_invoice_for_return(sales_return, user):
                 inv_line.save(update_fields=['quantity', 'discount_amount', 'updated_by'])
 
     remaining_lines = invoice.lines.filter(is_deleted=False)
-    new_amount = sum(
-        (l.quantity * l.unit_price) - (l.discount_amount or 0)
+    new_subtotal = sum(l.quantity * l.unit_price for l in remaining_lines)
+    new_discounts = sum((l.discount_amount or 0) for l in remaining_lines)
+    new_line_taxes = sum(
+        line_tax(l.quantity, l.unit_price, l.tax_rate, l.discount_amount)
         for l in remaining_lines
     )
     invoice.notes = ''
-    invoice.amount = max(new_amount, 0)
+    invoice.amount = max(
+        document_total(
+            new_subtotal, new_discounts, new_line_taxes,
+            invoice.overall_discount_percent, invoice.overall_tax_percent,
+        ),
+        Decimal('0'),
+    )
     invoice.updated_by = user
     invoice.save(update_fields=['amount', 'updated_by', 'notes'])
 
@@ -167,6 +177,7 @@ def sync_sales_order_to_invoice(order, user, create_invoice=True):
                 updated_by=user,
             )
             total += (Decimal(effective_qty) * line.unit_price) - prorated
+            total += line_tax(effective_qty, line.unit_price, line.tax_rate, prorated)
         return total
 
     if created:
@@ -269,7 +280,7 @@ class SalesOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequir
         validated_data['status'] = 'COMPLETE'
 
         order = SalesOrder.objects.create(**validated_data)
-        total_amount = 0
+        total_amount = Decimal('0')
 
         for item in line_items_data:
             variant_uuid = item.get('variant')
@@ -286,8 +297,7 @@ class SalesOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequir
                 discount = discount_fixed
             else:
                 discount = subtotal * (discount_pct / 100)
-            line_total = subtotal - discount
-            total_amount += line_total
+            total_amount += line_amount_with_tax(qty, unit_price, tax_rate, discount)
 
             # CRITICAL: set status='COMPLETE' explicitly
             order_line = SalesOrderLine.objects.create(
@@ -547,15 +557,16 @@ class SalesOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequir
                     line.save(update_fields=['status'])
 
             # Recalculate total with discounts
-            total_amount = 0
+            total_amount = Decimal('0')
             for item in new_line_items:
                 qty = item['quantity_ordered']
                 price = item['unit_price']
                 d_pct = item.get('discount_pct', 0)
                 d_fixed = item.get('discount_fixed', 0)
+                tax_rate = item.get('tax_rate', 0)
                 subtotal = qty * price
                 discount = d_fixed if d_fixed > 0 else subtotal * (d_pct / 100)
-                total_amount += (subtotal - discount)
+                total_amount += line_amount_with_tax(qty, price, tax_rate, discount)
             order.total_amount = total_amount
             order.status = 'COMPLETE'
             order.save(update_fields=['total_amount', 'status'])
@@ -692,23 +703,19 @@ class SalesOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequir
             ).values_list('_id', flat=True)
         )
 
-        # Direct POS returns on this order
-        pos_returns = ReturnRefund.objects.filter(
-            return_type='POS',
-            document_id=order._id,
+        # Both return kinds share the same table and tenant filters, and
+        # `return_type` already tells us which document namespace `document_id`
+        # refers to — so a single WHERE handles both. (Unioning two separately
+        # ordered querysets and ordering the result gave Postgres two ORDER BY
+        # clauses: "multiple ORDER BY clauses not allowed" → 500.)
+        from django.db.models import Q
+
+        all_returns = ReturnRefund.objects.filter(
+            Q(return_type='POS', document_id=order._id)
+            | Q(return_type='INVOICE', document_id__in=invoice_ids),
             company_id=request.user.company_id,
             is_deleted=False,
         ).select_related('warehouse', 'completed_by').order_by('-created_at')
-
-        # Invoice returns on linked invoices
-        invoice_returns = ReturnRefund.objects.filter(
-            return_type='INVOICE',
-            document_id__in=invoice_ids,
-            company_id=request.user.company_id,
-            is_deleted=False,
-        ).select_related('warehouse', 'completed_by').order_by('-created_at')
-
-        all_returns = pos_returns.union(invoice_returns).order_by('-created_at')
 
         results = []
         for ret in all_returns:
@@ -917,13 +924,14 @@ class SalesOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequir
                         f"[{timezone.now().strftime('%b %d %Y %H:%M')}] Removed {line.variant.sku or line.variant.product.product_name} x{line.quantity_ordered}"
                     )
 
-            total_amount = 0
+            total_amount = Decimal('0')
             for item in line_items:
                 qty = item['quantity_ordered']
                 line_id = item.get('line_id')
                 price = item['unit_price']
                 d_pct = item.get('discount_pct', 0)
                 d_fixed = item.get('discount_fixed', 0)
+                tax_rate = item.get('tax_rate', 0)
                 effective_qty = qty  # frontend sends effective qty
                 subtotal = effective_qty * price
                 if d_fixed > 0:
@@ -935,7 +943,7 @@ class SalesOrderViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequir
                         discount = d_fixed
                 else:
                     discount = subtotal * (d_pct / 100)
-                total_amount += (subtotal - discount)
+                total_amount += line_amount_with_tax(qty, price, tax_rate, discount)
             order.total_amount = total_amount
             order.updated_by = user
             order.save(update_fields=['total_amount', 'updated_by'])

@@ -5,6 +5,7 @@ from decimal import Decimal
 from rest_framework import serializers
 
 from apps.finance.models import CustomerInvoice, CustomerInvoiceLine, BankAccount
+from apps.common.totals import document_total, line_tax
 from apps.finance.services.invoice_supplier_bill import (
     create_supplier_bill_for_line,
     handle_removed_line,
@@ -226,6 +227,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
         
         subtotal = Decimal('0')
         per_line_discounts = Decimal('0')
+        per_line_taxes = Decimal('0')
         for line_item in lines_data:
             line = CustomerInvoiceLine.objects.create(
                 customer_invoice=invoice,
@@ -237,13 +239,14 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
             )
             subtotal += line.quantity * line.unit_price
             per_line_discounts += Decimal(str(line.discount_amount or 0))
-        
+            per_line_taxes += line_tax(line.quantity, line.unit_price, line.tax_rate, line.discount_amount)
+
         overall_discount_percent = Decimal(str(validated_data.get('overall_discount_percent', 0) or 0))
         overall_tax_percent = Decimal(str(validated_data.get('overall_tax_percent', 0) or 0))
-        overall_discount = subtotal * (overall_discount_percent / Decimal('100'))
-        total_before_tax = subtotal - per_line_discounts - overall_discount
-        overall_tax = total_before_tax * (overall_tax_percent / Decimal('100'))
-        invoice.amount = total_before_tax + overall_tax
+        invoice.amount = document_total(
+            subtotal, per_line_discounts, per_line_taxes,
+            overall_discount_percent, overall_tax_percent,
+        )
         invoice.save(update_fields=['amount'])
 
         line_bill_map = self._create_supplier_bills(invoice, lines_data, user)
@@ -270,6 +273,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
             
             subtotal = Decimal('0')
             per_line_discounts = Decimal('0')
+            per_line_taxes = Decimal('0')
             self._reduction_conflicts = []
             self._variant_reduction_conflicts = []
             created_lines = []
@@ -356,6 +360,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
                 line = created_lines[-1]
                 subtotal += line.quantity * line.unit_price
                 per_line_discounts += Decimal(str(line.discount_amount or 0))
+                per_line_taxes += line_tax(line.quantity, line.unit_price, line.tax_rate, line.discount_amount)
 
             for line_id, old_line in existing_lines.items():
                 if line_id not in incoming_ids:
@@ -369,10 +374,10 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
             overall_tax_percent = Decimal(str(
                 validated_data.get('overall_tax_percent', instance.overall_tax_percent or 0)
             ))
-            overall_discount = subtotal * (overall_discount_percent / Decimal('100'))
-            total_before_tax = subtotal - per_line_discounts - overall_discount
-            overall_tax = total_before_tax * (overall_tax_percent / Decimal('100'))
-            instance.amount = total_before_tax + overall_tax
+            instance.amount = document_total(
+                subtotal, per_line_discounts, per_line_taxes,
+                overall_discount_percent, overall_tax_percent,
+            )
             instance.save(update_fields=['amount'])
 
         return instance

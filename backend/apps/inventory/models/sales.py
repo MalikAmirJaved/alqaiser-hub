@@ -106,7 +106,11 @@ class SalesOrderLine(BaseModel):
 
     @property
     def line_total(self):
-        return self.subtotal - self.discount
+        """Net line amount + per-line tax (matches the order total)."""
+        from apps.common.totals import line_tax
+        return self.subtotal - self.discount + line_tax(
+            self.quantity_ordered, self.unit_price, self.tax_rate, self.discount
+        )
 
     @property
     def max_returnable(self):
