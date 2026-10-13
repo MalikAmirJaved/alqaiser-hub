@@ -701,6 +701,16 @@ export function InvoiceWorkflow({
   ) => {
     setNewCustomerInfo(customerData);
     setValue("customer", customerId);
+    setCustomerDisplayLabel(customerName);
+  };
+
+  const handleCustomerSelect = (customerId: string) => {
+    setValue("customer", customerId);
+    if (!customerId) {
+      setCustomerDisplayLabel("");
+    } else {
+      setNewCustomerInfo(null);
+    }
   };
 
   const addLine = useCallback(() => {
@@ -1117,6 +1127,7 @@ export function InvoiceWorkflow({
                   businessName: companySettings?.companyName,
                   businessAddress: companySettings?.address,
                   businessEmail: companySettings?.email,
+                  businessLogo: companySettings?.logo,
                   overallDiscountPercent: overallDiscountPct,
                   overallTaxPercent: overallTaxPct,
                   notes: watch("notes"),
@@ -1143,7 +1154,8 @@ export function InvoiceWorkflow({
                       <div className="flex-1">
                         <SearchableSelect
                           value={watch("customer") || ""}
-                          onChange={(val) => setValue("customer", val)}
+                          onChange={handleCustomerSelect}
+                          onOptionSelect={(option) => setCustomerDisplayLabel(option.label)}
                           fetchOptions={fetchCustomers}
                           placeholder="Search customers…"
                           required={!newCustomerInfo}
@@ -1167,6 +1179,7 @@ export function InvoiceWorkflow({
                           onClick={() => {
                             setNewCustomerInfo(null);
                             setValue("customer", "");
+                            setCustomerDisplayLabel("");
                           }}
                           className="ml-auto text-muted-foreground hover:text-destructive transition-colors"
                         >

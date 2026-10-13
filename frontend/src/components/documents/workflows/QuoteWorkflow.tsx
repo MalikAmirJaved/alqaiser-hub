@@ -514,6 +514,7 @@ export function QuoteWorkflow({
                   businessName: companySettings?.companyName,
                   businessAddress: companySettings?.address,
                   businessEmail: companySettings?.email,
+                  businessLogo: companySettings?.logo,
                   overallDiscountPercent: Number(formData.overall_discount_percent) || 0,
                   overallTaxPercent: Number(formData.overall_tax_percent) || 0,
                   notes: formData.notes,

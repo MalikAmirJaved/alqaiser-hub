@@ -15,6 +15,17 @@ export interface CrmPreviewLine {
   description?: string;
 }
 
+function resolveLogoUrl(logo?: string | null): string | null {
+  const source = logo?.trim();
+  if (!source) return null;
+  if (/^(https?:)?\/\//i.test(source) || /^(data|blob):/i.test(source)) {
+    return source;
+  }
+
+  const apiBase = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/+$/, "");
+  return `${apiBase}/${source.replace(/^\/+/, "")}`;
+}
+
 export function buildCrmDocumentPreview({
   appearance,
   documentType,
@@ -27,6 +38,7 @@ export function buildCrmDocumentPreview({
   businessName,
   businessAddress,
   businessEmail,
+  businessLogo,
   overallDiscountPercent = 0,
   overallTaxPercent = 0,
   notes = "",
@@ -43,6 +55,7 @@ export function buildCrmDocumentPreview({
   businessName?: string;
   businessAddress?: string;
   businessEmail?: string;
+  businessLogo?: string | null;
   overallDiscountPercent?: number;
   overallTaxPercent?: number;
   notes?: string;
@@ -78,13 +91,13 @@ export function buildCrmDocumentPreview({
   const overallDiscount = subtotal * (overallDiscountPercent / 100);
   const taxable = subtotal - lineDiscounts - overallDiscount;
   const overallTax = taxable * (overallTaxPercent / 100);
-
   return {
     ...data,
     templateSlug: appearance?.template_slug || "modern",
     accentColor: appearance?.accent_color || null,
     typography: appearance?.typography || createDefaultTypography(),
     currency,
+    logo: resolveLogoUrl(businessLogo),
     invoiceNumber: documentNumber || "Draft",
     issueDate: issueDate || data.issueDate,
     dueDate: dueDate || data.dueDate,
