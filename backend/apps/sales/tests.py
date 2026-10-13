@@ -231,6 +231,19 @@ class QuoteModelTest(TestCase):
             'CUSTOM-INV-200',
         )
 
+    def test_pending_sales_invoice_can_be_updated(self):
+        from apps.sales.views.invoice import SalesInvoiceViewSet
+
+        view = SalesInvoiceViewSet()
+        view.request = SimpleNamespace(user=self.user)
+        serializer = Mock(
+            instance=SimpleNamespace(status='PENDING', payment_status='UNPAID')
+        )
+
+        view.perform_update(serializer)
+
+        serializer.save.assert_called_once_with(updated_by=self.user)
+
     def test_source_default(self):
         quote = Quote.objects.create(
             quote_number='QT-SRC', date=date.today(),

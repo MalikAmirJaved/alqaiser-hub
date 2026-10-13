@@ -80,8 +80,8 @@ class SalesInvoiceViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequ
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
-        if instance.status != 'DRAFT':
-            raise ValidationError('Only DRAFT invoices can be updated.')
+        if instance.status not in ('DRAFT', 'PENDING'):
+            raise ValidationError('Only DRAFT or PENDING invoices can be updated.')
         if instance.payment_status == 'PAID':
             raise ValidationError('Cannot edit a paid invoice.')
         try:
@@ -107,17 +107,17 @@ class SalesInvoiceViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequ
 
     def perform_update(self, serializer):
         instance = serializer.instance
-        if instance.status != 'DRAFT':
-            raise ValidationError('Only DRAFT invoices can be updated.')
+        if instance.status not in ('DRAFT', 'PENDING'):
+            raise ValidationError('Only DRAFT or PENDING invoices can be updated.')
         if instance.payment_status == 'PAID':
             raise ValidationError('Cannot edit a paid invoice.')
         serializer.save(updated_by=self.request.user)
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        if instance.status != 'DRAFT':
+        if instance.status not in ('DRAFT', 'PENDING'):
             return Response(
-                {'error': 'Only DRAFT invoices can be deleted'},
+                {'error': 'Only DRAFT or PENDING invoices can be deleted'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if instance.payment_status == 'PAID':
