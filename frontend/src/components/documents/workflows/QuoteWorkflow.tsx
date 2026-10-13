@@ -41,7 +41,7 @@ interface QuoteLine {
 let lineKeyCounter = 0;
 const nextLineKey = () => `ql_${++lineKeyCounter}`;
 
-interface QuoteFormProps {
+export interface QuoteWorkflowProps {
   onClose: () => void;
   initialData?: Quote | null;
   initialCustomerId?: string | null;
@@ -49,13 +49,13 @@ interface QuoteFormProps {
   onSuccess?: (quote?: Quote) => void;
 }
 
-export default function QuoteForm({
+export function QuoteWorkflow({
   onClose,
   initialData,
   initialCustomerId,
   initialLeadId,
   onSuccess,
-}: QuoteFormProps) {
+}: QuoteWorkflowProps) {
   const formatCurrency = useFormatCurrency();
   const { data: companySettings } = useCompanySettingsQuery();
   const { terms: termsData } = useTermsAndConditions();

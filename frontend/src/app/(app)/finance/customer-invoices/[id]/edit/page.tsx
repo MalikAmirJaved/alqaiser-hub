@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import CustomerInvoiceForm from "@/components/finance/customer-invoices/CustomerInvoiceForm";
+import DocumentForm from "@/components/documents/DocumentForm";
 import { useCustomerInvoice } from "@/hooks/finance/useCustomerInvoices";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
@@ -18,7 +18,8 @@ export default function FinanceCustomerInvoiceEditPage() {
   }
 
   return (
-    <CustomerInvoiceForm
+    <DocumentForm
+      documentType="invoice"
       moduleCode="FINANCE"
       initialData={invoice}
       onClose={() => router.push(`/finance/customer-invoices/${invoice.id}`)}

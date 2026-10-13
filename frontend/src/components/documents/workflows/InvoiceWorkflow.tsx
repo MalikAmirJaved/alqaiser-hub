@@ -22,7 +22,7 @@ import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
 import { useAutoCode } from "@/hooks/useAutoCode";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
-import QtySplitModal from "./LineDispositionModals";
+import QtySplitModal from "@/components/finance/customer-invoices/LineDispositionModals";
 import { toast } from "sonner";
 import {
   createDefaultDocumentAppearance,
@@ -66,7 +66,7 @@ interface CustomerInvoiceFormData {
   new_customer?: any;
 }
 
-interface Props {
+export interface InvoiceWorkflowProps {
   onClose: () => void;
   initialData?: CustomerInvoice | SalesInvoice | null;
   defaultValues?: Partial<CustomerInvoiceFormData> | null;
@@ -447,13 +447,13 @@ const LineRow = memo(function LineRow({
 // ─────────────────────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
-export default function CustomerInvoiceForm({
+export function InvoiceWorkflow({
   onClose,
   initialData,
   defaultValues,
   onSuccess,
   moduleCode = "FINANCE",
-}: Props) {
+}: InvoiceWorkflowProps) {
   const formatCurrency = useFormatCurrency();
   const { data: companySettings } = useCompanySettingsQuery();
   const { terms: termsData } = useTermsAndConditions();

@@ -2,7 +2,7 @@
 
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import CustomerInvoiceForm from "@/components/finance/customer-invoices/CustomerInvoiceForm";
+import DocumentForm from "@/components/documents/DocumentForm";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useQuote, useMarkConvertedQuote } from "@/hooks/sales/useQuotes";
 import { toast } from "sonner";
@@ -50,7 +50,8 @@ function SalesCustomerInvoiceCreatePageContent() {
   } : null;
 
   return (
-    <CustomerInvoiceForm
+    <DocumentForm
+      documentType="invoice"
       moduleCode="SALES"
       defaultValues={defaultValues}
       onClose={() => router.push("/sales/customer-invoices")}

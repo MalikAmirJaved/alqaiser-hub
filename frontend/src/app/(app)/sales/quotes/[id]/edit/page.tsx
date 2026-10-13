@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import QuoteForm from "@/components/sales/QuoteForm";
+import DocumentForm from "@/components/documents/DocumentForm";
 import { useQuote } from "@/hooks/sales/useQuotes";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
@@ -18,7 +18,8 @@ export default function QuoteEditPage() {
   }
 
   return (
-    <QuoteForm
+    <DocumentForm
+      documentType="quote"
       initialData={quote}
       onClose={() => router.push(`/sales/quotes/${quote.id}`)}
       onSuccess={() => router.replace(`/sales/quotes/${quote.id}`)}

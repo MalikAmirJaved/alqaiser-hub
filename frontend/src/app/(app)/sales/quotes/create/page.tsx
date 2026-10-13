@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import QuoteForm from "@/components/sales/QuoteForm";
+import DocumentForm from "@/components/documents/DocumentForm";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 function QuoteCreatePageContent() {
@@ -14,7 +14,8 @@ function QuoteCreatePageContent() {
   }
 
   return (
-    <QuoteForm
+    <DocumentForm
+      documentType="quote"
       onClose={() => router.push("/sales/quotes")}
       initialCustomerId={searchParams.get("customerId")}
       initialLeadId={searchParams.get("leadId")}
