@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { DetailLayout, StandardSidebar, RelatedRecords, type DetailTab } from "@/components/reuseable/final/DetailLayout";
-import { useQuote, useUpdateQuote, useSendQuote, useMarkViewedQuote, useApproveQuote, useRejectQuote, useMarkConvertedQuote, useQuoteStatusHistory } from "@/hooks/sales/useQuotes";
+import { useQuote, useUpdateQuote, useSendQuote, useMarkViewedQuote, useApproveQuote, useRejectQuote, useQuoteStatusHistory } from "@/hooks/sales/useQuotes";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
@@ -24,6 +24,7 @@ export default function QuoteDetailPage() {
   const approveQuote = useApproveQuote();
   const rejectQuote = useRejectQuote();
   const permissions = useFeaturePermissions("SALES", "quote");
+  const invoicePermissions = useFeaturePermissions("SALES", "sales_customers_invoice");
   const { data: companySettings } = useCompanySettingsQuery();
   const { terms: termsData } = useTermsAndConditions();
 
@@ -68,6 +69,10 @@ export default function QuoteDetailPage() {
 
   const handlePrint = () => {
     setShowPrintPreview(true);
+  };
+
+  const handleConvertToInvoice = () => {
+    router.push(`/sales/customer-invoices/create?quoteId=${encodeURIComponent(quote.id)}`);
   };
 
   const handleExportPdf = () => {
@@ -340,6 +345,30 @@ export default function QuoteDetailPage() {
   const isViewed = quote.status === "VIEWED";
   const isApproved = quote.status === "APPROVED";
   const isConverted = quote.status === "CONVERTED";
+  const canConvertToInvoice = isApproved && !quote.converted_invoice && invoicePermissions.create;
+  const canViewConvertedInvoice = isConverted && !!quote.converted_invoice;
+  const primaryActionLabel = isDraft
+    ? "Send to Customer"
+    : isSent
+      ? "Mark as Viewed"
+      : isViewed
+        ? "Approve Quote"
+        : canConvertToInvoice
+          ? "Convert to Invoice"
+          : canViewConvertedInvoice
+            ? "View Invoice"
+            : undefined;
+  const handlePrimaryAction = isDraft
+    ? handleSend
+    : isSent
+      ? handleMarkViewed
+      : isViewed
+        ? handleApprove
+        : canConvertToInvoice
+          ? handleConvertToInvoice
+          : canViewConvertedInvoice
+            ? () => router.push(`/sales/customer-invoices/${quote.converted_invoice}`)
+            : undefined;
 
   return (
     <>
@@ -360,12 +389,16 @@ export default function QuoteDetailPage() {
           { label: "Status", value: quote.status, tone: isApproved || isConverted ? "success" : quote.status === "REJECTED" ? "destructive" : "warning" },
           { label: "Valid Until", value: quote.expiration_date || "—", isCurrency: false },
         ]}
-        primaryActionLabel={isDraft ? "Send to Customer" : isSent ? "Mark as Viewed" : isViewed ? "Approve Quote" : undefined}
-        onPrimaryAction={isDraft ? handleSend : isSent ? handleMarkViewed : isViewed ? handleApprove : undefined}
+        primaryActionLabel={primaryActionLabel}
+        primaryActionIcon={canConvertToInvoice || canViewConvertedInvoice ? FileText : undefined}
+        onPrimaryAction={handlePrimaryAction}
         onEdit={(permissions.update && isDraft) ? handleEdit : undefined}
         onPrint={handlePrint}
         onExport={handleExportPdf}
-        permissions={{ edit: permissions.update, submit: !!(isDraft || isSent || isViewed) }}
+        permissions={{
+          edit: permissions.update,
+          submit: !!(isDraft || isSent || isViewed || canConvertToInvoice || canViewConvertedInvoice),
+        }}
         tabs={tabs}
         sidebar={
           <StandardSidebar
