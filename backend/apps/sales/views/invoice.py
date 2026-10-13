@@ -87,7 +87,21 @@ class SalesInvoiceViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequ
         try:
             with transaction.atomic():
                 direct_release_stock(instance._id, instance.company_id, request.user)
-                serializer = self.get_serializer(instance, data=request.data, partial=partial)
+                raw_lines = request.data.get('lines', [])
+                line_ids_map = {
+                    idx: str(line.get('id', ''))
+                    for idx, line in enumerate(raw_lines)
+                    if line.get('id')
+                }
+                serializer = self.get_serializer(
+                    instance,
+                    data=request.data,
+                    partial=partial,
+                    context={
+                        **self.get_serializer_context(),
+                        'raw_line_ids': line_ids_map,
+                    },
+                )
                 serializer.is_valid(raise_exception=True)
                 self.perform_update(serializer)
                 direct_deduct_stock(

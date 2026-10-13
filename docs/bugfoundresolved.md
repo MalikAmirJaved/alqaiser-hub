@@ -27,6 +27,30 @@ Use this template:
 
 ## Resolved
 
+### BUG-20261013-07 — Repeated invoice edits inflated stock by replaying historical deductions
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | Critical |
+| Module | Inventory / Sales / Finance |
+| Found | 2026-10-13 (reported: invoice quantity changes such as 10 to 15 still produced incorrect stock) |
+| Resolved | 2026-10-13 (unreleased) |
+| Root cause | `direct_release_stock()` summed only `CUSTOMER_INVOICE` SALE transactions. Each update restored the prior deduction and wrote a positive `CUSTOMER_INVOICE_REVERSAL` transaction, but later updates ignored those reversals and restored the original plus every historical SALE again. For example, with 20 units initially and an invoice quantity of 10, stock falls to 10; updating to 15 should leave 5. A later update could restore the historical 10 and 15 again, inflating stock before re-deducting. |
+| Fix | Stock release now nets both invoice SALE and `CUSTOMER_INVOICE_REVERSAL` transaction quantities per variant and warehouse, so it restores only the currently active net deduction before applying the updated invoice lines. |
+| Prevention | Regression test exercises initial stock 15, invoice quantity 10, update to 15 (stock 0), decrease to 12 (stock 3), and another no-op/template-style reapplication (stock remains 3); it also asserts the ledger's net invoice deduction remains -12. |
+
+### BUG-20261013-06 — Updating a Sales invoice duplicated its stock-tracked lines
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | High |
+| Module | Sales / Inventory |
+| Found | 2026-10-13 (reported: editing an invoice to change only its template failed with “Insufficient stock” for the items already on that invoice) |
+| Resolved | 2026-10-13 (unreleased) |
+| Root cause | The shared invoice form submits existing line IDs, but the nested line serializer exposes `id` as read-only, so those IDs are not present in validated line data. The Finance invoice update view maps raw request line IDs into serializer context to match and update existing rows; the Sales invoice update view did not. As a result, Sales treated submitted existing lines as new rows while retaining the old rows, then attempted to deduct stock for both sets. |
+| Fix | Sales invoice updates now build and pass the same `raw_line_ids` index map as Finance. The serializer can therefore update existing rows instead of creating duplicates before stock is re-deducted. Template-only edits no longer inflate the quantities required from inventory. |
+| Prevention | Regression coverage asserts that the Sales update view supplies existing line IDs to the serializer so its update path preserves line identity. |
+
 ### BUG-20261013-05 — Pending Sales invoices could not be edited
 | Field | Value |
 | ----- | ----- |

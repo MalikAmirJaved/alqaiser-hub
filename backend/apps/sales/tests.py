@@ -244,6 +244,145 @@ class QuoteModelTest(TestCase):
 
         serializer.save.assert_called_once_with(updated_by=self.user)
 
+    def test_sales_invoice_update_passes_existing_line_ids_to_serializer(self):
+        from unittest.mock import patch
+        from apps.sales.views.invoice import SalesInvoiceViewSet
+
+        line_id = '271eba80-bbb4-4477-8c2a-c91d36fb3aab'
+        invoice = SimpleNamespace(
+            _id='0baf1e5a-119c-4fd3-a7df-e2601fb8ae99',
+            company_id=self.company.id,
+            branch_id=self.branch.id,
+            status='PENDING',
+            payment_status='UNPAID',
+            lines=SimpleNamespace(all=Mock()),
+        )
+        serializer = Mock(instance=invoice, data={})
+        serializer.data = {}
+        view = SalesInvoiceViewSet()
+        view.request = SimpleNamespace(
+            user=self.user,
+            data={'template_slug': 'classic', 'lines': [{'id': line_id, 'quantity': 7}]},
+        )
+        view.get_object = Mock(return_value=invoice)
+        view.get_serializer_context = Mock(return_value={})
+        view.get_serializer = Mock(return_value=serializer)
+
+        with (
+            patch('apps.sales.views.invoice.direct_release_stock'),
+            patch('apps.sales.views.invoice.direct_deduct_stock'),
+        ):
+            view.update(view.request)
+
+        self.assertEqual(
+            view.get_serializer.call_args.kwargs['context']['raw_line_ids'],
+            {0: line_id},
+        )
+
+    def test_revising_sales_invoice_quantity_reconciles_stock_across_updates(self):
+        from apps.finance.models import CustomerInvoice, CustomerInvoiceLine
+        from apps.inventory.models import (
+            InventoryTransaction,
+            Product,
+            ProductVariant,
+            StockItem,
+            Warehouse,
+        )
+        from apps.inventory.services.stock_service import (
+            direct_deduct_stock,
+            direct_release_stock,
+        )
+
+        product = Product.objects.create(
+            product_name='Bottle',
+            company_id=self.company.id,
+            branch_id=self.branch.id,
+        )
+        variant = ProductVariant.objects.create(
+            product=product,
+            sku='BOTTLE-STOCK-TEST',
+            company_id=self.company.id,
+            branch_id=self.branch.id,
+        )
+        warehouse = Warehouse.objects.create(
+            warehouse_name='Main',
+            code='MAIN-STOCK-TEST',
+            country='Pakistan',
+            city='Lahore',
+            company_id=self.company.id,
+            branch_id=self.branch.id,
+        )
+        stock = StockItem.objects.create(
+            variant=variant,
+            warehouse=warehouse,
+            quantity_on_hand=15,
+            company_id=self.company.id,
+            branch_id=self.branch.id,
+        )
+        invoice = CustomerInvoice.objects.create(
+            invoice_number='INV-STOCK-RECONCILE',
+            invoice_date=date.today(),
+            amount=Decimal('100'),
+            source='SALES_AGENT',
+            company_id=self.company.id,
+            branch_id=self.branch.id,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        line = CustomerInvoiceLine.objects.create(
+            customer_invoice=invoice,
+            variant=variant,
+            quantity=10,
+            unit_price=Decimal('10'),
+            company_id=self.company.id,
+            branch_id=self.branch.id,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        direct_deduct_stock(
+            invoice.lines.all(), self.company.id, self.branch.id, invoice._id, self.user
+        )
+        stock.refresh_from_db()
+        self.assertEqual(stock.quantity_on_hand, 5)
+
+        direct_release_stock(invoice._id, self.company.id, self.user)
+        line.quantity = 15
+        line.save(update_fields=['quantity'])
+        direct_deduct_stock(
+            invoice.lines.all(), self.company.id, self.branch.id, invoice._id, self.user
+        )
+        stock.refresh_from_db()
+        self.assertEqual(stock.quantity_on_hand, 0)
+
+        direct_release_stock(invoice._id, self.company.id, self.user)
+        line.quantity = 12
+        line.save(update_fields=['quantity'])
+        direct_deduct_stock(
+            invoice.lines.all(), self.company.id, self.branch.id, invoice._id, self.user
+        )
+        stock.refresh_from_db()
+        self.assertEqual(stock.quantity_on_hand, 3)
+
+        # A second update with the same quantity must not replay old deductions.
+        direct_release_stock(invoice._id, self.company.id, self.user)
+        direct_deduct_stock(
+            invoice.lines.all(), self.company.id, self.branch.id, invoice._id, self.user
+        )
+        stock.refresh_from_db()
+        self.assertEqual(stock.quantity_on_hand, 3)
+
+        invoice_transactions = InventoryTransaction.objects.filter(
+            source_document_id=invoice._id,
+            source_document_type__in=(
+                'CUSTOMER_INVOICE',
+                'CUSTOMER_INVOICE_REVERSAL',
+            ),
+        )
+        self.assertEqual(
+            sum(txn.quantity_change for txn in invoice_transactions),
+            -12,
+        )
+
     def test_source_default(self):
         quote = Quote.objects.create(
             quote_number='QT-SRC', date=date.today(),
