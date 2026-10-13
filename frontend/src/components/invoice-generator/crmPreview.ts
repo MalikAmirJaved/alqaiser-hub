@@ -30,6 +30,7 @@ export function buildCrmDocumentPreview({
   overallDiscountPercent = 0,
   overallTaxPercent = 0,
   notes = "",
+  terms = "",
 }: {
   appearance?: Partial<DocumentAppearance> | null;
   documentType: "Invoice" | "Quote";
@@ -45,6 +46,7 @@ export function buildCrmDocumentPreview({
   overallDiscountPercent?: number;
   overallTaxPercent?: number;
   notes?: string;
+  terms?: string;
 }): InvoiceData {
   const data = createDefaultInvoice();
   const lineItems = lines.map((line, index) => ({
@@ -57,6 +59,8 @@ export function buildCrmDocumentPreview({
       .join(" — "),
     quantity: Number(line.quantity) || 0,
     rate: Number(line.unit_price) || 0,
+    discountAmount: Number(line.discount_amount) || 0,
+    taxRate: Number(line.tax_rate) || 0,
   }));
   const subtotal = lines.reduce(
     (total, line) => total + (Number(line.quantity) || 0) * (Number(line.unit_price) || 0),
@@ -72,8 +76,7 @@ export function buildCrmDocumentPreview({
     return total + net * ((Number(line.tax_rate) || 0) / 100);
   }, 0);
   const overallDiscount = subtotal * (overallDiscountPercent / 100);
-  const totalDiscount = lineDiscounts + overallDiscount;
-  const taxable = subtotal - totalDiscount;
+  const taxable = subtotal - lineDiscounts - overallDiscount;
   const overallTax = taxable * (overallTaxPercent / 100);
 
   return {
@@ -93,11 +96,19 @@ export function buildCrmDocumentPreview({
     },
     to: { ...data.to, name: customerName || "Customer" },
     items: lineItems,
-    discount: totalDiscount,
+    financialBreakdown: {
+      lineDiscountTotal: lineDiscounts,
+      lineTaxTotal: lineTaxes,
+      overallDiscountPercent,
+      overallDiscountAmount: overallDiscount,
+      overallTaxPercent,
+      overallTaxAmount: overallTax,
+    },
+    discount: lineDiscounts + overallDiscount,
     discountType: "fixed",
     taxRate: taxable > 0 ? ((lineTaxes + overallTax) / taxable) * 100 : 0,
     notes,
-        terms: notes, // Use notes as terms since they serve the same purpose
+    terms,
     watermarkEnabled: false,
     watermarkText: documentType.toUpperCase(),
   };

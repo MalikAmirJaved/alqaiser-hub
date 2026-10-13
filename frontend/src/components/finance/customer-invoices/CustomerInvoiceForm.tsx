@@ -19,6 +19,7 @@ import DocumentFormLayout from "@/components/documents/DocumentFormLayout";
 import { FormModal } from "@/components/inventory/supplier/FormModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
+import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
 import { useAutoCode } from "@/hooks/useAutoCode";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import QtySplitModal from "./LineDispositionModals";
@@ -455,6 +456,7 @@ export default function CustomerInvoiceForm({
 }: Props) {
   const formatCurrency = useFormatCurrency();
   const { data: companySettings } = useCompanySettingsQuery();
+  const { terms: termsData } = useTermsAndConditions();
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [newCustomerInfo, setNewCustomerInfo] = useState<any>(null);
   const [customerDisplayLabel, setCustomerDisplayLabel] = useState("");
@@ -1116,6 +1118,7 @@ export default function CustomerInvoiceForm({
                   overallDiscountPercent: overallDiscountPct,
                   overallTaxPercent: overallTaxPct,
                   notes: watch("notes"),
+                  terms: termsData?.invoice || "",
                 })}
               />
 

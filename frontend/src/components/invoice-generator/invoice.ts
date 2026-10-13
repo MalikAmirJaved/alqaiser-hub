@@ -6,6 +6,8 @@ export interface LineItem {
   description: string;
   quantity: number;
   rate: number;
+  discountAmount?: number;
+  taxRate?: number;
 }
 
 export interface Party {
@@ -34,6 +36,14 @@ export interface InvoiceData {
   from: Party;
   to: Party;
   items: LineItem[];
+  financialBreakdown?: {
+    lineDiscountTotal: number;
+    lineTaxTotal: number;
+    overallDiscountPercent: number;
+    overallDiscountAmount: number;
+    overallTaxPercent: number;
+    overallTaxAmount: number;
+  };
   taxRate: number;
   discount: number;
   discountType: "percent" | "fixed";

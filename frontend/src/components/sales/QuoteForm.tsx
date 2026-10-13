@@ -10,6 +10,7 @@ import DocumentFormLayout from "@/components/documents/DocumentFormLayout";
 import { useCreateQuote, useUpdateQuote, Quote } from "@/hooks/sales/useQuotes";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
+import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { toast } from "sonner";
 import {
@@ -57,6 +58,7 @@ export default function QuoteForm({
 }: QuoteFormProps) {
   const formatCurrency = useFormatCurrency();
   const { data: companySettings } = useCompanySettingsQuery();
+  const { terms: termsData } = useTermsAndConditions();
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [newCustomerInfo, setNewCustomerInfo] = useState<any>(null);
   const [customerDisplayLabel, setCustomerDisplayLabel] = useState("");
@@ -470,6 +472,7 @@ export default function QuoteForm({
                   overallDiscountPercent: Number(formData.overall_discount_percent) || 0,
                   overallTaxPercent: Number(formData.overall_tax_percent) || 0,
                   notes: formData.notes,
+                  terms: termsData?.quote || "",
                 })}
               />
 

@@ -470,8 +470,34 @@ export function InvoicePreview({
               width: 100,
             }}
           >
-            Rate
+            Unit price
           </th>
+          {data.financialBreakdown && (
+            <>
+              <th
+                style={{
+                  textAlign: "right",
+                  padding: "9px 10px",
+                  color: A.ink,
+                  fontWeight: titleFw(700),
+                  width: 90,
+                }}
+              >
+                Discount
+              </th>
+              <th
+                style={{
+                  textAlign: "right",
+                  padding: "9px 10px",
+                  color: A.ink,
+                  fontWeight: titleFw(700),
+                  width: 90,
+                }}
+              >
+                Tax
+              </th>
+            </>
+          )}
           <th
             style={{
               textAlign: "right",
@@ -503,6 +529,22 @@ export function InvoicePreview({
             <td style={{ padding: "10px", textAlign: "right", color: A.muted, fontWeight: bodyFw(400) }}>
               {money(item.rate)}
             </td>
+            {data.financialBreakdown && (
+              <>
+                <td style={{ padding: "10px", textAlign: "right", color: A.muted, fontWeight: bodyFw(400) }}>
+                  {money(Number(item.discountAmount) || 0)}
+                </td>
+                <td style={{ padding: "10px", textAlign: "right", color: A.muted, fontWeight: bodyFw(400) }}>
+                  {(Number(item.taxRate) || 0).toFixed(2)}%
+                  <br />
+                  {money(
+                    ((Number(item.quantity) || 0) * (Number(item.rate) || 0) -
+                      (Number(item.discountAmount) || 0)) *
+                      ((Number(item.taxRate) || 0) / 100),
+                  )}
+                </td>
+              </>
+            )}
             <td
               style={{
                 padding: "10px",
@@ -511,7 +553,13 @@ export function InvoicePreview({
                 fontWeight: bodyFw(600),
               }}
             >
-              {money((Number(item.quantity) || 0) * (Number(item.rate) || 0))}
+              {money(
+                (Number(item.quantity) || 0) * (Number(item.rate) || 0) -
+                  (Number(item.discountAmount) || 0) +
+                  (((Number(item.quantity) || 0) * (Number(item.rate) || 0) -
+                    (Number(item.discountAmount) || 0)) *
+                    ((Number(item.taxRate) || 0) / 100)),
+              )}
             </td>
           </tr>
         ))}
@@ -538,8 +586,31 @@ export function InvoicePreview({
   const totalsPanel = (
     <div style={{ width: 268 }}>
       {totalsRow("Subtotal", money(totals.subtotal))}
-      {totals.discountAmount > 0 && totalsRow("Discount", `−${money(totals.discountAmount)}`)}
-      {totalsRow(`Tax (${data.taxRate || 0}%)`, money(totals.taxAmount))}
+      {data.financialBreakdown ? (
+        <>
+          {data.financialBreakdown.lineDiscountTotal > 0 &&
+            totalsRow("Line discounts", `−${money(data.financialBreakdown.lineDiscountTotal)}`)}
+          {(data.financialBreakdown.overallDiscountAmount > 0 ||
+            data.financialBreakdown.overallDiscountPercent > 0) &&
+            totalsRow(
+              `Overall discount (${data.financialBreakdown.overallDiscountPercent}%)`,
+              `−${money(data.financialBreakdown.overallDiscountAmount)}`,
+            )}
+          {data.financialBreakdown.lineTaxTotal > 0 &&
+            totalsRow("Line tax", money(data.financialBreakdown.lineTaxTotal))}
+          {(data.financialBreakdown.overallTaxAmount > 0 ||
+            data.financialBreakdown.overallTaxPercent > 0) &&
+            totalsRow(
+              `Overall tax (${data.financialBreakdown.overallTaxPercent}%)`,
+              money(data.financialBreakdown.overallTaxAmount),
+            )}
+        </>
+      ) : (
+        <>
+          {totals.discountAmount > 0 && totalsRow("Discount", `−${money(totals.discountAmount)}`)}
+          {totalsRow(`Tax (${data.taxRate || 0}%)`, money(totals.taxAmount))}
+        </>
+      )}
       {totals.shipping > 0 && totalsRow("Shipping", money(totals.shipping))}
       <div
         style={{
@@ -583,7 +654,7 @@ export function InvoicePreview({
         {data.terms ? (
           <div style={{ marginTop: 14 }}>
             <p style={label}>Terms</p>
-            <p
+            <div
               style={{
                 margin: "5px 0 0",
                 fontSize: ty.smallSize,
@@ -592,9 +663,8 @@ export function InvoicePreview({
                 fontStyle: ty.notesStyle,
                 fontWeight: bodyFw(400),
               }}
-            >
-              {data.terms}
-            </p>
+              dangerouslySetInnerHTML={{ __html: data.terms }}
+            />
           </div>
         ) : null}
       </div>
