@@ -9,7 +9,6 @@ import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
 import { useServerSearch } from "@/hooks/useServerSearch";
-import CustomerInvoiceFormModal from "@/components/finance/customer-invoices/CustomerInvoiceFormModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
 import { StatusBadge } from "@/components/finance/ui";
@@ -27,8 +26,6 @@ interface CustomerInvoicesPanelProps {
 export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPanelProps) {
   const formatCurrency = useFormatCurrency();
   const router = useRouter();
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingInvoice, setEditingInvoice] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [payModalOpen, setPayModalOpen] = useState(false);
   const [invoiceToPay, setInvoiceToPay] = useState<any>(null);
@@ -96,8 +93,7 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
   };
 
   const handleEdit = (invoice: any) => {
-    setEditingInvoice(invoice);
-    setModalOpen(true);
+    router.push(`${detailPathPrefix}/${invoice.id}/edit`);
   };
 
   const handlePay = (invoice: any) => {
@@ -202,10 +198,7 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
         getRowId={(invoice) => invoice.id}
         permissions={modulePermissions}
         primaryActionLabel="New Invoice"
-        onCreate={() => {
-          setEditingInvoice(null);
-          setModalOpen(true);
-        }}
+        onCreate={() => router.push(`${detailPathPrefix}/create`)}
         actions={{
           onEdit: handleEdit,
           canEdit: (invoice) => (invoice.status === "DRAFT" || invoice.status === "PENDING" || invoice.status === "SENT") && invoice.payment_status !== "PAID" && invoice.source !== "SALES_POS",
@@ -216,7 +209,6 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
           canPost: (invoice) =>
             invoice.status === "SENT" &&
             invoice.payment_status !== "PAID" &&
-            invoice.status !== "CANCELLED" &&
             Number(invoice.outstanding) > 0,
           postLabel: "Pay",
           onPrint: (invoice) => {
@@ -254,16 +246,6 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
           </>
         }
       />
-      <CustomerInvoiceFormModal
-        open={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setEditingInvoice(null);
-        }}
-        initialData={editingInvoice}
-        moduleCode={moduleCode}
-      />
-
       {invoiceToPay && (
         <PayAmountModal
           open={payModalOpen}

@@ -2,6 +2,10 @@ from decimal import Decimal
 from django.db import models
 from django.core.validators import MinValueValidator
 from apps.common.basemodel import BaseModel
+from apps.common.document_appearance import (
+    DOCUMENT_TEMPLATE_CHOICES,
+    default_document_typography,
+)
 
 class Quote(BaseModel):
     STATUS_CHOICES = [
@@ -38,6 +42,9 @@ class Quote(BaseModel):
     ], default='SALES_DESKTOP', db_index=True)
     overall_discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
     overall_tax_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    template_slug = models.CharField(max_length=30, choices=DOCUMENT_TEMPLATE_CHOICES, default='modern')
+    accent_color = models.CharField(max_length=7, blank=True, default='')
+    typography = models.JSONField(default=default_document_typography)
     notes = models.TextField(blank=True)
     converted_invoice = models.ForeignKey(
         'finance.CustomerInvoice',

@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import LeadFormModal from "./LeadFormModal";
-import QuoteFormModal from "./QuoteFormModal";
 import { toast } from "sonner";
 import { usePagination } from "@/hooks/usePagination";
 
@@ -146,9 +145,6 @@ export default function LeadsPanel() {
 
   const [followUpLead, setFollowUpLead] = useState<Lead | null>(null);
   const [lostLead, setLostLead] = useState<Lead | null>(null);
-  const [quoteModalOpen, setQuoteModalOpen] = useState(false);
-  const [quoteCustomerId, setQuoteCustomerId] = useState<string | null>(null);
-  const [quoteLeadId, setQuoteLeadId] = useState<string | null>(null);
 
   const leadStatusOptions = [
     { value: "NEW", label: "New" },
@@ -212,24 +208,14 @@ export default function LeadsPanel() {
   };
 
   const handleCreateQuote = async (lead: Lead) => {
-    setQuoteLeadId(lead.id);
     if (lead.status === "CONVERTED") {
-      setQuoteCustomerId(lead.converted_customer_id || null);
-      setQuoteModalOpen(true);
+      router.push(`/sales/quotes/create?leadId=${encodeURIComponent(lead.id)}&customerId=${encodeURIComponent(lead.converted_customer_id || "")}`);
       return;
     }
     try {
       const result = await convertLeadToCustomer.mutateAsync(lead.id);
-      setQuoteCustomerId(result.customer_id);
-      setQuoteModalOpen(true);
+      router.push(`/sales/quotes/create?leadId=${encodeURIComponent(lead.id)}&customerId=${encodeURIComponent(result.customer_id)}`);
     } catch { /* toast from apiFetch */ }
-  };
-
-  const handleQuoteModalSuccess = () => {
-    setQuoteModalOpen(false);
-    setQuoteCustomerId(null);
-    setQuoteLeadId(null);
-    refetch();
   };
 
   const renderActions = (lead: Lead) => {
@@ -409,14 +395,6 @@ export default function LeadsPanel() {
         onClose={() => setModalOpen(false)}
         initialData={editingLead}
         onSuccess={handleModalSuccess}
-      />
-
-      <QuoteFormModal
-        open={quoteModalOpen}
-        onClose={() => { setQuoteModalOpen(false); setQuoteCustomerId(null); setQuoteLeadId(null); }}
-        initialCustomerId={quoteCustomerId}
-        initialLeadId={quoteLeadId}
-        onSuccess={handleQuoteModalSuccess}
       />
 
       <FollowUpModal

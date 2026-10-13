@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   DetailLayout,
   StandardSidebar,
@@ -16,13 +16,13 @@ import {
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import LeadFormModal from "@/components/sales/LeadFormModal";
-import QuoteFormModal from "@/components/sales/QuoteFormModal";
 import StatusHistoryTimeline from "@/components/sales/StatusHistoryTimeline";
 import { toast } from "sonner";
 import { CheckCircle, Phone, ThumbsUp, UserPlus, XCircle, Calendar, FileText, Loader2, X, Clock } from "lucide-react";
 
 export default function LeadDetailPage() {
   const formatCurrency = useFormatCurrency();
+  const router = useRouter();
   const { id } = useParams();
   const { data: lead, isLoading, refetch } = useLead(id as string);
   const updateLead = useUpdateLead();
@@ -42,8 +42,6 @@ export default function LeadDetailPage() {
   const [followUpDate, setFollowUpDate] = useState("");
   const [followUpNotes, setFollowUpNotes] = useState("");
   const [lostReason, setLostReason] = useState("");
-  const [quoteModalOpen, setQuoteModalOpen] = useState(false);
-  const [quoteCustomerId, setQuoteCustomerId] = useState<string | null>(null);
 
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!lead) return <div className="p-8 text-center">Lead not found</div>;
@@ -94,21 +92,13 @@ export default function LeadDetailPage() {
 
   const handleCreateQuote = async () => {
     if (lead.status === "CONVERTED") {
-      setQuoteCustomerId(lead.converted_customer_id || null);
-      setQuoteModalOpen(true);
+      router.push(`/sales/quotes/create?leadId=${encodeURIComponent(lead.id)}&customerId=${encodeURIComponent(lead.converted_customer_id || "")}`);
       return;
     }
     try {
       const result = await convertLeadToCustomer.mutateAsync(lead.id);
-      setQuoteCustomerId(result.customer_id);
-      setQuoteModalOpen(true);
+      router.push(`/sales/quotes/create?leadId=${encodeURIComponent(lead.id)}&customerId=${encodeURIComponent(result.customer_id)}`);
     } catch { /* toast from apiFetch */ }
-  };
-
-  const handleQuoteModalSuccess = () => {
-    setQuoteModalOpen(false);
-    setQuoteCustomerId(null);
-    refetch();
   };
 
   const handleMarkLost = async () => {
@@ -244,14 +234,6 @@ export default function LeadDetailPage() {
         onClose={() => { setModalOpen(false); setEditingLead(null); }}
         initialData={editingLead}
         onSuccess={handleUpdateSuccess}
-      />
-
-      <QuoteFormModal
-        open={quoteModalOpen}
-        onClose={() => { setQuoteModalOpen(false); setQuoteCustomerId(null); }}
-        initialCustomerId={quoteCustomerId}
-        initialLeadId={lead.id}
-        onSuccess={handleQuoteModalSuccess}
       />
 
       {/* Follow Up Modal */}

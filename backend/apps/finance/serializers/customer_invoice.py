@@ -2,6 +2,7 @@ import random
 import time
 from decimal import Decimal
 
+import re
 from rest_framework import serializers
 
 from apps.finance.models import CustomerInvoice, CustomerInvoiceLine, BankAccount
@@ -14,6 +15,7 @@ from apps.finance.services.invoice_supplier_bill import (
 )
 from apps.inventory.models import Customer, SalesOrder, ProductVariant, Supplier
 from apps.inventory.serializers.customer import CustomerSerializer
+from apps.common.document_appearance import validate_document_typography
 
 class CustomerInvoiceLineSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)
@@ -159,6 +161,14 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
         name = obj.created_by.username if obj.created_by else None
         src = obj.source or 'new'
         return f"{name} ({src})" if name else None
+
+    def validate_accent_color(self, value):
+        if value and not re.fullmatch(r'#[0-9A-Fa-f]{6}', value):
+            raise serializers.ValidationError('Accent color must be a six-digit hex color.')
+        return value
+
+    def validate_typography(self, value):
+        return validate_document_typography(value)
 
     def get_payments(self, obj):
         from apps.finance.services.payable import get_payments_queryset

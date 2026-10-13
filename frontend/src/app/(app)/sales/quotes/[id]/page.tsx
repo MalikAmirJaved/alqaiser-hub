@@ -10,7 +10,6 @@ import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
 import StatusHistoryTimeline from "@/components/sales/StatusHistoryTimeline";
 import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
-import QuoteFormModal from "@/components/sales/QuoteFormModal";
 import { Printer, Download, FileText, HelpCircle, Settings, Info } from "lucide-react";
 
 export default function QuoteDetailPage() {
@@ -29,22 +28,13 @@ export default function QuoteDetailPage() {
 
   const { data: statusHistory, isLoading: historyLoading } = useQuoteStatusHistory(id as string);
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingQuote, setEditingQuote] = useState<any>(null);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
 
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!quote) return <div className="p-8 text-center">Quote not found</div>;
 
   const handleEdit = () => {
-    setEditingQuote(quote);
-    setModalOpen(true);
-  };
-
-  const handleUpdateSuccess = () => {
-    refetch();
-    setModalOpen(false);
-    setEditingQuote(null);
+    router.push(`/sales/quotes/${quote.id}/edit`);
   };
 
   const handleSend = async () => {
@@ -414,15 +404,6 @@ export default function QuoteDetailPage() {
           </button>
         </div>
       )}
-      <QuoteFormModal
-        open={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setEditingQuote(null);
-        }}
-        initialData={editingQuote}
-        onSuccess={handleUpdateSuccess}
-      />
       {quote && companySettings && (
         <PrintPreviewModal
           open={showPrintPreview}

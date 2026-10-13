@@ -33,6 +33,18 @@ export interface Quote {
   total_amount: number | string;
   overall_discount_percent?: number | string;
   overall_tax_percent?: number | string;
+  template_slug?: string;
+  accent_color?: string;
+  typography?: {
+    enabled: boolean;
+    fontFamily: "default" | "sans" | "serif" | "mono" | "classic" | "rounded";
+    baseSize: number;
+    titleLevel: "h1" | "h2" | "h3";
+    boldTitles: boolean;
+    boldBody: boolean;
+    italicBody: boolean;
+    italicNotes: boolean;
+  };
   status: "DRAFT" | "SENT" | "VIEWED" | "APPROVED" | "REJECTED" | "CONVERTED";
   source?: string;
   notes: string;

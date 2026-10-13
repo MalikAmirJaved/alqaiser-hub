@@ -10,7 +10,6 @@ import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
 import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
 import { StatusBadge } from "@/components/finance/ui";
-import CustomerInvoiceFormModal from "./CustomerInvoiceFormModal";
 import PayAmountModal from "@/components/finance/PayAmountModal";
 import InvoiceCancelModal from "./InvoiceCancelModal";
 import { FileText, Send, Printer, Download, Share2, Receipt, Edit, User, Clock, Mail, Loader2, X, RotateCcw } from "lucide-react";
@@ -55,8 +54,6 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const { data: auditLogs, isLoading: auditLogsLoading } = useCustomerInvoiceAuditLog(id);
   const { data: activityLog, isLoading: activityLoading } = useCustomerInvoiceActivityLog(id);
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingInvoice, setEditingInvoice] = useState<any>(null);
   const [posting, setPosting] = useState(false);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [payModalOpen, setPayModalOpen] = useState(false);
@@ -82,14 +79,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const canReturn = invoice.payment_status === "PAID" && invoice.status !== "CANCELLED" && !isFromPos;
 
   const handleEdit = () => {
-    setEditingInvoice(invoice);
-    setModalOpen(true);
-  };
-
-  const handleUpdateSuccess = () => {
-    refetch();
-    setModalOpen(false);
-    setEditingInvoice(null);
+    router.push(`/${moduleCode === "FINANCE" ? "finance" : "sales"}/customer-invoices/${invoice.id}/edit`);
   };
 
   const handlePay = async () => {
@@ -713,16 +703,6 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
         }
         currencyFormatter={formatCurrency}
       />
-      <CustomerInvoiceFormModal
-        open={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setEditingInvoice(null);
-        }}
-        initialData={editingInvoice}
-        onSuccess={handleUpdateSuccess}
-      />
-
       {invoice && (
         <PayAmountModal
           open={payModalOpen}

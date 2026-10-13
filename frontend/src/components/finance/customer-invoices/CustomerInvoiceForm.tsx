@@ -1,4 +1,3 @@
-// components/finance/CustomerInvoiceFormModal.tsx
 import { useEffect, useState, useCallback, useRef, memo } from "react";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { X, Plus, Trash2, RotateCw, Package, Type, FileText, AlertCircle, ChevronDown, Warehouse, DollarSign, Loader2 } from "lucide-react";
@@ -10,6 +9,7 @@ import {
   type CustomerInvoice,
 } from "@/hooks/finance/useCustomerInvoices";
 import { useCreateSalesInvoice, useUpdateSalesInvoice } from "@/hooks/sales/useSalesInvoices";
+import type { SalesInvoice } from "@/hooks/sales/useSalesInvoices";
 import { useCreateSupplier } from "@/hooks/useSuppliers";
 import { useServerSearch } from "@/hooks/useServerSearch";
 import { useApi } from "@/hooks/useApi";
@@ -17,10 +17,17 @@ import type { VariantDetail } from "@/hooks/useAllVariants";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
 import { FormModal } from "@/components/inventory/supplier/FormModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import { useAutoCode } from "@/hooks/useAutoCode";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import QtySplitModal from "./LineDispositionModals";
 import { toast } from "sonner";
+import {
+  createDefaultDocumentAppearance,
+  InvoiceAppearanceEditor,
+  type DocumentAppearance,
+} from "@/components/invoice-generator/InvoiceAppearanceEditor";
+import { buildCrmDocumentPreview } from "@/components/invoice-generator/crmPreview";
 
 interface InvoiceLine {
   id?: string;
@@ -49,15 +56,17 @@ interface CustomerInvoiceFormData {
   amount: number;
   overall_discount_percent: number;
   overall_tax_percent: number;
+  template_slug: string;
+  accent_color: string;
+  typography: DocumentAppearance["typography"];
   notes: string;
   lines: InvoiceLine[];
   new_customer?: any;
 }
 
 interface Props {
-  open: boolean;
   onClose: () => void;
-  initialData?: CustomerInvoice | null;
+  initialData?: CustomerInvoice | SalesInvoice | null;
   defaultValues?: Partial<CustomerInvoiceFormData> | null;
   onSuccess?: (result?: any) => void;
   moduleCode?: "FINANCE" | "SALES";
@@ -436,8 +445,7 @@ const LineRow = memo(function LineRow({
 // ─────────────────────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
-export default function CustomerInvoiceFormModal({
-  open,
+export default function CustomerInvoiceForm({
   onClose,
   initialData,
   defaultValues,
@@ -445,6 +453,7 @@ export default function CustomerInvoiceFormModal({
   moduleCode = "FINANCE",
 }: Props) {
   const formatCurrency = useFormatCurrency();
+  const { data: companySettings } = useCompanySettingsQuery();
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [newCustomerInfo, setNewCustomerInfo] = useState<any>(null);
   const [customerDisplayLabel, setCustomerDisplayLabel] = useState("");
@@ -535,6 +544,7 @@ export default function CustomerInvoiceFormModal({
         amount: 0,
         overall_discount_percent: 0,
         overall_tax_percent: 0,
+        ...createDefaultDocumentAppearance(),
         notes: "",
         lines: [],
       },
@@ -564,6 +574,13 @@ export default function CustomerInvoiceFormModal({
 
   const overallDiscountPct = Number(useWatch({ control, name: "overall_discount_percent" })) || 0;
   const overallTaxPct = Number(useWatch({ control, name: "overall_tax_percent" })) || 0;
+  const appearance: DocumentAppearance = {
+    template_slug: useWatch({ control, name: "template_slug" }) || "modern",
+    accent_color: useWatch({ control, name: "accent_color" }) || "",
+    typography:
+      useWatch({ control, name: "typography" }) ||
+      createDefaultDocumentAppearance().typography,
+  };
 
   const overallDiscountAmt = (subtotal || 0) * (overallDiscountPct / 100);
   const totalBeforeTax = (subtotal || 0) - (totalDiscount || 0) - (overallDiscountAmt || 0);
@@ -592,6 +609,12 @@ export default function CustomerInvoiceFormModal({
       setValue(
         "overall_tax_percent",
         Number((initialData as any).overall_tax_percent || 0)
+      );
+      setValue("template_slug", initialData.template_slug || "modern");
+      setValue("accent_color", initialData.accent_color || "");
+      setValue(
+        "typography",
+        initialData.typography || createDefaultDocumentAppearance().typography,
       );
       setValue("notes", initialData.notes);
       setValue(
@@ -625,6 +648,12 @@ export default function CustomerInvoiceFormModal({
       if (defaultValues.amount !== undefined) setValue("amount", defaultValues.amount);
       if (defaultValues.overall_discount_percent !== undefined) setValue("overall_discount_percent", defaultValues.overall_discount_percent);
       if (defaultValues.overall_tax_percent !== undefined) setValue("overall_tax_percent", defaultValues.overall_tax_percent);
+      setValue("template_slug", defaultValues.template_slug || "modern");
+      setValue("accent_color", defaultValues.accent_color || "");
+      setValue(
+        "typography",
+        defaultValues.typography || createDefaultDocumentAppearance().typography,
+      );
       if (defaultValues.notes !== undefined) setValue("notes", defaultValues.notes);
       if (defaultValues.lines !== undefined) setValue("lines", defaultValues.lines as any);
       setCustomerDisplayLabel((defaultValues as any).customer_name || "");
@@ -637,6 +666,7 @@ export default function CustomerInvoiceFormModal({
         amount: 0,
         overall_discount_percent: 0,
         overall_tax_percent: 0,
+        ...createDefaultDocumentAppearance(),
         notes: "",
         lines: [],
       });
@@ -648,7 +678,7 @@ export default function CustomerInvoiceFormModal({
         .then((code) => setValue("invoice_number", code))
         .catch(() => {});
     }
-  }, [initialData, defaultValues, setValue, reset, open]);
+  }, [initialData, defaultValues, setValue, reset]);
 
   useEffect(() => {
     const labels: Record<string, string> = {};
@@ -978,8 +1008,8 @@ export default function CustomerInvoiceFormModal({
         result = await createInvoice.mutateAsync(payload);
       }
     }
-    onSuccess?.(result);
-    onClose();
+    if (onSuccess) onSuccess(result);
+    else onClose();
   };
 
   const isPending =
@@ -988,16 +1018,11 @@ export default function CustomerInvoiceFormModal({
     createSalesInvoice.isPending ||
     updateSalesInvoice.isPending;
 
-  if (!open) return null;
-
   return (
     <>
-      {/* ── Backdrop ── */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-        <div className="relative w-full max-w-6xl rounded-2xl border border-border bg-card shadow-2xl flex flex-col max-h-[92vh]">
-
-          {/* ── Header ── */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
+      <main className="mx-auto w-full max-w-6xl px-3 py-6 sm:px-6 lg:px-8">
+        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+          <div className="flex items-center justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
             <div className="flex items-center gap-3">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary/10 text-primary text-xs font-medium">
                 <FileText className="w-3.5 h-3.5" />
@@ -1015,17 +1040,16 @@ export default function CustomerInvoiceFormModal({
               </div>
             </div>
             <button
+              type="button"
               onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors"
-              aria-label="Close"
+              className="rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted"
             >
-              <X className="w-4 h-4" />
+              Back
             </button>
           </div>
 
-          {/* ── Scrollable body ── */}
-          <div className="overflow-y-auto flex-1">
-            <form onSubmit={handleSubmit(onSubmit)} id="invoice-form" className="p-6 space-y-6">
+          <div>
+            <form onSubmit={handleSubmit(onSubmit)} id="invoice-form" className="space-y-6 p-5 sm:p-6">
 
               {/* ── Section 1: Document details ── */}
               <section>
@@ -1082,6 +1106,32 @@ export default function CustomerInvoiceFormModal({
                   </div>
                 </div>
               </section>
+
+              <InvoiceAppearanceEditor
+                documentTitle="Invoice"
+                appearance={appearance}
+                onChange={(next) => {
+                  setValue("template_slug", next.template_slug, { shouldDirty: true });
+                  setValue("accent_color", next.accent_color, { shouldDirty: true });
+                  setValue("typography", next.typography, { shouldDirty: true });
+                }}
+                previewData={buildCrmDocumentPreview({
+                  appearance,
+                  documentType: "Invoice",
+                  documentNumber: watch("invoice_number") || "Draft",
+                  customerName: customerDisplayLabel,
+                  issueDate: watch("invoice_date"),
+                  dueDate: watch("due_date"),
+                  lines: watchedLines || [],
+                  currency: companySettings?.currency,
+                  businessName: companySettings?.companyName,
+                  businessAddress: companySettings?.address,
+                  businessEmail: companySettings?.email,
+                  overallDiscountPercent: overallDiscountPct,
+                  overallTaxPercent: overallTaxPct,
+                  notes: watch("notes"),
+                })}
+              />
 
               <hr className="border-border" />
 
@@ -1322,7 +1372,7 @@ export default function CustomerInvoiceFormModal({
           </div>
 
           {/* ── Sticky footer ── */}
-          <div className="flex items-center justify-between px-6 py-3.5 border-t border-border bg-muted/30 shrink-0 rounded-b-2xl">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/30 px-5 py-3.5 sm:px-6">
             <p className="text-xs text-muted-foreground">
               {fields.length === 0
                 ? "No items added yet"
@@ -1346,8 +1396,8 @@ export default function CustomerInvoiceFormModal({
               </button>
             </div>
           </div>
-        </div>
       </div>
+      </main>
 
       <CustomerCreationModal
         open={showCustomerModal}

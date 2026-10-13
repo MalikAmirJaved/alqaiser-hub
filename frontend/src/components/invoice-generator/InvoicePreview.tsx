@@ -31,9 +31,11 @@ function tpl(slug: string): InvoiceTemplate {
 export function InvoicePreview({
   data,
   id = "invoice-document",
+  documentTitle = "Invoice",
 }: {
   data: InvoiceData;
   id?: string;
+  documentTitle?: "Invoice" | "Quote";
 }) {
   const t = tpl(data.templateSlug);
   const accent = data.accentColor?.trim() || t.accent;
@@ -120,7 +122,7 @@ export function InvoicePreview({
   const meta = (
     <div style={{ display: "grid", gap: 6 }}>
       <div>
-        <p style={label}>Invoice #</p>
+        <p style={label}>{documentTitle} #</p>
         <p style={{ margin: 0, fontSize: ty.bodySize, fontWeight: titleFw(700), color: A.ink }}>
           {data.invoiceNumber || "—"}
         </p>
@@ -185,7 +187,7 @@ export function InvoicePreview({
                   textTransform: "uppercase",
                 }}
               >
-                Invoice
+                {documentTitle}
               </p>
               <p style={{ margin: "4px 0 0", fontSize: ty.bodySize, opacity: 0.9, fontWeight: bodyFw(400) }}>
                 #{data.invoiceNumber || "—"}
@@ -236,7 +238,7 @@ export function InvoicePreview({
                   textTransform: "uppercase",
                 }}
               >
-                Invoice
+                {documentTitle}
               </p>
               <div style={{ marginTop: 10 }}>{meta}</div>
             </div>
@@ -264,7 +266,7 @@ export function InvoicePreview({
                 textTransform: "uppercase",
               }}
             >
-              Invoice
+              {documentTitle}
             </p>
             <p style={{ margin: "6px 0 0", fontSize: ty.bodySize, color: A.muted, fontWeight: bodyFw(400) }}>
               {data.from.name} · #{data.invoiceNumber || "—"}
@@ -309,7 +311,7 @@ export function InvoicePreview({
                     color: accent,
                   }}
                 >
-                  Invoice
+                  {documentTitle}
                 </p>
                 <p
                   style={{
@@ -384,7 +386,7 @@ export function InvoicePreview({
                     textTransform: "uppercase",
                   }}
                 >
-                  Invoice
+                  {documentTitle}
                 </p>
                 <p style={{ margin: "4px 0 0", fontSize: ty.bodySize, opacity: 0.95, fontWeight: bodyFw(400) }}>
                   #{data.invoiceNumber || "—"}
@@ -413,7 +415,7 @@ export function InvoicePreview({
                     textTransform: "uppercase",
                   }}
                 >
-                  Invoice
+                  {documentTitle}
                 </p>
               </div>
               <div style={{ textAlign: "right", fontSize: ty.smallSize, color: A.muted }}>
@@ -709,10 +711,10 @@ export function InvoicePreview({
                 textTransform: "uppercase",
               }}
             >
-              Invoice
+              {documentTitle}
             </p>
             <div style={{ marginTop: 18, fontSize: ty.smallSize, lineHeight: 1.6 }}>
-              <p style={{ margin: 0, opacity: 0.75 }}>Invoice #</p>
+              <p style={{ margin: 0, opacity: 0.75 }}>{documentTitle} #</p>
               <p style={{ margin: "0 0 12px", fontWeight: titleFw(700) }}>{data.invoiceNumber || "—"}</p>
               <p style={{ margin: 0, opacity: 0.75 }}>Issued</p>
               <p style={{ margin: "0 0 12px", fontWeight: titleFw(700) }}>{data.issueDate}</p>

@@ -1,3 +1,4 @@
+import re
 from decimal import Decimal
 from django.utils import timezone
 from rest_framework import serializers
@@ -7,6 +8,7 @@ from apps.sales.models.quote import Quote, QuoteLine
 from apps.sales.models.lead import Lead
 from apps.inventory.models import Customer, ProductVariant, Supplier
 from apps.inventory.serializers.customer import CustomerSerializer
+from apps.common.document_appearance import validate_document_typography
 
 class QuoteLineSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)
@@ -85,7 +87,8 @@ class QuoteSerializer(serializers.ModelSerializer):
         model = Quote
         fields = [
             'id', 'quote_number', 'lead', 'customer', 'customer_name', 'customer_email', 'customer_phone', 'new_customer',
-            'date', 'expiration_date', 'total_amount', 'overall_discount_percent', 'overall_tax_percent', 'status', 'source',
+            'date', 'expiration_date', 'total_amount', 'overall_discount_percent', 'overall_tax_percent',
+            'template_slug', 'accent_color', 'typography', 'status', 'source',
             'notes', 'lines', 'created_at', 'updated_at',
             'created_by_name', 'updated_by_name', 'source_label', 'created_by_label',
             'converted_invoice', 'converted_invoice_number',
@@ -114,6 +117,14 @@ class QuoteSerializer(serializers.ModelSerializer):
         name = obj.created_by.username if obj.created_by else None
         src = obj.source or 'new'
         return f"{name} ({src})" if name else None
+
+    def validate_accent_color(self, value):
+        if value and not re.fullmatch(r'#[0-9A-Fa-f]{6}', value):
+            raise serializers.ValidationError('Accent color must be a six-digit hex color.')
+        return value
+
+    def validate_typography(self, value):
+        return validate_document_typography(value)
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)

@@ -1,16 +1,22 @@
 "use client";
 
-// components/sales/QuoteFormModal.tsx
 import { useEffect, useState, useRef } from "react";
-import { X, Plus, Trash2, Package, Type, FileText, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Package, Type, FileText, AlertCircle } from "lucide-react";
 import { useServerSearch } from "@/hooks/useServerSearch";
 import { useApi } from "@/hooks/useApi";
 import type { VariantDetail } from "@/hooks/useAllVariants";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
 import { useCreateQuote, useUpdateQuote, Quote } from "@/hooks/sales/useQuotes";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { toast } from "sonner";
+import {
+  createDefaultDocumentAppearance,
+  InvoiceAppearanceEditor,
+  type DocumentAppearance,
+} from "@/components/invoice-generator/InvoiceAppearanceEditor";
+import { buildCrmDocumentPreview } from "@/components/invoice-generator/crmPreview";
 
 interface QuoteLine {
   _key: string;
@@ -33,8 +39,7 @@ interface QuoteLine {
 let lineKeyCounter = 0;
 const nextLineKey = () => `ql_${++lineKeyCounter}`;
 
-interface QuoteFormModalProps {
-  open: boolean;
+interface QuoteFormProps {
   onClose: () => void;
   initialData?: Quote | null;
   initialCustomerId?: string | null;
@@ -42,18 +47,21 @@ interface QuoteFormModalProps {
   onSuccess?: (quote?: Quote) => void;
 }
 
-export default function QuoteFormModal({
-  open,
+export default function QuoteForm({
   onClose,
   initialData,
   initialCustomerId,
   initialLeadId,
   onSuccess,
-}: QuoteFormModalProps) {
+}: QuoteFormProps) {
   const formatCurrency = useFormatCurrency();
+  const { data: companySettings } = useCompanySettingsQuery();
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [newCustomerInfo, setNewCustomerInfo] = useState<any>(null);
   const [customerDisplayLabel, setCustomerDisplayLabel] = useState("");
+  const [appearance, setAppearance] = useState<DocumentAppearance>(
+    createDefaultDocumentAppearance,
+  );
 
   const fetchCustomers = useServerSearch("/api/inventory/customers/", {
     transformOption: (c: any) => ({
@@ -94,6 +102,11 @@ export default function QuoteFormModal({
 
   useEffect(() => {
     if (initialData) {
+      setAppearance({
+        template_slug: initialData.template_slug || "modern",
+        accent_color: initialData.accent_color || "",
+        typography: initialData.typography || createDefaultDocumentAppearance().typography,
+      });
       setFormData({
         customer: initialData.customer || "",
         date: initialData.date || new Date().toISOString().split("T")[0],
@@ -123,25 +136,26 @@ export default function QuoteFormModal({
     } else {
       resetForm();
     }
-  }, [initialData, open]);
+  }, [initialData]);
 
   useEffect(() => {
-    if (initialCustomerId && !initialData && open) {
+    if (initialCustomerId && !initialData) {
       setFormData((prev) => ({ ...prev, customer: initialCustomerId }));
       setNewCustomerInfo(null);
       api(`/api/inventory/customers/${initialCustomerId}/`)
         .then((c: any) => setCustomerDisplayLabel(c.name || ""))
         .catch(() => {});
     }
-  }, [initialCustomerId, initialData, open]);
+  }, [initialCustomerId, initialData]);
 
   useEffect(() => {
-    if (initialLeadId && !initialData && open) {
+    if (initialLeadId && !initialData) {
       setFormData((prev) => ({ ...prev, lead: initialLeadId }));
     }
-  }, [initialLeadId, initialData, open]);
+  }, [initialLeadId, initialData]);
 
   const resetForm = () => {
+    setAppearance(createDefaultDocumentAppearance());
     setFormData({
       customer: "",
       date: new Date().toISOString().split("T")[0],
@@ -285,6 +299,9 @@ export default function QuoteFormModal({
 
     payload.overall_discount_percent = Number(formData.overall_discount_percent) || 0;
     payload.overall_tax_percent = Number(formData.overall_tax_percent) || 0;
+    payload.template_slug = appearance.template_slug;
+    payload.accent_color = appearance.accent_color;
+    payload.typography = appearance.typography;
 
     for (let i = 0; i < payload.lines.length; i++) {
       const line = payload.lines[i];
@@ -322,22 +339,17 @@ export default function QuoteFormModal({
       ? await updateQuote.mutateAsync({ id: initialData.id, data: payload })
       : await createQuote.mutateAsync(payload);
 
-    onSuccess?.(result);
-    onClose();
+    if (onSuccess) onSuccess(result);
+    else onClose();
   };
 
   const isPending = createQuote.isPending || updateQuote.isPending;
 
-  if (!open) return null;
-
   return (
     <>
-      {/* ── Backdrop ── */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-        <div className="relative w-full max-w-6xl rounded-2xl border border-border bg-card shadow-2xl flex flex-col max-h-[92vh]">
-
-          {/* ── Header ── */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
+      <main className="mx-auto ">
+        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+          <div className="flex items-center justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
             <div className="flex items-center gap-3">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-medium">
                 <FileText className="w-3.5 h-3.5" />
@@ -355,17 +367,16 @@ export default function QuoteFormModal({
               </div>
             </div>
             <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors"
-              aria-label="Close"
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted"
             >
-              <X className="w-4 h-4" />
+            Back
             </button>
           </div>
 
-          {/* ── Scrollable body ── */}
-          <div className="overflow-y-auto flex-1">
-            <form onSubmit={handleSubmit} id="quote-form" className="p-6 space-y-6">
+          <div>
+            <form onSubmit={handleSubmit} id="quote-form" className="space-y-6 p-5 sm:p-6">
 
               {/* ── Section 1: Document details ── */}
               <section>
@@ -452,6 +463,28 @@ export default function QuoteFormModal({
 
               {/* ── Divider ── */}
               <hr className="border-border" />
+
+              <InvoiceAppearanceEditor
+                documentTitle="Quote"
+                appearance={appearance}
+                onChange={setAppearance}
+                previewData={buildCrmDocumentPreview({
+                  appearance,
+                  documentType: "Quote",
+                  documentNumber: initialData?.quote_number || "Draft",
+                  customerName: customerDisplayLabel,
+                  issueDate: formData.date,
+                  dueDate: formData.expiration_date,
+                  lines: formData.lines,
+                  currency: companySettings?.currency,
+                  businessName: companySettings?.companyName,
+                  businessAddress: companySettings?.address,
+                  businessEmail: companySettings?.email,
+                  overallDiscountPercent: Number(formData.overall_discount_percent) || 0,
+                  overallTaxPercent: Number(formData.overall_tax_percent) || 0,
+                  notes: formData.notes,
+                })}
+              />
 
               {/* ── Section 2: Line items ── */}
               <section>
@@ -801,8 +834,7 @@ export default function QuoteFormModal({
             </form>
           </div>
 
-          {/* ── Sticky footer ── */}
-          <div className="flex items-center justify-between px-6 py-3.5 border-t border-border bg-muted/30 shrink-0 rounded-b-2xl">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/30 px-5 py-3.5 sm:px-6">
             <p className="text-xs text-muted-foreground">
               {formData.lines.length === 0
                 ? "No items added yet"
@@ -824,10 +856,10 @@ export default function QuoteFormModal({
               >
                 {isPending ? "Saving…" : initialData ? "Update quote" : "Save quote"}
               </button>
-            </div>
           </div>
         </div>
-      </div>
+        </div>
+      </main>
 
       <CustomerCreationModal
         open={showCustomerModal}
