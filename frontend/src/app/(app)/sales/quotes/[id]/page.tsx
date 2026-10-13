@@ -9,7 +9,8 @@ import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
 import StatusHistoryTimeline from "@/components/sales/StatusHistoryTimeline";
-import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
+import { DocumentPrintPreviewModal } from "@/components/invoice-generator/DocumentPrintPreviewModal";
+import { buildCrmDocumentPreview } from "@/components/invoice-generator/crmPreview";
 import { Printer, Download, FileText, HelpCircle, Settings, Info } from "lucide-react";
 
 export default function QuoteDetailPage() {
@@ -94,8 +95,12 @@ export default function QuoteDetailPage() {
             </thead>
             <tbody>
               {quote.lines?.map((line, idx) => {
-                const lineNet = line.quantity * line.unit_price - (line.discount_amount || 0);
-                const lineTax = lineNet * ((line.tax_rate || 0) / 100);
+                const quantity = Number(line.quantity) || 0;
+                const unitPrice = Number(line.unit_price) || 0;
+                const discount = Number(line.discount_amount) || 0;
+                const taxRate = Number(line.tax_rate) || 0;
+                const lineNet = quantity * unitPrice - discount;
+                const lineTax = lineNet * (taxRate / 100);
                 const lineTotal = lineNet + lineTax;
                 return (
                   <tr key={idx} className="border-b border-border/60">
@@ -113,13 +118,13 @@ export default function QuoteDetailPage() {
                         <span className="text-muted-foreground/40">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-2 text-right">{line.quantity}</td>
-                    <td className="px-4 py-2 text-right">{formatCurrency(line.unit_price)}</td>
-                    <td className="px-4 py-2 text-right text-destructive">{formatCurrency(line.discount_amount || 0)}</td>
+                    <td className="px-4 py-2 text-right">{quantity}</td>
+                    <td className="px-4 py-2 text-right">{formatCurrency(unitPrice)}</td>
+                    <td className="px-4 py-2 text-right text-destructive">{formatCurrency(discount)}</td>
                     <td className="px-4 py-2 text-right">
-                      {line.tax_rate > 0 ? (
+                      {taxRate > 0 ? (
                         <span className="text-muted-foreground">
-                          {line.tax_rate}% ({formatCurrency(lineTax)})
+                          {taxRate}% ({formatCurrency(lineTax)})
                         </span>
                       ) : (
                         <span className="text-muted-foreground/40">—</span>
@@ -137,27 +142,41 @@ export default function QuoteDetailPage() {
                 </tr>
               )}
             </tbody>
-            <tfoot className="border-t-2 border-border">                  {(quote as any).lines?.length > 0 && (
-                <>
+            <tfoot className="border-t-2 border-border">
+              <>
                   <tr>
                     <td colSpan={6} className="px-4 py-2 text-right text-sm text-muted-foreground">Subtotal</td>
                     <td className="px-4 py-2 text-right text-sm">
                       {formatCurrency(
-                        (quote.lines || []).reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0)
+                        (quote.lines || []).reduce(
+                          (sum, line) => sum + (Number(line.quantity) || 0) * (Number(line.unit_price) || 0),
+                          0,
+                        ),
                       )}
                     </td>
                   </tr>
                   {(() => {
                     const lines = (quote.lines || []) as any[];
-                    const sub = lines.reduce((s, l) => s + l.quantity * l.unit_price, 0);
-                    const lineDiscounts = lines.reduce((s, l) => s + (l.discount_amount || 0), 0);
-                    const lineTax = lines.reduce(
-                      (s, l) =>
-                        s +
-                        (l.quantity * l.unit_price - (l.discount_amount || 0)) * ((l.tax_rate || 0) / 100),
-                      0
+                    const sub = lines.reduce(
+                      (sum, line) => sum + (Number(line.quantity) || 0) * (Number(line.unit_price) || 0),
+                      0,
                     );
-                    const overallDisc = sub * (Number((quote as any).overall_discount_percent || 0) / 100);
+                    const lineDiscounts = lines.reduce(
+                      (sum, line) => sum + (Number(line.discount_amount) || 0),
+                      0,
+                    );
+                    const lineTax = lines.reduce(
+                      (sum, line) => {
+                        const lineSubtotal = (Number(line.quantity) || 0) * (Number(line.unit_price) || 0);
+                        const lineDiscount = Number(line.discount_amount) || 0;
+                        const taxRate = Number(line.tax_rate) || 0;
+                        return sum + (lineSubtotal - lineDiscount) * (taxRate / 100);
+                      },
+                      0,
+                    );
+                    const overallDiscountPercent = Number(quote.overall_discount_percent || 0);
+                    const overallTaxPercent = Number(quote.overall_tax_percent || 0);
+                    const overallDisc = sub * (overallDiscountPercent / 100);
                     return (
                       <>
                         {lineDiscounts > 0 && (
@@ -170,10 +189,10 @@ export default function QuoteDetailPage() {
                             </td>
                           </tr>
                         )}
-                        {(quote as any).overall_discount_percent > 0 && (
+                        {overallDiscountPercent > 0 && (
                           <tr>
                             <td colSpan={6} className="px-4 py-2 text-right text-sm text-muted-foreground">
-                              Discount ({(quote as any).overall_discount_percent}%)
+                              Discount ({overallDiscountPercent}%)
                             </td>
                             <td className="px-4 py-2 text-right text-sm text-destructive">
                               -{formatCurrency(overallDisc)}
@@ -188,21 +207,20 @@ export default function QuoteDetailPage() {
                             <td className="px-4 py-2 text-right text-sm">{formatCurrency(lineTax)}</td>
                           </tr>
                         )}
-                        {(quote as any).overall_tax_percent > 0 && (
+                        {overallTaxPercent > 0 && (
                           <tr>
                             <td colSpan={6} className="px-4 py-2 text-right text-sm text-muted-foreground">
-                              Tax ({(quote as any).overall_tax_percent}%)
+                              Tax ({overallTaxPercent}%)
                             </td>
                             <td className="px-4 py-2 text-right text-sm">
-                              {formatCurrency((sub - lineDiscounts - overallDisc) * (Number((quote as any).overall_tax_percent) / 100))}
+                              {formatCurrency((sub - lineDiscounts - overallDisc) * (overallTaxPercent / 100))}
                             </td>
                           </tr>
                         )}
                       </>
                     );
                   })()}
-                </>
-              )}
+              </>
               <tr className="border-t-2 border-border">
                 <td colSpan={6} className="px-4 py-3 text-right font-semibold">Total</td>
                 <td className="px-4 py-3 text-right font-bold text-primary">{formatCurrency(quote.total_amount)}</td>
@@ -405,52 +423,30 @@ export default function QuoteDetailPage() {
         </div>
       )}
       {quote && companySettings && (
-        <PrintPreviewModal
+        <DocumentPrintPreviewModal
           open={showPrintPreview}
           onClose={() => setShowPrintPreview(false)}
-          documentProps={{
-            data: {
-              type: "QUOTE",
-              documentNumber: quote.quote_number,
-              date: quote.date,
-              expirationDate: quote.expiration_date || undefined,
-              customerName: quote.customer_name || "—",
-              customerEmail: (quote as any).customer_email || "",
-              customerPhone: (quote as any).customer_phone || "",
-              lines: (quote.lines || []).map((l) => ({
-                variant_name: l.variant_name,
-                variant_sku: l.variant_sku,
-                quantity: l.quantity,
-                unit_price: l.unit_price,
-                tax_rate: l.tax_rate,
-                discount_amount: l.discount_amount,
-              })),
-              totalAmount:
-                typeof quote.total_amount === "string"
-                  ? parseFloat(quote.total_amount)
-                  : quote.total_amount,
-              overallDiscountPercent: Number((quote as any).overall_discount_percent || 0),
-              overallTaxPercent: Number((quote as any).overall_tax_percent || 0),
-              status: quote.status,
-              notes: quote.notes,
-            },
-            company: {
-              companyName: companySettings.companyName,
-              address: companySettings.address,
-              city: companySettings.city,
-              state: companySettings.state,
-              country: companySettings.country,
-              phone: companySettings.phone,
-              email: companySettings.email,
-              taxId: companySettings.taxId,
-              logo: (companySettings as any).logo || "",
-              logoUrl: (companySettings as any).logo
-                ? `${process.env.NEXT_PUBLIC_API_URL}${(companySettings as any).logo}`
-                : "",
-            },
-            termsContent: termsData?.quote || "",
-            formatCurrency,
-          }}
+          documentTitle="Quote"
+          data={buildCrmDocumentPreview({
+            appearance: quote,
+            documentType: "Quote",
+            documentNumber: quote.quote_number,
+            customerName: quote.customer_name,
+            customerEmail: (quote as any).customer_email,
+            customerPhone: (quote as any).customer_phone,
+            issueDate: quote.date,
+            dueDate: quote.expiration_date,
+            lines: quote.lines || [],
+            currency: companySettings.currency,
+            businessName: companySettings.companyName,
+            businessAddress: companySettings.address,
+            businessEmail: companySettings.email,
+            businessLogo: companySettings.logo,
+            overallDiscountPercent: Number(quote.overall_discount_percent || 0),
+            overallTaxPercent: Number(quote.overall_tax_percent || 0),
+            notes: quote.notes,
+            terms: termsData?.quote || "",
+          })}
         />
       )}
     </>

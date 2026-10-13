@@ -54,6 +54,7 @@ function SalesCustomerInvoiceCreatePageContent() {
       documentType="invoice"
       moduleCode="SALES"
       defaultValues={defaultValues}
+      defaultCustomerName={quote?.customer_name || ""}
       onClose={() => router.push("/sales/customer-invoices")}
       onSuccess={async (invoice: any) => {
         const invoiceId = invoice?.id || invoice?.data?.id;

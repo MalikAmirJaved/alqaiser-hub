@@ -8,7 +8,8 @@ import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
-import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
+import { DocumentPrintPreviewModal } from "@/components/invoice-generator/DocumentPrintPreviewModal";
+import { buildCrmDocumentPreview } from "@/components/invoice-generator/crmPreview";
 import { StatusBadge } from "@/components/finance/ui";
 import PayAmountModal from "@/components/finance/PayAmountModal";
 import InvoiceCancelModal from "./InvoiceCancelModal";
@@ -227,9 +228,12 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
             </thead>
             <tbody>
               {invoice.lines?.map((line, idx) => {
-                const subtotal = line.quantity * line.unit_price;
-                const discount = line.discount_amount || 0;
-                const tax = (subtotal - discount) * (line.tax_rate / 100);
+                const quantity = Number(line.quantity) || 0;
+                const unitPrice = Number(line.unit_price) || 0;
+                const discount = Number(line.discount_amount) || 0;
+                const taxRate = Number(line.tax_rate) || 0;
+                const subtotal = quantity * unitPrice;
+                const tax = (subtotal - discount) * (taxRate / 100);
                 const lineTotal = subtotal - discount + tax;
                 const lineStatus = line.status || "ACTIVE";
                 return (
@@ -279,27 +283,40 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
               )}
             </tbody>
             <tfoot className="border-t-2 border-border">
-              {invoice.lines && invoice.lines.length > 0 && (
-                <>
+              <>
                   <tr>
                     <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">Subtotal</td>
                     <td className="px-4 py-2 text-right text-sm">
                       {formatCurrency(
-                        invoice.lines.reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0)
+                        (invoice.lines || []).reduce(
+                          (sum, line) => sum + (Number(line.quantity) || 0) * (Number(line.unit_price) || 0),
+                          0,
+                        )
                       )}
                     </td>
                   </tr>
                   {(() => {
-                    const lines = invoice.lines as any[];
-                    const sub = lines.reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0);
-                    const lineDiscounts = lines.reduce((s: number, l: any) => s + (l.discount_amount || 0), 0);
-                    const lineTax = lines.reduce(
-                      (s: number, l: any) =>
-                        s +
-                        (l.quantity * l.unit_price - (l.discount_amount || 0)) * ((l.tax_rate || 0) / 100),
-                      0
+                    const lines = invoice.lines || [];
+                    const sub = lines.reduce(
+                      (sum, line) => sum + (Number(line.quantity) || 0) * (Number(line.unit_price) || 0),
+                      0,
                     );
-                    const overallDisc = sub * (Number((invoice as any).overall_discount_percent || 0) / 100);
+                    const lineDiscounts = lines.reduce(
+                      (sum, line) => sum + (Number(line.discount_amount) || 0),
+                      0,
+                    );
+                    const lineTax = lines.reduce(
+                      (sum, line) => {
+                        const lineSubtotal = (Number(line.quantity) || 0) * (Number(line.unit_price) || 0);
+                        const lineDiscount = Number(line.discount_amount) || 0;
+                        const taxRate = Number(line.tax_rate) || 0;
+                        return sum + (lineSubtotal - lineDiscount) * (taxRate / 100);
+                      },
+                      0,
+                    );
+                    const overallDiscountPercent = Number(invoice.overall_discount_percent || 0);
+                    const overallTaxPercent = Number(invoice.overall_tax_percent || 0);
+                    const overallDisc = sub * (overallDiscountPercent / 100);
                     return (
                       <>
                         {lineDiscounts > 0 && (
@@ -312,10 +329,10 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
                             </td>
                           </tr>
                         )}
-                        {(invoice as any).overall_discount_percent > 0 && (
+                        {overallDiscountPercent > 0 && (
                           <tr>
                             <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
-                              Discount ({(invoice as any).overall_discount_percent}%)
+                              Discount ({overallDiscountPercent}%)
                             </td>
                             <td className="px-4 py-2 text-right text-sm text-destructive">
                               -{formatCurrency(overallDisc)}
@@ -330,21 +347,20 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
                             <td className="px-4 py-2 text-right text-sm">{formatCurrency(lineTax)}</td>
                           </tr>
                         )}
-                        {(invoice as any).overall_tax_percent > 0 && (
+                        {overallTaxPercent > 0 && (
                           <tr>
                             <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
-                              Tax ({(invoice as any).overall_tax_percent}%)
+                              Tax ({overallTaxPercent}%)
                             </td>
                             <td className="px-4 py-2 text-right text-sm">
-                              {formatCurrency((sub - lineDiscounts - overallDisc) * (Number((invoice as any).overall_tax_percent) / 100))}
+                              {formatCurrency((sub - lineDiscounts - overallDisc) * (overallTaxPercent / 100))}
                             </td>
                           </tr>
                         )}
                       </>
                     );
                   })()}
-                </>
-              )}
+              </>
               <tr className="border-t-2 border-border">
                 <td colSpan={8} className="px-4 py-3 text-right font-bold">Total</td>
                 <td className="px-4 py-3 text-right font-bold text-primary">{formatCurrency(amount)}</td>
@@ -733,50 +749,30 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
         />
       )}
       {invoice && companySettings && (
-        <PrintPreviewModal
+        <DocumentPrintPreviewModal
           open={showPrintPreview}
           onClose={() => setShowPrintPreview(false)}
-          documentProps={{
-            data: {
-              type: "INVOICE",
-              documentNumber: invoice.invoice_number,
-              date: invoice.invoice_date,
-              dueDate: invoice.due_date,
-              customerName: invoice.customer_name || "—",
-              customerEmail: (invoice as any).customer_email || "",
-              customerPhone: (invoice as any).customer_phone || "",
-              lines: (invoice.lines || []).map((l) => ({
-                variant_name: l.variant_name,
-                variant_sku: l.variant_sku,
-                quantity: l.quantity,
-                unit_price: l.unit_price,
-                tax_rate: l.tax_rate,
-                discount_amount: l.discount_amount,
-              })),
-              totalAmount: toNumber(invoice.amount),
-              overallDiscountPercent: Number((invoice as any).overall_discount_percent || 0),
-              overallTaxPercent: Number((invoice as any).overall_tax_percent || 0),
-              status: invoice.status,
-              paymentStatus: invoice.payment_status,
-              notes: invoice.notes,
-            },
-            company: {
-              companyName: companySettings.companyName,
-              address: companySettings.address,
-              city: companySettings.city,
-              state: companySettings.state,
-              country: companySettings.country,
-              phone: companySettings.phone,
-              email: companySettings.email,
-              taxId: companySettings.taxId,
-              logo: (companySettings as any).logo || "",
-              logoUrl: (companySettings as any).logo
-                ? `${process.env.NEXT_PUBLIC_API_URL}${(companySettings as any).logo}`
-                : "",
-            },
-            termsContent: termsData?.invoice || "",
-            formatCurrency,
-          }}
+          documentTitle="Invoice"
+          data={buildCrmDocumentPreview({
+            appearance: invoice,
+            documentType: "Invoice",
+            documentNumber: invoice.invoice_number,
+            customerName: invoice.customer_name,
+            customerEmail: invoice.customer_email,
+            customerPhone: invoice.customer_phone,
+            issueDate: invoice.invoice_date,
+            dueDate: invoice.due_date,
+            lines: invoice.lines || [],
+            currency: companySettings.currency,
+            businessName: companySettings.companyName,
+            businessAddress: companySettings.address,
+            businessEmail: companySettings.email,
+            businessLogo: companySettings.logo,
+            overallDiscountPercent: Number(invoice.overall_discount_percent || 0),
+            overallTaxPercent: Number(invoice.overall_tax_percent || 0),
+            notes: invoice.notes,
+            terms: termsData?.invoice || "",
+          })}
         />
       )}
 

@@ -123,11 +123,11 @@ export async function exportInvoicePdf(element: HTMLElement, fileName: string) {
   pdf.save(fileName.endsWith(".pdf") ? fileName : `${fileName}.pdf`);
 }
 
-export function safeFileName(invoiceNumber: string, client: string) {
+export function safeFileName(invoiceNumber: string, client: string, documentType = "invoice") {
   const clean = (v: string) =>
     v
       .trim()
       .replace(/[^a-z0-9-_]+/gi, "-")
       .replace(/^-|-$/g, "");
-  return `invoice-${clean(invoiceNumber) || "draft"}${client ? `-${clean(client)}` : ""}.pdf`.toLowerCase();
+  return `${clean(documentType) || "invoice"}-${clean(invoiceNumber) || "draft"}${client ? `-${clean(client)}` : ""}.pdf`.toLowerCase();
 }

@@ -31,6 +31,9 @@ export function buildCrmDocumentPreview({
   documentType,
   documentNumber,
   customerName,
+  customerEmail,
+  customerPhone,
+  customerAddress,
   issueDate,
   dueDate,
   lines,
@@ -48,6 +51,9 @@ export function buildCrmDocumentPreview({
   documentType: "Invoice" | "Quote";
   documentNumber?: string;
   customerName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  customerAddress?: string;
   issueDate?: string;
   dueDate?: string | null;
   lines: CrmPreviewLine[];
@@ -107,7 +113,13 @@ export function buildCrmDocumentPreview({
       address: businessAddress || "",
       email: businessEmail || "",
     },
-    to: { ...data.to, name: customerName || "Customer" },
+    to: {
+      ...data.to,
+      name: customerName || "Customer",
+      email: customerEmail || "",
+      phone: customerPhone || "",
+      address: customerAddress || "",
+    },
     items: lineItems,
     financialBreakdown: {
       lineDiscountTotal: lineDiscounts,

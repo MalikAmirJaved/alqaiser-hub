@@ -70,6 +70,7 @@ export interface InvoiceWorkflowProps {
   onClose: () => void;
   initialData?: CustomerInvoice | SalesInvoice | null;
   defaultValues?: Partial<CustomerInvoiceFormData> | null;
+  defaultCustomerName?: string;
   onSuccess?: (result?: any) => void;
   moduleCode?: "FINANCE" | "SALES";
 }
@@ -451,6 +452,7 @@ export function InvoiceWorkflow({
   onClose,
   initialData,
   defaultValues,
+  defaultCustomerName,
   onSuccess,
   moduleCode = "FINANCE",
 }: InvoiceWorkflowProps) {
@@ -471,6 +473,7 @@ export function InvoiceWorkflow({
   const [variantDisplayLabels, setVariantDisplayLabels] = useState<Record<string, string>>({});
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [createdSupplierName, setCreatedSupplierName] = useState("");
+  const invoiceCodeGenerationRef = useRef(false);
 
   const fetchCustomers = useServerSearch("/api/inventory/customers/", {
     transformOption: (c: any) => ({
@@ -644,7 +647,19 @@ export function InvoiceWorkflow({
       setNewCustomerInfo(null);
       setExistingLineIds(new Set((initialData.lines || []).map((l: any) => l.id).filter(Boolean)));
     } else if (defaultValues) {
-      if (defaultValues.invoice_number !== undefined) setValue("invoice_number", defaultValues.invoice_number);
+      if (defaultValues.invoice_number?.trim()) {
+        setValue("invoice_number", defaultValues.invoice_number);
+      } else if (!invoiceCodeGenerationRef.current) {
+        invoiceCodeGenerationRef.current = true;
+        generateCode()
+          .then((code) => {
+            if (!getValues("invoice_number")) setValue("invoice_number", code);
+          })
+          .catch(() => toast.error("Could not generate an invoice number."))
+          .finally(() => {
+            invoiceCodeGenerationRef.current = false;
+          });
+      }
       if (defaultValues.customer !== undefined) setValue("customer", defaultValues.customer);
       if (defaultValues.invoice_date !== undefined) setValue("invoice_date", defaultValues.invoice_date);
       if (defaultValues.due_date !== undefined) setValue("due_date", defaultValues.due_date);
@@ -659,7 +674,7 @@ export function InvoiceWorkflow({
       );
       if (defaultValues.notes !== undefined) setValue("notes", defaultValues.notes);
       if (defaultValues.lines !== undefined) setValue("lines", defaultValues.lines as any);
-      setCustomerDisplayLabel((defaultValues as any).customer_name || "");
+      setCustomerDisplayLabel(defaultCustomerName || "");
     } else {
       reset({
         invoice_number: "",
@@ -679,9 +694,9 @@ export function InvoiceWorkflow({
       setExistingLineIds(new Set());
       generateCode()
         .then((code) => setValue("invoice_number", code))
-        .catch(() => {});
+        .catch(() => toast.error("Could not generate an invoice number."));
     }
-  }, [defaultValues, generateCode, initialData, reset, setValue]);
+  }, [defaultCustomerName, defaultValues, generateCode, getValues, initialData, reset, setValue]);
 
   useEffect(() => {
     const labels: Record<string, string> = {};

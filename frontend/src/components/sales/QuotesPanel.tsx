@@ -20,7 +20,8 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
-import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
+import { DocumentPrintPreviewModal } from "@/components/invoice-generator/DocumentPrintPreviewModal";
+import { buildCrmDocumentPreview } from "@/components/invoice-generator/crmPreview";
 import { usePagination } from "@/hooks/usePagination";
 
 export default function QuotesPanel() {
@@ -235,52 +236,30 @@ export default function QuotesPanel() {
       />
       <ConfirmModal />
       {printQuote && companySettings && (
-        <PrintPreviewModal
+        <DocumentPrintPreviewModal
           open={showPrintPreview}
           onClose={() => { setShowPrintPreview(false); setPrintQuote(null); }}
-          documentProps={{
-            data: {
-              type: "QUOTE",
-              documentNumber: printQuote.quote_number,
-              date: printQuote.date,
-              expirationDate: printQuote.expiration_date || undefined,
-              customerName: printQuote.customer_name || "—",
-              customerEmail: (printQuote as any).customer_email || "",
-              customerPhone: (printQuote as any).customer_phone || "",
-              lines: (printQuote.lines || []).map((l) => ({
-                variant_name: l.variant_name,
-                variant_sku: l.variant_sku,
-                quantity: l.quantity,
-                unit_price: l.unit_price,
-                tax_rate: l.tax_rate,
-                discount_amount: l.discount_amount,
-              })),
-              totalAmount:
-                typeof printQuote.total_amount === "string"
-                  ? parseFloat(printQuote.total_amount)
-                  : printQuote.total_amount,
-              overallDiscountPercent: Number((printQuote as any).overall_discount_percent || 0),
-              overallTaxPercent: Number((printQuote as any).overall_tax_percent || 0),
-              status: printQuote.status,
-              notes: printQuote.notes,
-            },
-            company: {
-              companyName: companySettings.companyName,
-              address: companySettings.address,
-              city: companySettings.city,
-              state: companySettings.state,
-              country: companySettings.country,
-              phone: companySettings.phone,
-              email: companySettings.email,
-              taxId: companySettings.taxId,
-              logo: (companySettings as any).logo || "",
-              logoUrl: (companySettings as any).logo
-                ? `${process.env.NEXT_PUBLIC_API_URL}${(companySettings as any).logo}`
-                : "",
-            },
-            termsContent: termsData?.quote || "",
-            formatCurrency,
-          }}
+          documentTitle="Quote"
+          data={buildCrmDocumentPreview({
+            appearance: printQuote,
+            documentType: "Quote",
+            documentNumber: printQuote.quote_number,
+            customerName: printQuote.customer_name,
+            customerEmail: (printQuote as any).customer_email,
+            customerPhone: (printQuote as any).customer_phone,
+            issueDate: printQuote.date,
+            dueDate: printQuote.expiration_date,
+            lines: printQuote.lines || [],
+            currency: companySettings.currency,
+            businessName: companySettings.companyName,
+            businessAddress: companySettings.address,
+            businessEmail: companySettings.email,
+            businessLogo: companySettings.logo,
+            overallDiscountPercent: Number(printQuote.overall_discount_percent || 0),
+            overallTaxPercent: Number(printQuote.overall_tax_percent || 0),
+            notes: printQuote.notes,
+            terms: termsData?.quote || "",
+          })}
         />
       )}
     </>

@@ -10,7 +10,8 @@ import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
 import { useServerSearch } from "@/hooks/useServerSearch";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
-import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
+import { DocumentPrintPreviewModal } from "@/components/invoice-generator/DocumentPrintPreviewModal";
+import { buildCrmDocumentPreview } from "@/components/invoice-generator/crmPreview";
 import { StatusBadge } from "@/components/finance/ui";
 import FilterBar from "@/components/reuseable/FilterBar";
 import type { FilterField } from "@/components/reuseable/FilterBar";
@@ -279,50 +280,30 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
         />
       )}
       {printInvoice && companySettings && (
-        <PrintPreviewModal
+        <DocumentPrintPreviewModal
           open={showPrintPreview}
           onClose={() => { setShowPrintPreview(false); setPrintInvoice(null); }}
-          documentProps={{
-            data: {
-              type: "INVOICE",
-              documentNumber: printInvoice.invoice_number,
-              date: printInvoice.invoice_date,
-              dueDate: printInvoice.due_date,
-              customerName: printInvoice.customer_name || "—",
-              customerEmail: (printInvoice as any).customer_email || "",
-              customerPhone: (printInvoice as any).customer_phone || "",
-              lines: (printInvoice.lines || []).map((l: any) => ({
-                variant_name: l.variant_name,
-                variant_sku: l.variant_sku,
-                quantity: l.quantity,
-                unit_price: l.unit_price,
-                tax_rate: l.tax_rate,
-                discount_amount: l.discount_amount,
-              })),
-              totalAmount: Number(printInvoice.amount),
-              overallDiscountPercent: Number((printInvoice as any).overall_discount_percent || 0),
-              overallTaxPercent: Number((printInvoice as any).overall_tax_percent || 0),
-              status: printInvoice.status,
-              paymentStatus: printInvoice.payment_status,
-              notes: printInvoice.notes,
-            },
-            company: {
-              companyName: companySettings.companyName,
-              address: companySettings.address,
-              city: companySettings.city,
-              state: companySettings.state,
-              country: companySettings.country,
-              phone: companySettings.phone,
-              email: companySettings.email,
-              taxId: companySettings.taxId,
-              logo: (companySettings as any).logo || "",
-              logoUrl: (companySettings as any).logo
-                ? `${process.env.NEXT_PUBLIC_API_URL}${(companySettings as any).logo}`
-                : "",
-            },
-            termsContent: termsData?.invoice || "",
-            formatCurrency,
-          }}
+          documentTitle="Invoice"
+          data={buildCrmDocumentPreview({
+            appearance: printInvoice,
+            documentType: "Invoice",
+            documentNumber: printInvoice.invoice_number,
+            customerName: printInvoice.customer_name,
+            customerEmail: printInvoice.customer_email,
+            customerPhone: printInvoice.customer_phone,
+            issueDate: printInvoice.invoice_date,
+            dueDate: printInvoice.due_date,
+            lines: printInvoice.lines || [],
+            currency: companySettings.currency,
+            businessName: companySettings.companyName,
+            businessAddress: companySettings.address,
+            businessEmail: companySettings.email,
+            businessLogo: companySettings.logo,
+            overallDiscountPercent: Number(printInvoice.overall_discount_percent || 0),
+            overallTaxPercent: Number(printInvoice.overall_tax_percent || 0),
+            notes: printInvoice.notes,
+            terms: termsData?.invoice || "",
+          })}
         />
       )}
     </>

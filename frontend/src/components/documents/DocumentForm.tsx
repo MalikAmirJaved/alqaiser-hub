@@ -26,6 +26,7 @@ export default function DocumentForm(props: DocumentFormProps) {
       onClose={props.onClose}
       initialData={props.initialData}
       defaultValues={props.defaultValues}
+      defaultCustomerName={props.defaultCustomerName}
       onSuccess={props.onSuccess}
       moduleCode={props.moduleCode}
     />
