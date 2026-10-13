@@ -6,6 +6,7 @@ import { useServerSearch } from "@/hooks/useServerSearch";
 import { useApi } from "@/hooks/useApi";
 import type { VariantDetail } from "@/hooks/useAllVariants";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
+import DocumentFormLayout from "@/components/documents/DocumentFormLayout";
 import { useCreateQuote, useUpdateQuote, Quote } from "@/hooks/sales/useQuotes";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
@@ -347,36 +348,22 @@ export default function QuoteForm({
 
   return (
     <>
-      <main className="mx-auto ">
-        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-          <div className="flex items-center justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
-            <div className="flex items-center gap-3">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-medium">
-                <FileText className="w-3.5 h-3.5" />
-                Quote
-              </span>
-              <div>
-                <h2 className="text-base font-semibold leading-tight">
-                  {initialData ? "Edit Quote" : "New Quote"}
-                </h2>
-                {initialData?.quote_number && (
-                  <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                    {initialData.quote_number}
-                  </p>
-                )}
-              </div>
-            </div>
-            <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted"
-            >
-            Back
-            </button>
-          </div>
-
-          <div>
-            <form onSubmit={handleSubmit} id="quote-form" className="space-y-6 p-5 sm:p-6">
+      <DocumentFormLayout
+        documentType="Quote"
+        title={initialData ? "Edit Quote" : "New Quote"}
+        documentNumber={initialData?.quote_number}
+        formId="quote-form"
+        isPending={isPending}
+        submitLabel={initialData ? "Update quote" : "Save quote"}
+        pendingLabel="Saving…"
+        summary={
+          formData.lines.length === 0
+            ? "No items added yet"
+            : `${formData.lines.length} item${formData.lines.length !== 1 ? "s" : ""} · Total ${formatCurrency(calculateTotal())}`
+        }
+        onCancel={onClose}
+      >
+        <form onSubmit={handleSubmit} id="quote-form" className="space-y-6 p-5 sm:p-6">
 
               {/* ── Section 1: Document details ── */}
               <section>
@@ -831,35 +818,8 @@ export default function QuoteForm({
                   </div>
                 </div>
               </div>
-            </form>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/30 px-5 py-3.5 sm:px-6">
-            <p className="text-xs text-muted-foreground">
-              {formData.lines.length === 0
-                ? "No items added yet"
-                : `${formData.lines.length} item${formData.lines.length !== 1 ? "s" : ""} · Total ${formatCurrency(calculateTotal())}`}
-            </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 h-9 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                form="quote-form"
-                disabled={isPending}
-                className="px-5 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-              >
-                {isPending ? "Saving…" : initialData ? "Update quote" : "Save quote"}
-              </button>
-          </div>
-        </div>
-        </div>
-      </main>
+        </form>
+      </DocumentFormLayout>
 
       <CustomerCreationModal
         open={showCustomerModal}

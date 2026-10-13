@@ -15,6 +15,7 @@ import { useServerSearch } from "@/hooks/useServerSearch";
 import { useApi } from "@/hooks/useApi";
 import type { VariantDetail } from "@/hooks/useAllVariants";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
+import DocumentFormLayout from "@/components/documents/DocumentFormLayout";
 import { FormModal } from "@/components/inventory/supplier/FormModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
@@ -1020,36 +1021,21 @@ export default function CustomerInvoiceForm({
 
   return (
     <>
-      <main className="mx-auto w-full max-w-6xl px-3 py-6 sm:px-6 lg:px-8">
-        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-          <div className="flex items-center justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
-            <div className="flex items-center gap-3">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary/10 text-primary text-xs font-medium">
-                <FileText className="w-3.5 h-3.5" />
-                Invoice
-              </span>
-              <div>
-                <h2 className="text-base font-semibold leading-tight">
-                  {initialData?.id ? "Edit Invoice" : "New Customer Invoice"}
-                </h2>
-                {initialData?.invoice_number && (
-                  <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                    {initialData.invoice_number}
-                  </p>
-                )}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted"
-            >
-              Back
-            </button>
-          </div>
-
-          <div>
-            <form onSubmit={handleSubmit(onSubmit)} id="invoice-form" className="space-y-6 p-5 sm:p-6">
+      <DocumentFormLayout
+        documentType="Invoice"
+        title={initialData?.id ? "Edit Invoice" : "New Customer Invoice"}
+        documentNumber={initialData?.invoice_number}
+        formId="invoice-form"
+        isPending={isPending}
+        submitLabel={initialData?.id ? "Update invoice" : "Save invoice"}
+        summary={
+          fields.length === 0
+            ? "No items added yet"
+            : `${fields.length} item${fields.length !== 1 ? "s" : ""} · Total ${formatCurrency((totalBeforeTax || 0) + (totalTax || 0) + (overallTaxAmt || 0))}`
+        }
+        onCancel={onClose}
+      >
+        <form onSubmit={handleSubmit(onSubmit)} id="invoice-form" className="space-y-6 p-5 sm:p-6">
 
               {/* ── Section 1: Document details ── */}
               <section>
@@ -1368,36 +1354,8 @@ export default function CustomerInvoiceForm({
                   </div>
                 </div>
               </div>
-            </form>
-          </div>
-
-          {/* ── Sticky footer ── */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/30 px-5 py-3.5 sm:px-6">
-            <p className="text-xs text-muted-foreground">
-              {fields.length === 0
-                ? "No items added yet"
-                : `${fields.length} item${fields.length !== 1 ? "s" : ""} · Total ${formatCurrency((totalBeforeTax || 0) + (totalTax || 0) + (overallTaxAmt || 0))}`}
-            </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 h-9 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                form="invoice-form"
-                disabled={isPending}
-                className="px-5 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-              >
-                {isPending ? "Saving…" : initialData?.id ? "Update invoice" : "Save invoice"}
-              </button>
-            </div>
-          </div>
-      </div>
-      </main>
+        </form>
+      </DocumentFormLayout>
 
       <CustomerCreationModal
         open={showCustomerModal}
