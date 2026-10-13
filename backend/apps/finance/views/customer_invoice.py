@@ -85,7 +85,8 @@ class CustomerInvoiceViewSet(
         for _ in range(10):
             try:
                 serializer.save(
-                    invoice_number=f"INV-{int(time.time())}-{random.randint(1000, 9999)}",
+                    invoice_number=serializer.validated_data.get('invoice_number')
+                    or f"INV-{int(time.time())}-{random.randint(1000, 9999)}",
                     source='FINANCE',
                     company_id=self.request.user.company_id,
                     branch_id=self.request.user.branch_id,

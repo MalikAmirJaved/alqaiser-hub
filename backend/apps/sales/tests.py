@@ -1,5 +1,7 @@
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
+from unittest.mock import Mock
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.core.exceptions import ValidationError
@@ -175,6 +177,59 @@ class QuoteModelTest(TestCase):
                 quote_number='QT-UNIQ', date=date.today(),
                 company_id=self.company.id, branch_id=self.branch.id
             )
+
+    def test_quote_serializer_preserves_user_supplied_quote_number(self):
+        from apps.sales.serializers.quote import QuoteSerializer
+
+        serializer = QuoteSerializer(
+            data={'quote_number': 'CUSTOM-Q-100', 'date': date.today()},
+            context={'request': SimpleNamespace(user=self.user)},
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        quote = serializer.save()
+        self.assertEqual(quote.quote_number, 'CUSTOM-Q-100')
+
+        update_serializer = QuoteSerializer(
+            quote,
+            data={'quote_number': 'CUSTOM-Q-100'},
+            partial=True,
+            context={'request': SimpleNamespace(user=self.user)},
+        )
+        self.assertTrue(update_serializer.is_valid(), update_serializer.errors)
+        self.assertEqual(update_serializer.save().quote_number, 'CUSTOM-Q-100')
+
+    def test_quote_serializer_rejects_duplicate_user_supplied_quote_number(self):
+        from apps.sales.serializers.quote import QuoteSerializer
+
+        Quote.objects.create(
+            quote_number='CUSTOM-Q-DUPLICATE',
+            date=date.today(),
+            company_id=self.company.id,
+            branch_id=self.branch.id,
+        )
+        serializer = QuoteSerializer(
+            data={'quote_number': 'CUSTOM-Q-DUPLICATE', 'date': date.today()},
+            context={'request': SimpleNamespace(user=self.user)},
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('quote_number', serializer.errors)
+
+    def test_sales_invoice_create_preserves_user_supplied_invoice_number(self):
+        from apps.sales.views.invoice import SalesInvoiceViewSet
+
+        view = SalesInvoiceViewSet()
+        view.request = SimpleNamespace(
+            user=SimpleNamespace(company_id=1, branch_id=1)
+        )
+        serializer = Mock(validated_data={'invoice_number': 'CUSTOM-INV-200'})
+
+        view.perform_create(serializer)
+
+        self.assertEqual(
+            serializer.save.call_args.kwargs['invoice_number'],
+            'CUSTOM-INV-200',
+        )
 
     def test_source_default(self):
         quote = Quote.objects.create(

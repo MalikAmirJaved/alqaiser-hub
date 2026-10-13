@@ -59,6 +59,7 @@ class QuoteLineSerializer(serializers.ModelSerializer):
 
 class QuoteSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)
+    quote_number = serializers.CharField(max_length=50, required=False)
     lines = QuoteLineSerializer(many=True, required=False)
     lead = serializers.SlugRelatedField(
         slug_field='_id',
@@ -93,7 +94,7 @@ class QuoteSerializer(serializers.ModelSerializer):
             'created_by_name', 'updated_by_name', 'source_label', 'created_by_label',
             'converted_invoice', 'converted_invoice_number',
         ]
-        read_only_fields = ('id', 'quote_number', 'created_at', 'updated_at', 'company_id', 'branch_id', 'total_amount', 'status')
+        read_only_fields = ('id', 'created_at', 'updated_at', 'company_id', 'branch_id', 'total_amount', 'status')
 
     def get_customer_name(self, obj):
         return obj.customer.name if obj.customer else None
@@ -117,6 +118,14 @@ class QuoteSerializer(serializers.ModelSerializer):
         name = obj.created_by.username if obj.created_by else None
         src = obj.source or 'new'
         return f"{name} ({src})" if name else None
+
+    def validate_quote_number(self, value):
+        quotes = Quote.objects.filter(quote_number=value)
+        if self.instance:
+            quotes = quotes.exclude(_id=self.instance._id)
+        if quotes.exists():
+            raise serializers.ValidationError('A quote with this number already exists.')
+        return value
 
     def validate_accent_color(self, value):
         if value and not re.fullmatch(r'#[0-9A-Fa-f]{6}', value):
@@ -150,7 +159,10 @@ class QuoteSerializer(serializers.ModelSerializer):
             customer = Customer.objects.create(**new_customer_data)
             validated_data['customer'] = customer
 
-        validated_data['quote_number'] = f"QT-{int(time.time())}-{random.randint(1000, 9999)}"
+        validated_data.setdefault(
+            'quote_number',
+            f"QT-{int(time.time())}-{random.randint(1000, 9999)}",
+        )
         validated_data['company_id'] = user.company_id
         validated_data['branch_id'] = user.branch_id
         validated_data['created_by'] = user

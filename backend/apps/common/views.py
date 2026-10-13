@@ -33,6 +33,7 @@ CODE_REGISTRY = {
     'employee': {'app': 'hr', 'model': 'Employee', 'field': 'employee_id', 'prefix': 'EMP'},
     'policy': {'app': 'hr', 'model': 'Policy', 'field': 'code', 'prefix': 'POL'},
     'customer_invoice': {'app': 'finance', 'model': 'CustomerInvoice', 'field': 'invoice_number', 'prefix': 'INV'},
+    'quote': {'app': 'sales', 'model': 'Quote', 'field': 'quote_number', 'prefix': 'QT'},
     'supplier_bill': {'app': 'finance', 'model': 'SupplierBill', 'field': 'bill_number', 'prefix': 'BILL'},
     'expense': {'app': 'finance', 'model': 'Expense', 'field': 'expense_number', 'prefix': 'EXP'},
     'bank_account': {'app': 'finance', 'model': 'BankAccount', 'field': 'account_number', 'prefix': 'BA'},

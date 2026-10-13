@@ -46,7 +46,8 @@ class SalesInvoiceViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequ
         import random
         import time
         serializer.save(
-            invoice_number=f'INV-SL-{int(time.time())}-{random.randint(1000, 9999)}',
+            invoice_number=serializer.validated_data.get('invoice_number')
+            or f'INV-SL-{int(time.time())}-{random.randint(1000, 9999)}',
             source='SALES_AGENT',
             company_id=self.request.user.company_id,
             branch_id=self.request.user.branch_id,

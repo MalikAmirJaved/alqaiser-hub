@@ -1,5 +1,7 @@
 from datetime import date, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
+from unittest.mock import Mock
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from apps.common.test_base import BaseTestCase
@@ -452,6 +454,22 @@ class CustomerInvoiceTest(TestCase):
                 invoice_date=date.today(), amount=Decimal('100'),
                 company_id=1, branch_id=1
             )
+
+    def test_finance_invoice_create_preserves_user_supplied_invoice_number(self):
+        from apps.finance.views.customer_invoice import CustomerInvoiceViewSet
+
+        view = CustomerInvoiceViewSet()
+        view.request = SimpleNamespace(
+            user=SimpleNamespace(company_id=1, branch_id=1)
+        )
+        serializer = Mock(validated_data={'invoice_number': 'CUSTOM-INV-100'})
+
+        view.perform_create(serializer)
+
+        self.assertEqual(
+            serializer.save.call_args.kwargs['invoice_number'],
+            'CUSTOM-INV-100',
+        )
 
     def test_overall_discount_and_tax(self):
         inv = CustomerInvoice.objects.create(

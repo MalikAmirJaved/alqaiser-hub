@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { Plus, Trash2, Package, Type, FileText, AlertCircle } from "lucide-react";
+import { useCallback, useEffect, useState, useRef } from "react";
+import { Plus, Trash2, Package, Type, FileText, AlertCircle, RotateCw } from "lucide-react";
 import { useServerSearch } from "@/hooks/useServerSearch";
 import { useApi } from "@/hooks/useApi";
 import type { VariantDetail } from "@/hooks/useAllVariants";
@@ -11,6 +11,7 @@ import { useCreateQuote, useUpdateQuote, Quote } from "@/hooks/sales/useQuotes";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
+import { useAutoCode } from "@/hooks/useAutoCode";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { toast } from "sonner";
 import {
@@ -90,9 +91,11 @@ export function QuoteWorkflow({
 
   const createQuote = useCreateQuote();
   const updateQuote = useUpdateQuote();
+  const { generateCode, validateCode } = useAutoCode("quote");
   const api = useApi();
 
   const [formData, setFormData] = useState({
+    quote_number: "",
     customer: "",
     date: new Date().toISOString().split("T")[0],
     expiration_date: "",
@@ -103,6 +106,26 @@ export function QuoteWorkflow({
     lines: [] as QuoteLine[],
   });
 
+  const resetForm = useCallback(() => {
+    setAppearance(createDefaultDocumentAppearance());
+    setFormData({
+      quote_number: "",
+      customer: "",
+      date: new Date().toISOString().split("T")[0],
+      expiration_date: "",
+      overall_discount_percent: 0,
+      overall_tax_percent: 0,
+      notes: "",
+      lead: "",
+      lines: [],
+    });
+    setNewCustomerInfo(null);
+    setCustomerDisplayLabel("");
+    generateCode()
+      .then((code) => setFormData((prev) => ({ ...prev, quote_number: code })))
+      .catch(() => toast.error("Could not generate a quote number."));
+  }, [generateCode]);
+
   useEffect(() => {
     if (initialData) {
       setAppearance({
@@ -111,6 +134,7 @@ export function QuoteWorkflow({
         typography: initialData.typography || createDefaultDocumentAppearance().typography,
       });
       setFormData({
+        quote_number: initialData.quote_number,
         customer: initialData.customer || "",
         date: initialData.date || new Date().toISOString().split("T")[0],
         expiration_date: initialData.expiration_date || "",
@@ -139,7 +163,7 @@ export function QuoteWorkflow({
     } else {
       resetForm();
     }
-  }, [initialData]);
+  }, [initialData, resetForm]);
 
   useEffect(() => {
     if (initialCustomerId && !initialData) {
@@ -149,29 +173,13 @@ export function QuoteWorkflow({
         .then((c: any) => setCustomerDisplayLabel(c.name || ""))
         .catch(() => {});
     }
-  }, [initialCustomerId, initialData]);
+  }, [api, initialCustomerId, initialData]);
 
   useEffect(() => {
     if (initialLeadId && !initialData) {
       setFormData((prev) => ({ ...prev, lead: initialLeadId }));
     }
   }, [initialLeadId, initialData]);
-
-  const resetForm = () => {
-    setAppearance(createDefaultDocumentAppearance());
-    setFormData({
-      customer: "",
-      date: new Date().toISOString().split("T")[0],
-      expiration_date: "",
-      overall_discount_percent: 0,
-      overall_tax_percent: 0,
-      notes: "",
-      lead: "",
-      lines: [],
-    });
-    setNewCustomerInfo(null);
-    setCustomerDisplayLabel("");
-  };
 
   const handleCustomerCreated = async (
     customerId: string,
@@ -292,6 +300,12 @@ export function QuoteWorkflow({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const payload: any = { ...formData };
+    payload.quote_number = payload.quote_number.trim();
+    if (!payload.quote_number) {
+      toast.error("Quote number is required.");
+      return;
+    }
+    if (!(await validateCode(payload.quote_number, initialData?.id))) return;
     if (newCustomerInfo) {
       payload.new_customer = newCustomerInfo;
       delete payload.customer;
@@ -353,7 +367,7 @@ export function QuoteWorkflow({
       <DocumentFormLayout
         documentType="Quote"
         title={initialData ? "Edit Quote" : "New Quote"}
-        documentNumber={initialData?.quote_number}
+        documentNumber={formData.quote_number}
         formId="quote-form"
         isPending={isPending}
         submitLabel={initialData ? "Update quote" : "Save quote"}
@@ -376,6 +390,37 @@ export function QuoteWorkflow({
                   </h3>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">
+                      Quote number <span className="text-destructive">*</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        value={formData.quote_number}
+                        onChange={(event) =>
+                          setFormData((prev) => ({ ...prev, quote_number: event.target.value }))
+                        }
+                        onBlur={(event) => {
+                          void validateCode(event.target.value.trim(), initialData?.id);
+                        }}
+                        required
+                        className="h-9 flex-1 rounded-lg border border-border bg-background px-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        placeholder="e.g. QT-2026-001"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          generateCode()
+                            .then((code) => setFormData((prev) => ({ ...prev, quote_number: code })))
+                            .catch(() => toast.error("Could not generate a quote number."))
+                        }
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted"
+                        title="Generate quote number"
+                      >
+                        <RotateCw className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
                   {/* Customer */}
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium">
@@ -460,7 +505,7 @@ export function QuoteWorkflow({
                 previewData={buildCrmDocumentPreview({
                   appearance,
                   documentType: "Quote",
-                  documentNumber: initialData?.quote_number || "Draft",
+                  documentNumber: formData.quote_number || "Draft",
                   customerName: customerDisplayLabel,
                   issueDate: formData.date,
                   dueDate: formData.expiration_date,

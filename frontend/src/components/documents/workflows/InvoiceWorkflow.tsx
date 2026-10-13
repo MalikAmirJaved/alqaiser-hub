@@ -681,7 +681,7 @@ export function InvoiceWorkflow({
         .then((code) => setValue("invoice_number", code))
         .catch(() => {});
     }
-  }, [initialData, defaultValues, setValue, reset]);
+  }, [defaultValues, generateCode, initialData, reset, setValue]);
 
   useEffect(() => {
     const labels: Record<string, string> = {};
@@ -1055,7 +1055,9 @@ export function InvoiceWorkflow({
                     <div className="flex gap-2">
                       <input
                         {...register("invoice_number", { required: true })}
-                        onBlur={(e) => validateCode(e.target.value)}
+                        onBlur={(e) => {
+                          void validateCode(e.target.value, initialData?.id);
+                        }}
                         className="flex-1 h-9 px-3 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
                         placeholder="e.g. INV-2025-001"
                       />
