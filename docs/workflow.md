@@ -219,7 +219,7 @@ Sales quote or customer-invoice create/edit page
 - User-entered quote/invoice numbers are retained; the backend generates one only when the submitted number is absent.
 - Quote-to-invoice conversion opens the invoice create page with quote-derived defaults, including a generated invoice number when one was not provided.
 - CRM live preview and print/PDF share the same template renderer and include branding, line and overall discounts/taxes, and terms.
-- Sales invoice update is allowed while status is DRAFT or PENDING. Paid and other non-editable statuses remain protected.
+- Unpaid Sales invoices in DRAFT, PENDING, or SENT can be edited by users with update permission; editing preserves the current status. Paid invoices, POS invoices, and other non-editable statuses remain protected.
 
 ### 7.7 Product import (Bulk)
 

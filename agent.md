@@ -1174,7 +1174,7 @@ Authenticated Sales quote/customer-invoice page
 - Quote-to-invoice conversion opens the invoice create page with quote defaults and supplies an invoice number if one is missing.
 - Create handlers retain a supplied quote/invoice number and generate only when absent.
 - Detail-page money calculations normalize decimal strings before summation/tax arithmetic.
-- Sales invoice updates permit DRAFT and PENDING; paid and other non-editable statuses remain blocked.
+- Unpaid Sales invoice updates permit DRAFT, PENDING, and SENT and preserve the current status; POS and paid invoices remain non-editable.
 - This is a page-based authenticated workflow. `components/invoice-generator/` contains shared CRM preview/template/print UI; it is not a public route.
 
 ---

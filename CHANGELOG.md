@@ -16,7 +16,7 @@ All notable changes to the **Al Qaiser Nexus ERP (Al-Qaiser BOS)** project.
 - **Editing a Sales invoice no longer duplicates its inventory deductions** — The Sales update view now passes submitted existing invoice-line IDs into the serializer, matching Finance behavior. Editing an invoice's template or other fields no longer creates duplicate line rows and attempts to deduct the same quantities twice.
 - **User-entered quote and invoice numbers are preserved** — Create endpoints now accept a supplied document number and generate one only when it is absent. Quote number editing and duplicate validation are supported in the shared form.
 - **Quote/invoice totals and previews handle serialized decimal values correctly** — Detail calculations coerce API decimal strings before arithmetic, preventing string concatenation and `NaN` overall tax. Customer selection and company-logo resolution are also reflected in the live preview.
-- **New Sales invoices can be edited while pending** — The Sales invoice update policy now permits DRAFT and PENDING invoices while continuing to block paid and other non-editable statuses.
+- **Eligible Sales invoices can be edited without changing their status** — DRAFT, PENDING, and SENT invoices can be updated while unpaid; updates preserve the existing status (including SENT). Paid invoices and other non-editable statuses remain protected.
 
 ## [1.8] — 2026-10-12
 

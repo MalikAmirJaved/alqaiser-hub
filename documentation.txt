@@ -1374,7 +1374,8 @@ URL: http://192.168.88.51:3000
     - Entered invoice numbers are retained; a number is generated only when none is supplied.
     - Converting an approved quote carries its details to the invoice create page and fills an invoice number when needed.
     - The live preview and printed/PDF invoice share the saved template, typography, branding, totals, and terms.
-    - Sales invoices in DRAFT or PENDING can be edited; paid invoices and other non-editable statuses remain protected.
+    - Unpaid Sales invoices in DRAFT, PENDING, or SENT can be edited by users with update permission; editing keeps the current status.
+    - Paid invoices, POS invoices, and other non-editable statuses remain protected.
 
 
 ================================================================================

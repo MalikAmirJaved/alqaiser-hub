@@ -27,6 +27,18 @@ Use this template:
 
 ## Resolved
 
+### BUG-20261013-08 — Editing a SENT Sales invoice was blocked or changed its status
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | High |
+| Module | Sales / Invoices |
+| Found | 2026-10-13 (reported: SENT invoices showed an Edit button; user clarified they should be editable and remain SENT after saving) |
+| Resolved | 2026-10-13 (unreleased) |
+| Root cause | The Sales invoice edit UI allowed SENT invoices, but the Sales API update guard only accepted DRAFT and PENDING. In addition, serializer updates could otherwise reapply the model default status of PENDING because status is read-only in the shared serializer. |
+| Fix | Sales API update guards now permit DRAFT, PENDING, and SENT, and `perform_update` explicitly preserves the existing status. The shared list/detail controls only show Edit for eligible unpaid, non-POS invoices when the user has update permission. |
+| Prevention | Regression coverage verifies SENT updates are accepted and save with `status='SENT'`; keep UI eligibility, API guards, and status preservation in sync. |
+
 ### BUG-20261013-07 — Repeated invoice edits inflated stock by replaying historical deductions
 | Field | Value |
 | ----- | ----- |
