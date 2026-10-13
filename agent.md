@@ -1160,6 +1160,23 @@ Backend: PaymentViewSet.create()
   → Return payment with journal reference
 ```
 
+### 12.5 Sales Quote and Invoice Document Flow
+
+```
+Authenticated Sales quote/customer-invoice page
+  → components/documents/DocumentForm
+  → QuoteWorkflow or InvoiceWorkflow for domain-specific state, validation, and API calls
+  → shared template/typography controls and CRM preview builder
+  → persist document fields + template_slug/accent_color/typography
+  → shared InvoicePreview for live preview and CRM print/PDF
+```
+
+- Quote-to-invoice conversion opens the invoice create page with quote defaults and supplies an invoice number if one is missing.
+- Create handlers retain a supplied quote/invoice number and generate only when absent.
+- Detail-page money calculations normalize decimal strings before summation/tax arithmetic.
+- Sales invoice updates permit DRAFT and PENDING; paid and other non-editable statuses remain blocked.
+- This is a page-based authenticated workflow. `components/invoice-generator/` contains shared CRM preview/template/print UI; it is not a public route.
+
 ---
 
 ## 13. AI Contributor Rules

@@ -27,6 +27,66 @@ Use this template:
 
 ## Resolved
 
+### BUG-20261013-05 — Pending Sales invoices could not be edited
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | High |
+| Module | Sales / Invoices |
+| Found | 2026-10-13 (reported: a newly created invoice had PENDING status, then edit failed with “Only DRAFT invoices can be updated.”) |
+| Resolved | 2026-10-13 (unreleased) |
+| Root cause | Sales invoice update handling only allowed the DRAFT status, despite newly created invoices being initialized as PENDING. This made the normal create-then-edit path impossible for those invoices. |
+| Fix | Sales invoice update and perform-update status checks now allow DRAFT and PENDING. Deletion rules were aligned with the finance invoice behavior; paid and other non-editable statuses remain protected. |
+| Prevention | A focused regression test covers updating a PENDING Sales invoice. |
+
+### BUG-20261013-04 — Overall invoice tax could calculate as `NaN`
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | High |
+| Module | Sales / Invoices / Quotes |
+| Found | 2026-10-13 (reported with console values showing concatenated line discounts and `calculated tax NaN`) |
+| Resolved | 2026-10-13 (unreleased) |
+| Root cause | API decimal values can arrive as strings. Detail-page reducers added those strings with JavaScript `+`, concatenating amounts rather than summing them; later tax arithmetic then operated on an invalid result. |
+| Fix | Quote and invoice detail calculations convert quantity, unit price, line discount, and tax rate to numbers before summing and calculating totals. Temporary debug output was removed. |
+| Prevention | Keep API response types honest about serialized decimals and normalize numeric inputs at calculation boundaries; the reported values now calculate numeric discount, taxable amount, and tax totals. |
+
+### BUG-20261013-03 — Quote conversion, detail totals, and printed CRM documents diverged
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | Medium |
+| Module | Sales / Invoices / Quotes |
+| Found | 2026-10-13 (reported: invoice number missing when converting a quote, overall totals missing on detail, and print output differing from the editor) |
+| Resolved | 2026-10-13 (unreleased) |
+| Root cause | Invoice-number generation was only applied when creating without conversion defaults; detail totals were not shown in the no-line-items rendering path; and CRM print/PDF used a rendering path separate from the saved-template editor preview. |
+| Fix | Quote conversion now generates a number if its defaults lack one and preserves the quote's data. Detail pages render overall discount/tax totals in the relevant state. CRM print/PDF now renders through the same `InvoicePreview` template renderer as the editor, including saved branding, typography, logo, and terms. |
+| Prevention | Keep conversion defaults, detail totals, and CRM print/PDF connected to the shared document data/rendering path. |
+
+### BUG-20261013-02 — Company logo and selected customer were missing from live preview
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | Medium |
+| Module | Sales / Invoices / Quotes (frontend) |
+| Found | 2026-10-13 (reported: logo absent and selecting an invoice customer did not update the preview) |
+| Resolved | 2026-10-13 (unreleased) |
+| Root cause | The CRM preview builder did not receive/resolve the company logo, and the selected customer ID changed without updating the display name consumed by the preview. |
+| Fix | Preview construction now includes resolved company branding, and customer selection updates the customer label used by the live document preview. |
+| Prevention | When wiring a form field to preview data, update the preview's display model as well as its persisted identifier; include company branding in the common preview builder. |
+
+### BUG-20261013-01 — User-provided quote and invoice numbers changed after creation
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | High |
+| Module | Sales / Invoices / Quotes |
+| Found | 2026-10-13 (reported: a manually entered document number was replaced after create) |
+| Resolved | 2026-10-13 (unreleased) |
+| Root cause | Quote serialization did not accept the supplied quote number, while invoice create handlers always generated a number instead of preferring the submitted value. |
+| Fix | Quote number is writable and quote/invoice create paths preserve supplied numbers; server-side number generation is used only as a fallback. The shared form supports quote number editing and duplicate validation, including during edit. |
+| Prevention | Preserve client-supplied document identifiers when valid and generate only for missing values; cover create/update behavior with focused backend tests. |
+
 ### BUG-20261012-04 — Purchase Order create 500'd on tax rates with more than 2 decimal places
 | Field | Value |
 | ----- | ----- |

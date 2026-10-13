@@ -113,6 +113,9 @@ Index: `docs/README.md`.
 - Inventory has a separate audit engine from `apps/audit`.
 - `DASHBOARD` permission module may be missing from seed — check fallbacks before “fixing” dashboard auth oddly.
 - Login “forgot password” hardcoding is a security smell — do not spread that pattern.
+- Sales quote and customer-invoice create/edit must use the shared page-based `DocumentForm`; keep domain-specific API workflows, but do not reintroduce separate CRUD modals or a public invoice-generator route.
+- CRM editor preview and print/PDF should consume the shared document preview/rendering path. When changing form state, update the preview model (including customer display name and company logo) as well as the persisted ID/value.
+- API monetary decimals may be serialized as strings. Convert them to numbers before arithmetic to avoid concatenation and invalid totals; preserve user-provided document numbers and generate only as fallback.
 
 Details: `docs/bugfoundresolved.md`, `agent.md` Known Issues.
 

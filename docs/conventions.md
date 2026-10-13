@@ -31,6 +31,8 @@ Short coding and process rules. Full tables live in [`../agent.md`](../agent.md)
 | Permissions | Never hardcode access; use Redux / guards |
 | Naming | `PascalCase.tsx` components, `use*.ts` hooks |
 | Styles | Tailwind + `cn()` |
+| Shared quote/invoice UI | Use the page-based `DocumentForm` entry point and retain domain-specific quote/invoice workflows; share preview/rendering instead of duplicating forms |
+| Money calculations | Normalize API decimal strings to numbers at calculation boundaries before `+`, discount, or tax arithmetic |
 
 ---
 

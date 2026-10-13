@@ -116,6 +116,8 @@ frontend/
     │       ├── inventory/
     │       ├── finance/
     │       ├── sales/
+    │       │   ├── quotes/                 # Quote list, create/edit pages, and quote detail
+    │       │   └── customer-invoices/      # Invoice list, create/edit pages, and invoice detail
     │       ├── monitoring/
     │       └── settings/
     │           └── trash/       # deleted-records page (permanent delete / restore)
@@ -124,6 +126,8 @@ frontend/
     │   ├── reuseable/       # shared widgets + final/ generics
     │   ├── sidebar/
     │   ├── navbar/
+    │   ├── documents/                      # Shared quote/invoice create/edit form and workflows
+    │   ├── invoice-generator/              # Shared CRM document preview, template, and print UI (not a public route)
     │   └── {hr,inventory,finance,sales,monitoring,settings,...}/
     ├── hooks/
     │   ├── finance/

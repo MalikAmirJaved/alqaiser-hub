@@ -24,6 +24,8 @@ Use this folder as the single place to manage architecture, workflows, structure
 3. **Structural change** (new app, folder, route) → update `filestructure.md` and the tree in `agent.md`.
 4. **AI work** → keep `prompt.md` + `agent.md` aligned; never invent APIs that are not in the code.
 
+For the shared Sales quote/invoice editor, see [workflow.md](./workflow.md) for the page, conversion, and status flow and [architecture.md](./architecture.md) for shared preview/print rendering. User-facing instructions belong in [`../documentation.txt`](../documentation.txt).
+
 ## Current branch context
 
 Local development is **non-Docker** (Docker compose removed). Backend runs via Daphne; Celery worker/beat are started separately. See `backend/cmd` and [setup.md](./setup.md).

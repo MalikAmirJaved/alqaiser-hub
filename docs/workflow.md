@@ -204,7 +204,24 @@ POS checkout → sales order / stock movement
   → attach finance invoice / accounting updates
 ```
 
-### 7.6 Product import (Bulk)
+### 7.6 Sales quote and invoice create/edit
+
+```
+Sales quote or customer-invoice create/edit page
+  → shared DocumentForm
+  → quote- or invoice-specific workflow for validation and API calls
+  → common template/typography controls and live preview
+  → POST/PUT to the existing Sales API
+  → persist document data and selected appearance
+```
+
+- These are authenticated pages, not a public `/invoice-generator` route or a create/edit modal.
+- User-entered quote/invoice numbers are retained; the backend generates one only when the submitted number is absent.
+- Quote-to-invoice conversion opens the invoice create page with quote-derived defaults, including a generated invoice number when one was not provided.
+- CRM live preview and print/PDF share the same template renderer and include branding, line and overall discounts/taxes, and terms.
+- Sales invoice update is allowed while status is DRAFT or PENDING. Paid and other non-editable statuses remain protected.
+
+### 7.7 Product import (Bulk)
 
 ```
 Upload XLSX/CSV → parse endpoint → review rows → confirm import
@@ -212,7 +229,7 @@ Upload XLSX/CSV → parse endpoint → review rows → confirm import
   → source field marks import origin
 ```
 
-### 7.7 Forecast (Celery)
+### 7.8 Forecast (Celery)
 
 ```
 Beat 02:00 UTC → generate sales forecasts (all companies)

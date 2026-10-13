@@ -110,6 +110,12 @@ All business data is isolated by **company** and **branch**.
 | Store | `store/` | Redux slices |
 | Config | `config/` | menu, route permissions, schemas |
 
+### Sales quote and invoice documents
+
+The authenticated Sales quote and customer-invoice pages use the shared `components/documents/DocumentForm` entry point. It selects a quote- or invoice-specific workflow for API mutations, validation, and conversion defaults, while common document components handle the template/typography controls and live preview. Saved appearance is represented by the document's `template_slug`, `accent_color`, and `typography`.
+
+The CRM preview builder maps document data and company/customer branding into the shared `InvoiceData` model. The same `InvoicePreview` renderer is used by the editor and CRM print/PDF flow so saved appearance, totals, logo, and terms do not diverge. The editor is an authenticated page workflow; there is no public invoice-generator route or create/edit modal.
+
 ### Provider stack
 
 ```

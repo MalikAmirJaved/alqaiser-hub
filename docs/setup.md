@@ -74,6 +74,14 @@ celery -A config beat --loglevel=info
 python manage.py test
 ```
 
+For frontend document-workflow changes, run the TypeScript check and production build:
+
+```bash
+cd frontend
+npx tsc --noEmit
+npm run build
+```
+
 Health check: `GET http://localhost:8000/health/` → `{"status":"healthy"}`.
 
 ---
