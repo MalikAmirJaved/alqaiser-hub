@@ -306,7 +306,9 @@ export function formatMoney(amount: number, currency: string) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  return `${entry?.symbol ?? "$"}${value}`;
+  // Use currency symbol if available, otherwise use currency code
+  const symbol = entry?.symbol ?? currency;
+  return `${symbol}${value}`;
 }
 
 /* ---------------------------------- validation --------------------------------- */

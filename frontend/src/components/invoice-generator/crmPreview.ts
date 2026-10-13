@@ -97,7 +97,7 @@ export function buildCrmDocumentPreview({
     discountType: "fixed",
     taxRate: taxable > 0 ? ((lineTaxes + overallTax) / taxable) * 100 : 0,
     notes,
-    terms: "",
+        terms: notes, // Use notes as terms since they serve the same purpose
     watermarkEnabled: false,
     watermarkText: documentType.toUpperCase(),
   };
