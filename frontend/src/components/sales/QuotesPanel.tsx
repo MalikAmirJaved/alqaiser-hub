@@ -62,6 +62,7 @@ export default function QuotesPanel() {
   const rejectQuote = useRejectQuote();
   const revertQuoteStatus = useRevertQuoteStatus();
   const permissions = useFeaturePermissions("SALES", "quote");
+  const invoicePermissions = useFeaturePermissions("SALES", "sales_customers_invoice");
   const { data: companySettings } = useCompanySettingsQuery();
   const { terms: termsData } = useTermsAndConditions();
   const { confirm: confirmDelete, Modal: ConfirmModal } = useConfirmationModal();
@@ -144,10 +145,20 @@ export default function QuotesPanel() {
       label: "",
       align: "right" as const,
       render: (_: any, quote: Quote) => {
-        const canRevert = ["SENT", "VIEWED", "APPROVED", "REJECTED"].includes(quote.status);
-        const hasWorkflowActions = ["DRAFT", "SENT", "VIEWED", "APPROVED"].includes(quote.status);
+        const canSend = permissions.update && quote.status === "DRAFT";
+        const canMarkViewed = permissions.update && quote.status === "SENT";
+        const canApprove = permissions.approve && quote.status === "VIEWED";
+        const canReject = permissions.reject && quote.status === "VIEWED";
+        const canConvert = permissions.view && quote.status === "CONVERTED" && !!quote.converted_invoice;
+        const canConvertToInvoice = invoicePermissions.create &&
+          quote.status === "APPROVED" && !quote.converted_invoice;
+        const canRevert = permissions.update &&
+          ["SENT", "VIEWED", "APPROVED", "REJECTED"].includes(quote.status);
+        const canPrint = permissions.view;
         const showEdit = quote.status === "DRAFT" && permissions.update;
-        const showSeparator = (hasWorkflowActions || canRevert) && showEdit;
+        const hasActions = canSend || canMarkViewed || canApprove || canReject ||
+          canConvert || canConvertToInvoice || canRevert || canPrint || showEdit;
+        if (!hasActions) return null;
 
         return (
           <DropdownMenu>
@@ -157,31 +168,35 @@ export default function QuotesPanel() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()} side="bottom">
-              {quote.status === "DRAFT" && (
+              {canSend && (
                 <DropdownMenuItem onClick={() => handleSend(quote)}>
                   <Send className="w-4 h-4 mr-2" /> Send to Customer
                 </DropdownMenuItem>
               )}
-              {quote.status === "SENT" && (
+              {canMarkViewed && (
                 <DropdownMenuItem onClick={() => handleMarkViewed(quote)}>
                   <Eye className="w-4 h-4 mr-2" /> Mark as Viewed
                 </DropdownMenuItem>
               )}
-              {quote.status === "VIEWED" && (
+              {(canApprove || canReject) && (
                 <>
-                  <DropdownMenuItem onClick={() => handleApprove(quote)}>
-                    <CheckCircle className="w-4 h-4 mr-2" /> Approve
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleReject(quote)}>
-                    <XCircle className="w-4 h-4 mr-2" /> Reject
-                  </DropdownMenuItem>
+                  {canApprove && (
+                    <DropdownMenuItem onClick={() => handleApprove(quote)}>
+                      <CheckCircle className="w-4 h-4 mr-2" /> Approve
+                    </DropdownMenuItem>
+                  )}
+                  {canReject && (
+                    <DropdownMenuItem onClick={() => handleReject(quote)}>
+                      <XCircle className="w-4 h-4 mr-2" /> Reject
+                    </DropdownMenuItem>
+                  )}
                 </>
               )}
-              {quote.status === "APPROVED" && quote.converted_invoice ? (
+              {canConvert ? (
                 <DropdownMenuItem onClick={() => router.push(`/sales/customer-invoices/${quote.converted_invoice}`)}>
                   <ExternalLink className="w-4 h-4 mr-2" /> View Invoice
                 </DropdownMenuItem>
-              ) : quote.status === "APPROVED" ? (
+              ) : canConvertToInvoice ? (
                 <DropdownMenuItem onClick={() => handleConvertToInvoice(quote)}>
                   <FileText className="w-4 h-4 mr-2" /> Convert to Invoice
                 </DropdownMenuItem>
@@ -191,10 +206,12 @@ export default function QuotesPanel() {
                   <Undo2 className="w-4 h-4 mr-2" /> Revert Status
                 </DropdownMenuItem>
               )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => handlePrint(quote)}>
-                <Printer className="w-4 h-4 mr-2" /> Print
-              </DropdownMenuItem>
+              {canPrint && <DropdownMenuSeparator />}
+              {canPrint && (
+                <DropdownMenuItem onClick={() => handlePrint(quote)}>
+                  <Printer className="w-4 h-4 mr-2" /> Print
+                </DropdownMenuItem>
+              )}
               {showEdit && (
                 <DropdownMenuItem onClick={() => handleEdit(quote)}>
                   <Pencil className="w-4 h-4 mr-2" /> Edit

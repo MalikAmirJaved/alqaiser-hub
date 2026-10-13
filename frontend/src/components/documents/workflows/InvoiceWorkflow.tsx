@@ -489,7 +489,6 @@ export function InvoiceWorkflow({
       label: `${v.product_name} (${v.sku}) — Stock: ${v.total_stock}`,
     }),
   });
-
   const fetchVendors = useServerSearch("/api/inventory/suppliers/", {
     transformOption: (v: any) => ({
       value: v.id,
@@ -587,6 +586,24 @@ export function InvoiceWorkflow({
       useWatch({ control, name: "typography" }) ||
       createDefaultDocumentAppearance().typography,
   };
+  const fetchAvailableVariants = useCallback(
+    async (
+      params: { search: string; page: number; pageSize: number },
+      currentVariant: string,
+    ) => {
+      const result = await fetchVariants(params);
+      const selectedVariants = new Set(
+        (watchedLines || [])
+          .map((line) => line.variant)
+          .filter((variant): variant is string => !!variant && variant !== currentVariant),
+      );
+      return {
+        ...result,
+        options: result.options.filter((option) => !selectedVariants.has(option.value)),
+      };
+    },
+    [fetchVariants, watchedLines],
+  );
 
   const overallDiscountAmt = (subtotal || 0) * (overallDiscountPct / 100);
   const totalBeforeTax = (subtotal || 0) - (totalDiscount || 0) - (overallDiscountAmt || 0);
@@ -1278,7 +1295,9 @@ export function InvoiceWorkflow({
                               currentLine={currentLine}
                               isOverStock={isOverStock}
                               isExistingLine={isExistingLine(idx)}
-                              fetchVariants={fetchVariants}
+                              fetchVariants={(params) =>
+                                fetchAvailableVariants(params, currentLine.variant || "")
+                              }
                               variantDisplayLabel={variantDisplayLabels[field.id] || ""}
                               fetchVendors={fetchVendors}
                               onUpdateLine={updateLine}

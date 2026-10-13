@@ -345,24 +345,28 @@ export default function QuoteDetailPage() {
   const isViewed = quote.status === "VIEWED";
   const isApproved = quote.status === "APPROVED";
   const isConverted = quote.status === "CONVERTED";
+  const canSend = isDraft && permissions.update;
+  const canMarkViewed = isSent && permissions.update;
+  const canApprove = isViewed && permissions.approve;
+  const canReject = isViewed && permissions.reject;
   const canConvertToInvoice = isApproved && !quote.converted_invoice && invoicePermissions.create;
-  const canViewConvertedInvoice = isConverted && !!quote.converted_invoice;
-  const primaryActionLabel = isDraft
+  const canViewConvertedInvoice = isConverted && !!quote.converted_invoice && invoicePermissions.view;
+  const primaryActionLabel = canSend
     ? "Send to Customer"
-    : isSent
+    : canMarkViewed
       ? "Mark as Viewed"
-      : isViewed
+      : canApprove
         ? "Approve Quote"
         : canConvertToInvoice
           ? "Convert to Invoice"
           : canViewConvertedInvoice
             ? "View Invoice"
             : undefined;
-  const handlePrimaryAction = isDraft
+  const handlePrimaryAction = canSend
     ? handleSend
-    : isSent
+    : canMarkViewed
       ? handleMarkViewed
-      : isViewed
+      : canApprove
         ? handleApprove
         : canConvertToInvoice
           ? handleConvertToInvoice
@@ -396,8 +400,8 @@ export default function QuoteDetailPage() {
         onPrint={handlePrint}
         onExport={handleExportPdf}
         permissions={{
-          edit: permissions.update,
-          submit: !!(isDraft || isSent || isViewed || canConvertToInvoice || canViewConvertedInvoice),
+          edit: permissions.update && isDraft,
+          submit: !!(canSend || canMarkViewed || canApprove || canConvertToInvoice || canViewConvertedInvoice),
         }}
         tabs={tabs}
         sidebar={
@@ -445,7 +449,7 @@ export default function QuoteDetailPage() {
         </button>
       </div>
 
-      {isViewed && (
+      {canReject && (
         <div className="mt-4 flex justify-end">
           <button
             onClick={handleReject}

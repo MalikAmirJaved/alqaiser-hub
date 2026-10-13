@@ -204,12 +204,17 @@ export function DynamicModulePage<T>({
     });
   };
 
-  const showActionsColumn = (actions?.onEdit || actions?.onDelete || actions?.onPost || actions?.onSend || actions?.onPrint) && (permissions.update || permissions.delete);
+  const showActionsColumn =
+    (actions?.onEdit && permissions.update) ||
+    (actions?.onDelete && permissions.delete) ||
+    (actions?.onPost && (permissions.update || !!actions.canPost)) ||
+    (actions?.onSend && (permissions.update || !!actions.canSend)) ||
+    (actions?.onPrint && permissions.view);
 
   const hasRowActions = (item: T) => {
     if (actions?.onPrint && permissions.view && (actions.canPrint?.(item) ?? true)) return true;
-    if (actions?.onSend && permissions.update && (actions.canSend?.(item) ?? true)) return true;
-    if (actions?.onPost && permissions.update && (actions.canPost?.(item) ?? true)) return true;
+    if (actions?.onSend && (actions.canSend ? actions.canSend(item) : permissions.update)) return true;
+    if (actions?.onPost && (actions.canPost ? actions.canPost(item) : permissions.update)) return true;
     if (actions?.onEdit && permissions.update && (actions.canEdit?.(item) ?? true)) return true;
     if (actions?.onDelete && permissions.delete && (actions.canDelete?.(item) ?? true)) return true;
     return false;
@@ -393,15 +398,13 @@ export function DynamicModulePage<T>({
                                     </DropdownMenuItem>
                                   )}
                                 {actions?.onSend &&
-                                  permissions.update &&
-                                  (actions.canSend?.(item) ?? true) && (
+                                  (actions.canSend ? actions.canSend(item) : permissions.update) && (
                                     <DropdownMenuItem onClick={() => actions.onSend!(item)}>
                                       <Send className="w-4 h-4 mr-2 text-primary" /> {actions.sendLabel ?? "Send"}
                                     </DropdownMenuItem>
                                   )}
                                 {actions?.onPost &&
-                                  permissions.update &&
-                                  (actions.canPost?.(item) ?? true) && (
+                                  (actions.canPost ? actions.canPost(item) : permissions.update) && (
                                     <DropdownMenuItem onClick={() => actions.onPost!(item)}>
                                       <Send className="w-4 h-4 mr-2" /> {actions.postLabel ?? "Post"}
                                     </DropdownMenuItem>

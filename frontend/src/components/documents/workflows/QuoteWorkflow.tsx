@@ -81,7 +81,6 @@ export function QuoteWorkflow({
       label: `${v.product_name} (${v.sku}) — Stock: ${v.total_stock}`,
     }),
   });
-
   const fetchVendors = useServerSearch("/api/inventory/suppliers/", {
     transformOption: (v: any) => ({
       value: v.id,
@@ -105,6 +104,24 @@ export function QuoteWorkflow({
     lead: "",
     lines: [] as QuoteLine[],
   });
+  const fetchAvailableVariants = useCallback(
+    async (
+      params: { search: string; page: number; pageSize: number },
+      currentVariant: string,
+    ) => {
+      const result = await fetchVariants(params);
+      const selectedVariants = new Set(
+        formData.lines
+          .map((line) => line.variant)
+          .filter((variant): variant is string => !!variant && variant !== currentVariant),
+      );
+      return {
+        ...result,
+        options: result.options.filter((option) => !selectedVariants.has(option.value)),
+      };
+    },
+    [fetchVariants, formData.lines],
+  );
 
   const resetForm = useCallback(() => {
     setAppearance(createDefaultDocumentAppearance());
@@ -621,7 +638,9 @@ export function QuoteWorkflow({
                                   <SearchableSelect
                                     value={line.variant}
                                     onChange={(val) => updateLine(idx, "variant", val)}
-                                    fetchOptions={fetchVariants}
+                                    fetchOptions={(params) =>
+                                      fetchAvailableVariants(params, line.variant)
+                                    }
                                     placeholder="Search variants…"
                                   />
                                 ) : (

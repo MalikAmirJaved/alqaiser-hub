@@ -204,10 +204,11 @@ export default function CustomerInvoicesPanel({ moduleCode }: CustomerInvoicesPa
           onEdit: handleEdit,
           canEdit: (invoice) => (invoice.status === "DRAFT" || invoice.status === "PENDING" || invoice.status === "SENT") && invoice.payment_status !== "PAID" && invoice.source !== "SALES_POS",
           onSend: handleSend,
-          canSend: (invoice) => invoice.status === "PENDING",
+          canSend: (invoice) => permissions.send && invoice.status === "PENDING",
           sendLabel: "Send",
           onPost: handlePay,
           canPost: (invoice) =>
+            permissions.pay &&
             invoice.status === "SENT" &&
             invoice.payment_status !== "PAID" &&
             Number(invoice.outstanding) > 0,

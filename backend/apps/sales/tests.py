@@ -242,7 +242,26 @@ class QuoteModelTest(TestCase):
 
         view.perform_update(serializer)
 
-        serializer.save.assert_called_once_with(updated_by=self.user)
+        serializer.save.assert_called_once_with(
+            updated_by=self.user,
+            status='PENDING',
+        )
+
+    def test_sent_sales_invoice_can_be_updated_without_changing_status(self):
+        from apps.sales.views.invoice import SalesInvoiceViewSet
+
+        view = SalesInvoiceViewSet()
+        view.request = SimpleNamespace(user=self.user)
+        serializer = Mock(
+            instance=SimpleNamespace(status='SENT', payment_status='UNPAID')
+        )
+
+        view.perform_update(serializer)
+
+        serializer.save.assert_called_once_with(
+            updated_by=self.user,
+            status='SENT',
+        )
 
     def test_sales_invoice_update_passes_existing_line_ids_to_serializer(self):
         from unittest.mock import patch
