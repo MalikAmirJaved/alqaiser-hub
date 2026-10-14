@@ -219,32 +219,6 @@ export default function TrashPage() {
           )}
         </div>
 
-        {/* ── Blocked warning ──────────────────────────────────────────── */}
-        {blockedCount > 0 && (
-          <div className="flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-xs text-foreground">
-            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-warning" />
-            <div>
-              <span className="font-medium">
-                {blockedCount} item{blockedCount === 1 ? "" : "s"} cannot be permanently
-                deleted.
-              </span>{" "}
-              {blockedCount === 1 ? "It is" : "They are"} still referenced by other records
-              (for example ledger transactions or invoice lines), so the reference has to be
-              removed first — otherwise {blockedCount === 1 ? "it" : "they"} will stay in the
-              trash forever.
-              {summary?.blocked_samples?.[0] && (
-                <span className="block mt-1 text-muted-foreground">
-                  e.g. “{summary.blocked_samples[0].display_name}” is held by{" "}
-                  {summary.blocked_samples[0].blocked_by
-                    .map((b) => `${b.count} × ${b.model.split(".").pop()}`)
-                    .join(", ")}
-                  .
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* ── Filters ──────────────────────────────────────────────────── */}
         <div className="bg-card border border-border rounded-xl p-4 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
