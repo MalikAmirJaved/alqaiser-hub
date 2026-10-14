@@ -25,9 +25,9 @@ def line_net(qty, unit_price, discount=Decimal('0')):
     return dec(qty) * dec(unit_price) - dec(discount)
 
 
-def line_tax(qty, unit_price, tax_rate=Decimal('0'), discount=Decimal('0')):
-    """Per-line tax: applied to the line net (after line discount)."""
-    return line_net(qty, unit_price, discount) * dec(tax_rate) / HUNDRED
+def line_tax(qty, unit_price, tax_rate=Decimal('0')):
+    """Per-line tax: applied to the gross line amount before discounts."""
+    return dec(qty) * dec(unit_price) * dec(tax_rate) / HUNDRED
 
 
 def line_amount_with_tax(qty, unit_price, tax_rate=Decimal('0'), discount=Decimal('0')):
@@ -37,7 +37,7 @@ def line_amount_with_tax(qty, unit_price, tax_rate=Decimal('0'), discount=Decima
     Decimal document total regardless of what JSON sent us.
     """
     return line_net(qty, unit_price, discount) + line_tax(
-        qty, unit_price, tax_rate, discount
+        qty, unit_price, tax_rate
     )
 
 
@@ -50,27 +50,39 @@ def document_total(
 ):
     """Grand total for a document.
 
-    Mirrors what the UI shows:
+    Applies tax first, calculates the overall percentage discount from the
+    tax-inclusive amount, then subtracts all discounts:
 
         subtotal
+      + line tax             (sum of tax on gross line amounts)
+      + overall tax %        (applied to subtotal)
+      - overall discount %   (applied to the tax-inclusive amount)
       - line discounts
-      - overall discount %   (applied to subtotal)
-      + line tax             (sum of per-line tax)
-      + overall tax %        (applied to the discounted base)
     """
     subtotal = dec(subtotal)
-    overall_discount = subtotal * dec(overall_discount_percent) / HUNDRED
-    base = subtotal - dec(line_discount_total) - overall_discount
-    overall_tax = base * dec(overall_tax_percent) / HUNDRED
-    return base + dec(line_tax_total) + overall_tax
+    overall_tax = overall_tax_amount(subtotal, overall_tax_percent)
+    tax_inclusive_subtotal = subtotal + dec(line_tax_total) + overall_tax
+    overall_discount = overall_discount_amount(
+        subtotal, line_tax_total, overall_tax_percent, overall_discount_percent
+    )
+    return tax_inclusive_subtotal - dec(line_discount_total) - overall_discount
 
 
-def overall_discount_amount(subtotal, overall_discount_percent):
-    """Discount row shown in the document footers."""
-    return dec(subtotal) * dec(overall_discount_percent) / HUNDRED
+def overall_discount_amount(
+    subtotal,
+    line_tax_total,
+    overall_tax_percent,
+    overall_discount_percent,
+):
+    """Overall discount calculated from the tax-inclusive amount."""
+    tax_inclusive_subtotal = (
+        dec(subtotal)
+        + dec(line_tax_total)
+        + overall_tax_amount(subtotal, overall_tax_percent)
+    )
+    return tax_inclusive_subtotal * dec(overall_discount_percent) / HUNDRED
 
 
-def overall_tax_amount(subtotal, line_discount_total, overall_discount_percent, overall_tax_percent):
-    """Overall-tax row shown in the document footers."""
-    base = dec(subtotal) - dec(line_discount_total) - overall_discount_amount(subtotal, overall_discount_percent)
-    return base * dec(overall_tax_percent) / HUNDRED
+def overall_tax_amount(subtotal, overall_tax_percent):
+    """Overall-tax amount applied before discounts."""
+    return dec(subtotal) * dec(overall_tax_percent) / HUNDRED

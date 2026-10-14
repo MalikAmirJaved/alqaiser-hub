@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from django.test import TestCase
 
-from apps.common.totals import dec, document_total, line_net, line_tax
+from apps.common.totals import dec, document_total, line_amount_with_tax, line_net, line_tax
 
 
 class TotalsHelperTest(TestCase):
@@ -23,16 +23,11 @@ class TotalsHelperTest(TestCase):
         self.assertEqual(dec(''), Decimal('0'))
         self.assertEqual(dec(3), Decimal('3'))
 
-    def test_line_tax_applies_rate_to_discounted_net(self):
+    def test_line_tax_applies_rate_before_line_discount(self):
         # 10 x 100.00 with 15% tax = 150.00
         self.assertEqual(
             line_tax(10, Decimal('100.00'), Decimal('15.00')),
             Decimal('150.00'),
-        )
-        # discount reduces the taxable base: net 900 -> tax 135
-        self.assertEqual(
-            line_tax(10, Decimal('100.00'), Decimal('15.00'), Decimal('100.00')),
-            Decimal('135.00'),
         )
         self.assertEqual(line_tax(2, Decimal('50.00')), Decimal('0'))
 
@@ -40,6 +35,14 @@ class TotalsHelperTest(TestCase):
         self.assertEqual(
             line_net(4, Decimal('25.00'), Decimal('10.00')),
             Decimal('90.00'),
+        )
+
+    def test_line_amount_adds_tax_before_subtracting_discount(self):
+        self.assertEqual(
+            line_amount_with_tax(
+                1, Decimal('280.00'), Decimal('50.00'), Decimal('20.00')
+            ),
+            Decimal('400.00'),
         )
 
     def test_document_total_without_any_tax_matches_old_behaviour(self):
@@ -61,16 +64,25 @@ class TotalsHelperTest(TestCase):
 
     def test_document_total_full_stack(self):
         # subtotal 1000
-        # - line discounts 100
-        # - overall discount 10% of 1000 = 100   -> base 800
         # + line tax 60
-        # + overall tax 5% of 800 = 40           -> 900
+        # + overall tax 5% of 1000 = 50 -> tax-inclusive amount 1110
+        # - overall discount 10% of 1110 = 111
+        # - line discounts 100
+        # -> 899
         self.assertEqual(
             document_total(
                 Decimal('1000'), Decimal('100'), Decimal('60'),
                 Decimal('10'), Decimal('5'),
             ),
-            Decimal('900'),
+            Decimal('899'),
+        )
+
+    def test_document_total_applies_tax_before_line_discount(self):
+        self.assertEqual(
+            document_total(
+                Decimal('280'), Decimal('20'), Decimal('140'),
+            ),
+            Decimal('400'),
         )
 
     def test_line_total_properties_include_tax(self):
@@ -232,11 +244,34 @@ class DocumentTotalRegressionTest(TestCase):
         self.assertTrue(serializer.is_valid(), serializer.errors)
         quote = serializer.save()
 
-        # subtotal 1000 - overall disc 100 = 900
-        # + line tax 150 + overall tax 5% of 900 = 45  -> 1095
-        self.assertEqual(quote.total_amount, Decimal('1095.00'))
+        # 1000 + line tax 150 + overall tax 50 = 1200, less 10% discount = 1080
+        self.assertEqual(quote.total_amount, Decimal('1080.00'))
 
-    def test_customer_invoice_total_adds_line_tax(self):
+    def test_quote_total_applies_tax_before_line_discount(self):
+        from apps.sales.serializers.quote import QuoteSerializer
+
+        user = self._make_user('qt-tax-first')
+        serializer = QuoteSerializer(
+            data={
+                'date': str(date.today()),
+                'overall_tax_percent': '0',
+                'lines': [{
+                    'quantity': 1,
+                    'unit_price': '280.00',
+                    'tax_rate': '50.00',
+                    'discount_amount': '20.00',
+                    'is_manual_entry': True,
+                    'manual_variant_name': 'Manual item',
+                }],
+            },
+            context={'request': type('R', (), {'user': user})()},
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        quote = serializer.save()
+        self.assertEqual(quote.total_amount, Decimal('400.00'))
+
+
+    def test_customer_invoice_total_applies_tax_before_line_discount(self):
         from apps.finance.serializers.customer_invoice import CustomerInvoiceSerializer
         from apps.inventory.models import Product, ProductVariant
 
@@ -255,10 +290,10 @@ class DocumentTotalRegressionTest(TestCase):
                 'overall_tax_percent': '0',
                 'lines': [{
                     'variant': str(variant._id),
-                    'quantity': 3,
-                    'unit_price': '200.00',
-                    'tax_rate': '15.00',
-                    'discount_amount': '0',
+                    'quantity': 1,
+                    'unit_price': '280.00',
+                    'tax_rate': '50.00',
+                    'discount_amount': '20.00',
                     'is_manual_entry': False,
                 }],
             },
@@ -267,8 +302,8 @@ class DocumentTotalRegressionTest(TestCase):
         self.assertTrue(serializer.is_valid(), serializer.errors)
         invoice = serializer.save()
 
-        # 600.00 net + 15% = 90.00 -> 690.00
-        self.assertEqual(invoice.amount, Decimal('690.00'))
+        # 280.00 + 50% tax 140.00 - line discount 20.00 = 400.00
+        self.assertEqual(invoice.amount, Decimal('400.00'))
 
     def test_quote_update_recalculates_total_with_tax(self):
         from apps.sales.serializers.quote import QuoteSerializer

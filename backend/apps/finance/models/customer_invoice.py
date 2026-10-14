@@ -156,7 +156,7 @@ class CustomerInvoiceLine(BaseModel):
         """Net line amount + per-line tax (matches the invoice total)."""
         from apps.common.totals import line_tax
         return self.subtotal - self.discount_amount + line_tax(
-            self.quantity, self.unit_price, self.tax_rate, self.discount_amount
+            self.quantity, self.unit_price, self.tax_rate
         )
 
 

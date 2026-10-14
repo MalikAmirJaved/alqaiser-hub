@@ -250,7 +250,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
             )
             subtotal += line.quantity * line.unit_price
             per_line_discounts += Decimal(str(line.discount_amount or 0))
-            per_line_taxes += line_tax(line.quantity, line.unit_price, line.tax_rate, line.discount_amount)
+            per_line_taxes += line_tax(line.quantity, line.unit_price, line.tax_rate)
 
         overall_discount_percent = Decimal(str(validated_data.get('overall_discount_percent', 0) or 0))
         overall_tax_percent = Decimal(str(validated_data.get('overall_tax_percent', 0) or 0))
@@ -371,7 +371,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
                 line = created_lines[-1]
                 subtotal += line.quantity * line.unit_price
                 per_line_discounts += Decimal(str(line.discount_amount or 0))
-                per_line_taxes += line_tax(line.quantity, line.unit_price, line.tax_rate, line.discount_amount)
+                per_line_taxes += line_tax(line.quantity, line.unit_price, line.tax_rate)
 
             for line_id, old_line in existing_lines.items():
                 if line_id not in incoming_ids:

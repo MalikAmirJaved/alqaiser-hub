@@ -233,8 +233,8 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
                 const discount = Number(line.discount_amount) || 0;
                 const taxRate = Number(line.tax_rate) || 0;
                 const subtotal = quantity * unitPrice;
-                const tax = (subtotal - discount) * (taxRate / 100);
-                const lineTotal = subtotal - discount + tax;
+                const tax = subtotal * (taxRate / 100);
+                const lineTotal = subtotal + tax - discount;
                 const lineStatus = line.status || "ACTIVE";
                 return (
                   <tr key={idx} className={`border-b border-border/60 ${lineStatus === "CANCELLED" ? "bg-destructive/5" : ""}`}>
@@ -308,17 +308,36 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
                     const lineTax = lines.reduce(
                       (sum, line) => {
                         const lineSubtotal = (Number(line.quantity) || 0) * (Number(line.unit_price) || 0);
-                        const lineDiscount = Number(line.discount_amount) || 0;
                         const taxRate = Number(line.tax_rate) || 0;
-                        return sum + (lineSubtotal - lineDiscount) * (taxRate / 100);
+                        return sum + lineSubtotal * (taxRate / 100);
                       },
                       0,
                     );
                     const overallDiscountPercent = Number(invoice.overall_discount_percent || 0);
                     const overallTaxPercent = Number(invoice.overall_tax_percent || 0);
-                    const overallDisc = sub * (overallDiscountPercent / 100);
+                    const overallTax = sub * (overallTaxPercent / 100);
+                    const overallDisc =
+                      (sub + lineTax + overallTax) * (overallDiscountPercent / 100);
                     return (
                       <>
+                        {lineTax > 0 && (
+                          <tr>
+                            <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                              Tax (line)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm">{formatCurrency(lineTax)}</td>
+                          </tr>
+                        )}
+                        {overallTaxPercent > 0 && (
+                          <tr>
+                            <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                              Tax ({overallTaxPercent}%)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm">
+                              {formatCurrency(overallTax)}
+                            </td>
+                          </tr>
+                        )}
                         {lineDiscounts > 0 && (
                           <tr>
                             <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
@@ -336,24 +355,6 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
                             </td>
                             <td className="px-4 py-2 text-right text-sm text-destructive">
                               -{formatCurrency(overallDisc)}
-                            </td>
-                          </tr>
-                        )}
-                        {lineTax > 0 && (
-                          <tr>
-                            <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
-                              Tax (line)
-                            </td>
-                            <td className="px-4 py-2 text-right text-sm">{formatCurrency(lineTax)}</td>
-                          </tr>
-                        )}
-                        {overallTaxPercent > 0 && (
-                          <tr>
-                            <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
-                              Tax ({overallTaxPercent}%)
-                            </td>
-                            <td className="px-4 py-2 text-right text-sm">
-                              {formatCurrency((sub - lineDiscounts - overallDisc) * (overallTaxPercent / 100))}
                             </td>
                           </tr>
                         )}

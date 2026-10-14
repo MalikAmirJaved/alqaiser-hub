@@ -293,24 +293,24 @@ export function QuoteWorkflow({
   const calculateLineTotal = (line: QuoteLine) => {
     const subtotal = line.quantity * line.unit_price;
     const discount = line.discount_amount || 0;
-    const tax = (subtotal - discount) * (line.tax_rate / 100);
-    return subtotal - discount + tax;
+    const tax = subtotal * (line.tax_rate / 100);
+    return subtotal + tax - discount;
   };
 
   const subtotal = formData.lines.reduce((s, l) => s + l.quantity * l.unit_price, 0);
   const totalDiscount = formData.lines.reduce((s, l) => s + (l.discount_amount || 0), 0);
   const totalTax = formData.lines.reduce((s, l) => {
     const sub = l.quantity * l.unit_price;
-    const disc = l.discount_amount || 0;
-    return s + (sub - disc) * (l.tax_rate / 100);
+    return s + sub * (l.tax_rate / 100);
   }, 0);
 
   const overallDiscountPercent = Number(formData.overall_discount_percent) || 0;
   const overallTaxPercent = Number(formData.overall_tax_percent) || 0;
-  const overallDiscountAmount = subtotal * (overallDiscountPercent / 100);
-  const totalBeforeTax = subtotal - totalDiscount - overallDiscountAmount;
-  const overallTaxAmount = totalBeforeTax * (overallTaxPercent / 100);
-  const calculateTotal = () => totalBeforeTax + totalTax + overallTaxAmount;
+  const overallTaxAmount = subtotal * (overallTaxPercent / 100);
+  const overallDiscountAmount =
+    (subtotal + totalTax + overallTaxAmount) * (overallDiscountPercent / 100);
+  const discountedSubtotal = subtotal - totalDiscount - overallDiscountAmount;
+  const calculateTotal = () => discountedSubtotal + totalTax + overallTaxAmount;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -809,17 +809,43 @@ export function QuoteWorkflow({
                       <span className="font-mono">{formatCurrency(subtotal)}</span>
                     </div>
 
-                    {totalDiscount > 0 && (
-                      <div className="flex justify-between text-sm text-muted-foreground">
-                        <span>Discount (line)</span>
-                        <span className="font-mono text-destructive">−{formatCurrency(totalDiscount)}</span>
-                      </div>
-                    )}
-
                     {totalTax > 0 && (
                       <div className="flex justify-between text-sm text-muted-foreground">
                         <span>Tax (line)</span>
                         <span className="font-mono">{formatCurrency(totalTax)}</span>
+                      </div>
+                    )}
+
+                    {/* Overall tax % */}
+                    <div className="flex justify-between items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm text-muted-foreground">Tax</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={formData.overall_tax_percent}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              overall_tax_percent: parseFloat(e.target.value) || 0,
+                            }))
+                          }
+                          className="w-14 h-6 text-xs text-right bg-muted/40 border border-border rounded px-1 focus:outline-none focus:ring-1 focus:ring-ring"
+                          placeholder="0"
+                        />
+                        <span className="text-[10px] text-muted-foreground">%</span>
+                      </div>
+                      <span className="font-mono text-sm">
+                        {formatCurrency(overallTaxAmount)}
+                      </span>
+                    </div>
+
+                    {totalDiscount > 0 && (
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Discount (line)</span>
+                        <span className="font-mono text-destructive">−{formatCurrency(totalDiscount)}</span>
                       </div>
                     )}
 
@@ -846,32 +872,6 @@ export function QuoteWorkflow({
                       </div>
                       <span className="font-mono text-sm text-destructive">
                         −{formatCurrency(overallDiscountAmount)}
-                      </span>
-                    </div>
-
-                    {/* Overall tax % */}
-                    <div className="flex justify-between items-center gap-2">
-                      <div className="flex items-center gap-1">
-                        <span className="text-sm text-muted-foreground">Tax</span>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.01"
-                          value={formData.overall_tax_percent}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              overall_tax_percent: parseFloat(e.target.value) || 0,
-                            }))
-                          }
-                          className="w-14 h-6 text-xs text-right bg-muted/40 border border-border rounded px-1 focus:outline-none focus:ring-1 focus:ring-ring"
-                          placeholder="0"
-                        />
-                        <span className="text-[10px] text-muted-foreground">%</span>
-                      </div>
-                      <span className="font-mono text-sm">
-                        {formatCurrency(overallTaxAmount)}
                       </span>
                     </div>
 

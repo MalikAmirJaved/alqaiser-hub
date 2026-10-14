@@ -118,7 +118,7 @@ class SalesOrderLine(BaseModel):
         """Net line amount + per-line tax (matches the order total)."""
         from apps.common.totals import line_tax
         return self.subtotal - self.discount + line_tax(
-            self.quantity_ordered, self.unit_price, self.tax_rate, self.discount
+            self.quantity_ordered, self.unit_price, self.tax_rate
         )
 
     @property

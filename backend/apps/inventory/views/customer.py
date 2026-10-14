@@ -104,7 +104,7 @@ class CustomerViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequired
         # ---- Related Invoices + Payments ----
         invoices_qs = CustomerInvoice.objects.filter(
             customer=customer, is_deleted=False
-        ).exclude(status='CANCELLED').order_by('-created_at')
+        ).exclude(status='CANCELLED').prefetch_related('lines').order_by('-created_at')
 
         invoices_data = []
         total_invoice_amount = Decimal('0.00')
@@ -116,14 +116,28 @@ class CustomerViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequired
         for inv in invoices_qs:
             paid = get_total_paid(inv)
             outstanding = get_outstanding(inv)
+            invoice_subtotal = sum(
+                (line.subtotal for line in inv.lines.all() if not line.is_deleted),
+                Decimal('0.00'),
+            )
 
-            # Calculate overall discount value
             disc_pct = Decimal(str(inv.overall_discount_percent or 0))
-            disc_value = Decimal(str(inv.amount)) * (disc_pct / Decimal('100'))
-
-            # Calculate overall tax value (post-discount)
             tax_pct = Decimal(str(inv.overall_tax_percent or 0))
-            tax_value = Decimal(str(inv.amount)) * (tax_pct / Decimal('100'))
+            line_tax_value = sum(
+                (
+                    line.subtotal * Decimal(str(line.tax_rate or 0)) / Decimal('100')
+                    for line in inv.lines.all()
+                    if not line.is_deleted
+                ),
+                Decimal('0.00'),
+            )
+            tax_value = (
+                line_tax_value
+                + invoice_subtotal * (tax_pct / Decimal('100'))
+            )
+            disc_value = (
+                invoice_subtotal + tax_value
+            ) * (disc_pct / Decimal('100'))
 
             total_invoice_amount += Decimal(str(inv.amount))
             total_paid_amount += paid

@@ -104,9 +104,9 @@ export default function QuoteDetailPage() {
                 const unitPrice = Number(line.unit_price) || 0;
                 const discount = Number(line.discount_amount) || 0;
                 const taxRate = Number(line.tax_rate) || 0;
-                const lineNet = quantity * unitPrice - discount;
-                const lineTax = lineNet * (taxRate / 100);
-                const lineTotal = lineNet + lineTax;
+                const lineSubtotal = quantity * unitPrice;
+                const lineTax = lineSubtotal * (taxRate / 100);
+                const lineTotal = lineSubtotal + lineTax - discount;
                 return (
                   <tr key={idx} className="border-b border-border/60">
                     <td className="px-4 py-2">
@@ -173,17 +173,36 @@ export default function QuoteDetailPage() {
                     const lineTax = lines.reduce(
                       (sum, line) => {
                         const lineSubtotal = (Number(line.quantity) || 0) * (Number(line.unit_price) || 0);
-                        const lineDiscount = Number(line.discount_amount) || 0;
                         const taxRate = Number(line.tax_rate) || 0;
-                        return sum + (lineSubtotal - lineDiscount) * (taxRate / 100);
+                        return sum + lineSubtotal * (taxRate / 100);
                       },
                       0,
                     );
                     const overallDiscountPercent = Number(quote.overall_discount_percent || 0);
                     const overallTaxPercent = Number(quote.overall_tax_percent || 0);
-                    const overallDisc = sub * (overallDiscountPercent / 100);
+                    const overallTax = sub * (overallTaxPercent / 100);
+                    const overallDisc =
+                      (sub + lineTax + overallTax) * (overallDiscountPercent / 100);
                     return (
                       <>
+                        {lineTax > 0 && (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                              Tax (line)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm">{formatCurrency(lineTax)}</td>
+                          </tr>
+                        )}
+                        {overallTaxPercent > 0 && (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                              Tax ({overallTaxPercent}%)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm">
+                              {formatCurrency(overallTax)}
+                            </td>
+                          </tr>
+                        )}
                         {lineDiscounts > 0 && (
                           <tr>
                             <td colSpan={6} className="px-4 py-2 text-right text-sm text-muted-foreground">
@@ -201,24 +220,6 @@ export default function QuoteDetailPage() {
                             </td>
                             <td className="px-4 py-2 text-right text-sm text-destructive">
                               -{formatCurrency(overallDisc)}
-                            </td>
-                          </tr>
-                        )}
-                        {lineTax > 0 && (
-                          <tr>
-                            <td colSpan={6} className="px-4 py-2 text-right text-sm text-muted-foreground">
-                              Tax (line)
-                            </td>
-                            <td className="px-4 py-2 text-right text-sm">{formatCurrency(lineTax)}</td>
-                          </tr>
-                        )}
-                        {overallTaxPercent > 0 && (
-                          <tr>
-                            <td colSpan={6} className="px-4 py-2 text-right text-sm text-muted-foreground">
-                              Tax ({overallTaxPercent}%)
-                            </td>
-                            <td className="px-4 py-2 text-right text-sm">
-                              {formatCurrency((sub - lineDiscounts - overallDisc) * (overallTaxPercent / 100))}
                             </td>
                           </tr>
                         )}

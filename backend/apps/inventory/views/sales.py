@@ -68,7 +68,7 @@ def sync_invoice_for_return(sales_return, user):
     new_subtotal = sum(l.quantity * l.unit_price for l in remaining_lines)
     new_discounts = sum((l.discount_amount or 0) for l in remaining_lines)
     new_line_taxes = sum(
-        line_tax(l.quantity, l.unit_price, l.tax_rate, l.discount_amount)
+        line_tax(l.quantity, l.unit_price, l.tax_rate)
         for l in remaining_lines
     )
     invoice.notes = ''
@@ -179,7 +179,7 @@ def sync_sales_order_to_invoice(order, user, create_invoice=True):
                 updated_by=user,
             )
             total += (Decimal(effective_qty) * line.unit_price) - prorated
-            total += line_tax(effective_qty, line.unit_price, line.tax_rate, prorated)
+            total += line_tax(effective_qty, line.unit_price, line.tax_rate)
         return total
 
     if created:

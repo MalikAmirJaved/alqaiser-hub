@@ -688,7 +688,7 @@ def _update_source_document_totals(ret, user):
         new_subtotal = sum(l.quantity * l.unit_price for l in active_lines)
         new_discounts = sum((l.discount_amount or 0) for l in active_lines)
         new_line_taxes = sum(
-            line_tax(l.quantity, l.unit_price, l.tax_rate, l.discount_amount)
+            line_tax(l.quantity, l.unit_price, l.tax_rate)
             for l in active_lines
         )
         invoice.amount = max(

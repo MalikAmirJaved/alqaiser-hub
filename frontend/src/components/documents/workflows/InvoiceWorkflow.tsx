@@ -570,15 +570,14 @@ export function InvoiceWorkflow({
   const totalDiscount = (watchedLines || []).reduce((s, l) => s + (Number(l.discount_amount) || 0), 0);
   const totalTax = (watchedLines || []).reduce((s, l) => {
     const sub = Number(l.quantity) * Number(l.unit_price);
-    const disc = Number(l.discount_amount) || 0;
-    return s + (sub - disc) * ((Number(l.tax_rate) || 0) / 100);
+    return s + sub * ((Number(l.tax_rate) || 0) / 100);
   }, 0);
 
   const calculateLineTotal = useCallback((line: InvoiceLine) => {
     const subtotal = line.quantity * line.unit_price;
     const discount = line.discount_amount || 0;
-    const tax = (subtotal - discount) * (line.tax_rate / 100);
-    return subtotal - discount + tax;
+    const tax = subtotal * (line.tax_rate / 100);
+    return subtotal + tax - discount;
   }, []);
 
   const overallDiscountPct = Number(useWatch({ control, name: "overall_discount_percent" })) || 0;
@@ -609,13 +608,16 @@ export function InvoiceWorkflow({
     [fetchVariants, watchedLines],
   );
 
-  const overallDiscountAmt = (subtotal || 0) * (overallDiscountPct / 100);
-  const totalBeforeTax = (subtotal || 0) - (totalDiscount || 0) - (overallDiscountAmt || 0);
-  const overallTaxAmt = (totalBeforeTax || 0) * (overallTaxPct / 100);
+  const overallTaxAmt = (subtotal || 0) * (overallTaxPct / 100);
+  const overallDiscountAmt =
+    ((subtotal || 0) + (totalTax || 0) + (overallTaxAmt || 0)) *
+    (overallDiscountPct / 100);
+  const discountedSubtotal = (subtotal || 0) - (totalDiscount || 0) - (overallDiscountAmt || 0);
+  const totalAmount = discountedSubtotal + (totalTax || 0) + (overallTaxAmt || 0);
 
   useEffect(() => {
-    setValue("amount", (totalBeforeTax || 0) + (totalTax || 0) + (overallTaxAmt || 0));
-  }, [totalBeforeTax, totalTax, overallTaxAmt, setValue]);
+    setValue("amount", totalAmount);
+  }, [totalAmount, setValue]);
 
   useEffect(() => {
     if (initialData) {
@@ -1081,7 +1083,7 @@ export function InvoiceWorkflow({
         summary={
           fields.length === 0
             ? "No items added yet"
-            : `${fields.length} item${fields.length !== 1 ? "s" : ""} · Total ${formatCurrency((totalBeforeTax || 0) + (totalTax || 0) + (overallTaxAmt || 0))}`
+            : `${fields.length} item${fields.length !== 1 ? "s" : ""} · Total ${formatCurrency(totalAmount)}`
         }
         onCancel={onClose}
       >
@@ -1353,33 +1355,8 @@ export function InvoiceWorkflow({
                       <span className="font-mono">{formatCurrency(subtotal)}</span>
                     </div>
                     <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Discount (line)</span>
-                      <span className="font-mono text-destructive">−{formatCurrency(totalDiscount)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm text-muted-foreground">
                       <span>Tax (line)</span>
                       <span className="font-mono">{formatCurrency(totalTax)}</span>
-                    </div>
-
-                    {/* Overall discount % */}
-                    <div className="flex justify-between items-center gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm text-muted-foreground">Discount</span>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.01"
-                          value={overallDiscountPct}
-                          onChange={(e) => setValue("overall_discount_percent", parseFloat(e.target.value) || 0)}
-                          className="w-14 h-6 text-xs text-right bg-background border border-border rounded px-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
-                          placeholder="0"
-                        />
-                        <span className="text-[10px] text-muted-foreground">%</span>
-                      </div>
-                      <span className="font-mono text-sm text-destructive">
-                        −{formatCurrency(overallDiscountAmt)}
-                      </span>
                     </div>
 
                     {/* Overall tax % */}
@@ -1403,10 +1380,36 @@ export function InvoiceWorkflow({
                       </span>
                     </div>
 
+                    <div className="flex justify-between text-sm text-muted-foreground">
+                      <span>Discount (line)</span>
+                      <span className="font-mono text-destructive">−{formatCurrency(totalDiscount)}</span>
+                    </div>
+
+                    {/* Overall discount % */}
+                    <div className="flex justify-between items-center gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm text-muted-foreground">Discount</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={overallDiscountPct}
+                          onChange={(e) => setValue("overall_discount_percent", parseFloat(e.target.value) || 0)}
+                          className="w-14 h-6 text-xs text-right bg-background border border-border rounded px-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                          placeholder="0"
+                        />
+                        <span className="text-[10px] text-muted-foreground">%</span>
+                      </div>
+                      <span className="font-mono text-sm text-destructive">
+                        −{formatCurrency(overallDiscountAmt)}
+                      </span>
+                    </div>
+
                     <div className="flex justify-between items-center pt-2.5 border-t border-border">
                       <span className="text-sm font-semibold">Total</span>
                       <span className="text-lg font-bold font-mono">
-                        {formatCurrency((totalBeforeTax || 0) + (totalTax || 0) + (overallTaxAmt || 0))}
+                        {formatCurrency(totalAmount)}
                       </span>
                     </div>
                   </div>
