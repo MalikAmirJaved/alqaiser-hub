@@ -151,7 +151,7 @@ export default function TrashPage() {
       <PageHeader
         breadcrumbs={["Settings", "Trash"]}
         title="Trash"
-        description={`Deleted records are grouped by module and kept for ${retentionDays} days, then permanently removed automatically.`}
+        description="Deleted records stay here until they are restored or permanently deleted."
         actions={
           <>
             <ToolbarButton
@@ -207,7 +207,7 @@ export default function TrashPage() {
                 label="Within retention"
                 value={summary?.within_retention ?? 0}
                 icon={Clock}
-                sub={`auto-removed after ${retentionDays} days`}
+                sub={`deleted within the last ${retentionDays} days`}
               />
               <KpiCard
                 label="Reclaimable"

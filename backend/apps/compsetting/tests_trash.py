@@ -21,6 +21,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.common.test_base import BaseTestCase
+from apps.hr.models import Compensation, Employee
 from apps.inventory.models import (
     Brand,
     Category,
@@ -213,6 +214,7 @@ class TrashListingTestCase(TrashFixtureMixin, BaseTestCase):
         self.assertEqual(entry['_id'], str(brand._id))
         self.assertIn('Trash Brand A', entry['display_name'])
         self.assertEqual(entry['deleted_by'], self.admin.username)
+        self.assertTrue(entry['can_purge'])
         self.assertFalse(entry['is_expired'])
         self.assertEqual(entry['days_left'], 30)
 
@@ -463,6 +465,30 @@ class TrashPurgeTestCase(TrashFixtureMixin, BaseTestCase):
         self.assertEqual(by_model['inventory.ProductVariant']['soft_deleted'], 1)
         self.assertEqual(data['total_related'], 2)
 
+    def test_employee_with_compensation_is_marked_as_having_related_records(self):
+        employee = Employee.objects.create(
+            employee_id='TRASH-EMP-001',
+            first_name='Trash Employee',
+            phone='123',
+            joining_date=timezone.now().date(),
+            company_id=self.company.id,
+            branch_id=self.branch.id,
+        )
+        Compensation.objects.create(
+            employee=employee,
+            company_id=self.company.id,
+            branch_id=self.branch.id,
+        )
+        employee = self.soft_delete(employee)
+
+        response = self.client.get(f'{TRASH_BASE}?type=employee')
+
+        self.assertEqual(response.status_code, 200)
+        entry = response.data['data']['results'][0]
+        self.assertEqual(entry['_id'], str(employee._id))
+        self.assertTrue(entry['can_purge'])
+        self.assertTrue(entry['has_related_records'])
+
     def test_permanent_delete_removes_the_whole_graph(self):
         product = self._soft_delete_product_graph()
         resp = self.client.delete(f'{TRASH_BASE}product/{product._id}/')
@@ -592,34 +618,12 @@ class TrashRetentionTestCase(TrashFixtureMixin, BaseTestCase):
         self.assertEqual(resp.data['data']['purged'], 0)
         self.assertIn('Nothing to purge', resp.data['message'])
 
-    def test_celery_task_purges_across_companies(self):
-        from .trash.tasks import purge_expired_trash
-
-        other_company = Company.objects.create(
-            name='Task Co', short_name='TK', city='Multan', country='Pakistan',
-            email='task@company.com',
-        )
-        other_brand = Brand.objects.create(
-            name='Task Brand', code='TKB', company_id=other_company.id,
-        )
-        mine = self.soft_delete(self.brand_a, when=timezone.now() - timedelta(days=45))
-        theirs = self.soft_delete(other_brand, user=self.admin,
-                                  when=timezone.now() - timedelta(days=45))
-
-        result = purge_expired_trash()
-
-        self.assertEqual(result['purged'], 2)
-        self.assertEqual(result['errors'], [])
-        self.assertFalse(Brand.objects.filter(pk=mine.pk).exists())
-        self.assertFalse(Brand.objects.filter(pk=theirs.pk).exists())
-
-    def test_celery_task_skips_rows_inside_window(self):
-        from .trash.tasks import purge_expired_trash
-
-        self.soft_delete(self.brand_a, when=timezone.now() - timedelta(days=5))
-        result = purge_expired_trash()
-        self.assertEqual(result['purged'], 0)
-        self.assertTrue(Brand.objects.filter(pk=self.brand_a.pk).exists())
+    def test_old_trash_rows_are_not_deleted_automatically(self):
+        old = self.soft_delete(self.brand_a, when=timezone.now() - timedelta(days=45))
+        response = self.client.get(TRASH_BASE)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(Brand.objects.filter(pk=old.pk).exists())
+        self.assertEqual(response.data['data']['count'], 1)
 
     def test_retention_days_is_configurable(self):
         from django.test import override_settings
@@ -631,16 +635,12 @@ class TrashRetentionTestCase(TrashFixtureMixin, BaseTestCase):
             self.assertEqual(resp.data['data']['retention_days'], 7)
             self.assertEqual(resp.data['data']['purged'], 1)
 
-    def test_task_is_registered_with_beat_schedule(self):
+    def test_automatic_trash_purge_is_not_registered(self):
         from config.celery import app as celery_app
 
-        self.assertIn('compsetting.purge_expired_trash', celery_app.tasks)
+        self.assertNotIn('compsetting.purge_expired_trash', celery_app.tasks)
         schedule = celery_app.conf.beat_schedule
-        self.assertIn('trash-retention-purge-daily', schedule)
-        self.assertEqual(
-            schedule['trash-retention-purge-daily']['task'],
-            'compsetting.purge_expired_trash',
-        )
+        self.assertNotIn('trash-retention-purge-daily', schedule)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1014,6 +1014,15 @@ class TrashProtectedRelationTestCase(TrashFixtureMixin, BaseTestCase):
         data = resp.data['data']
         self.assertFalse(data['can_purge'])
         self.assertTrue(data['blocked_by'])
+
+    def test_listing_marks_blocked_entries_as_not_purgeable(self):
+        product = self._soft_delete_product()
+        response = self.client.get(f'{TRASH_BASE}?type=product')
+
+        self.assertEqual(response.status_code, 200)
+        entry = response.data['data']['results'][0]
+        self.assertEqual(entry['_id'], str(product._id))
+        self.assertFalse(entry['can_purge'])
 
     def test_purge_refuses_and_leaves_everything_intact(self):
         product = self._soft_delete_product()

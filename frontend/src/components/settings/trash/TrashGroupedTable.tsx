@@ -23,9 +23,7 @@ import type { TrashEntry, TrashGroupCount } from "@/hooks/useTrash";
 import { cn } from "@/lib/utils";
 
 import {
-  daysLeftTone,
   formatDateTime,
-  formatDaysLeft,
   formatRelative,
 } from "./trashDisplay";
 
@@ -164,7 +162,6 @@ export default function TrashGroupedTable({
                       <th className="px-4 py-2.5 text-left font-medium">Record</th>
                       <th className="px-4 py-2.5 text-left font-medium">Deleted by</th>
                       <th className="px-4 py-2.5 text-left font-medium">Deleted at</th>
-                      <th className="px-4 py-2.5 text-left font-medium">Auto-delete</th>
                       {anyActions && <th className="px-4 py-2.5 w-12" />}
                     </tr>
                   </thead>
@@ -183,7 +180,7 @@ export default function TrashGroupedTable({
                             {entry.is_expired && (
                               <span
                                 className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border border-destructive/30 text-destructive bg-destructive/10"
-                                title="Past the retention window — purged on the next run"
+                                title="Past the retention window — can be manually purged"
                               >
                                 expired
                               </span>
@@ -218,51 +215,47 @@ export default function TrashGroupedTable({
                           <div className="text-[11px]">{formatRelative(entry.deleted_at)}</div>
                         </td>
 
-                        <td className="px-4 py-3">
-                          <span
-                            className={cn(
-                              "inline-flex items-center h-6 px-2 rounded-full border text-[11px] font-medium",
-                              daysLeftTone(entry.days_left, entry.is_expired),
-                            )}
-                            title={
-                              entry.expires_at
-                                ? `Expires ${formatDateTime(entry.expires_at)}`
-                                : undefined
-                            }
-                          >
-                            {formatDaysLeft(entry.days_left, entry.is_expired)}
-                          </span>
-                        </td>
-
                         {anyActions && (
                           <td className="px-4 py-3 text-right">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="p-1 rounded-md hover:bg-muted transition"
-                                  aria-label="Trash actions"
-                                >
-                                  <MoreVertical className="w-4 h-4" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                {canRestore && (
-                                  <DropdownMenuItem onClick={() => onRestore(entry)}>
-                                    <Undo2 className="w-4 h-4 mr-2" /> Restore
-                                  </DropdownMenuItem>
-                                )}
-                                {canRestore && canDelete && <DropdownMenuSeparator />}
-                                {canDelete && (
-                                  <DropdownMenuItem
-                                    onClick={() => onPurge(entry)}
-                                    className="text-destructive"
+                            {(
+                              canRestore ||
+                              (canDelete && entry.can_purge && !entry.has_related_records)
+                            ) && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="p-1 rounded-md hover:bg-muted transition"
+                                    aria-label="Trash actions"
                                   >
-                                    <Trash2 className="w-4 h-4 mr-2" /> Delete permanently
-                                  </DropdownMenuItem>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                                    <MoreVertical className="w-4 h-4" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  {canRestore && (
+                                    <DropdownMenuItem onClick={() => onRestore(entry)}>
+                                      <Undo2 className="w-4 h-4 mr-2" /> Restore
+                                    </DropdownMenuItem>
+                                  )}
+                                  {canRestore &&
+                                    canDelete &&
+                                    entry.can_purge &&
+                                    !entry.has_related_records && (
+                                    <DropdownMenuSeparator />
+                                  )}
+                                  {canDelete &&
+                                    entry.can_purge &&
+                                    !entry.has_related_records && (
+                                    <DropdownMenuItem
+                                      onClick={() => onPurge(entry)}
+                                      className="text-destructive"
+                                    >
+                                      <Trash2 className="w-4 h-4 mr-2" /> Delete permanently
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
                           </td>
                         )}
                       </tr>

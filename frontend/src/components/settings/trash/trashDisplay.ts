@@ -1,24 +1,6 @@
 // frontend/src/components/settings/trash/trashDisplay.ts
 /** Shared display helpers for the Trash module. */
 
-/** "3 days left" / "Expires today" / "Expired" — from the backend countdown. */
-export function formatDaysLeft(daysLeft: number | null, isExpired: boolean): string {
-  if (isExpired) return "Expired";
-  if (daysLeft === null) return "—";
-  if (daysLeft <= 0) return "Expires today";
-  if (daysLeft === 1) return "1 day left";
-  return `${daysLeft} days left`;
-}
-
-/** Tailwind classes for the countdown badge, escalating as expiry approaches. */
-export function daysLeftTone(daysLeft: number | null, isExpired: boolean): string {
-  if (isExpired) return "bg-destructive/15 text-destructive border-destructive/30";
-  if (daysLeft === null) return "bg-muted text-muted-foreground border-border";
-  if (daysLeft <= 3) return "bg-destructive/10 text-destructive border-destructive/25";
-  if (daysLeft <= 7) return "bg-warning/15 text-warning border-warning/30";
-  return "bg-muted text-muted-foreground border-border";
-}
-
 /** "12 Oct 2026, 14:32" */
 export function formatDateTime(value: string | null | undefined): string {
   if (!value) return "—";

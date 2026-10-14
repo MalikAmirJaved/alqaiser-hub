@@ -16,9 +16,4 @@ app.conf.beat_schedule = {
         'task': 'forecast.tasks.generate_stock_forecasts_for_all_companies',
         'schedule': crontab(hour=3, minute=0),
     },
-    # Settings → Trash: permanently delete rows soft-deleted > TRASH_RETENTION_DAYS ago.
-    'trash-retention-purge-daily': {
-        'task': 'compsetting.purge_expired_trash',
-        'schedule': crontab(hour=4, minute=0),
-    },
 }

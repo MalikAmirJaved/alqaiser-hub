@@ -1,4 +1,4 @@
-"""Trash services — listing, retention policy, restore and permanent purge.
+"""Trash services — listing, retention eligibility, restore and permanent purge.
 
 Scope rules
 -----------
@@ -11,9 +11,9 @@ Scope rules
 
 Retention
 ---------
-Everything in the trash is permanently deleted ``TRASH_RETENTION_DAYS``
-(default 30) after ``deleted_at``. The Celery beat task calls
-``purge_expired()``; the API can trigger the same thing on demand.
+``TRASH_RETENTION_DAYS`` (default 30) determines when a trashed row becomes
+eligible for the explicit ``purge-expired`` API action. Trash is never removed
+automatically.
 """
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ MAX_REPORTED_DEPENDENCIES = 25
 # ─────────────────────────────────────────────────────────────────────────────
 
 def retention_days() -> int:
-    """Days a row stays in the trash before it is auto-purged."""
+    """Retention window used to identify rows eligible for manual purge."""
     try:
         days = int(getattr(settings, 'TRASH_RETENTION_DAYS', 30))
     except (TypeError, ValueError):
@@ -59,7 +59,7 @@ def retention_cutoff():
 
 
 def expiry_for(deleted_at):
-    """The instant this row will be auto-purged."""
+    """The instant this row becomes eligible for manual purge."""
     if not deleted_at:
         return None
     return deleted_at + timedelta(days=retention_days())
@@ -143,6 +143,8 @@ class TrashEntry:
     is_expired: bool
     size_bytes: int
     meta: dict = dataclass_field(default_factory=dict)
+    can_purge: bool = True
+    has_related_records: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -383,6 +385,16 @@ def list_trash(user, types=None, groups=None, search='', page=1, page_size=20,
 
     paginator = Paginator(entries, max(1, min(int(page_size or 20), 200)))
     page_obj = paginator.get_page(page)
+
+    for entry in page_obj.object_list:
+        tm = get_trash_model(entry.type_key)
+        obj = (
+            scope_queryset(tm, user).filter(_id=entry._id).first()
+            if tm is not None
+            else None
+        )
+        entry.can_purge = obj is not None and not protected_relations(obj)
+        entry.has_related_records = obj is not None and bool(collect_dependencies(obj))
 
     return {
         'count': paginator.count,

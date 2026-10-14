@@ -22,6 +22,8 @@ export interface TrashEntry {
   expires_at: string | null;
   days_left: number | null;
   is_expired: boolean;
+  can_purge: boolean;
+  has_related_records: boolean;
   size_bytes: number;
   meta: Record<string, string | number | boolean>;
 }

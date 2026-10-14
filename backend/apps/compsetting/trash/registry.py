@@ -16,7 +16,7 @@ How to add a new trash type
    (``<MODULE>:<resource>:delete``) so an Inventory admin can see inventory
    trash without holding the Settings Trash permission.
 
-Unregistered models are never listed and are never auto-purged.
+Unregistered models are never listed or included in trash purge actions.
 """
 from __future__ import annotations
 
