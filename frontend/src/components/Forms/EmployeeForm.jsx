@@ -4,7 +4,7 @@
 // FILE: src/components/Forms/EmployeeForm.jsx
 // ============================================
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { X, Users, Building2, Briefcase, UserCog, Clock, RotateCw, FileText } from "lucide-react";
 import { useServerSearch } from "@/hooks/useServerSearch";
 import { LocationGroup } from "../reuseable/LocationSelectors";
@@ -13,11 +13,13 @@ import { DatePicker } from "@/components/reuseable/DatePicker";
 import DepartmentFormModal from "@/components/settings/departments/DepartmentFormModal";
 import DesignationFormModal from "@/components/settings/designations/DesignationFormModal";
 import { useAutoCode } from "@/hooks/useAutoCode";
+import { toast } from "sonner";
 import FileUpload, { uploadFiles, deleteUploadedFiles } from "../reuseable/FileUpload";
 import { BASE_URL } from "@/lib/api";
 import ProfilePicUploader from "./ProfilePicUploader";
 
 export default function EmployeeForm({ initialData = null, onSubmit, onCancel }) {
+  const isEditing = Boolean(initialData?.id);
   const [formData, setFormData] = useState({
     employee_id: "",
     first_name: "",
@@ -66,6 +68,19 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
   const [desigModalOpen, setDesigModalOpen] = useState(false);
   const [profilePicLoading, setProfilePicLoading] = useState(false);
 
+  const applyGeneratedEmployeeId = useCallback(async (overwrite = false) => {
+    try {
+      const code = await generateCode();
+      setFormData(prev =>
+        !overwrite && prev.employee_id
+          ? prev
+          : { ...prev, employee_id: code }
+      );
+    } catch {
+      toast.error("Could not generate an employee ID. Please try again.");
+    }
+  }, [generateCode]);
+
   const fetchDepartments = useServerSearch("/api/organization/departments/", {
     transformOption: (dept) => ({
       value: dept.id,
@@ -105,14 +120,21 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
   // Load initial data
   useEffect(() => {
     if (initialData) {
-      setFormData({
+      setFormData(prev => ({
+        ...prev,
         ...initialData,
+        employee_id: initialData.employee_id || prev.employee_id || "",
+        employment_status: initialData.employment_status || "ACTIVE",
+        employment_type: initialData.employment_type || "FULL_TIME",
         department_id: initialData.department_id || "",
         designation_id: initialData.designation_id || "",
         old_default_shift_id: initialData.default_shift_id || "",
         asset_category_id: initialData.asset_category_id || "",
         salary: initialData.salary ? Number(initialData.salary) : (initialData.expected_salary ? Number(initialData.expected_salary) : null),
-      });
+      }));
+      if (!initialData.employee_id) {
+        void applyGeneratedEmployeeId();
+      }
       // Load existing profile pictures for editing
       if (initialData.profile_pictures && initialData.profile_pictures.length > 0) {
         setProfilePictures(
@@ -128,9 +150,9 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
         );
       }
     } else {
-      generateCode().then(code => setFormData(prev => ({ ...prev, employee_id: code }))).catch(() => {});
+      void applyGeneratedEmployeeId();
     }
-  }, [initialData]);
+  }, [initialData, applyGeneratedEmployeeId]);
 
   const handleChange = (field, value) => {
     setFormData(prev => ({
@@ -305,7 +327,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
         <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-card z-10">
           <h2 className="font-semibold flex items-center gap-2">
             <Users className="w-5 h-5 text-primary" />
-            {initialData ? "Edit Employee" : "Add New Employee"}
+            {isEditing ? "Edit Employee" : "Add New Employee"}
           </h2>
           <button type="button" onClick={onCancel} className="p-1.5 rounded-md hover:bg-muted">
             <X className="w-4 h-4" />
@@ -341,7 +363,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
                 <span className="text-muted-foreground text-xs">Employee ID</span>
                 <div className="flex gap-2">
                   <input type="text" value={formData.employee_id} onChange={(e) => handleChange("employee_id", e.target.value)} onBlur={() => validateCode(formData.employee_id)} className="flex-1 bg-muted/40 border border-border rounded-md h-9 px-2 font-mono text-xs outline-none focus:ring-2 focus:ring-ring" />
-                  <button type="button" onClick={() => generateCode().then(code => setFormData(prev => ({ ...prev, employee_id: code }))).catch(() => {})} className="h-9 w-9 flex items-center justify-center rounded-md border border-border hover:bg-muted transition flex-shrink-0" title="Generate new code">
+                  <button type="button" onClick={() => void applyGeneratedEmployeeId(true)} className="h-9 w-9 flex items-center justify-center rounded-md border border-border hover:bg-muted transition flex-shrink-0" title="Generate new code">
                     <RotateCw className="w-4 h-4" />
                   </button>
                 </div>
@@ -558,7 +580,7 @@ export default function EmployeeForm({ initialData = null, onSubmit, onCancel })
 
         <div className="p-4 border-t border-border flex justify-end gap-2 sticky bottom-0 bg-card">
           <button type="button" onClick={onCancel} className="px-4 h-9 rounded-md border border-border text-sm hover:bg-muted">Cancel</button>
-          <button type="submit" disabled={loading} className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 disabled:opacity-50">{loading ? "Saving..." : initialData ? "Save Changes" : "Create Employee"}</button>
+          <button type="submit" disabled={loading} className="px-4 h-9 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90 disabled:opacity-50">{loading ? "Saving..." : isEditing ? "Save Changes" : "Create Employee"}</button>
         </div>
       </form>
 
