@@ -27,6 +27,42 @@ Use this template:
 
 ## Resolved
 
+### BUG-20261014-03 — Recruitment prefill omitted Employee ID and Active status
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | Medium |
+| Module | HR / Recruitment / Employees |
+| Found | 2026-10-14 (reported: Add to Employee opened the form without an Employee ID or selected Active status) |
+| Resolved | 2026-10-14 (unreleased) |
+| Root cause | Recruitment passes partial candidate data as `initialData`. The employee form treated it as a complete edit record, replacing its defaults and only generating an ID when `initialData` was absent. As a result, the partial payload omitted both `employee_id` and `employment_status`, so neither the server-issued ID nor the default Active value was present in form state. |
+| Fix | Employee form initialization now merges partial data over defaults, keeps missing employment status as `ACTIVE`, and generates a server-issued employee ID when the initial data has none. Existing employee IDs are retained for edits, and recruitment prefill is presented as a new employee form. Generation failures are shown to the user. |
+| Prevention | Keep partial create-form prefills distinct from complete edit records; verify recruitment-prefill flows retain defaults and generate missing codes. |
+
+### BUG-20261014-02 — Deleted employees were missing from paid payroll history
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | Medium |
+| Module | HR / Payroll / Compensation / Loans |
+| Found | 2026-10-14 (reported: show deleted-employee labels on payroll, compensation, and loan entries, while retaining paid payroll history) |
+| Resolved | 2026-10-14 (unreleased) |
+| Root cause | Employee lists exclude soft-deleted employees, so payroll history could not show a deleted employee even when a paid payroll record existed for the selected month. Payroll, Compensation, and Loan API payloads also did not expose the related employee's deletion state for their list rows. |
+| Fix | Payroll serialization now exposes the employee deletion state. The payroll page appends deleted employees only when they have a `PAID` payroll record in the selected month and year. Compensation and Loan responses also expose the deletion state, and all three HR pay lists show a Deleted badge for those records. |
+| Prevention | Preserve paid payroll history independently of the live employee list, scope deleted payroll rows to the selected paid month, and keep deletion-state fields aligned between serializers, types, and list UI. |
+
+### BUG-20261014-01 — Trash offered automatic deletion or individual purge for linked records
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | High |
+| Module | Settings / Trash / HR |
+| Found | 2026-10-14 (reported: remove automatic Trash deletion, hide permanent deletion for linked Employee records, and remove the blocked-items warning card) |
+| Resolved | 2026-10-14 (unreleased) |
+| Root cause | Trash included a scheduled retention purge, and its individual permanent-delete eligibility only accounted for protected relations. Employee-related rows are cascade dependencies, so Employees with related Compensation, Loan, Payroll, and Leave records could still appear individually purgeable. The UI also displayed a persistent card for records blocked by references. |
+| Fix | Removed the scheduled expired-trash purge while retaining explicit user-triggered purge actions and retention eligibility. The Trash payload and row actions now prevent individual permanent deletion when an entry has related records, including cascade dependencies. Removed the blocked-items warning card; bulk purge responses and confirmations still report blockers. |
+| Prevention | Keep purge eligibility separate from retention age: never schedule automatic Trash deletion, and test both protected references and cascade-related records when deciding whether an individual row can be purged. |
+
 ### BUG-20261013-08 — Editing a SENT Sales invoice was blocked or changed its status
 | Field | Value |
 | ----- | ----- |
