@@ -1,0 +1,10 @@
+1.	Deleted products/SKUs are not completely removed, and there is no visible Deleted/Archived/Trash section.
+2.	When an import shows a duplicate SKU, the system does not show where the existing SKU is stored.
+3.	Product import does not provide options to Add New, Update Existing, Skip Duplicates, or Replace Existing products.
+4.	Duplicate SKU errors show a technical database error instead of a simple, user-friendly message.
+5.	Stock in Hand cannot be imported directly, and there is no convenient bulk opening-stock update option.
+6.	There is no option to customize or remove the default software-generated invoice.
+7.	Line-item tax is not reflected in the final invoice total. Tax entered on the item line is shown there but is not added to the bottom/overall total.
+8.	The invoice total does not correctly reflect the tax amount.
+9.	Unable to create Purchase Orders — the page becomes blank and shows “This page couldn’t load.
+10.	Payment Method: Currently, only Bank is available. Other payment options such as Cash, Cheque, and Card should also be available.
