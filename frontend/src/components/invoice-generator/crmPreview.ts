@@ -107,13 +107,13 @@ export function buildCrmDocumentPreview({
     0,
   );
   const lineTaxes = lines.reduce((total, line) => {
-    const net = (Number(line.quantity) || 0) * (Number(line.unit_price) || 0) -
-      (Number(line.discount_amount) || 0);
-    return total + net * ((Number(line.tax_rate) || 0) / 100);
+    const gross = (Number(line.quantity) || 0) * (Number(line.unit_price) || 0);
+    return total + gross * ((Number(line.tax_rate) || 0) / 100);
   }, 0);
-  const overallDiscount = subtotal * (overallDiscountPercent / 100);
-  const taxable = subtotal - lineDiscounts - overallDiscount;
-  const overallTax = taxable * (overallTaxPercent / 100);
+  const overallTax = subtotal * (overallTaxPercent / 100);
+  const overallDiscount =
+    (subtotal + lineTaxes + overallTax) * (overallDiscountPercent / 100);
+  const taxable = subtotal + lineTaxes + overallTax - lineDiscounts - overallDiscount;
   return {
     ...data,
     templateSlug: appearance?.template_slug || "modern",

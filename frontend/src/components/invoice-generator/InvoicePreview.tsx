@@ -538,8 +538,7 @@ export function InvoicePreview({
                   {(Number(item.taxRate) || 0).toFixed(2)}%
                   <br />
                   {money(
-                    ((Number(item.quantity) || 0) * (Number(item.rate) || 0) -
-                      (Number(item.discountAmount) || 0)) *
+                    (Number(item.quantity) || 0) * (Number(item.rate) || 0) *
                       ((Number(item.taxRate) || 0) / 100),
                   )}
                 </td>
@@ -554,11 +553,10 @@ export function InvoicePreview({
               }}
             >
               {money(
-                (Number(item.quantity) || 0) * (Number(item.rate) || 0) -
-                  (Number(item.discountAmount) || 0) +
-                  (((Number(item.quantity) || 0) * (Number(item.rate) || 0) -
-                    (Number(item.discountAmount) || 0)) *
-                    ((Number(item.taxRate) || 0) / 100)),
+                (Number(item.quantity) || 0) * (Number(item.rate) || 0) +
+                  ((Number(item.quantity) || 0) * (Number(item.rate) || 0) *
+                    ((Number(item.taxRate) || 0) / 100)) -
+                  (Number(item.discountAmount) || 0),
               )}
             </td>
           </tr>
@@ -588,14 +586,6 @@ export function InvoicePreview({
       {totalsRow("Subtotal", money(totals.subtotal))}
       {data.financialBreakdown ? (
         <>
-          {data.financialBreakdown.lineDiscountTotal > 0 &&
-            totalsRow("Line discounts", `−${money(data.financialBreakdown.lineDiscountTotal)}`)}
-          {(data.financialBreakdown.overallDiscountAmount > 0 ||
-            data.financialBreakdown.overallDiscountPercent > 0) &&
-            totalsRow(
-              `Overall discount (${data.financialBreakdown.overallDiscountPercent}%)`,
-              `−${money(data.financialBreakdown.overallDiscountAmount)}`,
-            )}
           {data.financialBreakdown.lineTaxTotal > 0 &&
             totalsRow("Line tax", money(data.financialBreakdown.lineTaxTotal))}
           {(data.financialBreakdown.overallTaxAmount > 0 ||
@@ -603,6 +593,14 @@ export function InvoicePreview({
             totalsRow(
               `Overall tax (${data.financialBreakdown.overallTaxPercent}%)`,
               money(data.financialBreakdown.overallTaxAmount),
+            )}
+          {data.financialBreakdown.lineDiscountTotal > 0 &&
+            totalsRow("Line discounts", `−${money(data.financialBreakdown.lineDiscountTotal)}`)}
+          {(data.financialBreakdown.overallDiscountAmount > 0 ||
+            data.financialBreakdown.overallDiscountPercent > 0) &&
+            totalsRow(
+              `Overall discount (${data.financialBreakdown.overallDiscountPercent}%)`,
+              `−${money(data.financialBreakdown.overallDiscountAmount)}`,
             )}
         </>
       ) : (

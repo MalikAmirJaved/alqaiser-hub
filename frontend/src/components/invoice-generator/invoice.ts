@@ -294,12 +294,30 @@ export function computeTotals(d: InvoiceData): Totals {
     (sum, i) => sum + (Number(i.quantity) || 0) * (Number(i.rate) || 0),
     0,
   );
+  if (d.financialBreakdown) {
+    const discountAmount =
+      d.financialBreakdown.lineDiscountTotal +
+      d.financialBreakdown.overallDiscountAmount;
+    const taxAmount =
+      d.financialBreakdown.lineTaxTotal +
+      d.financialBreakdown.overallTaxAmount;
+    const shipping = Number(d.shipping) || 0;
+    const total = subtotal + taxAmount - discountAmount + shipping;
+    return {
+      subtotal,
+      discountAmount,
+      taxAmount,
+      shipping,
+      total,
+      balanceDue: total - (Number(d.amountPaid) || 0),
+    };
+  }
+
   const discountAmount =
     d.discountType === "percent" ? (subtotal * (Number(d.discount) || 0)) / 100 : Number(d.discount) || 0;
-  const taxable = Math.max(subtotal - discountAmount, 0);
-  const taxAmount = (taxable * (Number(d.taxRate) || 0)) / 100;
+  const taxAmount = (subtotal * (Number(d.taxRate) || 0)) / 100;
   const shipping = Number(d.shipping) || 0;
-  const total = taxable + taxAmount + shipping;
+  const total = subtotal - discountAmount + taxAmount + shipping;
   return {
     subtotal,
     discountAmount,
