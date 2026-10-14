@@ -46,16 +46,18 @@ export default function PayslipModal({
             Payslip - {employee?.first_name} {employee?.last_name || ""}
           </h2>
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => {
-                onClose();
-                router.push(`payroll/${employee.id}`);
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm bg-primary/10 hover:bg-primary/20 text-primary"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              Full Detail
-            </button>
+            {!employee?.is_deleted && (
+              <button
+                onClick={() => {
+                  onClose();
+                  router.push(`payroll/${employee.id}`);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm bg-primary/10 hover:bg-primary/20 text-primary"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Full Detail
+              </button>
+            )}
             <button onClick={onClose} className="p-1.5 rounded-md hover:bg-muted">
               <X className="w-4 h-4" />
             </button>

@@ -226,6 +226,7 @@ class PayrollView(PermissionRequiredMixin, FilterPaginationMixin, APIView):
         return {
             "id": str(payroll._id),
             "employee_id": str(payroll.employee._id) if payroll.employee else None,
+            "employee_is_deleted": bool(payroll.employee and payroll.employee.is_deleted),
             "employee_name": payroll.employee.full_name if payroll.employee else None,
             "employee_code": payroll.employee.employee_id if payroll.employee else None,
             "department": payroll.employee.department.name if payroll.employee and payroll.employee.department else None,
@@ -1100,6 +1101,7 @@ class EmployeeLoanView(PermissionRequiredMixin, FilterPaginationMixin, APIView):
         return {
             "id": str(loan._id),
             "employee_id": str(loan.employee._id) if loan.employee else None,
+            "employee_is_deleted": bool(loan.employee and loan.employee.is_deleted),
             "employee_name": loan.employee.full_name if loan.employee else None,
             "employee_code": loan.employee.employee_id if loan.employee else None,
             "department": loan.employee.department.name if loan.employee and loan.employee.department else None,
@@ -1775,6 +1777,7 @@ class CompensationView(PermissionRequiredMixin, FilterPaginationMixin, APIView):
         return {
             "id": str(comp._id),
             "employee_id": str(comp.employee._id) if comp.employee else None,
+            "employee_is_deleted": bool(comp.employee and comp.employee.is_deleted),
             "employee_name": comp.employee.full_name if comp.employee else None,
             "employee_code": comp.employee.employee_id if comp.employee else None,
             "department": comp.employee.department.name if comp.employee and comp.employee.department else None,

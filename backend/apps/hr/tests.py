@@ -335,6 +335,21 @@ class CompensationTest(TestCase):
         self.assertEqual(c.status, 'PENDING')
         self.assertEqual(c.frequency_type, 'MONTH_RANGE')
 
+    def test_compensation_serialization_marks_deleted_employee(self):
+        from apps.hr.views.payroll_views import CompensationView
+
+        self.employee.is_deleted = True
+        self.employee.save()
+        compensation = Compensation.objects.create(
+            employee=self.employee,
+            company_id=1,
+            branch_id=1,
+        )
+
+        serialized = CompensationView()._serialize_compensation(compensation)
+
+        self.assertTrue(serialized['employee_is_deleted'])
+
     def test_total_allowances(self):
         c = Compensation.objects.create(
             employee=self.employee,
@@ -432,6 +447,25 @@ class EmployeeLoanTest(TestCase):
         )
         self.assertEqual(loan.status, 'UNPAID')
         self.assertEqual(loan.approval, 'PENDING')
+
+    def test_loan_serialization_marks_deleted_employee(self):
+        from apps.hr.views.payroll_views import EmployeeLoanView
+
+        self.employee.is_deleted = True
+        self.employee.save()
+        loan = EmployeeLoan.objects.create(
+            employee=self.employee,
+            loan_type='PERSONAL_LOAN',
+            principal_amount=Decimal('10000'),
+            remaining_amount=Decimal('10000'),
+            total_payable=Decimal('10000'),
+            company_id=1,
+            branch_id=1,
+        )
+
+        serialized = EmployeeLoanView()._serialize_loan(loan)
+
+        self.assertTrue(serialized['employee_is_deleted'])
 
     def test_defaults(self):
         loan = EmployeeLoan.objects.create(
@@ -552,6 +586,22 @@ class PayrollRecordTest(TestCase):
         self.assertEqual(pr.total_compensation, 0)
         self.assertEqual(pr.total_loan_deduction, 0)
         self.assertEqual(pr.total_leave_deduction, 0)
+
+    def test_payroll_serialization_marks_deleted_employee(self):
+        from apps.hr.views.payroll_views import PayrollView
+
+        self.employee.is_deleted = True
+        self.employee.save()
+        payroll = PayrollRecord.objects.create(
+            employee=self.employee, month=6, year=2025,
+            base_salary=Decimal('5000'), net_salary=Decimal('5000'),
+            company_id=1, branch_id=1, created_by=self.user,
+        )
+
+        serialized = PayrollView()._serialize_payroll(payroll)
+
+        self.assertTrue(serialized['employee_is_deleted'])
+        self.assertEqual(serialized['employee_id'], str(self.employee._id))
 
 
 # =========================================================
