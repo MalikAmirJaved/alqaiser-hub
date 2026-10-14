@@ -13,11 +13,14 @@ import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
 import { useQueryClient } from "@tanstack/react-query";
 import { getCustomerInvoiceById } from "@/hooks/finance/useCustomerInvoices";
+import { apiFetch } from "@/lib/api";
+import { DocumentPrintPreviewModal } from "@/components/invoice-generator/DocumentPrintPreviewModal";
+import { InvoiceTemplatePickerModal } from "@/components/invoice-generator/InvoiceTemplatePickerModal";
 import {
-  PrintPreviewModal,
-  type QuoteInvoiceData,
-  type DocCompany,
-} from "@/components/common/QuoteInvoiceDocument";
+  documentAppearanceFromRecord,
+} from "@/components/invoice-generator/InvoiceAppearanceEditor";
+import { buildCrmDocumentPreview } from "@/components/invoice-generator/crmPreview";
+import type { InvoiceData } from "@/components/invoice-generator/invoice";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import {
@@ -476,8 +479,12 @@ export function SalesListPanel({ onEditOrder, onReturnOrder }: SalesListPanelPro
 
   const [invoiceModalProps, setInvoiceModalProps] = useState<{
     open: boolean;
-    data: QuoteInvoiceData | null;
+    data: InvoiceData | null;
   }>({ open: false, data: null });
+  const [templatePickerData, setTemplatePickerData] = useState<InvoiceData | null>(null);
+  const [templatePickerInvoiceId, setTemplatePickerInvoiceId] = useState<string | null>(null);
+  const [templatePickerIsPaid, setTemplatePickerIsPaid] = useState(false);
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [pdfLoading, setPdfLoading] = useState<string | null>(null);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
 
@@ -517,42 +524,42 @@ export function SalesListPanel({ onEditOrder, onReturnOrder }: SalesListPanelPro
     try {
       const invoiceData = await getCustomerInvoiceById(order.invoice_id);
 
-      const docCompany: DocCompany = {
-        companyName: companySettings?.companyName || "",
-        address: companySettings?.address || "",
-        city: companySettings?.city || "",
-        state: companySettings?.state || "",
-        country: companySettings?.country || "",
-        phone: companySettings?.phone || "",
-        email: companySettings?.email || "",
-        taxId: companySettings?.taxId || "",
-        logo: companySettings?.logo || "",
-        logoUrl: companySettings?.logo ? `${process.env.NEXT_PUBLIC_API_URL}${companySettings.logo}` : "",
-      };
-
-      const docData: QuoteInvoiceData = {
-        type: "INVOICE",
+      const appearance = documentAppearanceFromRecord({
+        template_slug: invoiceData?.template_slug,
+        accent_color: invoiceData?.accent_color,
+        typography: invoiceData?.typography,
+      });
+      const previewData = buildCrmDocumentPreview({
+        appearance,
+        documentType: "Invoice",
         documentNumber: invoiceData?.invoice_number || order.order_number,
-        date: invoiceData?.invoice_date || order.order_date,
-        dueDate: invoiceData?.due_date || "",
-        customerName: order.customer_name || invoiceData?.customer_name || "Walk-in Customer",
-        customerEmail: invoiceData?.customer_email || "",
-        customerPhone: invoiceData?.customer_phone || "",
-        lines: (invoiceData?.lines || order.lines || []).map((l: any) => ({
-          variant_name: l.variant_name || "Product",
-          variant_sku: l.variant_sku || "",
-          quantity: l.quantity || l.quantity_ordered,
-          unit_price: Number(l.unit_price),
-          tax_rate: Number(l.tax_rate || 0),
-          discount_amount: Number(l.discount_amount || 0),
+        customerName:
+          order.customer_name || invoiceData?.customer_name || "Walk-in Customer",
+        customerEmail: invoiceData?.customer_email,
+        customerPhone: invoiceData?.customer_phone,
+        issueDate: invoiceData?.invoice_date || order.order_date,
+        dueDate: invoiceData?.due_date,
+        lines: (invoiceData?.lines || order.lines || []).map((line: any) => ({
+          variant_name: line.variant_name || "Product",
+          quantity: line.quantity || line.quantity_ordered,
+          unit_price: Number(line.unit_price),
+          tax_rate: Number(line.tax_rate || 0),
+          discount_amount: Number(line.discount_amount || 0),
         })),
-        totalAmount: Number(invoiceData?.amount || order.total_amount),
-        status: invoiceData?.status || "COMPLETE",
-        paymentStatus: invoiceData?.payment_status || "",
+        currency: companySettings?.currency,
+        businessName: companySettings?.companyName,
+        businessAddress: companySettings?.address,
+        businessEmail: companySettings?.email,
+        businessLogo: companySettings?.logo,
+        overallDiscountPercent: Number(invoiceData?.overall_discount_percent || 0),
+        overallTaxPercent: Number(invoiceData?.overall_tax_percent || 0),
         notes: invoiceData?.notes || "",
-      };
+        terms: termsData?.invoice || "",
+      });
 
-      setInvoiceModalProps({ open: true, data: docData });
+      setTemplatePickerInvoiceId(order.invoice_id);
+      setTemplatePickerIsPaid(invoiceData?.payment_status === "PAID");
+      setTemplatePickerData(previewData);
     } catch (err) {
       console.error("Failed to load invoice:", err);
     } finally {
@@ -709,28 +716,59 @@ export function SalesListPanel({ onEditOrder, onReturnOrder }: SalesListPanelPro
         </div>
       )}
 
+      <InvoiceTemplatePickerModal
+        open={!!templatePickerData}
+        data={templatePickerData}
+        isPaid={templatePickerIsPaid}
+        isSaving={isSavingTemplate}
+        onClose={() => {
+          setTemplatePickerData(null);
+          setTemplatePickerInvoiceId(null);
+          setTemplatePickerIsPaid(false);
+        }}
+        onSelect={async (data) => {
+          if (!templatePickerInvoiceId) return;
+          setIsSavingTemplate(true);
+          try {
+            if (!templatePickerIsPaid) {
+              await apiFetch(`/api/finance/customer-invoices/${templatePickerInvoiceId}/`, {
+                method: "PATCH",
+                body: JSON.stringify({
+                  template_slug: data.templateSlug,
+                  accent_color: data.accentColor || "",
+                  typography: {
+                    ...data.typography,
+                    useCompanyLogo: Boolean(data.logo),
+                    watermarkEnabled: data.watermarkEnabled,
+                    watermarkText: data.watermarkText,
+                    watermarkOpacity: data.watermarkOpacity,
+                    watermarkLogo: Boolean(data.watermarkImage),
+                  },
+                }),
+              });
+              await queryClient.invalidateQueries({
+                queryKey: ["finance_customer_invoices", templatePickerInvoiceId],
+              });
+            }
+            setTemplatePickerData(null);
+            setTemplatePickerInvoiceId(null);
+            setTemplatePickerIsPaid(false);
+            setInvoiceModalProps({ open: true, data });
+          } catch (error) {
+            console.error("Failed to save invoice design:", error);
+          } finally {
+            setIsSavingTemplate(false);
+          }
+        }}
+      />
+
       {/* ── Invoice Print Modal ── */}
       {invoiceModalProps.data && (
-        <PrintPreviewModal
+        <DocumentPrintPreviewModal
           open={invoiceModalProps.open}
           onClose={() => setInvoiceModalProps({ open: false, data: null })}
-          documentProps={{
-            data: invoiceModalProps.data,
-            company: {
-              companyName: companySettings?.companyName || "",
-              address: companySettings?.address || "",
-              city: companySettings?.city || "",
-              state: companySettings?.state || "",
-              country: companySettings?.country || "",
-              phone: companySettings?.phone || "",
-              email: companySettings?.email || "",
-              taxId: companySettings?.taxId || "",
-              logo: companySettings?.logo || "",
-              logoUrl: companySettings?.logo ? `${process.env.NEXT_PUBLIC_API_URL}${companySettings.logo}` : "",
-            },
-            termsContent: termsData?.invoice || "",
-            formatCurrency,
-          }}
+          documentTitle="Invoice"
+          data={invoiceModalProps.data}
         />
       )}
     </div>

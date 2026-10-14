@@ -68,6 +68,23 @@ export function buildCrmDocumentPreview({
   terms?: string;
 }): InvoiceData {
   const data = createDefaultInvoice();
+  const storedTypography = appearance?.typography as
+    | (Partial<InvoiceData["typography"]> & {
+        useCompanyLogo?: boolean;
+        watermarkEnabled?: boolean;
+        watermarkText?: string;
+        watermarkOpacity?: number;
+        watermarkLogo?: boolean;
+      })
+    | undefined;
+  const useCompanyLogo =
+    appearance?.use_company_logo ??
+    storedTypography?.useCompanyLogo ??
+    true;
+  const watermarkEnabled =
+    appearance?.watermark_enabled ??
+    storedTypography?.watermarkEnabled ??
+    false;
   const lineItems = lines.map((line, index) => ({
     id: `crm-line-${index}`,
     description: [
@@ -103,7 +120,7 @@ export function buildCrmDocumentPreview({
     accentColor: appearance?.accent_color || null,
     typography: appearance?.typography || createDefaultTypography(),
     currency,
-    logo: resolveLogoUrl(businessLogo),
+    logo: useCompanyLogo ? resolveLogoUrl(businessLogo) : null,
     invoiceNumber: documentNumber || "Draft",
     issueDate: issueDate || data.issueDate,
     dueDate: dueDate || data.dueDate,
@@ -134,7 +151,18 @@ export function buildCrmDocumentPreview({
     taxRate: taxable > 0 ? ((lineTaxes + overallTax) / taxable) * 100 : 0,
     notes,
     terms,
-    watermarkEnabled: false,
-    watermarkText: documentType.toUpperCase(),
+    watermarkEnabled,
+    watermarkText:
+      appearance?.watermark_text ||
+      storedTypography?.watermarkText ||
+      documentType.toUpperCase(),
+    watermarkOpacity:
+      appearance?.watermark_opacity ??
+      storedTypography?.watermarkOpacity ??
+      data.watermarkOpacity,
+    watermarkImage:
+      (appearance?.watermark_logo ?? storedTypography?.watermarkLogo) && useCompanyLogo
+        ? resolveLogoUrl(businessLogo)
+        : null,
   };
 }

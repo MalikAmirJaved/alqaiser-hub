@@ -27,6 +27,18 @@ Use this template:
 
 ## Resolved
 
+### BUG-20261014-04 — POS invoice generation used the legacy fixed template
+| Field | Value |
+| ----- | ----- |
+| Status | Resolved |
+| Severity | Medium |
+| Module | Inventory / POS / Sales / Invoice Templates |
+| Found | 2026-10-14 (reported: Recent Sales generated an old invoice template and document templates lacked logo/watermark controls) |
+| Resolved | 2026-10-14 (unreleased) |
+| Root cause | Recent Sales generated or loaded an invoice and sent it to the legacy `QuoteInvoiceDocument` print component, which hardcoded its layout and company-logo watermark. The current invoice/quote template editor used a separate renderer, but exposed no controls for company-logo visibility or watermark configuration. |
+| Fix | Recent Sales now opens a template/branding picker and uses the shared invoice preview/print/PDF renderer. Invoice and quote appearance controls now allow hiding the company logo and enabling/configuring a text or company-logo watermark; the settings round-trip in the existing typography JSON field with backend validation. |
+| Prevention | Keep generated invoice, quote, preview, print, and PDF flows on the shared invoice renderer; test appearance settings through serializer validation and document preview flows. |
+
 ### BUG-20261014-03 — Recruitment prefill omitted Employee ID and Active status
 | Field | Value |
 | ----- | ----- |

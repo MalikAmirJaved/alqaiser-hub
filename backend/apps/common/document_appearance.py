@@ -33,6 +33,11 @@ DEFAULT_DOCUMENT_TYPOGRAPHY = {
     'boldBody': False,
     'italicBody': False,
     'italicNotes': False,
+    'useCompanyLogo': True,
+    'watermarkEnabled': False,
+    'watermarkText': 'PAID',
+    'watermarkOpacity': 0.14,
+    'watermarkLogo': False,
 }
 
 FONT_FAMILIES = {'default', 'sans', 'serif', 'mono', 'classic', 'rounded'}
@@ -43,6 +48,9 @@ TYPOGRAPHY_BOOLEAN_FIELDS = (
     'boldBody',
     'italicBody',
     'italicNotes',
+    'useCompanyLogo',
+    'watermarkEnabled',
+    'watermarkLogo',
 )
 
 
@@ -85,5 +93,16 @@ def validate_document_typography(value):
     for field in TYPOGRAPHY_BOOLEAN_FIELDS[1:]:
         if not isinstance(normalized[field], bool):
             raise serializers.ValidationError({field: 'Must be a boolean.'})
+
+    if not isinstance(normalized['watermarkText'], str):
+        raise serializers.ValidationError({'watermarkText': 'Must be a string.'})
+    if (
+        isinstance(normalized['watermarkOpacity'], bool)
+        or not isinstance(normalized['watermarkOpacity'], (int, float))
+        or not 0.04 <= normalized['watermarkOpacity'] <= 0.45
+    ):
+        raise serializers.ValidationError(
+            {'watermarkOpacity': 'Must be a number from 0.04 to 0.45.'}
+        )
 
     return normalized

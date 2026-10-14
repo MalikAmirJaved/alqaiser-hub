@@ -23,6 +23,23 @@ class DocumentAppearanceValidationTests(SimpleTestCase):
             {**DEFAULT_DOCUMENT_TYPOGRAPHY, 'fontFamily': 'serif'},
         )
 
+    def test_branding_options_are_validated_and_persisted(self):
+        values = {
+            'useCompanyLogo': False,
+            'watermarkEnabled': True,
+            'watermarkText': 'COPY',
+            'watermarkOpacity': 0.3,
+            'watermarkLogo': True,
+        }
+        self.assertEqual(
+            validate_document_typography(values),
+            {**DEFAULT_DOCUMENT_TYPOGRAPHY, **values},
+        )
+        with self.assertRaises(ValidationError):
+            validate_document_typography({'watermarkOpacity': 0.8})
+        with self.assertRaises(ValidationError):
+            validate_document_typography({'watermarkEnabled': 'yes'})
+
     def test_unknown_typography_fields_are_rejected(self):
         with self.assertRaises(ValidationError):
             validate_document_typography({'unexpected': True})

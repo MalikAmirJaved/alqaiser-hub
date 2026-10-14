@@ -9,6 +9,7 @@ All notable changes to the **Al Qaiser Nexus ERP (Al-Qaiser BOS)** project.
 ### Changed
 - **Quote and invoice create/edit now use a shared page-based document form** — Sales quote and customer-invoice routes use the reusable `DocumentForm` entry point and domain-specific workflows rather than separate modal forms. The live preview and template/typography controls are shown together at full-page size by default, without internal scrollers. Template slug, accent color, and typography continue to persist with the document.
 - **CRM live preview and print/PDF now share document data and rendering** — Preview and print include customer/company branding, company logo, line unit prices, line discounts and taxes, overall discount and tax, and terms. Quote-to-invoice conversion carries quote details forward and supplies an invoice number when the conversion defaults do not include one.
+- **POS Recent Sales invoice generation uses the current template renderer** — Generate Invoice now opens a template and branding chooser, then displays the selected template in the shared invoice preview/print/PDF modal instead of the legacy fixed invoice layout. Invoice and quote appearance settings now include company-logo visibility and optional text/logo watermark controls, persisted with the existing document appearance data.
 - **Quote detail exposes quote-to-invoice conversion** — An approved, unconverted quote shows the action to users with invoice-create permission; a converted quote links to its invoice.
 
 ### Fixed

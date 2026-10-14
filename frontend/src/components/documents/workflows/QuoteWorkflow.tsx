@@ -16,7 +16,9 @@ import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { toast } from "sonner";
 import {
   createDefaultDocumentAppearance,
+  documentAppearanceFromRecord,
   InvoiceAppearanceEditor,
+  serializeDocumentTypography,
   type DocumentAppearance,
 } from "@/components/invoice-generator/InvoiceAppearanceEditor";
 import { buildCrmDocumentPreview } from "@/components/invoice-generator/crmPreview";
@@ -145,11 +147,7 @@ export function QuoteWorkflow({
 
   useEffect(() => {
     if (initialData) {
-      setAppearance({
-        template_slug: initialData.template_slug || "modern",
-        accent_color: initialData.accent_color || "",
-        typography: initialData.typography || createDefaultDocumentAppearance().typography,
-      });
+      setAppearance(documentAppearanceFromRecord(initialData));
       setFormData({
         quote_number: initialData.quote_number,
         customer: initialData.customer || "",
@@ -335,7 +333,7 @@ export function QuoteWorkflow({
     payload.overall_tax_percent = Number(formData.overall_tax_percent) || 0;
     payload.template_slug = appearance.template_slug;
     payload.accent_color = appearance.accent_color;
-    payload.typography = appearance.typography;
+    payload.typography = serializeDocumentTypography(appearance);
 
     for (let i = 0; i < payload.lines.length; i++) {
       const line = payload.lines[i];

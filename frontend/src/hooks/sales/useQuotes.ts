@@ -44,6 +44,11 @@ export interface Quote {
     boldBody: boolean;
     italicBody: boolean;
     italicNotes: boolean;
+    useCompanyLogo?: boolean;
+    watermarkEnabled?: boolean;
+    watermarkText?: string;
+    watermarkOpacity?: number;
+    watermarkLogo?: boolean;
   };
   status: "DRAFT" | "SENT" | "VIEWED" | "APPROVED" | "REJECTED" | "CONVERTED";
   source?: string;

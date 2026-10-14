@@ -60,6 +60,11 @@ export interface CustomerInvoice {
     boldBody: boolean;
     italicBody: boolean;
     italicNotes: boolean;
+    useCompanyLogo?: boolean;
+    watermarkEnabled?: boolean;
+    watermarkText?: string;
+    watermarkOpacity?: number;
+    watermarkLogo?: boolean;
   };
   status: "PENDING" | "SENT" | "DRAFT" | "CANCELLED";
   payment_status?: "UNPAID" | "PARTIAL" | "PAID";

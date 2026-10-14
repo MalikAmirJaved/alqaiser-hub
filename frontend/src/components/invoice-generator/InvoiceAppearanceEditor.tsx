@@ -18,6 +18,11 @@ export interface DocumentAppearance {
   template_slug: string;
   accent_color: string;
   typography: InvoiceTypography;
+  use_company_logo: boolean;
+  watermark_enabled: boolean;
+  watermark_text: string;
+  watermark_opacity: number;
+  watermark_logo: boolean;
 }
 
 export function createDefaultDocumentAppearance(): DocumentAppearance {
@@ -25,6 +30,59 @@ export function createDefaultDocumentAppearance(): DocumentAppearance {
     template_slug: "modern",
     accent_color: "",
     typography: createDefaultTypography(),
+    use_company_logo: true,
+    watermark_enabled: false,
+    watermark_text: "PAID",
+    watermark_opacity: 0.14,
+    watermark_logo: false,
+  };
+}
+
+export function documentAppearanceFromRecord(
+  record: Partial<Pick<DocumentAppearance, "template_slug" | "accent_color">> & {
+    typography?: (Partial<InvoiceTypography> & Partial<Record<
+      "useCompanyLogo" | "watermarkEnabled" | "watermarkText" | "watermarkOpacity" | "watermarkLogo",
+      boolean | string | number
+    >>) | null;
+  },
+): DocumentAppearance {
+  const defaults = createDefaultDocumentAppearance();
+  const stored = record.typography;
+  return {
+    template_slug: record.template_slug || defaults.template_slug,
+    accent_color: record.accent_color || defaults.accent_color,
+    typography: normalizeTypography(stored),
+    use_company_logo:
+      typeof stored?.useCompanyLogo === "boolean"
+        ? stored.useCompanyLogo
+        : defaults.use_company_logo,
+    watermark_enabled:
+      typeof stored?.watermarkEnabled === "boolean"
+        ? stored.watermarkEnabled
+        : defaults.watermark_enabled,
+    watermark_text:
+      typeof stored?.watermarkText === "string"
+        ? stored.watermarkText
+        : defaults.watermark_text,
+    watermark_opacity:
+      typeof stored?.watermarkOpacity === "number"
+        ? Math.min(0.45, Math.max(0.04, stored.watermarkOpacity))
+        : defaults.watermark_opacity,
+    watermark_logo:
+      typeof stored?.watermarkLogo === "boolean"
+        ? stored.watermarkLogo
+        : defaults.watermark_logo,
+  };
+}
+
+export function serializeDocumentTypography(appearance: DocumentAppearance) {
+  return {
+    ...appearance.typography,
+    useCompanyLogo: appearance.use_company_logo,
+    watermarkEnabled: appearance.watermark_enabled,
+    watermarkText: appearance.watermark_text,
+    watermarkOpacity: appearance.watermark_opacity,
+    watermarkLogo: appearance.watermark_logo,
   };
 }
 
@@ -53,6 +111,14 @@ export function InvoiceAppearanceEditor({
     templateSlug: template.slug,
     accentColor: appearance.accent_color || null,
     typography,
+    logo: appearance.use_company_logo ? previewData.logo : null,
+    watermarkEnabled: appearance.watermark_enabled,
+    watermarkText: appearance.watermark_text,
+    watermarkOpacity: appearance.watermark_opacity,
+    watermarkImage:
+      appearance.watermark_logo && appearance.use_company_logo
+        ? previewData.logo
+        : null,
   };
 
   useEffect(() => {
@@ -82,7 +148,7 @@ export function InvoiceAppearanceEditor({
           Document design
         </h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          Choose the template and typography saved with this document.
+          Choose the template, typography and branding saved with this document.
         </p>
       </div>
 
@@ -230,6 +296,86 @@ export function InvoiceAppearanceEditor({
             {label}
           </label>
         ))}
+      </div>
+
+      <div className="space-y-2 border-t border-border pt-4">
+        <h5 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Branding
+        </h5>
+        <label className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 text-xs">
+          <input
+            type="checkbox"
+            checked={appearance.use_company_logo}
+            onChange={(event) =>
+              onChange({ ...appearance, use_company_logo: event.target.checked })
+            }
+            className="accent-primary"
+          />
+          Use company logo
+        </label>
+        <p className="text-[11px] text-muted-foreground">
+          Change the uploaded logo in{" "}
+          <a className="text-primary underline-offset-2 hover:underline" href="/settings/company">
+            Company Settings
+          </a>
+          .
+        </p>
+        <label className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 text-xs">
+          <input
+            type="checkbox"
+            checked={appearance.watermark_enabled}
+            onChange={(event) =>
+              onChange({ ...appearance, watermark_enabled: event.target.checked })
+            }
+            className="accent-primary"
+          />
+          Show watermark
+        </label>
+        {appearance.watermark_enabled && (
+          <>
+            <label className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 text-xs">
+              <input
+                type="checkbox"
+                checked={appearance.watermark_logo}
+                disabled={!appearance.use_company_logo}
+                onChange={(event) =>
+                  onChange({ ...appearance, watermark_logo: event.target.checked })
+                }
+                className="accent-primary"
+              />
+              Use company logo as watermark
+            </label>
+            {!appearance.watermark_logo && (
+              <label className="grid gap-1.5 text-xs font-medium">
+                Watermark text
+                <input
+                  value={appearance.watermark_text}
+                  onChange={(event) =>
+                    onChange({ ...appearance, watermark_text: event.target.value })
+                  }
+                  maxLength={40}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                />
+              </label>
+            )}
+            <label className="grid gap-1.5 text-xs font-medium">
+              Watermark opacity ({Math.round(appearance.watermark_opacity * 100)}%)
+              <input
+                type="range"
+                min={4}
+                max={45}
+                value={Math.round(appearance.watermark_opacity * 100)}
+                onChange={(event) =>
+                  onChange({
+                    ...appearance,
+                    watermark_opacity: Number(event.target.value) / 100,
+                  })
+                }
+                className="h-8 accent-primary"
+              />
+            </label>
+          </>
+        )}
       </div>
           </div>
         </div>

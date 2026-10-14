@@ -26,7 +26,9 @@ import QtySplitModal from "@/components/finance/customer-invoices/LineDispositio
 import { toast } from "sonner";
 import {
   createDefaultDocumentAppearance,
+  documentAppearanceFromRecord,
   InvoiceAppearanceEditor,
+  serializeDocumentTypography,
   type DocumentAppearance,
 } from "@/components/invoice-generator/InvoiceAppearanceEditor";
 import { buildCrmDocumentPreview } from "@/components/invoice-generator/crmPreview";
@@ -549,7 +551,9 @@ export function InvoiceWorkflow({
         amount: 0,
         overall_discount_percent: 0,
         overall_tax_percent: 0,
-        ...createDefaultDocumentAppearance(),
+        template_slug: createDefaultDocumentAppearance().template_slug,
+        accent_color: createDefaultDocumentAppearance().accent_color,
+        typography: serializeDocumentTypography(createDefaultDocumentAppearance()),
         notes: "",
         lines: [],
       },
@@ -580,11 +584,11 @@ export function InvoiceWorkflow({
   const overallDiscountPct = Number(useWatch({ control, name: "overall_discount_percent" })) || 0;
   const overallTaxPct = Number(useWatch({ control, name: "overall_tax_percent" })) || 0;
   const appearance: DocumentAppearance = {
-    template_slug: useWatch({ control, name: "template_slug" }) || "modern",
-    accent_color: useWatch({ control, name: "accent_color" }) || "",
-    typography:
-      useWatch({ control, name: "typography" }) ||
-      createDefaultDocumentAppearance().typography,
+    ...documentAppearanceFromRecord({
+      template_slug: useWatch({ control, name: "template_slug" }) || "modern",
+      accent_color: useWatch({ control, name: "accent_color" }) || "",
+      typography: useWatch({ control, name: "typography" }),
+    }),
   };
   const fetchAvailableVariants = useCallback(
     async (
@@ -701,7 +705,9 @@ export function InvoiceWorkflow({
         amount: 0,
         overall_discount_percent: 0,
         overall_tax_percent: 0,
-        ...createDefaultDocumentAppearance(),
+        template_slug: createDefaultDocumentAppearance().template_slug,
+        accent_color: createDefaultDocumentAppearance().accent_color,
+        typography: serializeDocumentTypography(createDefaultDocumentAppearance()),
         notes: "",
         lines: [],
       });
@@ -1145,7 +1151,7 @@ export function InvoiceWorkflow({
                 onChange={(next) => {
                   setValue("template_slug", next.template_slug, { shouldDirty: true });
                   setValue("accent_color", next.accent_color, { shouldDirty: true });
-                  setValue("typography", next.typography, { shouldDirty: true });
+                  setValue("typography", serializeDocumentTypography(next), { shouldDirty: true });
                 }}
                 previewData={buildCrmDocumentPreview({
                   appearance,
