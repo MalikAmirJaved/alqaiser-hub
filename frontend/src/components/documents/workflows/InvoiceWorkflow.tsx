@@ -50,6 +50,58 @@ interface InvoiceLine {
   vendor?: string;
   vendor_name?: string;
   cost_price?: number;
+  stock_check_pending?: boolean;
+  stock_check_error?: boolean;
+  stock_check_checked?: boolean;
+}
+
+function validateInvoiceQuantities(lines: InvoiceLine[]) {
+  const errors = new Map<number, string>();
+  const inventoryGroups = new Map<
+    string,
+    { indices: number[]; quantity: number; available: number }
+  >();
+  let hasPendingStockCheck = false;
+
+  lines.forEach((line, index) => {
+    const quantity = Number(line.quantity);
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      errors.set(index, "Quantity must be a whole number of at least 1.");
+    }
+
+    if (line.is_manual_entry || !line.variant) return;
+    if (line.stock_check_pending) {
+      hasPendingStockCheck = true;
+      return;
+    }
+    if (line.stock_check_error || line.max_quantity === undefined) {
+      errors.set(index, "Available stock could not be verified.");
+      return;
+    }
+
+    const group = inventoryGroups.get(line.variant) || {
+      indices: [],
+      quantity: 0,
+      available: line.max_quantity,
+    };
+    group.indices.push(index);
+    group.quantity += quantity;
+    group.available = Math.min(group.available, line.max_quantity);
+    inventoryGroups.set(line.variant, group);
+  });
+
+  for (const group of inventoryGroups.values()) {
+    if (group.quantity > group.available) {
+      for (const index of group.indices) {
+        errors.set(
+          index,
+          `Requested ${group.quantity}; only ${group.available} available.`,
+        );
+      }
+    }
+  }
+
+  return { errors, hasPendingStockCheck };
 }
 
 interface CustomerInvoiceFormData {
@@ -276,6 +328,8 @@ interface LineRowProps {
   fieldId: string;
   currentLine: InvoiceLine;
   isOverStock: boolean;
+  quantityError?: string;
+  isStockCheckPending: boolean;
   isExistingLine?: boolean;
   fetchVariants: any;
   variantDisplayLabel: string;
@@ -294,6 +348,8 @@ const LineRow = memo(function LineRow({
   fieldId,
   currentLine,
   isOverStock,
+  quantityError,
+  isStockCheckPending,
   isExistingLine = false,
   fetchVariants,
   variantDisplayLabel,
@@ -309,7 +365,12 @@ const LineRow = memo(function LineRow({
   const lineTotal = calculateLineTotal(currentLine);
 
   return (
-    <tr key={fieldId} className="group hover:bg-muted/20 transition-colors">
+    <tr
+      key={fieldId}
+      className={`group hover:bg-muted/20 transition-colors ${
+        quantityError ? "border-2 border-destructive bg-destructive/5" : ""
+      }`}
+    >
       {/* ── Item cell ── */}
       <td className="px-4 py-3 min-w-[300px] align-bottom">
         <div className="inline-flex rounded-md border border-border overflow-hidden mb-2 text-[11px]">
@@ -375,18 +436,30 @@ const LineRow = memo(function LineRow({
           <NumericCell
             value={Number(currentLine.quantity) || 0}
             onChange={(val) => onUpdateLine(index, "quantity", val)}
-            min={1}
-            max={currentLine.max_quantity || 999999}
+            min={0}
+            step="1"
             className={`w-full h-8 px-2 bg-background border border-input hover:border-primary/60 focus:border-primary rounded-md text-right text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 ${
-              isOverStock ? "text-destructive font-medium" : ""
+              quantityError ? "text-destructive font-medium" : ""
             }`}
           />
-          {isOverStock && (
+          {quantityError && (
             <span className="flex items-center gap-0.5 text-[10px] text-destructive whitespace-nowrap">
               <AlertCircle className="w-3 h-3" />
-              Max {currentLine.max_quantity}
+              {quantityError}
             </span>
           )}
+          {!quantityError && isStockCheckPending && (
+            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+              Checking stock…
+            </span>
+          )}
+          {!quantityError && !isStockCheckPending && !isOverStock &&
+            !currentLine.is_manual_entry && currentLine.variant &&
+            currentLine.max_quantity !== undefined && (
+              <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                Available {currentLine.max_quantity}
+              </span>
+            )}
         </div>
       </td>
 
@@ -564,8 +637,23 @@ export function InvoiceWorkflow({
     control,
     name: "lines",
   });
+  const fieldsRef = useRef(fields);
+  fieldsRef.current = fields;
 
   const watchedLines = watch("lines");
+  const getReleasedQuantity = useCallback(
+    (variantId: string) =>
+      initialData?.id
+        ? (initialData.lines || []).reduce(
+            (total, line) =>
+              !line.is_manual_entry && String(line.variant || "") === variantId
+                ? total + Number(line.quantity || 0)
+                : total,
+            0,
+          )
+        : 0,
+    [initialData],
+  );
   const subtotal = (watchedLines || []).reduce((s, l) => s + Number(l.quantity) * Number(l.unit_price), 0);
   const totalDiscount = (watchedLines || []).reduce((s, l) => s + (Number(l.discount_amount) || 0), 0);
   const totalTax = (watchedLines || []).reduce((s, l) => {
@@ -607,6 +695,62 @@ export function InvoiceWorkflow({
     },
     [fetchVariants, watchedLines],
   );
+
+  useEffect(() => {
+    (watchedLines || []).forEach((line, index) => {
+      if (
+        line.is_manual_entry ||
+        !line.variant ||
+        line.stock_check_pending ||
+        line.stock_check_checked
+      ) {
+        return;
+      }
+
+      const fieldId = fields[index]?.id;
+      const variantId = line.variant;
+      if (!fieldId) return;
+
+      setValue(`lines.${index}.stock_check_pending`, true, { shouldDirty: false });
+      void api<VariantDetail>(`/api/inventory/variants/${variantId}/`)
+        .then((variant) => {
+          const currentIndex = fieldsRef.current.findIndex((field) => field.id === fieldId);
+          if (currentIndex < 0) return;
+          const currentLine = getValues(`lines.${currentIndex}`);
+          if (currentLine?.variant !== variantId) return;
+          setValue(
+            `lines.${currentIndex}.max_quantity`,
+            Math.max(0, Number(variant.total_stock) || 0) +
+              getReleasedQuantity(variantId),
+            { shouldDirty: false },
+          );
+          setValue(`lines.${currentIndex}.stock_check_pending`, false, {
+            shouldDirty: false,
+          });
+          setValue(`lines.${currentIndex}.stock_check_checked`, true, {
+            shouldDirty: false,
+          });
+        })
+        .catch(() => {
+          const currentIndex = fieldsRef.current.findIndex((field) => field.id === fieldId);
+          if (currentIndex < 0) return;
+          const currentLine = getValues(`lines.${currentIndex}`);
+          if (currentLine?.variant !== variantId) return;
+          setValue(`lines.${currentIndex}.stock_check_pending`, false, {
+            shouldDirty: false,
+          });
+          setValue(`lines.${currentIndex}.stock_check_error`, true, {
+            shouldDirty: false,
+          });
+          setValue(`lines.${currentIndex}.stock_check_checked`, true, {
+            shouldDirty: false,
+          });
+          toast.error("Could not check available stock for an invoice item.");
+        });
+    });
+  }, [api, fields, getReleasedQuantity, getValues, setValue, watchedLines]);
+
+  const quantityValidation = validateInvoiceQuantities(watchedLines || []);
 
   const overallTaxAmt = (subtotal || 0) * (overallTaxPct / 100);
   const overallDiscountAmt =
@@ -784,34 +928,83 @@ export function InvoiceWorkflow({
           ...currentLines[index],
           is_manual_entry: value,
           variant: value ? "" : currentLines[index].variant,
+          max_quantity: undefined,
+          stock_check_pending: false,
+          stock_check_error: false,
+          stock_check_checked: false,
           manual_variant_name: value ? currentLines[index].manual_variant_name : "",
           manual_variant_sku: value ? currentLines[index].manual_variant_sku : "",
           description: value ? currentLines[index].description : "",
         });
       } else if (field === "variant" && value) {
         const fieldId = fields[index]?.id;
-        update(index, { ...currentLines[index], variant: value });
+        setValue(`lines.${index}.variant`, value, { shouldDirty: true });
+        setValue(`lines.${index}.max_quantity`, undefined, { shouldDirty: false });
+        setValue(`lines.${index}.stock_check_pending`, true, { shouldDirty: false });
+        setValue(`lines.${index}.stock_check_error`, false, { shouldDirty: false });
+        setValue(`lines.${index}.stock_check_checked`, false, { shouldDirty: false });
         try {
           const variant = await api<VariantDetail>(`/api/inventory/variants/${value}/`);
           if (variant && fieldId) {
-            const correctIdx = fields.findIndex((f) => f.id === fieldId);
+            const correctIdx = fieldsRef.current.findIndex((f) => f.id === fieldId);
             if (correctIdx === -1) return;
-            const freshLines = getValues("lines");
-            const freshLine = freshLines?.[correctIdx];
-            update(correctIdx, {
-              ...freshLine,
-              variant: value,
-              variant_name: variant.product_name,
-              variant_sku: variant.sku,
-              unit_price: freshLine?.unit_price || variant.selling_price,
-              max_quantity: variant.total_stock,
+            const freshLine = getValues(`lines.${correctIdx}`);
+            if (freshLine?.variant !== value) return;
+            setValue(`lines.${correctIdx}.variant_name`, variant.product_name, {
+              shouldDirty: false,
+            });
+            setValue(`lines.${correctIdx}.variant_sku`, variant.sku, {
+              shouldDirty: false,
+            });
+            if (!freshLine.unit_price) {
+              setValue(`lines.${correctIdx}.unit_price`, variant.selling_price, {
+                shouldDirty: false,
+              });
+            }
+            setValue(
+              `lines.${correctIdx}.max_quantity`,
+              Math.max(0, Number(variant.total_stock) || 0) +
+                getReleasedQuantity(value),
+              { shouldDirty: false },
+            );
+            setValue(`lines.${correctIdx}.stock_check_pending`, false, {
+              shouldDirty: false,
+            });
+            setValue(`lines.${correctIdx}.stock_check_error`, false, {
+              shouldDirty: false,
+            });
+            setValue(`lines.${correctIdx}.stock_check_checked`, true, {
+              shouldDirty: false,
             });
             setVariantDisplayLabels((prev) => ({
               ...prev,
               [fieldId]: `${variant.product_name} (${variant.sku})`,
             }));
           }
-        } catch {}
+        } catch {
+          const correctIdx = fieldsRef.current.findIndex((f) => f.id === fieldId);
+          if (correctIdx >= 0 && getValues(`lines.${correctIdx}`)?.variant === value) {
+            setValue(`lines.${correctIdx}.stock_check_pending`, false, {
+              shouldDirty: false,
+            });
+            setValue(`lines.${correctIdx}.stock_check_error`, true, {
+              shouldDirty: false,
+            });
+            setValue(`lines.${correctIdx}.stock_check_checked`, true, {
+              shouldDirty: false,
+            });
+            toast.error("Could not check available stock for the selected item.");
+          }
+        }
+      } else if (field === "variant") {
+        update(index, {
+          ...currentLines[index],
+          variant: "",
+          max_quantity: undefined,
+          stock_check_pending: false,
+          stock_check_error: false,
+          stock_check_checked: false,
+        });
       } else if (field === "vendor") {
         // Must go through useFieldArray's update() — setValue() on a nested
         // path updates RHF's internal form state but does NOT refresh the
@@ -823,7 +1016,7 @@ export function InvoiceWorkflow({
         setValue(`lines.${index}.${field}` as any, value, { shouldDirty: true });
       }
     },
-    [api, update, watch, setValue, getValues, fields]
+    [api, update, watch, setValue, getValues, fields, getReleasedQuantity]
   );
 
   const handleVariantOptionSelect = useCallback(
@@ -937,6 +1130,18 @@ export function InvoiceWorkflow({
       return;
     }
 
+    const submittedQuantityValidation = validateInvoiceQuantities(data.lines);
+    if (submittedQuantityValidation.hasPendingStockCheck) {
+      toast.error("Wait for available stock to finish checking before saving.");
+      return;
+    }
+    const firstQuantityError = submittedQuantityValidation.errors.entries().next().value;
+    if (firstQuantityError) {
+      const [lineIndex, message] = firstQuantityError;
+      toast.error(`Line ${lineIndex + 1}: ${message}`);
+      return;
+    }
+
     // ── Variant / manual item name required for every line ──
     for (let i = 0; i < data.lines.length; i++) {
       const line = data.lines[i];
@@ -979,22 +1184,6 @@ export function InvoiceWorkflow({
             return;
           }
         }
-      }
-    }
-
-    // ── Stock validation (only for non-manual entries) ──
-    for (const line of data.lines) {
-      if (
-        !line.is_manual_entry &&
-        line.variant &&
-        line.max_quantity !== undefined &&
-        line.quantity > line.max_quantity
-      ) {
-        const name = line.variant_name || line.variant_sku || line.variant;
-        toast.error(
-          `Insufficient stock for "${name}". Requested ${line.quantity}, only ${line.max_quantity} available.`
-        );
-        return;
       }
     }
 
@@ -1079,6 +1268,10 @@ export function InvoiceWorkflow({
         documentNumber={initialData?.invoice_number}
         formId="invoice-form"
         isPending={isPending}
+        isSubmitDisabled={
+          quantityValidation.errors.size > 0 ||
+          quantityValidation.hasPendingStockCheck
+        }
         submitLabel={initialData?.id ? "Update invoice" : "Save invoice"}
         summary={
           fields.length === 0
@@ -1294,6 +1487,8 @@ export function InvoiceWorkflow({
                             !currentLine.is_manual_entry &&
                             currentLine.max_quantity !== undefined &&
                             currentLine.quantity > currentLine.max_quantity;
+                          const quantityError =
+                            quantityValidation.errors.get(idx);
 
                           return (
                             <LineRow
@@ -1302,6 +1497,8 @@ export function InvoiceWorkflow({
                               fieldId={field.id}
                               currentLine={currentLine}
                               isOverStock={isOverStock}
+                              quantityError={quantityError}
+                              isStockCheckPending={Boolean(currentLine.stock_check_pending)}
                               isExistingLine={isExistingLine(idx)}
                               fetchVariants={(params) =>
                                 fetchAvailableVariants(params, currentLine.variant || "")

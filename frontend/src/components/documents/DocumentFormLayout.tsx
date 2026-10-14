@@ -7,6 +7,7 @@ interface DocumentFormLayoutProps {
   documentNumber?: string;
   formId: string;
   isPending: boolean;
+  isSubmitDisabled?: boolean;
   submitLabel: string;
   pendingLabel?: string;
   summary: ReactNode;
@@ -20,6 +21,7 @@ export default function DocumentFormLayout({
   documentNumber,
   formId,
   isPending,
+  isSubmitDisabled = false,
   submitLabel,
   pendingLabel = "Saving...",
   summary,
@@ -76,7 +78,7 @@ export default function DocumentFormLayout({
             <button
               type="submit"
               form={formId}
-              disabled={isPending}
+              disabled={isPending || isSubmitDisabled}
               className="h-9 rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {isPending ? pendingLabel : submitLabel}
