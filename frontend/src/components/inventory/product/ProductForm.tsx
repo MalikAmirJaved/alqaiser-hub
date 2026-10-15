@@ -14,6 +14,19 @@ import type { Product, ProductPayload } from "@/hooks/useProducts";
 import { useAutoCode } from "@/hooks/useAutoCode";
 import { type PendingFile, uploadFiles, deleteUploadedFiles } from "@/components/reuseable/FileUpload";
 
+const productUnits = ["PIECE", "KG", "GRAM", "LITER", "ML", "PACK", "DOZEN"] as const;
+const storageRequirements = ["AMBIENT", "REFRIGERATED", "FROZEN"] as const;
+
+function getProductUnit(unit: string | null | undefined): (typeof productUnits)[number] {
+  return productUnits.find((option) => option === unit) ?? "PIECE";
+}
+
+function getStorageRequirement(
+  storage: string | null | undefined,
+): (typeof storageRequirements)[number] {
+  return storageRequirements.find((option) => option === storage) ?? "AMBIENT";
+}
+
 // ──────────────────────────────────────────
 // Zod schema
 // ──────────────────────────────────────────
@@ -45,8 +58,8 @@ const schema = z.object({
   description: z.string().max(1000).optional().nullable(),
   category: z.string().nullable().optional(),
   brand: z.string().nullable().optional(),
-  unit: z.enum(["PIECE", "KG", "GRAM", "LITER", "ML", "PACK", "DOZEN"]).default("PIECE"),
-  storageRequirement: z.enum(["AMBIENT", "REFRIGERATED", "FROZEN"]).default("AMBIENT"),
+  unit: z.enum(productUnits).default("PIECE"),
+  storageRequirement: z.enum(storageRequirements).default("AMBIENT"),
   taxRate: z.preprocess((v) => (v === "" ? 0 : Number(v)), z.number().min(0).max(100).default(0)),
   status: z.enum(["draft", "active", "discontinued", "archived"]).default("active"),
   is_active: z.boolean().default(true),
@@ -89,8 +102,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
         description: initialData.description || "",
         category: initialData.category_id || null,
         brand: initialData.brand_id || null,
-        unit: initialData.unit as FormData["unit"],
-        storageRequirement: initialData.storage_requirement as FormData["storageRequirement"],
+        unit: getProductUnit(initialData.unit),
+        storageRequirement: getStorageRequirement(initialData.storage_requirement),
         taxRate: initialData.tax_rate,
         status: initialData.status as FormData["status"],
         is_active: initialData.is_active,
