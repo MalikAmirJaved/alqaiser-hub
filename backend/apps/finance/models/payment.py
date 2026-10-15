@@ -43,6 +43,10 @@ class Payment(BaseModel):
     )
     payment_date = models.DateField()
     reference_number = models.CharField(max_length=100, blank=True)
+    receipt_image = models.CharField(
+        max_length=500, blank=True,
+        help_text='Uploaded receipt/proof-of-payment image URL',
+    )
 
     content_type = models.ForeignKey(
     ContentType,

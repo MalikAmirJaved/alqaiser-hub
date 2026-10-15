@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import SAFE_METHODS
 from django.db import transaction
 from django.db.models import Q, F
+from django.utils import timezone
 import uuid
 from decimal import Decimal
 from apps.common.baseauthentication import CompanyBranchMixin
@@ -616,22 +617,34 @@ class ProductViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequiredM
         product = self.get_object()
         user = request.user
 
-        # Soft delete the product itself
+        # Soft delete the product itself. ``deleted_by`` must be set explicitly:
+        # it is what the Trash module shows as "deleted by" and what stops the
+        # row from being mistaken for seeded demo data.
+        deleted_at = timezone.now()
         product.is_deleted = True
-        product.save(update_fields=['is_deleted'])
+        product.deleted_by = user
+        product.deleted_at = deleted_at
+        product.save(update_fields=['is_deleted', 'deleted_by', 'deleted_at'])
 
         # Get all variant IDs for this product
         variant_ids = list(product.variants.values_list('_id', flat=True))
 
         if variant_ids:
-            # Soft delete all related records in one go
-            StockItem.objects.filter(variant___id__in=variant_ids).update(is_deleted=True)
-            VariantAttribute.objects.filter(variant___id__in=variant_ids).update(is_deleted=True)
-            VariantImage.objects.filter(variant___id__in=variant_ids).update(is_deleted=True)
-            StockReservation.objects.filter(variant___id__in=variant_ids).update(is_deleted=True)
+            # Soft delete all related records in one go. queryset.update() skips
+            # Model.save(), so deleted_at must be stamped explicitly to keep the
+            # Trash retention clock (and audit trail) honest.
+            cascade = {
+                'is_deleted': True,
+                'deleted_at': deleted_at,
+                'deleted_by': user,
+            }
+            StockItem.objects.filter(variant___id__in=variant_ids).update(**cascade)
+            VariantAttribute.objects.filter(variant___id__in=variant_ids).update(**cascade)
+            VariantImage.objects.filter(variant___id__in=variant_ids).update(**cascade)
+            StockReservation.objects.filter(variant___id__in=variant_ids).update(**cascade)
 
             # Finally soft delete the variants themselves
-            product.variants.update(is_deleted=True)
+            product.variants.update(**cascade)
 
         return Response({
             'status': 'success',

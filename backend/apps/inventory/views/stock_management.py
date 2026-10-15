@@ -55,11 +55,41 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
         ],
     }
 
+    # -------------------- SOFT-DELETE SCOPING --------------------
+    @staticmethod
+    def alive_stock(qs=None):
+        """Stock rows whose stock item, variant **and** product are all alive.
+
+        ``StockItem.objects`` is used directly throughout this module, which
+        bypasses ``CompanyBranchMixin.get_queryset()`` — the only place that
+        normally applies ``is_deleted=False``. Without this, deleted products
+        kept showing up on the Stock Management page (and in the POS catalog)
+        because the soft-deleted stock row still exists in the table.
+
+        Filtering the variant and product as well means a half-cascaded delete
+        (one where the parent was soft-deleted but the child rows were missed)
+        cannot leak either.
+        """
+        if qs is None:
+            qs = StockItem.objects.all()
+        return qs.filter(
+            is_deleted=False,
+            variant__is_deleted=False,
+            variant__product__is_deleted=False,
+        )
+
+    @staticmethod
+    def alive_variant(qs=None):
+        """Variants that are not soft-deleted, on a product that is not either."""
+        if qs is None:
+            qs = ProductVariant.objects.all()
+        return qs.filter(is_deleted=False, product__is_deleted=False)
+
     # -------------------- RETRIEVE --------------------
     def retrieve(self, request, pk=None):
         try:
-            stock_item = StockItem.objects.select_related(
-                'variant__product', 'warehouse'
+            stock_item = self.alive_stock(
+                StockItem.objects.select_related('variant__product', 'warehouse')
             ).get(
                 _id=pk,
                 company_id=request.user.company_id,
@@ -89,6 +119,15 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
         reason = data['reason']
         transaction_type = data['transaction_type']
         user = request.user
+
+        # Never adjust stock for a deleted variant/product — the row is in the
+        # Trash and would otherwise be resurrected by the get_or_create below.
+        if variant.is_deleted or getattr(variant.product, 'is_deleted', False):
+            return Response(
+                {'error': 'This product or variant has been deleted. Restore it from '
+                          'Settings → Trash before adjusting stock.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         with transaction.atomic():
             stock_item, created = StockItem.objects.select_for_update().get_or_create(
@@ -147,15 +186,20 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
         low_stock = request.query_params.get('low_stock')
         search_query = request.query_params.get('search', '').strip()
         
-        # Build cache key (only for simple queries without low_stock)
+        # Build cache key (only for simple queries without low_stock).
+        # NOTE: bump `_v2` whenever the queryset semantics change, otherwise a
+        # response cached by an older code path keeps serving deleted rows.
         cache_key = None
         if not low_stock and variant_ids and warehouse_uuid:
-            cache_key = f"current_stock_{company_id}_{warehouse_uuid}_{'_'.join(sorted(variant_ids))}"
+            cache_key = f"current_stock_v2_{company_id}_{warehouse_uuid}_{'_'.join(sorted(variant_ids))}"
             cached = cache.get(cache_key)
             if cached:
                 return Response(cached)
         
-        queryset = StockItem.objects.filter(company_id=company_id)
+        # Soft-delete scoping: StockItem.objects bypasses CompanyBranchMixin,
+        # so deleted stock must be excluded explicitly or the Stock Management
+        # page keeps listing products that were deleted.
+        queryset = self.alive_stock(StockItem.objects.filter(company_id=company_id))
         
         # Warehouse filter
         if warehouse_uuid:
@@ -167,7 +211,9 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
         
         # Multiple variant filter
         if variant_ids and variant_ids[0]:
-            variants = ProductVariant.objects.filter(_id__in=variant_ids, company_id=company_id)
+            variants = self.alive_variant(
+                ProductVariant.objects.filter(_id__in=variant_ids, company_id=company_id)
+            )
             queryset = queryset.filter(variant__in=variants)
         
         # Low stock filter
@@ -186,9 +232,12 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
                 models.Q(variant__product__product_name__icontains=search_query)
             )
 
-        # Pagination
+        # Pagination. An explicit order_by() is required: without it Postgres may
+        # return rows in a different order per page, so records can appear twice
+        # or be skipped entirely while paging through the stock list.
         page = int(request.query_params.get('page', 1))
         page_size = int(request.query_params.get('page_size', 100))  # Increased default
+        queryset = queryset.order_by('variant__product__product_name', 'variant__sku', 'id')
         paginator = Paginator(queryset, page_size)
         page_obj = paginator.get_page(page)
         
@@ -272,13 +321,14 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
         user = request.user
 
         try:
-            variant = ProductVariant.objects.get(_id=variant_uuid, company_id=user.company_id)
+            variant = self.alive_variant(
+                ProductVariant.objects.filter(_id=variant_uuid, company_id=user.company_id)
+            ).get()
         except ProductVariant.DoesNotExist:
             return Response({'error': 'Variant not found'}, status=404)
 
-        stock_items = StockItem.objects.filter(
-            variant=variant,
-            company_id=user.company_id
+        stock_items = self.alive_stock(
+            StockItem.objects.filter(variant=variant, company_id=user.company_id)
         ).select_related('warehouse')
 
         total_on_hand = stock_items.aggregate(
@@ -340,26 +390,26 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
             except Warehouse.DoesNotExist:
                 return Response({'error': 'Warehouse not found'}, status=404)
 
-        # Build base query
-        products_qs = Product.objects.filter(company_id=company_id)
+        # Build base query — deleted products must never reach the POS catalog.
+        products_qs = Product.objects.filter(company_id=company_id, is_deleted=False)
 
         # When a warehouse is selected, only show products that have stock in that warehouse
         if warehouse:
             has_stock_in_warehouse = Exists(
-                StockItem.objects.filter(
+                self.alive_stock(StockItem.objects.filter(
                     variant__product=OuterRef('pk'),
                     warehouse=warehouse,
                     company_id=company_id,
-                )
+                ))
             )
             products_qs = products_qs.filter(has_stock_in_warehouse)
         else:
             # When "All" is selected, show products that have stock in ANY warehouse
             has_stock_in_any_warehouse = Exists(
-                StockItem.objects.filter(
+                self.alive_stock(StockItem.objects.filter(
                     variant__product=OuterRef('pk'),
                     company_id=company_id,
-                )
+                ))
             )
             products_qs = products_qs.filter(has_stock_in_any_warehouse)
 
@@ -399,22 +449,22 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
         # Calculate total variant count across ALL filtered products (not just current page)
         if warehouse:
             has_variant_stock_all = Exists(
-                StockItem.objects.filter(
+                self.alive_stock(StockItem.objects.filter(
                     variant=OuterRef('pk'),
                     warehouse=warehouse,
                     company_id=company_id,
-                )
+                ))
             )
-            total_variant_count = ProductVariant.objects.filter(
+            total_variant_count = self.alive_variant(ProductVariant.objects.filter(
                 has_variant_stock_all,
                 product__in=products_qs,
                 company_id=company_id,
-            ).count()
+            )).count()
         else:
-            total_variant_count = ProductVariant.objects.filter(
+            total_variant_count = self.alive_variant(ProductVariant.objects.filter(
                 product__in=products_qs,
                 company_id=company_id,
-            ).count()
+            )).count()
 
         # Build response with variants and stock data
         result = []
@@ -422,41 +472,41 @@ class StockManagementViewSet(CompanyBranchMixin, PermissionRequiredMixin, BatchS
             # Filter variants by warehouse stock when warehouse is selected
             if warehouse:
                 has_variant_stock = Exists(
-                    StockItem.objects.filter(
+                    self.alive_stock(StockItem.objects.filter(
                         variant=OuterRef('pk'),
                         warehouse=warehouse,
                         company_id=company_id,
-                    )
+                    ))
                 )
-                variants = ProductVariant.objects.filter(
+                variants = self.alive_variant(ProductVariant.objects.filter(
                     has_variant_stock,
                     product=product,
                     company_id=company_id,
-                ).select_related('product').prefetch_related('variant_attributes', 'variant_images')
+                )).select_related('product').prefetch_related('variant_attributes', 'variant_images')
             else:
-                variants = ProductVariant.objects.filter(
+                variants = self.alive_variant(ProductVariant.objects.filter(
                     product=product,
                     company_id=company_id,
-                ).select_related('product').prefetch_related('variant_attributes', 'variant_images')
+                )).select_related('product').prefetch_related('variant_attributes', 'variant_images')
 
             variants_data = []
             for v in variants:
                 # Get stock data — either for specific warehouse or all warehouses summed
                 if warehouse:
-                    stock = StockItem.objects.filter(
+                    stock = self.alive_stock(StockItem.objects.filter(
                         variant=v,
                         warehouse=warehouse,
                         company_id=company_id,
-                    ).first()
+                    )).first()
                     available = (stock.quantity_on_hand - stock.quantity_reserved) if stock else 0
                     on_hand = stock.quantity_on_hand if stock else 0
                     reserved = stock.quantity_reserved if stock else 0
                 else:
                     # Aggregate across all warehouses
-                    stock_agg = StockItem.objects.filter(
+                    stock_agg = self.alive_stock(StockItem.objects.filter(
                         variant=v,
                         company_id=company_id,
-                    ).aggregate(
+                    )).aggregate(
                         total_on_hand=models.Sum('quantity_on_hand'),
                         total_reserved=models.Sum('quantity_reserved'),
                     )

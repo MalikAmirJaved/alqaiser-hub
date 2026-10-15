@@ -19,18 +19,25 @@ def broadcast_data_update(company_id, branch_id, entity, action=None, record_id=
         logger.warning(f"broadcast_data_update called without company_id for entity {entity}")
         return
 
-    channel_layer = get_channel_layer()
-    group_name = f"notify_c{company_id}_b{branch_id}" if branch_id else f"notify_c{company_id}_bNone"
+    try:
+        channel_layer = get_channel_layer()
+        if channel_layer is None:
+            logger.warning("Channel layer not available, skipping data_update broadcast")
+            return
 
-    async_to_sync(channel_layer.group_send)(
-        group_name,
-        {
-            'type': 'data_update',
-            'entity': entity,
-            'action': action,
-            'record_id': str(record_id) if record_id else None,
-        }
-    )
+        group_name = f"notify_c{company_id}_b{branch_id}" if branch_id else f"notify_c{company_id}_bNone"
+        async_to_sync(channel_layer.group_send)(
+            group_name,
+            {
+                'type': 'data_update',
+                'entity': entity,
+                'action': action,
+                'record_id': str(record_id) if record_id else None,
+            }
+        )
+    except Exception as e:
+        # Do not fail DB writes / management commands when Redis/WS is unavailable
+        logger.error(f"Failed to broadcast data_update for {entity}: {e}", exc_info=True)
 
 
 # ─────────────────────────────────────────────

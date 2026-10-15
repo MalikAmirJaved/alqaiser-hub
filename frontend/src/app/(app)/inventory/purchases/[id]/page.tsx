@@ -108,6 +108,15 @@ export default function PurchaseOrderDetailPage() {
   const totalReceived = order.lines.reduce((s, l) => s + l.quantity_received, 0);
   const progressPct = totalOrdered > 0 ? Math.round((totalReceived / totalOrdered) * 100) : 0;
 
+  // ── Overall tax ─────────────────────────────────────────────────────────
+  // PO lines carry no discount, so per-line tax is exactly
+  // line_total − (qty × unit_cost); summing that keeps the rows reconciling
+  // with the stored Order total (net + tax).
+  const totalTax = order.lines.reduce(
+    (s, l) => s + (Number(l.line_total) - l.quantity_ordered * Number(l.unit_cost)),
+    0,
+  );
+
   // ── Handlers ───────────────────────────────────────────────────────────────
   const handleConfirm = () =>
     confirm({
@@ -279,6 +288,7 @@ export default function PurchaseOrderDetailPage() {
               <th className="px-4 py-2.5 text-right">Received</th>
               <th className="px-4 py-2.5 text-right">Pending</th>
               <th className="px-4 py-2.5 text-right">Unit cost</th>
+              <th className="px-4 py-2.5 text-right">Tax</th>
               <th className="px-4 py-2.5 text-right">Line total</th>
               <th className="px-4 py-2.5 text-right">Status</th>
             </tr>
@@ -310,6 +320,11 @@ export default function PurchaseOrderDetailPage() {
                   <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
                     {formatCurrency(line.unit_cost)}
                   </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                    {line.tax_rate > 0
+                      ? `${line.tax_rate}%`
+                      : '—'}
+                  </td>
                   <td className="px-4 py-3 text-right tabular-nums font-medium">
                     {formatCurrency(line.line_total)}
                   </td>
@@ -319,9 +334,22 @@ export default function PurchaseOrderDetailPage() {
                 </tr>
               );
             })}
+            {/* Overall tax, directly above the Order total */}
+            {totalTax > 0.005 && (
+              <tr className="bg-muted/40 border-t border-border">
+                <td colSpan={7} className="px-4 py-2.5 text-right text-sm text-muted-foreground font-medium">
+                  Tax
+                </td>
+                <td className="px-4 py-2.5 text-right text-sm font-medium">
+                  {formatCurrency(totalTax)}
+                </td>
+                <td />
+              </tr>
+            )}
+
             {/* Total row */}
             <tr className="bg-muted/40 border-t border-border">
-              <td colSpan={6} className="px-4 py-2.5 text-right text-sm text-muted-foreground font-medium">
+              <td colSpan={7} className="px-4 py-2.5 text-right text-sm text-muted-foreground font-medium">
                 Order total
               </td>
               <td className="px-4 py-2.5 text-right text-sm font-semibold">

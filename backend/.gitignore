@@ -13,7 +13,7 @@ env/
 
 # Django
 *.log
-
+/daphne.err
 # Django migrations cache
 **/migrations/__pycache__/
 

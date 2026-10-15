@@ -1,4 +1,3 @@
-// components/finance/CustomerInvoiceFormModal.tsx
 import { useEffect, useState, useCallback, useRef, memo } from "react";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { X, Plus, Trash2, RotateCw, Package, Type, FileText, AlertCircle, ChevronDown, Warehouse, DollarSign, Loader2 } from "lucide-react";
@@ -10,17 +9,29 @@ import {
   type CustomerInvoice,
 } from "@/hooks/finance/useCustomerInvoices";
 import { useCreateSalesInvoice, useUpdateSalesInvoice } from "@/hooks/sales/useSalesInvoices";
+import type { SalesInvoice } from "@/hooks/sales/useSalesInvoices";
 import { useCreateSupplier } from "@/hooks/useSuppliers";
 import { useServerSearch } from "@/hooks/useServerSearch";
 import { useApi } from "@/hooks/useApi";
 import type { VariantDetail } from "@/hooks/useAllVariants";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
+import DocumentFormLayout from "@/components/documents/DocumentFormLayout";
 import { FormModal } from "@/components/inventory/supplier/FormModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
+import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
 import { useAutoCode } from "@/hooks/useAutoCode";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
-import QtySplitModal from "./LineDispositionModals";
+import QtySplitModal from "@/components/finance/customer-invoices/LineDispositionModals";
 import { toast } from "sonner";
+import {
+  createDefaultDocumentAppearance,
+  documentAppearanceFromRecord,
+  InvoiceAppearanceEditor,
+  serializeDocumentTypography,
+  type DocumentAppearance,
+} from "@/components/invoice-generator/InvoiceAppearanceEditor";
+import { buildCrmDocumentPreview } from "@/components/invoice-generator/crmPreview";
 
 interface InvoiceLine {
   id?: string;
@@ -39,6 +50,58 @@ interface InvoiceLine {
   vendor?: string;
   vendor_name?: string;
   cost_price?: number;
+  stock_check_pending?: boolean;
+  stock_check_error?: boolean;
+  stock_check_checked?: boolean;
+}
+
+function validateInvoiceQuantities(lines: InvoiceLine[]) {
+  const errors = new Map<number, string>();
+  const inventoryGroups = new Map<
+    string,
+    { indices: number[]; quantity: number; available: number }
+  >();
+  let hasPendingStockCheck = false;
+
+  lines.forEach((line, index) => {
+    const quantity = Number(line.quantity);
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      errors.set(index, "Quantity must be a whole number of at least 1.");
+    }
+
+    if (line.is_manual_entry || !line.variant) return;
+    if (line.stock_check_pending) {
+      hasPendingStockCheck = true;
+      return;
+    }
+    if (line.stock_check_error || line.max_quantity === undefined) {
+      errors.set(index, "Available stock could not be verified.");
+      return;
+    }
+
+    const group = inventoryGroups.get(line.variant) || {
+      indices: [],
+      quantity: 0,
+      available: line.max_quantity,
+    };
+    group.indices.push(index);
+    group.quantity += quantity;
+    group.available = Math.min(group.available, line.max_quantity);
+    inventoryGroups.set(line.variant, group);
+  });
+
+  for (const group of inventoryGroups.values()) {
+    if (group.quantity > group.available) {
+      for (const index of group.indices) {
+        errors.set(
+          index,
+          `Requested ${group.quantity}; only ${group.available} available.`,
+        );
+      }
+    }
+  }
+
+  return { errors, hasPendingStockCheck };
 }
 
 interface CustomerInvoiceFormData {
@@ -49,16 +112,19 @@ interface CustomerInvoiceFormData {
   amount: number;
   overall_discount_percent: number;
   overall_tax_percent: number;
+  template_slug: string;
+  accent_color: string;
+  typography: DocumentAppearance["typography"];
   notes: string;
   lines: InvoiceLine[];
   new_customer?: any;
 }
 
-interface Props {
-  open: boolean;
+export interface InvoiceWorkflowProps {
   onClose: () => void;
-  initialData?: CustomerInvoice | null;
+  initialData?: CustomerInvoice | SalesInvoice | null;
   defaultValues?: Partial<CustomerInvoiceFormData> | null;
+  defaultCustomerName?: string;
   onSuccess?: (result?: any) => void;
   moduleCode?: "FINANCE" | "SALES";
 }
@@ -262,6 +328,8 @@ interface LineRowProps {
   fieldId: string;
   currentLine: InvoiceLine;
   isOverStock: boolean;
+  quantityError?: string;
+  isStockCheckPending: boolean;
   isExistingLine?: boolean;
   fetchVariants: any;
   variantDisplayLabel: string;
@@ -280,6 +348,8 @@ const LineRow = memo(function LineRow({
   fieldId,
   currentLine,
   isOverStock,
+  quantityError,
+  isStockCheckPending,
   isExistingLine = false,
   fetchVariants,
   variantDisplayLabel,
@@ -295,7 +365,12 @@ const LineRow = memo(function LineRow({
   const lineTotal = calculateLineTotal(currentLine);
 
   return (
-    <tr key={fieldId} className="group hover:bg-muted/20 transition-colors">
+    <tr
+      key={fieldId}
+      className={`group hover:bg-muted/20 transition-colors ${
+        quantityError ? "border-2 border-destructive bg-destructive/5" : ""
+      }`}
+    >
       {/* ── Item cell ── */}
       <td className="px-4 py-3 min-w-[300px] align-bottom">
         <div className="inline-flex rounded-md border border-border overflow-hidden mb-2 text-[11px]">
@@ -361,18 +436,30 @@ const LineRow = memo(function LineRow({
           <NumericCell
             value={Number(currentLine.quantity) || 0}
             onChange={(val) => onUpdateLine(index, "quantity", val)}
-            min={1}
-            max={currentLine.max_quantity || 999999}
+            min={0}
+            step="1"
             className={`w-full h-8 px-2 bg-background border border-input hover:border-primary/60 focus:border-primary rounded-md text-right text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 ${
-              isOverStock ? "text-destructive font-medium" : ""
+              quantityError ? "text-destructive font-medium" : ""
             }`}
           />
-          {isOverStock && (
+          {quantityError && (
             <span className="flex items-center gap-0.5 text-[10px] text-destructive whitespace-nowrap">
               <AlertCircle className="w-3 h-3" />
-              Max {currentLine.max_quantity}
+              {quantityError}
             </span>
           )}
+          {!quantityError && isStockCheckPending && (
+            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+              Checking stock…
+            </span>
+          )}
+          {!quantityError && !isStockCheckPending && !isOverStock &&
+            !currentLine.is_manual_entry && currentLine.variant &&
+            currentLine.max_quantity !== undefined && (
+              <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                Available {currentLine.max_quantity}
+              </span>
+            )}
         </div>
       </td>
 
@@ -436,15 +523,17 @@ const LineRow = memo(function LineRow({
 // ─────────────────────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
-export default function CustomerInvoiceFormModal({
-  open,
+export function InvoiceWorkflow({
   onClose,
   initialData,
   defaultValues,
+  defaultCustomerName,
   onSuccess,
   moduleCode = "FINANCE",
-}: Props) {
+}: InvoiceWorkflowProps) {
   const formatCurrency = useFormatCurrency();
+  const { data: companySettings } = useCompanySettingsQuery();
+  const { terms: termsData } = useTermsAndConditions();
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [newCustomerInfo, setNewCustomerInfo] = useState<any>(null);
   const [customerDisplayLabel, setCustomerDisplayLabel] = useState("");
@@ -459,6 +548,7 @@ export default function CustomerInvoiceFormModal({
   const [variantDisplayLabels, setVariantDisplayLabels] = useState<Record<string, string>>({});
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [createdSupplierName, setCreatedSupplierName] = useState("");
+  const invoiceCodeGenerationRef = useRef(false);
 
   const fetchCustomers = useServerSearch("/api/inventory/customers/", {
     transformOption: (c: any) => ({
@@ -474,7 +564,6 @@ export default function CustomerInvoiceFormModal({
       label: `${v.product_name} (${v.sku}) — Stock: ${v.total_stock}`,
     }),
   });
-
   const fetchVendors = useServerSearch("/api/inventory/suppliers/", {
     transformOption: (v: any) => ({
       value: v.id,
@@ -535,6 +624,9 @@ export default function CustomerInvoiceFormModal({
         amount: 0,
         overall_discount_percent: 0,
         overall_tax_percent: 0,
+        template_slug: createDefaultDocumentAppearance().template_slug,
+        accent_color: createDefaultDocumentAppearance().accent_color,
+        typography: serializeDocumentTypography(createDefaultDocumentAppearance()),
         notes: "",
         lines: [],
       },
@@ -545,33 +637,131 @@ export default function CustomerInvoiceFormModal({
     control,
     name: "lines",
   });
+  const fieldsRef = useRef(fields);
+  fieldsRef.current = fields;
 
   const watchedLines = watch("lines");
+  const getReleasedQuantity = useCallback(
+    (variantId: string) =>
+      initialData?.id
+        ? (initialData.lines || []).reduce(
+            (total, line) =>
+              !line.is_manual_entry && String(line.variant || "") === variantId
+                ? total + Number(line.quantity || 0)
+                : total,
+            0,
+          )
+        : 0,
+    [initialData],
+  );
   const subtotal = (watchedLines || []).reduce((s, l) => s + Number(l.quantity) * Number(l.unit_price), 0);
   const totalDiscount = (watchedLines || []).reduce((s, l) => s + (Number(l.discount_amount) || 0), 0);
   const totalTax = (watchedLines || []).reduce((s, l) => {
     const sub = Number(l.quantity) * Number(l.unit_price);
-    const disc = Number(l.discount_amount) || 0;
-    return s + (sub - disc) * ((Number(l.tax_rate) || 0) / 100);
+    return s + sub * ((Number(l.tax_rate) || 0) / 100);
   }, 0);
 
   const calculateLineTotal = useCallback((line: InvoiceLine) => {
     const subtotal = line.quantity * line.unit_price;
     const discount = line.discount_amount || 0;
-    const tax = (subtotal - discount) * (line.tax_rate / 100);
-    return subtotal - discount + tax;
+    const tax = subtotal * (line.tax_rate / 100);
+    return subtotal + tax - discount;
   }, []);
 
   const overallDiscountPct = Number(useWatch({ control, name: "overall_discount_percent" })) || 0;
   const overallTaxPct = Number(useWatch({ control, name: "overall_tax_percent" })) || 0;
-
-  const overallDiscountAmt = (subtotal || 0) * (overallDiscountPct / 100);
-  const totalBeforeTax = (subtotal || 0) - (totalDiscount || 0) - (overallDiscountAmt || 0);
-  const overallTaxAmt = (totalBeforeTax || 0) * (overallTaxPct / 100);
+  const appearance: DocumentAppearance = {
+    ...documentAppearanceFromRecord({
+      template_slug: useWatch({ control, name: "template_slug" }) || "modern",
+      accent_color: useWatch({ control, name: "accent_color" }) || "",
+      typography: useWatch({ control, name: "typography" }),
+    }),
+  };
+  const fetchAvailableVariants = useCallback(
+    async (
+      params: { search: string; page: number; pageSize: number },
+      currentVariant: string,
+    ) => {
+      const result = await fetchVariants(params);
+      const selectedVariants = new Set(
+        (watchedLines || [])
+          .map((line) => line.variant)
+          .filter((variant): variant is string => !!variant && variant !== currentVariant),
+      );
+      return {
+        ...result,
+        options: result.options.filter((option) => !selectedVariants.has(option.value)),
+      };
+    },
+    [fetchVariants, watchedLines],
+  );
 
   useEffect(() => {
-    setValue("amount", (totalBeforeTax || 0) + (overallTaxAmt || 0));
-  }, [totalBeforeTax, overallTaxAmt, setValue]);
+    (watchedLines || []).forEach((line, index) => {
+      if (
+        line.is_manual_entry ||
+        !line.variant ||
+        line.stock_check_pending ||
+        line.stock_check_checked
+      ) {
+        return;
+      }
+
+      const fieldId = fields[index]?.id;
+      const variantId = line.variant;
+      if (!fieldId) return;
+
+      setValue(`lines.${index}.stock_check_pending`, true, { shouldDirty: false });
+      void api<VariantDetail>(`/api/inventory/variants/${variantId}/`)
+        .then((variant) => {
+          const currentIndex = fieldsRef.current.findIndex((field) => field.id === fieldId);
+          if (currentIndex < 0) return;
+          const currentLine = getValues(`lines.${currentIndex}`);
+          if (currentLine?.variant !== variantId) return;
+          setValue(
+            `lines.${currentIndex}.max_quantity`,
+            Math.max(0, Number(variant.total_stock) || 0) +
+              getReleasedQuantity(variantId),
+            { shouldDirty: false },
+          );
+          setValue(`lines.${currentIndex}.stock_check_pending`, false, {
+            shouldDirty: false,
+          });
+          setValue(`lines.${currentIndex}.stock_check_checked`, true, {
+            shouldDirty: false,
+          });
+        })
+        .catch(() => {
+          const currentIndex = fieldsRef.current.findIndex((field) => field.id === fieldId);
+          if (currentIndex < 0) return;
+          const currentLine = getValues(`lines.${currentIndex}`);
+          if (currentLine?.variant !== variantId) return;
+          setValue(`lines.${currentIndex}.stock_check_pending`, false, {
+            shouldDirty: false,
+          });
+          setValue(`lines.${currentIndex}.stock_check_error`, true, {
+            shouldDirty: false,
+          });
+          setValue(`lines.${currentIndex}.stock_check_checked`, true, {
+            shouldDirty: false,
+          });
+          toast.error("Could not check available stock for an invoice item.");
+        });
+    });
+  }, [api, fields, getReleasedQuantity, getValues, setValue, watchedLines]);
+
+  const quantityValidation = validateInvoiceQuantities(watchedLines || []);
+
+  const overallTaxAmt = (subtotal || 0) * (overallTaxPct / 100);
+  const overallDiscountAmt =
+    ((subtotal || 0) + (totalTax || 0) + (overallTaxAmt || 0)) *
+    (overallDiscountPct / 100);
+  const discountedSubtotal = (subtotal || 0) - (totalDiscount || 0) - (overallDiscountAmt || 0);
+  const totalAmount = discountedSubtotal + (totalTax || 0) + (overallTaxAmt || 0);
+
+  useEffect(() => {
+    setValue("amount", totalAmount);
+  }, [totalAmount, setValue]);
 
   useEffect(() => {
     if (initialData) {
@@ -592,6 +782,12 @@ export default function CustomerInvoiceFormModal({
       setValue(
         "overall_tax_percent",
         Number((initialData as any).overall_tax_percent || 0)
+      );
+      setValue("template_slug", initialData.template_slug || "modern");
+      setValue("accent_color", initialData.accent_color || "");
+      setValue(
+        "typography",
+        initialData.typography || createDefaultDocumentAppearance().typography,
       );
       setValue("notes", initialData.notes);
       setValue(
@@ -618,16 +814,34 @@ export default function CustomerInvoiceFormModal({
       setNewCustomerInfo(null);
       setExistingLineIds(new Set((initialData.lines || []).map((l: any) => l.id).filter(Boolean)));
     } else if (defaultValues) {
-      if (defaultValues.invoice_number !== undefined) setValue("invoice_number", defaultValues.invoice_number);
+      if (defaultValues.invoice_number?.trim()) {
+        setValue("invoice_number", defaultValues.invoice_number);
+      } else if (!invoiceCodeGenerationRef.current) {
+        invoiceCodeGenerationRef.current = true;
+        generateCode()
+          .then((code) => {
+            if (!getValues("invoice_number")) setValue("invoice_number", code);
+          })
+          .catch(() => toast.error("Could not generate an invoice number."))
+          .finally(() => {
+            invoiceCodeGenerationRef.current = false;
+          });
+      }
       if (defaultValues.customer !== undefined) setValue("customer", defaultValues.customer);
       if (defaultValues.invoice_date !== undefined) setValue("invoice_date", defaultValues.invoice_date);
       if (defaultValues.due_date !== undefined) setValue("due_date", defaultValues.due_date);
       if (defaultValues.amount !== undefined) setValue("amount", defaultValues.amount);
       if (defaultValues.overall_discount_percent !== undefined) setValue("overall_discount_percent", defaultValues.overall_discount_percent);
       if (defaultValues.overall_tax_percent !== undefined) setValue("overall_tax_percent", defaultValues.overall_tax_percent);
+      setValue("template_slug", defaultValues.template_slug || "modern");
+      setValue("accent_color", defaultValues.accent_color || "");
+      setValue(
+        "typography",
+        defaultValues.typography || createDefaultDocumentAppearance().typography,
+      );
       if (defaultValues.notes !== undefined) setValue("notes", defaultValues.notes);
       if (defaultValues.lines !== undefined) setValue("lines", defaultValues.lines as any);
-      setCustomerDisplayLabel((defaultValues as any).customer_name || "");
+      setCustomerDisplayLabel(defaultCustomerName || "");
     } else {
       reset({
         invoice_number: "",
@@ -637,6 +851,9 @@ export default function CustomerInvoiceFormModal({
         amount: 0,
         overall_discount_percent: 0,
         overall_tax_percent: 0,
+        template_slug: createDefaultDocumentAppearance().template_slug,
+        accent_color: createDefaultDocumentAppearance().accent_color,
+        typography: serializeDocumentTypography(createDefaultDocumentAppearance()),
         notes: "",
         lines: [],
       });
@@ -646,9 +863,9 @@ export default function CustomerInvoiceFormModal({
       setExistingLineIds(new Set());
       generateCode()
         .then((code) => setValue("invoice_number", code))
-        .catch(() => {});
+        .catch(() => toast.error("Could not generate an invoice number."));
     }
-  }, [initialData, defaultValues, setValue, reset, open]);
+  }, [defaultCustomerName, defaultValues, generateCode, getValues, initialData, reset, setValue]);
 
   useEffect(() => {
     const labels: Record<string, string> = {};
@@ -668,6 +885,16 @@ export default function CustomerInvoiceFormModal({
   ) => {
     setNewCustomerInfo(customerData);
     setValue("customer", customerId);
+    setCustomerDisplayLabel(customerName);
+  };
+
+  const handleCustomerSelect = (customerId: string) => {
+    setValue("customer", customerId);
+    if (!customerId) {
+      setCustomerDisplayLabel("");
+    } else {
+      setNewCustomerInfo(null);
+    }
   };
 
   const addLine = useCallback(() => {
@@ -701,34 +928,83 @@ export default function CustomerInvoiceFormModal({
           ...currentLines[index],
           is_manual_entry: value,
           variant: value ? "" : currentLines[index].variant,
+          max_quantity: undefined,
+          stock_check_pending: false,
+          stock_check_error: false,
+          stock_check_checked: false,
           manual_variant_name: value ? currentLines[index].manual_variant_name : "",
           manual_variant_sku: value ? currentLines[index].manual_variant_sku : "",
           description: value ? currentLines[index].description : "",
         });
       } else if (field === "variant" && value) {
         const fieldId = fields[index]?.id;
-        update(index, { ...currentLines[index], variant: value });
+        setValue(`lines.${index}.variant`, value, { shouldDirty: true });
+        setValue(`lines.${index}.max_quantity`, undefined, { shouldDirty: false });
+        setValue(`lines.${index}.stock_check_pending`, true, { shouldDirty: false });
+        setValue(`lines.${index}.stock_check_error`, false, { shouldDirty: false });
+        setValue(`lines.${index}.stock_check_checked`, false, { shouldDirty: false });
         try {
           const variant = await api<VariantDetail>(`/api/inventory/variants/${value}/`);
           if (variant && fieldId) {
-            const correctIdx = fields.findIndex((f) => f.id === fieldId);
+            const correctIdx = fieldsRef.current.findIndex((f) => f.id === fieldId);
             if (correctIdx === -1) return;
-            const freshLines = getValues("lines");
-            const freshLine = freshLines?.[correctIdx];
-            update(correctIdx, {
-              ...freshLine,
-              variant: value,
-              variant_name: variant.product_name,
-              variant_sku: variant.sku,
-              unit_price: freshLine?.unit_price || variant.selling_price,
-              max_quantity: variant.total_stock,
+            const freshLine = getValues(`lines.${correctIdx}`);
+            if (freshLine?.variant !== value) return;
+            setValue(`lines.${correctIdx}.variant_name`, variant.product_name, {
+              shouldDirty: false,
+            });
+            setValue(`lines.${correctIdx}.variant_sku`, variant.sku, {
+              shouldDirty: false,
+            });
+            if (!freshLine.unit_price) {
+              setValue(`lines.${correctIdx}.unit_price`, variant.selling_price, {
+                shouldDirty: false,
+              });
+            }
+            setValue(
+              `lines.${correctIdx}.max_quantity`,
+              Math.max(0, Number(variant.total_stock) || 0) +
+                getReleasedQuantity(value),
+              { shouldDirty: false },
+            );
+            setValue(`lines.${correctIdx}.stock_check_pending`, false, {
+              shouldDirty: false,
+            });
+            setValue(`lines.${correctIdx}.stock_check_error`, false, {
+              shouldDirty: false,
+            });
+            setValue(`lines.${correctIdx}.stock_check_checked`, true, {
+              shouldDirty: false,
             });
             setVariantDisplayLabels((prev) => ({
               ...prev,
               [fieldId]: `${variant.product_name} (${variant.sku})`,
             }));
           }
-        } catch {}
+        } catch {
+          const correctIdx = fieldsRef.current.findIndex((f) => f.id === fieldId);
+          if (correctIdx >= 0 && getValues(`lines.${correctIdx}`)?.variant === value) {
+            setValue(`lines.${correctIdx}.stock_check_pending`, false, {
+              shouldDirty: false,
+            });
+            setValue(`lines.${correctIdx}.stock_check_error`, true, {
+              shouldDirty: false,
+            });
+            setValue(`lines.${correctIdx}.stock_check_checked`, true, {
+              shouldDirty: false,
+            });
+            toast.error("Could not check available stock for the selected item.");
+          }
+        }
+      } else if (field === "variant") {
+        update(index, {
+          ...currentLines[index],
+          variant: "",
+          max_quantity: undefined,
+          stock_check_pending: false,
+          stock_check_error: false,
+          stock_check_checked: false,
+        });
       } else if (field === "vendor") {
         // Must go through useFieldArray's update() — setValue() on a nested
         // path updates RHF's internal form state but does NOT refresh the
@@ -740,7 +1016,7 @@ export default function CustomerInvoiceFormModal({
         setValue(`lines.${index}.${field}` as any, value, { shouldDirty: true });
       }
     },
-    [api, update, watch, setValue, getValues, fields]
+    [api, update, watch, setValue, getValues, fields, getReleasedQuantity]
   );
 
   const handleVariantOptionSelect = useCallback(
@@ -854,6 +1130,18 @@ export default function CustomerInvoiceFormModal({
       return;
     }
 
+    const submittedQuantityValidation = validateInvoiceQuantities(data.lines);
+    if (submittedQuantityValidation.hasPendingStockCheck) {
+      toast.error("Wait for available stock to finish checking before saving.");
+      return;
+    }
+    const firstQuantityError = submittedQuantityValidation.errors.entries().next().value;
+    if (firstQuantityError) {
+      const [lineIndex, message] = firstQuantityError;
+      toast.error(`Line ${lineIndex + 1}: ${message}`);
+      return;
+    }
+
     // ── Variant / manual item name required for every line ──
     for (let i = 0; i < data.lines.length; i++) {
       const line = data.lines[i];
@@ -896,22 +1184,6 @@ export default function CustomerInvoiceFormModal({
             return;
           }
         }
-      }
-    }
-
-    // ── Stock validation (only for non-manual entries) ──
-    for (const line of data.lines) {
-      if (
-        !line.is_manual_entry &&
-        line.variant &&
-        line.max_quantity !== undefined &&
-        line.quantity > line.max_quantity
-      ) {
-        const name = line.variant_name || line.variant_sku || line.variant;
-        toast.error(
-          `Insufficient stock for "${name}". Requested ${line.quantity}, only ${line.max_quantity} available.`
-        );
-        return;
       }
     }
 
@@ -978,8 +1250,8 @@ export default function CustomerInvoiceFormModal({
         result = await createInvoice.mutateAsync(payload);
       }
     }
-    onSuccess?.(result);
-    onClose();
+    if (onSuccess) onSuccess(result);
+    else onClose();
   };
 
   const isPending =
@@ -988,44 +1260,27 @@ export default function CustomerInvoiceFormModal({
     createSalesInvoice.isPending ||
     updateSalesInvoice.isPending;
 
-  if (!open) return null;
-
   return (
     <>
-      {/* ── Backdrop ── */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-        <div className="relative w-full max-w-6xl rounded-2xl border border-border bg-card shadow-2xl flex flex-col max-h-[92vh]">
-
-          {/* ── Header ── */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-            <div className="flex items-center gap-3">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary/10 text-primary text-xs font-medium">
-                <FileText className="w-3.5 h-3.5" />
-                Invoice
-              </span>
-              <div>
-                <h2 className="text-base font-semibold leading-tight">
-                  {initialData?.id ? "Edit Invoice" : "New Customer Invoice"}
-                </h2>
-                {initialData?.invoice_number && (
-                  <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                    {initialData.invoice_number}
-                  </p>
-                )}
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors"
-              aria-label="Close"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* ── Scrollable body ── */}
-          <div className="overflow-y-auto flex-1">
-            <form onSubmit={handleSubmit(onSubmit)} id="invoice-form" className="p-6 space-y-6">
+      <DocumentFormLayout
+        documentType="Invoice"
+        title={initialData?.id ? "Edit Invoice" : "New Customer Invoice"}
+        documentNumber={initialData?.invoice_number}
+        formId="invoice-form"
+        isPending={isPending}
+        isSubmitDisabled={
+          quantityValidation.errors.size > 0 ||
+          quantityValidation.hasPendingStockCheck
+        }
+        submitLabel={initialData?.id ? "Update invoice" : "Save invoice"}
+        summary={
+          fields.length === 0
+            ? "No items added yet"
+            : `${fields.length} item${fields.length !== 1 ? "s" : ""} · Total ${formatCurrency(totalAmount)}`
+        }
+        onCancel={onClose}
+      >
+        <form onSubmit={handleSubmit(onSubmit)} id="invoice-form" className="space-y-6 p-5 sm:p-6">
 
               {/* ── Section 1: Document details ── */}
               <section>
@@ -1043,7 +1298,9 @@ export default function CustomerInvoiceFormModal({
                     <div className="flex gap-2">
                       <input
                         {...register("invoice_number", { required: true })}
-                        onBlur={(e) => validateCode(e.target.value)}
+                        onBlur={(e) => {
+                          void validateCode(e.target.value, initialData?.id);
+                        }}
                         className="flex-1 h-9 px-3 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
                         placeholder="e.g. INV-2025-001"
                       />
@@ -1083,6 +1340,34 @@ export default function CustomerInvoiceFormModal({
                 </div>
               </section>
 
+              <InvoiceAppearanceEditor
+                documentTitle="Invoice"
+                appearance={appearance}
+                onChange={(next) => {
+                  setValue("template_slug", next.template_slug, { shouldDirty: true });
+                  setValue("accent_color", next.accent_color, { shouldDirty: true });
+                  setValue("typography", serializeDocumentTypography(next), { shouldDirty: true });
+                }}
+                previewData={buildCrmDocumentPreview({
+                  appearance,
+                  documentType: "Invoice",
+                  documentNumber: watch("invoice_number") || "Draft",
+                  customerName: customerDisplayLabel,
+                  issueDate: watch("invoice_date"),
+                  dueDate: watch("due_date"),
+                  lines: watchedLines || [],
+                  currency: companySettings?.currency,
+                  businessName: companySettings?.companyName,
+                  businessAddress: companySettings?.address,
+                  businessEmail: companySettings?.email,
+                  businessLogo: companySettings?.logo,
+                  overallDiscountPercent: overallDiscountPct,
+                  overallTaxPercent: overallTaxPct,
+                  notes: watch("notes"),
+                  terms: termsData?.invoice || "",
+                })}
+              />
+
               <hr className="border-border" />
 
               {/* ── Section 2: Customer ── */}
@@ -1102,7 +1387,8 @@ export default function CustomerInvoiceFormModal({
                       <div className="flex-1">
                         <SearchableSelect
                           value={watch("customer") || ""}
-                          onChange={(val) => setValue("customer", val)}
+                          onChange={handleCustomerSelect}
+                          onOptionSelect={(option) => setCustomerDisplayLabel(option.label)}
                           fetchOptions={fetchCustomers}
                           placeholder="Search customers…"
                           required={!newCustomerInfo}
@@ -1126,6 +1412,7 @@ export default function CustomerInvoiceFormModal({
                           onClick={() => {
                             setNewCustomerInfo(null);
                             setValue("customer", "");
+                            setCustomerDisplayLabel("");
                           }}
                           className="ml-auto text-muted-foreground hover:text-destructive transition-colors"
                         >
@@ -1200,6 +1487,8 @@ export default function CustomerInvoiceFormModal({
                             !currentLine.is_manual_entry &&
                             currentLine.max_quantity !== undefined &&
                             currentLine.quantity > currentLine.max_quantity;
+                          const quantityError =
+                            quantityValidation.errors.get(idx);
 
                           return (
                             <LineRow
@@ -1208,8 +1497,12 @@ export default function CustomerInvoiceFormModal({
                               fieldId={field.id}
                               currentLine={currentLine}
                               isOverStock={isOverStock}
+                              quantityError={quantityError}
+                              isStockCheckPending={Boolean(currentLine.stock_check_pending)}
                               isExistingLine={isExistingLine(idx)}
-                              fetchVariants={fetchVariants}
+                              fetchVariants={(params) =>
+                                fetchAvailableVariants(params, currentLine.variant || "")
+                              }
                               variantDisplayLabel={variantDisplayLabels[field.id] || ""}
                               fetchVendors={fetchVendors}
                               onUpdateLine={updateLine}
@@ -1259,33 +1552,8 @@ export default function CustomerInvoiceFormModal({
                       <span className="font-mono">{formatCurrency(subtotal)}</span>
                     </div>
                     <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Discount (line)</span>
-                      <span className="font-mono text-destructive">−{formatCurrency(totalDiscount)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm text-muted-foreground">
                       <span>Tax (line)</span>
                       <span className="font-mono">{formatCurrency(totalTax)}</span>
-                    </div>
-
-                    {/* Overall discount % */}
-                    <div className="flex justify-between items-center gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm text-muted-foreground">Discount</span>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.01"
-                          value={overallDiscountPct}
-                          onChange={(e) => setValue("overall_discount_percent", parseFloat(e.target.value) || 0)}
-                          className="w-14 h-6 text-xs text-right bg-background border border-border rounded px-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
-                          placeholder="0"
-                        />
-                        <span className="text-[10px] text-muted-foreground">%</span>
-                      </div>
-                      <span className="font-mono text-sm text-destructive">
-                        −{formatCurrency(overallDiscountAmt)}
-                      </span>
                     </div>
 
                     {/* Overall tax % */}
@@ -1309,45 +1577,43 @@ export default function CustomerInvoiceFormModal({
                       </span>
                     </div>
 
+                    <div className="flex justify-between text-sm text-muted-foreground">
+                      <span>Discount (line)</span>
+                      <span className="font-mono text-destructive">−{formatCurrency(totalDiscount)}</span>
+                    </div>
+
+                    {/* Overall discount % */}
+                    <div className="flex justify-between items-center gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm text-muted-foreground">Discount</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={overallDiscountPct}
+                          onChange={(e) => setValue("overall_discount_percent", parseFloat(e.target.value) || 0)}
+                          className="w-14 h-6 text-xs text-right bg-background border border-border rounded px-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                          placeholder="0"
+                        />
+                        <span className="text-[10px] text-muted-foreground">%</span>
+                      </div>
+                      <span className="font-mono text-sm text-destructive">
+                        −{formatCurrency(overallDiscountAmt)}
+                      </span>
+                    </div>
+
                     <div className="flex justify-between items-center pt-2.5 border-t border-border">
                       <span className="text-sm font-semibold">Total</span>
                       <span className="text-lg font-bold font-mono">
-                        {formatCurrency((totalBeforeTax || 0) + (overallTaxAmt || 0))}
+                        {formatCurrency(totalAmount)}
                       </span>
                     </div>
                   </div>
                 </div>
               </div>
-            </form>
-          </div>
-
-          {/* ── Sticky footer ── */}
-          <div className="flex items-center justify-between px-6 py-3.5 border-t border-border bg-muted/30 shrink-0 rounded-b-2xl">
-            <p className="text-xs text-muted-foreground">
-              {fields.length === 0
-                ? "No items added yet"
-                : `${fields.length} item${fields.length !== 1 ? "s" : ""} · Total ${formatCurrency((totalBeforeTax || 0) + (overallTaxAmt || 0))}`}
-            </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 h-9 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                form="invoice-form"
-                disabled={isPending}
-                className="px-5 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-              >
-                {isPending ? "Saving…" : initialData?.id ? "Update invoice" : "Save invoice"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+        </form>
+      </DocumentFormLayout>
 
       <CustomerCreationModal
         open={showCustomerModal}

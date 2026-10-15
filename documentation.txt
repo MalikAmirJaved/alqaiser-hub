@@ -1322,6 +1322,13 @@ URL: http://192.168.88.51:3000
     - Line items: Product, Quantity, Unit Price, Discount, Tax
     - Subtotal, Tax total, Discount total, Grand total
     - Notes, Terms & Conditions
+    - Document number and saved template/typography appearance
+
+  Create and Edit:
+    - Quote create/edit opens as a page using the shared quote/invoice document form.
+    - Entered quote numbers are retained; a number is generated only when the field is left blank.
+    - The live preview includes company branding, customer, line and overall discounts/taxes, and terms.
+    - The selected template and typography are saved with the quote and reused for print/PDF.
 
 ---------------------------------------
   7.4 Sales Customers
@@ -1361,6 +1368,14 @@ URL: http://192.168.88.51:3000
     - Post Invoice: Marks the invoice as fully paid
     - Record Payment: Records a partial payment against the invoice
     - Paid invoices cannot be edited or deleted
+
+  Create, Edit, and Convert:
+    - Invoice create/edit opens as a page using the shared quote/invoice document form.
+    - Entered invoice numbers are retained; a number is generated only when none is supplied.
+    - Converting an approved quote carries its details to the invoice create page and fills an invoice number when needed.
+    - The live preview and printed/PDF invoice share the saved template, typography, branding, totals, and terms.
+    - Unpaid Sales invoices in DRAFT, PENDING, or SENT can be edited by users with update permission; editing keeps the current status.
+    - Paid invoices, POS invoices, and other non-editable statuses remain protected.
 
 
 ================================================================================

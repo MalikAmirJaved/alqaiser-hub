@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { X, Wallet, CreditCard, CalendarDays, Hash, AlertCircle, BadgeCheck, ArrowRight, PiggyBank, Banknote } from "lucide-react";
 import { StatusBadge } from "@/components/finance/ui";
+import ReceiptUpload from "@/components/reuseable/ReceiptUpload";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 
 export interface PayAmountModalProps {
@@ -23,12 +24,15 @@ export interface PayAmountModalProps {
     payment_date: string;
     payment_method: string;
     reference_number?: string;
+    receipt_image?: string;
   }) => Promise<void>;
 }
 
 const PAYMENT_METHODS = [
   { value: "BANK_TRANSFER", label: "Bank Transfer" },
   { value: "CASH", label: "Cash" },
+  { value: "CREDIT_CARD", label: "Card" },
+  { value: "WALLET", label: "Digital Wallet" },
 ];
 
 export default function PayAmountModal({
@@ -51,6 +55,7 @@ export default function PayAmountModal({
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
   const [paymentMethod, setPaymentMethod] = useState("BANK_TRANSFER");
   const [referenceNumber, setReferenceNumber] = useState("");
+  const [receiptImage, setReceiptImage] = useState("");
   const [error, setError] = useState("");
 
   const outstandingNum = Number(outstanding) || 0;
@@ -71,6 +76,7 @@ export default function PayAmountModal({
       setPaymentDate(new Date().toISOString().split("T")[0]);
       setPaymentMethod("BANK_TRANSFER");
       setReferenceNumber("");
+      setReceiptImage("");
       setError("");
     }
   }, [open, effectiveOutstanding]);
@@ -81,6 +87,10 @@ export default function PayAmountModal({
   const isValidAmount =
     isCreditCovered ||
     (!isNaN(parsedAmount) && parsedAmount > 0 && parsedAmount <= effectiveOutstanding + 0.001);
+
+  // Transaction number + receipt only apply to bank transfers / digital wallets
+  const showTxnFields =
+    paymentMethod === "BANK_TRANSFER" || paymentMethod === "WALLET" || paymentMethod === "CREDIT_CARD"; 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,7 +103,8 @@ export default function PayAmountModal({
       amount: isCreditCovered ? outstandingNum : parsedAmount,
       payment_date: paymentDate,
       payment_method: paymentMethod,
-      reference_number: referenceNumber.trim() || undefined,
+      reference_number: showTxnFields ? referenceNumber.trim() || undefined : undefined,
+      receipt_image: showTxnFields ? receiptImage || undefined : undefined,
     });
   };
 
@@ -415,18 +426,28 @@ export default function PayAmountModal({
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                <Hash className="w-3 h-3" /> Reference <span className="font-normal">(optional)</span>
-              </label>
-              <input
-                type="text"
-                value={referenceNumber}
-                onChange={(e) => setReferenceNumber(e.target.value)}
-                placeholder="Cheque #, transfer ref…"
-                className="w-full h-9 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-              />
-            </div>
+            {showTxnFields && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                    <Hash className="w-3 h-3" /> Transaction Number <span className="font-normal">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={referenceNumber}
+                    onChange={(e) => setReferenceNumber(e.target.value)}
+                    placeholder="Transfer ref, auth code…"
+                    className="w-full h-9 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+
+                <ReceiptUpload
+                  value={receiptImage}
+                  onChange={setReceiptImage}
+                  label="Receipt image"
+                />
+              </>
+            )}
           </form>
         </div>
 

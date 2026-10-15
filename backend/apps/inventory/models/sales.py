@@ -37,9 +37,18 @@ class SalesOrder(BaseModel):
         ('CHEQUE', 'Cheque'),
         ('CREDIT_CARD', 'Credit Card'),
         ('CREDIT', 'Credit/On Account'),
+        ('WALLET', 'Digital Wallet'),
         ('OTHER', 'Other'),
     ], default='CREDIT')
     bank_account = models.ForeignKey('finance.BankAccount', on_delete=models.SET_NULL, null=True, blank=True, related_name='sales_orders')
+    transaction_number = models.CharField(
+        max_length=100, blank=True,
+        help_text='Card/wallet transaction reference captured at POS',
+    )
+    receipt_image = models.CharField(
+        max_length=500, blank=True,
+        help_text='Uploaded receipt/proof-of-payment image URL',
+    )
     total_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     source = models.CharField(max_length=20, choices=[
         ('INVENTORY', 'Inventory'),
@@ -106,7 +115,11 @@ class SalesOrderLine(BaseModel):
 
     @property
     def line_total(self):
-        return self.subtotal - self.discount
+        """Net line amount + per-line tax (matches the order total)."""
+        from apps.common.totals import line_tax
+        return self.subtotal - self.discount + line_tax(
+            self.quantity_ordered, self.unit_price, self.tax_rate
+        )
 
     @property
     def max_returnable(self):

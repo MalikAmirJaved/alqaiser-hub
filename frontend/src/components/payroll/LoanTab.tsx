@@ -109,7 +109,17 @@ export default function LoanTab({
                             return (
                                 <TableRow key={item.id}>
                                     <TableCell>
-                                        <div className="font-medium">{item.employee_name}</div>
+                                        <div className="flex items-center gap-2 font-medium">
+                                            {item.employee_name}
+                                            {item.employee_is_deleted && (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="border-warning/40 bg-warning/10 text-warning"
+                                                >
+                                                    Deleted
+                                                </Badge>
+                                            )}
+                                        </div>
                                         <div className="text-xs text-muted-foreground">ID: {item.employee_id}</div>
                                     </TableCell>
                                     <TableCell>

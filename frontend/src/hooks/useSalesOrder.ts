@@ -21,6 +21,10 @@ export interface CreateSalesOrderParams {
   line_items: SalesOrderLineItem[];
   status: "DRAFT" | "COMPLETE";
   create_invoice?: boolean;
+  /** POS payment details (mapped to SalesOrder.payment_method choices) */
+  payment_method?: string;
+  transaction_number?: string;
+  receipt_image?: string;
 }
 
 export interface ReturnLinePayload {
@@ -57,14 +61,16 @@ export interface SalesOrderResponse {
   created_at: string;
   status: string;
   notes?: string;
+  payment_method?: string;
+  transaction_number?: string;
+  receipt_image?: string;
   lines?: Array<{
     id: string;
     variant: string;
     variant_sku: string;
     variant_name: string;
+    discount_percent: number;
     discount_amount: number;
-    discount_pct: number;
-    discount_fixed: number;
     quantity_ordered: number;
     quantity_returned?: number;
     unit_price: number;
@@ -131,6 +137,9 @@ export function useCreateSalesOrder() {
       if (params.create_invoice) {
         createPayload.create_invoice = true;
       }
+      if (params.payment_method) createPayload.payment_method = params.payment_method;
+      if (params.transaction_number) createPayload.transaction_number = params.transaction_number;
+      if (params.receipt_image) createPayload.receipt_image = params.receipt_image;
       const resp = await api<ApiResponse<any>>("/api/inventory/sales-orders/", {
         method: "POST",
         body: JSON.stringify(createPayload),
@@ -156,10 +165,13 @@ export function useCompleteSalesOrder() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ orderId, line_items, create_invoice }: { orderId: string; line_items?: SalesOrderLineItem[]; create_invoice?: boolean }) => {
+    mutationFn: async ({ orderId, line_items, create_invoice, payment_method, transaction_number, receipt_image }: { orderId: string; line_items?: SalesOrderLineItem[]; create_invoice?: boolean; payment_method?: string; transaction_number?: string; receipt_image?: string }) => {
       const payload: Record<string, any> = {};
       if (line_items) payload.line_items = line_items;
       if (create_invoice) payload.create_invoice = true;
+      if (payment_method) payload.payment_method = payment_method;
+      if (transaction_number) payload.transaction_number = transaction_number;
+      if (receipt_image) payload.receipt_image = receipt_image;
       return api(`/api/inventory/sales-orders/${orderId}/complete/`, {
         method: "POST",
         body: JSON.stringify(payload),

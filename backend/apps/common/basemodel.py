@@ -1,6 +1,7 @@
 import uuid
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 
 
 class BaseModel(models.Model):
@@ -56,8 +57,73 @@ class BaseModel(models.Model):
 
     is_deleted = models.BooleanField(default=False)
 
+    # When the row was soft-deleted. Drives the Trash module and the
+    # automatic 30-day permanent purge (see apps.compsetting.trash).
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         abstract = True
         indexes = [
             models.Index(fields=['company_id', 'branch_id']),
         ]
+
+    # ------------------------------------------------------------------
+    # Soft-delete bookkeeping
+    # ------------------------------------------------------------------
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Remember what was loaded so save() can detect a soft-delete flip
+        # without paying for an extra SELECT on every write.
+        self._loaded_is_deleted = self.is_deleted
+
+    def save(self, *args, **kwargs):
+        """Keep ``deleted_at`` in sync with ``is_deleted``.
+
+        Existing delete paths only set ``is_deleted`` / ``deleted_by``; this
+        stamps the timestamp they were missing. Bulk ``queryset.update()``
+        calls bypass ``save()`` — the Trash services handle those.
+        """
+        touched_delete_state = False
+
+        if self.is_deleted:
+            if not self.deleted_at:
+                self.deleted_at = timezone.now()
+                touched_delete_state = True
+        elif self.deleted_at or getattr(self, '_loaded_is_deleted', False):
+            # Row was un-deleted (restore) — clear the trash bookkeeping.
+            self.deleted_at = None
+            self.deleted_by = None
+            touched_delete_state = True
+
+        self._loaded_is_deleted = self.is_deleted
+
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None and touched_delete_state:
+            kwargs['update_fields'] = set(update_fields) | {'is_deleted', 'deleted_at', 'deleted_by'}
+
+        super().save(*args, **kwargs)
+
+
+def soft_delete_qs(queryset, user=None, *, at=None, **extra):
+    """Soft-delete a whole queryset while recording WHO and WHEN.
+
+    ``queryset.update(is_deleted=True)`` bypasses :meth:`BaseModel.save`, so it
+    leaves ``deleted_at`` NULL and ``deleted_by`` unset. That silently breaks:
+
+    * the Trash module, which hides rows with no ``deleted_at`` so that rows
+      stored as deleted (imports/seed data) never surface as user deletions;
+    * the 30-day retention purge, which only touches rows that have a timestamp;
+    * the audit trail ("who deleted this?").
+
+    Always use this helper for bulk soft deletes::
+
+        soft_delete_qs(employee.documents.filter(document_type='EDUCATION'), request.user)
+
+    System-initiated replacements (no human actor) should pass ``user=None``;
+    the row is still timestamped so retention can retire it.
+    """
+    updates = {'is_deleted': True, 'deleted_at': at or timezone.now()}
+    if user is not None:
+        updates['deleted_by'] = user
+    updates.update(extra)
+    return queryset.update(**updates)

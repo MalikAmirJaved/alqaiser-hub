@@ -27,6 +27,7 @@ def pay_customer_invoice(invoice, request, amount=None):
     bank_account_uuid = request.data.get('bank_account_id')
     payment_method = request.data.get('payment_method', 'BANK_TRANSFER')
     reference_number = request.data.get('reference_number', '')
+    receipt_image = request.data.get('receipt_image', '')
 
     from django.utils.dateparse import parse_date
     payment_date = parse_date(request.data.get('payment_date')) if request.data.get('payment_date') else timezone.now().date()
@@ -60,6 +61,7 @@ def pay_customer_invoice(invoice, request, amount=None):
             payment_method=payment_method,
             bank_account=bank_account,
             reference_number=reference_number,
+            receipt_image=receipt_image,
             user=request.user,
             auto_confirm=True,
         )
@@ -82,6 +84,7 @@ def pay_supplier_bill(bill, request, amount=None):
     bank_account_uuid = request.data.get('bank_account_id')
     cash_payment_method = request.data.get('payment_method', 'BANK_TRANSFER')
     reference_number = request.data.get('reference_number', '')
+    receipt_image = request.data.get('receipt_image', '')
 
     from django.utils.dateparse import parse_date
     payment_date = parse_date(request.data.get('payment_date')) if request.data.get('payment_date') else bill.bill_date
@@ -162,6 +165,7 @@ def pay_supplier_bill(bill, request, amount=None):
             payment_method=cash_payment_method,
             bank_account=bank_account,
             reference_number=reference_number,
+            receipt_image=receipt_image,
             user=request.user,
             auto_confirm=True,
         )

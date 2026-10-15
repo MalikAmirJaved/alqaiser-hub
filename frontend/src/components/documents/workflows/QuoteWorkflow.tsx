@@ -1,16 +1,27 @@
 "use client";
 
-// components/sales/QuoteFormModal.tsx
-import { useEffect, useState, useRef } from "react";
-import { X, Plus, Trash2, Package, Type, FileText, AlertCircle } from "lucide-react";
+import { useCallback, useEffect, useState, useRef } from "react";
+import { Plus, Trash2, Package, Type, FileText, AlertCircle, RotateCw } from "lucide-react";
 import { useServerSearch } from "@/hooks/useServerSearch";
 import { useApi } from "@/hooks/useApi";
 import type { VariantDetail } from "@/hooks/useAllVariants";
 import CustomerCreationModal from "@/components/sales/CustomerCreationModal";
+import DocumentFormLayout from "@/components/documents/DocumentFormLayout";
 import { useCreateQuote, useUpdateQuote, Quote } from "@/hooks/sales/useQuotes";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
+import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
+import { useAutoCode } from "@/hooks/useAutoCode";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
 import { toast } from "sonner";
+import {
+  createDefaultDocumentAppearance,
+  documentAppearanceFromRecord,
+  InvoiceAppearanceEditor,
+  serializeDocumentTypography,
+  type DocumentAppearance,
+} from "@/components/invoice-generator/InvoiceAppearanceEditor";
+import { buildCrmDocumentPreview } from "@/components/invoice-generator/crmPreview";
 
 interface QuoteLine {
   _key: string;
@@ -33,8 +44,7 @@ interface QuoteLine {
 let lineKeyCounter = 0;
 const nextLineKey = () => `ql_${++lineKeyCounter}`;
 
-interface QuoteFormModalProps {
-  open: boolean;
+export interface QuoteWorkflowProps {
   onClose: () => void;
   initialData?: Quote | null;
   initialCustomerId?: string | null;
@@ -42,18 +52,22 @@ interface QuoteFormModalProps {
   onSuccess?: (quote?: Quote) => void;
 }
 
-export default function QuoteFormModal({
-  open,
+export function QuoteWorkflow({
   onClose,
   initialData,
   initialCustomerId,
   initialLeadId,
   onSuccess,
-}: QuoteFormModalProps) {
+}: QuoteWorkflowProps) {
   const formatCurrency = useFormatCurrency();
+  const { data: companySettings } = useCompanySettingsQuery();
+  const { terms: termsData } = useTermsAndConditions();
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [newCustomerInfo, setNewCustomerInfo] = useState<any>(null);
   const [customerDisplayLabel, setCustomerDisplayLabel] = useState("");
+  const [appearance, setAppearance] = useState<DocumentAppearance>(
+    createDefaultDocumentAppearance,
+  );
 
   const fetchCustomers = useServerSearch("/api/inventory/customers/", {
     transformOption: (c: any) => ({
@@ -69,7 +83,6 @@ export default function QuoteFormModal({
       label: `${v.product_name} (${v.sku}) — Stock: ${v.total_stock}`,
     }),
   });
-
   const fetchVendors = useServerSearch("/api/inventory/suppliers/", {
     transformOption: (v: any) => ({
       value: v.id,
@@ -79,9 +92,11 @@ export default function QuoteFormModal({
 
   const createQuote = useCreateQuote();
   const updateQuote = useUpdateQuote();
+  const { generateCode, validateCode } = useAutoCode("quote");
   const api = useApi();
 
   const [formData, setFormData] = useState({
+    quote_number: "",
     customer: "",
     date: new Date().toISOString().split("T")[0],
     expiration_date: "",
@@ -91,10 +106,50 @@ export default function QuoteFormModal({
     lead: "",
     lines: [] as QuoteLine[],
   });
+  const fetchAvailableVariants = useCallback(
+    async (
+      params: { search: string; page: number; pageSize: number },
+      currentVariant: string,
+    ) => {
+      const result = await fetchVariants(params);
+      const selectedVariants = new Set(
+        formData.lines
+          .map((line) => line.variant)
+          .filter((variant): variant is string => !!variant && variant !== currentVariant),
+      );
+      return {
+        ...result,
+        options: result.options.filter((option) => !selectedVariants.has(option.value)),
+      };
+    },
+    [fetchVariants, formData.lines],
+  );
+
+  const resetForm = useCallback(() => {
+    setAppearance(createDefaultDocumentAppearance());
+    setFormData({
+      quote_number: "",
+      customer: "",
+      date: new Date().toISOString().split("T")[0],
+      expiration_date: "",
+      overall_discount_percent: 0,
+      overall_tax_percent: 0,
+      notes: "",
+      lead: "",
+      lines: [],
+    });
+    setNewCustomerInfo(null);
+    setCustomerDisplayLabel("");
+    generateCode()
+      .then((code) => setFormData((prev) => ({ ...prev, quote_number: code })))
+      .catch(() => toast.error("Could not generate a quote number."));
+  }, [generateCode]);
 
   useEffect(() => {
     if (initialData) {
+      setAppearance(documentAppearanceFromRecord(initialData));
       setFormData({
+        quote_number: initialData.quote_number,
         customer: initialData.customer || "",
         date: initialData.date || new Date().toISOString().split("T")[0],
         expiration_date: initialData.expiration_date || "",
@@ -123,38 +178,23 @@ export default function QuoteFormModal({
     } else {
       resetForm();
     }
-  }, [initialData, open]);
+  }, [initialData, resetForm]);
 
   useEffect(() => {
-    if (initialCustomerId && !initialData && open) {
+    if (initialCustomerId && !initialData) {
       setFormData((prev) => ({ ...prev, customer: initialCustomerId }));
       setNewCustomerInfo(null);
       api(`/api/inventory/customers/${initialCustomerId}/`)
         .then((c: any) => setCustomerDisplayLabel(c.name || ""))
         .catch(() => {});
     }
-  }, [initialCustomerId, initialData, open]);
+  }, [api, initialCustomerId, initialData]);
 
   useEffect(() => {
-    if (initialLeadId && !initialData && open) {
+    if (initialLeadId && !initialData) {
       setFormData((prev) => ({ ...prev, lead: initialLeadId }));
     }
-  }, [initialLeadId, initialData, open]);
-
-  const resetForm = () => {
-    setFormData({
-      customer: "",
-      date: new Date().toISOString().split("T")[0],
-      expiration_date: "",
-      overall_discount_percent: 0,
-      overall_tax_percent: 0,
-      notes: "",
-      lead: "",
-      lines: [],
-    });
-    setNewCustomerInfo(null);
-    setCustomerDisplayLabel("");
-  };
+  }, [initialLeadId, initialData]);
 
   const handleCustomerCreated = async (
     customerId: string,
@@ -253,28 +293,34 @@ export default function QuoteFormModal({
   const calculateLineTotal = (line: QuoteLine) => {
     const subtotal = line.quantity * line.unit_price;
     const discount = line.discount_amount || 0;
-    const tax = (subtotal - discount) * (line.tax_rate / 100);
-    return subtotal - discount + tax;
+    const tax = subtotal * (line.tax_rate / 100);
+    return subtotal + tax - discount;
   };
 
   const subtotal = formData.lines.reduce((s, l) => s + l.quantity * l.unit_price, 0);
   const totalDiscount = formData.lines.reduce((s, l) => s + (l.discount_amount || 0), 0);
   const totalTax = formData.lines.reduce((s, l) => {
     const sub = l.quantity * l.unit_price;
-    const disc = l.discount_amount || 0;
-    return s + (sub - disc) * (l.tax_rate / 100);
+    return s + sub * (l.tax_rate / 100);
   }, 0);
 
   const overallDiscountPercent = Number(formData.overall_discount_percent) || 0;
   const overallTaxPercent = Number(formData.overall_tax_percent) || 0;
-  const overallDiscountAmount = subtotal * (overallDiscountPercent / 100);
-  const totalBeforeTax = subtotal - totalDiscount - overallDiscountAmount;
-  const overallTaxAmount = totalBeforeTax * (overallTaxPercent / 100);
-  const calculateTotal = () => totalBeforeTax + overallTaxAmount;
+  const overallTaxAmount = subtotal * (overallTaxPercent / 100);
+  const overallDiscountAmount =
+    (subtotal + totalTax + overallTaxAmount) * (overallDiscountPercent / 100);
+  const discountedSubtotal = subtotal - totalDiscount - overallDiscountAmount;
+  const calculateTotal = () => discountedSubtotal + totalTax + overallTaxAmount;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const payload: any = { ...formData };
+    payload.quote_number = payload.quote_number.trim();
+    if (!payload.quote_number) {
+      toast.error("Quote number is required.");
+      return;
+    }
+    if (!(await validateCode(payload.quote_number, initialData?.id))) return;
     if (newCustomerInfo) {
       payload.new_customer = newCustomerInfo;
       delete payload.customer;
@@ -285,6 +331,9 @@ export default function QuoteFormModal({
 
     payload.overall_discount_percent = Number(formData.overall_discount_percent) || 0;
     payload.overall_tax_percent = Number(formData.overall_tax_percent) || 0;
+    payload.template_slug = appearance.template_slug;
+    payload.accent_color = appearance.accent_color;
+    payload.typography = serializeDocumentTypography(appearance);
 
     for (let i = 0; i < payload.lines.length; i++) {
       const line = payload.lines[i];
@@ -322,50 +371,30 @@ export default function QuoteFormModal({
       ? await updateQuote.mutateAsync({ id: initialData.id, data: payload })
       : await createQuote.mutateAsync(payload);
 
-    onSuccess?.(result);
-    onClose();
+    if (onSuccess) onSuccess(result);
+    else onClose();
   };
 
   const isPending = createQuote.isPending || updateQuote.isPending;
 
-  if (!open) return null;
-
   return (
     <>
-      {/* ── Backdrop ── */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-        <div className="relative w-full max-w-6xl rounded-2xl border border-border bg-card shadow-2xl flex flex-col max-h-[92vh]">
-
-          {/* ── Header ── */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-            <div className="flex items-center gap-3">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-medium">
-                <FileText className="w-3.5 h-3.5" />
-                Quote
-              </span>
-              <div>
-                <h2 className="text-base font-semibold leading-tight">
-                  {initialData ? "Edit Quote" : "New Quote"}
-                </h2>
-                {initialData?.quote_number && (
-                  <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                    {initialData.quote_number}
-                  </p>
-                )}
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors"
-              aria-label="Close"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* ── Scrollable body ── */}
-          <div className="overflow-y-auto flex-1">
-            <form onSubmit={handleSubmit} id="quote-form" className="p-6 space-y-6">
+      <DocumentFormLayout
+        documentType="Quote"
+        title={initialData ? "Edit Quote" : "New Quote"}
+        documentNumber={formData.quote_number}
+        formId="quote-form"
+        isPending={isPending}
+        submitLabel={initialData ? "Update quote" : "Save quote"}
+        pendingLabel="Saving…"
+        summary={
+          formData.lines.length === 0
+            ? "No items added yet"
+            : `${formData.lines.length} item${formData.lines.length !== 1 ? "s" : ""} · Total ${formatCurrency(calculateTotal())}`
+        }
+        onCancel={onClose}
+      >
+        <form onSubmit={handleSubmit} id="quote-form" className="space-y-6 p-5 sm:p-6">
 
               {/* ── Section 1: Document details ── */}
               <section>
@@ -376,6 +405,37 @@ export default function QuoteFormModal({
                   </h3>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">
+                      Quote number <span className="text-destructive">*</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        value={formData.quote_number}
+                        onChange={(event) =>
+                          setFormData((prev) => ({ ...prev, quote_number: event.target.value }))
+                        }
+                        onBlur={(event) => {
+                          void validateCode(event.target.value.trim(), initialData?.id);
+                        }}
+                        required
+                        className="h-9 flex-1 rounded-lg border border-border bg-background px-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        placeholder="e.g. QT-2026-001"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          generateCode()
+                            .then((code) => setFormData((prev) => ({ ...prev, quote_number: code })))
+                            .catch(() => toast.error("Could not generate a quote number."))
+                        }
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted"
+                        title="Generate quote number"
+                      >
+                        <RotateCw className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
                   {/* Customer */}
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium">
@@ -452,6 +512,30 @@ export default function QuoteFormModal({
 
               {/* ── Divider ── */}
               <hr className="border-border" />
+
+              <InvoiceAppearanceEditor
+                documentTitle="Quote"
+                appearance={appearance}
+                onChange={setAppearance}
+                previewData={buildCrmDocumentPreview({
+                  appearance,
+                  documentType: "Quote",
+                  documentNumber: formData.quote_number || "Draft",
+                  customerName: customerDisplayLabel,
+                  issueDate: formData.date,
+                  dueDate: formData.expiration_date,
+                  lines: formData.lines,
+                  currency: companySettings?.currency,
+                  businessName: companySettings?.companyName,
+                  businessAddress: companySettings?.address,
+                  businessEmail: companySettings?.email,
+                  businessLogo: companySettings?.logo,
+                  overallDiscountPercent: Number(formData.overall_discount_percent) || 0,
+                  overallTaxPercent: Number(formData.overall_tax_percent) || 0,
+                  notes: formData.notes,
+                  terms: termsData?.quote || "",
+                })}
+              />
 
               {/* ── Section 2: Line items ── */}
               <section>
@@ -552,7 +636,9 @@ export default function QuoteFormModal({
                                   <SearchableSelect
                                     value={line.variant}
                                     onChange={(val) => updateLine(idx, "variant", val)}
-                                    fetchOptions={fetchVariants}
+                                    fetchOptions={(params) =>
+                                      fetchAvailableVariants(params, line.variant)
+                                    }
                                     placeholder="Search variants…"
                                   />
                                 ) : (
@@ -723,31 +809,12 @@ export default function QuoteFormModal({
                       <span className="font-mono">{formatCurrency(subtotal)}</span>
                     </div>
 
-                    {/* Overall discount % */}
-                    <div className="flex justify-between items-center gap-2">
-                      <div className="flex items-center gap-1">
-                        <span className="text-sm text-muted-foreground">Discount</span>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.01"
-                          value={formData.overall_discount_percent}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              overall_discount_percent: parseFloat(e.target.value) || 0,
-                            }))
-                          }
-                          className="w-14 h-6 text-xs text-right bg-muted/40 border border-border rounded px-1 focus:outline-none focus:ring-1 focus:ring-ring"
-                          placeholder="0"
-                        />
-                        <span className="text-[10px] text-muted-foreground">%</span>
+                    {totalTax > 0 && (
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Tax (line)</span>
+                        <span className="font-mono">{formatCurrency(totalTax)}</span>
                       </div>
-                      <span className="font-mono text-sm text-destructive">
-                        −{formatCurrency(overallDiscountAmount)}
-                      </span>
-                    </div>
+                    )}
 
                     {/* Overall tax % */}
                     <div className="flex justify-between items-center gap-2">
@@ -775,6 +842,39 @@ export default function QuoteFormModal({
                       </span>
                     </div>
 
+                    {totalDiscount > 0 && (
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Discount (line)</span>
+                        <span className="font-mono text-destructive">−{formatCurrency(totalDiscount)}</span>
+                      </div>
+                    )}
+
+                    {/* Overall discount % */}
+                    <div className="flex justify-between items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm text-muted-foreground">Discount</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={formData.overall_discount_percent}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              overall_discount_percent: parseFloat(e.target.value) || 0,
+                            }))
+                          }
+                          className="w-14 h-6 text-xs text-right bg-muted/40 border border-border rounded px-1 focus:outline-none focus:ring-1 focus:ring-ring"
+                          placeholder="0"
+                        />
+                        <span className="text-[10px] text-muted-foreground">%</span>
+                      </div>
+                      <span className="font-mono text-sm text-destructive">
+                        −{formatCurrency(overallDiscountAmount)}
+                      </span>
+                    </div>
+
                     <div className="flex justify-between items-center pt-2.5 border-t border-border">
                       <span className="text-sm font-semibold">Total</span>
                       <span className="text-lg font-bold font-mono">
@@ -784,36 +884,8 @@ export default function QuoteFormModal({
                   </div>
                 </div>
               </div>
-            </form>
-          </div>
-
-          {/* ── Sticky footer ── */}
-          <div className="flex items-center justify-between px-6 py-3.5 border-t border-border bg-muted/30 shrink-0 rounded-b-2xl">
-            <p className="text-xs text-muted-foreground">
-              {formData.lines.length === 0
-                ? "No items added yet"
-                : `${formData.lines.length} item${formData.lines.length !== 1 ? "s" : ""} · Total ${formatCurrency(calculateTotal())}`}
-            </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 h-9 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                form="quote-form"
-                disabled={isPending}
-                className="px-5 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-              >
-                {isPending ? "Saving…" : initialData ? "Update quote" : "Save quote"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+        </form>
+      </DocumentFormLayout>
 
       <CustomerCreationModal
         open={showCustomerModal}

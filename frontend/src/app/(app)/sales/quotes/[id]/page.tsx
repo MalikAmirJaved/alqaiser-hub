@@ -3,14 +3,14 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { DetailLayout, StandardSidebar, RelatedRecords, type DetailTab } from "@/components/reuseable/final/DetailLayout";
-import { useQuote, useUpdateQuote, useSendQuote, useMarkViewedQuote, useApproveQuote, useRejectQuote, useMarkConvertedQuote, useQuoteStatusHistory } from "@/hooks/sales/useQuotes";
+import { useQuote, useUpdateQuote, useSendQuote, useMarkViewedQuote, useApproveQuote, useRejectQuote, useQuoteStatusHistory } from "@/hooks/sales/useQuotes";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
 import StatusHistoryTimeline from "@/components/sales/StatusHistoryTimeline";
-import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
-import QuoteFormModal from "@/components/sales/QuoteFormModal";
+import { DocumentPrintPreviewModal } from "@/components/invoice-generator/DocumentPrintPreviewModal";
+import { buildCrmDocumentPreview } from "@/components/invoice-generator/crmPreview";
 import { Printer, Download, FileText, HelpCircle, Settings, Info } from "lucide-react";
 
 export default function QuoteDetailPage() {
@@ -24,27 +24,19 @@ export default function QuoteDetailPage() {
   const approveQuote = useApproveQuote();
   const rejectQuote = useRejectQuote();
   const permissions = useFeaturePermissions("SALES", "quote");
+  const invoicePermissions = useFeaturePermissions("SALES", "sales_customers_invoice");
   const { data: companySettings } = useCompanySettingsQuery();
   const { terms: termsData } = useTermsAndConditions();
 
   const { data: statusHistory, isLoading: historyLoading } = useQuoteStatusHistory(id as string);
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingQuote, setEditingQuote] = useState<any>(null);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
 
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!quote) return <div className="p-8 text-center">Quote not found</div>;
 
   const handleEdit = () => {
-    setEditingQuote(quote);
-    setModalOpen(true);
-  };
-
-  const handleUpdateSuccess = () => {
-    refetch();
-    setModalOpen(false);
-    setEditingQuote(null);
+    router.push(`/sales/quotes/${quote.id}/edit`);
   };
 
   const handleSend = async () => {
@@ -79,6 +71,10 @@ export default function QuoteDetailPage() {
     setShowPrintPreview(true);
   };
 
+  const handleConvertToInvoice = () => {
+    router.push(`/sales/customer-invoices/create?quoteId=${encodeURIComponent(quote.id)}`);
+  };
+
   const handleExportPdf = () => {
     setShowPrintPreview(true);
   };
@@ -98,12 +94,19 @@ export default function QuoteDetailPage() {
                 <th className="px-4 py-2 text-right">Qty</th>
                 <th className="px-4 py-2 text-right">Unit Price</th>
                 <th className="px-4 py-2 text-right">Discount</th>
+                <th className="px-4 py-2 text-right">Tax</th>
                 <th className="px-4 py-2 text-right">Total</th>
               </tr>
             </thead>
             <tbody>
               {quote.lines?.map((line, idx) => {
-                const lineTotal = line.quantity * line.unit_price - (line.discount_amount || 0);
+                const quantity = Number(line.quantity) || 0;
+                const unitPrice = Number(line.unit_price) || 0;
+                const discount = Number(line.discount_amount) || 0;
+                const taxRate = Number(line.tax_rate) || 0;
+                const lineSubtotal = quantity * unitPrice;
+                const lineTax = lineSubtotal * (taxRate / 100);
+                const lineTotal = lineSubtotal + lineTax - discount;
                 return (
                   <tr key={idx} className="border-b border-border/60">
                     <td className="px-4 py-2">
@@ -120,64 +123,112 @@ export default function QuoteDetailPage() {
                         <span className="text-muted-foreground/40">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-2 text-right">{line.quantity}</td>
-                    <td className="px-4 py-2 text-right">{formatCurrency(line.unit_price)}</td>
-                    <td className="px-4 py-2 text-right text-destructive">{formatCurrency(line.discount_amount || 0)}</td>
+                    <td className="px-4 py-2 text-right">{quantity}</td>
+                    <td className="px-4 py-2 text-right">{formatCurrency(unitPrice)}</td>
+                    <td className="px-4 py-2 text-right text-destructive">{formatCurrency(discount)}</td>
+                    <td className="px-4 py-2 text-right">
+                      {taxRate > 0 ? (
+                        <span className="text-muted-foreground">
+                          {taxRate}% ({formatCurrency(lineTax)})
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground/40">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-right font-medium">{formatCurrency(lineTotal)}</td>
                   </tr>
                 );
               })}
               {(!quote.lines || quote.lines.length === 0) && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
                     No items in this quote
                   </td>
                 </tr>
               )}
             </tbody>
             <tfoot className="border-t-2 border-border">
-              {(quote as any).lines?.length > 0 && (
-                <>
+              <>
                   <tr>
-                    <td colSpan={5} className="px-4 py-2 text-right text-sm text-muted-foreground">Subtotal</td>
+                    <td colSpan={6} className="px-4 py-2 text-right text-sm text-muted-foreground">Subtotal</td>
                     <td className="px-4 py-2 text-right text-sm">
                       {formatCurrency(
-                        (quote.lines || []).reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0)
+                        (quote.lines || []).reduce(
+                          (sum, line) => sum + (Number(line.quantity) || 0) * (Number(line.unit_price) || 0),
+                          0,
+                        ),
                       )}
                     </td>
                   </tr>
-                  {(quote as any).overall_discount_percent > 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-2 text-right text-sm text-muted-foreground">
-                        Discount ({(quote as any).overall_discount_percent}%)
-                      </td>
-                      <td className="px-4 py-2 text-right text-sm text-destructive">
-                        -{formatCurrency(
-                          ((quote.lines || []).reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0)) *
-                          (Number((quote as any).overall_discount_percent) / 100)
+                  {(() => {
+                    const lines = (quote.lines || []) as any[];
+                    const sub = lines.reduce(
+                      (sum, line) => sum + (Number(line.quantity) || 0) * (Number(line.unit_price) || 0),
+                      0,
+                    );
+                    const lineDiscounts = lines.reduce(
+                      (sum, line) => sum + (Number(line.discount_amount) || 0),
+                      0,
+                    );
+                    const lineTax = lines.reduce(
+                      (sum, line) => {
+                        const lineSubtotal = (Number(line.quantity) || 0) * (Number(line.unit_price) || 0);
+                        const taxRate = Number(line.tax_rate) || 0;
+                        return sum + lineSubtotal * (taxRate / 100);
+                      },
+                      0,
+                    );
+                    const overallDiscountPercent = Number(quote.overall_discount_percent || 0);
+                    const overallTaxPercent = Number(quote.overall_tax_percent || 0);
+                    const overallTax = sub * (overallTaxPercent / 100);
+                    const overallDisc =
+                      (sub + lineTax + overallTax) * (overallDiscountPercent / 100);
+                    return (
+                      <>
+                        {lineTax > 0 && (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                              Tax (line)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm">{formatCurrency(lineTax)}</td>
+                          </tr>
                         )}
-                      </td>
-                    </tr>
-                  )}
-                  {(quote as any).overall_tax_percent > 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-2 text-right text-sm text-muted-foreground">
-                        Tax ({(quote as any).overall_tax_percent}%)
-                      </td>
-                      <td className="px-4 py-2 text-right text-sm">
-                        {formatCurrency(
-                          ((quote.lines || []).reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0) -
-                            ((quote.lines || []).reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0)) *
-                            (Number((quote as any).overall_discount_percent) / 100)) *
-                          (Number((quote as any).overall_tax_percent) / 100)
+                        {overallTaxPercent > 0 && (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                              Tax ({overallTaxPercent}%)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm">
+                              {formatCurrency(overallTax)}
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                    </tr>
-                  )}
-                </>
-              )}
+                        {lineDiscounts > 0 && (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                              Discount (line)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm text-destructive">
+                              -{formatCurrency(lineDiscounts)}
+                            </td>
+                          </tr>
+                        )}
+                        {overallDiscountPercent > 0 && (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                              Discount ({overallDiscountPercent}%)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm text-destructive">
+                              -{formatCurrency(overallDisc)}
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    );
+                  })()}
+              </>
               <tr className="border-t-2 border-border">
-                <td colSpan={5} className="px-4 py-3 text-right font-semibold">Total</td>
+                <td colSpan={6} className="px-4 py-3 text-right font-semibold">Total</td>
                 <td className="px-4 py-3 text-right font-bold text-primary">{formatCurrency(quote.total_amount)}</td>
               </tr>
             </tfoot>
@@ -295,6 +346,34 @@ export default function QuoteDetailPage() {
   const isViewed = quote.status === "VIEWED";
   const isApproved = quote.status === "APPROVED";
   const isConverted = quote.status === "CONVERTED";
+  const canSend = isDraft && permissions.update;
+  const canMarkViewed = isSent && permissions.update;
+  const canApprove = isViewed && permissions.approve;
+  const canReject = isViewed && permissions.reject;
+  const canConvertToInvoice = isApproved && !quote.converted_invoice && invoicePermissions.create;
+  const canViewConvertedInvoice = isConverted && !!quote.converted_invoice && invoicePermissions.view;
+  const primaryActionLabel = canSend
+    ? "Send to Customer"
+    : canMarkViewed
+      ? "Mark as Viewed"
+      : canApprove
+        ? "Approve Quote"
+        : canConvertToInvoice
+          ? "Convert to Invoice"
+          : canViewConvertedInvoice
+            ? "View Invoice"
+            : undefined;
+  const handlePrimaryAction = canSend
+    ? handleSend
+    : canMarkViewed
+      ? handleMarkViewed
+      : canApprove
+        ? handleApprove
+        : canConvertToInvoice
+          ? handleConvertToInvoice
+          : canViewConvertedInvoice
+            ? () => router.push(`/sales/customer-invoices/${quote.converted_invoice}`)
+            : undefined;
 
   return (
     <>
@@ -315,12 +394,16 @@ export default function QuoteDetailPage() {
           { label: "Status", value: quote.status, tone: isApproved || isConverted ? "success" : quote.status === "REJECTED" ? "destructive" : "warning" },
           { label: "Valid Until", value: quote.expiration_date || "—", isCurrency: false },
         ]}
-        primaryActionLabel={isDraft ? "Send to Customer" : isSent ? "Mark as Viewed" : isViewed ? "Approve Quote" : undefined}
-        onPrimaryAction={isDraft ? handleSend : isSent ? handleMarkViewed : isViewed ? handleApprove : undefined}
+        primaryActionLabel={primaryActionLabel}
+        primaryActionIcon={canConvertToInvoice || canViewConvertedInvoice ? FileText : undefined}
+        onPrimaryAction={handlePrimaryAction}
         onEdit={(permissions.update && isDraft) ? handleEdit : undefined}
         onPrint={handlePrint}
         onExport={handleExportPdf}
-        permissions={{ edit: permissions.update, submit: !!(isDraft || isSent || isViewed) }}
+        permissions={{
+          edit: permissions.update && isDraft,
+          submit: !!(canSend || canMarkViewed || canApprove || canConvertToInvoice || canViewConvertedInvoice),
+        }}
         tabs={tabs}
         sidebar={
           <StandardSidebar
@@ -367,7 +450,7 @@ export default function QuoteDetailPage() {
         </button>
       </div>
 
-      {isViewed && (
+      {canReject && (
         <div className="mt-4 flex justify-end">
           <button
             onClick={handleReject}
@@ -377,62 +460,31 @@ export default function QuoteDetailPage() {
           </button>
         </div>
       )}
-      <QuoteFormModal
-        open={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setEditingQuote(null);
-        }}
-        initialData={editingQuote}
-        onSuccess={handleUpdateSuccess}
-      />
       {quote && companySettings && (
-        <PrintPreviewModal
+        <DocumentPrintPreviewModal
           open={showPrintPreview}
           onClose={() => setShowPrintPreview(false)}
-          documentProps={{
-            data: {
-              type: "QUOTE",
-              documentNumber: quote.quote_number,
-              date: quote.date,
-              expirationDate: quote.expiration_date || undefined,
-              customerName: quote.customer_name || "—",
-              customerEmail: (quote as any).customer_email || "",
-              customerPhone: (quote as any).customer_phone || "",
-              lines: (quote.lines || []).map((l) => ({
-                variant_name: l.variant_name,
-                variant_sku: l.variant_sku,
-                quantity: l.quantity,
-                unit_price: l.unit_price,
-                tax_rate: l.tax_rate,
-                discount_amount: l.discount_amount,
-              })),
-              totalAmount:
-                typeof quote.total_amount === "string"
-                  ? parseFloat(quote.total_amount)
-                  : quote.total_amount,
-              overallDiscountPercent: Number((quote as any).overall_discount_percent || 0),
-              overallTaxPercent: Number((quote as any).overall_tax_percent || 0),
-              status: quote.status,
-              notes: quote.notes,
-            },
-            company: {
-              companyName: companySettings.companyName,
-              address: companySettings.address,
-              city: companySettings.city,
-              state: companySettings.state,
-              country: companySettings.country,
-              phone: companySettings.phone,
-              email: companySettings.email,
-              taxId: companySettings.taxId,
-              logo: (companySettings as any).logo || "",
-              logoUrl: (companySettings as any).logo
-                ? `${process.env.NEXT_PUBLIC_API_URL}${(companySettings as any).logo}`
-                : "",
-            },
-            termsContent: termsData?.quote || "",
-            formatCurrency,
-          }}
+          documentTitle="Quote"
+          data={buildCrmDocumentPreview({
+            appearance: quote,
+            documentType: "Quote",
+            documentNumber: quote.quote_number,
+            customerName: quote.customer_name,
+            customerEmail: (quote as any).customer_email,
+            customerPhone: (quote as any).customer_phone,
+            issueDate: quote.date,
+            dueDate: quote.expiration_date,
+            lines: quote.lines || [],
+            currency: companySettings.currency,
+            businessName: companySettings.companyName,
+            businessAddress: companySettings.address,
+            businessEmail: companySettings.email,
+            businessLogo: companySettings.logo,
+            overallDiscountPercent: Number(quote.overall_discount_percent || 0),
+            overallTaxPercent: Number(quote.overall_tax_percent || 0),
+            notes: quote.notes,
+            terms: termsData?.quote || "",
+          })}
         />
       )}
     </>

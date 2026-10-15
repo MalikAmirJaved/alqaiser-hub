@@ -29,6 +29,7 @@ export interface InvoicePayment {
   payment_date: string;
   payment_method: string;
   reference_number: string;
+  receipt_image?: string;
   status: string;
   payment_type?: string;
 }
@@ -48,6 +49,23 @@ export interface CustomerInvoice {
   outstanding: number | string;
   overall_discount_percent?: number | string;
   overall_tax_percent?: number | string;
+  template_slug?: string;
+  accent_color?: string;
+  typography?: {
+    enabled: boolean;
+    fontFamily: "default" | "sans" | "serif" | "mono" | "classic" | "rounded";
+    baseSize: number;
+    titleLevel: "h1" | "h2" | "h3";
+    boldTitles: boolean;
+    boldBody: boolean;
+    italicBody: boolean;
+    italicNotes: boolean;
+    useCompanyLogo?: boolean;
+    watermarkEnabled?: boolean;
+    watermarkText?: string;
+    watermarkOpacity?: number;
+    watermarkLogo?: boolean;
+  };
   status: "PENDING" | "SENT" | "DRAFT" | "CANCELLED";
   payment_status?: "UNPAID" | "PARTIAL" | "PAID";
   journal_entry: number | string | null;

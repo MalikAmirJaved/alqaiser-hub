@@ -13,11 +13,14 @@ import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
 import { useQueryClient } from "@tanstack/react-query";
 import { getCustomerInvoiceById } from "@/hooks/finance/useCustomerInvoices";
+import { apiFetch } from "@/lib/api";
+import { DocumentPrintPreviewModal } from "@/components/invoice-generator/DocumentPrintPreviewModal";
+import { InvoiceTemplatePickerModal } from "@/components/invoice-generator/InvoiceTemplatePickerModal";
 import {
-  PrintPreviewModal,
-  type QuoteInvoiceData,
-  type DocCompany,
-} from "@/components/common/QuoteInvoiceDocument";
+  documentAppearanceFromRecord,
+} from "@/components/invoice-generator/InvoiceAppearanceEditor";
+import { buildCrmDocumentPreview } from "@/components/invoice-generator/crmPreview";
+import type { InvoiceData } from "@/components/invoice-generator/invoice";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import {
@@ -110,6 +113,20 @@ function OrderCard({
   const StatusIcon = cfg.icon;
   const hasInvoice = !!order.invoice_id;
   const lineCount = order.lines?.filter((l) => l.status !== "CANCELLED").length || 0;
+  // Overall (aggregate) discount across all non-cancelled lines — shown above
+  // the Total row and on the thermal receipt.
+  const orderDiscount = (order.lines || [])
+    .filter((l) => l.status !== "CANCELLED")
+    .reduce((sum, l) => {
+      const lineSub =
+        (l.quantity_ordered - (l.quantity_returned || 0)) *
+        Number(l.unit_price);
+      const disc =
+        Number(l.discount_amount || 0) > 0
+          ? Number(l.discount_amount)
+          : lineSub * (Number(l.discount_percent || 0) / 100);
+      return sum + Math.max(0, disc);
+    }, 0);
   const orderDate = new Date(order.order_date);
   const createdAt = new Date(order.created_at);
 
@@ -216,15 +233,19 @@ function OrderCard({
                     <th className="px-5 py-2 text-left font-medium">Product</th>
                     <th className="px-2 py-2 text-center font-medium">Qty</th>
                     <th className="px-2 py-2 text-right font-medium">Price</th>
+                    <th className="px-2 py-2 text-right font-medium">Discount</th>
                     <th className="px-5 py-2 text-right font-medium">Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {order.lines.filter((l) => l.status !== "CANCELLED").map((line) => {
                     const effectiveQty = line.quantity_ordered - (line.quantity_returned || 0);
-                    const lineTotal =
-                      effectiveQty * Number(line.unit_price) -
-                      Number(line.discount_amount || 0);
+                    const lineSub = effectiveQty * Number(line.unit_price);
+                    const disc =
+                      Number(line.discount_amount || 0) > 0
+                        ? Number(line.discount_amount)
+                        : lineSub * (Number(line.discount_percent || 0) / 100);
+                    const lineTotal = lineSub - disc;
                     return (
                       <tr key={line.id} className="border-b border-border/20 hover:bg-muted/20">
                         <td className="px-5 py-2">
@@ -246,6 +267,15 @@ function OrderCard({
                         <td className="px-2 py-2 text-right text-muted-foreground">
                           {formatCurrency(Number(line.unit_price))}
                         </td>
+                        <td className="px-2 py-2 text-right">
+                          {disc > 0 ? (
+                            <span className="text-destructive">
+                              -{formatCurrency(disc)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground/50">—</span>
+                          )}
+                        </td>
                         <td className="px-5 py-2 text-right font-semibold text-foreground">
                           {formatCurrency(lineTotal)}
                         </td>
@@ -254,9 +284,22 @@ function OrderCard({
                   })}
                 </tbody>
                 <tfoot>
+                  {orderDiscount > 0 && (
+                    <tr className="bg-muted/20">
+                      <td
+                        colSpan={4}
+                        className="px-5 py-2 text-right text-xs text-muted-foreground"
+                      >
+                        Discount
+                      </td>
+                      <td className="px-5 py-2 text-right text-xs font-semibold text-destructive">
+                        -{formatCurrency(orderDiscount)}
+                      </td>
+                    </tr>
+                  )}
                   <tr className="bg-muted/20">
                     <td
-                      colSpan={3}
+                      colSpan={4}
                       className="px-5 py-2 text-right text-xs font-bold text-foreground"
                     >
                       Total
@@ -359,13 +402,22 @@ function OrderCard({
                 const effectiveLines = (order.lines || [])
                   .filter((l) => l.status !== "CANCELLED")
                   .map((l) => {
-                    const effectiveQty = l.quantity_ordered - (l.quantity_returned || 0);
+                    const effectiveQty = Math.max(
+                      l.quantity_ordered - (l.quantity_returned || 0),
+                      0,
+                    );
+                    const lineSub = effectiveQty * Number(l.unit_price);
+                    const discount =
+                      Number(l.discount_amount || 0) > 0
+                        ? Number(l.discount_amount)
+                        : lineSub * (Number(l.discount_percent || 0) / 100);
                     return {
                       variant_name: l.variant_name || "Product",
                       variant_sku: l.variant_sku,
-                      quantity: Math.max(effectiveQty, 0),
+                      quantity: effectiveQty,
                       unit_price: Number(l.unit_price),
-                      total: Math.max(effectiveQty, 0) * Number(l.unit_price),
+                      discount_amount: discount,
+                      total: lineSub - discount,
                     };
                   });
                 const effectiveTotal = effectiveLines.reduce((s, l) => s + l.total, 0);
@@ -379,6 +431,7 @@ function OrderCard({
                   time: now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
                   customerName: order.customer_name,
                   lines: effectiveLines,
+                  discountAmount: orderDiscount,
                   totalAmount: Number(order.total_amount),
                 };
                 printThermalReceipt(data, companyName || "Store", formatCurrency);
@@ -426,8 +479,12 @@ export function SalesListPanel({ onEditOrder, onReturnOrder }: SalesListPanelPro
 
   const [invoiceModalProps, setInvoiceModalProps] = useState<{
     open: boolean;
-    data: QuoteInvoiceData | null;
+    data: InvoiceData | null;
   }>({ open: false, data: null });
+  const [templatePickerData, setTemplatePickerData] = useState<InvoiceData | null>(null);
+  const [templatePickerInvoiceId, setTemplatePickerInvoiceId] = useState<string | null>(null);
+  const [templatePickerIsPaid, setTemplatePickerIsPaid] = useState(false);
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [pdfLoading, setPdfLoading] = useState<string | null>(null);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
 
@@ -467,42 +524,42 @@ export function SalesListPanel({ onEditOrder, onReturnOrder }: SalesListPanelPro
     try {
       const invoiceData = await getCustomerInvoiceById(order.invoice_id);
 
-      const docCompany: DocCompany = {
-        companyName: companySettings?.companyName || "",
-        address: companySettings?.address || "",
-        city: companySettings?.city || "",
-        state: companySettings?.state || "",
-        country: companySettings?.country || "",
-        phone: companySettings?.phone || "",
-        email: companySettings?.email || "",
-        taxId: companySettings?.taxId || "",
-        logo: companySettings?.logo || "",
-        logoUrl: companySettings?.logo ? `${process.env.NEXT_PUBLIC_API_URL}${companySettings.logo}` : "",
-      };
-
-      const docData: QuoteInvoiceData = {
-        type: "INVOICE",
+      const appearance = documentAppearanceFromRecord({
+        template_slug: invoiceData?.template_slug,
+        accent_color: invoiceData?.accent_color,
+        typography: invoiceData?.typography,
+      });
+      const previewData = buildCrmDocumentPreview({
+        appearance,
+        documentType: "Invoice",
         documentNumber: invoiceData?.invoice_number || order.order_number,
-        date: invoiceData?.invoice_date || order.order_date,
-        dueDate: invoiceData?.due_date || "",
-        customerName: order.customer_name || invoiceData?.customer_name || "Walk-in Customer",
-        customerEmail: invoiceData?.customer_email || "",
-        customerPhone: invoiceData?.customer_phone || "",
-        lines: (invoiceData?.lines || order.lines || []).map((l: any) => ({
-          variant_name: l.variant_name || "Product",
-          variant_sku: l.variant_sku || "",
-          quantity: l.quantity || l.quantity_ordered,
-          unit_price: Number(l.unit_price),
-          tax_rate: Number(l.tax_rate || 0),
-          discount_amount: Number(l.discount_amount || 0),
+        customerName:
+          order.customer_name || invoiceData?.customer_name || "Walk-in Customer",
+        customerEmail: invoiceData?.customer_email,
+        customerPhone: invoiceData?.customer_phone,
+        issueDate: invoiceData?.invoice_date || order.order_date,
+        dueDate: invoiceData?.due_date,
+        lines: (invoiceData?.lines || order.lines || []).map((line: any) => ({
+          variant_name: line.variant_name || "Product",
+          quantity: line.quantity || line.quantity_ordered,
+          unit_price: Number(line.unit_price),
+          tax_rate: Number(line.tax_rate || 0),
+          discount_amount: Number(line.discount_amount || 0),
         })),
-        totalAmount: Number(invoiceData?.amount || order.total_amount),
-        status: invoiceData?.status || "COMPLETE",
-        paymentStatus: invoiceData?.payment_status || "",
+        currency: companySettings?.currency,
+        businessName: companySettings?.companyName,
+        businessAddress: companySettings?.address,
+        businessEmail: companySettings?.email,
+        businessLogo: companySettings?.logo,
+        overallDiscountPercent: Number(invoiceData?.overall_discount_percent || 0),
+        overallTaxPercent: Number(invoiceData?.overall_tax_percent || 0),
         notes: invoiceData?.notes || "",
-      };
+        terms: termsData?.invoice || "",
+      });
 
-      setInvoiceModalProps({ open: true, data: docData });
+      setTemplatePickerInvoiceId(order.invoice_id);
+      setTemplatePickerIsPaid(invoiceData?.payment_status === "PAID");
+      setTemplatePickerData(previewData);
     } catch (err) {
       console.error("Failed to load invoice:", err);
     } finally {
@@ -659,28 +716,59 @@ export function SalesListPanel({ onEditOrder, onReturnOrder }: SalesListPanelPro
         </div>
       )}
 
+      <InvoiceTemplatePickerModal
+        open={!!templatePickerData}
+        data={templatePickerData}
+        isPaid={templatePickerIsPaid}
+        isSaving={isSavingTemplate}
+        onClose={() => {
+          setTemplatePickerData(null);
+          setTemplatePickerInvoiceId(null);
+          setTemplatePickerIsPaid(false);
+        }}
+        onSelect={async (data) => {
+          if (!templatePickerInvoiceId) return;
+          setIsSavingTemplate(true);
+          try {
+            if (!templatePickerIsPaid) {
+              await apiFetch(`/api/finance/customer-invoices/${templatePickerInvoiceId}/`, {
+                method: "PATCH",
+                body: JSON.stringify({
+                  template_slug: data.templateSlug,
+                  accent_color: data.accentColor || "",
+                  typography: {
+                    ...data.typography,
+                    useCompanyLogo: Boolean(data.logo),
+                    watermarkEnabled: data.watermarkEnabled,
+                    watermarkText: data.watermarkText,
+                    watermarkOpacity: data.watermarkOpacity,
+                    watermarkLogo: Boolean(data.watermarkImage),
+                  },
+                }),
+              });
+              await queryClient.invalidateQueries({
+                queryKey: ["finance_customer_invoices", templatePickerInvoiceId],
+              });
+            }
+            setTemplatePickerData(null);
+            setTemplatePickerInvoiceId(null);
+            setTemplatePickerIsPaid(false);
+            setInvoiceModalProps({ open: true, data });
+          } catch (error) {
+            console.error("Failed to save invoice design:", error);
+          } finally {
+            setIsSavingTemplate(false);
+          }
+        }}
+      />
+
       {/* ── Invoice Print Modal ── */}
       {invoiceModalProps.data && (
-        <PrintPreviewModal
+        <DocumentPrintPreviewModal
           open={invoiceModalProps.open}
           onClose={() => setInvoiceModalProps({ open: false, data: null })}
-          documentProps={{
-            data: invoiceModalProps.data,
-            company: {
-              companyName: companySettings?.companyName || "",
-              address: companySettings?.address || "",
-              city: companySettings?.city || "",
-              state: companySettings?.state || "",
-              country: companySettings?.country || "",
-              phone: companySettings?.phone || "",
-              email: companySettings?.email || "",
-              taxId: companySettings?.taxId || "",
-              logo: companySettings?.logo || "",
-              logoUrl: companySettings?.logo ? `${process.env.NEXT_PUBLIC_API_URL}${companySettings.logo}` : "",
-            },
-            termsContent: termsData?.invoice || "",
-            formatCurrency,
-          }}
+          documentTitle="Invoice"
+          data={invoiceModalProps.data}
         />
       )}
     </div>

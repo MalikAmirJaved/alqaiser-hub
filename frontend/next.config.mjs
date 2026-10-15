@@ -14,7 +14,7 @@ const nextConfig = {
   // Standalone output — optimal for Docker / production deployments
   output: "standalone",
 
-  allowedDevOrigins: ['192.168.88.51'],
+  allowedDevOrigins: ['192.168.88.35'],
 
   // Experimental: enable SWC-based CSS transforms if needed
   experimental: {

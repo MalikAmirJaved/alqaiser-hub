@@ -8,19 +8,31 @@ import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCompanySettingsQuery } from "@/hooks/useCompanySettings";
 import { useTermsAndConditions } from "@/hooks/useTermsAndConditions";
-import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
+import { DocumentPrintPreviewModal } from "@/components/invoice-generator/DocumentPrintPreviewModal";
+import { buildCrmDocumentPreview } from "@/components/invoice-generator/crmPreview";
 import { StatusBadge } from "@/components/finance/ui";
-import CustomerInvoiceFormModal from "./CustomerInvoiceFormModal";
 import PayAmountModal from "@/components/finance/PayAmountModal";
 import InvoiceCancelModal from "./InvoiceCancelModal";
 import { FileText, Send, Printer, Download, Share2, Receipt, Edit, User, Clock, Mail, Loader2, X, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
+import { BASE_URL } from "@/lib/api";
+import ImageLightbox from "@/components/reuseable/ImageLightbox";
 
 interface CustomerInvoiceDetailProps {
   id: string;
   moduleCode: "FINANCE" | "SALES";
   onBack?: () => void;
 }
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  CASH: "Cash",
+  BANK_TRANSFER: "Bank Transfer",
+  CHEQUE: "Cheque",
+  CREDIT_CARD: "Credit Card",
+  CREDIT: "Supplier Credit",
+  WALLET: "Digital Wallet",
+  OTHER: "Other",
+};
 
 const toNumber = (value: number | string | undefined): number => {
   if (value === undefined || value === null) return 0;
@@ -43,13 +55,12 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const { data: auditLogs, isLoading: auditLogsLoading } = useCustomerInvoiceAuditLog(id);
   const { data: activityLog, isLoading: activityLoading } = useCustomerInvoiceActivityLog(id);
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingInvoice, setEditingInvoice] = useState<any>(null);
   const [posting, setPosting] = useState(false);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [payModalOpen, setPayModalOpen] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [receiptPreview, setReceiptPreview] = useState("");
 
   if (isLoading) return <div className="p-8 text-center">Loading...</div>;
   if (!invoice) return <div className="p-8 text-center">Invoice not found</div>;
@@ -57,7 +68,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const amount = toNumber(invoice.amount);
   const paidAmount = toNumber(invoice.paid_amount);
   const outstanding = toNumber(invoice.outstanding);
-  const canPay = invoice.status === "SENT" && invoice.payment_status !== "PAID";
+  const canPay = invoice.status === "SENT" && invoice.payment_status !== "PAID" && permissions.pay;
   const isFromPos = (invoice as any).source === "SALES_POS";
   const canEdit = (invoice.status === "DRAFT" || invoice.status === "PENDING" || invoice.status === "SENT") && permissions.update && invoice.payment_status !== "PAID" && !isFromPos;
   const canDelete = (invoice.status === "DRAFT" || invoice.status === "PENDING") && permissions.delete;
@@ -66,17 +77,10 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
   const isRefunded = invoice.payments?.some((p: any) => p.payment_type === "PAYMENT" && p.status === "CONFIRMED");
   const hasReturnedLines = invoice.lines?.some((l: any) => l.status === "RETURNED");
   const canCancel = invoice.status !== "CANCELLED" && permissions.cancel && !isRefunded && !hasReturnedLines && !isFromPos;
-  const canReturn = invoice.payment_status === "PAID" && invoice.status !== "CANCELLED" && !isFromPos;
+  const canReturn = invoice.payment_status === "PAID" && invoice.status !== "CANCELLED" && !isFromPos && permissions.refund;
 
   const handleEdit = () => {
-    setEditingInvoice(invoice);
-    setModalOpen(true);
-  };
-
-  const handleUpdateSuccess = () => {
-    refetch();
-    setModalOpen(false);
-    setEditingInvoice(null);
+    router.push(`/${moduleCode === "FINANCE" ? "finance" : "sales"}/customer-invoices/${invoice.id}/edit`);
   };
 
   const handlePay = async () => {
@@ -224,10 +228,13 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
             </thead>
             <tbody>
               {invoice.lines?.map((line, idx) => {
-                const subtotal = line.quantity * line.unit_price;
-                const discount = line.discount_amount || 0;
-                const tax = (subtotal - discount) * (line.tax_rate / 100);
-                const lineTotal = subtotal - discount + tax;
+                const quantity = Number(line.quantity) || 0;
+                const unitPrice = Number(line.unit_price) || 0;
+                const discount = Number(line.discount_amount) || 0;
+                const taxRate = Number(line.tax_rate) || 0;
+                const subtotal = quantity * unitPrice;
+                const tax = subtotal * (taxRate / 100);
+                const lineTotal = subtotal + tax - discount;
                 const lineStatus = line.status || "ACTIVE";
                 return (
                   <tr key={idx} className={`border-b border-border/60 ${lineStatus === "CANCELLED" ? "bg-destructive/5" : ""}`}>
@@ -276,46 +283,85 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
               )}
             </tbody>
             <tfoot className="border-t-2 border-border">
-              {invoice.lines && invoice.lines.length > 0 && (
-                <>
+              <>
                   <tr>
                     <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">Subtotal</td>
                     <td className="px-4 py-2 text-right text-sm">
                       {formatCurrency(
-                        invoice.lines.reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0)
+                        (invoice.lines || []).reduce(
+                          (sum, line) => sum + (Number(line.quantity) || 0) * (Number(line.unit_price) || 0),
+                          0,
+                        )
                       )}
                     </td>
                   </tr>
-                  {(invoice as any).overall_discount_percent > 0 && (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
-                        Discount ({(invoice as any).overall_discount_percent}%)
-                      </td>
-                      <td className="px-4 py-2 text-right text-sm text-destructive">
-                        -{formatCurrency(
-                          invoice.lines.reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0) *
-                          (Number((invoice as any).overall_discount_percent) / 100)
+                  {(() => {
+                    const lines = invoice.lines || [];
+                    const sub = lines.reduce(
+                      (sum, line) => sum + (Number(line.quantity) || 0) * (Number(line.unit_price) || 0),
+                      0,
+                    );
+                    const lineDiscounts = lines.reduce(
+                      (sum, line) => sum + (Number(line.discount_amount) || 0),
+                      0,
+                    );
+                    const lineTax = lines.reduce(
+                      (sum, line) => {
+                        const lineSubtotal = (Number(line.quantity) || 0) * (Number(line.unit_price) || 0);
+                        const taxRate = Number(line.tax_rate) || 0;
+                        return sum + lineSubtotal * (taxRate / 100);
+                      },
+                      0,
+                    );
+                    const overallDiscountPercent = Number(invoice.overall_discount_percent || 0);
+                    const overallTaxPercent = Number(invoice.overall_tax_percent || 0);
+                    const overallTax = sub * (overallTaxPercent / 100);
+                    const overallDisc =
+                      (sub + lineTax + overallTax) * (overallDiscountPercent / 100);
+                    return (
+                      <>
+                        {lineTax > 0 && (
+                          <tr>
+                            <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                              Tax (line)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm">{formatCurrency(lineTax)}</td>
+                          </tr>
                         )}
-                      </td>
-                    </tr>
-                  )}
-                  {(invoice as any).overall_tax_percent > 0 && (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
-                        Tax ({(invoice as any).overall_tax_percent}%)
-                      </td>
-                      <td className="px-4 py-2 text-right text-sm">
-                        {formatCurrency(
-                          (invoice.lines.reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0) -
-                            invoice.lines.reduce((s: number, l: any) => s + l.quantity * l.unit_price, 0) *
-                            (Number((invoice as any).overall_discount_percent) / 100)) *
-                          (Number((invoice as any).overall_tax_percent) / 100)
+                        {overallTaxPercent > 0 && (
+                          <tr>
+                            <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                              Tax ({overallTaxPercent}%)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm">
+                              {formatCurrency(overallTax)}
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                    </tr>
-                  )}
-                </>
-              )}
+                        {lineDiscounts > 0 && (
+                          <tr>
+                            <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                              Discount (line)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm text-destructive">
+                              -{formatCurrency(lineDiscounts)}
+                            </td>
+                          </tr>
+                        )}
+                        {overallDiscountPercent > 0 && (
+                          <tr>
+                            <td colSpan={8} className="px-4 py-2 text-right text-sm text-muted-foreground">
+                              Discount ({overallDiscountPercent}%)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm text-destructive">
+                              -{formatCurrency(overallDisc)}
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    );
+                  })()}
+              </>
               <tr className="border-t-2 border-border">
                 <td colSpan={8} className="px-4 py-3 text-right font-bold">Total</td>
                 <td className="px-4 py-3 text-right font-bold text-primary">{formatCurrency(amount)}</td>
@@ -382,6 +428,84 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
       label: "Related",
       count: relatedItems.length,
       render: () => <RelatedRecords items={relatedItems} />,
+    });
+  }
+
+  const invoicePayments = invoice.payments || [];
+  if (invoicePayments.length > 0) {
+    tabs.push({
+      id: "payments",
+      label: "Payments",
+      count: invoicePayments.length,
+      render: () => (
+        <div className="space-y-3">
+          {invoicePayments.map((payment) => (
+            <div
+              key={payment.id}
+              className="flex items-start justify-between gap-4 rounded-xl border border-border bg-card p-4"
+            >
+              <div className="min-w-0 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold">
+                    {formatCurrency(toNumber(payment.amount))}
+                  </span>
+                  <span className="inline-flex px-2 py-0.5 text-[11px] rounded-full border border-border text-muted-foreground">
+                    {(payment.payment_type || "Payment").replace(/_/g, " ")}
+                  </span>
+                  <span
+                    className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${
+                      payment.status === "CONFIRMED"
+                        ? "bg-success/15 text-success border-success/30"
+                        : payment.status === "CANCELLED"
+                        ? "bg-destructive/15 text-destructive border-destructive/30"
+                        : "bg-warning/15 text-warning border-warning/30"
+                    }`}
+                  >
+                    {payment.status}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {payment.payment_date
+                    ? new Date(payment.payment_date).toLocaleDateString()
+                    : "—"}
+                  {" · "}
+                  {PAYMENT_METHOD_LABELS[payment.payment_method] ||
+                    payment.payment_method ||
+                    "—"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Transaction Number:{" "}
+                  <span className="font-mono text-primary">
+                    {payment.reference_number || "—"}
+                  </span>
+                </p>
+              </div>
+              <div className="shrink-0">
+                {payment.receipt_image ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setReceiptPreview(`${BASE_URL}${payment.receipt_image}`)
+                    }
+                    title="View receipt"
+                    className="block"
+                  >
+                    <img
+                      src={`${BASE_URL}${payment.receipt_image}`}
+                      alt="Receipt"
+                      className="h-14 w-14 rounded-lg border border-border object-cover transition-opacity hover:opacity-80"
+                    />
+                  </button>
+                ) : (
+                  <span className="text-xs text-muted-foreground">
+                    No receipt
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ),
     });
   }
 
@@ -596,16 +720,6 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
         }
         currencyFormatter={formatCurrency}
       />
-      <CustomerInvoiceFormModal
-        open={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setEditingInvoice(null);
-        }}
-        initialData={editingInvoice}
-        onSuccess={handleUpdateSuccess}
-      />
-
       {invoice && (
         <PayAmountModal
           open={payModalOpen}
@@ -627,6 +741,7 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
                 payment_method: data.payment_method,
                 payment_date: data.payment_date,
                 reference_number: data.reference_number,
+                receipt_image: data.receipt_image,
               },
             });
             setPayModalOpen(false);
@@ -635,50 +750,30 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
         />
       )}
       {invoice && companySettings && (
-        <PrintPreviewModal
+        <DocumentPrintPreviewModal
           open={showPrintPreview}
           onClose={() => setShowPrintPreview(false)}
-          documentProps={{
-            data: {
-              type: "INVOICE",
-              documentNumber: invoice.invoice_number,
-              date: invoice.invoice_date,
-              dueDate: invoice.due_date,
-              customerName: invoice.customer_name || "—",
-              customerEmail: (invoice as any).customer_email || "",
-              customerPhone: (invoice as any).customer_phone || "",
-              lines: (invoice.lines || []).map((l) => ({
-                variant_name: l.variant_name,
-                variant_sku: l.variant_sku,
-                quantity: l.quantity,
-                unit_price: l.unit_price,
-                tax_rate: l.tax_rate,
-                discount_amount: l.discount_amount,
-              })),
-              totalAmount: toNumber(invoice.amount),
-              overallDiscountPercent: Number((invoice as any).overall_discount_percent || 0),
-              overallTaxPercent: Number((invoice as any).overall_tax_percent || 0),
-              status: invoice.status,
-              paymentStatus: invoice.payment_status,
-              notes: invoice.notes,
-            },
-            company: {
-              companyName: companySettings.companyName,
-              address: companySettings.address,
-              city: companySettings.city,
-              state: companySettings.state,
-              country: companySettings.country,
-              phone: companySettings.phone,
-              email: companySettings.email,
-              taxId: companySettings.taxId,
-              logo: (companySettings as any).logo || "",
-              logoUrl: (companySettings as any).logo
-                ? `${process.env.NEXT_PUBLIC_API_URL}${(companySettings as any).logo}`
-                : "",
-            },
-            termsContent: termsData?.invoice || "",
-            formatCurrency,
-          }}
+          documentTitle="Invoice"
+          data={buildCrmDocumentPreview({
+            appearance: invoice,
+            documentType: "Invoice",
+            documentNumber: invoice.invoice_number,
+            customerName: invoice.customer_name,
+            customerEmail: invoice.customer_email,
+            customerPhone: invoice.customer_phone,
+            issueDate: invoice.invoice_date,
+            dueDate: invoice.due_date,
+            lines: invoice.lines || [],
+            currency: companySettings.currency,
+            businessName: companySettings.companyName,
+            businessAddress: companySettings.address,
+            businessEmail: companySettings.email,
+            businessLogo: companySettings.logo,
+            overallDiscountPercent: Number(invoice.overall_discount_percent || 0),
+            overallTaxPercent: Number(invoice.overall_tax_percent || 0),
+            notes: invoice.notes,
+            terms: termsData?.invoice || "",
+          })}
         />
       )}
 
@@ -702,6 +797,13 @@ export default function CustomerInvoiceDetail({ id, moduleCode, onBack }: Custom
         }))}
         onConfirm={handleConfirmCancel}
       />
+
+      {receiptPreview && (
+        <ImageLightbox
+          src={receiptPreview}
+          onClose={() => setReceiptPreview("")}
+        />
+      )}
     </>
   );
 }

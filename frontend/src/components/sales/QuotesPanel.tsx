@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useQuotes, useSendQuote, useMarkViewedQuote, useApproveQuote, useRejectQuote, useMarkConvertedQuote, useRevertQuoteStatus, Quote } from "@/hooks/sales/useQuotes";
+import { useQuotes, useSendQuote, useMarkViewedQuote, useApproveQuote, useRejectQuote, useRevertQuoteStatus, Quote } from "@/hooks/sales/useQuotes";
 import { DynamicModulePage, type ModulePermissions, type Kpi } from "@/components/reuseable/final/DynamicModulePage";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
@@ -20,20 +20,15 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
-import { PrintPreviewModal } from "@/components/common/QuoteInvoiceDocument";
-import QuoteFormModal from "./QuoteFormModal";
-import CustomerInvoiceFormModal from "@/components/finance/customer-invoices/CustomerInvoiceFormModal";
+import { DocumentPrintPreviewModal } from "@/components/invoice-generator/DocumentPrintPreviewModal";
+import { buildCrmDocumentPreview } from "@/components/invoice-generator/crmPreview";
 import { usePagination } from "@/hooks/usePagination";
 
 export default function QuotesPanel() {
   const formatCurrency = useFormatCurrency();
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
-  const [quoteToConvert, setQuoteToConvert] = useState<Quote | null>(null);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [printQuote, setPrintQuote] = useState<Quote | null>(null);
   const pagination = usePagination();
@@ -65,9 +60,9 @@ export default function QuotesPanel() {
   const markViewed = useMarkViewedQuote();
   const approveQuote = useApproveQuote();
   const rejectQuote = useRejectQuote();
-  const markConverted = useMarkConvertedQuote();
   const revertQuoteStatus = useRevertQuoteStatus();
   const permissions = useFeaturePermissions("SALES", "quote");
+  const invoicePermissions = useFeaturePermissions("SALES", "sales_customers_invoice");
   const { data: companySettings } = useCompanySettingsQuery();
   const { terms: termsData } = useTermsAndConditions();
   const { confirm: confirmDelete, Modal: ConfirmModal } = useConfirmationModal();
@@ -109,40 +104,21 @@ export default function QuotesPanel() {
   };
 
   const handleConvertToInvoice = (quote: Quote) => {
-    setQuoteToConvert(quote);
-    setInvoiceModalOpen(true);
+    router.push(`/sales/customer-invoices/create?quoteId=${encodeURIComponent(quote.id)}`);
   };
 
   const handleCreate = () => {
-    setEditingQuote(null);
-    setModalOpen(true);
+    router.push("/sales/quotes/create");
   };
 
   const handleEdit = (quote: Quote) => {
-    setEditingQuote(quote);
-    setModalOpen(true);
+    router.push(`/sales/quotes/${quote.id}/edit`);
   };
 
   const handlePrint = useCallback((quote: Quote) => {
     setPrintQuote(quote);
     setShowPrintPreview(true);
   }, []);
-
-  const handleModalSuccess = () => {
-    refetch();
-    setModalOpen(false);
-    setEditingQuote(null);
-  };
-
-  const handleInvoiceSuccess = (result?: any) => {
-    const invoiceId = result?.data?.id || result?.id;
-    if (quoteToConvert && invoiceId) {
-      markConverted.mutate({ quoteId: quoteToConvert.id, invoiceId });
-    }
-    refetch();
-    setInvoiceModalOpen(false);
-    setQuoteToConvert(null);
-  };
 
   const computeKPIs = (data: Quote[]): Kpi[] => {
     const totalAmount = data.reduce((sum, q) => sum + Number(q.total_amount || 0), 0);
@@ -158,31 +134,6 @@ export default function QuotesPanel() {
     ];
   };
 
-  const buildInvoiceInitialData = (quote: Quote): any => ({
-    customer: quote.customer || "",
-    customer_name: quote.customer_name || "",
-    invoice_date: new Date().toISOString().split("T")[0],
-    due_date: quote.expiration_date || "",
-    amount: Number(quote.total_amount),
-    overall_discount_percent: Number((quote as any).overall_discount_percent || 0),
-    overall_tax_percent: Number((quote as any).overall_tax_percent || 0),
-    notes: quote.notes || "",
-    lines: (quote.lines || []).map((line) => ({
-      variant: line.variant,
-      quantity: line.quantity,
-      unit_price: line.unit_price,
-      discount_amount: line.discount_amount || 0,
-      tax_rate: line.tax_rate || 0,
-      variant_name: line.variant_name,
-      variant_sku: line.variant_sku,
-      is_manual_entry: line.is_manual_entry || false,
-      manual_variant_name: line.manual_variant_name || "",
-      manual_variant_sku: line.manual_variant_sku || "",
-      vendor: line.vendor || "",
-      vendor_name: line.vendor_name || "",
-    })),
-  });
-
   const columns = [
     { key: "quote_number", label: "Quote #", mono: true, sortable: true },
     { key: "customer_name", label: "Customer", sortable: true },
@@ -194,10 +145,20 @@ export default function QuotesPanel() {
       label: "",
       align: "right" as const,
       render: (_: any, quote: Quote) => {
-        const canRevert = ["SENT", "VIEWED", "APPROVED", "REJECTED"].includes(quote.status);
-        const hasWorkflowActions = ["DRAFT", "SENT", "VIEWED", "APPROVED"].includes(quote.status);
+        const canSend = permissions.update && quote.status === "DRAFT";
+        const canMarkViewed = permissions.update && quote.status === "SENT";
+        const canApprove = permissions.approve && quote.status === "VIEWED";
+        const canReject = permissions.reject && quote.status === "VIEWED";
+        const canConvert = permissions.view && quote.status === "CONVERTED" && !!quote.converted_invoice;
+        const canConvertToInvoice = invoicePermissions.create &&
+          quote.status === "APPROVED" && !quote.converted_invoice;
+        const canRevert = permissions.update &&
+          ["SENT", "VIEWED", "APPROVED", "REJECTED"].includes(quote.status);
+        const canPrint = permissions.view;
         const showEdit = quote.status === "DRAFT" && permissions.update;
-        const showSeparator = (hasWorkflowActions || canRevert) && showEdit;
+        const hasActions = canSend || canMarkViewed || canApprove || canReject ||
+          canConvert || canConvertToInvoice || canRevert || canPrint || showEdit;
+        if (!hasActions) return null;
 
         return (
           <DropdownMenu>
@@ -207,31 +168,35 @@ export default function QuotesPanel() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()} side="bottom">
-              {quote.status === "DRAFT" && (
+              {canSend && (
                 <DropdownMenuItem onClick={() => handleSend(quote)}>
                   <Send className="w-4 h-4 mr-2" /> Send to Customer
                 </DropdownMenuItem>
               )}
-              {quote.status === "SENT" && (
+              {canMarkViewed && (
                 <DropdownMenuItem onClick={() => handleMarkViewed(quote)}>
                   <Eye className="w-4 h-4 mr-2" /> Mark as Viewed
                 </DropdownMenuItem>
               )}
-              {quote.status === "VIEWED" && (
+              {(canApprove || canReject) && (
                 <>
-                  <DropdownMenuItem onClick={() => handleApprove(quote)}>
-                    <CheckCircle className="w-4 h-4 mr-2" /> Approve
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleReject(quote)}>
-                    <XCircle className="w-4 h-4 mr-2" /> Reject
-                  </DropdownMenuItem>
+                  {canApprove && (
+                    <DropdownMenuItem onClick={() => handleApprove(quote)}>
+                      <CheckCircle className="w-4 h-4 mr-2" /> Approve
+                    </DropdownMenuItem>
+                  )}
+                  {canReject && (
+                    <DropdownMenuItem onClick={() => handleReject(quote)}>
+                      <XCircle className="w-4 h-4 mr-2" /> Reject
+                    </DropdownMenuItem>
+                  )}
                 </>
               )}
-              {quote.status === "APPROVED" && quote.converted_invoice ? (
+              {canConvert ? (
                 <DropdownMenuItem onClick={() => router.push(`/sales/customer-invoices/${quote.converted_invoice}`)}>
                   <ExternalLink className="w-4 h-4 mr-2" /> View Invoice
                 </DropdownMenuItem>
-              ) : quote.status === "APPROVED" ? (
+              ) : canConvertToInvoice ? (
                 <DropdownMenuItem onClick={() => handleConvertToInvoice(quote)}>
                   <FileText className="w-4 h-4 mr-2" /> Convert to Invoice
                 </DropdownMenuItem>
@@ -241,10 +206,12 @@ export default function QuotesPanel() {
                   <Undo2 className="w-4 h-4 mr-2" /> Revert Status
                 </DropdownMenuItem>
               )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => handlePrint(quote)}>
-                <Printer className="w-4 h-4 mr-2" /> Print
-              </DropdownMenuItem>
+              {canPrint && <DropdownMenuSeparator />}
+              {canPrint && (
+                <DropdownMenuItem onClick={() => handlePrint(quote)}>
+                  <Printer className="w-4 h-4 mr-2" /> Print
+                </DropdownMenuItem>
+              )}
               {showEdit && (
                 <DropdownMenuItem onClick={() => handleEdit(quote)}>
                   <Pencil className="w-4 h-4 mr-2" /> Edit
@@ -284,70 +251,32 @@ export default function QuotesPanel() {
           />
         }
       />
-      <QuoteFormModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        initialData={editingQuote}
-        onSuccess={handleModalSuccess}
-      />
-      <CustomerInvoiceFormModal
-        open={invoiceModalOpen}
-        onClose={() => {
-          setInvoiceModalOpen(false);
-          setQuoteToConvert(null);
-        }}
-        defaultValues={quoteToConvert ? buildInvoiceInitialData(quoteToConvert) : null}
-        onSuccess={handleInvoiceSuccess}
-        moduleCode="SALES"
-      />
       <ConfirmModal />
       {printQuote && companySettings && (
-        <PrintPreviewModal
+        <DocumentPrintPreviewModal
           open={showPrintPreview}
           onClose={() => { setShowPrintPreview(false); setPrintQuote(null); }}
-          documentProps={{
-            data: {
-              type: "QUOTE",
-              documentNumber: printQuote.quote_number,
-              date: printQuote.date,
-              expirationDate: printQuote.expiration_date || undefined,
-              customerName: printQuote.customer_name || "—",
-              customerEmail: (printQuote as any).customer_email || "",
-              customerPhone: (printQuote as any).customer_phone || "",
-              lines: (printQuote.lines || []).map((l) => ({
-                variant_name: l.variant_name,
-                variant_sku: l.variant_sku,
-                quantity: l.quantity,
-                unit_price: l.unit_price,
-                tax_rate: l.tax_rate,
-                discount_amount: l.discount_amount,
-              })),
-              totalAmount:
-                typeof printQuote.total_amount === "string"
-                  ? parseFloat(printQuote.total_amount)
-                  : printQuote.total_amount,
-              overallDiscountPercent: Number((printQuote as any).overall_discount_percent || 0),
-              overallTaxPercent: Number((printQuote as any).overall_tax_percent || 0),
-              status: printQuote.status,
-              notes: printQuote.notes,
-            },
-            company: {
-              companyName: companySettings.companyName,
-              address: companySettings.address,
-              city: companySettings.city,
-              state: companySettings.state,
-              country: companySettings.country,
-              phone: companySettings.phone,
-              email: companySettings.email,
-              taxId: companySettings.taxId,
-              logo: (companySettings as any).logo || "",
-              logoUrl: (companySettings as any).logo
-                ? `${process.env.NEXT_PUBLIC_API_URL}${(companySettings as any).logo}`
-                : "",
-            },
-            termsContent: termsData?.quote || "",
-            formatCurrency,
-          }}
+          documentTitle="Quote"
+          data={buildCrmDocumentPreview({
+            appearance: printQuote,
+            documentType: "Quote",
+            documentNumber: printQuote.quote_number,
+            customerName: printQuote.customer_name,
+            customerEmail: (printQuote as any).customer_email,
+            customerPhone: (printQuote as any).customer_phone,
+            issueDate: printQuote.date,
+            dueDate: printQuote.expiration_date,
+            lines: printQuote.lines || [],
+            currency: companySettings.currency,
+            businessName: companySettings.companyName,
+            businessAddress: companySettings.address,
+            businessEmail: companySettings.email,
+            businessLogo: companySettings.logo,
+            overallDiscountPercent: Number(printQuote.overall_discount_percent || 0),
+            overallTaxPercent: Number(printQuote.overall_tax_percent || 0),
+            notes: printQuote.notes,
+            terms: termsData?.quote || "",
+          })}
         />
       )}
     </>

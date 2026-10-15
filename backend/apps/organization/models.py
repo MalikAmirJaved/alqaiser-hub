@@ -3,6 +3,7 @@ import uuid
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
+from django.utils import timezone
 from apps.common.basemodel import BaseModel
 
 
@@ -103,6 +104,9 @@ class User(AbstractUser):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="deleted_users"
     )
     is_deleted = models.BooleanField(default=False, db_index=True)
+    # Mirrors apps.common.basemodel.BaseModel.deleted_at — User does not inherit
+    # BaseModel (it extends AbstractUser), so the Trash module needs it here too.
+    deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -114,6 +118,27 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
+
+    def save(self, *args, **kwargs):
+        """Keep ``deleted_at`` in sync with ``is_deleted`` (see BaseModel.save)."""
+        touched_delete_state = False
+
+        if self.is_deleted:
+            if not self.deleted_at:
+                self.deleted_at = timezone.now()
+                touched_delete_state = True
+        elif self.deleted_at or getattr(self, '_loaded_is_deleted', False):
+            self.deleted_at = None
+            self.deleted_by = None
+            touched_delete_state = True
+
+        self._loaded_is_deleted = self.is_deleted
+
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None and touched_delete_state:
+            kwargs['update_fields'] = set(update_fields) | {'is_deleted', 'deleted_at', 'deleted_by'}
+
+        super().save(*args, **kwargs)
 
 
 class UserCompanyContext(models.Model):

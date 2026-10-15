@@ -8,6 +8,11 @@ class VariantAttribute(BaseModel):
 
     class Meta:
         db_table = 'inventory_variant_attributes'
+        # NOTE: soft-deleted rows still hold this constraint, so a "delete then
+        # re-create with the same key" flow raises IntegrityError. Callers must
+        # upsert (revive the existing row) — see ProductVariantSerializer
+        # ._create_attributes. Only keys not in the incoming payload should be
+        # soft-deleted.
         unique_together = [['variant', 'attribute_key']]
         constraints = [
             models.UniqueConstraint(

@@ -11,6 +11,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from django.db.models import Q
 import logging
+from apps.common.basemodel import soft_delete_qs
 from apps.common.filters import FilterPaginationMixin
 from apps.hr.filters import PayrollFilter, EmployeeLoanFilter, CompensationFilter
 from apps.notifications.utils import broadcast_data_update
@@ -225,6 +226,7 @@ class PayrollView(PermissionRequiredMixin, FilterPaginationMixin, APIView):
         return {
             "id": str(payroll._id),
             "employee_id": str(payroll.employee._id) if payroll.employee else None,
+            "employee_is_deleted": bool(payroll.employee and payroll.employee.is_deleted),
             "employee_name": payroll.employee.full_name if payroll.employee else None,
             "employee_code": payroll.employee.employee_id if payroll.employee else None,
             "department": payroll.employee.department.name if payroll.employee and payroll.employee.department else None,
@@ -247,6 +249,7 @@ class PayrollView(PermissionRequiredMixin, FilterPaginationMixin, APIView):
             "transaction_type": payroll.transaction_type,
             "transaction_number": latest_payment.reference_number if latest_payment else None,
             "payment_method": latest_payment.payment_method if latest_payment else None,
+            "receipt_image": latest_payment.receipt_image if latest_payment else None,
             "payment_status": payment_status,
             "status": payment_status,
             "custom_note": payroll.custom_note,
@@ -658,6 +661,7 @@ class PayrollView(PermissionRequiredMixin, FilterPaginationMixin, APIView):
             user=request.user,
             payment_method=payment_method,
             reference_number=transaction_number,
+            receipt_image=request.data.get('receipt_image', ''),
             notes=request.data.get('custom_note', ''),
             auto_confirm=False,
         )
@@ -1097,6 +1101,7 @@ class EmployeeLoanView(PermissionRequiredMixin, FilterPaginationMixin, APIView):
         return {
             "id": str(loan._id),
             "employee_id": str(loan.employee._id) if loan.employee else None,
+            "employee_is_deleted": bool(loan.employee and loan.employee.is_deleted),
             "employee_name": loan.employee.full_name if loan.employee else None,
             "employee_code": loan.employee.employee_id if loan.employee else None,
             "department": loan.employee.department.name if loan.employee and loan.employee.department else None,
@@ -1360,7 +1365,7 @@ class EmployeeLoanView(PermissionRequiredMixin, FilterPaginationMixin, APIView):
                         {'error': f'Sum of deductions ({deductions_sum:.2f}) must equal total payable amount ({total_payable_val:.2f})'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
-            loan.selected_months.all().update(is_deleted=True)
+            soft_delete_qs(loan.selected_months.all(), request.user)
             for sm in request.data['selected_months']:
                 LoanSelectedMonth.objects.create(
                     loan=loan,
@@ -1772,6 +1777,7 @@ class CompensationView(PermissionRequiredMixin, FilterPaginationMixin, APIView):
         return {
             "id": str(comp._id),
             "employee_id": str(comp.employee._id) if comp.employee else None,
+            "employee_is_deleted": bool(comp.employee and comp.employee.is_deleted),
             "employee_name": comp.employee.full_name if comp.employee else None,
             "employee_code": comp.employee.employee_id if comp.employee else None,
             "department": comp.employee.department.name if comp.employee and comp.employee.department else None,
@@ -1984,7 +1990,7 @@ class CompensationView(PermissionRequiredMixin, FilterPaginationMixin, APIView):
         
         # Update selected months if provided
         if 'selected_months' in request.data:
-            compensation.selected_months.all().update(is_deleted=True)
+            soft_delete_qs(compensation.selected_months.all(), request.user)
             for sm in request.data['selected_months']:
                 CompensationSelectedMonth.objects.create(
                     compensation=compensation,
@@ -2248,8 +2254,9 @@ class PayrollAdvanceView(PermissionRequiredMixin, APIView):
             amount=Decimal(str(net_amount)),
             payment_date=date.today(),
             user=request.user,
-            payment_method='BANK_TRANSFER',
+            payment_method=request.data.get('payment_method', 'BANK_TRANSFER'),
             reference_number=transaction_number,
+            receipt_image=request.data.get('receipt_image', ''),
             notes=f'Advance salary for {month}/{year}',
             auto_confirm=False,
         )

@@ -11,6 +11,7 @@ export interface SupplierBillPayment {
   payment_date: string;
   payment_method: string;
   reference_number: string;
+  receipt_image?: string;
   status: "DRAFT" | "CONFIRMED" | "CANCELLED";
   notes: string;
 }

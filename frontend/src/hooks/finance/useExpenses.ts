@@ -31,6 +31,19 @@ export interface Expense {
   supplier_name?: string;
 
   pay_immediately?: boolean;
+
+  payments?: ExpensePayment[];
+}
+
+export interface ExpensePayment {
+  id: string;
+  amount: string;
+  payment_date: string;
+  payment_method: string;
+  reference_number: string;
+  receipt_image?: string;
+  status: string;
+  notes?: string;
 }
 
 
@@ -53,8 +66,7 @@ export interface CreateExpenseData {
   pay_immediately?: boolean;
 }
 
-export interface UpdateExpenseData
-  extends Partial<CreateExpenseData> {}
+export type UpdateExpenseData = Partial<CreateExpenseData>;
 const EXPENSES_KEY = "finance_expenses";
 
 // ============================================
@@ -104,7 +116,7 @@ async function deleteExpense(id: string) {
   return apiFetch<void>(`/api/finance/expenses/${id}/`, { method: "DELETE" });
 }
 
-async function recordExpensePayment(id: string, paymentData: { amount?: number; payment_date: string; payment_method: string; reference_number?: string }) {
+async function recordExpensePayment(id: string, paymentData: { amount?: number; payment_date: string; payment_method: string; reference_number?: string; receipt_image?: string }) {
   return apiFetch<Expense>(`/api/finance/expenses/${id}/record_payment/`, { method: "POST", body: JSON.stringify(paymentData) });
 }
 
@@ -179,7 +191,7 @@ export function useDeleteExpense() {
 export function useRecordExpensePayment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { amount?: number; payment_date: string; payment_method: string; reference_number?: string } }) =>
+    mutationFn: ({ id, data }: { id: string; data: { amount?: number; payment_date: string; payment_method: string; reference_number?: string; receipt_image?: string } }) =>
       recordExpensePayment(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: [EXPENSES_KEY] });

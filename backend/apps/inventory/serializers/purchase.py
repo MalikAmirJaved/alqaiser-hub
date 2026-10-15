@@ -8,6 +8,7 @@ from apps.inventory.models import (
     ProductVariant, Warehouse, Supplier
 )
 from apps.common.serializer_fields import UUIDForeignRelatedField
+from apps.common.totals import line_tax
 from django.contrib.contenttypes.models import ContentType
 from apps.finance.models import Payment, SupplierBill
 from apps.hr.models import Asset, AssetPurchaseRequest
@@ -144,9 +145,17 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             asset_uuid = line_data.get('asset')
             qty = line_data['quantity_ordered']
             unit_cost = Decimal(str(line_data['unit_cost'])).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            tax_rate = line_data.get('tax_rate', 0)
+            # `line_items` is a raw ListField, so any JSON number reaches here
+            # unvalidated; PurchaseOrderLine.save() calls full_clean(), which
+            # rejects >2dp rates with an uncaught 500. Quantize exactly like
+            # unit_cost and reuse the same value for the total so the stored
+            # rate and the stored total cannot drift.
+            tax_rate = Decimal(str(line_data.get('tax_rate', 0) or 0)).quantize(
+                Decimal('0.01'), rounding=ROUND_HALF_UP
+            )
+            # Line amount is net of discount; per-line tax must land in the total.
             line_total = Decimal(qty) * unit_cost
-            total_amount += line_total
+            total_amount += line_total + line_tax(qty, unit_cost, tax_rate)
 
             # Resolve either variant or asset
             variant = None

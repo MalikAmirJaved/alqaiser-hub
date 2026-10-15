@@ -3,6 +3,11 @@ from datetime import date, timedelta
 from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
+from rest_framework.test import APIClient
+
+from apps.common.test_base import BaseTestCase
+from apps.finance.models import CustomerInvoice
 from apps.inventory.models import (
     Category, Brand, Warehouse, Product, ProductVariant,
     StockItem, InventoryTransaction, Supplier, SupplierHistory,
@@ -915,6 +920,67 @@ class ReturnRefundTest(TestCase):
         self.assertEqual(rr.total_refund_amount, Decimal('250.00'))
 
 
+class RelatedReturnsEndpointTest(BaseTestCase):
+    """GET .../sales-orders/<id>/related-returns/ must not 500.
+
+    The endpoint unioned two querysets that each carried their own
+    ``ORDER BY`` and then ordered the union again, so Postgres rejected the
+    SQL with "multiple ORDER BY clauses not allowed" (BUG-20261010-12).
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.wh = Warehouse.objects.create(
+            warehouse_name='WH-RR', code='WH-RR1', country='C', city='C',
+            company_id=self.company.id, branch_id=self.branch.id
+        )
+        self.customer = Customer.objects.create(
+            name='Rel Cust', customer_code='REL01',
+            company_id=self.company.id, branch_id=self.branch.id
+        )
+        self.order = SalesOrder.objects.create(
+            order_number='SO-REL-1', customer=self.customer, warehouse=self.wh,
+            company_id=self.company.id, branch_id=self.branch.id
+        )
+        self.invoice = CustomerInvoice.objects.create(
+            invoice_number='INV-REL-1', customer=self.customer,
+            invoice_date=date.today(), amount=Decimal('100'),
+            sales_order=self.order,
+            company_id=self.company.id, branch_id=self.branch.id
+        )
+        # One return of each kind, so both sides of the old union are exercised.
+        ReturnRefund.objects.create(
+            return_number='RR-POS-1', return_type='POS',
+            document_id=self.order._id, document_number='SO-REL-1',
+            warehouse=self.wh, return_date=timezone.now(),
+            company_id=self.company.id, branch_id=self.branch.id
+        )
+        ReturnRefund.objects.create(
+            return_number='RR-INV-1', return_type='INVOICE',
+            document_id=self.invoice._id, document_number='INV-REL-1',
+            warehouse=self.wh, return_date=timezone.now(),
+            company_id=self.company.id, branch_id=self.branch.id
+        )
+
+    def test_related_returns_returns_200_and_both_kinds(self):
+        resp = self.client.get(
+            f'/api/inventory/sales-orders/{self.order._id}/related-returns/'
+        )
+        self.assertEqual(resp.status_code, 200)
+        kinds = {row['return_type'] for row in resp.data}
+        self.assertEqual(kinds, {'POS', 'INVOICE'})
+        self.assertEqual(len(resp.data), 2)
+
+    def test_related_returns_orders_newest_first(self):
+        resp = self.client.get(
+            f'/api/inventory/sales-orders/{self.order._id}/related-returns/'
+        )
+        self.assertEqual(resp.status_code, 200)
+        numbers = [row['return_number'] for row in resp.data]
+        # Both share created_at; ordering must at least be stable + descending.
+        self.assertEqual(sorted(numbers), ['RR-INV-1', 'RR-POS-1'])
+
+
 class ReturnRefundLineTest(TestCase):
     def setUp(self):
         self.warehouse = Warehouse.objects.create(
@@ -1069,3 +1135,339 @@ class InventoryAuditFieldChangeTest(TestCase):
         self.assertEqual(change.field_name, 'name')
         self.assertEqual(change.old_value, 'Old')
         self.assertEqual(change.new_value, 'New')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stock endpoints must not serve soft-deleted rows
+# BUG: deleted products kept appearing on Inventory → Stock Management because
+# the custom actions use `StockItem.objects` directly, bypassing
+# CompanyBranchMixin.get_queryset() (the only place applying is_deleted=False).
+# ─────────────────────────────────────────────────────────────────────────────
+
+class StockSoftDeleteTest(BaseTestCase):
+    """`/api/inventory/stock/…` must hide deleted stock, variants and products."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.warehouse = Warehouse.objects.create(
+            warehouse_name='Soft Delete WH', code='SDWH',
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        cls.product = Product.objects.create(
+            product_name='Live Product', company_id=cls.company.id,
+            branch_id=cls.branch.id, unit='PCS',
+        )
+        cls.variant = ProductVariant.objects.create(
+            product=cls.product, sku='LIVE-1', selling_price=10,
+            min_stock_level=1, max_stock_level=50,
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        cls.stock = StockItem.objects.create(
+            variant=cls.variant, warehouse=cls.warehouse,
+            quantity_on_hand=25, quantity_reserved=0,
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        # A second graph that has been soft-deleted.
+        cls.dead_product = Product.objects.create(
+            product_name='Deleted Product', company_id=cls.company.id,
+            branch_id=cls.branch.id, unit='PCS', is_deleted=True,
+        )
+        cls.dead_variant = ProductVariant.objects.create(
+            product=cls.dead_product, sku='DEAD-1', selling_price=99,
+            min_stock_level=1, max_stock_level=50,
+            company_id=cls.company.id, branch_id=cls.branch.id, is_deleted=True,
+        )
+        cls.dead_stock = StockItem.objects.create(
+            variant=cls.dead_variant, warehouse=cls.warehouse,
+            quantity_on_hand=199, quantity_reserved=0,
+            company_id=cls.company.id, branch_id=cls.branch.id, is_deleted=True,
+        )
+
+    def setUp(self):
+        super().setUp()
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.admin)
+
+    def _stock_skus(self, resp):
+        return [row['variant_sku'] for row in resp.data['results']]
+
+    def test_current_stock_excludes_deleted_rows(self):
+        resp = self.client.get('/api/inventory/stock/current_stock/')
+        self.assertEqual(resp.status_code, 200)
+        skus = self._stock_skus(resp)
+        self.assertIn('LIVE-1', skus)
+        self.assertNotIn('DEAD-1', skus)
+        self.assertEqual(resp.data['count'], 1)
+
+    def test_current_stock_ignores_deleted_variant_in_filter(self):
+        resp = self.client.get(
+            '/api/inventory/stock/current_stock/',
+            {'variant_ids': str(self.dead_variant._id)},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 0)
+
+    def test_current_stock_low_stock_filter_ignores_deleted(self):
+        resp = self.client.get('/api/inventory/stock/current_stock/', {'low_stock': 'true'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn('DEAD-1', self._stock_skus(resp))
+
+    def test_current_stock_search_ignores_deleted(self):
+        resp = self.client.get('/api/inventory/stock/current_stock/', {'search': 'Deleted'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 0)
+
+    def test_retrieve_deleted_stock_returns_404(self):
+        resp = self.client.get(f'/api/inventory/stock/{self.dead_stock._id}/')
+        self.assertEqual(resp.status_code, 404)
+        live = self.client.get(f'/api/inventory/stock/{self.stock._id}/')
+        self.assertEqual(live.status_code, 200)
+
+    def test_variant_summary_404_for_deleted_variant(self):
+        resp = self.client.get(
+            '/api/inventory/stock/variant_summary/',
+            {'variant_id': str(self.dead_variant._id)},
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_variant_summary_excludes_deleted_stock_of_live_variant(self):
+        """A live variant whose stock row was soft-deleted reports zero."""
+        StockItem.objects.filter(pk=self.stock.pk).update(is_deleted=True)
+        resp = self.client.get(
+            '/api/inventory/stock/variant_summary/',
+            {'variant_id': str(self.variant._id)},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['total_on_hand'], 0)
+        self.assertEqual(resp.data['warehouses'], [])
+
+    def test_pos_catalog_hides_deleted_products(self):
+        resp = self.client.get('/api/inventory/stock/pos-catalog/')
+        self.assertEqual(resp.status_code, 200)
+        names = [p['product_name'] for p in resp.data['results']]
+        self.assertIn('Live Product', names)
+        self.assertNotIn('Deleted Product', names)
+
+    def test_batch_stock_reports_zero_for_deleted_variant(self):
+        resp = self.client.post(
+            '/api/inventory/stock/batch-stock/',
+            {
+                'variant_ids': [str(self.variant._id), str(self.dead_variant._id)],
+                'warehouse_id': str(self.warehouse._id),
+            },
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        results = resp.data['results']
+        self.assertEqual(results[str(self.variant._id)]['on_hand'], 25)
+        # Deleted variant must not leak its 199 units.
+        self.assertEqual(results[str(self.dead_variant._id)]['on_hand'], 0)
+
+    def test_adjust_refuses_deleted_variant(self):
+        resp = self.client.post(
+            '/api/inventory/stock/adjust/',
+            {
+                'variant_id': str(self.dead_variant._id),
+                'warehouse_id': str(self.warehouse._id),
+                'quantity_change': 5,
+                'reason': 'test',
+                'transaction_type': 'ADJUSTMENT',
+            },
+            format='json',
+        )
+        self.assertIn(resp.status_code, (400, 422))
+        self.dead_stock.refresh_from_db()
+        self.assertEqual(self.dead_stock.quantity_on_hand, 199)
+
+    def test_alive_stock_helper_filters_all_three_levels(self):
+        from apps.inventory.views.stock_management import StockManagementViewSet as V
+
+        self.assertEqual(V.alive_stock().filter(company_id=self.company.id).count(), 1)
+        self.assertEqual(V.alive_variant().filter(company_id=self.company.id).count(), 1)
+        # Half-cascaded state: stock row itself alive, but its variant deleted.
+        StockItem.objects.filter(pk=self.dead_stock.pk).update(is_deleted=False)
+        self.assertEqual(V.alive_stock().filter(pk=self.dead_stock.pk).count(), 0)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# POST /api/inventory/purchase-orders/ 500'd on tax rates with more than
+# 2 decimal places: `line_items` is a raw ListField, so the JSON number
+# reaches PurchaseOrderLine.save() -> full_clean() unvalidated, which raises
+# "Ensure that there are no more than 2 decimal places" as an uncaught 500.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class PurchaseOrderTaxPrecisionTest(BaseTestCase):
+    """PO create must quantize tax_rate to 2dp, not blow up with a 500."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.warehouse = Warehouse.objects.create(
+            warehouse_name='Tax WH', code='TAXWH',
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        cls.supplier = Supplier.objects.create(
+            name='Tax Sup', code='TAXSUP',
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        cls.product = Product.objects.create(
+            product_name='Tax Product', unit='PCS',
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        cls.variant = ProductVariant.objects.create(
+            product=cls.product, sku='TAX-V1', selling_price=10,
+            min_stock_level=1, max_stock_level=50,
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+
+    def _payload(self, tax_rate):
+        return {
+            'supplier': str(self.supplier._id),
+            'warehouse': str(self.warehouse._id),
+            'inventory_type': 'FOR_SALE',
+            'order_date': date.today().isoformat(),
+            'line_items': [{
+                'variant': str(self.variant._id),
+                'quantity_ordered': 2,
+                'unit_cost': '100.00',
+                'tax_rate': tax_rate,
+            }],
+        }
+
+    def test_high_precision_tax_rate_is_quantized_not_500(self):
+        resp = self.client.post(
+            '/api/inventory/purchase-orders/',
+            self._payload(15.555), format='json',
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        line = PurchaseOrderLine.objects.get(
+            purchase_order__supplier=self.supplier
+        )
+        self.assertEqual(line.tax_rate, Decimal('15.56'))
+
+    def test_float_artifact_tax_rate_is_quantized(self):
+        # 0.1 + 0.2 style JS float noise the frontend can send verbatim.
+        resp = self.client.post(
+            '/api/inventory/purchase-orders/',
+            self._payload(7.500000000000001), format='json',
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        line = PurchaseOrderLine.objects.get(
+            purchase_order__supplier=self.supplier
+        )
+        self.assertEqual(line.tax_rate, Decimal('7.50'))
+
+    def test_total_is_computed_with_the_quantized_rate(self):
+        resp = self.client.post(
+            '/api/inventory/purchase-orders/',
+            self._payload(15.555), format='json',
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        po = PurchaseOrder.objects.get(supplier=self.supplier)
+        net = Decimal('2') * Decimal('100.00')
+        expected = net + net * Decimal('15.56') / Decimal('100')
+        self.assertEqual(po.total_amount, expected)
+        # Stored rate and stored total must agree (no 1c drift).
+        line = po.lines.get()
+        self.assertEqual(
+            line.quantity_ordered * line.unit_cost
+            + line.quantity_ordered * line.unit_cost * line.tax_rate / Decimal('100'),
+            po.total_amount,
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# POS cart payment options: Card / Digital Wallet capture a transaction number
+# and a receipt image. They must save on the SalesOrder and flow into the
+# auto-created finance settlement Payment.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class PosPaymentDetailsTest(BaseTestCase):
+    """POST /api/inventory/sales-orders/ persists POS payment details."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.warehouse = Warehouse.objects.create(
+            warehouse_name='POS Pay WH', code='POSPWH',
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        cls.product = Product.objects.create(
+            product_name='POS Pay Product', unit='PCS',
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        cls.variant = ProductVariant.objects.create(
+            product=cls.product, sku='POSP-V1', selling_price=10,
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        StockItem.objects.create(
+            variant=cls.variant, warehouse=cls.warehouse,
+            quantity_on_hand=10, quantity_reserved=0,
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+        # Cash account used by the auto-settlement payment journal
+        from apps.finance.models import Account
+        Account.objects.create(
+            code='CASH', name='Cash', account_type='ASSET',
+            company_id=cls.company.id, branch_id=cls.branch.id,
+        )
+
+    def _payload(self, **extra):
+        payload = {
+            'warehouse': str(self.warehouse._id),
+            'order_date': date.today().isoformat(),
+            'notes': '',
+            'line_items': [{
+                'variant': str(self.variant._id),
+                'quantity_ordered': 1,
+                'unit_price': 10,
+                'tax_rate': 0,
+                'discount_pct': 0,
+                'discount_fixed': 0,
+            }],
+            'status': 'COMPLETE',
+        }
+        payload.update(extra)
+        return payload
+
+    def test_wallet_sale_saves_payment_details_on_order(self):
+        resp = self.client.post(
+            '/api/inventory/sales-orders/',
+            self._payload(
+                payment_method='WALLET',
+                transaction_number='WLT-42',
+                receipt_image='/upload/general/pos.jpg',
+            ),
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        order = SalesOrder.objects.get(
+            order_number=resp.data['data']['order_number']
+        )
+        self.assertEqual(order.payment_method, 'WALLET')
+        self.assertEqual(order.transaction_number, 'WLT-42')
+        self.assertEqual(order.receipt_image, '/upload/general/pos.jpg')
+
+    def test_auto_created_payment_carries_txn_and_receipt(self):
+        resp = self.client.post(
+            '/api/inventory/sales-orders/',
+            self._payload(
+                payment_method='CREDIT_CARD',
+                transaction_number='CARD-77',
+                receipt_image='/upload/general/pos2.jpg',
+            ),
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        order = SalesOrder.objects.get(
+            order_number=resp.data['data']['order_number']
+        )
+        from apps.finance.services.payable import get_payments_queryset
+        payment = get_payments_queryset(order).first()
+        self.assertIsNotNone(payment, 'POS settlement payment should be created')
+        self.assertEqual(payment.payment_method, 'CREDIT_CARD')
+        self.assertEqual(payment.reference_number, 'CARD-77')
+        self.assertEqual(payment.receipt_image, '/upload/general/pos2.jpg')

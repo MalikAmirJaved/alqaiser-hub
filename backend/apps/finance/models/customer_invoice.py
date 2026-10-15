@@ -4,6 +4,10 @@ from django.core.validators import MinValueValidator
 from django.db import models
 
 from apps.common.basemodel import BaseModel
+from apps.common.document_appearance import (
+    DOCUMENT_TEMPLATE_CHOICES,
+    default_document_typography,
+)
 from apps.finance.services.payable import PayableModelMixin
 
 
@@ -38,6 +42,7 @@ class CustomerInvoice(PayableModelMixin, BaseModel):
             ('CHEQUE', 'Cheque'),
             ('CREDIT_CARD', 'Credit Card'),
             ('CREDIT', 'Credit/On Account'),
+            ('WALLET', 'Digital Wallet'),
             ('OTHER', 'Other'),
         ],
         default='CREDIT',
@@ -63,6 +68,9 @@ class CustomerInvoice(PayableModelMixin, BaseModel):
     )
     overall_discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
     overall_tax_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    template_slug = models.CharField(max_length=30, choices=DOCUMENT_TEMPLATE_CHOICES, default='modern')
+    accent_color = models.CharField(max_length=7, blank=True, default='')
+    typography = models.JSONField(default=default_document_typography)
     notes = models.TextField(blank=True)
     cancelled_by = models.ForeignKey(
         'organization.User',
@@ -145,7 +153,11 @@ class CustomerInvoiceLine(BaseModel):
 
     @property
     def line_total(self):
-        return self.subtotal - self.discount_amount
+        """Net line amount + per-line tax (matches the invoice total)."""
+        from apps.common.totals import line_tax
+        return self.subtotal - self.discount_amount + line_tax(
+            self.quantity, self.unit_price, self.tax_rate
+        )
 
 
 class InvoiceLineProductLink(BaseModel):

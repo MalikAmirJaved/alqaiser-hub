@@ -1,5 +1,7 @@
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
+from unittest.mock import Mock
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.core.exceptions import ValidationError
@@ -175,6 +177,230 @@ class QuoteModelTest(TestCase):
                 quote_number='QT-UNIQ', date=date.today(),
                 company_id=self.company.id, branch_id=self.branch.id
             )
+
+    def test_quote_serializer_preserves_user_supplied_quote_number(self):
+        from apps.sales.serializers.quote import QuoteSerializer
+
+        serializer = QuoteSerializer(
+            data={'quote_number': 'CUSTOM-Q-100', 'date': date.today()},
+            context={'request': SimpleNamespace(user=self.user)},
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        quote = serializer.save()
+        self.assertEqual(quote.quote_number, 'CUSTOM-Q-100')
+
+        update_serializer = QuoteSerializer(
+            quote,
+            data={'quote_number': 'CUSTOM-Q-100'},
+            partial=True,
+            context={'request': SimpleNamespace(user=self.user)},
+        )
+        self.assertTrue(update_serializer.is_valid(), update_serializer.errors)
+        self.assertEqual(update_serializer.save().quote_number, 'CUSTOM-Q-100')
+
+    def test_quote_serializer_rejects_duplicate_user_supplied_quote_number(self):
+        from apps.sales.serializers.quote import QuoteSerializer
+
+        Quote.objects.create(
+            quote_number='CUSTOM-Q-DUPLICATE',
+            date=date.today(),
+            company_id=self.company.id,
+            branch_id=self.branch.id,
+        )
+        serializer = QuoteSerializer(
+            data={'quote_number': 'CUSTOM-Q-DUPLICATE', 'date': date.today()},
+            context={'request': SimpleNamespace(user=self.user)},
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('quote_number', serializer.errors)
+
+    def test_sales_invoice_create_preserves_user_supplied_invoice_number(self):
+        from apps.sales.views.invoice import SalesInvoiceViewSet
+
+        view = SalesInvoiceViewSet()
+        view.request = SimpleNamespace(
+            user=SimpleNamespace(company_id=1, branch_id=1)
+        )
+        serializer = Mock(validated_data={'invoice_number': 'CUSTOM-INV-200'})
+
+        view.perform_create(serializer)
+
+        self.assertEqual(
+            serializer.save.call_args.kwargs['invoice_number'],
+            'CUSTOM-INV-200',
+        )
+
+    def test_pending_sales_invoice_can_be_updated(self):
+        from apps.sales.views.invoice import SalesInvoiceViewSet
+
+        view = SalesInvoiceViewSet()
+        view.request = SimpleNamespace(user=self.user)
+        serializer = Mock(
+            instance=SimpleNamespace(status='PENDING', payment_status='UNPAID')
+        )
+
+        view.perform_update(serializer)
+
+        serializer.save.assert_called_once_with(
+            updated_by=self.user,
+            status='PENDING',
+        )
+
+    def test_sent_sales_invoice_can_be_updated_without_changing_status(self):
+        from apps.sales.views.invoice import SalesInvoiceViewSet
+
+        view = SalesInvoiceViewSet()
+        view.request = SimpleNamespace(user=self.user)
+        serializer = Mock(
+            instance=SimpleNamespace(status='SENT', payment_status='UNPAID')
+        )
+
+        view.perform_update(serializer)
+
+        serializer.save.assert_called_once_with(
+            updated_by=self.user,
+            status='SENT',
+        )
+
+    def test_sales_invoice_update_passes_existing_line_ids_to_serializer(self):
+        from unittest.mock import patch
+        from apps.sales.views.invoice import SalesInvoiceViewSet
+
+        line_id = '271eba80-bbb4-4477-8c2a-c91d36fb3aab'
+        invoice = SimpleNamespace(
+            _id='0baf1e5a-119c-4fd3-a7df-e2601fb8ae99',
+            company_id=self.company.id,
+            branch_id=self.branch.id,
+            status='PENDING',
+            payment_status='UNPAID',
+            lines=SimpleNamespace(all=Mock()),
+        )
+        serializer = Mock(instance=invoice, data={})
+        serializer.data = {}
+        view = SalesInvoiceViewSet()
+        view.request = SimpleNamespace(
+            user=self.user,
+            data={'template_slug': 'classic', 'lines': [{'id': line_id, 'quantity': 7}]},
+        )
+        view.get_object = Mock(return_value=invoice)
+        view.get_serializer_context = Mock(return_value={})
+        view.get_serializer = Mock(return_value=serializer)
+
+        with (
+            patch('apps.sales.views.invoice.direct_release_stock'),
+            patch('apps.sales.views.invoice.direct_deduct_stock'),
+        ):
+            view.update(view.request)
+
+        self.assertEqual(
+            view.get_serializer.call_args.kwargs['context']['raw_line_ids'],
+            {0: line_id},
+        )
+
+    def test_revising_sales_invoice_quantity_reconciles_stock_across_updates(self):
+        from apps.finance.models import CustomerInvoice, CustomerInvoiceLine
+        from apps.inventory.models import (
+            InventoryTransaction,
+            Product,
+            ProductVariant,
+            StockItem,
+            Warehouse,
+        )
+        from apps.inventory.services.stock_service import (
+            direct_deduct_stock,
+            direct_release_stock,
+        )
+
+        product = Product.objects.create(
+            product_name='Bottle',
+            company_id=self.company.id,
+            branch_id=self.branch.id,
+        )
+        variant = ProductVariant.objects.create(
+            product=product,
+            sku='BOTTLE-STOCK-TEST',
+            company_id=self.company.id,
+            branch_id=self.branch.id,
+        )
+        warehouse = Warehouse.objects.create(
+            warehouse_name='Main',
+            code='MAIN-STOCK-TEST',
+            country='Pakistan',
+            city='Lahore',
+            company_id=self.company.id,
+            branch_id=self.branch.id,
+        )
+        stock = StockItem.objects.create(
+            variant=variant,
+            warehouse=warehouse,
+            quantity_on_hand=15,
+            company_id=self.company.id,
+            branch_id=self.branch.id,
+        )
+        invoice = CustomerInvoice.objects.create(
+            invoice_number='INV-STOCK-RECONCILE',
+            invoice_date=date.today(),
+            amount=Decimal('100'),
+            source='SALES_AGENT',
+            company_id=self.company.id,
+            branch_id=self.branch.id,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        line = CustomerInvoiceLine.objects.create(
+            customer_invoice=invoice,
+            variant=variant,
+            quantity=10,
+            unit_price=Decimal('10'),
+            company_id=self.company.id,
+            branch_id=self.branch.id,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        direct_deduct_stock(
+            invoice.lines.all(), self.company.id, self.branch.id, invoice._id, self.user
+        )
+        stock.refresh_from_db()
+        self.assertEqual(stock.quantity_on_hand, 5)
+
+        direct_release_stock(invoice._id, self.company.id, self.user)
+        line.quantity = 15
+        line.save(update_fields=['quantity'])
+        direct_deduct_stock(
+            invoice.lines.all(), self.company.id, self.branch.id, invoice._id, self.user
+        )
+        stock.refresh_from_db()
+        self.assertEqual(stock.quantity_on_hand, 0)
+
+        direct_release_stock(invoice._id, self.company.id, self.user)
+        line.quantity = 12
+        line.save(update_fields=['quantity'])
+        direct_deduct_stock(
+            invoice.lines.all(), self.company.id, self.branch.id, invoice._id, self.user
+        )
+        stock.refresh_from_db()
+        self.assertEqual(stock.quantity_on_hand, 3)
+
+        # A second update with the same quantity must not replay old deductions.
+        direct_release_stock(invoice._id, self.company.id, self.user)
+        direct_deduct_stock(
+            invoice.lines.all(), self.company.id, self.branch.id, invoice._id, self.user
+        )
+        stock.refresh_from_db()
+        self.assertEqual(stock.quantity_on_hand, 3)
+
+        invoice_transactions = InventoryTransaction.objects.filter(
+            source_document_id=invoice._id,
+            source_document_type__in=(
+                'CUSTOMER_INVOICE',
+                'CUSTOMER_INVOICE_REVERSAL',
+            ),
+        )
+        self.assertEqual(
+            sum(txn.quantity_change for txn in invoice_transactions),
+            -12,
+        )
 
     def test_source_default(self):
         quote = Quote.objects.create(

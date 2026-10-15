@@ -274,7 +274,10 @@ def direct_release_stock(reference_id, company_id, user, warehouse=None):
 
     transactions = InventoryTransaction.objects.filter(
         source_document_id=reference_id,
-        source_document_type='CUSTOMER_INVOICE',
+        source_document_type__in=(
+            'CUSTOMER_INVOICE',
+            'CUSTOMER_INVOICE_REVERSAL',
+        ),
         company_id=company_id,
     ).select_related('variant', 'warehouse')
 

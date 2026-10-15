@@ -5,9 +5,13 @@ import { useState, useRef, useCallback } from "react";
 import { X, Upload, FileSpreadsheet, Download, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useImportParse } from "@/hooks/useProductExportImport";
-import type { ImportRow } from "@/hooks/useProductExportImport";
+import {
+  ImportParseError,
+  type ImportParseFieldError,
+  type ImportRow,
+} from "@/hooks/useProductExportImport";
 
-const ACCEPTED_TYPES = ".xlsx,.xls,.csv";
+const ACCEPTED_TYPES = ".xlsx";
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 const TEMPLATE_COLUMNS = [
@@ -43,6 +47,7 @@ export default function ImportUploadModal({
   const [dragOver, setDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<ImportParseFieldError[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importParse = useImportParse();
 
@@ -50,8 +55,8 @@ export default function ImportUploadModal({
 
   const validateFile = useCallback((file: File): string | null => {
     const ext = file.name.split(".").pop()?.toLowerCase();
-    if (!ext || !["xlsx", "xls", "csv"].includes(ext)) {
-      return "Invalid file format. Please upload .xlsx, .xls, or .csv files only.";
+    if (ext !== "xlsx") {
+      return "Invalid file format. Please upload an .xlsx file.";
     }
     if (file.size > MAX_FILE_SIZE) {
       return "File size exceeds 10 MB limit.";
@@ -61,6 +66,7 @@ export default function ImportUploadModal({
 
   const handleUploadAndParse = useCallback(async (file: File) => {
     setError(null);
+    setErrorDetails([]);
     const ext = file.name.split(".").pop()?.toLowerCase() || "xlsx";
     const source = ext === "csv" ? "csv" : "excel";
 
@@ -68,6 +74,8 @@ export default function ImportUploadModal({
       const result = await importParse.mutateAsync(file);
       const parsedRows = result.data?.rows;
       if (parsedRows && parsedRows.length > 0) {
+        setSelectedFile(null);
+        setDragOver(false);
         onParsed(parsedRows, source);
       } else {
         setSelectedFile(null);
@@ -75,12 +83,21 @@ export default function ImportUploadModal({
       }
     } catch (err: any) {
       setSelectedFile(null);
-      setError(err.message || "Failed to parse file");
+      if (err instanceof ImportParseError) {
+        setError(err.message);
+        setErrorDetails(err.details);
+      } else if (err instanceof TypeError) {
+        setError("We couldn't reach the server to read your workbook. Check your connection and try again.");
+      } else {
+        setError(err.message || "We couldn't process this workbook. Please try again.");
+      }
     }
   }, [importParse, onParsed]);
 
   const handleFileSelect = useCallback((file: File) => {
     if (isParsing) return;
+    setError(null);
+    setErrorDetails([]);
     const validationError = validateFile(file);
     if (validationError) {
       setError(validationError);
@@ -115,6 +132,7 @@ export default function ImportUploadModal({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isParsing) return;
     const file = e.target.files?.[0];
+    e.currentTarget.value = "";
     if (file) handleFileSelect(file);
   };
 
@@ -181,7 +199,7 @@ export default function ImportUploadModal({
             <div>
               <h2 className="text-lg font-semibold">Import Products</h2>
               <p className="text-xs text-muted-foreground">
-                Upload an Excel or CSV file
+                Upload an .xlsx workbook
               </p>
             </div>
           </div>
@@ -272,7 +290,7 @@ export default function ImportUploadModal({
                   <span className="text-primary hover:underline">browse</span>
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Supports .xlsx, .xls, and .csv files
+                  Supports .xlsx files only
                 </p>
               </div>
             )}
@@ -280,9 +298,33 @@ export default function ImportUploadModal({
 
           {/* Error */}
           {error && (
-            <div className="flex items-start gap-2.5 p-3 rounded-xl bg-destructive/10 text-destructive text-sm">
-              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-              <span>{error}</span>
+            <div
+              className="flex items-start gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+              role="alert"
+              aria-live="assertive"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="min-w-0">
+                <p className="font-medium">{error}</p>
+                {errorDetails.length > 0 && (
+                  <div className="mt-2 rounded-lg bg-background/70 p-2.5">
+                    <p className="text-xs font-medium">
+                      Correct these spreadsheet cells and upload the file again:
+                    </p>
+                    <ul className="mt-1.5 space-y-1 text-xs">
+                      {errorDetails.map((detail, index) => (
+                        <li key={`${detail.row_number}-${detail.column}-${index}`}>
+                          <span className="font-semibold">
+                            Row {detail.row_number}, {detail.column}
+                          </span>
+                          {detail.value !== "" && <> (“{detail.value}”)</>}:{" "}
+                          {detail.message}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

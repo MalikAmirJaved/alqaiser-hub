@@ -27,6 +27,20 @@ export interface SalesInvoice {
   status: string;
   payment_status?: string;
   source?: string;
+  overall_discount_percent?: number | string;
+  overall_tax_percent?: number | string;
+  template_slug?: string;
+  accent_color?: string;
+  typography?: {
+    enabled: boolean;
+    fontFamily: "default" | "sans" | "serif" | "mono" | "classic" | "rounded";
+    baseSize: number;
+    titleLevel: "h1" | "h2" | "h3";
+    boldTitles: boolean;
+    boldBody: boolean;
+    italicBody: boolean;
+    italicNotes: boolean;
+  };
   notes: string;
   lines?: any[];
   created_at: string;

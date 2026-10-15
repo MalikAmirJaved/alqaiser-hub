@@ -9,6 +9,22 @@ import { toast } from "sonner";
 // Types
 // ---------------------------------------------------------------------------
 
+export type ConflictType = "db_conflict" | "soft_deleted" | "file_duplicate" | null;
+export type ConflictPolicy =
+  | "add_new"
+  | "update_existing"
+  | "skip_duplicates"
+  | "replace_existing";
+
+export interface ExistingLocation {
+  warehouse_id?: string | null;
+  warehouse_name: string;
+  quantity_on_hand: number;
+  quantity_reserved: number;
+  /** The warehouse the import writes stock to (the tenant's default warehouse). */
+  is_default?: boolean;
+}
+
 export interface ImportRow {
   row_index: number;
   product_name: string;
@@ -30,6 +46,35 @@ export interface ImportRow {
   selling_price: number;
   min_stock_level: number;
   max_stock_level: number;
+  /**
+   * Quantity typed in the review modal.
+   * - `null` / missing → stock is left untouched.
+   * - Update Existing → added to the current stock (80 + 20 = 100).
+   * - Replace Existing → replaces the current stock (80 → 20).
+   * - New rows → opening stock.
+   */
+  quantity_on_hand?: number | null;
+
+  // Server-resolved conflict metadata (see backend `_resolve_duplicates`)
+  conflict_type?: ConflictType;
+  is_duplicate_in_file?: boolean;
+  duplicate_of_row_index?: number | null;
+  existing_match?: "active" | "soft_deleted" | null;
+  existing_product_id?: string;
+  existing_product_name?: string;
+  existing_variant_id?: string;
+  existing_variant_title?: string;
+  existing_sku?: string;
+  existing_category_name?: string;
+  existing_brand_name?: string;
+  existing_product_status?: string;
+  existing_location?: ExistingLocation[];
+}
+
+export interface ImportCounts {
+  total: number;
+  valid: number;
+  conflicting: number;
 }
 
 export interface ImportParseResponse {
@@ -38,7 +83,66 @@ export interface ImportParseResponse {
   data: {
     rows: ImportRow[];
     total_rows: number;
+    counts?: ImportCounts;
   };
+}
+
+export interface ImportParseFieldError {
+  row_number: number;
+  column: string;
+  value: string;
+  message: string;
+}
+
+export class ImportParseError extends Error {
+  constructor(
+    message: string,
+    public readonly details: ImportParseFieldError[] = []
+  ) {
+    super(message);
+    this.name = "ImportParseError";
+  }
+}
+
+/** Per-row validation result returned by the validate endpoint. */
+export interface RowValidation {
+  row_index: number;
+  is_duplicate_in_file: boolean;
+  duplicate_of_row_index: number | null;
+  conflict_type: ConflictType;
+  existing_match: "active" | "soft_deleted" | null;
+  existing_product_id?: string;
+  existing_product_name?: string;
+  existing_variant_id?: string;
+  existing_variant_title?: string;
+  existing_sku?: string;
+  existing_category_name?: string;
+  existing_brand_name?: string;
+  existing_product_status?: string;
+  existing_location?: ExistingLocation[];
+}
+
+export interface ImportValidateResponse {
+  status: string;
+  message: string;
+  data: {
+    rows: RowValidation[];
+    counts: ImportCounts;
+  };
+}
+
+export interface SkippedRow {
+  row_index: number | null;
+  sku?: string;
+  reason: string;
+  message: string;
+  existing?: Partial<RowValidation>;
+}
+
+export interface FailedRow {
+  row_index: number | null;
+  rows?: number[];
+  message: string;
 }
 
 export interface ImportConfirmResponse {
@@ -49,6 +153,12 @@ export interface ImportConfirmResponse {
     variants_created: number;
     brands_created: number;
     categories_created: number;
+    products_updated?: number;
+    variants_updated?: number;
+    rows_skipped?: number;
+    rows_failed?: number;
+    skipped?: SkippedRow[];
+    failed?: FailedRow[];
   };
 }
 
@@ -57,8 +167,6 @@ export interface ImportConfirmResponse {
 // ---------------------------------------------------------------------------
 
 export function useExportProducts() {
-  const api = useApi();
-
   return useMutation({
     mutationFn: async ({
       format,
@@ -121,8 +229,6 @@ export function useExportProducts() {
 }
 
 export function useImportParse() {
-  const api = useApi();
-
   return useMutation({
     mutationFn: async (file: File): Promise<ImportParseResponse> => {
       const formData = new FormData();
@@ -138,25 +244,64 @@ export function useImportParse() {
         }
       );
 
-      let data: ImportParseResponse;
+      let data: Partial<ImportParseResponse> & {
+        message?: string;
+        errors?: ImportParseFieldError[];
+      };
       try {
         const text = await response.text();
         data = JSON.parse(text);
       } catch {
-        const msg =
-          !response.ok && response.status >= 500
-            ? "The server encountered an error. Please check your file format and try again."
-            : "Server returned an unexpected response. Please try again.";
+        const msg = response.status === 413
+          ? "This file is too large to process. Please choose a smaller workbook."
+          : !response.ok && response.status >= 500
+          ? "We couldn't process this workbook because of a server error. Please try again later."
+          : "We received an unexpected response while reading the workbook. Please try again.";
         throw new Error(msg);
       }
 
       if (!response.ok) {
-        throw new Error(data.message || "Failed to parse file");
+        throw new ImportParseError(
+          data.message || "We couldn't read this workbook. Please check the file and try again.",
+          Array.isArray(data.errors) ? data.errors : []
+        );
+      }
+      return data as ImportParseResponse;
+    },
+  });
+}
+
+/**
+ * Server-authoritative revalidation of edited rows.
+ * Uses raw fetch (like parse) so a debounce-triggered validation failure does
+ * not spawn a global toast — the modal surfaces the error inline instead.
+ */
+export function useImportValidate() {
+  return useMutation({
+    mutationFn: async (
+      rows: Pick<ImportRow, "row_index" | "variant_sku">[]
+    ): Promise<ImportValidateResponse> => {
+      const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+      const response = await fetch(
+        `${BASE_URL}/api/inventory/products/import/validate/`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rows }),
+        }
+      );
+
+      let data: ImportValidateResponse;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error("Couldn't revalidate SKUs. Please retry.");
+      }
+      if (!response.ok) {
+        throw new Error(data?.message || "Couldn't revalidate SKUs. Please retry.");
       }
       return data;
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || "Import parsing failed");
     },
   });
 }
@@ -169,15 +314,17 @@ export function useImportConfirm() {
     mutationFn: async ({
       rows,
       source,
+      conflict_policy,
     }: {
       rows: ImportRow[];
       source: string;
+      conflict_policy: ConflictPolicy;
     }): Promise<ImportConfirmResponse> => {
       return api<ImportConfirmResponse>(
         "/api/inventory/products/import/confirm/",
         {
           method: "POST",
-          body: JSON.stringify({ rows, source }),
+          body: JSON.stringify({ rows, source, conflict_policy }),
         }
       );
     },

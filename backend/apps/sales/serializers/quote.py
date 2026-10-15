@@ -1,9 +1,14 @@
+import re
 from decimal import Decimal
+from django.utils import timezone
 from rest_framework import serializers
+from apps.common.basemodel import soft_delete_qs
+from apps.common.totals import document_total, line_tax
 from apps.sales.models.quote import Quote, QuoteLine
 from apps.sales.models.lead import Lead
 from apps.inventory.models import Customer, ProductVariant, Supplier
 from apps.inventory.serializers.customer import CustomerSerializer
+from apps.common.document_appearance import validate_document_typography
 
 class QuoteLineSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)
@@ -54,6 +59,7 @@ class QuoteLineSerializer(serializers.ModelSerializer):
 
 class QuoteSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)
+    quote_number = serializers.CharField(max_length=50, required=False)
     lines = QuoteLineSerializer(many=True, required=False)
     lead = serializers.SlugRelatedField(
         slug_field='_id',
@@ -82,12 +88,13 @@ class QuoteSerializer(serializers.ModelSerializer):
         model = Quote
         fields = [
             'id', 'quote_number', 'lead', 'customer', 'customer_name', 'customer_email', 'customer_phone', 'new_customer',
-            'date', 'expiration_date', 'total_amount', 'overall_discount_percent', 'overall_tax_percent', 'status', 'source',
+            'date', 'expiration_date', 'total_amount', 'overall_discount_percent', 'overall_tax_percent',
+            'template_slug', 'accent_color', 'typography', 'status', 'source',
             'notes', 'lines', 'created_at', 'updated_at',
             'created_by_name', 'updated_by_name', 'source_label', 'created_by_label',
             'converted_invoice', 'converted_invoice_number',
         ]
-        read_only_fields = ('id', 'quote_number', 'created_at', 'updated_at', 'company_id', 'branch_id', 'total_amount', 'status')
+        read_only_fields = ('id', 'created_at', 'updated_at', 'company_id', 'branch_id', 'total_amount', 'status')
 
     def get_customer_name(self, obj):
         return obj.customer.name if obj.customer else None
@@ -111,6 +118,22 @@ class QuoteSerializer(serializers.ModelSerializer):
         name = obj.created_by.username if obj.created_by else None
         src = obj.source or 'new'
         return f"{name} ({src})" if name else None
+
+    def validate_quote_number(self, value):
+        quotes = Quote.objects.filter(quote_number=value)
+        if self.instance:
+            quotes = quotes.exclude(_id=self.instance._id)
+        if quotes.exists():
+            raise serializers.ValidationError('A quote with this number already exists.')
+        return value
+
+    def validate_accent_color(self, value):
+        if value and not re.fullmatch(r'#[0-9A-Fa-f]{6}', value):
+            raise serializers.ValidationError('Accent color must be a six-digit hex color.')
+        return value
+
+    def validate_typography(self, value):
+        return validate_document_typography(value)
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)
@@ -136,7 +159,10 @@ class QuoteSerializer(serializers.ModelSerializer):
             customer = Customer.objects.create(**new_customer_data)
             validated_data['customer'] = customer
 
-        validated_data['quote_number'] = f"QT-{int(time.time())}-{random.randint(1000, 9999)}"
+        validated_data.setdefault(
+            'quote_number',
+            f"QT-{int(time.time())}-{random.randint(1000, 9999)}",
+        )
         validated_data['company_id'] = user.company_id
         validated_data['branch_id'] = user.branch_id
         validated_data['created_by'] = user
@@ -151,6 +177,7 @@ class QuoteSerializer(serializers.ModelSerializer):
         
         subtotal = Decimal('0')
         per_line_discounts = Decimal('0')
+        per_line_taxes = Decimal('0')
         for line_item in lines_data:
             line = QuoteLine.objects.create(
                 quote=quote,
@@ -162,13 +189,14 @@ class QuoteSerializer(serializers.ModelSerializer):
             )
             subtotal += line.quantity * line.unit_price
             per_line_discounts += Decimal(str(line.discount_amount or 0))
-            
+            per_line_taxes += line_tax(line.quantity, line.unit_price, line.tax_rate)
+
         overall_discount_percent = Decimal(str(validated_data.get('overall_discount_percent', 0) or 0))
         overall_tax_percent = Decimal(str(validated_data.get('overall_tax_percent', 0) or 0))
-        overall_discount = subtotal * (overall_discount_percent / Decimal('100'))
-        total_before_tax = subtotal - per_line_discounts - overall_discount
-        overall_tax = total_before_tax * (overall_tax_percent / Decimal('100'))
-        quote.total_amount = total_before_tax + overall_tax
+        quote.total_amount = document_total(
+            subtotal, per_line_discounts, per_line_taxes,
+            overall_discount_percent, overall_tax_percent,
+        )
         quote.save(update_fields=['total_amount'])
         return quote
 
@@ -182,9 +210,11 @@ class QuoteSerializer(serializers.ModelSerializer):
         instance.save()
 
         if lines_data is not None:
-            instance.lines.all().update(is_deleted=True)
+            # Records who/when — queryset.update() bypasses Model.save().
+            soft_delete_qs(instance.lines.all(), user)
             subtotal = Decimal('0')
             per_line_discounts = Decimal('0')
+            per_line_taxes = Decimal('0')
             for line_item in lines_data:
                 line = QuoteLine.objects.create(
                     quote=instance,
@@ -196,12 +226,13 @@ class QuoteSerializer(serializers.ModelSerializer):
                 )
                 subtotal += line.quantity * line.unit_price
                 per_line_discounts += Decimal(str(line.discount_amount or 0))
+                per_line_taxes += line_tax(line.quantity, line.unit_price, line.tax_rate)
             overall_discount_percent = Decimal(str(validated_data.get('overall_discount_percent', instance.overall_discount_percent or 0)))
             overall_tax_percent = Decimal(str(validated_data.get('overall_tax_percent', instance.overall_tax_percent or 0)))
-            overall_discount = subtotal * (overall_discount_percent / Decimal('100'))
-            total_before_tax = subtotal - per_line_discounts - overall_discount
-            overall_tax = total_before_tax * (overall_tax_percent / Decimal('100'))
-            instance.total_amount = total_before_tax + overall_tax
+            instance.total_amount = document_total(
+                subtotal, per_line_discounts, per_line_taxes,
+                overall_discount_percent, overall_tax_percent,
+            )
             instance.save(update_fields=['total_amount'])
             
         return instance

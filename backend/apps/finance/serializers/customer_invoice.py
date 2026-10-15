@@ -2,9 +2,11 @@ import random
 import time
 from decimal import Decimal
 
+import re
 from rest_framework import serializers
 
 from apps.finance.models import CustomerInvoice, CustomerInvoiceLine, BankAccount
+from apps.common.totals import document_total, line_tax
 from apps.finance.services.invoice_supplier_bill import (
     create_supplier_bill_for_line,
     handle_removed_line,
@@ -13,6 +15,7 @@ from apps.finance.services.invoice_supplier_bill import (
 )
 from apps.inventory.models import Customer, SalesOrder, ProductVariant, Supplier
 from apps.inventory.serializers.customer import CustomerSerializer
+from apps.common.document_appearance import validate_document_typography
 
 class CustomerInvoiceLineSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='_id', read_only=True)
@@ -159,6 +162,14 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
         src = obj.source or 'new'
         return f"{name} ({src})" if name else None
 
+    def validate_accent_color(self, value):
+        if value and not re.fullmatch(r'#[0-9A-Fa-f]{6}', value):
+            raise serializers.ValidationError('Accent color must be a six-digit hex color.')
+        return value
+
+    def validate_typography(self, value):
+        return validate_document_typography(value)
+
     def get_payments(self, obj):
         from apps.finance.services.payable import get_payments_queryset
         payments = get_payments_queryset(obj)
@@ -169,6 +180,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
                 'payment_date': str(p.payment_date),
                 'payment_method': p.payment_method,
                 'reference_number': p.reference_number or '',
+                'receipt_image': p.receipt_image or '',
                 'status': p.status,
                 'payment_type': p.payment_type,
             }
@@ -226,6 +238,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
         
         subtotal = Decimal('0')
         per_line_discounts = Decimal('0')
+        per_line_taxes = Decimal('0')
         for line_item in lines_data:
             line = CustomerInvoiceLine.objects.create(
                 customer_invoice=invoice,
@@ -237,13 +250,14 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
             )
             subtotal += line.quantity * line.unit_price
             per_line_discounts += Decimal(str(line.discount_amount or 0))
-        
+            per_line_taxes += line_tax(line.quantity, line.unit_price, line.tax_rate)
+
         overall_discount_percent = Decimal(str(validated_data.get('overall_discount_percent', 0) or 0))
         overall_tax_percent = Decimal(str(validated_data.get('overall_tax_percent', 0) or 0))
-        overall_discount = subtotal * (overall_discount_percent / Decimal('100'))
-        total_before_tax = subtotal - per_line_discounts - overall_discount
-        overall_tax = total_before_tax * (overall_tax_percent / Decimal('100'))
-        invoice.amount = total_before_tax + overall_tax
+        invoice.amount = document_total(
+            subtotal, per_line_discounts, per_line_taxes,
+            overall_discount_percent, overall_tax_percent,
+        )
         invoice.save(update_fields=['amount'])
 
         line_bill_map = self._create_supplier_bills(invoice, lines_data, user)
@@ -270,6 +284,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
             
             subtotal = Decimal('0')
             per_line_discounts = Decimal('0')
+            per_line_taxes = Decimal('0')
             self._reduction_conflicts = []
             self._variant_reduction_conflicts = []
             created_lines = []
@@ -356,6 +371,7 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
                 line = created_lines[-1]
                 subtotal += line.quantity * line.unit_price
                 per_line_discounts += Decimal(str(line.discount_amount or 0))
+                per_line_taxes += line_tax(line.quantity, line.unit_price, line.tax_rate)
 
             for line_id, old_line in existing_lines.items():
                 if line_id not in incoming_ids:
@@ -369,10 +385,10 @@ class CustomerInvoiceSerializer(serializers.ModelSerializer):
             overall_tax_percent = Decimal(str(
                 validated_data.get('overall_tax_percent', instance.overall_tax_percent or 0)
             ))
-            overall_discount = subtotal * (overall_discount_percent / Decimal('100'))
-            total_before_tax = subtotal - per_line_discounts - overall_discount
-            overall_tax = total_before_tax * (overall_tax_percent / Decimal('100'))
-            instance.amount = total_before_tax + overall_tax
+            instance.amount = document_total(
+                subtotal, per_line_discounts, per_line_taxes,
+                overall_discount_percent, overall_tax_percent,
+            )
             instance.save(update_fields=['amount'])
 
         return instance

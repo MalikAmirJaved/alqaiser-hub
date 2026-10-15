@@ -3,12 +3,14 @@
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { DetailLayout, StandardSidebar } from "@/components/reuseable/final/DetailLayout";
-import { useProduct, useUpdateProduct, useDeleteProduct } from "@/hooks/useProducts";
+import ProductForm from "@/components/inventory/product/ProductForm";
+import { useProduct, useUpdateProduct, useDeleteProduct, type ProductPayload } from "@/hooks/useProducts";
 import { useCategories } from "@/hooks/useCategories";
 import { useBrands } from "@/hooks/useBrands";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import { useServerSearch } from "@/hooks/useServerSearch";
 import { useRelatedTabData, type RelatedTab, type PaginatedResult } from "@/hooks/useProductRelatedData";
 import { format } from "date-fns";
 import { BASE_URL } from "@/lib/api";
@@ -497,6 +499,12 @@ export default function ProductDetailPage() {
   const { data: product, isLoading: productLoading } = useProduct(id);
   const { data: categories = [] } = useCategories();
   const { data: brands = [] } = useBrands();
+  const fetchCategories = useServerSearch("/api/inventory/categories/", {
+    transformOption: (category: any) => ({ value: category.id, label: category.name }),
+  });
+  const fetchBrands = useServerSearch("/api/inventory/brands/", {
+    transformOption: (brand: any) => ({ value: brand.id, label: brand.name }),
+  });
   const permissions = useFeaturePermissions("INVENTORY", "product");
   const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
@@ -528,6 +536,11 @@ export default function ProductDetailPage() {
         router.push("/inventory/products");
       },
     });
+  };
+
+  const handleSave = async (data: ProductPayload) => {
+    await updateProduct.mutateAsync({ id: product.id, ...data });
+    setEditing(false);
   };
 
   const priceDisplay = minPrice === maxPrice
@@ -856,6 +869,22 @@ export default function ProductDetailPage() {
           />
         }
       />
+
+      {editing && permissions.update && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-4xl bg-card rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            <ProductForm
+              initialData={product}
+              onSubmit={handleSave}
+              isLoading={updateProduct.isPending}
+              isEditing
+              onCancel={() => setEditing(false)}
+              fetchCategories={fetchCategories}
+              fetchBrands={fetchBrands}
+            />
+          </div>
+        </div>
+      )}
 
       <deleteConfirm.Modal />
 

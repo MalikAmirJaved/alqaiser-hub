@@ -143,6 +143,7 @@ def create_payment_for(
     payment_type=None,
     bank_account=None,
     reference_number='',
+    receipt_image='',
     notes='',
     auto_confirm=False,
 ):
@@ -163,6 +164,7 @@ def create_payment_for(
         amount=amount,
         payment_date=payment_date,
         reference_number=reference_number,
+        receipt_image=receipt_image,
         bank_account=bank_account,
         status='DRAFT',
         notes=notes,

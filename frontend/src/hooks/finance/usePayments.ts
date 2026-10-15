@@ -12,6 +12,7 @@ export interface Payment {
   amount: number | string;
   payment_date: string;
   reference_number: string;
+  receipt_image?: string;
   bank_account: string | null;
   bank_account_name?: string | null;
   journal_entry: string | null;

@@ -27,6 +27,7 @@ export interface LeaveBreakdown {
 export interface PayrollRecord {
   id: string;
   employee_id: string;
+  employee_is_deleted: boolean;
   employee_name: string;
   employee_code: string;
   department: string;
@@ -47,6 +48,7 @@ export interface PayrollRecord {
   transaction_type: string;
   transaction_number?: string;
   payment_method: string;
+  receipt_image?: string;
   status: string;
   payment_status?: string;
   paid_amount?: string;
@@ -85,6 +87,7 @@ export interface MonthRange {
 export interface EmployeeLoan {
   id: string;
   employee_id: string;
+  employee_is_deleted: boolean;
   employee_name: string;
   employee_code: string;
   department: string;
@@ -141,6 +144,7 @@ export function computeTotalMonths(loan: EmployeeLoan): number {
 export interface Compensation {
   id: string;
   employee_id: string;
+  employee_is_deleted: boolean;
   employee_name: string;
   employee_code: string;
   department: string;

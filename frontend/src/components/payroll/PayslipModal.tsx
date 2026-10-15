@@ -6,6 +6,8 @@ import { useEmployeeLoans } from "@/hooks/usePayroll";
 import { useCompensations } from "@/hooks/usePayroll";
 import { useRouter } from "next/navigation";
 import { X, Receipt, ExternalLink } from "lucide-react";
+import { BASE_URL } from "@/lib/api";
+import ImageLightbox from "@/components/reuseable/ImageLightbox";
 
 export default function PayslipModal({ 
   employee, 
@@ -29,6 +31,7 @@ export default function PayslipModal({
   );
 
   const router = useRouter();
+  const [receiptPreview, setReceiptPreview] = useState("");
   const activeCompensation = compensations.find(c => c.status === "CONFIRM");
   const activeLoans = loans.filter(l => l.approval === "CONFIRM" && l.status === "PAID");
 
@@ -43,16 +46,18 @@ export default function PayslipModal({
             Payslip - {employee?.first_name} {employee?.last_name || ""}
           </h2>
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => {
-                onClose();
-                router.push(`payroll/${employee.id}`);
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm bg-primary/10 hover:bg-primary/20 text-primary"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              Full Detail
-            </button>
+            {!employee?.is_deleted && (
+              <button
+                onClick={() => {
+                  onClose();
+                  router.push(`payroll/${employee.id}`);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm bg-primary/10 hover:bg-primary/20 text-primary"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Full Detail
+              </button>
+            )}
             <button onClick={onClose} className="p-1.5 rounded-md hover:bg-muted">
               <X className="w-4 h-4" />
             </button>
@@ -147,7 +152,10 @@ export default function PayslipModal({
                           {record.month}/{record.year}
                         </div>
                         {record.transaction_number && (
-                          <div className="text-xs font-mono text-primary">{record.transaction_number}</div>
+                          <div className="text-xs text-muted-foreground">
+                            Transaction Reference:{" "}
+                            <span className="font-mono text-primary">{record.transaction_number}</span>
+                          </div>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
@@ -157,6 +165,21 @@ export default function PayslipModal({
                         <span className="text-xs text-muted-foreground">{record.payment_method}</span>
                       </div>
                     </div>
+
+                    {record.receipt_image && (
+                      <button
+                        type="button"
+                        onClick={() => setReceiptPreview(`${BASE_URL}${record.receipt_image}`)}
+                        className="mb-2 inline-block"
+                        title="View receipt"
+                      >
+                        <img
+                          src={`${BASE_URL}${record.receipt_image}`}
+                          alt="Payment receipt"
+                          className="h-16 w-16 rounded-lg border border-border object-cover hover:opacity-80 transition-opacity"
+                        />
+                      </button>
+                    )}
 
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div>
@@ -246,6 +269,13 @@ export default function PayslipModal({
           </div>
         </div>
       </div>
+
+      {receiptPreview && (
+        <ImageLightbox
+          src={receiptPreview}
+          onClose={() => setReceiptPreview("")}
+        />
+      )}
     </div>
   );
 }

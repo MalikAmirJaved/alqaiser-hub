@@ -85,7 +85,10 @@ export function PayrollPage({
     gcTime: 5 * 60 * 1000,
   });
 
-  const employees = employeeQuery.data?.results ?? [];
+  const employees = useMemo(
+    () => employeeQuery.data?.results ?? [],
+    [employeeQuery.data?.results],
+  );
   const employeeTotal = employeeQuery.data?.count ?? 0;
   const employeeTotalPages = employeeQuery.data?.total_pages ?? 0;
 
@@ -130,6 +133,29 @@ const payrollPermissions = getPermissions(
       r => r.employee_id === employeeId && r.month === selectedMonth && r.year === selectedYear
     );
   };
+
+  const deletedPaidEmployees = useMemo(() => {
+    if (page !== 1) return [];
+    return payrollRecords
+      .filter(
+        record =>
+          record.employee_is_deleted &&
+          record.employee_id &&
+          record.payment_status === "PAID" &&
+          record.month === selectedMonth &&
+          record.year === selectedYear,
+      )
+      .map(record => ({
+        id: record.employee_id,
+        employee_id: record.employee_code,
+        first_name: record.employee_name || record.employee_code || "Deleted employee",
+        last_name: "",
+        department_name: record.department,
+        designation_name: record.designation,
+        salary: record.base_salary,
+        is_deleted: true,
+      }));
+  }, [payrollRecords, page, selectedMonth, selectedYear]);
 
   // Get advance loan for this employee/month (PAID = not yet returned)
   const getAdvanceLoan = (employeeId: string) => {
@@ -224,11 +250,20 @@ const handleRefresh = () => {
   const avgSalary = statsQuery.data?.avgSalary ? parseFloat(statsQuery.data.avgSalary) : 0;
   const totalEmployees = statsQuery.data?.totalEmployees ?? 0;
 
-  // Post-filter employees by payment status (client-side since status is computed from payroll records)
+  // Deleted employees remain visible only for months with a completed payment.
   const displayEmployees = useMemo(() => {
-    if (!filters.status) return employees;
-    return employees.filter(e => getPaymentStatus(e.id) === filters.status.toUpperCase());
-  }, [employees, filters.status]);
+    const monthEmployees = [...employees, ...deletedPaidEmployees];
+    if (!filters.status) return monthEmployees;
+    return monthEmployees.filter(employee => {
+      const record = payrollRecords.find(
+        item =>
+          item.employee_id === employee.id &&
+          item.month === selectedMonth &&
+          item.year === selectedYear,
+      );
+      return (record?.payment_status || record?.status || "PENDING") === filters.status.toUpperCase();
+    });
+  }, [employees, deletedPaidEmployees, filters.status, payrollRecords, selectedMonth, selectedYear]);
 
   return (
     <div>
@@ -353,14 +388,28 @@ const handleRefresh = () => {
                 return (
                   <tr key={employee.id} className="border-t border-border hover:bg-muted/30">
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => router.push(`payroll/${employee.id}`)}
-                        className="text-left hover:underline"
-                      >
-                        <div className="font-medium">{employee.first_name} {employee.last_name || ""}</div>
-                        <div className="text-xs text-muted-foreground">{employee.designation_name || employee.department_name || ""}</div>
-                      </button>
-                      {(() => {
+                      {employee.is_deleted ? (
+                        <div>
+                          <div className="flex items-center gap-2 font-medium">
+                            {employee.first_name}
+                            <span className="inline-flex items-center rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning">
+                              Deleted
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {employee.designation_name || employee.department_name || ""}
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => router.push(`payroll/${employee.id}`)}
+                          className="text-left hover:underline"
+                        >
+                          <div className="font-medium">{employee.first_name} {employee.last_name || ""}</div>
+                          <div className="text-xs text-muted-foreground">{employee.designation_name || employee.department_name || ""}</div>
+                        </button>
+                      )}
+                      {!employee.is_deleted && (() => {
                         const advance = getAdvanceLoan(employee.id);
                         return advance ? (
                           <div className="flex items-center gap-1 mt-1">
@@ -416,6 +465,7 @@ const handleRefresh = () => {
                           <Eye className="w-4 h-4" />
                         </button>
                         {(selectedYear < currentYear || (selectedYear === currentYear && selectedMonth < currentMonth))
+                          && !employee.is_deleted
                           && (!isPaid || hasAdvanceItems(employee.id))
                           && payrollPermissions.pay_salary && (
                           <button

@@ -46,7 +46,8 @@ class SalesInvoiceViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequ
         import random
         import time
         serializer.save(
-            invoice_number=f'INV-SL-{int(time.time())}-{random.randint(1000, 9999)}',
+            invoice_number=serializer.validated_data.get('invoice_number')
+            or f'INV-SL-{int(time.time())}-{random.randint(1000, 9999)}',
             source='SALES_AGENT',
             company_id=self.request.user.company_id,
             branch_id=self.request.user.branch_id,
@@ -79,14 +80,28 @@ class SalesInvoiceViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequ
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
-        if instance.status != 'DRAFT':
-            raise ValidationError('Only DRAFT invoices can be updated.')
+        if instance.status not in ('DRAFT', 'PENDING', 'SENT'):
+            raise ValidationError('Only DRAFT, PENDING, or SENT invoices can be updated.')
         if instance.payment_status == 'PAID':
             raise ValidationError('Cannot edit a paid invoice.')
         try:
             with transaction.atomic():
                 direct_release_stock(instance._id, instance.company_id, request.user)
-                serializer = self.get_serializer(instance, data=request.data, partial=partial)
+                raw_lines = request.data.get('lines', [])
+                line_ids_map = {
+                    idx: str(line.get('id', ''))
+                    for idx, line in enumerate(raw_lines)
+                    if line.get('id')
+                }
+                serializer = self.get_serializer(
+                    instance,
+                    data=request.data,
+                    partial=partial,
+                    context={
+                        **self.get_serializer_context(),
+                        'raw_line_ids': line_ids_map,
+                    },
+                )
                 serializer.is_valid(raise_exception=True)
                 self.perform_update(serializer)
                 direct_deduct_stock(
@@ -106,17 +121,17 @@ class SalesInvoiceViewSet(GenericFilterMixin, CompanyBranchMixin, PermissionRequ
 
     def perform_update(self, serializer):
         instance = serializer.instance
-        if instance.status != 'DRAFT':
-            raise ValidationError('Only DRAFT invoices can be updated.')
+        if instance.status not in ('DRAFT', 'PENDING', 'SENT'):
+            raise ValidationError('Only DRAFT, PENDING, or SENT invoices can be updated.')
         if instance.payment_status == 'PAID':
             raise ValidationError('Cannot edit a paid invoice.')
-        serializer.save(updated_by=self.request.user)
+        serializer.save(updated_by=self.request.user, status=instance.status)
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        if instance.status != 'DRAFT':
+        if instance.status not in ('DRAFT', 'PENDING'):
             return Response(
-                {'error': 'Only DRAFT invoices can be deleted'},
+                {'error': 'Only DRAFT or PENDING invoices can be deleted'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if instance.payment_status == 'PAID':

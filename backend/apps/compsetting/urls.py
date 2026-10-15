@@ -23,5 +23,7 @@ urlpatterns = [
     path('settings/history/', SettingHistoryView.as_view(), name='settings-history'),
     path('settings/designations/<uuid:designation_id>/employees/', DesignationEmployeesView.as_view(), name='designation-employees'),
     path('settings/terms/', TermsAndConditionView.as_view(), name='terms-and-conditions'),
+    # Settings → Trash (unified soft-delete listing + permanent delete)
+    path('settings/trash/', include('apps.compsetting.trash.urls', namespace='trash')),
     path('', include(router.urls)),
 ]

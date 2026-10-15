@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.db import models
+from apps.common.basemodel import soft_delete_qs
 from apps.inventory.models import (
     Product, ProductVariant, StockItem, Category, Brand,
     VariantAttribute, VariantImage
@@ -51,14 +52,39 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         ]
 
     def _create_attributes(self, variant, attributes_data, company_id, branch_id):
+        """Upsert attributes by key.
+
+        ``VariantAttribute`` is unique on ``(variant, attribute_key)``, so
+        soft-deleting the old rows and inserting fresh ones collides with the
+        soft-deleted record still sitting in the table. Reviving the existing
+        row (from any previous soft delete) keeps that constraint satisfied and
+        avoids duplicating a key that appears twice in the payload.
+        """
         for attr in attributes_data:
-            VariantAttribute.objects.create(
-                variant=variant,
-                company_id=company_id,
-                branch_id=branch_id,
-                attribute_key=attr.get('key', ''),
-                attribute_value=attr.get('value', '')
-            )
+            key = (attr.get('key') or '').strip()
+            if not key:
+                continue
+            value = attr.get('value', '')
+            existing = VariantAttribute.objects.filter(
+                variant=variant, attribute_key=key,
+            ).first()
+            if existing:
+                if existing.is_deleted:
+                    existing.is_deleted = False
+                    existing.deleted_at = None
+                    existing.deleted_by = None
+                existing.attribute_value = value
+                existing.company_id = company_id or existing.company_id
+                existing.branch_id = branch_id or existing.branch_id
+                existing.save()
+            else:
+                VariantAttribute.objects.create(
+                    variant=variant,
+                    company_id=company_id,
+                    branch_id=branch_id,
+                    attribute_key=key,
+                    attribute_value=value,
+                )
 
     def _create_images(self, variant, images_data, company_id, branch_id):
         for idx, img in enumerate(images_data):
@@ -104,14 +130,20 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         instance.save()
 
         if attributes_data is not None:
-            instance.variant_attributes.all().update(is_deleted=True)
+            soft_delete_qs(
+                instance.variant_attributes.all(),
+                self.context.get('request').user if self.context.get('request') else None,
+            )
             self._create_attributes(
                 instance, attributes_data,
                 instance.company_id, instance.branch_id
             )
 
         if images_data is not None:
-            instance.variant_images.all().update(is_deleted=True)
+            soft_delete_qs(
+                instance.variant_images.all(),
+                self.context.get('request').user if self.context.get('request') else None,
+            )
             self._create_images(
                 instance, images_data,
                 instance.company_id, instance.branch_id

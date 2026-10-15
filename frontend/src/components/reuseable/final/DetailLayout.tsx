@@ -76,6 +76,7 @@ export interface DetailLayoutProps<T = any> {
   sidebar?: ReactNode;
   charts?: ChartConfig[];  // Charts will be displayed in the left column (above tabs)
   primaryActionLabel?: string;
+  primaryActionIcon?: typeof Send;
   onPrimaryAction?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
@@ -132,6 +133,7 @@ export function DetailLayout<T>({
   sidebar,
   charts,
   primaryActionLabel = "Submit",
+  primaryActionIcon = Send,
   onPrimaryAction,
   onEdit,
   onDelete,
@@ -297,7 +299,7 @@ export function DetailLayout<T>({
               </ToolbarButton>
             )}
             {propPermissions?.submit && onPrimaryAction && (
-              <ToolbarButton variant="primary" icon={Send} onClick={onPrimaryAction}>
+              <ToolbarButton variant="primary" icon={primaryActionIcon} onClick={onPrimaryAction}>
                 {primaryActionLabel}
               </ToolbarButton>
             )}
