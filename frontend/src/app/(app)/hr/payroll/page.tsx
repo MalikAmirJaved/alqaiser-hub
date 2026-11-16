@@ -409,7 +409,10 @@ const handleRefresh = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {!getAdvanceLoan(employee.id) && !isPaid && payrollPermissions.pay_salary && (
+                        {(selectedYear > currentYear || (selectedYear === currentYear && selectedMonth >= currentMonth)
+                          ? !getAdvanceLoan(employee.id) && !isPaid
+                          : !isPaid || hasAdvanceItems(employee.id)
+                        ) && payrollPermissions.pay_salary && (
                           <button
                             onClick={() => {
                               setSelectedEmployee(employee);
