@@ -56,6 +56,7 @@ RESOURCES_ACTIONS: dict[str, dict[str, list[str]]] = {
             "update_compensation_status", "update_loan_status",
             "update_compensation", "delete_compensation",
             "update_loan", "delete_loan",
+            "approve_loan", "pay_loan",
             "export",
         ],
     },
@@ -172,6 +173,8 @@ ACTION_DISPLAY_NAMES: dict[str, str] = {
     "delete_compensation":    "Delete Compensation",
     "update_loan":            "Update Loan",
     "delete_loan":            "Delete Loan",
+    "approve_loan":           "Approve Loan",
+    "pay_loan":               "Pay Loan",
     # Inventory-specific
     "adjust":                 "Adjust",
     "confirm":                "Confirm",

@@ -101,10 +101,16 @@ export interface EmployeeLoan {
   selected_months: SelectedMonth[];
   month_range: MonthRange | null;
   status: string;
+  approval: string;
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_iban?: string;
   paid_months_set?: Array<[number, number]>;
   purpose?: string;
   transaction_number?: string;
   approved_at?: string;
+  confirmed_at?: string;
+  paid_at?: string;
   notes?: string;
   advance_for_month?: number;
   advance_for_year?: number;
@@ -168,6 +174,10 @@ export interface PayrollPreview {
   joining_date: string | null;
   original_base_salary?: number;
   base_salary: number;
+  prorated_days?: number;
+  days_in_month?: number;
+  proration_factor?: string;
+  daily_rate?: number;
   compensation: number;
   overtime_hours: number;
   overtime_amount: number;
@@ -382,10 +392,37 @@ export function useUpdateLoanStatus() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string; status: string }) => 
+    mutationFn: (data: { id: string; status?: string; approval?: string }) => 
       api("/api/hr/loans/status/", { method: "POST", body: JSON.stringify(data) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employeeLoans"] });
+    },
+  });
+}
+
+export function useApproveLoan() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: string; approval: string }) => 
+      api("/api/hr/loans/approve/", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["employeeLoans"] });
+    },
+  });
+}
+
+export function usePayLoan() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) => {
+      const { id, ...rest } = data;
+      return api(`/api/hr/loans/pay/`, { method: "POST", body: JSON.stringify({ id, ...rest }) });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["employeeLoans"] });
+      queryClient.invalidateQueries({ queryKey: ["payroll"] });
     },
   });
 }

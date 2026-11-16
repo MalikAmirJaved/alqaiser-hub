@@ -10,9 +10,8 @@ import {
   useDeleteCompensation,
   useEmployeeLoans,
   useCreateEmployeeLoan,
-  useUpdateEmployeeLoan,
-  useDeleteEmployeeLoan,
-  useUpdateLoanStatus,
+  useApproveLoan,
+  usePayLoan,
 } from "@/hooks/usePayroll";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -50,6 +49,8 @@ export default function CompensationLoanPage({
   const [statusDropdownId, setStatusDropdownId] = useState<number | null>(null);
   const [selectedEmployeeSalary, setSelectedEmployeeSalary] = useState<number>(0);
   const [loanValidationErrors, setLoanValidationErrors] = useState<string[]>([]);
+  const [payLoanModalOpen, setPayLoanModalOpen] = useState(false);
+  const [payLoanItem, setPayLoanItem] = useState<any>(null);
 
   const { data: employees = [] } = useActiveEmployees();
   const { data: compensations = [] } = useCompensations();
@@ -58,9 +59,8 @@ export default function CompensationLoanPage({
   const updateCompensation = useUpdateCompensation();
   const deleteCompensation = useDeleteCompensation();
   const createLoan = useCreateEmployeeLoan();
-  const updateLoan = useUpdateEmployeeLoan();
-  const deleteLoan = useDeleteEmployeeLoan();
-  const updateLoanStatus = useUpdateLoanStatus();
+  const approveLoan = useApproveLoan();
+  const payLoan = usePayLoan();
 
   // -----------------------------
   // Permissions helpers
@@ -184,11 +184,7 @@ export default function CompensationLoanPage({
           payload.month_range = null;
         }
 
-        if (editingItem) {
-          await updateLoan.mutateAsync({ id: editingItem.id, ...payload });
-        } else {
-          await createLoan.mutateAsync(payload);
-        }
+        await createLoan.mutateAsync(payload);
       }
 
       setShowModal(false);
@@ -200,23 +196,65 @@ export default function CompensationLoanPage({
     }
   };
 
-  const handleDelete = async (type: string, id: string) => {
+  const handleDeleteCompensation = async (id: string) => {
     if (!confirm("Are you sure you want to delete this record?")) return;
 
     try {
-      if (type === "compensation") {
-        await deleteCompensation.mutateAsync(id);
-      } else {
-        await deleteLoan.mutateAsync(id);
-      }
+      await deleteCompensation.mutateAsync(id);
     } catch (error: any) {
     }
   };
 
-  const handleStatusChange = async (id: string, newStatus: string) => {
+  const handleConfirmLoan = async (id: string) => {
     try {
-      await updateLoanStatus.mutateAsync({ id, status: newStatus });
-      setStatusDropdownId(null);
+      await approveLoan.mutateAsync({ id, approval: 'CONFIRM' });
+    } catch (error: any) {
+    }
+  };
+
+  const handleRejectLoan = async (id: string) => {
+    try {
+      await approveLoan.mutateAsync({ id, approval: 'REJECTED' });
+    } catch (error: any) {
+    }
+  };
+
+  const handlePayLoanOpen = (loan: any) => {
+    setPayLoanItem(loan);
+    setFormData({
+      ...loan,
+      selected_months: loan.selected_months || [],
+      month_range: loan.month_range || null,
+    });
+    setPayLoanModalOpen(true);
+  };
+
+  const handlePayLoanSave = async () => {
+    try {
+      const payload: any = {
+        id: payLoanItem.id,
+        bank_name: formData.bank_name,
+        bank_account_number: formData.bank_account_number,
+        bank_iban: formData.bank_iban,
+        principal_amount: formData.principal_amount,
+        interest_rate: formData.interest_rate,
+      };
+      if (formData.frequency_type === 'MONTH_RANGE') {
+        payload.month_range = formData.month_range ? {
+          start_month: formData.month_range.start_month,
+          start_year: formData.month_range.start_year,
+          end_month: formData.month_range.end_month,
+          end_year: formData.month_range.end_year,
+        } : null;
+        payload.selected_months = formData.selected_months || [];
+      } else {
+        payload.selected_months = formData.selected_months || [];
+        payload.month_range = null;
+      }
+      await payLoan.mutateAsync(payload);
+      setPayLoanModalOpen(false);
+      setPayLoanItem(null);
+      setFormData({});
     } catch (error: any) {
     }
   };
@@ -341,7 +379,7 @@ export default function CompensationLoanPage({
             }
             onDelete={
               permissions.delete_compensation
-                ? (id) => handleDelete("compensation", id)
+                ? (id) => handleDeleteCompensation(id)
                 : undefined
             }
           />
@@ -351,21 +389,19 @@ export default function CompensationLoanPage({
           <LoanTab
             filteredLoans={filteredLoans}
             formatCurrency={formatCurrency}
-            statusDropdownId={statusDropdownId}
-            setStatusDropdownId={setStatusDropdownId}
-            onEdit={
-              permissions.update_loan
-                ? (item) => openEditModal("loan", item)
+            onConfirm={
+              permissions.approve_loan
+                ? handleConfirmLoan
                 : undefined
             }
-            onDelete={
-              permissions.delete_loan
-                ? (id) => handleDelete("loan", id)
+            onReject={
+              permissions.approve_loan
+                ? handleRejectLoan
                 : undefined
             }
-            onStatusChange={
-              permissions.update_loan_status
-                ? handleStatusChange
+            onPayLoan={
+              permissions.pay_loan
+                ? handlePayLoanOpen
                 : undefined
             }
           />
@@ -431,6 +467,43 @@ export default function CompensationLoanPage({
           className="fixed inset-0 z-40"
           onClick={() => setStatusDropdownId(null)}
         />
+      )}
+
+      {/* Pay Loan Modal */}
+      {payLoanModalOpen && payLoanItem && (
+        <Dialog open={payLoanModalOpen} onOpenChange={setPayLoanModalOpen}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+            <DialogHeader className="px-6 py-4 border-b bg-gradient-to-r from-primary/5 to-transparent pr-12">
+              <DialogTitle>
+                Pay Loan - {payLoanItem.employee_name}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto p-6">
+              <LoanForm
+                formData={formData}
+                setFormData={setFormData}
+                employeeOptions={employeeOptionsForLoan}
+                selectedEmployeeSalary={selectedEmployeeSalary}
+                formatCurrency={formatCurrency}
+                errors={[]}
+                onValidationChange={() => {}}
+                employeeJoiningDate={
+                  formData.employee_id
+                    ? employees.find((e: any) => String(e.id) === String(formData.employee_id))?.joining_date
+                    : null
+                }
+              />
+            </div>
+            <div className="px-6 py-4 border-t flex justify-end gap-3 bg-muted/30">
+              <Button variant="outline" onClick={() => { setPayLoanModalOpen(false); setPayLoanItem(null); setFormData({}); }}>
+                Cancel
+              </Button>
+              <Button onClick={handlePayLoanSave}>
+                {payLoan.isPending ? 'Processing...' : 'Confirm Payment'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

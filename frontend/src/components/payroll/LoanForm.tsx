@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import SearchableSelect from "@/components/reuseable/SearchableSelect";
-import { AlertCircle, Calculator, Target, FileText, Clock, Check, X, ChevronDown, ChevronRight } from "lucide-react";
+import { AlertCircle, Calculator, Target, FileText, Clock, Check, X, ChevronDown, ChevronRight, Banknote, Building2 } from "lucide-react";
 
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { FREQUENCY_TYPES, MONTHS, generateYearOptions, getMonthLabel } from "./types";
@@ -552,6 +552,46 @@ export default function LoanForm({
             )}
           </div>
         )}
+      </div>
+
+      {/* Bank Information */}
+      <div className="bg-muted/30 rounded-xl border border-border overflow-hidden">
+        <div className="flex items-center gap-2 p-4 border-b border-border">
+          <Banknote className="w-4 h-4 text-primary" />
+          <span className="text-sm font-semibold text-foreground">Bank Information</span>
+        </div>
+        <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">Bank Name</label>
+            <input
+              type="text"
+              value={formData.bank_name || ""}
+              onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
+              placeholder="e.g., National Bank"
+              className="w-full bg-background border border-border rounded-lg h-10 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-ring"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">Account Number</label>
+            <input
+              type="text"
+              value={formData.bank_account_number || ""}
+              onChange={(e) => setFormData({ ...formData, bank_account_number: e.target.value })}
+              placeholder="e.g., 1234567890"
+              className="w-full bg-background border border-border rounded-lg h-10 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-ring"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">IBAN</label>
+            <input
+              type="text"
+              value={formData.bank_iban || ""}
+              onChange={(e) => setFormData({ ...formData, bank_iban: e.target.value })}
+              placeholder="e.g., PK36NAFA000123456789"
+              className="w-full bg-background border border-border rounded-lg h-10 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-ring"
+            />
+          </div>
+        </div>
       </div>
 
       {/* Purpose */}

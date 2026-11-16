@@ -91,6 +91,7 @@ const payrollPermissions = getPermissions(
         && l.loan_type === "SALARY_ADVANCE"
         && l.advance_for_month === selectedMonth
         && l.advance_for_year === selectedYear
+        && l.approval === "CONFIRM"
         && l.status === "PAID"
     );
   };
@@ -124,10 +125,23 @@ const payrollPermissions = getPermissions(
     const empComp = compensations.find(c => c.employee_id === employeeId && c.status === 'ACTIVE');
     if (empComp && compensationAppliesToMonth(empComp)) return true;
 
-    // Check other active (non-advance) loans
-    const empLoans = allLoans.filter(
-      l => l.employee_id === employeeId && l.status === 'PAID' && l.loan_type !== 'SALARY_ADVANCE'
-    );
+    // Check paid non-advance loans that apply to this month
+    const empLoans = allLoans.filter((l: any) => {
+      if (l.employee_id !== employeeId || l.approval !== 'CONFIRM' || l.status !== 'PAID' || l.loan_type === 'SALARY_ADVANCE') return false;
+      const freq = l.frequency_type;
+      if (freq === 'SELECTED_MONTH' || freq === 'ONE_TIME') {
+        return l.selected_months?.some((sm: any) => sm.month === selectedMonth && sm.year === selectedYear) ?? false;
+      }
+      if (freq === 'MONTH_RANGE') {
+        const mr = l.month_range;
+        if (!mr) return false;
+        const startVal = mr.start_year * 12 + mr.start_month;
+        const endVal = mr.end_year * 12 + mr.end_month;
+        const curVal = selectedYear * 12 + selectedMonth;
+        return curVal >= startVal && curVal <= endVal;
+      }
+      return true;
+    });
     if (empLoans.length > 0) return true;
 
     // Check approved leaves overlapping this month
@@ -329,6 +343,7 @@ const handleRefresh = () => {
                 const status = getPaymentStatus(employee.id);
                 const isPaid = status === "PAID";
                 const payrollRecord = getPayrollRecord(employee.id);
+
                 return (
                   <tr key={employee.id} className="border-t border-border hover:bg-muted/30">
                     <td className="px-4 py-3">
@@ -394,7 +409,7 @@ const handleRefresh = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {((!isPaid || hasAdvanceItems(employee.id)) && payrollPermissions.pay_salary) && (
+                        {!getAdvanceLoan(employee.id) && !isPaid && payrollPermissions.pay_salary && (
                           <button
                             onClick={() => {
                               setSelectedEmployee(employee);

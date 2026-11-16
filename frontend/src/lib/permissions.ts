@@ -36,7 +36,7 @@ export const PERMISSIONS = {
   HR: {
     dashboard:        ["view", "export"]                                                           as const,
     employee:         ["view","create","update","delete","activate","deactivate", "export"]        as const,
-    payroll:          ["view","pay_salary", "export"]                                              as const,
+    payroll:          ["view","pay_salary","update_loan","delete_loan","update_loan_status","approve_loan","pay_loan","export"] as const,
     attendance:       ["view", "export"]                                                           as const,
     leave:            ["view","create","approve","reject", "export"]                               as const,
     shift_override:   ["view","schedule", "export"]                                                as const,
@@ -54,6 +54,7 @@ export const PERMISSIONS = {
       "update_compensation_status","update_loan_status",
       "update_compensation","delete_compensation",
       "update_loan","delete_loan",
+      "approve_loan","pay_loan",
       "export",
     ] as const,
   },

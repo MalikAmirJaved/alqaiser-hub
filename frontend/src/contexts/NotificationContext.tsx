@@ -38,7 +38,7 @@ const ENTITY_TO_QUERY_KEY: Record<string, string[]> = {
   exitRecords: ["exitRecords", "exitStats"],
   policies: ["policies"],
   compensations: ["compensations"],
-  loans: ["loans"],
+  loans: ["loans", "employeeLoans"],
 
   // ---------- HR ----------
   asset_purchase_request: ["assetPurchaseRequests"],

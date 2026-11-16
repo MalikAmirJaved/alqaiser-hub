@@ -277,9 +277,11 @@ class ExitRecordView(BaseExitView):
         # ── 3. Settle all outstanding personal loans ──
         outstanding_loans = EmployeeLoan.objects.filter(
             employee=employee,
-            status='PAID',
+            approval='CONFIRM',
             is_deleted=False
-        ).exclude(loan_type='SALARY_ADVANCE')
+        ).exclude(loan_type='SALARY_ADVANCE').filter(
+            Q(status='UNPAID') | Q(status='PAID')
+        )
         total_loan_settled = 0
         for loan in outstanding_loans:
             remaining = float(loan.remaining_amount or 0)
@@ -297,6 +299,7 @@ class ExitRecordView(BaseExitView):
         outstanding_advances = EmployeeLoan.objects.filter(
             employee=employee,
             loan_type='SALARY_ADVANCE',
+            approval='CONFIRM',
             status='PAID',
             is_deleted=False
         )
@@ -682,15 +685,18 @@ class ExitFinalSettlementView(BaseExitView):
     # ---- Loan deductions (all outstanding: personal loans, NOT salary advances) ----
         active_loans = EmployeeLoan.objects.filter(
             employee=employee,
-            status='PAID',
+            approval='CONFIRM',
             is_deleted=False
-        ).exclude(loan_type='SALARY_ADVANCE')
+        ).exclude(loan_type='SALARY_ADVANCE').filter(
+            Q(status='UNPAID') | Q(status='PAID')
+        )
         total_loan_deduction = sum(float(l.remaining_amount or 0) for l in active_loans)
 
         # Salary advances outstanding (status='PAID' = not yet returned/deducted)
         advance_loans = EmployeeLoan.objects.filter(
             employee=employee,
             loan_type='SALARY_ADVANCE',
+            approval='CONFIRM',
             status='PAID',
             is_deleted=False
         )

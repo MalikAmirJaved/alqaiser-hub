@@ -8,7 +8,7 @@ from apps.hr.views.employee_views import EmployeeView, EmployeeStatsView, Active
 from apps.hr.views.payroll_views import (
     PayrollView, PayrollStatsView, PayrollPreviewView, PayrollAdvanceView,
     EmployeeLoanView, CompensationView,
-    LoanStatusUpdateView 
+    LoanStatusUpdateView, LoanApproveView, LoanPayView,
 )
 from apps.hr.views.employee_asset_views import (
     EmployeeAssetAssignmentView,
@@ -93,6 +93,8 @@ urlpatterns = [
     # Loans (with individual update/delete support)
     path('loans/', EmployeeLoanView.as_view(), name='employee-loans'),
     path('loans/status/', LoanStatusUpdateView.as_view(), name='loan-status-update'),
+    path('loans/approve/', LoanApproveView.as_view(), name='loan-approve'),
+    path('loans/pay/', LoanPayView.as_view(), name='loan-pay'),
     path('loans/<str:pk>/', EmployeeLoanView.as_view(), name='employee-loan-detail'),
 
     # Compensations

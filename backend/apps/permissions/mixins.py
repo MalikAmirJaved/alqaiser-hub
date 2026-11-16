@@ -88,6 +88,8 @@ CUSTOM_ACTION_TO_PERMISSION: dict[str, str] = {
     "delete_compensation":            "delete_compensation",
     "update_loan":                    "update_loan",
     "delete_loan":                    "delete_loan",
+    "approve_loan":                   "approve_loan",
+    "pay_loan":                       "pay_loan",
 
     # ── Inventory ──────────────────────────────────────────────────
     "receive_goods":    "receive_goods",

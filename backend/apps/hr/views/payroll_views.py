@@ -11,6 +11,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from django.db.models import Q
 import logging
+from apps.notifications.utils import broadcast_data_update
 from apps.permissions.mixins import PermissionRequiredMixin
 from apps.hr.models import (
     Employee, PayrollRecord, EmployeeLoan, Compensation, LeaveRequest, PayrollDeductionDetail,
@@ -434,12 +435,21 @@ class PayrollView(PermissionRequiredMixin, APIView):
         advance_loans = EmployeeLoan.objects.filter(
             employee=employee,
             loan_type='SALARY_ADVANCE',
+            approval='CONFIRM',
             status='PAID',
             advance_for_month=month,
             advance_for_year=year,
             is_deleted=False
         ).prefetch_related('selected_months')
         for advance in advance_loans:
+            # Don't deduct twice
+            if PayrollLoanDeduction.objects.filter(
+                loan=advance,
+                payroll__month=month,
+                payroll__year=year,
+                payroll__is_deleted=False
+            ).exists():
+                continue
             deduction_amount = float(advance.remaining_amount or advance.total_payable)
             if deduction_amount <= 0:
                 continue
@@ -458,9 +468,11 @@ class PayrollView(PermissionRequiredMixin, APIView):
         
         selected_loan_uuids = request.data.get('selected_loans', [])
         if selected_loan_uuids:
+            # Allow deduction only for loans that are CONFIRMED and PAID
             active_loans = EmployeeLoan.objects.filter(
                 employee=employee,
                 _id__in=selected_loan_uuids,
+                approval='CONFIRM',
                 status='PAID',
                 is_deleted=False
             ).prefetch_related('selected_months', 'month_range')
@@ -468,6 +480,15 @@ class PayrollView(PermissionRequiredMixin, APIView):
             for loan in active_loans:
                 # Skip salary advances (handled by auto-deduction above)
                 if loan.loan_type == 'SALARY_ADVANCE':
+                    continue
+                
+                # Don't deduct twice - skip if already deducted for this month/year
+                if PayrollLoanDeduction.objects.filter(
+                    loan=loan,
+                    payroll__month=month,
+                    payroll__year=year,
+                    payroll__is_deleted=False
+                ).exists():
                     continue
                 
                 deduction_amount = 0
@@ -497,7 +518,7 @@ class PayrollView(PermissionRequiredMixin, APIView):
                 
                 interest_amount = 0
                 if float(loan.interest_rate) > 0:
-                    interest_amount = (float(loan.remaining_amount) * float(loan.interest_rate) / 100) / max(1, loan.paid_months or 1)
+                    interest_amount = (float(loan.remaining_amount) * float(loan.interest_rate) / 100) / max(1, (loan.paid_months or 0) + 1)
                 
                 monthly_deduction_with_interest = deduction_amount + interest_amount
                 loan_deductions += monthly_deduction_with_interest
@@ -669,12 +690,15 @@ class PayrollView(PermissionRequiredMixin, APIView):
                 total_payable=carryover_amount,
                 frequency_type='ONE_TIME',
                 status='PAID',
+                approval='CONFIRM',
                 purpose=f'Carryover advance for {month}/{year} (leave/loan deduction exceeded salary)',
                 advance_for_month=carryover_month,
                 advance_for_year=carryover_year,
                 transaction_number=carryover_transaction_number,
                 approved_by=request.user,
                 approved_at=timezone.now(),
+                confirmed_by=request.user,
+                confirmed_at=timezone.now(),
                 created_by=request.user,
                 updated_by=request.user,
             )
@@ -846,12 +870,21 @@ class PayrollView(PermissionRequiredMixin, APIView):
         advance_loans = EmployeeLoan.objects.filter(
             employee=employee,
             loan_type='SALARY_ADVANCE',
+            approval='CONFIRM',
             status='PAID',
             advance_for_month=month,
             advance_for_year=year,
             is_deleted=False
         )
         for advance in advance_loans:
+            # Don't deduct twice
+            if PayrollLoanDeduction.objects.filter(
+                loan=advance,
+                payroll__month=month,
+                payroll__year=year,
+                payroll__is_deleted=False
+            ).exists():
+                continue
             deduction_amount = float(advance.remaining_amount or advance.total_payable)
             if deduction_amount > 0:
                 loan_deductions += deduction_amount
@@ -864,15 +897,26 @@ class PayrollView(PermissionRequiredMixin, APIView):
                 })
         
         if selected_loan_uuids:
+            # Allow deduction only for loans that are CONFIRMED and PAID
             active_loans = EmployeeLoan.objects.filter(
                 employee=employee,
                 _id__in=selected_loan_uuids,
+                approval='CONFIRM',
                 status='PAID',
                 is_deleted=False
             ).prefetch_related('selected_months', 'month_range')
             for loan in active_loans:
                 # Skip salary advances (handled by auto-deduction above)
                 if loan.loan_type == 'SALARY_ADVANCE':
+                    continue
+                
+                # Don't deduct twice - skip if already deducted for this month/year
+                if PayrollLoanDeduction.objects.filter(
+                    loan=loan,
+                    payroll__month=month,
+                    payroll__year=year,
+                    payroll__is_deleted=False
+                ).exists():
                     continue
                 
                 deduction_amount = 0
@@ -899,7 +943,7 @@ class PayrollView(PermissionRequiredMixin, APIView):
                 
                 interest_amount = 0
                 if float(loan.interest_rate) > 0 and deduction_amount > 0:
-                    interest_amount = (float(loan.remaining_amount) * float(loan.interest_rate) / 100) / max(1, loan.paid_months or 1)
+                    interest_amount = (float(loan.remaining_amount) * float(loan.interest_rate) / 100) / max(1, (loan.paid_months or 0) + 1)
                 total = deduction_amount + interest_amount
                 loan_deductions += total
                 loan_details.append({
@@ -1065,9 +1109,15 @@ class EmployeeLoanView(PermissionRequiredMixin, APIView):
             "selected_months": selected_months,
             "month_range": month_range,
             "status": loan.status,
+            "approval": loan.approval,
             "purpose": loan.purpose,
+            "bank_name": loan.bank_name,
+            "bank_account_number": loan.bank_account_number,
+            "bank_iban": loan.bank_iban,
             "transaction_number": loan.transaction_number,
             "approved_at": loan.approved_at.isoformat() if loan.approved_at else None,
+            "confirmed_at": loan.confirmed_at.isoformat() if loan.confirmed_at else None,
+            "paid_at": loan.paid_at.isoformat() if loan.paid_at else None,
             "notes": loan.notes,
             "advance_for_month": loan.advance_for_month,
             "advance_for_year": loan.advance_for_year,
@@ -1212,7 +1262,8 @@ class EmployeeLoanView(PermissionRequiredMixin, APIView):
             interest_rate=interest_rate,
             total_payable=total_payable,
             frequency_type=frequency_type,
-            status='PAID',
+            status='UNPAID',
+            approval='PENDING',
             purpose=request.data.get('purpose'),
             notes=request.data.get('notes'),
             transaction_number=transaction_number,
@@ -1288,7 +1339,8 @@ class EmployeeLoanView(PermissionRequiredMixin, APIView):
             company_id=company_id,
             is_deleted=False
         )
-        updatable_fields = ['loan_type', 'interest_rate', 'purpose', 'notes', 'frequency_type']
+        updatable_fields = ['loan_type', 'interest_rate', 'purpose', 'notes', 'frequency_type',
+                            'bank_name', 'bank_account_number', 'bank_iban']
         for field in updatable_fields:
             if field in request.data:
                 setattr(loan, field, request.data[field])
@@ -1379,9 +1431,9 @@ class EmployeeLoanView(PermissionRequiredMixin, APIView):
             company_id=company_id,
             is_deleted=False
         )
-        if loan.status == 'ACTIVE':
+        if loan.status == 'PAID' and loan.approval == 'CONFIRM':
             return Response(
-                {'error': 'Cannot delete an active loan. Please cancel it first.'},
+                {'error': 'Cannot delete a confirmed paid loan. Please mark it as returned first.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         loan.is_deleted = True
@@ -1409,14 +1461,9 @@ class LoanStatusUpdateView(PermissionRequiredMixin, APIView):
             )
         loan_uuid = request.data.get('id')
         new_status = request.data.get('status')
-        if not loan_uuid or not new_status:
+        if not loan_uuid:
             return Response(
-                {'error': 'id and status are required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        if new_status not in ['PAID', 'RETURNED']:
-            return Response(
-                {'error': 'Invalid status. Only PAID and RETURNED are supported.'},
+                {'error': 'id is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         loan = get_object_or_404(
@@ -1425,18 +1472,245 @@ class LoanStatusUpdateView(PermissionRequiredMixin, APIView):
             company_id=company_id,
             is_deleted=False
         )
-        old_status = loan.status
-        loan.status = new_status
-        if new_status == 'RETURNED':
-            loan.remaining_amount = 0
-            loan.paid_amount = float(loan.total_payable)
+        
+        # Handle approval change
+        if 'approval' in request.data:
+            new_approval = request.data['approval']
+            if new_approval not in ['PENDING', 'CONFIRM', 'REJECTED']:
+                return Response(
+                    {'error': 'Invalid approval value. Use PENDING, CONFIRM, or REJECTED.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            loan.approval = new_approval
+            if new_approval == 'CONFIRM':
+                loan.confirmed_by = request.user
+                loan.confirmed_at = timezone.now()
+            loan.updated_by = request.user
+            loan.save()
+            return Response({
+                "message": f"Loan approval set to {new_approval}",
+                "loan": self._serialize_simple_loan(loan)
+            })
+        
+        # Handle status change
+        if new_status:
+            if new_status not in ['UNPAID', 'PAID', 'RETURNED']:
+                return Response(
+                    {'error': 'Invalid status. Use UNPAID, PAID, or RETURNED.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            old_status = loan.status
+            loan.status = new_status
+            if new_status == 'RETURNED':
+                loan.remaining_amount = 0
+                loan.paid_amount = float(loan.total_payable)
+            if new_status == 'PAID':
+                loan.paid_at = timezone.now()
+            loan.updated_by = request.user
+            loan.save()
+            return Response({
+                "message": f"Loan status changed from {old_status} to {new_status}",
+                "loan": self._serialize_simple_loan(loan)
+            })
+        
+        return Response({'error': 'status or approval field is required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    def _serialize_simple_loan(self, loan):
+        return {
+            "id": str(loan._id),
+            "status": loan.status,
+            "approval": loan.approval,
+            "remaining_amount": str(loan.remaining_amount),
+            "paid_amount": str(loan.paid_amount),
+            "paid_months": loan.paid_months,
+        }
+
+
+class LoanApproveView(PermissionRequiredMixin, APIView):
+    """Approve or reject a loan"""
+    permission_module = 'HR'
+    permission_resource = 'compensation'
+    permission_classes = [IsAuthenticated]
+
+    def get_permission_action(self):
+        return 'approve_loan'
+
+    @transaction.atomic
+    def post(self, request):
+        company_id = request.user.company_id
+        if not company_id:
+            return Response(
+                {'error': 'User is not associated with any company'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        loan_uuid = request.data.get('id')
+        approval_action = request.data.get('approval')
+        if not loan_uuid or not approval_action:
+            return Response(
+                {'error': 'id and approval are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if approval_action not in ['CONFIRM', 'REJECTED']:
+            return Response(
+                {'error': 'Invalid action. Use CONFIRM or REJECTED.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        loan = get_object_or_404(
+            EmployeeLoan,
+            _id=loan_uuid,
+            company_id=company_id,
+            is_deleted=False
+        )
+        if loan.approval != 'PENDING':
+            return Response(
+                {'error': f'Loan has already been {loan.approval.lower()}ed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        loan.approval = approval_action
+        if approval_action == 'CONFIRM':
+            loan.confirmed_by = request.user
+            loan.confirmed_at = timezone.now()
+            loan.approved_by = request.user
+            loan.approved_at = timezone.now()
         loan.updated_by = request.user
         loan.save()
         return Response({
-            "message": f"Loan status changed from {old_status} to {new_status}",
+            "message": f"Loan {approval_action.lower()}ed successfully",
             "loan": {
                 "id": str(loan._id),
                 "status": loan.status,
+                "approval": loan.approval,
+            }
+        })
+
+
+class LoanPayView(PermissionRequiredMixin, APIView):
+    """Pay a loan - update amount, selected months, bank info and mark as paid"""
+    permission_module = 'HR'
+    permission_resource = 'compensation'
+    permission_classes = [IsAuthenticated]
+
+    def get_permission_action(self):
+        return 'pay_loan'
+
+    @transaction.atomic
+    def post(self, request):
+        company_id = request.user.company_id
+        branch_id = request.user.branch_id
+        if not company_id:
+            return Response(
+                {'error': 'User is not associated with any company'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        loan_uuid = request.data.get('id')
+        if not loan_uuid:
+            return Response(
+                {'error': 'id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        loan = get_object_or_404(
+            EmployeeLoan,
+            _id=loan_uuid,
+            company_id=company_id,
+            is_deleted=False
+        )
+        if loan.approval != 'CONFIRM':
+            return Response(
+                {'error': 'Loan must be confirmed before payment'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if loan.status != 'UNPAID':
+            return Response(
+                {'error': f'Loan is already {loan.status.lower()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update bank info
+        if 'bank_name' in request.data:
+            loan.bank_name = request.data['bank_name']
+        if 'bank_account_number' in request.data:
+            loan.bank_account_number = request.data['bank_account_number']
+        if 'bank_iban' in request.data:
+            loan.bank_iban = request.data['bank_iban']
+        
+        # Update principal and interest if provided
+        if 'principal_amount' in request.data:
+            principal = float(request.data['principal_amount'])
+            interest = float(request.data.get('interest_rate', loan.interest_rate))
+            loan.principal_amount = principal
+            if interest > 0:
+                loan.total_payable = principal + (principal * interest / 100)
+            else:
+                loan.total_payable = principal
+            loan.remaining_amount = float(loan.total_payable)
+        
+        # Update selected months if provided
+        if 'selected_months' in request.data:
+            selected_months_data = request.data['selected_months']
+            if selected_months_data:
+                total_payable_val = float(loan.total_payable)
+                if total_payable_val > 0:
+                    deductions_sum = sum(float(sm.get('deduction', 0)) for sm in selected_months_data)
+                    if abs(deductions_sum - total_payable_val) > 0.01:
+                        return Response(
+                            {'error': f'Sum of deductions ({deductions_sum:.2f}) must equal total payable amount ({total_payable_val:.2f})'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                loan.selected_months.all().delete()
+                for sm in selected_months_data:
+                    LoanSelectedMonth.objects.create(
+                        loan=loan,
+                        month=sm['month'],
+                        year=sm['year'],
+                        deduction=sm.get('deduction', 0),
+                        company_id=company_id,
+                        branch_id=branch_id or loan.branch_id,
+                        created_by=request.user,
+                        updated_by=request.user,
+                    )
+        
+        # Update month range if provided
+        if 'month_range' in request.data and request.data['month_range'] is not None:
+            try:
+                loan.month_range.is_deleted = True
+                loan.month_range.save(update_fields=["is_deleted"])
+            except (LoanMonthRange.DoesNotExist, AttributeError):
+                pass
+            mr_data = request.data['month_range']
+            total_months_count = (mr_data['end_year'] - mr_data['start_year']) * 12 + \
+                                 (mr_data['end_month'] - mr_data['start_month']) + 1
+            tp = float(loan.total_payable)
+            deduction_per_month = tp / total_months_count if total_months_count > 0 else tp
+            LoanMonthRange.objects.create(
+                loan=loan,
+                start_month=mr_data['start_month'],
+                start_year=mr_data['start_year'],
+                end_month=mr_data['end_month'],
+                end_year=mr_data['end_year'],
+                deduction=deduction_per_month,
+                company_id=company_id,
+                branch_id=branch_id or loan.branch_id,
+                created_by=request.user,
+                updated_by=request.user,
+            )
+        
+        # Mark loan as PAID
+        loan.status = 'PAID'
+        loan.paid_at = timezone.now()
+        loan.updated_by = request.user
+        loan.save()
+        
+        return Response({
+            "message": "Loan paid successfully",
+            "loan": {
+                "id": str(loan._id),
+                "status": loan.status,
+                "approval": loan.approval,
+                "principal_amount": str(loan.principal_amount),
+                "total_payable": str(loan.total_payable),
+                "remaining_amount": str(loan.remaining_amount),
+                "paid_amount": str(loan.paid_amount),
+                "paid_at": loan.paid_at.isoformat() if loan.paid_at else None,
             }
         })
 
@@ -1718,11 +1992,11 @@ class CompensationView(PermissionRequiredMixin, APIView):
                 )
         
         # Update month range if provided
-        if 'month_range' in request.data:
+        if 'month_range' in request.data and request.data['month_range'] is not None:
             try:
-                compensation.month_range.is_deleted = True
-                compensation.month_range.save(update_fields=["is_deleted"])
-            except (CompensationMonthRange.DoesNotExist, AttributeError):
+                loan.month_range.is_deleted = True
+                loan.month_range.save(update_fields=["is_deleted"])
+            except (LoanMonthRange.DoesNotExist, AttributeError):
                 pass
             mr_data = request.data['month_range']
             CompensationMonthRange.objects.create(
@@ -1864,12 +2138,15 @@ class PayrollAdvanceView(PermissionRequiredMixin, APIView):
             total_payable=net_amount,
             frequency_type='ONE_TIME',
             status='PAID',
+            approval='CONFIRM',
             purpose=f'Advance salary for {month}/{year}',
             advance_for_month=month,
             advance_for_year=year,
             transaction_number=transaction_number,
             approved_by=request.user,
             approved_at=timezone.now(),
+            confirmed_by=request.user,
+            confirmed_at=timezone.now(),
             created_by=request.user,
             updated_by=request.user,
         )
@@ -1924,6 +2201,10 @@ class PayrollAdvanceView(PermissionRequiredMixin, APIView):
         )
         payment.status = 'CONFIRMED'
         payment.save(update_fields=['status', 'updated_at'])
+
+        # Notify frontend to refresh both payroll and loans data
+        broadcast_data_update(company_id, branch_id, 'payroll', 'create', advance_payroll._id)
+        broadcast_data_update(company_id, branch_id, 'loans', 'create', loan._id)
 
         return Response({
             "message": f"Advance salary of {net_amount:.2f} processed for {employee.full_name} for {month}/{year}",

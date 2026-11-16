@@ -9,6 +9,7 @@ import {
   Pencil, X, Clock, DollarSign, Timer
 } from "lucide-react";
 import { LocationGroup } from "@/components/reuseable/LocationSelectors";
+import CurrencySelect from "@/components/reuseable/CurrencySelect";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
 interface WorkingDayDisplay {
@@ -595,15 +596,11 @@ export default function CompanyProfile() {
         <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-4">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block">Currency & Tax</span>
           <Field label="Primary Currency">
-            <select className={selectCls} value={draft.currency} onChange={(e) => setDraftField("currency", e.target.value)}>
-              <option value="USD">USD ($)</option>
-              <option value="PKR">PKR (₨)</option>
-              <option value="AED">AED (د.إ)</option>
-              <option value="GBP">GBP (£)</option>
-              <option value="EUR">EUR (€)</option>
-              <option value="INR">INR (₹)</option>
-              <option value="SAR">SAR (﷼)</option>
-            </select>
+            <CurrencySelect
+              value={draft.currency}
+              onChange={(val) => setDraftField("currency", val)}
+              required
+            />
           </Field>
           <Field label="Default Tax Rate (%)">
             <input type="number" step="0.01" min="0" max="100" className={inputCls} value={draft.taxRate} onChange={(e) => setDraftField("taxRate", e.target.value)} />

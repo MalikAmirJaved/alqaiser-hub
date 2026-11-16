@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef } from "react";
+import { LocationGroup } from "@/components/reuseable/LocationSelectors";
 
 interface FormField {
   name: string;
@@ -21,6 +22,7 @@ interface FormField {
   maxLength?: number;
   placeholder?: string;
   options?: { value: string; label: string }[];
+  fields?: Record<string, string>; // For field groups like location-group
 }
 
 interface FormModalProps {
@@ -100,6 +102,38 @@ export function FormModal({ open, onClose, title, fields, initialData, onSubmit,
       );
     }
     
+    if (field.type === "location-group") {
+      const countryField = field.fields?.country || "country";
+      const stateField = field.fields?.state || "state";
+      const cityField = field.fields?.city || "city";
+      const country = watch(countryField);
+      const state = watch(stateField);
+      const city = watch(cityField);
+
+      return (
+        <LocationGroup
+          country={country}
+          setCountry={(val) => {
+            setValue(countryField, val);
+            if (val !== country) {
+              setValue(stateField, "");
+              setValue(cityField, "");
+            }
+          }}
+          state={state}
+          setState={(val) => {
+            setValue(stateField, val);
+            if (val !== state) {
+              setValue(cityField, "");
+            }
+          }}
+          city={city}
+          setCity={(val) => setValue(cityField, val)}
+          required={field.required}
+        />
+      );
+    }
+
     if (field.type === "code") {
       return (
         <div className="space-y-2">
@@ -157,8 +191,8 @@ export function FormModal({ open, onClose, title, fields, initialData, onSubmit,
     );
   };
 
-  // Group fields for 2-column layout (except textarea which takes full width)
-  const isFullWidthField = (field: FormField) => field.type === "textarea";
+  // Group fields for 2-column layout (except textarea/location-group which take full width)
+  const isFullWidthField = (field: FormField) => field.type === "textarea" || field.type === "location-group";
   const regularFields = fields.filter(f => !isFullWidthField(f));
   const fullWidthFields = fields.filter(f => isFullWidthField(f));
 

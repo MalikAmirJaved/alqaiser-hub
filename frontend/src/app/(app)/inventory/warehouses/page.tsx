@@ -3,12 +3,12 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, Search, X } from "lucide-react";
 import { TableView, GridView } from "@/components/reuseable/TableGridView";
 import { StatsCards } from "@/components/reuseable/StatsCards";
 import { ConfirmationModal, useConfirmationModal } from "@/components/reuseable/ConfirmationModal";
 import { WarehouseForm } from "@/components/inventory/warehouse/WarehouseForm";
-import { WarehouseDetail } from "@/components/inventory/warehouse/WarehouseDetail";
 import {
   useWarehouses,
   useWarehouseStats,
@@ -24,12 +24,12 @@ import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 type ViewMode = "table" | "grid";
 
 export default function WarehousesPage() {
+  const router = useRouter();
   const permissions = useFeaturePermissions("INVENTORY", "warehouse");
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [searchTerm, setSearchTerm] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null);
-  const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse | null>(null);
 
   const { data: warehouses = [], isLoading, refetch } = useWarehouses({ search: searchTerm });
   const { data: stats, isLoading: statsLoading } = useWarehouseStats();
@@ -66,7 +66,6 @@ export default function WarehousesPage() {
   const handleEdit = (warehouse: Warehouse) => {
     setEditingWarehouse(warehouse);
     setIsFormOpen(true);
-    setSelectedWarehouse(null);
   };
 
   const handleDelete = async (warehouse: Warehouse) => {
@@ -76,7 +75,6 @@ export default function WarehousesPage() {
       onConfirm: async () => {
         try {
           await deleteWarehouse.mutateAsync(warehouse.id);
-          setSelectedWarehouse(null);
           refetch();
         } catch (error: any) {
         }
@@ -99,7 +97,7 @@ export default function WarehousesPage() {
   };
 
   const handleRowClick = (row: Warehouse) => {
-    setSelectedWarehouse(row);
+    router.push(`/inventory/warehouses/${row.id}`);
   };
 
   const columns = [
@@ -300,13 +298,6 @@ export default function WarehousesPage() {
         />
       )}
 
-      <WarehouseDetail
-        warehouse={selectedWarehouse}
-        isOpen={!!selectedWarehouse}
-        onClose={() => setSelectedWarehouse(null)}
-        onEdit={permissions.update ? handleEdit : undefined}
-        onDelete={permissions.delete ? handleDelete : undefined}
-      />
 
       {(isFormOpen && (editingWarehouse ? permissions.update : permissions.create)) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">

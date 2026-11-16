@@ -16,6 +16,7 @@ import {
   CreditCard,
   Hash,
   User,
+  Banknote,
 } from "lucide-react";
 import { getFrequencyLabel, getMonthLabel, getFrequencyBadgeColor } from "@/components/payroll/types";
 
@@ -54,6 +55,7 @@ const fmtDate = (val?: string | null) => {
 
 const StatusBadge = ({ status }: { status: string }) => {
   const colors: Record<string, string> = {
+    UNPAID: "bg-amber-500/15 text-amber-600 border-amber-500/30",
     PAID: "bg-blue-500/15 text-blue-600 border-blue-500/30",
     RETURNED: "bg-green-500/15 text-green-600 border-green-500/30",
   };
@@ -61,6 +63,20 @@ const StatusBadge = ({ status }: { status: string }) => {
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${colors[status] || "bg-muted text-muted-foreground border-border"}`}>
       <span className="w-1.5 h-1.5 rounded-full bg-current" />
       {status}
+    </span>
+  );
+};
+
+const ApprovalBadge = ({ approval }: { approval: string }) => {
+  const colors: Record<string, string> = {
+    PENDING: "bg-yellow-500/15 text-yellow-600 border-yellow-500/30",
+    CONFIRM: "bg-emerald-500/15 text-emerald-600 border-emerald-500/30",
+    REJECTED: "bg-red-500/15 text-red-600 border-red-500/30",
+  };
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${colors[approval] || "bg-muted text-muted-foreground border-border"}`}>
+      <span className="w-1.5 h-1.5 rounded-full bg-current" />
+      {approval}
     </span>
   );
 };
@@ -114,7 +130,10 @@ export default function LoanDetailPage() {
               {loan.employee_name} &middot; {loan.employee_code}
             </p>
           </div>
-          <StatusBadge status={loan.status} />
+          <div className="flex items-center gap-2">
+            <ApprovalBadge approval={loan.approval || 'PENDING'} />
+            <StatusBadge status={loan.status} />
+          </div>
         </div>
       </div>
 
@@ -161,6 +180,17 @@ export default function LoanDetailPage() {
           </div>
         )}
       </SectionCard>
+
+      {/* Bank Information */}
+      {(loan.bank_name || loan.bank_account_number || loan.bank_iban) && (
+        <SectionCard title="Bank Information" icon={Banknote}>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8">
+            <InfoRow label="Bank Name" value={loan.bank_name} />
+            <InfoRow label="Account Number" value={loan.bank_account_number} />
+            <InfoRow label="IBAN" value={loan.bank_iban} />
+          </div>
+        </SectionCard>
+      )}
 
       {/* Frequency & Schedule */}
       <SectionCard title="Frequency & Schedule" icon={Clock}>
@@ -271,6 +301,8 @@ export default function LoanDetailPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
           <InfoRow label="Created At" value={fmtDate(loan.created_at)} />
           <InfoRow label="Approved At" value={fmtDate(loan.approved_at)} />
+          <InfoRow label="Confirmed At" value={fmtDate(loan.confirmed_at)} />
+          <InfoRow label="Paid At" value={fmtDate(loan.paid_at)} />
         </div>
         {loan.notes && (
           <div className="mt-4 pt-4 border-t border-border">

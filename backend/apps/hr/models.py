@@ -595,11 +595,28 @@ class EmployeeLoan(BaseModel):
     status = models.CharField(
         max_length=20,
         choices=[
+            ('UNPAID', 'Unpaid'),
             ('PAID', 'Paid'),
             ('RETURNED', 'Returned'),
         ],
-        default='PAID'
+        default='UNPAID'
     )
+    
+    # Approval
+    approval = models.CharField(
+        max_length=20,
+        choices=[
+            ('PENDING', 'Pending'),
+            ('CONFIRM', 'Confirmed'),
+            ('REJECTED', 'Rejected'),
+        ],
+        default='PENDING'
+    )
+    
+    # Bank Info
+    bank_name = models.CharField(max_length=255, blank=True, null=True)
+    bank_account_number = models.CharField(max_length=100, blank=True, null=True)
+    bank_iban = models.CharField(max_length=50, blank=True, null=True)
     
     # Additional Info
     purpose = models.TextField(blank=True, null=True)
@@ -611,6 +628,15 @@ class EmployeeLoan(BaseModel):
         related_name='approved_loans'
     )
     approved_at = models.DateTimeField(null=True, blank=True)
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='confirmed_loans'
+    )
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True, null=True)
     transaction_number = models.CharField(max_length=100, blank=True, null=True)
     
@@ -625,6 +651,7 @@ class EmployeeLoan(BaseModel):
         indexes = [
             models.Index(fields=['employee', 'status']),
             models.Index(fields=['company_id', 'status']),
+            models.Index(fields=['company_id', 'approval']),
             models.Index(fields=['frequency_type']),
             models.Index(fields=['advance_for_month', 'advance_for_year']),
         ]

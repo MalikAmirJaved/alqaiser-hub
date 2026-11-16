@@ -54,11 +54,20 @@ export interface Loan {
   paid_amount?: string;
   paid_months?: number;
   purpose?: string;
-  status: 'PENDING' | 'ACTIVE' | 'PAID' | 'CANCELLED';
+  status: 'UNPAID' | 'PAID' | 'RETURNED';
+  approval: 'PENDING' | 'CONFIRM' | 'REJECTED';
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_iban?: string;
   monthly_salary?: string;
   frequency_type: 'ONE_TIME' | 'SELECTED_MONTH' | 'MONTH_RANGE';
   selected_months?: SelectedMonth[];
   month_range?: MonthRange | null;
+  paid_months_set?: Array<[number, number]>;
+  confirmed_at?: string;
+  paid_at?: string;
+  created_at?: string;
+  transaction_number?: string;
 }
 
 export interface LoanFormData {

@@ -2,47 +2,44 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2, HandCoins, Clock, Eye, MoreHorizontal } from "lucide-react";
+import { HandCoins, Clock, Eye, CreditCard, CheckCircle, XCircle } from "lucide-react";
 import { getFrequencyLabel, getFrequencyBadgeColor } from "./types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 interface LoanTabProps {
     filteredLoans: any[];
     formatCurrency: (amount: number) => string;
-    statusDropdownId: number | null;
-    setStatusDropdownId: (id: number | null) => void;
-    onEdit?: (loan: any) => void;
-    onDelete?: (id: string) => void;
-    onStatusChange?: (id: string, status: string) => void;
+    onConfirm?: (id: string) => void;
+    onReject?: (id: string) => void;
+    onPayLoan?: (loan: any) => void;
 }
 
 export default function LoanTab({
     filteredLoans,
     formatCurrency,
-    statusDropdownId,
-    setStatusDropdownId,
-    onEdit,
-    onDelete,
-    onStatusChange
+    onConfirm,
+    onReject,
+    onPayLoan
 }: LoanTabProps) {
     const router = useRouter();
 
-    const getStatusVariant = (status: string): "default" | "secondary" | "outline" | "destructive" => {
-        switch (status) {
-            case "PAID": return "default";
-            case "RETURNED": return "secondary";
-            default: return "outline";
-        }
-    };
-
     const getStatusClassName = (status: string) => {
         switch (status) {
+            case "UNPAID": return "bg-amber-500/15 text-amber-600 border-amber-500/30 hover:bg-amber-500/20";
             case "PAID": return "bg-blue-500/15 text-blue-600 border-blue-500/30 hover:bg-blue-500/20";
             case "RETURNED": return "bg-green-500/15 text-green-600 border-green-500/30 hover:bg-green-500/20";
             default: return "bg-gray-500/15 text-gray-600 border-gray-500/30 hover:bg-gray-500/20";
+        }
+    };
+
+    const getApprovalClassName = (approval: string) => {
+        switch (approval) {
+            case "PENDING": return "bg-yellow-500/15 text-yellow-600 border-yellow-500/30";
+            case "CONFIRM": return "bg-emerald-500/15 text-emerald-600 border-emerald-500/30";
+            case "REJECTED": return "bg-red-500/15 text-red-600 border-red-500/30";
+            default: return "bg-gray-500/15 text-gray-600 border-gray-500/30";
         }
     };
 
@@ -75,13 +72,14 @@ export default function LoanTab({
                         <TableHead className="uppercase text-xs tracking-wider">Progress</TableHead>
                         <TableHead className="uppercase text-xs tracking-wider">Frequency</TableHead>
                         <TableHead className="uppercase text-xs tracking-wider">Status</TableHead>
+                        <TableHead className="uppercase text-xs tracking-wider">Approval</TableHead>
                         <TableHead className="text-right uppercase text-xs tracking-wider">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {filteredLoans.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                            <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                                 <HandCoins className="w-12 h-12 mx-auto mb-3 opacity-30" />
                                 No loan records found.
                             </TableCell>
@@ -89,6 +87,7 @@ export default function LoanTab({
                     ) : (
                         filteredLoans.map((item) => {
                             const progress = calculateProgress(parseFloat(item.remaining_amount), parseFloat(item.total_payable));
+                            const canPay = item.approval === 'CONFIRM' && item.status === 'UNPAID';
                             return (
                                 <TableRow key={item.id}>
                                     <TableCell>
@@ -122,39 +121,14 @@ export default function LoanTab({
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
-                                        {onStatusChange ? (
-                                            <DropdownMenu
-                                                open={statusDropdownId === item.id}
-                                                onOpenChange={(open) => setStatusDropdownId(open ? item.id : null)}
-                                            >
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className={`gap-1.5 h-7 px-2.5 text-xs rounded-full font-normal ${getStatusClassName(item.status)}`}
-                                                    >
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                                                        {item.status}
-                                                        <MoreHorizontal className="w-3 h-3" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="start" className="min-w-[120px]">
-                                                    {['PAID', 'RETURNED'].map(status => (
-                                                        <DropdownMenuItem
-                                                            key={status}
-                                                            onClick={() => onStatusChange(item.id, status)}
-                                                            className={item.status === status ? 'bg-primary/10 text-primary font-medium' : ''}
-                                                        >
-                                                            {status}
-                                                        </DropdownMenuItem>
-                                                    ))}
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        ) : (
-                                            <Badge variant="outline" className={`font-normal ${getStatusClassName(item.status)}`}>
-                                                {item.status}
-                                            </Badge>
-                                        )}
+                                        <Badge variant="outline" className={`font-normal ${getStatusClassName(item.status)}`}>
+                                            {item.status}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant="outline" className={`font-normal ${getApprovalClassName(item.approval)}`}>
+                                            {item.approval || 'PENDING'}
+                                        </Badge>
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-1">
@@ -167,27 +141,45 @@ export default function LoanTab({
                                             >
                                                 <Eye className="w-4 h-4" />
                                             </Button>
-                                            {onEdit && (
+                                            {canPay && onPayLoan && (
                                                 <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8"
-                                                    onClick={() => onEdit(item)}
-                                                    title="Edit"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-8 text-xs gap-1 bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
+                                                    onClick={() => onPayLoan(item)}
+                                                    title="Pay Loan"
                                                 >
-                                                    <Pencil className="w-4 h-4" />
+                                                    <CreditCard className="w-3 h-3" />
+                                                    Pay Loan
                                                 </Button>
                                             )}
-                                            {onDelete && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 text-red-500 hover:text-red-500 hover:bg-red-500/10"
-                                                    onClick={() => onDelete(item.id)}
-                                                    title="Delete"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </Button>
+                                            {item.approval === 'PENDING' && (
+                                                <>
+                                                    {onConfirm && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-8 text-xs gap-1 bg-emerald-500/10 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/20"
+                                                            onClick={() => onConfirm(item.id)}
+                                                            title="Confirm Loan"
+                                                        >
+                                                            <CheckCircle className="w-3 h-3" />
+                                                            Confirm
+                                                        </Button>
+                                                    )}
+                                                    {onReject && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-8 text-xs gap-1 bg-red-500/10 text-red-600 border-red-500/30 hover:bg-red-500/20"
+                                                            onClick={() => onReject(item.id)}
+                                                            title="Reject Loan"
+                                                        >
+                                                            <XCircle className="w-3 h-3" />
+                                                            Reject
+                                                        </Button>
+                                                    )}
+                                                </>
                                             )}
                                         </div>
                                     </TableCell>

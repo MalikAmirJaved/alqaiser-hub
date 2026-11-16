@@ -335,14 +335,6 @@ export default function EmployeesPage() {
       {employeePermissions.update && (
         <>
           <button
-            onClick={() => openStatusModal(row)}
-            className="p-1.5 rounded-md hover:bg-blue-100 text-blue-600 transition-colors"
-            title="Change Employment Status"
-            aria-label="Change Status"
-          >
-            <ToggleRight className="w-4 h-4" />
-          </button>
-          <button
             onClick={() => openPromotionModal(row)}
             className="p-1.5 rounded-md hover:bg-success/15 text-success transition-colors"
             title="Promotion"

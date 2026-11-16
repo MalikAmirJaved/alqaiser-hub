@@ -161,7 +161,7 @@ export default function EmployeeSalaryDetailPage() {
   const totalLeaveDeduction = payrollRecords.reduce((s, r) => s + parseFloat(r.total_leave_deduction || "0"), 0);
 
   // Loans summary
-  const personalLoans = loans.filter((l) => l.loan_type !== "SALARY_ADVANCE");
+  const personalLoans = loans.filter((l) => l.loan_type !== "SALARY_ADVANCE" && l.approval === "CONFIRM");
   const advanceLoans = loans.filter((l) => l.loan_type === "SALARY_ADVANCE");
   const totalLoanPrincipal = personalLoans.reduce((s, l) => s + parseFloat(l.principal_amount || "0"), 0);
   const totalLoanRemaining = personalLoans.reduce((s, l) => s + parseFloat(l.remaining_amount || "0"), 0);

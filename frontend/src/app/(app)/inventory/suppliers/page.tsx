@@ -38,9 +38,16 @@ const formFields = [
   { name: "email", label: "Email", type: "email", placeholder: "contact@company.com" },
   { name: "phone", label: "Phone", type: "tel", minLength: 7, maxLength: 20, placeholder: "+1 234 567 8900" },
   { name: "address_line", label: "Address Line", type: "textarea", placeholder: "Street address" },
-  { name: "country", label: "Country", type: "text", placeholder: "Country" },
-  { name: "state", label: "State", type: "text", placeholder: "State/Province" },
-  { name: "city", label: "City", type: "text", placeholder: "City" },
+  {
+    name: "location",
+    label: "Location",
+    type: "location-group",
+    fields: {
+      country: "country",
+      state: "state",
+      city: "city",
+    },
+  },
   { name: "postal_code", label: "Postal Code", type: "text", placeholder: "Postal code" },
   {
     name: "status",
@@ -123,10 +130,7 @@ export default function SuppliersPage() {
 
   const handleAdd = () => {
     setEditingItem(null);
-    generateCode().then(code => {
-      setEditingItem({ code } as any);
-      setModalOpen(true);
-    }).catch(() => setModalOpen(true));
+    setModalOpen(true);
   };
 
   const handleEdit = (item: Supplier) => {

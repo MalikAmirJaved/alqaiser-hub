@@ -40,10 +40,17 @@ export default function PaymentModal({
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
-  const isAdvance = selectedYear > currentYear || (selectedYear === currentYear && selectedMonth >= currentMonth);
 
   const { data: allLoans = [] } = useEmployeeLoans();
   const { data: compensations = [] } = useCompensations();
+  const advanceExists = employee && allLoans.some(
+    l => l.employee_id === employee.id
+        && l.loan_type === "SALARY_ADVANCE"
+        && l.advance_for_month === selectedMonth
+        && l.advance_for_year === selectedYear
+        && l.approval === "CONFIRM"
+  );
+  const isAdvance = !advanceExists && (selectedYear > currentYear || (selectedYear === currentYear && selectedMonth >= currentMonth));
   const previewMutation = usePayrollPreview(apiModule);
   const processPayroll = useProcessPayroll(apiModule);
   const processPayrollAdvance = useProcessPayrollAdvance(apiModule);
@@ -51,11 +58,32 @@ export default function PaymentModal({
   const activeCompensation = compensations.find(
     c => c.employee_id === employee?.id && c.status === "ACTIVE"
   );
-  const activeLoans = allLoans.filter(
-    l => l.employee_id === employee?.id && l.status === "PAID" && l.loan_type !== "SALARY_ADVANCE"
-  );
+  const activeLoans = allLoans.filter(l => {
+    if (l.employee_id !== employee?.id || l.approval !== "CONFIRM" || l.status !== "PAID" || l.loan_type === "SALARY_ADVANCE") return false;
+    // Only include loans whose selected months or month range matches the current payroll period
+    const freq = l.frequency_type;
+    if (freq === 'SELECTED_MONTH' || freq === 'ONE_TIME') {
+      return l.selected_months?.some((sm: any) => sm.month === selectedMonth && sm.year === selectedYear) ?? false;
+    }
+    if (freq === 'MONTH_RANGE') {
+      const mr = l.month_range;
+      if (!mr) return false;
+      const startVal = mr.start_year * 12 + mr.start_month;
+      const endVal = mr.end_year * 12 + mr.end_month;
+      const curVal = selectedYear * 12 + selectedMonth;
+      return curVal >= startVal && curVal <= endVal;
+    }
+    return true;
+  });
 
-  const baseSalary = useMemo(() => parseFloat(employee?.salary || "0"), [employee?.salary]);
+  const preview = previewMutation.data;
+  const fullBaseSalary = useMemo(() => preview?.original_base_salary ?? parseFloat(employee?.salary || "0"), [preview?.original_base_salary, employee?.salary]);
+  const proratedBaseSalary = preview?.base_salary ?? fullBaseSalary;
+  const prorationDeduction = fullBaseSalary - proratedBaseSalary;
+  const hasProration = prorationDeduction > 0;
+  const joiningDay = preview?.joining_date ? new Date(preview.joining_date).getDate() : null;
+  const proratedDays = preview?.prorated_days;
+  const daysInMonth = preview?.days_in_month;
 
   const selectedLoanIds = useMemo(() =>
     Object.keys(selectedLoanDeductions).filter(id => selectedLoanDeductions[id]),
@@ -122,7 +150,7 @@ export default function PaymentModal({
         employee_id: employee.id,
         month: selectedMonth,
         year: selectedYear,
-        base_salary: baseSalary,
+        base_salary: proratedBaseSalary,
         bonus: bonus,
         deductions: deductions,
         deduction_reason: deductionReason,
@@ -152,7 +180,6 @@ export default function PaymentModal({
   if (!isOpen) return null;
 
   const isLoading = previewMutation.isPending;
-  const preview = previewMutation.data;
 
   const leaveDeduction = preview?.leave_deduction ?? 0;
   const leaveDays = preview?.leave_days ?? 0;
@@ -164,9 +191,9 @@ export default function PaymentModal({
   );
 
   const compensationAmount = useMemo(() => {
-    // Compensation is NOT included in advance salary
     if (isAdvance) return 0;
     if (!activeCompensation) return 0;
+    if (preview?.compensation !== undefined) return preview.compensation;
     const freq = activeCompensation.frequency_type;
     const total = parseFloat(activeCompensation.total_allowances || "0");
     if (freq === 'ONE_TIME' || freq === 'SELECTED_MONTH') {
@@ -184,12 +211,12 @@ export default function PaymentModal({
       return (curVal >= startVal && curVal <= endVal) ? total : 0;
     }
     return total;
-  }, [isAdvance, activeCompensation, selectedMonth, selectedYear]);
+  }, [isAdvance, activeCompensation, selectedMonth, selectedYear, preview?.compensation]);
   const overtimeAmount = preview?.overtime_amount ?? 0;
 
-  // Net pay: salary + compensation + overtime + bonus - leave - loan - deductions
+  // Net pay: prorated salary + compensation + overtime + bonus - leave - loan - deductions
   const clientNetSalary = Math.max(0,
-    baseSalary + compensationAmount + overtimeAmount + bonus
+    proratedBaseSalary + compensationAmount + overtimeAmount + bonus
     - leaveDeduction - effectiveLoanDeductions - deductions
   );
 
@@ -222,13 +249,21 @@ export default function PaymentModal({
             </div>
           )}
 
-          {/* Salary Breakdown - Static */}
+          {/* Salary Breakdown */}
           <div className="bg-muted/40 rounded-xl p-3 space-y-2">
             <div className="text-xs font-medium text-primary mb-2">Salary Breakdown</div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Base Salary</span>
-              <span className="font-medium">{formatCurrency(baseSalary)}</span>
+              <span className="font-medium">{formatCurrency(fullBaseSalary)}</span>
             </div>
+            {hasProration && (
+              <div className="flex justify-between text-sm text-destructive">
+                <span className="text-xs">
+                  Proration Deduction (Joining {joiningDay}, {proratedDays}/{daysInMonth} days)
+                </span>
+                <span className="font-medium">-{formatCurrency(prorationDeduction)}</span>
+              </div>
+            )}
             {activeCompensation && compensationAmount > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Compensation Allowances</span>
@@ -314,7 +349,7 @@ export default function PaymentModal({
             />
           </label>
 
-          {/* Active Loans Checkboxes - show always if loans exist */}
+          {/* Active Loans Deductions - always included, not deselectable */}
           {activeLoans.length > 0 && (
             <div className="border border-border rounded-xl p-3">
               <div className="text-xs font-medium text-warning mb-2">Active Loans Deductions (Principal + Interest)</div>
@@ -322,14 +357,9 @@ export default function PaymentModal({
                 const deductionForLoan = preview?.loan_details?.find((d: any) => d.loan_id === loan.id)?.total;
                 const clientDeduction = parseFloat(loan.remaining_amount || "0");
                 return (
-                  <label key={loan.id} className="flex items-center justify-between py-2">
+                  <div key={loan.id} className="flex items-center justify-between py-2">
                     <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={selectedLoanDeductions[loan.id] || false}
-                        onChange={(e) => setSelectedLoanDeductions(prev => ({ ...prev, [loan.id]: e.target.checked }))}
-                        className="rounded border-border"
-                      />
+                      <input type="checkbox" checked disabled className="rounded border-border opacity-60" />
                       <div>
                         <div className="text-sm">{loan.loan_type_display || loan.loan_type}</div>
                         <div className="text-xs text-muted-foreground">
@@ -339,10 +369,10 @@ export default function PaymentModal({
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-medium text-warning">
-                        -{formatCurrency(deductionForLoan || (selectedLoanDeductions[loan.id] ? clientDeduction : 0))}
+                        -{formatCurrency(deductionForLoan || clientDeduction)}
                       </div>
                     </div>
-                  </label>
+                  </div>
                 );
               })}
             </div>
@@ -388,8 +418,14 @@ export default function PaymentModal({
           <div className="pt-4 border-t border-border space-y-2">
             <div className="flex justify-between text-sm text-muted-foreground">
               <span>Base Salary</span>
-              <span>{formatCurrency(baseSalary)}</span>
+              <span>{formatCurrency(fullBaseSalary)}</span>
             </div>
+            {hasProration && (
+              <div className="flex justify-between text-sm text-destructive">
+                <span className="text-xs">Proration (Joining {joiningDay}, {proratedDays}/{daysInMonth} days)</span>
+                <span>-{formatCurrency(prorationDeduction)}</span>
+              </div>
+            )}
             {activeCompensation && compensationAmount > 0 && (
               <div className="flex justify-between text-sm text-muted-foreground">
                 <span>Compensation</span>
@@ -475,7 +511,7 @@ export default function PaymentModal({
                   </div>
                 ) : clientNetSalary <= 0 && (
                   <div className="text-xs text-muted-foreground">
-                    Estimated carryover: <strong>{formatCurrency(Math.abs(baseSalary + compensationAmount + overtimeAmount + bonus - leaveDeduction - effectiveLoanDeductions - deductions))}</strong>
+                    Estimated carryover: <strong>{formatCurrency(Math.abs(proratedBaseSalary + compensationAmount + overtimeAmount + bonus - leaveDeduction - effectiveLoanDeductions - deductions))}</strong>
                   </div>
                 )}
               </div>
